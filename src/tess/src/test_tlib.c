@@ -528,6 +528,18 @@ static int test_crc32_integrity(void) {
 }
 
 // Helper to write a string to a file
+// Read file contents into a static buffer. Returns null on failure.
+static char *read_file_contents(char const *path, size_t *out_len) {
+    static char buf[8192];
+    FILE       *f = fopen(path, "rb");
+    if (!f) return null;
+    size_t n = fread(buf, 1, sizeof(buf) - 1, f);
+    fclose(f);
+    buf[n] = '\0';
+    if (out_len) *out_len = n;
+    return buf;
+}
+
 static int write_file(char const *path, char const *content) {
     FILE *f = fopen(path, "wb");
     if (!f) return 1;
@@ -965,7 +977,8 @@ static int test_e2e_basic_package(void) {
 
     char cmd[2048];
     snprintf(cmd, sizeof(cmd),
-             CD_CMD " \"%s\" && \"%s\" pack --no-standard-includes -S \"%s\" greeter.tl -o Greeter.tlib 2>&1",
+             CD_CMD
+             " \"%s\" && \"%s\" pack --no-standard-includes -S \"%s\" greeter.tl -o Greeter.tlib 2>&1",
              lib_dir, e2e_tess_exe, e2e_stdlib_dir);
     if (run_cmd(cmd) != 0) {
         fprintf(stderr, "  tess pack failed\n");
@@ -1007,8 +1020,8 @@ static int test_e2e_basic_package(void) {
     char out_exe[512];
     snprintf(out_exe, sizeof(out_exe), "%sapp" EXE_SUFFIX, app_dir);
     snprintf(cmd, sizeof(cmd),
-             CD_CMD " \"%s\" && \"%s\" exe --no-standard-includes -S \"%s\" -o \"%s\" main.tl 2>&1", app_dir,
-             e2e_tess_exe, e2e_stdlib_dir, out_exe);
+             CD_CMD " \"%s\" && \"%s\" exe --no-standard-includes -S \"%s\" -o \"%s\" main.tl 2>&1",
+             app_dir, e2e_tess_exe, e2e_stdlib_dir, out_exe);
     if (run_cmd(cmd) != 0) {
         fprintf(stderr, "  tess exe failed\n");
         return 1;
@@ -1044,7 +1057,8 @@ static int test_e2e_version_mismatch(void) {
 
     char cmd[2048];
     snprintf(cmd, sizeof(cmd),
-             CD_CMD " \"%s\" && \"%s\" pack --no-standard-includes -S \"%s\" greeter.tl -o Greeter.tlib 2>&1",
+             CD_CMD
+             " \"%s\" && \"%s\" pack --no-standard-includes -S \"%s\" greeter.tl -o Greeter.tlib 2>&1",
              lib_dir, e2e_tess_exe, e2e_stdlib_dir);
     if (run_cmd(cmd) != 0) {
         fprintf(stderr, "  tess pack failed\n");
@@ -1076,8 +1090,8 @@ static int test_e2e_version_mismatch(void) {
     char out_exe[512];
     snprintf(out_exe, sizeof(out_exe), "%sapp" EXE_SUFFIX, app_dir);
     snprintf(cmd, sizeof(cmd),
-             CD_CMD " \"%s\" && \"%s\" exe --no-standard-includes -S \"%s\" -o \"%s\" main.tl 2>&1", app_dir,
-             e2e_tess_exe, e2e_stdlib_dir, out_exe);
+             CD_CMD " \"%s\" && \"%s\" exe --no-standard-includes -S \"%s\" -o \"%s\" main.tl 2>&1",
+             app_dir, e2e_tess_exe, e2e_stdlib_dir, out_exe);
     if (run_cmd(cmd) == 0) {
         fprintf(stderr, "  tess exe should have failed (version mismatch)\n");
         return 1;
@@ -1109,8 +1123,8 @@ static int test_e2e_dep_not_found(void) {
     char cmd[2048], out_exe[512];
     snprintf(out_exe, sizeof(out_exe), "%sapp" EXE_SUFFIX, app_dir);
     snprintf(cmd, sizeof(cmd),
-             CD_CMD " \"%s\" && \"%s\" exe --no-standard-includes -S \"%s\" -o \"%s\" main.tl 2>&1", app_dir,
-             e2e_tess_exe, e2e_stdlib_dir, out_exe);
+             CD_CMD " \"%s\" && \"%s\" exe --no-standard-includes -S \"%s\" -o \"%s\" main.tl 2>&1",
+             app_dir, e2e_tess_exe, e2e_stdlib_dir, out_exe);
     if (run_cmd(cmd) == 0) {
         fprintf(stderr, "  tess exe should have failed (package not found)\n");
         return 1;
@@ -1197,8 +1211,8 @@ static int test_e2e_multi_file_library(void) {
     char out_exe[512];
     snprintf(out_exe, sizeof(out_exe), "%sapp" EXE_SUFFIX, app_dir);
     snprintf(cmd, sizeof(cmd),
-             CD_CMD " \"%s\" && \"%s\" exe --no-standard-includes -S \"%s\" -o \"%s\" main.tl 2>&1", app_dir,
-             e2e_tess_exe, e2e_stdlib_dir, out_exe);
+             CD_CMD " \"%s\" && \"%s\" exe --no-standard-includes -S \"%s\" -o \"%s\" main.tl 2>&1",
+             app_dir, e2e_tess_exe, e2e_stdlib_dir, out_exe);
     if (run_cmd(cmd) != 0) {
         fprintf(stderr, "  tess exe failed\n");
         return 1;
@@ -1301,8 +1315,8 @@ static int test_e2e_transitive_deps(void) {
     char out_exe[512];
     snprintf(out_exe, sizeof(out_exe), "%sapp" EXE_SUFFIX, app_dir);
     snprintf(cmd, sizeof(cmd),
-             CD_CMD " \"%s\" && \"%s\" exe --no-standard-includes -S \"%s\" -o \"%s\" main.tl 2>&1", app_dir,
-             e2e_tess_exe, e2e_stdlib_dir, out_exe);
+             CD_CMD " \"%s\" && \"%s\" exe --no-standard-includes -S \"%s\" -o \"%s\" main.tl 2>&1",
+             app_dir, e2e_tess_exe, e2e_stdlib_dir, out_exe);
     if (run_cmd(cmd) != 0) {
         fprintf(stderr, "  tess exe failed\n");
         return 1;
@@ -1438,8 +1452,8 @@ static int test_e2e_diamond_deps(void) {
     char out_exe[512];
     snprintf(out_exe, sizeof(out_exe), "%sapp" EXE_SUFFIX, app_dir);
     snprintf(cmd, sizeof(cmd),
-             CD_CMD " \"%s\" && \"%s\" exe --no-standard-includes -S \"%s\" -o \"%s\" main.tl 2>&1", app_dir,
-             e2e_tess_exe, e2e_stdlib_dir, out_exe);
+             CD_CMD " \"%s\" && \"%s\" exe --no-standard-includes -S \"%s\" -o \"%s\" main.tl 2>&1",
+             app_dir, e2e_tess_exe, e2e_stdlib_dir, out_exe);
     if (run_cmd(cmd) != 0) {
         fprintf(stderr, "  tess exe failed\n");
         return 1;
@@ -1547,8 +1561,8 @@ static int test_e2e_circular_deps(void) {
     snprintf(out_exe, sizeof(out_exe), "%sapp" EXE_SUFFIX, app_dir);
     char cmd[2048];
     snprintf(cmd, sizeof(cmd),
-             CD_CMD " \"%s\" && \"%s\" exe --no-standard-includes -S \"%s\" -o \"%s\" main.tl 2>&1", app_dir,
-             e2e_tess_exe, e2e_stdlib_dir, out_exe);
+             CD_CMD " \"%s\" && \"%s\" exe --no-standard-includes -S \"%s\" -o \"%s\" main.tl 2>&1",
+             app_dir, e2e_tess_exe, e2e_stdlib_dir, out_exe);
     if (run_cmd(cmd) == 0) {
         fprintf(stderr, "  tess exe should have failed (circular dependency)\n");
         return 1;
@@ -1665,8 +1679,8 @@ static int test_e2e_version_conflict(void) {
     snprintf(out_exe, sizeof(out_exe), "%sapp" EXE_SUFFIX, app_dir);
     char cmd[2048];
     snprintf(cmd, sizeof(cmd),
-             CD_CMD " \"%s\" && \"%s\" exe --no-standard-includes -S \"%s\" -o \"%s\" main.tl 2>&1", app_dir,
-             e2e_tess_exe, e2e_stdlib_dir, out_exe);
+             CD_CMD " \"%s\" && \"%s\" exe --no-standard-includes -S \"%s\" -o \"%s\" main.tl 2>&1",
+             app_dir, e2e_tess_exe, e2e_stdlib_dir, out_exe);
     if (run_cmd(cmd) == 0) {
         fprintf(stderr, "  tess exe should have failed (version conflict)\n");
         return 1;
@@ -1735,8 +1749,8 @@ static int test_e2e_missing_transitive_dep(void) {
     snprintf(out_exe, sizeof(out_exe), "%sapp" EXE_SUFFIX, app_dir);
     char cmd[2048];
     snprintf(cmd, sizeof(cmd),
-             CD_CMD " \"%s\" && \"%s\" exe --no-standard-includes -S \"%s\" -o \"%s\" main.tl 2>&1", app_dir,
-             e2e_tess_exe, e2e_stdlib_dir, out_exe);
+             CD_CMD " \"%s\" && \"%s\" exe --no-standard-includes -S \"%s\" -o \"%s\" main.tl 2>&1",
+             app_dir, e2e_tess_exe, e2e_stdlib_dir, out_exe);
     if (run_cmd(cmd) == 0) {
         fprintf(stderr, "  tess exe should have failed (missing transitive dep)\n");
         return 1;
@@ -1777,7 +1791,8 @@ static int test_e2e_internal_module_accessible(void) {
 
     char cmd[2048];
     snprintf(cmd, sizeof(cmd),
-             CD_CMD " \"%s\" && \"%s\" pack --no-standard-includes -S \"%s\" mathpub.tl -o MathPkg.tlib 2>&1",
+             CD_CMD
+             " \"%s\" && \"%s\" pack --no-standard-includes -S \"%s\" mathpub.tl -o MathPkg.tlib 2>&1",
              lib_dir, e2e_tess_exe, e2e_stdlib_dir);
     if (run_cmd(cmd) != 0) {
         fprintf(stderr, "  tess pack failed\n");
@@ -1812,8 +1827,8 @@ static int test_e2e_internal_module_accessible(void) {
     char out_exe[512];
     snprintf(out_exe, sizeof(out_exe), "%sapp" EXE_SUFFIX, app_dir);
     snprintf(cmd, sizeof(cmd),
-             CD_CMD " \"%s\" && \"%s\" exe --no-standard-includes -S \"%s\" -o \"%s\" main.tl 2>&1", app_dir,
-             e2e_tess_exe, e2e_stdlib_dir, out_exe);
+             CD_CMD " \"%s\" && \"%s\" exe --no-standard-includes -S \"%s\" -o \"%s\" main.tl 2>&1",
+             app_dir, e2e_tess_exe, e2e_stdlib_dir, out_exe);
     if (run_cmd(cmd) != 0) {
         fprintf(stderr, "  tess exe failed (internal module should be accessible)\n");
         return 1;
@@ -1888,8 +1903,8 @@ static int test_e2e_generic_package(void) {
     char out_exe[512];
     snprintf(out_exe, sizeof(out_exe), "%sapp" EXE_SUFFIX, app_dir);
     snprintf(cmd, sizeof(cmd),
-             CD_CMD " \"%s\" && \"%s\" exe --no-standard-includes -S \"%s\" -o \"%s\" main.tl 2>&1", app_dir,
-             e2e_tess_exe, e2e_stdlib_dir, out_exe);
+             CD_CMD " \"%s\" && \"%s\" exe --no-standard-includes -S \"%s\" -o \"%s\" main.tl 2>&1",
+             app_dir, e2e_tess_exe, e2e_stdlib_dir, out_exe);
     if (run_cmd(cmd) != 0) {
         fprintf(stderr, "  tess exe failed\n");
         return 1;
@@ -1976,14 +1991,24 @@ static int test_e2e_module_conflict(void) {
     copy_file(b_path, dst);
 
     // -- Compile: should fail due to duplicate module "Utils" --
-    char out_exe[512];
+    // Capture output to verify the early warning from dep loading is present.
+    char out_exe[512], output_log[512];
     snprintf(out_exe, sizeof(out_exe), "%sapp" EXE_SUFFIX, app_dir);
+    snprintf(output_log, sizeof(output_log), "%soutput.log", app_dir);
     char cmd[2048];
     snprintf(cmd, sizeof(cmd),
-             CD_CMD " \"%s\" && \"%s\" exe --no-standard-includes -S \"%s\" -o \"%s\" main.tl 2>&1", app_dir,
-             e2e_tess_exe, e2e_stdlib_dir, out_exe);
+             CD_CMD " \"%s\" && \"%s\" exe --no-standard-includes -S \"%s\" -o \"%s\" main.tl >\"%s\" 2>&1",
+             app_dir, e2e_tess_exe, e2e_stdlib_dir, out_exe, output_log);
     if (run_cmd(cmd) == 0) {
         fprintf(stderr, "  tess exe should have failed (module conflict)\n");
+        return 1;
+    }
+
+    // Verify the duplicate-module warning was emitted during dep loading
+    char *output = read_file_contents(output_log, null);
+    if (!output || !strstr(output, "warning: module 'Utils' exported by package 'LibB'")) {
+        fprintf(stderr, "  expected duplicate-module warning in output\n");
+        if (output) fprintf(stderr, "  got: %s\n", output);
         return 1;
     }
 

@@ -357,11 +357,37 @@ static int parse_dep_string(allocator *alloc, str dep_str, str *out_name, str *o
     return 0;
 }
 
+// Info about which package exported a module (for duplicate detection).
+typedef struct {
+    str pkg_name;
+    str tlib_path;
+} module_pkg_info;
+
 // Context for recursive dependency resolution.
 typedef struct {
-    hashmap  *loaded; // name -> version (str->str map) for dedup and conflict detection
-    str_array stack;  // package names currently being resolved (cycle detection)
+    hashmap  *loaded;        // name -> version (str->str map) for dedup and conflict detection
+    str_array stack;         // package names currently being resolved (cycle detection)
+    hashmap  *module_owners; // module_name (str) -> module_pkg_info for duplicate detection
 } dep_resolve_ctx;
+
+// Check for duplicate module names across packages after extraction.
+// Warns (but does not fail) if two packages export the same module.
+static void check_duplicate_modules(tl_tlib_metadata *meta, str tlib_path, dep_resolve_ctx *ctx) {
+    for (u16 i = 0; i < meta->module_count; i++) {
+        str mod = meta->modules[i];
+        if (str_map_contains(ctx->module_owners, mod)) {
+            module_pkg_info *existing = str_map_get(ctx->module_owners, mod);
+            fprintf(stderr,
+                    "warning: module '%s' exported by package '%s' (%s)"
+                    " was already exported by package '%s' (%s)\n",
+                    str_cstr(&mod), str_cstr(&meta->name), str_cstr(&tlib_path),
+                    str_cstr(&existing->pkg_name), str_cstr(&existing->tlib_path));
+        } else {
+            module_pkg_info info = {.pkg_name = meta->name, .tlib_path = tlib_path};
+            str_map_set(&ctx->module_owners, mod, &info);
+        }
+    }
+}
 
 // Recursively resolve a single dependency and its transitive deps.
 // Uses consumer's depend_path directories for transitive resolution.
@@ -461,6 +487,8 @@ static int resolve_dep_recursive(state *self, str dep_name, str dep_version,
         return 1;
     }
 
+    check_duplicate_modules(&archive.metadata, tlib_path, ctx);
+
     if (self->verbose) {
         fprintf(stderr, "Loaded package: %s=%s from %s (%u files to %s)\n", str_cstr(&dep_name),
                 str_cstr(&dep_version), str_cstr(&tlib_path), archive.entries_count, tmppath.path);
@@ -489,8 +517,9 @@ static int load_package_deps(state *self, str_array *out_pkg_files) {
     }
 
     dep_resolve_ctx ctx = {
-      .loaded = map_new(self->arena, str, str, 8),
-      .stack  = {.alloc = self->arena},
+      .loaded        = map_new(self->arena, str, str, 8),
+      .stack         = {.alloc = self->arena},
+      .module_owners = map_new(self->arena, str, module_pkg_info, 16),
     };
 
     for (u32 i = 0; i < pkg.dep_count; i++) {
@@ -575,6 +604,8 @@ static int load_package_deps(state *self, str_array *out_pkg_files) {
             fprintf(stderr, "error: failed to extract package '%s'\n", str_cstr(&dep->name));
             return 1;
         }
+
+        check_duplicate_modules(&archive.metadata, tlib_path, &ctx);
 
         if (self->verbose) {
             fprintf(stderr, "Loaded package: %s=%s from %s (%u files to %s)\n", str_cstr(&dep->name),
