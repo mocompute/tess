@@ -2587,7 +2587,10 @@ static int toplevel_hash(parser *self) {
                 // Prelude: don't add to modules_seen
                 if (!is_prelude) str_hset_insert(&self->modules_seen, module);
                 if (str_eq(module, S("main"))) self->current_module = str_empty();
-                else self->current_module = str_copy(self->parent_alloc, module);
+                else {
+                    // Note: do not use ast_arena, as it could be speculative and discarded
+                    self->current_module = str_copy(self->parent_alloc, module);
+                }
 
                 // Only reset during first pass. During second pass, current_module_symbols may point
                 // to a hashmap in module_symbols (set by load_module_symbols), and resetting it would
