@@ -561,7 +561,9 @@ The compilation process:
 7. Feed all source (local + package) into the existing compilation pipeline
 8. Tree shaking removes unreferenced code
 
-All package source is loaded upfront and unconditionally based on `depend()` declarations in `package.tl`. No tokenizer/parser changes are needed — package modules are accessed via existing qualified syntax (`Module.function()`), the same as local modules.
+All package source is loaded upfront and unconditionally based on `depend()` declarations in `package.tl`. Package modules are accessed via existing qualified syntax (`Module.function()`), the same as local modules.
+
+**Parser fix for cross-file nested modules:** Import resolution orders files depth-first (imported files before importers), which means a child module file (e.g., `internal.tl` with `#module MathUtils.Internal`) is parsed before its parent (`math.tl` with `#module MathUtils`). The parser's nested module validation (`#module Parent.Child` checks that `Parent` exists) originally only checked modules parsed so far, causing a `nested_module_parent_not_found` error. Fixed by passing the source scanner's pre-scanned module map (`known_modules`) to the parser, so it can validate against all modules discovered during directive scanning. This enables the `MathUtils.Internal` pattern shown in the end-to-end example.
 
 Key functions:
 - `tl_tlib_extract()` in `tlib.c`: Extracts archive entries to a directory, returns file paths
@@ -569,7 +571,7 @@ Key functions:
 - `load_package_deps()` in `tess_exe.c`: Parses `package.tl`, resolves/reads/version-checks/extracts dependencies
 - `files_in_order()` modified to accept package files, scan them for directives, and include them in the compilation file list with deduplication
 
-Unit tests in `test_tlib.c`: `test_extract`, `test_package_version_mismatch`, `test_package_dep_not_found`.
+E2E tests in `test_tlib.c`: `test_e2e_basic_package`, `test_e2e_version_mismatch`, `test_e2e_dep_not_found`, `test_e2e_multi_file_library` (uses cross-file nested modules).
 
 ---
 
