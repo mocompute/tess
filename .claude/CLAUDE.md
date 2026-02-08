@@ -17,6 +17,7 @@ Tess is a statically-typed, compiled programming language that transpiles to C. 
 ```bash
 make -j all                # Parallel build (release mode)
 make CONFIG=debug          # Debug build with symbols
+make CONFIG=asan           # Memory debug (ASAN) build
 make -j test               # Run all tests in parallel (preferred)
 make -j test-mos           # MOS library tests only
 make -j test-tess          # Compiler unit tests only
