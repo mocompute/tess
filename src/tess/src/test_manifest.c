@@ -59,15 +59,14 @@ static int test_basic_package(void) {
     int        error = 0;
     tl_package pkg;
 
-    int rc = parse_pkg(
-        "format(1)\n"
-        "package(\"Foo\")\n"
-        "version(\"1.0\")\n"
-        "author(\"Alice\")\n"
-        "export(\"Mod1\", \"Mod2\")\n"
-        "depend(\"Bar\", \"2.0\")\n"
-        "depend_path(\"./libs\")\n",
-        &pkg);
+    int        rc = parse_pkg("format(1)\n"
+                                     "package(\"Foo\")\n"
+                                     "version(\"1.0\")\n"
+                                     "author(\"Alice\")\n"
+                                     "export(\"Mod1\", \"Mod2\")\n"
+                                     "depend(\"Bar\", \"2.0\")\n"
+                                     "depend_path(\"./libs\")\n",
+                              &pkg);
 
     error += rc != 0;
     if (rc) return error;
@@ -99,11 +98,10 @@ static int test_minimal_package(void) {
     int        error = 0;
     tl_package pkg;
 
-    int rc = parse_pkg(
-        "format(1)\n"
-        "package(\"Foo\")\n"
-        "version(\"1.0\")\n",
-        &pkg);
+    int        rc = parse_pkg("format(1)\n"
+                                     "package(\"Foo\")\n"
+                                     "version(\"1.0\")\n",
+                              &pkg);
 
     error += rc != 0;
     if (rc) return error;
@@ -125,14 +123,13 @@ static int test_multiple_depends(void) {
     int        error = 0;
     tl_package pkg;
 
-    int rc = parse_pkg(
-        "format(1)\n"
-        "package(\"App\")\n"
-        "version(\"0.1\")\n"
-        "depend(\"Lib1\", \"1.0\")\n"
-        "depend(\"Lib2\", \"2.0\")\n"
-        "depend_optional(\"OptLib\", \"3.0\")\n",
-        &pkg);
+    int        rc = parse_pkg("format(1)\n"
+                                     "package(\"App\")\n"
+                                     "version(\"0.1\")\n"
+                                     "depend(\"Lib1\", \"1.0\")\n"
+                                     "depend(\"Lib2\", \"2.0\")\n"
+                                     "depend_optional(\"OptLib\", \"3.0\")\n",
+                              &pkg);
 
     error += rc != 0;
     if (rc) return error;
@@ -158,12 +155,11 @@ static int test_depend_with_path(void) {
     int        error = 0;
     tl_package pkg;
 
-    int rc = parse_pkg(
-        "format(1)\n"
-        "package(\"App\")\n"
-        "version(\"0.1\")\n"
-        "depend(\"Lib\", \"1.0\", \"./path/Lib.tlib\")\n",
-        &pkg);
+    int        rc = parse_pkg("format(1)\n"
+                                     "package(\"App\")\n"
+                                     "version(\"0.1\")\n"
+                                     "depend(\"Lib\", \"1.0\", \"./path/Lib.tlib\")\n",
+                              &pkg);
 
     error += rc != 0;
     if (rc) return error;
@@ -183,13 +179,12 @@ static int test_multiple_depend_paths(void) {
     int        error = 0;
     tl_package pkg;
 
-    int rc = parse_pkg(
-        "format(1)\n"
-        "package(\"App\")\n"
-        "version(\"0.1\")\n"
-        "depend_path(\"./libs\")\n"
-        "depend_path(\"./vendor\")\n",
-        &pkg);
+    int        rc = parse_pkg("format(1)\n"
+                                     "package(\"App\")\n"
+                                     "version(\"0.1\")\n"
+                                     "depend_path(\"./libs\")\n"
+                                     "depend_path(\"./vendor\")\n",
+                              &pkg);
 
     error += rc != 0;
     if (rc) return error;
@@ -208,12 +203,11 @@ static int test_export_multiple_args(void) {
     int        error = 0;
     tl_package pkg;
 
-    int rc = parse_pkg(
-        "format(1)\n"
-        "package(\"App\")\n"
-        "version(\"0.1\")\n"
-        "export(\"A\", \"B\", \"C\")\n",
-        &pkg);
+    int        rc = parse_pkg("format(1)\n"
+                                     "package(\"App\")\n"
+                                     "version(\"0.1\")\n"
+                                     "export(\"A\", \"B\", \"C\")\n",
+                              &pkg);
 
     error += rc != 0;
     if (rc) return error;
@@ -229,15 +223,43 @@ static int test_export_multiple_args(void) {
     return error;
 }
 
+static int test_export_multiple_lines(void) {
+    int        error = 0;
+    tl_package pkg;
+
+    int        rc = parse_pkg("format(1)\n"
+                                     "package(\"App\")\n"
+                                     "version(\"0.1\")\n"
+                                     "export(\"A\", \"B\")\n"
+                                     "export(\"C\")\n"
+                                     "export(\"D\", \"E\", \"F\")\n",
+                              &pkg);
+
+    error += rc != 0;
+    if (rc) return error;
+
+    error += pkg.info.export_count != 6;
+    if (pkg.info.export_count == 6) {
+        error += !str_eq(pkg.info.exports[0], S("A"));
+        error += !str_eq(pkg.info.exports[1], S("B"));
+        error += !str_eq(pkg.info.exports[2], S("C"));
+        error += !str_eq(pkg.info.exports[3], S("D"));
+        error += !str_eq(pkg.info.exports[4], S("E"));
+        error += !str_eq(pkg.info.exports[5], S("F"));
+    }
+
+    if (error) fprintf(stderr, "  %d check(s) failed in test_export_multiple_lines\n", error);
+    return error;
+}
+
 static int test_missing_format(void) {
     int        error = 0;
     tl_package pkg;
 
     // No format() call
-    int rc = parse_pkg(
-        "package(\"Foo\")\n"
-        "version(\"1.0\")\n",
-        &pkg);
+    int rc = parse_pkg("package(\"Foo\")\n"
+                       "version(\"1.0\")\n",
+                       &pkg);
 
     // Should fail
     error += rc != 1;
@@ -250,11 +272,10 @@ static int test_format_not_first(void) {
     int        error = 0;
     tl_package pkg;
 
-    int rc = parse_pkg(
-        "package(\"Foo\")\n"
-        "format(1)\n"
-        "version(\"1.0\")\n",
-        &pkg);
+    int        rc = parse_pkg("package(\"Foo\")\n"
+                                     "format(1)\n"
+                                     "version(\"1.0\")\n",
+                              &pkg);
 
     // Should fail: format not first
     error += rc != 1;
@@ -267,11 +288,10 @@ static int test_unsupported_format(void) {
     int        error = 0;
     tl_package pkg;
 
-    int rc = parse_pkg(
-        "format(2)\n"
-        "package(\"Foo\")\n"
-        "version(\"1.0\")\n",
-        &pkg);
+    int        rc = parse_pkg("format(2)\n"
+                                     "package(\"Foo\")\n"
+                                     "version(\"1.0\")\n",
+                              &pkg);
 
     // Should fail: unsupported format
     error += rc != 1;
@@ -284,10 +304,9 @@ static int test_missing_package(void) {
     int        error = 0;
     tl_package pkg;
 
-    int rc = parse_pkg(
-        "format(1)\n"
-        "version(\"1.0\")\n",
-        &pkg);
+    int        rc = parse_pkg("format(1)\n"
+                                     "version(\"1.0\")\n",
+                              &pkg);
 
     // Should fail
     error += rc != 1;
@@ -300,10 +319,9 @@ static int test_missing_version(void) {
     int        error = 0;
     tl_package pkg;
 
-    int rc = parse_pkg(
-        "format(1)\n"
-        "package(\"Foo\")\n",
-        &pkg);
+    int        rc = parse_pkg("format(1)\n"
+                                     "package(\"Foo\")\n",
+                              &pkg);
 
     // Should fail
     error += rc != 1;
@@ -316,12 +334,11 @@ static int test_unknown_function(void) {
     int        error = 0;
     tl_package pkg;
 
-    int rc = parse_pkg(
-        "format(1)\n"
-        "package(\"Foo\")\n"
-        "version(\"1.0\")\n"
-        "unknown(\"x\")\n",
-        &pkg);
+    int        rc = parse_pkg("format(1)\n"
+                                     "package(\"Foo\")\n"
+                                     "version(\"1.0\")\n"
+                                     "unknown(\"x\")\n",
+                              &pkg);
 
     // Should fail
     error += rc != 1;
@@ -334,11 +351,10 @@ static int test_wrong_arg_count(void) {
     int        error = 0;
     tl_package pkg;
 
-    int rc = parse_pkg(
-        "format(1)\n"
-        "package(\"a\", \"b\")\n"
-        "version(\"1.0\")\n",
-        &pkg);
+    int        rc = parse_pkg("format(1)\n"
+                                     "package(\"a\", \"b\")\n"
+                                     "version(\"1.0\")\n",
+                              &pkg);
 
     // Should fail: package expects 1 arg
     error += rc != 1;
@@ -351,11 +367,10 @@ static int test_non_string_arg(void) {
     int        error = 0;
     tl_package pkg;
 
-    int rc = parse_pkg(
-        "format(1)\n"
-        "package(42)\n"
-        "version(\"1.0\")\n",
-        &pkg);
+    int        rc = parse_pkg("format(1)\n"
+                                     "package(42)\n"
+                                     "version(\"1.0\")\n",
+                              &pkg);
 
     // Should fail: integer where string expected
     error += rc != 1;
@@ -368,12 +383,11 @@ static int test_duplicate_package(void) {
     int        error = 0;
     tl_package pkg;
 
-    int rc = parse_pkg(
-        "format(1)\n"
-        "package(\"Foo\")\n"
-        "version(\"1.0\")\n"
-        "package(\"Bar\")\n",
-        &pkg);
+    int        rc = parse_pkg("format(1)\n"
+                                     "package(\"Foo\")\n"
+                                     "version(\"1.0\")\n"
+                                     "package(\"Bar\")\n",
+                              &pkg);
 
     // Should fail: duplicate package()
     error += rc != 1;
@@ -386,12 +400,11 @@ static int test_duplicate_version(void) {
     int        error = 0;
     tl_package pkg;
 
-    int rc = parse_pkg(
-        "format(1)\n"
-        "package(\"Foo\")\n"
-        "version(\"1.0\")\n"
-        "version(\"2.0\")\n",
-        &pkg);
+    int        rc = parse_pkg("format(1)\n"
+                                     "package(\"Foo\")\n"
+                                     "version(\"1.0\")\n"
+                                     "version(\"2.0\")\n",
+                              &pkg);
 
     // Should fail: duplicate version()
     error += rc != 1;
@@ -431,6 +444,7 @@ int main(void) {
     T(test_depend_with_path)
     T(test_multiple_depend_paths)
     T(test_export_multiple_args)
+    T(test_export_multiple_lines)
     T(test_missing_format)
     T(test_format_not_first)
     T(test_unsupported_format)
