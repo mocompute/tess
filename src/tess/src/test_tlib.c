@@ -1713,6 +1713,260 @@ static int test_e2e_missing_transitive_dep(void) {
     return 0;
 }
 
+// Phase 9: Internal (non-exported) modules are accessible to consumers
+static int test_e2e_internal_module_accessible(void) {
+    // -- Create library with exported + internal modules --
+    char lib_dir[512];
+    make_temp_path(lib_dir, sizeof(lib_dir), "e2e_internal_lib/");
+    test_mkdir_p(lib_dir);
+
+    char path[512];
+    snprintf(path, sizeof(path), "%spackage.tl", lib_dir);
+    write_file(path,
+            "format(1)\n"
+            "package(\"MathPkg\")\n"
+            "version(\"1.0.0\")\n"
+            "export(\"MathPub\")\n"); // only MathPub is exported
+
+    snprintf(path, sizeof(path), "%smathpub.tl", lib_dir);
+    write_file(path,
+            "#module MathPub\n"
+            "#import \"mathint.tl\"\n"
+            "\n"
+            "pub_val() { 10 }\n");
+
+    snprintf(path, sizeof(path), "%smathint.tl", lib_dir);
+    write_file(path,
+            "#module MathInt\n"
+            "\n"
+            "int_val() { 32 }\n");
+
+    // -- Pack --
+    char tlib_path[512];
+    snprintf(tlib_path, sizeof(tlib_path), "%sMathPkg.tlib", lib_dir);
+
+    char cmd[2048];
+    snprintf(cmd, sizeof(cmd),
+             "cd \"%s\" && \"%s\" pack --no-standard-includes -S \"%s\" mathpub.tl -o MathPkg.tlib 2>&1",
+             lib_dir, e2e_tess_exe, e2e_stdlib_dir);
+    if (run_cmd(cmd) != 0) {
+        fprintf(stderr, "  tess pack failed\n");
+        return 1;
+    }
+
+    // -- Consumer accesses BOTH exported and internal modules --
+    char app_dir[512], app_libs[512];
+    make_temp_path(app_dir, sizeof(app_dir), "e2e_internal_app/");
+    snprintf(app_libs, sizeof(app_libs), "%slibs/", app_dir);
+    test_mkdir_p(app_dir);
+    test_mkdir_p(app_libs);
+
+    snprintf(path, sizeof(path), "%spackage.tl", app_dir);
+    write_file(path,
+            "format(1)\n"
+            "package(\"App\")\n"
+            "version(\"0.1.0\")\n"
+            "depend(\"MathPkg\", \"1.0.0\")\n"
+            "depend_path(\"./libs\")\n");
+
+    snprintf(path, sizeof(path), "%smain.tl", app_dir);
+    write_file(path,
+            "#module main\n\n"
+            "main() {\n"
+            "  MathPub.pub_val() + MathInt.int_val()\n"
+            "}\n");
+
+    char dst[512];
+    snprintf(dst, sizeof(dst), "%sMathPkg.tlib", app_libs);
+    copy_file(tlib_path, dst);
+
+    // -- Compile and run: both modules accessible --
+    char out_exe[512];
+    snprintf(out_exe, sizeof(out_exe), "%sapp", app_dir);
+    snprintf(cmd, sizeof(cmd),
+             "cd \"%s\" && \"%s\" exe --no-standard-includes -S \"%s\" -o \"%s\" main.tl 2>&1",
+             app_dir, e2e_tess_exe, e2e_stdlib_dir, out_exe);
+    if (run_cmd(cmd) != 0) {
+        fprintf(stderr, "  tess exe failed (internal module should be accessible)\n");
+        return 1;
+    }
+
+    int exit_code = run_cmd(out_exe);
+    if (exit_code != 42) {
+        fprintf(stderr, "  expected exit code 42, got %d\n", exit_code);
+        return 1;
+    }
+
+    return 0;
+}
+
+// Phase 10: Generic functions in a package specialize correctly in consumer
+static int test_e2e_generic_package(void) {
+    // -- Create library with generic function --
+    char lib_dir[512];
+    make_temp_path(lib_dir, sizeof(lib_dir), "e2e_generic_lib/");
+    test_mkdir_p(lib_dir);
+
+    char path[512];
+    snprintf(path, sizeof(path), "%spackage.tl", lib_dir);
+    write_file(path,
+            "format(1)\n"
+            "package(\"GenLib\")\n"
+            "version(\"1.0.0\")\n"
+            "export(\"GenLib\")\n");
+
+    snprintf(path, sizeof(path), "%sgenlib.tl", lib_dir);
+    write_file(path,
+            "#module GenLib\n"
+            "\n"
+            "identity(x) { x }\n"
+            "add(a, b) { a + b }\n");
+
+    char tlib_path[512];
+    snprintf(tlib_path, sizeof(tlib_path), "%sGenLib.tlib", lib_dir);
+
+    char cmd[2048];
+    snprintf(cmd, sizeof(cmd),
+             "cd \"%s\" && \"%s\" pack --no-standard-includes -S \"%s\" genlib.tl -o GenLib.tlib 2>&1",
+             lib_dir, e2e_tess_exe, e2e_stdlib_dir);
+    if (run_cmd(cmd) != 0) {
+        fprintf(stderr, "  tess pack failed\n");
+        return 1;
+    }
+
+    // -- Consumer uses generic functions --
+    char app_dir[512], app_libs[512];
+    make_temp_path(app_dir, sizeof(app_dir), "e2e_generic_app/");
+    snprintf(app_libs, sizeof(app_libs), "%slibs/", app_dir);
+    test_mkdir_p(app_dir);
+    test_mkdir_p(app_libs);
+
+    snprintf(path, sizeof(path), "%spackage.tl", app_dir);
+    write_file(path,
+            "format(1)\n"
+            "package(\"App\")\n"
+            "version(\"0.1.0\")\n"
+            "depend(\"GenLib\", \"1.0.0\")\n"
+            "depend_path(\"./libs\")\n");
+
+    snprintf(path, sizeof(path), "%smain.tl", app_dir);
+    write_file(path,
+            "#module main\n\n"
+            "main() {\n"
+            "  x := GenLib.identity(40)\n"
+            "  GenLib.add(x, 2)\n"
+            "}\n");
+
+    char dst[512];
+    snprintf(dst, sizeof(dst), "%sGenLib.tlib", app_libs);
+    copy_file(tlib_path, dst);
+
+    char out_exe[512];
+    snprintf(out_exe, sizeof(out_exe), "%sapp", app_dir);
+    snprintf(cmd, sizeof(cmd),
+             "cd \"%s\" && \"%s\" exe --no-standard-includes -S \"%s\" -o \"%s\" main.tl 2>&1",
+             app_dir, e2e_tess_exe, e2e_stdlib_dir, out_exe);
+    if (run_cmd(cmd) != 0) {
+        fprintf(stderr, "  tess exe failed\n");
+        return 1;
+    }
+
+    int exit_code = run_cmd(out_exe);
+    if (exit_code != 42) {
+        fprintf(stderr, "  expected exit code 42, got %d\n", exit_code);
+        return 1;
+    }
+
+    return 0;
+}
+
+// Phase 10: Module name conflict across packages
+static int test_e2e_module_conflict(void) {
+    allocator *alloc = default_allocator();
+
+    char libs_dir[512];
+    make_temp_path(libs_dir, sizeof(libs_dir), "e2e_modconflict_libs/");
+    test_mkdir_p(libs_dir);
+
+    // LibA with module "Utils"
+    str a_modules[1];
+    a_modules[0] = str_init(alloc, "Utils");
+
+    tl_tlib_metadata meta_a = {
+        .name         = str_init(alloc, "LibA"),
+        .author       = str_empty(),
+        .version      = str_init(alloc, "1.0.0"),
+        .modules      = a_modules,
+        .module_count = 1,
+    };
+
+    char const *a_src = "#module Utils\n\nfoo() { 1 }\n";
+    tl_tlib_entry a_entry = {"utils.tl", 8, (byte const *)a_src, (u32)strlen(a_src)};
+
+    char a_path[512];
+    snprintf(a_path, sizeof(a_path), "%sLibA.tlib", libs_dir);
+    tl_tlib_write(alloc, a_path, &meta_a, &a_entry, 1);
+
+    // LibB also with module "Utils" (conflict!)
+    str b_modules[1];
+    b_modules[0] = str_init(alloc, "Utils");
+
+    tl_tlib_metadata meta_b = {
+        .name         = str_init(alloc, "LibB"),
+        .author       = str_empty(),
+        .version      = str_init(alloc, "1.0.0"),
+        .modules      = b_modules,
+        .module_count = 1,
+    };
+
+    char const *b_src = "#module Utils\n\nbar() { 2 }\n";
+    tl_tlib_entry b_entry = {"utils.tl", 8, (byte const *)b_src, (u32)strlen(b_src)};
+
+    char b_path[512];
+    snprintf(b_path, sizeof(b_path), "%sLibB.tlib", libs_dir);
+    tl_tlib_write(alloc, b_path, &meta_b, &b_entry, 1);
+
+    // -- Consumer depends on both --
+    char app_dir[512], app_libs[512];
+    make_temp_path(app_dir, sizeof(app_dir), "e2e_modconflict_app/");
+    snprintf(app_libs, sizeof(app_libs), "%slibs/", app_dir);
+    test_mkdir_p(app_dir);
+    test_mkdir_p(app_libs);
+
+    char path[512];
+    snprintf(path, sizeof(path), "%spackage.tl", app_dir);
+    write_file(path,
+            "format(1)\n"
+            "package(\"App\")\n"
+            "version(\"0.1.0\")\n"
+            "depend(\"LibA\", \"1.0.0\")\n"
+            "depend(\"LibB\", \"1.0.0\")\n"
+            "depend_path(\"./libs\")\n");
+
+    snprintf(path, sizeof(path), "%smain.tl", app_dir);
+    write_file(path, "#module main\n\nmain() { 0 }\n");
+
+    char dst[512];
+    snprintf(dst, sizeof(dst), "%sLibA.tlib", app_libs);
+    copy_file(a_path, dst);
+    snprintf(dst, sizeof(dst), "%sLibB.tlib", app_libs);
+    copy_file(b_path, dst);
+
+    // -- Compile: should fail due to duplicate module "Utils" --
+    char out_exe[512];
+    snprintf(out_exe, sizeof(out_exe), "%sapp", app_dir);
+    char cmd[2048];
+    snprintf(cmd, sizeof(cmd),
+             "cd \"%s\" && \"%s\" exe --no-standard-includes -S \"%s\" -o \"%s\" main.tl 2>&1",
+             app_dir, e2e_tess_exe, e2e_stdlib_dir, out_exe);
+    if (run_cmd(cmd) == 0) {
+        fprintf(stderr, "  tess exe should have failed (module conflict)\n");
+        return 1;
+    }
+
+    return 0;
+}
+
 int main(void) {
     init_temp_dir();
     init_e2e_paths();
@@ -1745,5 +1999,8 @@ int main(void) {
     T(test_e2e_circular_deps)
     T(test_e2e_version_conflict)
     T(test_e2e_missing_transitive_dep)
+    T(test_e2e_internal_module_accessible)
+    T(test_e2e_generic_package)
+    T(test_e2e_module_conflict)
     return error;
 }
