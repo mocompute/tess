@@ -67,6 +67,26 @@ int platform_temp_file_create(platform_temp_file *tf, char const *suffix);
 // Delete a temp file
 void platform_temp_file_delete(platform_temp_file *tf);
 
+// -- Temp directory management --
+typedef struct {
+    char path[PLATFORM_PATH_MAX];
+} platform_temp_path;
+
+// Get platform temp directory path (with trailing separator, e.g., "/tmp/")
+// Returns 0 on success, non-zero on failure
+int platform_temp_dir(char *buf, size_t bufsize);
+
+// Create a unique temporary directory with given prefix (e.g., "tess-pkg-")
+// Returns 0 on success, non-zero on failure
+int platform_temp_path_create(platform_temp_path *tp, char const *prefix);
+
+// Remove a temp directory
+void platform_temp_path_delete(platform_temp_path *tp);
+
+// -- Directory creation --
+// Create a single directory. Returns 0 on success, non-zero on failure.
+int platform_mkdir(char const *path);
+
 // -- Process execution --
 typedef struct {
     char const *const *argv;       // NULL-terminated argument array

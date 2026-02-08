@@ -2,7 +2,7 @@
 
 > **Work in Progress.** The standard library is under active development. APIs may change.
 
-The Tess standard library is automatically included when compiling with `tess exe` or `tess lib`. To disable automatic includes, pass `--no-standard-includes` and specify paths manually with `-I`.
+The Tess standard library is automatically included when compiling with `tess exe` or `tess lib`. Standard library modules are imported using angle brackets (e.g., `#import <Array.tl>`). To disable default standard paths, pass `--no-standard-includes` and specify custom standard paths with `-S`.
 
 Import a module with:
 

@@ -16,6 +16,7 @@
     /* parser */                                                                                           \
     X(tl_err_reserved_keyword, "reserved_keyword")                                                         \
     X(tl_err_expected_toplevel, "expected_toplevel")                                                       \
+    X(tl_err_expected_funcall, "expected_funcall")                                                         \
     X(tl_err_expected_hash_command, "expected_hash_command")                                               \
     X(tl_err_expected_module, "expected_module")                                                           \
     X(tl_err_unfinished_begin_end, "unfinished_begin_end")                                                 \

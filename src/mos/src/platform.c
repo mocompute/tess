@@ -8,6 +8,8 @@
 #include <fcntl.h>
 #include <io.h>
 #include <process.h>
+#else
+#include <sys/stat.h>
 #endif
 
 // -- High-resolution timing --
@@ -98,6 +100,55 @@ int platform_temp_file_create(platform_temp_file *tf, char const *suffix) {
 
 void platform_temp_file_delete(platform_temp_file *tf) {
     unlink(tf->path);
+}
+
+#endif
+
+// -- Temp directory management --
+#ifdef MOS_WINDOWS
+
+int platform_temp_dir(char *buf, size_t bufsize) {
+    char temp[MAX_PATH];
+    if (GetTempPathA(MAX_PATH, temp) == 0) return 1;
+    snprintf(buf, bufsize, "%s", temp);
+    return 0;
+}
+
+int platform_temp_path_create(platform_temp_path *tp, char const *prefix) {
+    char temp_base[MAX_PATH];
+    if (GetTempPathA(MAX_PATH, temp_base) == 0) return 1;
+    snprintf(tp->path, PLATFORM_PATH_MAX, "%s%sXXXXXX", temp_base, prefix);
+    if (_mktemp(tp->path) == NULL || _mkdir(tp->path) != 0) return 1;
+    return 0;
+}
+
+void platform_temp_path_delete(platform_temp_path *tp) {
+    RemoveDirectoryA(tp->path);
+}
+
+int platform_mkdir(char const *path) {
+    return _mkdir(path);
+}
+
+#else
+
+int platform_temp_dir(char *buf, size_t bufsize) {
+    snprintf(buf, bufsize, "/tmp/");
+    return 0;
+}
+
+int platform_temp_path_create(platform_temp_path *tp, char const *prefix) {
+    snprintf(tp->path, PLATFORM_PATH_MAX, "/tmp/%sXXXXXX", prefix);
+    if (mkdtemp(tp->path) == NULL) return 1;
+    return 0;
+}
+
+void platform_temp_path_delete(platform_temp_path *tp) {
+    rmdir(tp->path);
+}
+
+int platform_mkdir(char const *path) {
+    return mkdir(path, 0755);
 }
 
 #endif

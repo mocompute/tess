@@ -39,7 +39,7 @@ check_flag = $(shell $(CC) -Werror $(patsubst -Wno-%,-W%,$(1)) -x c -c /dev/null
 CLANG_FLAGS := -Wno-gnu-alignof-expression
 CFLAGS += $(foreach flag,$(CLANG_FLAGS),$(call check_flag,$(flag)))
 
-CPPFLAGS = -I$(MOS_INC_DIR) -I$(TESS_INC_DIR)
+CPPFLAGS = -I$(MOS_INC_DIR) -I$(TESS_INC_DIR) -I$(LIBDEFLATE_DIR)
 LDFLAGS ?=
 LDFLAGS += $(LDFLAGS_CONFIG)
 
@@ -101,9 +101,9 @@ MOS_SOURCES =					\
 	$(MOS_SRC_DIR)/src/sexp_parser.c	\
 	$(MOS_SRC_DIR)/src/str.c
 
-MOS_OBJECTS = $(patsubst $(MOS_SRC_DIR)/%.c,$(BUILD_DIR)/mos/%.o,$(MOS_SOURCES))
+MOS_OBJECTS = $(patsubst $(MOS_SRC_DIR)/src/%.c,$(BUILD_DIR)/mos/%.o,$(MOS_SOURCES))
 
-$(BUILD_DIR)/mos/%.o: $(MOS_SRC_DIR)/%.c
+$(BUILD_DIR)/mos/%.o: $(MOS_SRC_DIR)/src/%.c
 	@mkdir -p $(dir $@)
 	$(MSG_CC) $<
 	$(Q)$(CC) $(CFLAGS) $(CPPFLAGS) -c -o $@ $<
@@ -116,17 +116,21 @@ TESS_SOURCES =				\
 	$(TESS_SRC_DIR)/src/ast.c	\
 	$(TESS_SRC_DIR)/src/error.c	\
 	$(TESS_SRC_DIR)/src/format.c	\
+	$(TESS_SRC_DIR)/src/import_resolver.c \
 	$(TESS_SRC_DIR)/src/parser.c	\
 	$(TESS_SRC_DIR)/src/tess.c	\
 	$(TESS_SRC_DIR)/src/token.c	\
 	$(TESS_SRC_DIR)/src/tokenizer.c \
 	$(TESS_SRC_DIR)/src/infer.c	\
 	$(TESS_SRC_DIR)/src/transpile.c \
+	$(TESS_SRC_DIR)/src/manifest.c \
+	$(TESS_SRC_DIR)/src/source_scanner.c \
+	$(TESS_SRC_DIR)/src/tlib.c	\
 	$(TESS_SRC_DIR)/src/type.c
 
-TESS_OBJECTS = $(patsubst $(TESS_SRC_DIR)/%.c,$(BUILD_DIR)/tess/%.o,$(TESS_SOURCES))
+TESS_OBJECTS = $(patsubst $(TESS_SRC_DIR)/src/%.c,$(BUILD_DIR)/tess/%.o,$(TESS_SOURCES))
 
-$(BUILD_DIR)/tess/%.o: $(TESS_SRC_DIR)/%.c
+$(BUILD_DIR)/tess/%.o: $(TESS_SRC_DIR)/src/%.c
 	@mkdir -p $(dir $@)
 	$(MSG_CC) $<
 	$(Q)$(CC) $(CFLAGS) $(CPPFLAGS) -c -o $@ $<
@@ -173,6 +177,26 @@ $(TESS_EMBED_OBJ): $(TESS_EMBED_SRC)
 	$(Q)$(CC) $(CFLAGS) $(CPPFLAGS) -c -o $@ $<
 
 # ------------------------------------------------------------------------------
+# libdeflate (vendored)
+# ------------------------------------------------------------------------------
+
+LIBDEFLATE_DIR = vendor/libdeflate-1.25
+LIBDEFLATE_SOURCES = \
+	$(LIBDEFLATE_DIR)/lib/arm/cpu_features.c \
+	$(LIBDEFLATE_DIR)/lib/x86/cpu_features.c \
+	$(LIBDEFLATE_DIR)/lib/utils.c \
+	$(LIBDEFLATE_DIR)/lib/deflate_compress.c \
+	$(LIBDEFLATE_DIR)/lib/deflate_decompress.c \
+	$(LIBDEFLATE_DIR)/lib/crc32.c
+LIBDEFLATE_OBJECTS = $(patsubst $(LIBDEFLATE_DIR)/%.c,$(BUILD_DIR)/libdeflate/%.o,$(LIBDEFLATE_SOURCES))
+LIBDEFLATE_CFLAGS = -std=gnu11 -O2 -fPIE -I$(LIBDEFLATE_DIR)
+
+$(BUILD_DIR)/libdeflate/%.o: $(LIBDEFLATE_DIR)/%.c
+	@mkdir -p $(dir $@)
+	$(MSG_CC) $<
+	$(Q)$(CC) $(LIBDEFLATE_CFLAGS) -c -o $@ $<
+
+# ------------------------------------------------------------------------------
 # tess Executable
 # ------------------------------------------------------------------------------
 
@@ -180,7 +204,7 @@ TESS_EXE_SRC = $(TESS_SRC_DIR)/src/tess_exe.c
 TESS_EXE_OBJ = $(BUILD_DIR)/tess_exe.o
 TESS_EXE     = tess
 
-$(TESS_EXE): $(TESS_EXE_OBJ) $(TESS_OBJECTS) $(TESS_EMBED_OBJ) $(MOS_OBJECTS)
+$(TESS_EXE): $(TESS_EXE_OBJ) $(TESS_OBJECTS) $(TESS_EMBED_OBJ) $(MOS_OBJECTS) $(LIBDEFLATE_OBJECTS)
 	$(MSG_LD) $@
 	$(Q)$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $^
 
@@ -221,6 +245,7 @@ cleanall:
 
 # $(1): test suite name (for display)
 # $(2): list of test executables
+# $(3): test count
 define run_test_suite
 	@failed=0; \
 	for test in $(2); do \
@@ -231,6 +256,7 @@ define run_test_suite
 			failed=$$((failed + 1)); \
 		fi; \
 	done; \
+	printf "  \033[1;36m[COUNT]\033[0m $(3) $(1) tests\n"; \
 	if [ $$failed -gt 0 ]; then \
 		printf "  \033[1;31m[FAIL] $$failed $(1) test(s) failed\033[0m\n"; \
 		exit 1; \
@@ -259,19 +285,19 @@ build-mos-tests: $(MOS_TEST_EXES)
 build-mos-benchmarks: $(MOS_BENCHMARK_EXES)
 
 bench-mos: build-mos-benchmarks
-	$(call run_test_suite,mos benchmarks,$(MOS_BENCHMARK_EXES))
+	$(call run_test_suite,mos benchmarks,$(MOS_BENCHMARK_EXES),$(words $(MOS_BENCHMARKS)))
 
 test-mos: build-mos-tests
-	$(call run_test_suite,mos,$(MOS_TEST_EXES))
+	$(call run_test_suite,mos,$(MOS_TEST_EXES),$(words $(MOS_TESTS)))
 
 # ------------------------------------------------------------------------------
 # tess Compiler Tests
 # ------------------------------------------------------------------------------
 
-TESS_TESTS     = tess type_v2 format
+TESS_TESTS     = tess type_v2 format tlib import_resolver manifest source_scanner
 TESS_TEST_EXES = $(patsubst %,$(BUILD_DIR)/test_%,$(TESS_TESTS))
 
-$(BUILD_DIR)/test_%: $(TESS_SRC_DIR)/src/test_%.c $(TESS_OBJECTS) $(TESS_EMBED_OBJ) $(MOS_OBJECTS)
+$(BUILD_DIR)/test_%: $(TESS_SRC_DIR)/src/test_%.c $(TESS_OBJECTS) $(TESS_EMBED_OBJ) $(MOS_OBJECTS) $(LIBDEFLATE_OBJECTS)
 	@mkdir -p $(dir $@)
 	$(MSG_LD) $@
 	$(Q)$(CC) $(CFLAGS) $(CPPFLAGS) $(LDFLAGS) -o $@ $^
@@ -279,7 +305,24 @@ $(BUILD_DIR)/test_%: $(TESS_SRC_DIR)/src/test_%.c $(TESS_OBJECTS) $(TESS_EMBED_O
 build-tess-tests: $(TESS_TEST_EXES)
 
 test-tess: build-tess-tests
-	$(call run_test_suite,tess,$(TESS_TEST_EXES))
+	$(call run_test_suite,tess,$(TESS_TEST_EXES),$(words $(TESS_TESTS)))
+
+# ------------------------------------------------------------------------------
+# Vendor Tests
+# ------------------------------------------------------------------------------
+
+VENDOR_TESTS     = deflate
+VENDOR_TEST_EXES = $(patsubst %,$(BUILD_DIR)/test_vendor_%,$(VENDOR_TESTS))
+
+$(BUILD_DIR)/test_vendor_%: $(TESS_SRC_DIR)/src/test_%.c $(TESS_OBJECTS) $(TESS_EMBED_OBJ) $(MOS_OBJECTS) $(LIBDEFLATE_OBJECTS)
+	@mkdir -p $(dir $@)
+	$(MSG_LD) $@
+	$(Q)$(CC) $(CFLAGS) $(CPPFLAGS) $(LDFLAGS) -o $@ $^
+
+build-vendor-tests: $(VENDOR_TEST_EXES)
+
+test-vendor: build-vendor-tests
+	$(call run_test_suite,vendor,$(VENDOR_TEST_EXES),$(words $(VENDOR_TESTS)))
 
 # ------------------------------------------------------------------------------
 # Tesslang (.tl) Tests
@@ -385,6 +428,7 @@ TL_TESTS =					\
 	nested_lambda_context			\
 	number_formats				\
 	number_separators			\
+	pack					\
 	printf					\
 	pointer_array				\
 	pointer_cast				\
@@ -468,7 +512,9 @@ TL_TESTS =					\
 	while_break				\
 	while_continue				\
 	while_statement				\
-	while_update_statement
+	while_update_statement			\
+	import_relative				\
+	import_relative_dotdot
 
 TL_FAIL_TESTS =					\
 	fail_case_float				\
@@ -486,6 +532,7 @@ TL_FAIL_TESTS =					\
 	fail_lambda_implicit_return		\
 	fail_lambda_return			\
 	fail_monkey_patch			\
+	fail_nested_module_no_immediate_parent	\
 	fail_nested_module_no_parent		\
 	fail_nested_type_cross_module_conflict	\
 	fail_reserved_type_alias		\
@@ -502,7 +549,9 @@ TL_FAIL_TESTS =					\
 	fail_tagged_union_existing_type_bad_type_arg \
 	fail_tagged_union_unknown_variant	\
 	fail_type_alias_partial_specialization	\
-	fail_unknown_free_variable
+	fail_unknown_free_variable		\
+	fail_import_absolute			\
+	fail_import_missing_quotes
 
 # Expected runtime failure tests (debug only: must compile, must fail at runtime)
 TL_FAIL_RUNTIME_TESTS =				\
@@ -516,14 +565,26 @@ TL_KNOWN_FAIL_FAILURES =
 TL_KNOWN_FAILURES =			\
 	while_empty_body
 
-
+# Total test count across all suites
+TOTAL_TESTS = $(words $(MOS_TESTS) $(TESS_TESTS) $(VENDOR_TESTS) \
+	$(TL_TESTS) $(TL_FAIL_TESTS) $(TL_FAIL_RUNTIME_TESTS) \
+	$(TL_KNOWN_FAIL_FAILURES) $(TL_KNOWN_FAILURES))
 
 TL_TEST_EXES = $(patsubst %,$(TL_BUILD_DIR)/test_%,$(TL_TESTS))
+
+# Special rule for test_import_relative_dotdot (needs to run from fixtures directory)
+$(TL_BUILD_DIR)/test_import_relative_dotdot: $(TL_TEST_DIR)/fixtures/test_import_relative_dotdot.tl $(TESS_EXE)
+	@mkdir -p $(dir $@)
+	$(MSG_GEN) $@
+	@cd $(TL_TEST_DIR)/fixtures && \
+	if ! $(CURDIR)/$(TESS_EXE) exe --no-standard-includes -S $(CURDIR)/$(TL_STD_DIR) -o $(CURDIR)/$@ test_import_relative_dotdot.tl ; then \
+		$(MSG_FAIL) $@; \
+	fi
 
 $(TL_BUILD_DIR)/test_%: $(TL_TEST_DIR)/test_%.tl $(TESS_EXE)
 	@mkdir -p $(dir $@)
 	$(MSG_GEN) $@
-	@if ! ./$(TESS_EXE) exe --no-standard-includes -I $(TL_STD_DIR) -o $@ $< ; then \
+	@if ! ./$(TESS_EXE) exe --no-standard-includes -S $(TL_STD_DIR) -o $@ $< ; then \
 		$(MSG_FAIL) $@; \
 	fi
 
@@ -546,7 +607,7 @@ test-tl: build-tl-tests
 	printf "  \033[1;36m[COUNT]\033[0m $$count_pass expected passing tests\n\n"; \
 	for name in $(TL_FAIL_TESTS); do \
 		$(MSG_TEST) $$name; \
-		if ./$(TESS_EXE) exe --no-standard-includes -I $(TL_STD_DIR) -o /dev/null $(TL_TEST_DIR)/test_$$name.tl 2>/dev/null; then \
+		if ./$(TESS_EXE) exe --no-standard-includes -S $(TL_STD_DIR) -o /dev/null $(TL_TEST_DIR)/test_$$name.tl 2>/dev/null; then \
 			$(MSG_FAIL2) $$name; \
 			failed=$$((failed + 1)); \
 		fi; \
@@ -556,7 +617,7 @@ test-tl: build-tl-tests
 	count_fail_rt=0; \
 	for name in $(TL_FAIL_RUNTIME_TESTS); do \
 		$(MSG_TEST) $$name; \
-		if ./$(TESS_EXE) exe --no-standard-includes -I $(TL_STD_DIR) -o /tmp/tl_test_$$name $(TL_TEST_DIR)/test_$$name.tl 2>/dev/null; then \
+		if ./$(TESS_EXE) exe --no-standard-includes -S $(TL_STD_DIR) -o /tmp/tl_test_$$name $(TL_TEST_DIR)/test_$$name.tl 2>/dev/null; then \
 			if /tmp/tl_test_$$name 2>/dev/null; then \
 				$(MSG_FAIL2) $$name; \
 				failed=$$((failed + 1)); \
@@ -571,7 +632,7 @@ test-tl: build-tl-tests
 	count_known_fail=0; \
 	known_fail=0; \
 	for name in $(TL_KNOWN_FAIL_FAILURES); do \
-		if ! ./$(TESS_EXE) exe --no-standard-includes -I $(TL_STD_DIR) -o /dev/null $(TL_TEST_DIR)/test_$$name.tl 2>/dev/null; then \
+		if ! ./$(TESS_EXE) exe --no-standard-includes -S $(TL_STD_DIR) -o /dev/null $(TL_TEST_DIR)/test_$$name.tl 2>/dev/null; then \
 			printf "  \033[1;32m[FIXED]\033[0m  test_$$name (remove from TL_KNOWN_FAIL_FAILURES)\n"; \
 		else \
 			printf "  \033[1;33m[KNOWN]\033[0m  test_$$name\n"; \
@@ -582,7 +643,7 @@ test-tl: build-tl-tests
 	printf "  \033[1;36m[COUNT]\033[0m $$count_known_fail known fail-failure tests\n\n"; \
 	known=0; \
 	for name in $(TL_KNOWN_FAILURES); do \
-		if ./$(TESS_EXE) exe --no-standard-includes -I $(TL_STD_DIR) -o /tmp/tl_test_$$name $(TL_TEST_DIR)/test_$$name.tl 2>/dev/null && /tmp/tl_test_$$name 2>/dev/null; then \
+		if ./$(TESS_EXE) exe --no-standard-includes -S $(TL_STD_DIR) -o /tmp/tl_test_$$name $(TL_TEST_DIR)/test_$$name.tl 2>/dev/null && /tmp/tl_test_$$name 2>/dev/null; then \
 			printf "  \033[1;32m[FIXED]\033[0m  test_$$name (remove from TL_KNOWN_FAILURES)\n"; \
 		else \
 			printf "  \033[1;33m[KNOWN]\033[0m  test_$$name\n"; \
@@ -591,8 +652,6 @@ test-tl: build-tl-tests
 		count_known=$$((count_known + 1)); \
 	done; \
 	printf "  \033[1;36m[COUNT]\033[0m $$count_known known failure tests\n"; \
-	total=$$((count_pass + count_fail + count_fail_rt + count_known_fail + count_known)); \
-	printf "  \033[1;36m[TOTAL]\033[0m $$total tests\n"; \
 	if [ $$failed -gt 0 ]; then \
 		printf "  \033[1;31m[FAIL] $$failed TL test(s) failed\033[0m\n"; \
 		exit 1; \
@@ -609,22 +668,24 @@ test-tl: build-tl-tests
 # Combined Test Target
 # ------------------------------------------------------------------------------
 
-build-tests: build-mos-tests build-tess-tests build-tl-tests
+build-tests: build-mos-tests build-tess-tests build-vendor-tests build-tl-tests
 
 test:
-	@mos_ok=0; tess_ok=0; tl_ok=0; \
+	@mos_ok=0; tess_ok=0; vendor_ok=0; tl_ok=0; \
 	$(MAKE) --no-print-directory test-mos && mos_ok=1; \
 	$(MAKE) --no-print-directory test-tess && tess_ok=1; \
+	$(MAKE) --no-print-directory test-vendor && vendor_ok=1; \
 	$(MAKE) --no-print-directory test-tl && tl_ok=1; \
 	printf "\n"; \
 	printf "==============================================================================\n"; \
-	if [ $$mos_ok -eq 1 ] && [ $$tess_ok -eq 1 ] && [ $$tl_ok -eq 1 ]; then \
-		printf "\n"; \
+	printf "  \033[1;36m[TOTAL]\033[0m $(TOTAL_TESTS) tests\n\n"; \
+	if [ $$mos_ok -eq 1 ] && [ $$tess_ok -eq 1 ] && [ $$vendor_ok -eq 1 ] && [ $$tl_ok -eq 1 ]; then \
 		$(MSG_PASS) "All test suites passed"; \
 	else \
-		[ $$mos_ok -eq 0 ]  && printf "  \033[1;31m[FAIL] mos tests failed\033[0m\n"; \
-		[ $$tess_ok -eq 0 ] && printf "  \033[1;31m[FAIL] tess tests failed\033[0m\n"; \
-		[ $$tl_ok -eq 0 ]   && printf "  \033[1;31m[FAIL] TL tests failed\033[0m\n"; \
+		[ $$mos_ok -eq 0 ]    && printf "  \033[1;31m[FAIL] mos tests failed\033[0m\n"; \
+		[ $$tess_ok -eq 0 ]   && printf "  \033[1;31m[FAIL] tess tests failed\033[0m\n"; \
+		[ $$vendor_ok -eq 0 ] && printf "  \033[1;31m[FAIL] vendor tests failed\033[0m\n"; \
+		[ $$tl_ok -eq 0 ]     && printf "  \033[1;31m[FAIL] TL tests failed\033[0m\n"; \
 		printf "\n"; \
 		exit 1; \
 	fi

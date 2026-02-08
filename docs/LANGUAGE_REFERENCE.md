@@ -52,6 +52,12 @@ The entry point is the `main` function in the `main` module.
 
 Access module members with dot notation: `ModuleName.function()` or `ModuleName.Type`
 
+### Packages
+
+Modules can be distributed as `.tlib` packages. When a package is declared as a dependency via `depend()` in `package.tl`, all its modules are loaded automatically -- no `#import` needed. Consumer code accesses package modules with the same qualified syntax: `Module.function()`.
+
+See [PACKAGES.md](PACKAGES.md) for the full package system reference.
+
 ### Module Initialization
 
 Modules can define a `__init()` function that runs automatically when the module is loaded:
