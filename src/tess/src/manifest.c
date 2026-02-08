@@ -81,9 +81,14 @@ int tl_package_parse_file(allocator *alloc, char const *path, tl_package *out) {
     // Read file
     char *data = 0;
     u32   size = 0;
+    str   path_str = str_init_static(path);
+    if (!file_exists(path_str)) {
+        fprintf(stderr, "error: '%s' not found (required for pack/validate commands)\n", path);
+        return 1;
+    }
     file_read(alloc, path, &data, &size);
     if (!data) {
-        fprintf(stderr, "package.tl: error: cannot read '%s'\n", path);
+        fprintf(stderr, "error: cannot read '%s'\n", path);
         return 1;
     }
 

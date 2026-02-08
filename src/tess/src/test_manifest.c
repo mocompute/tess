@@ -406,6 +406,22 @@ static int test_duplicate_version(void) {
     return error;
 }
 
+static int test_missing_file(void) {
+    int        error = 0;
+    tl_package pkg;
+    char       path[512];
+
+    make_temp_path(path, sizeof(path), "nonexistent_package.tl");
+
+    int rc = tl_package_parse_file(default_allocator(), path, &pkg);
+
+    // Should fail: file does not exist
+    error += rc != 1;
+
+    if (error) fprintf(stderr, "  %d check(s) failed in test_missing_file\n", error);
+    return error;
+}
+
 // ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
@@ -431,6 +447,7 @@ int main(void) {
     T(test_non_string_arg)
     T(test_duplicate_package)
     T(test_duplicate_version)
+    T(test_missing_file)
 
     if (error) fprintf(stderr, "manifest tests: %d FAILED\n", error);
     return error;
