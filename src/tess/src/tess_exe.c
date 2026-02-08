@@ -83,6 +83,7 @@ noreturn void usage(int status, char const *argv0) {
     printf("    c                      transpile input files to C\n");
     printf("    exe                    compile and create executable (-o required)\n");
     printf("    fmt                    format source file (reads stdin if no file given)\n");
+    printf("    init                   create a package.tl in the current directory\n");
     printf("    lib                    compile and create shared library (-o required)\n");
     printf("    lib-emit-c             transpile input files to C as library source code\n");
     printf("    pack                   create .tlib archive from source files (-o required, reads package.tl)\n");
@@ -1037,6 +1038,40 @@ static int validate_files(state *self) {
     return 0;
 }
 
+static int init_package(state *self) {
+    // Check if package.tl already exists
+    str pkg_path = str_init_static("package.tl");
+    if (file_exists(pkg_path)) {
+        fprintf(stderr, "error: package.tl already exists\n");
+        return 1;
+    }
+
+    // Use current directory name as package name
+    char cwd[256];
+    span cwd_s = {.buf = cwd, .len = sizeof cwd};
+    if (!file_current_working_directory(cwd_s)) {
+        fprintf(stderr, "error: cannot determine current directory\n");
+        return 1;
+    }
+    char const *name = file_basename(cwd);
+
+    FILE *f = fopen("package.tl", "wb");
+    if (!f) {
+        fprintf(stderr, "error: cannot create package.tl\n");
+        return 1;
+    }
+    fprintf(f, "format(1)\n");
+    fprintf(f, "package(\"%s\")\n", name);
+    fprintf(f, "version(\"0.0.1\")\n");
+    fclose(f);
+
+    if (self->verbose) {
+        fprintf(stderr, "Created package.tl for package \"%s\"\n", name);
+    }
+
+    return 0;
+}
+
 static int unpack_files(state *self) {
     // Validate arguments
     if (self->words.size < 2) {
@@ -1162,6 +1197,10 @@ int main(int argc, char *argv[]) {
 
     else if (0 == strcmp("unpack", self.words.v[0])) {
         result = unpack_files(&self);
+    }
+
+    else if (0 == strcmp("init", self.words.v[0])) {
+        result = init_package(&self);
     }
 
 done:
