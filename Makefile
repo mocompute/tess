@@ -147,7 +147,7 @@ TESS_EMBED_OBJ = $(BUILD_DIR)/tess/tess_embed.o
 VERSION_HEADER = $(BUILD_DIR)/version.h
 VERSION := $(shell cat VERSION)
 
-$(VERSION_HEADER):
+$(VERSION_HEADER): VERSION
 	@mkdir -p $(dir $@)
 	$(MSG_GEN) $@
 	$(Q)( \
@@ -160,8 +160,6 @@ $(VERSION_HEADER):
 		echo "" >> $@; \
 		echo "#endif /* TESS_VERSION_H */" >> $@; \
 	)
-
-.PHONY: $(VERSION_HEADER)
 
 $(EMBED_TOOL): $(MOS_SRC_DIR)/src/embed.c $(MOS_OBJECTS)
 	$(MSG_LD) $@
