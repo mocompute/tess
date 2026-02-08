@@ -20,10 +20,14 @@
 #define ftruncate(fd, size) _chsize(fd, size)
 #define fileno              _fileno
 #define CD_CMD              "cd /d"
+#define SEP_STR             "\\"
+#define EXE_SUFFIX          ".exe"
 #else
 #include <sys/wait.h>
 #include <unistd.h>
-#define CD_CMD "cd"
+#define CD_CMD     "cd"
+#define SEP_STR    "/"
+#define EXE_SUFFIX ""
 #endif
 
 #define T(name)                                                                                            \
@@ -39,8 +43,19 @@ static void init_temp_dir(void) {
     platform_temp_dir(temp_dir, sizeof(temp_dir));
 }
 
+static void normalize_seps(char *path) {
+#ifdef MOS_WINDOWS
+    for (char *p = path; *p; p++) {
+        if (*p == '/') *p = '\\';
+    }
+#else
+    (void)path;
+#endif
+}
+
 static void make_temp_path(char *buf, size_t bufsize, char const *filename) {
     snprintf(buf, bufsize, "%s%s", temp_dir, filename);
+    normalize_seps(buf);
 }
 
 static str              test_modules[2];
@@ -659,11 +674,22 @@ static int test_pack_with_manifest(void) {
 static void test_mkdir_p(char const *path) {
     char tmp[512];
     snprintf(tmp, sizeof(tmp), "%s", path);
-    for (char *p = tmp + 1; *p; p++) {
-        if (*p == '/') {
-            *p = '\0';
+
+    // Skip drive letter on Windows (e.g. "C:\") — _mkdir("C:") can fail with
+    // EACCES instead of EEXIST on some environments (e.g. GitHub Actions runners).
+    char *start = tmp + 1;
+#ifdef MOS_WINDOWS
+    if (tmp[0] && tmp[1] == ':' && (tmp[2] == '/' || tmp[2] == '\\')) {
+        start = tmp + 3;
+    }
+#endif
+
+    for (char *p = start; *p; p++) {
+        if (*p == '/' || *p == '\\') {
+            char saved = *p;
+            *p         = '\0';
             platform_mkdir(tmp);
-            *p = '/';
+            *p = saved;
         }
     }
     platform_mkdir(tmp);
@@ -866,8 +892,9 @@ static void init_e2e_paths(void) {
     if (cwd) {
         snprintf(e2e_project_root, sizeof(e2e_project_root), "%s", cwd);
     }
-    snprintf(e2e_tess_exe, sizeof(e2e_tess_exe), "%s/tess", e2e_project_root);
-    snprintf(e2e_stdlib_dir, sizeof(e2e_stdlib_dir), "%s/src/tl/std", e2e_project_root);
+    snprintf(e2e_tess_exe, sizeof(e2e_tess_exe), "%s" SEP_STR "tess" EXE_SUFFIX, e2e_project_root);
+    snprintf(e2e_stdlib_dir, sizeof(e2e_stdlib_dir), "%s" SEP_STR "src" SEP_STR "tl" SEP_STR "std",
+             e2e_project_root);
 #endif
 }
 
@@ -901,6 +928,13 @@ static int run_cmd(char const *cmd) {
     if (WIFEXITED(ret)) return WEXITSTATUS(ret);
     return -1;
 #endif
+}
+
+// Run an executable path (quoted for paths with spaces or special characters).
+static int run_exe(char const *exe_path) {
+    char quoted[600];
+    snprintf(quoted, sizeof(quoted), "\"%s\"", exe_path);
+    return run_cmd(quoted);
 }
 
 // Test: pack a simple library, consume it via package.tl, compile, run.
@@ -941,7 +975,7 @@ static int test_e2e_basic_package(void) {
     // -- Set up consumer project --
     char app_dir[512], libs_dir[512];
     make_temp_path(app_dir, sizeof(app_dir), "e2e_basic_app/");
-    snprintf(libs_dir, sizeof(libs_dir), "%slibs/", app_dir);
+    snprintf(libs_dir, sizeof(libs_dir), "%slibs" SEP_STR, app_dir);
     test_mkdir_p(app_dir);
     test_mkdir_p(libs_dir);
 
@@ -971,7 +1005,7 @@ static int test_e2e_basic_package(void) {
 
     // -- Compile consumer --
     char out_exe[512];
-    snprintf(out_exe, sizeof(out_exe), "%sapp", app_dir);
+    snprintf(out_exe, sizeof(out_exe), "%sapp" EXE_SUFFIX, app_dir);
     snprintf(cmd, sizeof(cmd),
              CD_CMD " \"%s\" && \"%s\" exe --no-standard-includes -S \"%s\" -o \"%s\" main.tl 2>&1", app_dir,
              e2e_tess_exe, e2e_stdlib_dir, out_exe);
@@ -981,7 +1015,7 @@ static int test_e2e_basic_package(void) {
     }
 
     // -- Run and verify --
-    int exit_code = run_cmd(out_exe);
+    int exit_code = run_exe(out_exe);
     if (exit_code != 42) {
         fprintf(stderr, "  expected exit code 42, got %d\n", exit_code);
         return 1;
@@ -1020,7 +1054,7 @@ static int test_e2e_version_mismatch(void) {
     // -- Set up consumer expecting version 2.0.0 --
     char app_dir[512], libs_dir[512];
     make_temp_path(app_dir, sizeof(app_dir), "e2e_vermis_app/");
-    snprintf(libs_dir, sizeof(libs_dir), "%slibs/", app_dir);
+    snprintf(libs_dir, sizeof(libs_dir), "%slibs" SEP_STR, app_dir);
     test_mkdir_p(app_dir);
     test_mkdir_p(libs_dir);
 
@@ -1040,7 +1074,7 @@ static int test_e2e_version_mismatch(void) {
 
     // -- Compile consumer: should fail due to version mismatch --
     char out_exe[512];
-    snprintf(out_exe, sizeof(out_exe), "%sapp", app_dir);
+    snprintf(out_exe, sizeof(out_exe), "%sapp" EXE_SUFFIX, app_dir);
     snprintf(cmd, sizeof(cmd),
              CD_CMD " \"%s\" && \"%s\" exe --no-standard-includes -S \"%s\" -o \"%s\" main.tl 2>&1", app_dir,
              e2e_tess_exe, e2e_stdlib_dir, out_exe);
@@ -1057,7 +1091,7 @@ static int test_e2e_version_mismatch(void) {
 static int test_e2e_dep_not_found(void) {
     char app_dir[512], libs_dir[512];
     make_temp_path(app_dir, sizeof(app_dir), "e2e_notfound_app/");
-    snprintf(libs_dir, sizeof(libs_dir), "%slibs/", app_dir);
+    snprintf(libs_dir, sizeof(libs_dir), "%slibs" SEP_STR, app_dir);
     test_mkdir_p(app_dir);
     test_mkdir_p(libs_dir);
 
@@ -1073,7 +1107,7 @@ static int test_e2e_dep_not_found(void) {
     write_file(path, "#module main\n\nmain() { 0 }\n");
 
     char cmd[2048], out_exe[512];
-    snprintf(out_exe, sizeof(out_exe), "%sapp", app_dir);
+    snprintf(out_exe, sizeof(out_exe), "%sapp" EXE_SUFFIX, app_dir);
     snprintf(cmd, sizeof(cmd),
              CD_CMD " \"%s\" && \"%s\" exe --no-standard-includes -S \"%s\" -o \"%s\" main.tl 2>&1", app_dir,
              e2e_tess_exe, e2e_stdlib_dir, out_exe);
@@ -1136,7 +1170,7 @@ static int test_e2e_multi_file_library(void) {
     // -- Set up consumer --
     char app_dir[512], libs_dir[512];
     make_temp_path(app_dir, sizeof(app_dir), "e2e_multi_app/");
-    snprintf(libs_dir, sizeof(libs_dir), "%slibs/", app_dir);
+    snprintf(libs_dir, sizeof(libs_dir), "%slibs" SEP_STR, app_dir);
     test_mkdir_p(app_dir);
     test_mkdir_p(libs_dir);
 
@@ -1161,7 +1195,7 @@ static int test_e2e_multi_file_library(void) {
 
     // -- Compile and run --
     char out_exe[512];
-    snprintf(out_exe, sizeof(out_exe), "%sapp", app_dir);
+    snprintf(out_exe, sizeof(out_exe), "%sapp" EXE_SUFFIX, app_dir);
     snprintf(cmd, sizeof(cmd),
              CD_CMD " \"%s\" && \"%s\" exe --no-standard-includes -S \"%s\" -o \"%s\" main.tl 2>&1", app_dir,
              e2e_tess_exe, e2e_stdlib_dir, out_exe);
@@ -1170,7 +1204,7 @@ static int test_e2e_multi_file_library(void) {
         return 1;
     }
 
-    int exit_code = run_cmd(out_exe);
+    int exit_code = run_exe(out_exe);
     if (exit_code != 42) {
         fprintf(stderr, "  expected exit code 42, got %d\n", exit_code);
         return 1;
@@ -1205,7 +1239,7 @@ static int test_e2e_transitive_deps(void) {
     // -- Create MathLib (module MathLib, depends on LogLib) --
     char mathlib_dir[512], mathlib_libs[512];
     make_temp_path(mathlib_dir, sizeof(mathlib_dir), "e2e_trans_mathlib/");
-    snprintf(mathlib_libs, sizeof(mathlib_libs), "%slibs/", mathlib_dir);
+    snprintf(mathlib_libs, sizeof(mathlib_libs), "%slibs" SEP_STR, mathlib_dir);
     test_mkdir_p(mathlib_dir);
     test_mkdir_p(mathlib_libs);
 
@@ -1240,7 +1274,7 @@ static int test_e2e_transitive_deps(void) {
     // -- Create consumer App --
     char app_dir[512], app_libs[512];
     make_temp_path(app_dir, sizeof(app_dir), "e2e_trans_app/");
-    snprintf(app_libs, sizeof(app_libs), "%slibs/", app_dir);
+    snprintf(app_libs, sizeof(app_libs), "%slibs" SEP_STR, app_dir);
     test_mkdir_p(app_dir);
     test_mkdir_p(app_libs);
 
@@ -1265,7 +1299,7 @@ static int test_e2e_transitive_deps(void) {
 
     // -- Compile and run --
     char out_exe[512];
-    snprintf(out_exe, sizeof(out_exe), "%sapp", app_dir);
+    snprintf(out_exe, sizeof(out_exe), "%sapp" EXE_SUFFIX, app_dir);
     snprintf(cmd, sizeof(cmd),
              CD_CMD " \"%s\" && \"%s\" exe --no-standard-includes -S \"%s\" -o \"%s\" main.tl 2>&1", app_dir,
              e2e_tess_exe, e2e_stdlib_dir, out_exe);
@@ -1274,7 +1308,7 @@ static int test_e2e_transitive_deps(void) {
         return 1;
     }
 
-    int exit_code = run_cmd(out_exe);
+    int exit_code = run_exe(out_exe);
     if (exit_code != 42) {
         fprintf(stderr, "  expected exit code 42, got %d\n", exit_code);
         return 1;
@@ -1309,7 +1343,7 @@ static int test_e2e_diamond_deps(void) {
     // -- Create LibA (depends on BaseLib) --
     char liba_dir[512], liba_libs[512];
     make_temp_path(liba_dir, sizeof(liba_dir), "e2e_diamond_liba/");
-    snprintf(liba_libs, sizeof(liba_libs), "%slibs/", liba_dir);
+    snprintf(liba_libs, sizeof(liba_libs), "%slibs" SEP_STR, liba_dir);
     test_mkdir_p(liba_dir);
     test_mkdir_p(liba_libs);
 
@@ -1340,7 +1374,7 @@ static int test_e2e_diamond_deps(void) {
     // -- Create LibB (depends on BaseLib) --
     char libb_dir[512], libb_libs[512];
     make_temp_path(libb_dir, sizeof(libb_dir), "e2e_diamond_libb/");
-    snprintf(libb_libs, sizeof(libb_libs), "%slibs/", libb_dir);
+    snprintf(libb_libs, sizeof(libb_libs), "%slibs" SEP_STR, libb_dir);
     test_mkdir_p(libb_dir);
     test_mkdir_p(libb_libs);
 
@@ -1369,7 +1403,7 @@ static int test_e2e_diamond_deps(void) {
     // -- Create App depending on both LibA and LibB --
     char app_dir[512], app_libs[512];
     make_temp_path(app_dir, sizeof(app_dir), "e2e_diamond_app/");
-    snprintf(app_libs, sizeof(app_libs), "%slibs/", app_dir);
+    snprintf(app_libs, sizeof(app_libs), "%slibs" SEP_STR, app_dir);
     test_mkdir_p(app_dir);
     test_mkdir_p(app_libs);
 
@@ -1402,7 +1436,7 @@ static int test_e2e_diamond_deps(void) {
 
     // -- Compile and run --
     char out_exe[512];
-    snprintf(out_exe, sizeof(out_exe), "%sapp", app_dir);
+    snprintf(out_exe, sizeof(out_exe), "%sapp" EXE_SUFFIX, app_dir);
     snprintf(cmd, sizeof(cmd),
              CD_CMD " \"%s\" && \"%s\" exe --no-standard-includes -S \"%s\" -o \"%s\" main.tl 2>&1", app_dir,
              e2e_tess_exe, e2e_stdlib_dir, out_exe);
@@ -1411,7 +1445,7 @@ static int test_e2e_diamond_deps(void) {
         return 1;
     }
 
-    int exit_code = run_cmd(out_exe);
+    int exit_code = run_exe(out_exe);
     if (exit_code != 42) {
         fprintf(stderr, "  expected exit code 42, got %d\n", exit_code);
         return 1;
@@ -1486,7 +1520,7 @@ static int test_e2e_circular_deps(void) {
     // -- Create App depending on PkgA --
     char app_dir[512], app_libs[512];
     make_temp_path(app_dir, sizeof(app_dir), "e2e_circular_app/");
-    snprintf(app_libs, sizeof(app_libs), "%slibs/", app_dir);
+    snprintf(app_libs, sizeof(app_libs), "%slibs" SEP_STR, app_dir);
     test_mkdir_p(app_dir);
     test_mkdir_p(app_libs);
 
@@ -1510,7 +1544,7 @@ static int test_e2e_circular_deps(void) {
 
     // -- Compile: should fail with circular dependency error --
     char out_exe[512];
-    snprintf(out_exe, sizeof(out_exe), "%sapp", app_dir);
+    snprintf(out_exe, sizeof(out_exe), "%sapp" EXE_SUFFIX, app_dir);
     char cmd[2048];
     snprintf(cmd, sizeof(cmd),
              CD_CMD " \"%s\" && \"%s\" exe --no-standard-includes -S \"%s\" -o \"%s\" main.tl 2>&1", app_dir,
@@ -1601,7 +1635,7 @@ static int test_e2e_version_conflict(void) {
     // -- Create App depending on LibA and LibB --
     char app_dir[512], app_libs[512];
     make_temp_path(app_dir, sizeof(app_dir), "e2e_conflict_app/");
-    snprintf(app_libs, sizeof(app_libs), "%slibs/", app_dir);
+    snprintf(app_libs, sizeof(app_libs), "%slibs" SEP_STR, app_dir);
     test_mkdir_p(app_dir);
     test_mkdir_p(app_libs);
 
@@ -1628,7 +1662,7 @@ static int test_e2e_version_conflict(void) {
 
     // -- Compile: should fail (LibA needs Base=1.0.0, LibB needs Base=2.0.0) --
     char out_exe[512];
-    snprintf(out_exe, sizeof(out_exe), "%sapp", app_dir);
+    snprintf(out_exe, sizeof(out_exe), "%sapp" EXE_SUFFIX, app_dir);
     char cmd[2048];
     snprintf(cmd, sizeof(cmd),
              CD_CMD " \"%s\" && \"%s\" exe --no-standard-includes -S \"%s\" -o \"%s\" main.tl 2>&1", app_dir,
@@ -1676,7 +1710,7 @@ static int test_e2e_missing_transitive_dep(void) {
     // -- Create App depending on MathLib, but LogLib is NOT available --
     char app_dir[512], app_libs[512];
     make_temp_path(app_dir, sizeof(app_dir), "e2e_missing_trans_app/");
-    snprintf(app_libs, sizeof(app_libs), "%slibs/", app_dir);
+    snprintf(app_libs, sizeof(app_libs), "%slibs" SEP_STR, app_dir);
     test_mkdir_p(app_dir);
     test_mkdir_p(app_libs);
 
@@ -1698,7 +1732,7 @@ static int test_e2e_missing_transitive_dep(void) {
 
     // -- Compile: should fail with missing transitive dep --
     char out_exe[512];
-    snprintf(out_exe, sizeof(out_exe), "%sapp", app_dir);
+    snprintf(out_exe, sizeof(out_exe), "%sapp" EXE_SUFFIX, app_dir);
     char cmd[2048];
     snprintf(cmd, sizeof(cmd),
              CD_CMD " \"%s\" && \"%s\" exe --no-standard-includes -S \"%s\" -o \"%s\" main.tl 2>&1", app_dir,
@@ -1753,7 +1787,7 @@ static int test_e2e_internal_module_accessible(void) {
     // -- Consumer accesses BOTH exported and internal modules --
     char app_dir[512], app_libs[512];
     make_temp_path(app_dir, sizeof(app_dir), "e2e_internal_app/");
-    snprintf(app_libs, sizeof(app_libs), "%slibs/", app_dir);
+    snprintf(app_libs, sizeof(app_libs), "%slibs" SEP_STR, app_dir);
     test_mkdir_p(app_dir);
     test_mkdir_p(app_libs);
 
@@ -1776,7 +1810,7 @@ static int test_e2e_internal_module_accessible(void) {
 
     // -- Compile and run: both modules accessible --
     char out_exe[512];
-    snprintf(out_exe, sizeof(out_exe), "%sapp", app_dir);
+    snprintf(out_exe, sizeof(out_exe), "%sapp" EXE_SUFFIX, app_dir);
     snprintf(cmd, sizeof(cmd),
              CD_CMD " \"%s\" && \"%s\" exe --no-standard-includes -S \"%s\" -o \"%s\" main.tl 2>&1", app_dir,
              e2e_tess_exe, e2e_stdlib_dir, out_exe);
@@ -1785,7 +1819,7 @@ static int test_e2e_internal_module_accessible(void) {
         return 1;
     }
 
-    int exit_code = run_cmd(out_exe);
+    int exit_code = run_exe(out_exe);
     if (exit_code != 42) {
         fprintf(stderr, "  expected exit code 42, got %d\n", exit_code);
         return 1;
@@ -1829,7 +1863,7 @@ static int test_e2e_generic_package(void) {
     // -- Consumer uses generic functions --
     char app_dir[512], app_libs[512];
     make_temp_path(app_dir, sizeof(app_dir), "e2e_generic_app/");
-    snprintf(app_libs, sizeof(app_libs), "%slibs/", app_dir);
+    snprintf(app_libs, sizeof(app_libs), "%slibs" SEP_STR, app_dir);
     test_mkdir_p(app_dir);
     test_mkdir_p(app_libs);
 
@@ -1852,7 +1886,7 @@ static int test_e2e_generic_package(void) {
     copy_file(tlib_path, dst);
 
     char out_exe[512];
-    snprintf(out_exe, sizeof(out_exe), "%sapp", app_dir);
+    snprintf(out_exe, sizeof(out_exe), "%sapp" EXE_SUFFIX, app_dir);
     snprintf(cmd, sizeof(cmd),
              CD_CMD " \"%s\" && \"%s\" exe --no-standard-includes -S \"%s\" -o \"%s\" main.tl 2>&1", app_dir,
              e2e_tess_exe, e2e_stdlib_dir, out_exe);
@@ -1861,7 +1895,7 @@ static int test_e2e_generic_package(void) {
         return 1;
     }
 
-    int exit_code = run_cmd(out_exe);
+    int exit_code = run_exe(out_exe);
     if (exit_code != 42) {
         fprintf(stderr, "  expected exit code 42, got %d\n", exit_code);
         return 1;
@@ -1919,7 +1953,7 @@ static int test_e2e_module_conflict(void) {
     // -- Consumer depends on both --
     char app_dir[512], app_libs[512];
     make_temp_path(app_dir, sizeof(app_dir), "e2e_modconflict_app/");
-    snprintf(app_libs, sizeof(app_libs), "%slibs/", app_dir);
+    snprintf(app_libs, sizeof(app_libs), "%slibs" SEP_STR, app_dir);
     test_mkdir_p(app_dir);
     test_mkdir_p(app_libs);
 
@@ -1943,7 +1977,7 @@ static int test_e2e_module_conflict(void) {
 
     // -- Compile: should fail due to duplicate module "Utils" --
     char out_exe[512];
-    snprintf(out_exe, sizeof(out_exe), "%sapp", app_dir);
+    snprintf(out_exe, sizeof(out_exe), "%sapp" EXE_SUFFIX, app_dir);
     char cmd[2048];
     snprintf(cmd, sizeof(cmd),
              CD_CMD " \"%s\" && \"%s\" exe --no-standard-includes -S \"%s\" -o \"%s\" main.tl 2>&1", app_dir,
