@@ -115,6 +115,9 @@ tess_create_test(tess)
 tess_create_test(type_v2)
 tess_create_test(format)
 tess_create_test(tlib)
+target_compile_definitions(test-tlib PRIVATE
+  "TEST_TESS_EXE=\"$<TARGET_FILE:tess_exe>\""
+  "TEST_STDLIB_DIR=\"${PROJECT_SOURCE_DIR}/src/tl/std\"")
 tess_create_test(import_resolver)
 tess_create_test(manifest)
 tess_create_test(source_scanner)

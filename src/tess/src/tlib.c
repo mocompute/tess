@@ -686,7 +686,8 @@ int tl_tlib_extract(allocator *alloc, tl_tlib_archive const *archive,
             return 1;
         }
 
-        array_push(*out_files, out_path);
+        str normed = file_path_normalize(alloc, out_path);
+        array_push(*out_files, normed);
     }
 
     return 0;

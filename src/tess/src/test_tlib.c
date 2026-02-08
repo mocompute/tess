@@ -847,16 +847,16 @@ static char e2e_tess_exe[512];
 static char e2e_stdlib_dir[512];
 
 static void init_e2e_paths(void) {
+#if defined(TEST_TESS_EXE) && defined(TEST_STDLIB_DIR)
+    snprintf(e2e_tess_exe, sizeof(e2e_tess_exe), "%s", TEST_TESS_EXE);
+    snprintf(e2e_stdlib_dir, sizeof(e2e_stdlib_dir), "%s", TEST_STDLIB_DIR);
+#else
     char buf[512];
     span s = {.buf = buf, .len = sizeof(buf)};
     char *cwd = file_current_working_directory(s);
     if (cwd) {
         snprintf(e2e_project_root, sizeof(e2e_project_root), "%s", cwd);
     }
-#ifdef MOS_WINDOWS
-    snprintf(e2e_tess_exe, sizeof(e2e_tess_exe), "%s\\tess.exe", e2e_project_root);
-    snprintf(e2e_stdlib_dir, sizeof(e2e_stdlib_dir), "%s\\src\\tl\\std", e2e_project_root);
-#else
     snprintf(e2e_tess_exe, sizeof(e2e_tess_exe), "%s/tess", e2e_project_root);
     snprintf(e2e_stdlib_dir, sizeof(e2e_stdlib_dir), "%s/src/tl/std", e2e_project_root);
 #endif
