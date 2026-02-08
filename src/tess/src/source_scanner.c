@@ -62,9 +62,14 @@ static int process_hash_directive(tl_source_scanner *self, str file_path, str_ar
         } else if (!is_stdlib_file && str_eq(words.v[0], S("module"))) {
             if (str_map_contains(self->modules_seen, words.v[1])) {
                 str *existing = str_map_get(self->modules_seen, words.v[1]);
-                fprintf(stderr, "error: module '%s' defined in '%s' was already defined in '%s'\n",
-                        str_cstr(&words.v[1]), str_cstr(&file_path), str_cstr(existing));
-                return 1;
+                // Allow same file to re-declare the same module (happens when
+                // a package file is scanned both directly and via #import chain)
+                if (!str_eq(*existing, file_path)) {
+                    fprintf(stderr,
+                            "error: module '%s' defined in '%s' was already defined in '%s'\n",
+                            str_cstr(&words.v[1]), str_cstr(&file_path), str_cstr(existing));
+                    return 1;
+                }
             }
 
             str_map_set(&self->modules_seen, words.v[1], &file_path);

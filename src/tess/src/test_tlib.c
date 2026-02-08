@@ -13,6 +13,7 @@
 #define ftruncate(fd, size) _chsize(fd, size)
 #define fileno              _fileno
 #else
+#include <sys/wait.h>
 #include <unistd.h>
 #endif
 
@@ -833,8 +834,351 @@ static int test_extract(void) {
     return error;
 }
 
+// ===========================================================================
+// End-to-end integration tests (Phase 7: package consumption)
+// ===========================================================================
+//
+// These tests exercise the full pipeline: create library, pack to .tlib,
+// create consumer with package.tl, compile with tess exe, run the result.
+// They require the `tess` binary to be built (it is when running via `make test`).
+
+static char e2e_project_root[512];
+static char e2e_tess_exe[512];
+static char e2e_stdlib_dir[512];
+
+static void init_e2e_paths(void) {
+    char buf[512];
+    span s = {.buf = buf, .len = sizeof(buf)};
+    char *cwd = file_current_working_directory(s);
+    if (cwd) {
+        snprintf(e2e_project_root, sizeof(e2e_project_root), "%s", cwd);
+    }
+#ifdef MOS_WINDOWS
+    snprintf(e2e_tess_exe, sizeof(e2e_tess_exe), "%s\\tess.exe", e2e_project_root);
+    snprintf(e2e_stdlib_dir, sizeof(e2e_stdlib_dir), "%s\\src\\tl\\std", e2e_project_root);
+#else
+    snprintf(e2e_tess_exe, sizeof(e2e_tess_exe), "%s/tess", e2e_project_root);
+    snprintf(e2e_stdlib_dir, sizeof(e2e_stdlib_dir), "%s/src/tl/std", e2e_project_root);
+#endif
+}
+
+static int copy_file(char const *src, char const *dst) {
+    FILE *in = fopen(src, "rb");
+    if (!in) return 1;
+    FILE *out = fopen(dst, "wb");
+    if (!out) { fclose(in); return 1; }
+    char buf[4096];
+    size_t n;
+    while ((n = fread(buf, 1, sizeof(buf), in)) > 0) {
+        if (fwrite(buf, 1, n, out) != n) { fclose(in); fclose(out); return 1; }
+    }
+    fclose(in);
+    fclose(out);
+    return 0;
+}
+
+static int run_cmd(char const *cmd) {
+    int ret = system(cmd);
+#ifdef MOS_WINDOWS
+    return ret;
+#else
+    if (WIFEXITED(ret)) return WEXITSTATUS(ret);
+    return -1;
+#endif
+}
+
+// Test: pack a simple library, consume it via package.tl, compile, run.
+// Library has one module (Greeter) with greet() returning 42.
+// Consumer calls Greeter.greet() from main() and returns the result.
+static int test_e2e_basic_package(void) {
+    // -- Set up library project --
+    char lib_dir[512];
+    make_temp_path(lib_dir, sizeof(lib_dir), "e2e_basic_lib/");
+    test_mkdir_p(lib_dir);
+
+    char path[512];
+    snprintf(path, sizeof(path), "%spackage.tl", lib_dir);
+    if (write_file(path, "format(1)\npackage(\"Greeter\")\nversion(\"1.0.0\")\nexport(\"Greeter\")\n")) {
+        fprintf(stderr, "  failed to write lib package.tl\n");
+        return 1;
+    }
+
+    snprintf(path, sizeof(path), "%sgreeter.tl", lib_dir);
+    if (write_file(path, "#module Greeter\n\ngreet() { 42 }\n")) {
+        fprintf(stderr, "  failed to write greeter.tl\n");
+        return 1;
+    }
+
+    // -- Pack library --
+    char tlib_path[512];
+    snprintf(tlib_path, sizeof(tlib_path), "%sGreeter.tlib", lib_dir);
+
+    char cmd[2048];
+    snprintf(cmd, sizeof(cmd),
+             "cd \"%s\" && \"%s\" pack --no-standard-includes -S \"%s\" greeter.tl -o Greeter.tlib 2>&1",
+             lib_dir, e2e_tess_exe, e2e_stdlib_dir);
+    if (run_cmd(cmd) != 0) {
+        fprintf(stderr, "  tess pack failed\n");
+        return 1;
+    }
+
+    // -- Set up consumer project --
+    char app_dir[512], libs_dir[512];
+    make_temp_path(app_dir, sizeof(app_dir), "e2e_basic_app/");
+    snprintf(libs_dir, sizeof(libs_dir), "%slibs/", app_dir);
+    test_mkdir_p(app_dir);
+    test_mkdir_p(libs_dir);
+
+    snprintf(path, sizeof(path), "%spackage.tl", app_dir);
+    if (write_file(path,
+            "format(1)\n"
+            "package(\"App\")\n"
+            "version(\"0.1.0\")\n"
+            "depend(\"Greeter\", \"1.0.0\")\n"
+            "depend_path(\"./libs\")\n")) {
+        fprintf(stderr, "  failed to write app package.tl\n");
+        return 1;
+    }
+
+    snprintf(path, sizeof(path), "%smain.tl", app_dir);
+    if (write_file(path, "#module main\n\nmain() {\n  Greeter.greet()\n}\n")) {
+        fprintf(stderr, "  failed to write main.tl\n");
+        return 1;
+    }
+
+    // Copy .tlib to consumer's libs/
+    char dst_tlib[512];
+    snprintf(dst_tlib, sizeof(dst_tlib), "%sGreeter.tlib", libs_dir);
+    if (copy_file(tlib_path, dst_tlib)) {
+        fprintf(stderr, "  failed to copy Greeter.tlib\n");
+        return 1;
+    }
+
+    // -- Compile consumer --
+    char out_exe[512];
+    snprintf(out_exe, sizeof(out_exe), "%sapp", app_dir);
+    snprintf(cmd, sizeof(cmd),
+             "cd \"%s\" && \"%s\" exe --no-standard-includes -S \"%s\" -o \"%s\" main.tl 2>&1",
+             app_dir, e2e_tess_exe, e2e_stdlib_dir, out_exe);
+    if (run_cmd(cmd) != 0) {
+        fprintf(stderr, "  tess exe failed\n");
+        return 1;
+    }
+
+    // -- Run and verify --
+    int exit_code = run_cmd(out_exe);
+    if (exit_code != 42) {
+        fprintf(stderr, "  expected exit code 42, got %d\n", exit_code);
+        return 1;
+    }
+
+    return 0;
+}
+
+// Test: version mismatch between package.tl depend() and .tlib metadata.
+// Consumer expects version 2.0.0 but .tlib has 1.0.0 → compilation must fail.
+static int test_e2e_version_mismatch(void) {
+    // -- Set up library (version 1.0.0) --
+    char lib_dir[512];
+    make_temp_path(lib_dir, sizeof(lib_dir), "e2e_vermis_lib/");
+    test_mkdir_p(lib_dir);
+
+    char path[512];
+    snprintf(path, sizeof(path), "%spackage.tl", lib_dir);
+    write_file(path, "format(1)\npackage(\"Greeter\")\nversion(\"1.0.0\")\nexport(\"Greeter\")\n");
+
+    snprintf(path, sizeof(path), "%sgreeter.tl", lib_dir);
+    write_file(path, "#module Greeter\n\ngreet() { 42 }\n");
+
+    char tlib_path[512];
+    snprintf(tlib_path, sizeof(tlib_path), "%sGreeter.tlib", lib_dir);
+
+    char cmd[2048];
+    snprintf(cmd, sizeof(cmd),
+             "cd \"%s\" && \"%s\" pack --no-standard-includes -S \"%s\" greeter.tl -o Greeter.tlib 2>&1",
+             lib_dir, e2e_tess_exe, e2e_stdlib_dir);
+    if (run_cmd(cmd) != 0) {
+        fprintf(stderr, "  tess pack failed\n");
+        return 1;
+    }
+
+    // -- Set up consumer expecting version 2.0.0 --
+    char app_dir[512], libs_dir[512];
+    make_temp_path(app_dir, sizeof(app_dir), "e2e_vermis_app/");
+    snprintf(libs_dir, sizeof(libs_dir), "%slibs/", app_dir);
+    test_mkdir_p(app_dir);
+    test_mkdir_p(libs_dir);
+
+    snprintf(path, sizeof(path), "%spackage.tl", app_dir);
+    write_file(path,
+            "format(1)\n"
+            "package(\"App\")\n"
+            "version(\"0.1.0\")\n"
+            "depend(\"Greeter\", \"2.0.0\")\n"
+            "depend_path(\"./libs\")\n");
+
+    snprintf(path, sizeof(path), "%smain.tl", app_dir);
+    write_file(path, "#module main\n\nmain() { Greeter.greet() }\n");
+
+    char dst_tlib[512];
+    snprintf(dst_tlib, sizeof(dst_tlib), "%sGreeter.tlib", libs_dir);
+    copy_file(tlib_path, dst_tlib);
+
+    // -- Compile consumer: should fail due to version mismatch --
+    char out_exe[512];
+    snprintf(out_exe, sizeof(out_exe), "%sapp", app_dir);
+    snprintf(cmd, sizeof(cmd),
+             "cd \"%s\" && \"%s\" exe --no-standard-includes -S \"%s\" -o \"%s\" main.tl 2>&1",
+             app_dir, e2e_tess_exe, e2e_stdlib_dir, out_exe);
+    if (run_cmd(cmd) == 0) {
+        fprintf(stderr, "  tess exe should have failed (version mismatch)\n");
+        return 1;
+    }
+
+    return 0;
+}
+
+// Test: dependency .tlib not found in any depend_path().
+// Consumer depends on "NonExistent" which has no .tlib → compilation must fail.
+static int test_e2e_dep_not_found(void) {
+    char app_dir[512], libs_dir[512];
+    make_temp_path(app_dir, sizeof(app_dir), "e2e_notfound_app/");
+    snprintf(libs_dir, sizeof(libs_dir), "%slibs/", app_dir);
+    test_mkdir_p(app_dir);
+    test_mkdir_p(libs_dir);
+
+    char path[512];
+    snprintf(path, sizeof(path), "%spackage.tl", app_dir);
+    write_file(path,
+            "format(1)\n"
+            "package(\"App\")\n"
+            "version(\"0.1.0\")\n"
+            "depend(\"NonExistent\", \"1.0.0\")\n"
+            "depend_path(\"./libs\")\n");
+
+    snprintf(path, sizeof(path), "%smain.tl", app_dir);
+    write_file(path, "#module main\n\nmain() { 0 }\n");
+
+    char cmd[2048], out_exe[512];
+    snprintf(out_exe, sizeof(out_exe), "%sapp", app_dir);
+    snprintf(cmd, sizeof(cmd),
+             "cd \"%s\" && \"%s\" exe --no-standard-includes -S \"%s\" -o \"%s\" main.tl 2>&1",
+             app_dir, e2e_tess_exe, e2e_stdlib_dir, out_exe);
+    if (run_cmd(cmd) == 0) {
+        fprintf(stderr, "  tess exe should have failed (package not found)\n");
+        return 1;
+    }
+
+    return 0;
+}
+
+// Test: library with multiple files and internal imports.
+// Library has MathLib (public, imports helper.tl) and MathHelper (internal).
+// Consumer uses MathLib.add() which internally calls MathHelper.check().
+//
+// FIXME: ideally the internal module would be MathLib.Internal (nested module),
+// but cross-file nested modules fail when the child file (internal.tl) is parsed
+// before the parent file (math.tl): "nested_module_parent_not_found". This
+// happens because import resolution adds internal.tl before math.tl in the file
+// list. Using a flat module name (MathHelper) works around this for now.
+static int test_e2e_multi_file_library(void) {
+    // -- Set up library --
+    char lib_dir[512];
+    make_temp_path(lib_dir, sizeof(lib_dir), "e2e_multi_lib/");
+    test_mkdir_p(lib_dir);
+
+    char path[512];
+    snprintf(path, sizeof(path), "%spackage.tl", lib_dir);
+    write_file(path,
+            "format(1)\n"
+            "package(\"MathLib\")\n"
+            "version(\"1.0.0\")\n"
+            "export(\"MathLib\")\n");
+
+    snprintf(path, sizeof(path), "%smath.tl", lib_dir);
+    write_file(path,
+            "#module MathLib\n"
+            "#import \"helper.tl\"\n"
+            "\n"
+            "add(a, b) {\n"
+            "  MathHelper.check(a)\n"
+            "  MathHelper.check(b)\n"
+            "  a + b\n"
+            "}\n");
+
+    snprintf(path, sizeof(path), "%shelper.tl", lib_dir);
+    write_file(path,
+            "#module MathHelper\n"
+            "\n"
+            "check(x) {\n"
+            "  if x < 0 { 0 - x }\n"
+            "  else { x }\n"
+            "}\n");
+
+    // -- Pack library (passing root file, imports are resolved automatically) --
+    char tlib_path[512];
+    snprintf(tlib_path, sizeof(tlib_path), "%sMathLib.tlib", lib_dir);
+
+    char cmd[2048];
+    snprintf(cmd, sizeof(cmd),
+             "cd \"%s\" && \"%s\" pack --no-standard-includes -S \"%s\" math.tl -o MathLib.tlib 2>&1",
+             lib_dir, e2e_tess_exe, e2e_stdlib_dir);
+    if (run_cmd(cmd) != 0) {
+        fprintf(stderr, "  tess pack failed\n");
+        return 1;
+    }
+
+    // -- Set up consumer --
+    char app_dir[512], libs_dir[512];
+    make_temp_path(app_dir, sizeof(app_dir), "e2e_multi_app/");
+    snprintf(libs_dir, sizeof(libs_dir), "%slibs/", app_dir);
+    test_mkdir_p(app_dir);
+    test_mkdir_p(libs_dir);
+
+    snprintf(path, sizeof(path), "%spackage.tl", app_dir);
+    write_file(path,
+            "format(1)\n"
+            "package(\"App\")\n"
+            "version(\"0.1.0\")\n"
+            "depend(\"MathLib\", \"1.0.0\")\n"
+            "depend_path(\"./libs\")\n");
+
+    snprintf(path, sizeof(path), "%smain.tl", app_dir);
+    write_file(path,
+            "#module main\n"
+            "\n"
+            "main() {\n"
+            "  result := MathLib.add(17, 25)\n"
+            "  result\n"
+            "}\n");
+
+    char dst_tlib[512];
+    snprintf(dst_tlib, sizeof(dst_tlib), "%sMathLib.tlib", libs_dir);
+    copy_file(tlib_path, dst_tlib);
+
+    // -- Compile and run --
+    char out_exe[512];
+    snprintf(out_exe, sizeof(out_exe), "%sapp", app_dir);
+    snprintf(cmd, sizeof(cmd),
+             "cd \"%s\" && \"%s\" exe --no-standard-includes -S \"%s\" -o \"%s\" main.tl 2>&1",
+             app_dir, e2e_tess_exe, e2e_stdlib_dir, out_exe);
+    if (run_cmd(cmd) != 0) {
+        fprintf(stderr, "  tess exe failed\n");
+        return 1;
+    }
+
+    int exit_code = run_cmd(out_exe);
+    if (exit_code != 42) {
+        fprintf(stderr, "  expected exit code 42, got %d\n", exit_code);
+        return 1;
+    }
+
+    return 0;
+}
+
 int main(void) {
     init_temp_dir();
+    init_e2e_paths();
 
     int error      = 0;
     int this_error = 0;
@@ -855,5 +1199,9 @@ int main(void) {
     T(test_pack_malformed_import_ok)
     T(test_pack_subdir_import)
     T(test_extract)
+    T(test_e2e_basic_package)
+    T(test_e2e_version_mismatch)
+    T(test_e2e_dep_not_found)
+    T(test_e2e_multi_file_library)
     return error;
 }

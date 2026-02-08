@@ -639,7 +639,7 @@ Final validation and edge case coverage:
 - Module name conflict detection across packages
 - Pack dependency verification (missing dep, version mismatch)
 - Compile dependency verification (missing package, version mismatch, transitive dep missing)
-- Internal module accessible but removed by tree shaking when unused
+- Internal module accessible but removed by tree shaking when unused (cannot test treeshake of unused module)
 - Generics in a package specialize correctly in the consumer
 - Circular dependency detection (package A requires B, B requires A → error)
 
