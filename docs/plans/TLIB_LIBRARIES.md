@@ -539,13 +539,7 @@ Implemented in two sub-phases (export scanning was removed — see Design Change
 
 Key infrastructure: callback-based `scan_directives()` core in `source_scanner.c` shared by the full scanner and the lightweight import collector. `validate` CLI command for standalone validation.
 
----
-
-### Remaining Phases
-
-The remaining work is organized into phases that build incrementally. Each phase has clear validation criteria and can be tested before proceeding.
-
-#### Phase 7: Basic Package Consumption
+#### Phase 7: Basic Package Consumption ✓
 
 **Goal:** Compile code that uses a package (without inter-package dependencies).
 
@@ -561,7 +555,7 @@ The compilation process:
 1. Auto-discover and parse `package.tl` (skip dependency loading if not found)
 2. Load each `depend()` package via `tl_tlib_read()`, resolving from explicit paths (3-argument `depend()`) or `depend_path()` directories
 3. Verify each loaded package's metadata version matches the `depend()` declaration exactly
-4. Extract source files into arena-allocated buffers
+4. Extract source files to a temp directory via `tl_tlib_extract()`
 5. All modules from all packages (exported and internal) enter the single global namespace
 6. Detect module name conflicts (duplicate `#module` across packages or between packages and local code)
 7. Feed all source (local + package) into the existing compilation pipeline
@@ -569,13 +563,19 @@ The compilation process:
 
 All package source is loaded upfront and unconditionally based on `depend()` declarations in `package.tl`. No tokenizer/parser changes are needed — package modules are accessed via existing qualified syntax (`Module.function()`), the same as local modules.
 
-**Validation:**
-- Integration test: Create a simple package, compile a consumer that uses it
-- Verify the end-to-end example from this document works (without LoggingLib dependency)
-- Test version mismatch between `depend()` declaration and `.tlib` metadata
-- Test dependency resolution with explicit path (3-argument `depend()`)
-- Test error when dependency `.tlib` is missing from `depend_path()` directories
-- Test that builds without `package.tl` still work (local-only)
+Key functions:
+- `tl_tlib_extract()` in `tlib.c`: Extracts archive entries to a directory, returns file paths
+- `resolve_tlib_path()` in `tess_exe.c`: Searches `depend_path()` dirs or explicit path for `.tlib` files
+- `load_package_deps()` in `tess_exe.c`: Parses `package.tl`, resolves/reads/version-checks/extracts dependencies
+- `files_in_order()` modified to accept package files, scan them for directives, and include them in the compilation file list with deduplication
+
+Unit tests in `test_tlib.c`: `test_extract`, `test_package_version_mismatch`, `test_package_dep_not_found`.
+
+---
+
+### Remaining Phases
+
+The remaining work is organized into phases that build incrementally. Each phase has clear validation criteria and can be tested before proceeding.
 
 #### Phase 8: Inter-Package Dependencies
 
@@ -660,7 +660,7 @@ Phase 6 (Module Discovery — scanning) ✓
     ↓
 Phase 6b (Module Discovery — pack integration) ✓
     ↓
-Phase 7 (Basic Consumption)  ←── First end-to-end validation
+Phase 7 (Basic Consumption) ✓  ←── First end-to-end validation
     ↓
 Phase 8 (Inter-Package Dependencies)
     ↓
