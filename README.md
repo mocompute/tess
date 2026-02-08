@@ -49,6 +49,8 @@ A statically-typed programming language that transpiles to C11.
 
 - **Tail call optimization** - Guaranteed by the language.
 
+- **Packages** - Distribute reusable libraries as `.tlib` source archives. Declare dependencies in `package.tl`, and the compiler handles version verification, transitive resolution, and whole-program compilation.
+
 - **C interoperability** - Seamless integration with C libraries. Directly `#include` headers and call C functions with the `c_` prefix.
 
 ## Example
@@ -104,6 +106,7 @@ This is a research project exploring what a minimal, C-like language might look 
 ## Documentation
 
 - **[Language Reference](docs/LANGUAGE_REFERENCE.md)** - Complete syntax guide
+- **[Packages](docs/PACKAGES.md)** - Creating and consuming reusable `.tlib` libraries
 - **[Array Tutorial](src/tl/std/Array-tutorial.tl)** - Tutorial introduction to Tess through the Array implementation
 - **[Standard Library Reference](docs/STANDARD_LIBRARY.md)** - API reference for Array, Alloc, and other modules
 - **[All Documentation](docs/)** - Type system, specialization, and compiler internals

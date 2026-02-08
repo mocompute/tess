@@ -11,6 +11,7 @@ This directory contains technical documentation for the Tess programming languag
 | [SPECIALIZATION.md](SPECIALIZATION.md) | Deep dive into generic specialization (monomorphization) in the compiler |
 | [TAGGED_UNIONS.md](TAGGED_UNIONS.md) | Technical documentation on tagged union (sum type) implementation |
 | [NAME_MANGLING.md](NAME_MANGLING.md) | Name mangling system for arity overloading, modules, and specialization |
+| [PACKAGES.md](PACKAGES.md) | Package system for distributing reusable `.tlib` libraries |
 | [STANDARD_LIBRARY.md](STANDARD_LIBRARY.md) | Standard library API reference (Array, Alloc, Unsafe, C bindings) |
 | [FAQ.md](FAQ.md) | Historical background, motivations and miscellaneous |
 
@@ -20,6 +21,7 @@ This directory contains technical documentation for the Tess programming languag
 1. [LANGUAGE_REFERENCE.md](LANGUAGE_REFERENCE.md) - Learn the language syntax
 2. [TYPE_SYSTEM.md](TYPE_SYSTEM.md) - Understand how types work
 3. [STANDARD_LIBRARY.md](STANDARD_LIBRARY.md) - Standard library API reference
+4. [PACKAGES.md](PACKAGES.md) - Creating and consuming reusable libraries
 
 **For compiler contributors:**
 1. [TYPE_SYSTEM.md](TYPE_SYSTEM.md) - Understand the type system concepts
