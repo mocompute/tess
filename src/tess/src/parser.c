@@ -2566,9 +2566,10 @@ static int toplevel_hash(parser *self) {
                 return ERROR_STOP;
             }
 
-            // Validate parent module exists for nested modules (e.g., Foo must exist for Foo.Bar)
+            // Validate immediate parent module exists for nested modules (e.g., Foo.Bar must exist for
+            // Foo.Bar.Baz)
             str parent = str_empty();
-            if (str_prefix_char(self->transient, module, '.', &parent)) {
+            if (str_rprefix_char(self->transient, module, '.', &parent)) {
                 int parent_known =
                   str_hset_contains(self->modules_seen, parent) ||
                   (self->opts.known_modules && str_map_contains(self->opts.known_modules, parent));

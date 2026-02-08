@@ -277,6 +277,46 @@ static int test_prefix_char(void) {
     return error;
 }
 
+static int test_rprefix_char(void) {
+    int        error = 0;
+    allocator *alloc = leak_detector_create();
+    str        prefix;
+
+    // Found: basic case (single dot, same as prefix_char)
+    error += 1 == str_rprefix_char(alloc, S("Foo.Bar"), '.', &prefix) ? 0 : 1;
+    error += str_eq(prefix, S("Foo")) ? 0 : 1;
+    str_deinit(alloc, &prefix);
+
+    // Found: dot at start
+    error += 1 == str_rprefix_char(alloc, S(".Bar"), '.', &prefix) ? 0 : 1;
+    error += str_eq(prefix, S("")) ? 0 : 1;
+    str_deinit(alloc, &prefix);
+
+    // Found: multiple dots, returns prefix before last
+    error += 1 == str_rprefix_char(alloc, S("A.B.C"), '.', &prefix) ? 0 : 1;
+    error += str_eq(prefix, S("A.B")) ? 0 : 1;
+    str_deinit(alloc, &prefix);
+
+    // Found: three dots
+    error += 1 == str_rprefix_char(alloc, S("A.B.C.D"), '.', &prefix) ? 0 : 1;
+    error += str_eq(prefix, S("A.B.C")) ? 0 : 1;
+    str_deinit(alloc, &prefix);
+
+    // Found: dot at end
+    error += 1 == str_rprefix_char(alloc, S("Foo."), '.', &prefix) ? 0 : 1;
+    error += str_eq(prefix, S("Foo")) ? 0 : 1;
+    str_deinit(alloc, &prefix);
+
+    // Not found
+    error += 0 == str_rprefix_char(alloc, S("FooBar"), '.', &prefix) ? 0 : 1;
+
+    // Not found: empty string
+    error += 0 == str_rprefix_char(alloc, S(""), '.', &prefix) ? 0 : 1;
+
+    leak_detector_destroy(&alloc);
+    return error;
+}
+
 static int test_replace_char(void) {
     int        error = 0;
     allocator *alloc = leak_detector_create();
@@ -702,6 +742,7 @@ int main(void) {
     T(test_cat_multi);
     T(test_parse_cnum_binary);
     T(test_prefix_char);
+    T(test_rprefix_char);
     T(test_replace_char);
     T(test_replace_char_str);
     T(test_starts_with);

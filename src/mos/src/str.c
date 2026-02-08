@@ -515,6 +515,18 @@ int str_prefix_char(allocator *alloc, str s, char c, str *prefix) {
     return 1;
 }
 
+int str_rprefix_char(allocator *alloc, str s, char c, str *prefix) {
+    span sp = str_span(&s);
+    // scan backwards for the last occurrence of c (memrchr is not available on Windows)
+    char *p = null;
+    for (size_t i = sp.len; i > 0; i--) {
+        if (sp.buf[i - 1] == c) { p = sp.buf + i - 1; break; }
+    }
+    if (!p) return 0;
+    *prefix = str_init_n(alloc, sp.buf, (size_t)(p - sp.buf));
+    return 1;
+}
+
 int str_eq(str lhs, str rhs) {
     return 0 == str_cmp(lhs, rhs);
 }

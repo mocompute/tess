@@ -532,6 +532,7 @@ TL_FAIL_TESTS =					\
 	fail_lambda_implicit_return		\
 	fail_lambda_return			\
 	fail_monkey_patch			\
+	fail_nested_module_no_immediate_parent	\
 	fail_nested_module_no_parent		\
 	fail_nested_type_cross_module_conflict	\
 	fail_reserved_type_alias		\

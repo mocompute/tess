@@ -95,6 +95,7 @@ int         str_ends_with(str, str);
 int         str_contains(str haystack, str needle);
 int         str_contains_char(str, char);
 int         str_prefix_char(allocator *, str, char, str *);
+int         str_rprefix_char(allocator *, str, char, str *);
 int         str_eq(str, str);
 u32         str_hash32(str);
 u64         str_hash64(str);
