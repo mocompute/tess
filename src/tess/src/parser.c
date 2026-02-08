@@ -3918,7 +3918,7 @@ int parser_next(parser *self) {
                 // compilers interpret as UCN escapes.
                 str file_str = self->files.v[self->files_index++];
 #ifdef MOS_WINDOWS
-                file_str = str_replace_char(self->file_arena, file_str, '\\', '/');
+                file_str = str_replace_char(self->parent_alloc, file_str, '\\', '/');
 #endif
                 char const *file = str_cstr(&file_str);
                 file_read(self->file_arena, file, (char **)&self->current_file_data.v,
