@@ -59,6 +59,9 @@ typedef struct {
     int         is_library;
     int         is_executable;
 
+    // Temp directories created during package extraction (cleaned up in state_deinit)
+    c_string_carray     temp_dirs;
+
     // Compilation statistics (populated when report_stats is set)
     struct {
         double parse_time_ms;
@@ -140,9 +143,20 @@ void state_init(state *self) {
     self->in_place             = 0;
     self->is_library           = 0;
     self->is_executable        = 0;
+    self->temp_dirs            = (c_string_carray){.alloc = self->arena};
+}
+
+static void state_track_temp_dir(state *self, char const *path) {
+    str         s    = str_init(self->arena, path);
+    char const *copy = str_cstr(&s);
+    array_push(self->temp_dirs, copy);
 }
 
 void state_deinit(state *self) {
+    forall(i, self->temp_dirs) {
+        platform_temp_path_delete_recursive(self->temp_dirs.v[i]);
+    }
+
     arena_destroy(&self->arena);
 
     alloc_invalidate(self);
@@ -448,6 +462,7 @@ static int resolve_dep_recursive(state *self, str dep_name, str dep_version,
                 str_cstr(&dep_name));
         return 1;
     }
+    state_track_temp_dir(self, tmppath.path);
 
     if (tl_tlib_extract(self->arena, &archive, tmppath.path, out_pkg_files)) {
         fprintf(stderr, "error: failed to extract package '%s'\n", str_cstr(&dep_name));
@@ -567,6 +582,7 @@ static int load_package_deps(state *self, str_array *out_pkg_files) {
                     str_cstr(&dep->name));
             return 1;
         }
+        state_track_temp_dir(self, tmppath.path);
 
         if (tl_tlib_extract(self->arena, &archive, tmppath.path, out_pkg_files)) {
             fprintf(stderr, "error: failed to extract package '%s'\n",

@@ -9,6 +9,7 @@
 #include <io.h>
 #include <process.h>
 #else
+#include <dirent.h>
 #include <sys/stat.h>
 #endif
 
@@ -122,8 +123,40 @@ int platform_temp_path_create(platform_temp_path *tp, char const *prefix) {
     return 0;
 }
 
-void platform_temp_path_delete(platform_temp_path *tp) {
-    RemoveDirectoryA(tp->path);
+void platform_temp_path_delete(char const *path) {
+    RemoveDirectoryA(path);
+}
+
+static void remove_dir_recursive_win(char const *path) {
+    char pattern[PLATFORM_PATH_MAX];
+    snprintf(pattern, sizeof(pattern), "%s\\*", path);
+
+    WIN32_FIND_DATAA fd;
+    HANDLE           h = FindFirstFileA(pattern, &fd);
+    if (h == INVALID_HANDLE_VALUE) return;
+
+    do {
+        if (fd.cFileName[0] == '.' &&
+            (fd.cFileName[1] == '\0' || (fd.cFileName[1] == '.' && fd.cFileName[2] == '\0')))
+            continue;
+
+        char child[PLATFORM_PATH_MAX];
+        snprintf(child, sizeof(child), "%s\\%s", path, fd.cFileName);
+
+        if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
+            remove_dir_recursive_win(child);
+        } else {
+            DeleteFileA(child);
+        }
+    } while (FindNextFileA(h, &fd));
+
+    FindClose(h);
+    RemoveDirectoryA(path);
+}
+
+void platform_temp_path_delete_recursive(char const *path) {
+    if (!path) return;
+    remove_dir_recursive_win(path);
 }
 
 int platform_mkdir(char const *path) {
@@ -143,8 +176,38 @@ int platform_temp_path_create(platform_temp_path *tp, char const *prefix) {
     return 0;
 }
 
-void platform_temp_path_delete(platform_temp_path *tp) {
-    rmdir(tp->path);
+void platform_temp_path_delete(char const *path) {
+    rmdir(path);
+}
+
+static void remove_dir_recursive(char const *path) {
+    DIR *d = opendir(path);
+    if (!d) return;
+
+    struct dirent *ent;
+    while ((ent = readdir(d)) != NULL) {
+        if (ent->d_name[0] == '.' &&
+            (ent->d_name[1] == '\0' || (ent->d_name[1] == '.' && ent->d_name[2] == '\0')))
+            continue;
+
+        char child[PLATFORM_PATH_MAX];
+        snprintf(child, sizeof(child), "%s/%s", path, ent->d_name);
+
+        struct stat st;
+        if (lstat(child, &st) == 0 && S_ISDIR(st.st_mode)) {
+            remove_dir_recursive(child);
+        } else {
+            unlink(child);
+        }
+    }
+
+    closedir(d);
+    rmdir(path);
+}
+
+void platform_temp_path_delete_recursive(char const *path) {
+    if (!path) return;
+    remove_dir_recursive(path);
 }
 
 int platform_mkdir(char const *path) {

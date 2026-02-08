@@ -80,8 +80,11 @@ int platform_temp_dir(char *buf, size_t bufsize);
 // Returns 0 on success, non-zero on failure
 int platform_temp_path_create(platform_temp_path *tp, char const *prefix);
 
-// Remove a temp directory
-void platform_temp_path_delete(platform_temp_path *tp);
+// Remove a directory (must be empty)
+void platform_temp_path_delete(char const *path);
+
+// Remove a directory and all its contents recursively
+void platform_temp_path_delete_recursive(char const *path);
 
 // -- Directory creation --
 // Create a single directory. Returns 0 on success, non-zero on failure.
