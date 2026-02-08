@@ -259,7 +259,7 @@ start:; // loop point for skip_depth > 0
     size_t start_capture = 0;
 
     // return value, to be copied to *out
-    token res = {.file = str_cstr(&self->file)};
+    token res = {0};
 
     while (1) {
 
@@ -1137,7 +1137,7 @@ finish:
     else if (stop == state) {
         if (0 != skip_depth) goto start;
 
-        res.file = str_cstr(&self->file);
+        res.file = alloc_strdup(self->parent, str_cstr(&self->file));
         res.line = self->line;
         res.col  = self->col;
         alloc_copy(out, &res);
