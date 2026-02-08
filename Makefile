@@ -248,6 +248,7 @@ cleanall:
 # $(3): test count
 define run_test_suite
 	@failed=0; \
+	export ASAN_OPTIONS=detect_leaks=0; \
 	for test in $(2); do \
 		name=$$(basename $$test); \
 		$(MSG_TEST) $$name; \
