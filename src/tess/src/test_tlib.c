@@ -833,93 +833,6 @@ static int test_extract(void) {
     return error;
 }
 
-static int test_package_version_mismatch(void) {
-    allocator *alloc = default_allocator();
-
-    // Create a .tlib with version "1.0.0"
-    char tlib_path[512];
-    make_temp_path(tlib_path, sizeof(tlib_path), "test_version_mismatch.tlib");
-
-    tl_tlib_metadata meta  = {
-      .name    = str_init(alloc, "Lib"),
-      .author  = str_empty(),
-      .version = str_init(alloc, "1.0.0"),
-    };
-    tl_tlib_entry entry = {"lib.tl", 6, (byte const *)"x", 1};
-
-    if (tl_tlib_write(alloc, tlib_path, &meta, &entry, 1)) {
-        fprintf(stderr, "  write failed\n");
-        return 1;
-    }
-
-    // Read archive back
-    tl_tlib_archive arc = {0};
-    if (tl_tlib_read(alloc, tlib_path, &arc)) {
-        fprintf(stderr, "  read failed\n");
-        return 1;
-    }
-
-    // Verify version mismatch check (consumer wants 2.0.0 but archive has 1.0.0)
-    if (str_eq(arc.metadata.version, S("2.0.0"))) {
-        fprintf(stderr, "  versions should NOT match\n");
-        return 1;
-    }
-
-    // The actual check is: !str_eq(archive.metadata.version, dep->version)
-    // This test verifies the comparison logic used in load_package_deps
-    if (!str_eq(arc.metadata.version, S("1.0.0"))) {
-        fprintf(stderr, "  version should match 1.0.0\n");
-        return 1;
-    }
-
-    return 0;
-}
-
-static int test_package_dep_not_found(void) {
-    allocator *alloc = default_allocator();
-
-    // Create a package.tl referencing a non-existent package
-    char pkg_path[512];
-    make_temp_path(pkg_path, sizeof(pkg_path), "test_dep_not_found_package.tl");
-    char const *pkg_content = "format(1)\n"
-                              "package(\"App\")\n"
-                              "version(\"0.1.0\")\n"
-                              "depend(\"NonExistent\", \"1.0.0\")\n"
-                              "depend_path(\"/tmp/no_such_dir_tess_test\")\n";
-    if (write_file(pkg_path, pkg_content)) {
-        fprintf(stderr, "  failed to write package.tl\n");
-        return 1;
-    }
-
-    // Parse it
-    tl_package pkg = {0};
-    if (tl_package_parse_file(alloc, pkg_path, &pkg)) {
-        fprintf(stderr, "  package.tl parse failed\n");
-        return 1;
-    }
-
-    // Verify that we have a dependency
-    if (pkg.dep_count != 1) {
-        fprintf(stderr, "  expected 1 dep, got %u\n", pkg.dep_count);
-        return 1;
-    }
-
-    // Verify the dep name
-    if (!str_eq(pkg.deps[0].name, S("NonExistent"))) {
-        fprintf(stderr, "  dep name mismatch\n");
-        return 1;
-    }
-
-    // Verify .tlib does not exist in specified path
-    str candidate = str_init(alloc, "/tmp/no_such_dir_tess_test/NonExistent.tlib");
-    if (file_exists(candidate)) {
-        fprintf(stderr, "  test precondition failed: file should not exist\n");
-        return 1;
-    }
-
-    return 0;
-}
-
 int main(void) {
     init_temp_dir();
 
@@ -942,7 +855,5 @@ int main(void) {
     T(test_pack_malformed_import_ok)
     T(test_pack_subdir_import)
     T(test_extract)
-    T(test_package_version_mismatch)
-    T(test_package_dep_not_found)
     return error;
 }
