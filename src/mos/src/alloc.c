@@ -19,16 +19,7 @@
 typedef double max_align_t;
 #endif
 
-// use LSAN's allocators if we can detect they are present
-#if defined(__has_feature)
-#if __has_feature(address_sanitizer)
-#include <sanitizer/lsan_interface.h>
-#else
 #include <stdlib.h>
-#endif
-#else
-#include <stdlib.h>
-#endif
 
 #define ALLOC_DEBUG_PATTERN 0xCD
 
@@ -48,7 +39,7 @@ typedef struct arena_allocator {
     struct allocator allocator;
     allocator       *parent;
     arena_header    *head;
-    arena_header    *tail;  // cached pointer to current/last bucket for O(1) allocation
+    arena_header    *tail; // cached pointer to current/last bucket for O(1) allocation
     size_t           peak_allocated;
 } arena_allocator;
 
@@ -209,7 +200,7 @@ static void *arena_malloc(allocator *alloc, size_t sz, char const *file, int lin
             arena->tail = bucket;
             return bump_alloc_assume_capacity(bucket, sz);
         }
-        tail = bucket;  // track last bucket for potential new allocation
+        tail   = bucket; // track last bucket for potential new allocation
         bucket = bucket->next;
     }
 
@@ -306,7 +297,7 @@ static void arena_init(allocator *arena_, allocator *parent, size_t sz) {
     if (0 == sz) sz = 16; // overflow (TODO)
 
     arena->head              = arena_header_create(parent, sz);
-    arena->tail              = arena->head;  // tail tracks current allocation bucket
+    arena->tail              = arena->head; // tail tracks current allocation bucket
     arena->allocator.malloc  = &arena_malloc;
     arena->allocator.calloc  = &arena_calloc;
     arena->allocator.realloc = &arena_realloc;
