@@ -2,7 +2,7 @@
 
 ## Summary
 
-Add a `tess pack` command that bundles Tess source files into a `.tlib` **package** for distribution as a reusable library. A package contains one or more **modules** (declared with `#module`) plus metadata. Every package (including consumer applications) has a `package.tl` file at its root that declares metadata, exported modules, and dependencies using a function-call DSL that is valid TL syntax. The compiler auto-discovers `package.tl` in the current working directory. The compiler performs whole-program compilation as usual. Access control is at the module level: the `export()` declarations in `package.tl` control which modules consumers can import, and all symbols within those modules are accessible.
+Add a `tess pack` command that bundles Tess source files into a `.tlib` **package** for distribution as a reusable library. A package contains one or more **modules** (declared with `#module`) plus metadata. Every package (including consumer applications) has a `package.tl` file at its root that declares metadata, exported modules, and dependencies using a function-call DSL that is valid TL syntax. The compiler auto-discovers `package.tl` in the current working directory. The compiler performs whole-program compilation as usual. The `export()` declarations in `package.tl` document which modules are part of the package's public API, though access control is not enforced--all package modules enter the global namespace. Package modules become available to consumer code automatically when declared via `depend()` in `package.tl`--no explicit import is needed. Tree shaking removes unused code.
 
 This is distinct from C-compatible shared libraries (`tess lib` producing `.so`/`.dll`), which remain unchanged.
 
@@ -15,7 +15,7 @@ This is distinct from C-compatible shared libraries (`tess lib` producing `.so`/
 
 **Notes:**
 - Every `.tl` file MUST have a `#module` directive before any definitions. The parser will error if it encounters a definition before seeing `#module`.
-- Module names are discovered at load time by parsing `#module` declarations (because `#module` directives may be conditional inside `#ifdef`/`#endif`). The `export()` declarations in `package.tl` separately declare which discovered modules are *public*--this is for access control, not discovery.
+- Module names are discovered at load time by parsing `#module` declarations (because `#module` directives may be conditional inside `#ifdef`/`#endif`). The `export()` declarations in `package.tl` separately declare which discovered modules are *public*--this is for documentation and tooling, not discovery or access control.
 
 **Import semantics:**
 
@@ -53,29 +53,33 @@ This matches how Tess currently works: there is one global namespace for modules
 
 ### Import Syntax
 
-Three forms of `#import` serve different purposes:
+Two forms of `#import` serve different purposes:
 
 | Syntax | Purpose | Resolution |
 |--------|---------|------------|
 | `#import "file.tl"` | Local file import | Relative to importing file, then `-I` paths |
 | `#import <file.tl>` | Standard library import | Standard library paths (`-S` paths) |
-| `#import ModuleName` | Package module import | Modules from included packages (via `package.tl`) |
 
-The unquoted form (`#import ModuleName`) is **only** for modules provided by packages. Local project modules must use the quoted form with a file path.
+Package modules do not use `#import`. When a package is declared as a dependency via `depend()` in `package.tl`, all its modules are loaded automatically and enter the global namespace. Consumer code accesses them directly via qualified syntax (`Module.function()`).
 
 ### Package Dependencies
 
-When `tess pack` encounters an import that resolves to a module from another package (not a local file), it records that package as a dependency in the `.tlib` archive metadata. The source from external packages is **not** bundled--only local source files are included.
+Dependencies declared in `package.tl` via `depend()` are recorded in the `.tlib` archive metadata. The source from external packages is **not** bundled--only local source files are included.
 
-Consumers only need to declare their **direct** dependencies in `package.tl` via `depend()`. When the compiler loads a package, it reads the archive's dependency metadata and automatically resolves transitive dependencies from `depend_path()` directories, verifying version equality. See Phases 8 and 9 for the full resolution algorithm.
+Consumers only need to declare their **direct** dependencies in `package.tl` via `depend()`. When the compiler loads a package, it reads the archive's dependency metadata and automatically resolves transitive dependencies from `depend_path()` directories, verifying version equality. See Phase 8 for the full resolution algorithm.
 
 The binary encoding of dependencies in the `.tlib` archive is described in the Archive Format section.
 
 ### Module-Level Access Control
 
-Access control is purely at the module level. The `export()` declarations in `package.tl` declare which modules are part of the package's public API. All symbols within an exported module are accessible to consumers. Modules not exported are internal and cannot be imported by consumer code.
+The `export()` declarations in `package.tl` declare which modules are part of the package's public API. However, access control is **not enforced** by the compiler. When a consumer loads a package, all modules (exported and internal) enter the global namespace because exported modules may depend on internal ones. A consumer *could* call into `MathUtils.Internal` — it is the producer's responsibility to name internal modules clearly (e.g., using an `.Internal` suffix) and to document the public API via `export()`.
 
-Library authors control their API surface by organizing code into public and internal modules. For example, a package might expose `MathUtils` while keeping `MathUtils.Internal` unlisted. This is simpler than symbol-level visibility and encourages clean module boundaries.
+The `export()` declaration serves three purposes:
+1. **Documentation** — clearly communicates which modules are the public API
+2. **Tooling** — future tools (linters, documentation generators) can use it
+3. **Pack validation** — `tess pack` verifies that exported modules exist in the source
+
+Library authors control their API surface by organizing code into public and internal modules. For example, a package might expose `MathUtils` while keeping `MathUtils.Internal` as an internal detail. Using clear naming conventions makes the boundary obvious to consumers.
 
 ### Standard Library Exclusion
 
@@ -130,7 +134,7 @@ Built with:
 tess pack logger.tl -o LoggingLib.tlib
 ```
 
-The compiler auto-discovers `package.tl` in the current working directory. Package names and module names are independent (they may differ or be the same). Package names appear in `package.tl` and dependency metadata. Module names appear in source code (`#import Logger`, `Logger.error(...)`).
+The compiler auto-discovers `package.tl` in the current working directory. Package names and module names are independent (they may differ or be the same). Package names appear in `package.tl` and dependency metadata. Module names appear in source code (`Logger.error(...)`).
 
 ### Producer: Creating a Package with Dependencies
 
@@ -167,8 +171,6 @@ lerp(a, b, t) {
 ```tl
 #module MathUtils.Internal
 
-#import Logger    // package dependency (unquoted)
-
 validate_range(lo, hi) {
   if lo > hi { fatal("invalid range") }
 }
@@ -180,7 +182,7 @@ fatal(msg) {
 }
 ```
 
-Note: Every file must have a `#module` directive. `MathUtils.Internal` is not listed in `export()`, so consumers cannot import it or access its symbols. All symbols in the exported `MathUtils` module are accessible to consumers.
+Note: Every file must have a `#module` directive. `MathUtils.Internal` is not listed in `export()`, so it is not part of the public API. It is still loaded into consumer compilations (because `MathUtils` depends on it), but consumers should not rely on it. Tree shaking will remove it from the final binary if unused by consumer code.
 
 **package.tl:**
 ```tl
@@ -194,7 +196,7 @@ depend("LoggingLib", "2.0.0")
 depend_path("./libs")
 ```
 
-Note: `MathUtils.Internal` is not listed in `export()`, so consumers cannot import it. `package.tl` references the **package name** ("LoggingLib"), while the source code uses the **module name** (`#import Logger`, `Logger.error(...)`).
+Note: `MathUtils.Internal` is not listed in `export()`, signaling it is not part of the public API. `package.tl` references the **package name** ("LoggingLib"), while the source code uses the **module name** (`Logger.error(...)`).
 
 **Build the package:**
 ```bash
@@ -222,8 +224,8 @@ myapp/
 ```tl
 #module main
 
-#import MathUtils    // unquoted = package module
-// #import MathUtils.Internal          // ERROR: not in package's export()
+// No #import needed for package modules -- they are loaded automatically
+// from depend() declarations in package.tl
 
 main() {
   x := MathUtils.clamp(150, 0, 100)
@@ -231,8 +233,6 @@ main() {
 
   y := MathUtils.lerp(0.0, 10.0, 0.5)
   c_printf("lerp: %f\n", y)       // prints "lerp: 5.0"
-
-  // MathUtils.Internal.fatal("x")        // ERROR: MathUtils.Internal not in export()
 
   0
 }
@@ -259,7 +259,7 @@ verifies versions match. Consumers only declare **direct** dependencies. The com
 verifies the version matches, and loads it automatically. If a transitive dependency cannot be found, the
 compiler emits an error naming the missing package and which package requires it.
 
-A `package.tl` is required for any build that uses packages. There are no `-l` or `-L` CLI flags — all dependency information comes from `package.tl`.
+A `package.tl` is required for any build that uses packages. Builds that do not use packages (e.g., local-only projects, individual test files) work without `package.tl` — the compiler simply skips dependency loading when no `package.tl` is found. There are no `-l` or `-L` CLI flags — all dependency information comes from `package.tl`.
 
 ---
 
@@ -558,28 +558,24 @@ tess exe main.tl -o main
 ```
 
 The compilation process:
-1. Auto-discover and parse `package.tl`
-2. Load each `depend()` package via `tl_tlib_read()`, resolving from explicit paths or `depend_path()` directories
-3. Extract source files into arena-allocated buffers
-3. All modules from all packages enter the single global namespace
-4. Build two sets from package metadata and source scanning:
-   - **All package modules**: every module discovered from package source via `#module` directives
-   - **Exported modules**: modules declared in the package's `export()` (the public API)
-5. Detect module name conflicts (duplicate `#module` across packages or between packages and local code)
-6. Feed all source (local + package) into the existing compilation pipeline
-7. Tree shaking removes unreferenced code
+1. Auto-discover and parse `package.tl` (skip dependency loading if not found)
+2. Load each `depend()` package via `tl_tlib_read()`, resolving from explicit paths (3-argument `depend()`) or `depend_path()` directories
+3. Verify each loaded package's metadata version matches the `depend()` declaration exactly
+4. Extract source files into arena-allocated buffers
+5. All modules from all packages (exported and internal) enter the single global namespace
+6. Detect module name conflicts (duplicate `#module` across packages or between packages and local code)
+7. Feed all source (local + package) into the existing compilation pipeline
+8. Tree shaking removes unreferenced code
 
-All package source is loaded upfront and unconditionally — there is no lazy loading triggered by imports. `#import ModuleName` (unquoted) is a declaration of intent to use a package module, resolved against the exported modules set, not a trigger to load package files.
-
-**No file→package provenance tracking.** The two module sets (all package modules vs exported modules) enable module-level access control (Phase 10). No per-file "is package source" flag is needed since there is no symbol-level access control.
-
-**Unquoted import resolution:**
-
-Modify the tokenizer/parser to recognize `#import ModuleName` (no quotes, no angle brackets) as a package module import. The import resolver checks that `ModuleName` exists in the exported modules set. If the module exists in all package modules but is not exported, it is an internal module and the import is rejected. If not found at all, an error is emitted.
+All package source is loaded upfront and unconditionally based on `depend()` declarations in `package.tl`. No tokenizer/parser changes are needed — package modules are accessed via existing qualified syntax (`Module.function()`), the same as local modules.
 
 **Validation:**
-- Integration test: Create a simple package, compile a consumer that imports it
+- Integration test: Create a simple package, compile a consumer that uses it
 - Verify the end-to-end example from this document works (without LoggingLib dependency)
+- Test version mismatch between `depend()` declaration and `.tlib` metadata
+- Test dependency resolution with explicit path (3-argument `depend()`)
+- Test error when dependency `.tlib` is missing from `depend_path()` directories
+- Test that builds without `package.tl` still work (local-only)
 
 #### Phase 8: Inter-Package Dependencies
 
@@ -590,84 +586,44 @@ Modify the tokenizer/parser to recognize `#import ModuleName` (no quotes, no ang
 **During pack:**
 1. Load dependency packages from `package.tl`'s `depend()` declarations (resolved via `depend_path()` or explicit path)
 2. Verify each package's version matches `depend()` declaration
-3. Scan dependencies to discover their modules
-4. Build module → package mapping for dependencies
-5. When packing source uses `#import ModuleName`:
-   - If `ModuleName` is from a dependency, record that dependency
-6. Write used dependencies to archive's `depends` field
-7. Error if a required dependency is declared but never used
-8. Optional dependencies may be unused
+3. Write all `depend()` declarations to the archive's `depends` field
+4. Optional dependencies (`depend_optional()`) are written to the `depends-optional` field
+
+Dependencies are declared in `package.tl`, not auto-detected from source. If a producer declares a `depend()` they don't actually use, it is still recorded in the archive — consumers will need to provide it. This is accepted for simplicity; a future lint pass could warn about unused declarations.
 
 **During compile (transitive dependency resolution):**
 1. When loading a package, check its `depends` field
-2. For each required dependency, search `depend_path()` directories for `<PackageName>.tlib`
+2. For each required dependency, search the consumer's `depend_path()` directories for `<PackageName>.tlib`
 3. Read metadata and verify version matches exactly
 4. Recurse: load the transitive dependency's own `depends` the same way
 5. Detect cycles during resolution (A→B→A) and emit an error listing the cycle path
-6. Error on missing dependencies with helpful message: `"package 'MathUtils' depends 'LoggingLib=2.0.0', not found in library search paths"`
+6. Error on missing dependencies with helpful message: `"package 'MathUtils' requires 'LoggingLib=2.0.0', not found in library search paths"`
+
+Consumers only list direct dependencies via `depend()`. Transitive dependencies are resolved automatically from `depend_path()` directories. This keeps `package.tl` concise while enabling reproducible builds with pinned versions.
 
 **Validation:**
 - Integration test: MathUtils→LoggingLib example from this document
-- Test version mismatch detection
+- Test version mismatch detection (transitive dep version doesn't match)
 - Test missing transitive dependency detection (helpful error message)
 - Test transitive dependency auto-resolution from `depend_path()`
 - Test circular dependency detection
 
-#### Phase 9: Package.tl-Based Compilation
+#### Phase 9: Module-Level Access Control (Documentation Only)
 
-**Goal:** `tess exe` auto-discovers `package.tl` and uses it for version-verified compilation.
-
-**Implementation:**
-
-```bash
-tess exe src/main.tl -o main
-```
-
-The compiler auto-discovers `package.tl` in the current working directory:
-1. Parse `package.tl` for `depend()` declarations (direct dependencies only)
-2. Load packages from explicit paths or resolve from `depend_path()` directories
-3. Verify versions match `depend()` declarations
-4. Auto-resolve transitive dependencies from `depend_path()` directories
-
-Consumers only list direct dependencies via `depend()`. Transitive dependencies are resolved automatically from `depend_path()`. This enables reproducible builds with pinned versions for direct dependencies while keeping `package.tl` concise.
-
-**Validation:**
-- Integration test: compile with `package.tl`, verify version checking
-- Test transitive dependency auto-resolution from `depend_path()`
-- Test dependency resolution with explicit path (3-argument `depend()`)
-- Test error when `package.tl` is missing but package imports are used
-
-#### Phase 10: Module-Level Access Control
-
-**Goal:** Consumers can only import modules listed in a package's `export()` declarations.
+**Goal:** Verify that `export()` serves its documentation and validation purposes correctly.
 
 **Implementation:**
 
-Access control uses two sets built during package loading (Phase 7):
-- **All package modules**: every module discovered from package source
-- **Exported modules**: modules declared in packages' `export()` declarations
+Access control is **not enforced at compile time**. All modules from a package (exported and internal) enter the global namespace because exported modules may depend on internal ones. The `export()` declaration is advisory — it documents the public API and is validated during `tess pack` (ensuring exported modules exist), but the compiler does not prevent consumer code from accessing internal modules.
 
-**Unquoted import resolution** (for local files):
-1. If `ModuleName` is in the exported modules set → allowed
-2. If `ModuleName` is in all package modules but not exported → error: "module 'X' is not a public module"
-3. If `ModuleName` is not found → error: "module 'X' not found"
-
-**Qualified access** (`Module.symbol`) in local files:
-- If `Module` is in all package modules but not in exported modules → error (accessing internal package module)
-- If `Module` is in exported modules → allowed (all symbols accessible)
-- If `Module` is not in package modules → local module, no restrictions
-
-Package source files are unrestricted — they can access any module freely, including unlisted modules from other packages.
-
-**Known limitation:** Access control is not enforced between packages — only between consumer (local) code and packages.
+It is the producer's responsibility to name internal modules clearly (e.g., `MathUtils.Internal`) and to document the public API via `export()`. This is analogous to Python's `_private` naming convention — not enforced by the language, but a clear signal.
 
 **Validation:**
-- Integration test: attempt to import internal module, verify error
-- Test that internal modules work within the package
-- Test that local modules remain accessible without restrictions
-- Test that qualified access to an unlisted package module from local code is rejected
+- Integration test: package with exported and internal modules, verify both are accessible (internal access is allowed, not an error)
+- Verify `tess pack` validates that `export()` modules exist in source
+- Verify tree shaking removes unreferenced internal modules from the final binary
 
-#### Phase 11: Comprehensive Test Suite
+#### Phase 10: Comprehensive Test Suite
 
 Final validation and edge case coverage:
 
@@ -681,9 +637,9 @@ Final validation and edge case coverage:
 **Integration tests:**
 - End-to-end: pack multi-file library → compile consumer → run
 - Module name conflict detection across packages
-- Pack dependency verification (missing dep, unused required dep, unused optional ok, version mismatch)
+- Pack dependency verification (missing dep, version mismatch)
 - Compile dependency verification (missing package, version mismatch, transitive dep missing)
-- Module access control (import non-public module → error)
+- Internal module accessible but removed by tree shaking when unused
 - Generics in a package specialize correctly in the consumer
 - Circular dependency detection (package A requires B, B requires A → error)
 
@@ -706,21 +662,19 @@ Phase 6b (Module Discovery — pack integration) ✓
     ↓
 Phase 7 (Basic Consumption)  ←── First end-to-end validation
     ↓
-Phase 8 (Dependencies)
+Phase 8 (Inter-Package Dependencies)
     ↓
-Phase 9 (Package.tl Compilation)
+Phase 9 (Module Access Control — documentation only)
     ↓
-Phase 10 (Module Access Control)
-    ↓
-Phase 11 (Test Suite)
+Phase 10 (Test Suite)
 ```
 
 **Key validation points:**
 - After Phase 5: `package.tl` parser works standalone with full test coverage
 - After Phase 6/6b: Module discovery, validation, and self-containment checking complete
-- After Phase 7: Can pack and consume a simple library (no dependencies)
-- After Phase 8: Can handle library chains (A uses B)
-- After Phase 10: Full access control model working (module-level)
+- After Phase 7: Can pack and consume a simple library (with version verification)
+- After Phase 8: Can handle library chains with transitive resolution (A uses B uses C)
+- After Phase 9: Export declarations validated, tree shaking of unused internals verified
 
 Each phase can be merged independently, allowing incremental progress and early feedback on the design
 
@@ -737,6 +691,8 @@ Each phase can be merged independently, allowing incremental progress and early 
 - **Format version compatibility**: Keep v1 during development. The format is internal/experimental; no backwards compatibility needed.
 
 - **Symbol-level access control (`[[export]]`)**: Removed. Access control is purely at the module level via `export()` in `package.tl`. All symbols in an exported module are accessible. Authors control API surface by organizing code into public vs internal modules (e.g., `MathUtils` vs `MathUtils.Internal`). This is simpler and encourages clean module boundaries. See Design Change Log.
+
+- **Unquoted `#import ModuleName`**: Removed. Package modules are loaded automatically from `depend()` declarations in `package.tl` and accessed via qualified syntax (`Module.function()`). No explicit import needed. See Design Change Log.
 
 - **Transitive dependency version conflicts**: Error on conflict. The single global module namespace means two versions of the same package cannot coexist--strict equality is a structural requirement, not a simplification. See "Single Global Module Namespace" section.
 
@@ -770,9 +726,9 @@ Each phase can be merged independently, allowing incremental progress and early 
 **Phases affected:**
 - Phase 6b simplified (removed sub-phases 2 and 3)
 - Phase 7 simplified (no "is package source" flag needed)
-- Phase 10 simplified (listed modules → all symbols accessible, no deferred symbol check)
+- Phase 9 (was Phase 10) simplified (listed modules → all symbols accessible, no deferred symbol check)
 - Phase 11 (Symbol-Level Access Control) eliminated entirely
-- Old Phase 12 (Test Suite) renumbered to Phase 11
+- Test Suite renumbered to Phase 10
 
 **Implementation cleanup (done):**
 - Removed `[[export]]` state machine scanning and `out_has_export` parameter from `scan_directives()` in `source_scanner.c`
@@ -797,6 +753,18 @@ Each phase can be merged independently, allowing incremental progress and early 
 - Removed `-m` flag handling from `tess_exe.c`
 - Updated types to `tl_package` / `tl_package_info` / `tl_package_dep`
 
+### Removed: `#import ModuleName` (Unquoted Package Import)
+
+**Change:** Removed the unquoted `#import ModuleName` syntax for package module imports. Package modules are now available automatically when declared via `depend()` in `package.tl`. Consumer code accesses them via existing qualified syntax (`Module.function()`).
+
+**Rationale:** `package.tl` already declares all dependencies via `depend()`. The compiler loads all package source upfront based on these declarations — there is no lazy loading triggered by imports. The unquoted `#import` was redundant: it didn't trigger loading (that's `package.tl`'s job), and it didn't add information the compiler didn't already have. Removing it means no tokenizer/parser changes are needed for package support, and the import system stays simple with two file-based forms (`"file.tl"` and `<file.tl>`).
+
+**Phases affected:**
+- Phase 7 simplified (no unquoted import resolution, no parser changes)
+- Phase 8 simplified (dependencies come from `package.tl` declarations, not detected from imports)
+- Phase 9 (was Phase 10) simplified (access control is not enforced — all modules are loaded, `export()` is advisory/documentary, internal modules are removed by tree shaking when unused)
+- Phase 9 (was Phase 9, Package.tl-Based Compilation) eliminated — content merged into Phases 7 and 8
+
 ### Removed: `-l` and `-L` CLI Flags
 
 **Change:** Removed `-l` (load package) and `-L` (library search path) CLI flags. All dependency information must come from `package.tl`. A `package.tl` is required for any build that uses packages.
@@ -805,7 +773,7 @@ Each phase can be merged independently, allowing incremental progress and early 
 
 **Phases affected:**
 - Phase 7 (Basic Consumption) — no longer adds `-l`/`-L` flags; loads from `package.tl` only
-- Phase 9 (Package.tl Compilation) — no longer needs to check for `-l`/`-L` and `package.tl` conflicts
+- Old Phase 9 (Package.tl Compilation) eliminated — merged into Phases 7 and 8
 
 **Implementation cleanup (done):**
 - `-l` and `-L` flags were never added; `package.tl` is the sole mechanism from the start
