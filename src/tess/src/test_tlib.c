@@ -1072,15 +1072,9 @@ static int test_e2e_dep_not_found(void) {
     return 0;
 }
 
-// Test: library with multiple files and internal imports.
-// Library has MathLib (public, imports helper.tl) and MathHelper (internal).
-// Consumer uses MathLib.add() which internally calls MathHelper.check().
-//
-// FIXME: ideally the internal module would be MathLib.Internal (nested module),
-// but cross-file nested modules fail when the child file (internal.tl) is parsed
-// before the parent file (math.tl): "nested_module_parent_not_found". This
-// happens because import resolution adds internal.tl before math.tl in the file
-// list. Using a flat module name (MathHelper) works around this for now.
+// Test: library with multiple files and internal imports using nested modules.
+// Library has MathLib (public, imports internal.tl) and MathLib.Internal (nested).
+// Consumer uses MathLib.add() which internally calls MathLib.Internal.check().
 static int test_e2e_multi_file_library(void) {
     // -- Set up library --
     char lib_dir[512];
@@ -1098,17 +1092,17 @@ static int test_e2e_multi_file_library(void) {
     snprintf(path, sizeof(path), "%smath.tl", lib_dir);
     write_file(path,
             "#module MathLib\n"
-            "#import \"helper.tl\"\n"
+            "#import \"internal.tl\"\n"
             "\n"
             "add(a, b) {\n"
-            "  MathHelper.check(a)\n"
-            "  MathHelper.check(b)\n"
+            "  MathLib.Internal.check(a)\n"
+            "  MathLib.Internal.check(b)\n"
             "  a + b\n"
             "}\n");
 
-    snprintf(path, sizeof(path), "%shelper.tl", lib_dir);
+    snprintf(path, sizeof(path), "%sinternal.tl", lib_dir);
     write_file(path,
-            "#module MathHelper\n"
+            "#module MathLib.Internal\n"
             "\n"
             "check(x) {\n"
             "  if x < 0 { 0 - x }\n"
@@ -1123,6 +1117,7 @@ static int test_e2e_multi_file_library(void) {
     snprintf(cmd, sizeof(cmd),
              "cd \"%s\" && \"%s\" pack --no-standard-includes -S \"%s\" math.tl -o MathLib.tlib 2>&1",
              lib_dir, e2e_tess_exe, e2e_stdlib_dir);
+    // internal.tl is resolved automatically via #import in math.tl
     if (run_cmd(cmd) != 0) {
         fprintf(stderr, "  tess pack failed\n");
         return 1;

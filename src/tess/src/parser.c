@@ -2568,10 +2568,14 @@ static int toplevel_hash(parser *self) {
 
             // Validate parent module exists for nested modules (e.g., Foo must exist for Foo.Bar)
             str parent = str_empty();
-            if (str_prefix_char(self->transient, module, '.', &parent) &&
-                !str_hset_contains(self->modules_seen, parent)) {
-                self->error.tag = tl_err_nested_module_parent_not_found;
-                return ERROR_STOP;
+            if (str_prefix_char(self->transient, module, '.', &parent)) {
+                int parent_known =
+                  str_hset_contains(self->modules_seen, parent) ||
+                  (self->opts.known_modules && str_map_contains(self->opts.known_modules, parent));
+                if (!parent_known) {
+                    self->error.tag = tl_err_nested_module_parent_not_found;
+                    return ERROR_STOP;
+                }
             }
             str_deinit(self->transient, &parent);
 
@@ -2583,7 +2587,7 @@ static int toplevel_hash(parser *self) {
                 // Prelude: don't add to modules_seen
                 if (!is_prelude) str_hset_insert(&self->modules_seen, module);
                 if (str_eq(module, S("main"))) self->current_module = str_empty();
-                else self->current_module = module;
+                else self->current_module = str_copy(self->parent_alloc, module);
 
                 // Only reset during first pass. During second pass, current_module_symbols may point
                 // to a hashmap in module_symbols (set by load_module_symbols), and resetting it would

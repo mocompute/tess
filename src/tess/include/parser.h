@@ -24,8 +24,9 @@ typedef struct parser_error {
 typedef struct {
     tl_type_registry *registry;
     str_sized         files;
-    char const       *prelude; // optional: TL source string parsed before files
-    str_array         defines; // -D symbols for conditional compilation
+    char const       *prelude;        // optional: TL source string parsed before files
+    str_array         defines;        // -D symbols for conditional compilation
+    hashmap          *known_modules;  // optional: pre-scanned module names (str map) for nested module validation
 } parser_opts;
 
 // -- allocation and deallocation --

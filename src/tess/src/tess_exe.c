@@ -557,10 +557,15 @@ int compile(state *self) {
     tl_infer       *infer       = tl_infer_create(default_allocator(), &infer_opts);
 
     parser_opts     parser_opts = {
-          .registry = tl_infer_get_registry(infer),
-          .files    = files_in_order(self, paths, (str_sized)array_sized(pkg_files)),
-          .prelude  = embed_prelude_tl,
-          .defines  = self->defines,
+          .registry      = tl_infer_get_registry(infer),
+          .files         = files_in_order(self, paths, (str_sized)array_sized(pkg_files)),
+          .prelude       = embed_prelude_tl,
+          .defines       = self->defines,
+          // The parser validates nested modules (#module Foo.Bar) by checking that the
+          // parent (Foo) exists. Without this, cross-file nested modules fail when import
+          // resolution orders the child before the parent (the parser hasn't seen Foo yet).
+          // The scanner has already discovered all modules, so we pass its map here.
+          .known_modules = self->scanner.modules_seen,
     };
 
     // === PARSING PHASE ===
