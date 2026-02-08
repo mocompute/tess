@@ -316,7 +316,10 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
     case ast_hash_command: {
         clone->hash_command.full = str_copy(alloc, orig->hash_command.full);
         str_array arr            = {.alloc = alloc};
-        forall(i, orig->hash_command.words) array_push(arr, orig->hash_command.words.v[i]);
+        forall(i, orig->hash_command.words) {
+            str _t = str_copy(alloc, orig->hash_command.words.v[i]);
+            array_push(arr, _t);
+        }
         array_shrink(arr);
         clone->hash_command.words      = (str_sized)sized_all(arr);
         clone->hash_command.is_c_block = orig->hash_command.is_c_block;
