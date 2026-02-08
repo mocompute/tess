@@ -385,22 +385,13 @@ static int load_package_deps(state *self, str_array *out_pkg_files) {
         }
 
         // Create temp directory for extraction
-        char tmpdir[512];
-#ifdef MOS_WINDOWS
-        {
-            char tmp_base[MAX_PATH];
-            GetTempPathA(MAX_PATH, tmp_base);
-            snprintf(tmpdir, sizeof(tmpdir), "%stess-pkg-XXXXXX", tmp_base);
-        }
-        if (_mktemp(tmpdir) == null || _mkdir(tmpdir) != 0) {
-#else
-        snprintf(tmpdir, sizeof(tmpdir), "/tmp/tess-pkg-XXXXXX");
-        if (mkdtemp(tmpdir) == null) {
-#endif
+        platform_temp_path tmppath;
+        if (platform_temp_path_create(&tmppath, "tess-pkg-")) {
             fprintf(stderr, "error: failed to create temp directory for package '%s'\n",
                     str_cstr(&dep->name));
             return 1;
         }
+        char *tmpdir = tmppath.path;
 
         if (tl_tlib_extract(self->arena, &archive, tmpdir, out_pkg_files)) {
             fprintf(stderr, "error: failed to extract package '%s'\n",

@@ -10,11 +10,7 @@
 #include <errno.h>
 #include <stdio.h>
 #include <string.h>
-#include <sys/stat.h>
 
-#ifdef MOS_WINDOWS
-#include <direct.h>
-#endif
 
 #define TLIB_MAGIC         0x544C4942u /* "TLIB" big-endian (network order) */
 #define TLIB_VERSION       1u
@@ -637,11 +633,7 @@ static int mkdir_p(char const *path) {
             char saved = *p;
             *p         = '\0';
 
-#ifdef MOS_WINDOWS
-            int ret = _mkdir(tmp);
-#else
-            int ret = mkdir(tmp, 0755);
-#endif
+            int ret = platform_mkdir(tmp);
             if (ret != 0 && errno != EEXIST) {
                 return 1;
             }
@@ -651,11 +643,7 @@ static int mkdir_p(char const *path) {
     }
 
     // Create final directory
-#ifdef MOS_WINDOWS
-    int ret = _mkdir(tmp);
-#else
-    int ret = mkdir(tmp, 0755);
-#endif
+    int ret = platform_mkdir(tmp);
     if (ret != 0 && errno != EEXIST) {
         return 1;
     }

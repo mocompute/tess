@@ -1,4 +1,5 @@
 #include "manifest.h"
+#include "platform.h"
 
 #include "str.h"
 
@@ -20,17 +21,10 @@
         error += this_error;                                                                               \
     }
 
-// Platform-specific temp directory
 static char temp_dir[512];
 
 static void init_temp_dir(void) {
-#ifdef MOS_WINDOWS
-    char temp[260];
-    GetTempPathA(260, temp);
-    snprintf(temp_dir, sizeof(temp_dir), "%s", temp);
-#else
-    snprintf(temp_dir, sizeof(temp_dir), "/tmp/");
-#endif
+    platform_temp_dir(temp_dir, sizeof(temp_dir));
 }
 
 static void make_temp_path(char *buf, size_t bufsize, char const *filename) {

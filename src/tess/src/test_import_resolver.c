@@ -5,21 +5,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-#ifdef MOS_WINDOWS
-#include <direct.h>
-#include <io.h>
-#define platform_mkdir(path) _mkdir(path)
-#define NULL_DEVICE          "NUL"
-#define dup                  _dup
-#define dup2                 _dup2
-#define fileno               _fileno
-#define close                _close
-#else
-#include <sys/stat.h>
-#include <unistd.h>
-#define platform_mkdir(path) mkdir(path, 0755)
-#define NULL_DEVICE          "/dev/null"
-#endif
 
 #define T(name)                                                                                            \
     this_error = name();                                                                                   \
@@ -34,13 +19,9 @@ static char test_base[TEST_BASE_MAX];
 
 // Initialize test base directory using platform temp path
 static void init_test_base(void) {
-#ifdef MOS_WINDOWS
-    char temp[MAX_PATH];
-    GetTempPathA(MAX_PATH, temp);
+    char temp[PLATFORM_PATH_MAX];
+    platform_temp_dir(temp, sizeof(temp));
     snprintf(test_base, sizeof(test_base), "%stess_import_test", temp);
-#else
-    snprintf(test_base, sizeof(test_base), "/tmp/tess_import_test");
-#endif
 }
 
 // Recursively create directories (like mkdir -p)
@@ -58,13 +39,10 @@ static int mkdirp(char const *path) {
     // Create each directory component
     for (p = tmp + 1; *p; p++) {
         if (*p == '/' || *p == '\\') {
+            char saved = *p;
             *p = 0;
             platform_mkdir(tmp);
-#ifdef MOS_WINDOWS
-            *p = '\\';
-#else
-            *p = '/';
-#endif
+            *p = saved;
         }
     }
     return platform_mkdir(tmp);
@@ -72,13 +50,7 @@ static int mkdirp(char const *path) {
 
 // Build a path by joining base and components
 static void build_path(char *dest, size_t dest_size, char const *base, char const *suffix) {
-    snprintf(dest, dest_size, "%s%c%s", base,
-#ifdef MOS_WINDOWS
-             '\\',
-#else
-             '/',
-#endif
-             suffix);
+    snprintf(dest, dest_size, "%s/%s", base, suffix);
 }
 
 // Create a temporary test file

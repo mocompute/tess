@@ -7,10 +7,8 @@
 
 #include <stdio.h>
 #include <string.h>
-#include <sys/stat.h>
 
 #ifdef MOS_WINDOWS
-#include <direct.h>
 #include <io.h>
 #define ftruncate(fd, size) _chsize(fd, size)
 #define fileno              _fileno
@@ -25,17 +23,10 @@
         error += this_error;                                                                               \
     }
 
-// Platform-specific temp directory
 static char temp_dir[512];
 
 static void init_temp_dir(void) {
-#ifdef MOS_WINDOWS
-    char temp[MAX_PATH];
-    GetTempPathA(MAX_PATH, temp);
-    snprintf(temp_dir, sizeof(temp_dir), "%s", temp);
-#else
-    snprintf(temp_dir, sizeof(temp_dir), "/tmp/");
-#endif
+    platform_temp_dir(temp_dir, sizeof(temp_dir));
 }
 
 static void make_temp_path(char *buf, size_t bufsize, char const *filename) {
@@ -661,19 +652,11 @@ static void test_mkdir_p(char const *path) {
     for (char *p = tmp + 1; *p; p++) {
         if (*p == '/') {
             *p = '\0';
-#ifdef MOS_WINDOWS
-            _mkdir(tmp);
-#else
-            mkdir(tmp, 0755);
-#endif
+            platform_mkdir(tmp);
             *p = '/';
         }
     }
-#ifdef MOS_WINDOWS
-    _mkdir(tmp);
-#else
-    mkdir(tmp, 0755);
-#endif
+    platform_mkdir(tmp);
 }
 
 // Helper: pack files from in-memory content using tl_tlib_pack.
