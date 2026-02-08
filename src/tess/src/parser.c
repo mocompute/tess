@@ -27,6 +27,13 @@
 // All non-zero returns from a_try parsing functions signal a backtrack, except for this:
 #define ERROR_STOP        2 // signal to stop parsing rather than backtrack
 
+typedef enum {
+    mode_none,            // initialisation
+    mode_symbols,         // first pass, formerly is_symbol_pass
+    mode_source,          // second pass, after symbols
+    mode_toplevel_funcall // for parsing package.tl
+} parser_mode;
+
 struct parser {
     allocator             *parent_alloc;
     allocator             *file_arena;
@@ -64,8 +71,8 @@ struct parser {
     int                    in_function_application; // enable greedy parsing
     int                    skip_module;             // skip parsing until next module or file
     int                    prelude_consumed;        // prelude string has been parsed
-    int expect_module; // expect a module immediately after a #unity_file before any terms
-    int is_symbol_pass;
+    int         expect_module; // expect a module immediately after a #unity_file before any terms
+    parser_mode mode;
 };
 
 typedef int (*parse_fun)(parser *);
@@ -195,7 +202,7 @@ parser *parser_create(allocator *alloc, parser_opts const *opts) {
     self->skip_module             = 0;
     self->prelude_consumed        = 0;
     self->expect_module           = 0;
-    self->is_symbol_pass          = 0;
+    self->mode                    = mode_none;
 
     self->tokenizer               = null;
     self->tokens                  = (token_array){.alloc = self->tokens_arena};
@@ -2511,7 +2518,7 @@ static int toplevel_c_chunk(parser *self) {
 }
 
 static void save_current_module_symbols(parser *self) {
-    if (!self->is_symbol_pass) return;
+    if (self->mode != mode_symbols) return;
     str      module_name = str_is_empty(self->current_module) ? S("main") : self->current_module;
     hashmap *copy        = map_copy(self->current_module_symbols);
     str_map_set_ptr(&self->module_symbols, module_name, copy);
@@ -2582,7 +2589,7 @@ static int toplevel_hash(parser *self) {
                 // to a hashmap in module_symbols (set by load_module_symbols), and resetting it would
                 // corrupt module_symbols.
 
-                if (self->is_symbol_pass) {
+                if (self->mode == mode_symbols) {
                     hset_reset(self->current_module_symbols);
                 }
 
@@ -3831,89 +3838,159 @@ static int toplevel(parser *self) {
     return 1;
 }
 
-int parser_next(parser *self) {
-    if (!self->tokenizer) {
+static int toplevel_funcall_only(parser *self) {
 
-        // A new tokenizer is created for each file being parsed.
-        tokenizer_opts tok_opts   = {.defines = self->opts.defines};
+    self->error.tag = tl_err_ok;
 
-        self->error.tag           = tl_err_ok;
-        self->tokenizer_error.tag = tl_err_ok;
+    // Switch to speculative arena for all allocations during pattern matching
+    allocator *permanent = self->ast_arena;
+    self->ast_arena      = self->speculative;
 
-        // Parse the prelude string before any files.
-        if (self->opts.prelude && !self->prelude_consumed) {
-            self->prelude_consumed = 1;
-            char_csized data       = {.v = self->opts.prelude, .size = strlen(self->opts.prelude)};
+    while (!is_eof(self)) {
 
-            tok_opts.input         = data;
-            tok_opts.file          = "<prelude>";
-            self->tokenizer        = tokenizer_create(self->parent_alloc, &tok_opts);
-        } else {
-            if ((i32)self->files_index >= (i32)self->files.size) {
-                self->error.tag = tl_err_eof;
-                return 1;
-            }
+        int res = 0;
 
-            // free prior data
-            if (self->current_file_data.v) {
-                alloc_free(self->file_arena, (void *)self->current_file_data.v);
-                self->current_file_data.v    = null;
-                self->current_file_data.size = 0;
-            }
+        if (0 == (res = a_try(self, a_funcall))) goto success;
+        else if (ERROR_STOP == res) goto error;
 
-            // read file
-            char const *file = str_cstr(&self->files.v[self->files_index++]);
-            file_read(self->file_arena, file, (char **)&self->current_file_data.v,
-                      &self->current_file_data.size);
+        self->error.tag = tl_err_expected_funcall;
+        // Fall through to cleanup_fail
 
-            tok_opts.input      = self->current_file_data;
-            tok_opts.file       = file;
-            self->tokenizer     = tokenizer_create(self->parent_alloc, &tok_opts);
-            self->expect_module = 1;
+    cleanup_fail:
+        arena_reset(self->speculative);
+        self->ast_arena = permanent;
+        return 1;
+
+    error:
+        arena_reset(self->speculative);
+        self->ast_arena = permanent;
+        return res;
+
+    success:
+        if (self->expect_module) {
+            self->error.tag = tl_err_expected_module;
+            goto cleanup_fail;
         }
+
+        // continue loop, reset speculative arena for next iteration
+        arena_reset(self->speculative);
     }
 
-    int res = toplevel(self);
-
-    if (0 == res) {
-        self->result->file = self->error.file;
-        self->result->line = self->error.line;
-        self->result->col  = self->error.col;
-    } else if (is_eof(self)) {
-        if (self->tokenizer) tokenizer_destroy(&self->tokenizer);
-        self->tokenizer   = null;
-        self->tokens.size = 0;
-
-        // keep going with next file if possible
-        res = parser_next(self);
-    }
-
-    arena_reset(self->transient);
-
-    return res;
+    // EOF reached
+    arena_reset(self->speculative);
+    self->ast_arena = permanent;
+    return 1;
 }
 
-int parser_parse_all(parser *p, ast_node_array *out) {
+int parser_next(parser *self) {
+    while (1) {
+        if (!self->tokenizer) {
 
-    int res = 0;
-    while (0 == (res = parser_next(p))) {
+            // A new tokenizer is created for each file being parsed.
+            tokenizer_opts tok_opts   = {.defines = self->opts.defines};
+
+            self->error.tag           = tl_err_ok;
+            self->tokenizer_error.tag = tl_err_ok;
+
+            // Parse the prelude string before any files.
+            if (self->opts.prelude && !self->prelude_consumed) {
+                self->prelude_consumed = 1;
+                char_csized data       = {.v = self->opts.prelude, .size = strlen(self->opts.prelude)};
+
+                tok_opts.input         = data;
+                tok_opts.file          = "<prelude>";
+                self->tokenizer        = tokenizer_create(self->parent_alloc, &tok_opts);
+            } else {
+                if ((i32)self->files_index >= (i32)self->files.size) {
+                    self->error.tag = tl_err_eof;
+                    return 1;
+                }
+
+                // free prior data
+                if (self->current_file_data.v) {
+                    alloc_free(self->file_arena, (void *)self->current_file_data.v);
+                    self->current_file_data.v    = null;
+                    self->current_file_data.size = 0;
+                }
+
+                // read file
+                char const *file = str_cstr(&self->files.v[self->files_index++]);
+                file_read(self->file_arena, file, (char **)&self->current_file_data.v,
+                          &self->current_file_data.size);
+
+                tok_opts.input      = self->current_file_data;
+                tok_opts.file       = file;
+                self->tokenizer     = tokenizer_create(self->parent_alloc, &tok_opts);
+                self->expect_module = 1;
+            }
+        }
+
+        int res = 0;
+        if (mode_toplevel_funcall == self->mode) {
+            res = toplevel_funcall_only(self);
+        } else {
+            res = toplevel(self);
+        }
+
+        if (0 == res) {
+            self->result->file = self->error.file;
+            self->result->line = self->error.line;
+            self->result->col  = self->error.col;
+            arena_reset(self->transient);
+            return res;
+        } else if (is_eof(self)) {
+            if (self->tokenizer) tokenizer_destroy(&self->tokenizer);
+            self->tokenizer   = null;
+            self->tokens.size = 0;
+
+            // keep going with next file if possible
+        } else {
+            arena_reset(self->transient);
+            return res;
+        }
+    }
+}
+
+int parser_parse_all(parser *self, ast_node_array *out) {
+
+    self->mode = mode_source;
+
+    int res    = 0;
+    while (0 == (res = parser_next(self))) {
         ast_node *node;
 
-        parser_result(p, &node);
-        str str = v2_ast_node_to_string(p->transient, node);
-        dbg(p, "parse_all: parsed node %s", str_cstr(&str));
+        parser_result(self, &node);
+        str str = v2_ast_node_to_string(self->transient, node);
+        dbg(self, "parse_all: parsed node %s", str_cstr(&str));
 
         array_push(*out, node);
     }
 
-    if (is_eof(p)) return 0;
+    if (is_eof(self)) return 0;
+
+    return res;
+}
+
+int parser_parse_all_toplevel_funcalls(parser *self, ast_node_array *out) {
+    self->mode = mode_toplevel_funcall;
+
+    int res    = 0;
+    while (0 == (res = parser_next(self))) {
+        ast_node *node;
+
+        parser_result(self, &node);
+        array_push(*out, node);
+    }
+
+    if (is_eof(self)) return 0;
 
     return res;
 }
 
 int parser_parse_all_symbols(parser *self) {
-    int res              = 0;
-    self->is_symbol_pass = 1;
+    int res    = 0;
+    self->mode = mode_symbols;
+
     while (0 == (res = parser_next(self))) {
         ast_node *node;
         parser_result(self, &node);
@@ -3930,6 +4007,7 @@ int parser_parse_all_symbols(parser *self) {
 
 int parser_parse_all_verbose(parser *p, ast_node_array *out) {
     p->verbose = 1;
+    p->mode    = mode_source;
 
     dbg(p, "begin parse");
     int res = parser_parse_all(p, out);

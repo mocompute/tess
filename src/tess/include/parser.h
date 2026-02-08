@@ -46,6 +46,7 @@ void parser_result(parser *, ast_node **);
 int  parser_parse_all(parser *, ast_node_array *out);
 int  parser_parse_all_symbols(parser *);
 int  parser_parse_all_verbose(parser *, ast_node_array *out);
+int  parser_parse_all_toplevel_funcalls(parser *, ast_node_array *out);
 void parser_report_errors(parser *);
 void parser_set_verbose(parser *, int);
 
