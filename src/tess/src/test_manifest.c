@@ -6,6 +6,10 @@
 #include <stdio.h>
 #include <string.h>
 
+#if defined(__GNUC__) && !defined(__clang__)
+#pragma GCC diagnostic ignored "-Wformat-truncation"
+#endif
+
 #ifdef MOS_WINDOWS
 #include <io.h>
 #define ftruncate(fd, size) _chsize(fd, size)

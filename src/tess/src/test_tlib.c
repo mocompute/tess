@@ -8,6 +8,13 @@
 #include <stdio.h>
 #include <string.h>
 
+// snprintf truncation is safe by design; GCC warns because same-sized source
+// and destination buffers with any suffix *could* truncate, but in practice
+// temp paths are short. Suppress for this file's many path-building calls.
+#if defined(__GNUC__) && !defined(__clang__)
+#pragma GCC diagnostic ignored "-Wformat-truncation"
+#endif
+
 #ifdef MOS_WINDOWS
 #include <io.h>
 #define ftruncate(fd, size) _chsize(fd, size)
@@ -554,7 +561,7 @@ static int test_pack_with_manifest(void) {
     tl_tlib_pack_opts opts = {.verbose = 0};
     opts.name              = str_cstr(&pkg.info.name);
     opts.version           = str_cstr(&pkg.info.version);
-    opts.author = str_is_empty(pkg.info.author) ? null : str_cstr(&pkg.info.author);
+    opts.author            = str_is_empty(pkg.info.author) ? null : str_cstr(&pkg.info.author);
 
     if (pkg.info.export_count > 0) {
         opts.modules      = pkg.info.exports;
@@ -774,7 +781,7 @@ static int test_extract(void) {
     char       path[512];
     make_temp_path(path, sizeof(path), "test_tlib_extract.tlib");
 
-    tl_tlib_metadata meta    = make_test_metadata(alloc);
+    tl_tlib_metadata meta       = make_test_metadata(alloc);
     tl_tlib_entry    entries[2] = {
       {"lib.tl", 6, (byte const *)"#module Lib\nfoo() { 1 }\n", 24},
       {"sub/util.tl", 11, (byte const *)"#module Util\nbar() { 2 }\n", 25},
@@ -851,8 +858,8 @@ static void init_e2e_paths(void) {
     snprintf(e2e_tess_exe, sizeof(e2e_tess_exe), "%s", TEST_TESS_EXE);
     snprintf(e2e_stdlib_dir, sizeof(e2e_stdlib_dir), "%s", TEST_STDLIB_DIR);
 #else
-    char buf[512];
-    span s = {.buf = buf, .len = sizeof(buf)};
+    char  buf[512];
+    span  s   = {.buf = buf, .len = sizeof(buf)};
     char *cwd = file_current_working_directory(s);
     if (cwd) {
         snprintf(e2e_project_root, sizeof(e2e_project_root), "%s", cwd);
@@ -866,11 +873,18 @@ static int copy_file(char const *src, char const *dst) {
     FILE *in = fopen(src, "rb");
     if (!in) return 1;
     FILE *out = fopen(dst, "wb");
-    if (!out) { fclose(in); return 1; }
-    char buf[4096];
+    if (!out) {
+        fclose(in);
+        return 1;
+    }
+    char   buf[4096];
     size_t n;
     while ((n = fread(buf, 1, sizeof(buf), in)) > 0) {
-        if (fwrite(buf, 1, n, out) != n) { fclose(in); fclose(out); return 1; }
+        if (fwrite(buf, 1, n, out) != n) {
+            fclose(in);
+            fclose(out);
+            return 1;
+        }
     }
     fclose(in);
     fclose(out);
@@ -930,12 +944,11 @@ static int test_e2e_basic_package(void) {
     test_mkdir_p(libs_dir);
 
     snprintf(path, sizeof(path), "%spackage.tl", app_dir);
-    if (write_file(path,
-            "format(1)\n"
-            "package(\"App\")\n"
-            "version(\"0.1.0\")\n"
-            "depend(\"Greeter\", \"1.0.0\")\n"
-            "depend_path(\"./libs\")\n")) {
+    if (write_file(path, "format(1)\n"
+                         "package(\"App\")\n"
+                         "version(\"0.1.0\")\n"
+                         "depend(\"Greeter\", \"1.0.0\")\n"
+                         "depend_path(\"./libs\")\n")) {
         fprintf(stderr, "  failed to write app package.tl\n");
         return 1;
     }
@@ -958,8 +971,8 @@ static int test_e2e_basic_package(void) {
     char out_exe[512];
     snprintf(out_exe, sizeof(out_exe), "%sapp", app_dir);
     snprintf(cmd, sizeof(cmd),
-             "cd \"%s\" && \"%s\" exe --no-standard-includes -S \"%s\" -o \"%s\" main.tl 2>&1",
-             app_dir, e2e_tess_exe, e2e_stdlib_dir, out_exe);
+             "cd \"%s\" && \"%s\" exe --no-standard-includes -S \"%s\" -o \"%s\" main.tl 2>&1", app_dir,
+             e2e_tess_exe, e2e_stdlib_dir, out_exe);
     if (run_cmd(cmd) != 0) {
         fprintf(stderr, "  tess exe failed\n");
         return 1;
@@ -1010,12 +1023,11 @@ static int test_e2e_version_mismatch(void) {
     test_mkdir_p(libs_dir);
 
     snprintf(path, sizeof(path), "%spackage.tl", app_dir);
-    write_file(path,
-            "format(1)\n"
-            "package(\"App\")\n"
-            "version(\"0.1.0\")\n"
-            "depend(\"Greeter\", \"2.0.0\")\n"
-            "depend_path(\"./libs\")\n");
+    write_file(path, "format(1)\n"
+                     "package(\"App\")\n"
+                     "version(\"0.1.0\")\n"
+                     "depend(\"Greeter\", \"2.0.0\")\n"
+                     "depend_path(\"./libs\")\n");
 
     snprintf(path, sizeof(path), "%smain.tl", app_dir);
     write_file(path, "#module main\n\nmain() { Greeter.greet() }\n");
@@ -1028,8 +1040,8 @@ static int test_e2e_version_mismatch(void) {
     char out_exe[512];
     snprintf(out_exe, sizeof(out_exe), "%sapp", app_dir);
     snprintf(cmd, sizeof(cmd),
-             "cd \"%s\" && \"%s\" exe --no-standard-includes -S \"%s\" -o \"%s\" main.tl 2>&1",
-             app_dir, e2e_tess_exe, e2e_stdlib_dir, out_exe);
+             "cd \"%s\" && \"%s\" exe --no-standard-includes -S \"%s\" -o \"%s\" main.tl 2>&1", app_dir,
+             e2e_tess_exe, e2e_stdlib_dir, out_exe);
     if (run_cmd(cmd) == 0) {
         fprintf(stderr, "  tess exe should have failed (version mismatch)\n");
         return 1;
@@ -1049,12 +1061,11 @@ static int test_e2e_dep_not_found(void) {
 
     char path[512];
     snprintf(path, sizeof(path), "%spackage.tl", app_dir);
-    write_file(path,
-            "format(1)\n"
-            "package(\"App\")\n"
-            "version(\"0.1.0\")\n"
-            "depend(\"NonExistent\", \"1.0.0\")\n"
-            "depend_path(\"./libs\")\n");
+    write_file(path, "format(1)\n"
+                     "package(\"App\")\n"
+                     "version(\"0.1.0\")\n"
+                     "depend(\"NonExistent\", \"1.0.0\")\n"
+                     "depend_path(\"./libs\")\n");
 
     snprintf(path, sizeof(path), "%smain.tl", app_dir);
     write_file(path, "#module main\n\nmain() { 0 }\n");
@@ -1062,8 +1073,8 @@ static int test_e2e_dep_not_found(void) {
     char cmd[2048], out_exe[512];
     snprintf(out_exe, sizeof(out_exe), "%sapp", app_dir);
     snprintf(cmd, sizeof(cmd),
-             "cd \"%s\" && \"%s\" exe --no-standard-includes -S \"%s\" -o \"%s\" main.tl 2>&1",
-             app_dir, e2e_tess_exe, e2e_stdlib_dir, out_exe);
+             "cd \"%s\" && \"%s\" exe --no-standard-includes -S \"%s\" -o \"%s\" main.tl 2>&1", app_dir,
+             e2e_tess_exe, e2e_stdlib_dir, out_exe);
     if (run_cmd(cmd) == 0) {
         fprintf(stderr, "  tess exe should have failed (package not found)\n");
         return 1;
@@ -1083,31 +1094,28 @@ static int test_e2e_multi_file_library(void) {
 
     char path[512];
     snprintf(path, sizeof(path), "%spackage.tl", lib_dir);
-    write_file(path,
-            "format(1)\n"
-            "package(\"MathLib\")\n"
-            "version(\"1.0.0\")\n"
-            "export(\"MathLib\")\n");
+    write_file(path, "format(1)\n"
+                     "package(\"MathLib\")\n"
+                     "version(\"1.0.0\")\n"
+                     "export(\"MathLib\")\n");
 
     snprintf(path, sizeof(path), "%smath.tl", lib_dir);
-    write_file(path,
-            "#module MathLib\n"
-            "#import \"internal.tl\"\n"
-            "\n"
-            "add(a, b) {\n"
-            "  MathLib.Internal.check(a)\n"
-            "  MathLib.Internal.check(b)\n"
-            "  a + b\n"
-            "}\n");
+    write_file(path, "#module MathLib\n"
+                     "#import \"internal.tl\"\n"
+                     "\n"
+                     "add(a, b) {\n"
+                     "  MathLib.Internal.check(a)\n"
+                     "  MathLib.Internal.check(b)\n"
+                     "  a + b\n"
+                     "}\n");
 
     snprintf(path, sizeof(path), "%sinternal.tl", lib_dir);
-    write_file(path,
-            "#module MathLib.Internal\n"
-            "\n"
-            "check(x) {\n"
-            "  if x < 0 { 0 - x }\n"
-            "  else { x }\n"
-            "}\n");
+    write_file(path, "#module MathLib.Internal\n"
+                     "\n"
+                     "check(x) {\n"
+                     "  if x < 0 { 0 - x }\n"
+                     "  else { x }\n"
+                     "}\n");
 
     // -- Pack library (passing root file, imports are resolved automatically) --
     char tlib_path[512];
@@ -1131,21 +1139,19 @@ static int test_e2e_multi_file_library(void) {
     test_mkdir_p(libs_dir);
 
     snprintf(path, sizeof(path), "%spackage.tl", app_dir);
-    write_file(path,
-            "format(1)\n"
-            "package(\"App\")\n"
-            "version(\"0.1.0\")\n"
-            "depend(\"MathLib\", \"1.0.0\")\n"
-            "depend_path(\"./libs\")\n");
+    write_file(path, "format(1)\n"
+                     "package(\"App\")\n"
+                     "version(\"0.1.0\")\n"
+                     "depend(\"MathLib\", \"1.0.0\")\n"
+                     "depend_path(\"./libs\")\n");
 
     snprintf(path, sizeof(path), "%smain.tl", app_dir);
-    write_file(path,
-            "#module main\n"
-            "\n"
-            "main() {\n"
-            "  result := MathLib.add(17, 25)\n"
-            "  result\n"
-            "}\n");
+    write_file(path, "#module main\n"
+                     "\n"
+                     "main() {\n"
+                     "  result := MathLib.add(17, 25)\n"
+                     "  result\n"
+                     "}\n");
 
     char dst_tlib[512];
     snprintf(dst_tlib, sizeof(dst_tlib), "%sMathLib.tlib", libs_dir);
@@ -1155,8 +1161,8 @@ static int test_e2e_multi_file_library(void) {
     char out_exe[512];
     snprintf(out_exe, sizeof(out_exe), "%sapp", app_dir);
     snprintf(cmd, sizeof(cmd),
-             "cd \"%s\" && \"%s\" exe --no-standard-includes -S \"%s\" -o \"%s\" main.tl 2>&1",
-             app_dir, e2e_tess_exe, e2e_stdlib_dir, out_exe);
+             "cd \"%s\" && \"%s\" exe --no-standard-includes -S \"%s\" -o \"%s\" main.tl 2>&1", app_dir,
+             e2e_tess_exe, e2e_stdlib_dir, out_exe);
     if (run_cmd(cmd) != 0) {
         fprintf(stderr, "  tess exe failed\n");
         return 1;
@@ -1202,20 +1208,18 @@ static int test_e2e_transitive_deps(void) {
     test_mkdir_p(mathlib_libs);
 
     snprintf(path, sizeof(path), "%spackage.tl", mathlib_dir);
-    write_file(path,
-            "format(1)\n"
-            "package(\"MathLib\")\n"
-            "version(\"2.0.0\")\n"
-            "export(\"MathLib\")\n"
-            "depend(\"LogLib\", \"1.0.0\")\n"
-            "depend_path(\"./libs\")\n");
+    write_file(path, "format(1)\n"
+                     "package(\"MathLib\")\n"
+                     "version(\"2.0.0\")\n"
+                     "export(\"MathLib\")\n"
+                     "depend(\"LogLib\", \"1.0.0\")\n"
+                     "depend_path(\"./libs\")\n");
 
     snprintf(path, sizeof(path), "%smath.tl", mathlib_dir);
-    write_file(path,
-            "#module MathLib\n\n"
-            "compute() {\n"
-            "  Logger.log_value() + 32\n"
-            "}\n");
+    write_file(path, "#module MathLib\n\n"
+                     "compute() {\n"
+                     "  Logger.log_value() + 32\n"
+                     "}\n");
 
     // Copy LogLib.tlib to MathLib's libs/
     char src_tlib[512], dst_tlib[512];
@@ -1239,12 +1243,11 @@ static int test_e2e_transitive_deps(void) {
     test_mkdir_p(app_libs);
 
     snprintf(path, sizeof(path), "%spackage.tl", app_dir);
-    write_file(path,
-            "format(1)\n"
-            "package(\"App\")\n"
-            "version(\"0.1.0\")\n"
-            "depend(\"MathLib\", \"2.0.0\")\n"
-            "depend_path(\"./libs\")\n");
+    write_file(path, "format(1)\n"
+                     "package(\"App\")\n"
+                     "version(\"0.1.0\")\n"
+                     "depend(\"MathLib\", \"2.0.0\")\n"
+                     "depend_path(\"./libs\")\n");
 
     snprintf(path, sizeof(path), "%smain.tl", app_dir);
     write_file(path, "#module main\n\nmain() {\n  MathLib.compute()\n}\n");
@@ -1262,8 +1265,8 @@ static int test_e2e_transitive_deps(void) {
     char out_exe[512];
     snprintf(out_exe, sizeof(out_exe), "%sapp", app_dir);
     snprintf(cmd, sizeof(cmd),
-             "cd \"%s\" && \"%s\" exe --no-standard-includes -S \"%s\" -o \"%s\" main.tl 2>&1",
-             app_dir, e2e_tess_exe, e2e_stdlib_dir, out_exe);
+             "cd \"%s\" && \"%s\" exe --no-standard-includes -S \"%s\" -o \"%s\" main.tl 2>&1", app_dir,
+             e2e_tess_exe, e2e_stdlib_dir, out_exe);
     if (run_cmd(cmd) != 0) {
         fprintf(stderr, "  tess exe failed\n");
         return 1;
@@ -1309,13 +1312,12 @@ static int test_e2e_diamond_deps(void) {
     test_mkdir_p(liba_libs);
 
     snprintf(path, sizeof(path), "%spackage.tl", liba_dir);
-    write_file(path,
-            "format(1)\n"
-            "package(\"LibA\")\n"
-            "version(\"1.0.0\")\n"
-            "export(\"ModA\")\n"
-            "depend(\"BaseLib\", \"1.0.0\")\n"
-            "depend_path(\"./libs\")\n");
+    write_file(path, "format(1)\n"
+                     "package(\"LibA\")\n"
+                     "version(\"1.0.0\")\n"
+                     "export(\"ModA\")\n"
+                     "depend(\"BaseLib\", \"1.0.0\")\n"
+                     "depend_path(\"./libs\")\n");
 
     snprintf(path, sizeof(path), "%smoda.tl", liba_dir);
     write_file(path, "#module ModA\n\ncompute() { Base.val() + 1 }\n");
@@ -1341,13 +1343,12 @@ static int test_e2e_diamond_deps(void) {
     test_mkdir_p(libb_libs);
 
     snprintf(path, sizeof(path), "%spackage.tl", libb_dir);
-    write_file(path,
-            "format(1)\n"
-            "package(\"LibB\")\n"
-            "version(\"1.0.0\")\n"
-            "export(\"ModB\")\n"
-            "depend(\"BaseLib\", \"1.0.0\")\n"
-            "depend_path(\"./libs\")\n");
+    write_file(path, "format(1)\n"
+                     "package(\"LibB\")\n"
+                     "version(\"1.0.0\")\n"
+                     "export(\"ModB\")\n"
+                     "depend(\"BaseLib\", \"1.0.0\")\n"
+                     "depend_path(\"./libs\")\n");
 
     snprintf(path, sizeof(path), "%smodb.tl", libb_dir);
     write_file(path, "#module ModB\n\ncompute() { Base.val() + 1 }\n");
@@ -1371,20 +1372,18 @@ static int test_e2e_diamond_deps(void) {
     test_mkdir_p(app_libs);
 
     snprintf(path, sizeof(path), "%spackage.tl", app_dir);
-    write_file(path,
-            "format(1)\n"
-            "package(\"App\")\n"
-            "version(\"0.1.0\")\n"
-            "depend(\"LibA\", \"1.0.0\")\n"
-            "depend(\"LibB\", \"1.0.0\")\n"
-            "depend_path(\"./libs\")\n");
+    write_file(path, "format(1)\n"
+                     "package(\"App\")\n"
+                     "version(\"0.1.0\")\n"
+                     "depend(\"LibA\", \"1.0.0\")\n"
+                     "depend(\"LibB\", \"1.0.0\")\n"
+                     "depend_path(\"./libs\")\n");
 
     snprintf(path, sizeof(path), "%smain.tl", app_dir);
-    write_file(path,
-            "#module main\n\n"
-            "main() {\n"
-            "  ModA.compute() + ModB.compute()\n"
-            "}\n");
+    write_file(path, "#module main\n\n"
+                     "main() {\n"
+                     "  ModA.compute() + ModB.compute()\n"
+                     "}\n");
 
     // Copy all .tlibs to App's libs/
     snprintf(src_tlib, sizeof(src_tlib), "%sLibA.tlib", liba_dir);
@@ -1403,8 +1402,8 @@ static int test_e2e_diamond_deps(void) {
     char out_exe[512];
     snprintf(out_exe, sizeof(out_exe), "%sapp", app_dir);
     snprintf(cmd, sizeof(cmd),
-             "cd \"%s\" && \"%s\" exe --no-standard-includes -S \"%s\" -o \"%s\" main.tl 2>&1",
-             app_dir, e2e_tess_exe, e2e_stdlib_dir, out_exe);
+             "cd \"%s\" && \"%s\" exe --no-standard-includes -S \"%s\" -o \"%s\" main.tl 2>&1", app_dir,
+             e2e_tess_exe, e2e_stdlib_dir, out_exe);
     if (run_cmd(cmd) != 0) {
         fprintf(stderr, "  tess exe failed\n");
         return 1;
@@ -1433,22 +1432,22 @@ static int test_e2e_circular_deps(void) {
     a_depends[0] = str_init(alloc, "PkgB=1.0.0");
 
     str a_modules[1];
-    a_modules[0] = str_init(alloc, "ModA");
+    a_modules[0]            = str_init(alloc, "ModA");
 
     tl_tlib_metadata meta_a = {
-        .name           = str_init(alloc, "PkgA"),
-        .author         = str_empty(),
-        .version        = str_init(alloc, "1.0.0"),
-        .modules        = a_modules,
-        .module_count   = 1,
-        .depends        = a_depends,
-        .depends_count  = 1,
+      .name          = str_init(alloc, "PkgA"),
+      .author        = str_empty(),
+      .version       = str_init(alloc, "1.0.0"),
+      .modules       = a_modules,
+      .module_count  = 1,
+      .depends       = a_depends,
+      .depends_count = 1,
     };
 
-    char const *a_src = "#module ModA\n\nfoo() { 1 }\n";
+    char const   *a_src   = "#module ModA\n\nfoo() { 1 }\n";
     tl_tlib_entry a_entry = {"moda.tl", 7, (byte const *)a_src, (u32)strlen(a_src)};
 
-    char a_path[512];
+    char          a_path[512];
     snprintf(a_path, sizeof(a_path), "%sPkgA.tlib", libs_dir);
     if (tl_tlib_write(alloc, a_path, &meta_a, &a_entry, 1)) {
         fprintf(stderr, "  failed to write PkgA.tlib\n");
@@ -1460,22 +1459,22 @@ static int test_e2e_circular_deps(void) {
     b_depends[0] = str_init(alloc, "PkgA=1.0.0");
 
     str b_modules[1];
-    b_modules[0] = str_init(alloc, "ModB");
+    b_modules[0]            = str_init(alloc, "ModB");
 
     tl_tlib_metadata meta_b = {
-        .name           = str_init(alloc, "PkgB"),
-        .author         = str_empty(),
-        .version        = str_init(alloc, "1.0.0"),
-        .modules        = b_modules,
-        .module_count   = 1,
-        .depends        = b_depends,
-        .depends_count  = 1,
+      .name          = str_init(alloc, "PkgB"),
+      .author        = str_empty(),
+      .version       = str_init(alloc, "1.0.0"),
+      .modules       = b_modules,
+      .module_count  = 1,
+      .depends       = b_depends,
+      .depends_count = 1,
     };
 
-    char const *b_src = "#module ModB\n\nbar() { 2 }\n";
+    char const   *b_src   = "#module ModB\n\nbar() { 2 }\n";
     tl_tlib_entry b_entry = {"modb.tl", 7, (byte const *)b_src, (u32)strlen(b_src)};
 
-    char b_path[512];
+    char          b_path[512];
     snprintf(b_path, sizeof(b_path), "%sPkgB.tlib", libs_dir);
     if (tl_tlib_write(alloc, b_path, &meta_b, &b_entry, 1)) {
         fprintf(stderr, "  failed to write PkgB.tlib\n");
@@ -1491,12 +1490,11 @@ static int test_e2e_circular_deps(void) {
 
     char path[512];
     snprintf(path, sizeof(path), "%spackage.tl", app_dir);
-    write_file(path,
-            "format(1)\n"
-            "package(\"App\")\n"
-            "version(\"0.1.0\")\n"
-            "depend(\"PkgA\", \"1.0.0\")\n"
-            "depend_path(\"./libs\")\n");
+    write_file(path, "format(1)\n"
+                     "package(\"App\")\n"
+                     "version(\"0.1.0\")\n"
+                     "depend(\"PkgA\", \"1.0.0\")\n"
+                     "depend_path(\"./libs\")\n");
 
     snprintf(path, sizeof(path), "%smain.tl", app_dir);
     write_file(path, "#module main\n\nmain() { 0 }\n");
@@ -1513,8 +1511,8 @@ static int test_e2e_circular_deps(void) {
     snprintf(out_exe, sizeof(out_exe), "%sapp", app_dir);
     char cmd[2048];
     snprintf(cmd, sizeof(cmd),
-             "cd \"%s\" && \"%s\" exe --no-standard-includes -S \"%s\" -o \"%s\" main.tl 2>&1",
-             app_dir, e2e_tess_exe, e2e_stdlib_dir, out_exe);
+             "cd \"%s\" && \"%s\" exe --no-standard-includes -S \"%s\" -o \"%s\" main.tl 2>&1", app_dir,
+             e2e_tess_exe, e2e_stdlib_dir, out_exe);
     if (run_cmd(cmd) == 0) {
         fprintf(stderr, "  tess exe should have failed (circular dependency)\n");
         return 1;
@@ -1527,26 +1525,26 @@ static int test_e2e_circular_deps(void) {
 static int test_e2e_version_conflict(void) {
     allocator *alloc = default_allocator();
 
-    char libs_dir[512];
+    char       libs_dir[512];
     make_temp_path(libs_dir, sizeof(libs_dir), "e2e_conflict_libs/");
     test_mkdir_p(libs_dir);
 
     // BaseLib v1.0.0
     str base_modules[1];
-    base_modules[0] = str_init(alloc, "Base");
+    base_modules[0]            = str_init(alloc, "Base");
 
     tl_tlib_metadata meta_base = {
-        .name         = str_init(alloc, "BaseLib"),
-        .author       = str_empty(),
-        .version      = str_init(alloc, "1.0.0"),
-        .modules      = base_modules,
-        .module_count = 1,
+      .name         = str_init(alloc, "BaseLib"),
+      .author       = str_empty(),
+      .version      = str_init(alloc, "1.0.0"),
+      .modules      = base_modules,
+      .module_count = 1,
     };
 
-    char const *base_src = "#module Base\n\nval() { 1 }\n";
+    char const   *base_src   = "#module Base\n\nval() { 1 }\n";
     tl_tlib_entry base_entry = {"base.tl", 7, (byte const *)base_src, (u32)strlen(base_src)};
 
-    char base_path[512];
+    char          base_path[512];
     snprintf(base_path, sizeof(base_path), "%sBaseLib.tlib", libs_dir);
     tl_tlib_write(alloc, base_path, &meta_base, &base_entry, 1);
 
@@ -1555,22 +1553,22 @@ static int test_e2e_version_conflict(void) {
     a_depends[0] = str_init(alloc, "BaseLib=1.0.0");
 
     str a_modules[1];
-    a_modules[0] = str_init(alloc, "ModA");
+    a_modules[0]            = str_init(alloc, "ModA");
 
     tl_tlib_metadata meta_a = {
-        .name          = str_init(alloc, "LibA"),
-        .author        = str_empty(),
-        .version       = str_init(alloc, "1.0.0"),
-        .modules       = a_modules,
-        .module_count  = 1,
-        .depends       = a_depends,
-        .depends_count = 1,
+      .name          = str_init(alloc, "LibA"),
+      .author        = str_empty(),
+      .version       = str_init(alloc, "1.0.0"),
+      .modules       = a_modules,
+      .module_count  = 1,
+      .depends       = a_depends,
+      .depends_count = 1,
     };
 
-    char const *a_src = "#module ModA\n\nfoo() { Base.val() }\n";
+    char const   *a_src   = "#module ModA\n\nfoo() { Base.val() }\n";
     tl_tlib_entry a_entry = {"moda.tl", 7, (byte const *)a_src, (u32)strlen(a_src)};
 
-    char a_path[512];
+    char          a_path[512];
     snprintf(a_path, sizeof(a_path), "%sLibA.tlib", libs_dir);
     tl_tlib_write(alloc, a_path, &meta_a, &a_entry, 1);
 
@@ -1579,22 +1577,22 @@ static int test_e2e_version_conflict(void) {
     b_depends[0] = str_init(alloc, "BaseLib=2.0.0");
 
     str b_modules[1];
-    b_modules[0] = str_init(alloc, "ModB");
+    b_modules[0]            = str_init(alloc, "ModB");
 
     tl_tlib_metadata meta_b = {
-        .name          = str_init(alloc, "LibB"),
-        .author        = str_empty(),
-        .version       = str_init(alloc, "1.0.0"),
-        .modules       = b_modules,
-        .module_count  = 1,
-        .depends       = b_depends,
-        .depends_count = 1,
+      .name          = str_init(alloc, "LibB"),
+      .author        = str_empty(),
+      .version       = str_init(alloc, "1.0.0"),
+      .modules       = b_modules,
+      .module_count  = 1,
+      .depends       = b_depends,
+      .depends_count = 1,
     };
 
-    char const *b_src = "#module ModB\n\nbar() { Base.val() }\n";
+    char const   *b_src   = "#module ModB\n\nbar() { Base.val() }\n";
     tl_tlib_entry b_entry = {"modb.tl", 7, (byte const *)b_src, (u32)strlen(b_src)};
 
-    char b_path[512];
+    char          b_path[512];
     snprintf(b_path, sizeof(b_path), "%sLibB.tlib", libs_dir);
     tl_tlib_write(alloc, b_path, &meta_b, &b_entry, 1);
 
@@ -1607,13 +1605,12 @@ static int test_e2e_version_conflict(void) {
 
     char path[512];
     snprintf(path, sizeof(path), "%spackage.tl", app_dir);
-    write_file(path,
-            "format(1)\n"
-            "package(\"App\")\n"
-            "version(\"0.1.0\")\n"
-            "depend(\"LibA\", \"1.0.0\")\n"
-            "depend(\"LibB\", \"1.0.0\")\n"
-            "depend_path(\"./libs\")\n");
+    write_file(path, "format(1)\n"
+                     "package(\"App\")\n"
+                     "version(\"0.1.0\")\n"
+                     "depend(\"LibA\", \"1.0.0\")\n"
+                     "depend(\"LibB\", \"1.0.0\")\n"
+                     "depend_path(\"./libs\")\n");
 
     snprintf(path, sizeof(path), "%smain.tl", app_dir);
     write_file(path, "#module main\n\nmain() { 0 }\n");
@@ -1632,8 +1629,8 @@ static int test_e2e_version_conflict(void) {
     snprintf(out_exe, sizeof(out_exe), "%sapp", app_dir);
     char cmd[2048];
     snprintf(cmd, sizeof(cmd),
-             "cd \"%s\" && \"%s\" exe --no-standard-includes -S \"%s\" -o \"%s\" main.tl 2>&1",
-             app_dir, e2e_tess_exe, e2e_stdlib_dir, out_exe);
+             "cd \"%s\" && \"%s\" exe --no-standard-includes -S \"%s\" -o \"%s\" main.tl 2>&1", app_dir,
+             e2e_tess_exe, e2e_stdlib_dir, out_exe);
     if (run_cmd(cmd) == 0) {
         fprintf(stderr, "  tess exe should have failed (version conflict)\n");
         return 1;
@@ -1655,22 +1652,22 @@ static int test_e2e_missing_transitive_dep(void) {
     m_depends[0] = str_init(alloc, "LogLib=1.0.0");
 
     str m_modules[1];
-    m_modules[0] = str_init(alloc, "MathLib");
+    m_modules[0]            = str_init(alloc, "MathLib");
 
     tl_tlib_metadata meta_m = {
-        .name          = str_init(alloc, "MathLib"),
-        .author        = str_empty(),
-        .version       = str_init(alloc, "1.0.0"),
-        .modules       = m_modules,
-        .module_count  = 1,
-        .depends       = m_depends,
-        .depends_count = 1,
+      .name          = str_init(alloc, "MathLib"),
+      .author        = str_empty(),
+      .version       = str_init(alloc, "1.0.0"),
+      .modules       = m_modules,
+      .module_count  = 1,
+      .depends       = m_depends,
+      .depends_count = 1,
     };
 
-    char const *m_src = "#module MathLib\n\nadd(a, b) { a + b }\n";
+    char const   *m_src   = "#module MathLib\n\nadd(a, b) { a + b }\n";
     tl_tlib_entry m_entry = {"math.tl", 7, (byte const *)m_src, (u32)strlen(m_src)};
 
-    char m_path[512];
+    char          m_path[512];
     snprintf(m_path, sizeof(m_path), "%sMathLib.tlib", libs_dir);
     tl_tlib_write(alloc, m_path, &meta_m, &m_entry, 1);
 
@@ -1683,12 +1680,11 @@ static int test_e2e_missing_transitive_dep(void) {
 
     char path[512];
     snprintf(path, sizeof(path), "%spackage.tl", app_dir);
-    write_file(path,
-            "format(1)\n"
-            "package(\"App\")\n"
-            "version(\"0.1.0\")\n"
-            "depend(\"MathLib\", \"1.0.0\")\n"
-            "depend_path(\"./libs\")\n");
+    write_file(path, "format(1)\n"
+                     "package(\"App\")\n"
+                     "version(\"0.1.0\")\n"
+                     "depend(\"MathLib\", \"1.0.0\")\n"
+                     "depend_path(\"./libs\")\n");
 
     snprintf(path, sizeof(path), "%smain.tl", app_dir);
     write_file(path, "#module main\n\nmain() { 0 }\n");
@@ -1703,8 +1699,8 @@ static int test_e2e_missing_transitive_dep(void) {
     snprintf(out_exe, sizeof(out_exe), "%sapp", app_dir);
     char cmd[2048];
     snprintf(cmd, sizeof(cmd),
-             "cd \"%s\" && \"%s\" exe --no-standard-includes -S \"%s\" -o \"%s\" main.tl 2>&1",
-             app_dir, e2e_tess_exe, e2e_stdlib_dir, out_exe);
+             "cd \"%s\" && \"%s\" exe --no-standard-includes -S \"%s\" -o \"%s\" main.tl 2>&1", app_dir,
+             e2e_tess_exe, e2e_stdlib_dir, out_exe);
     if (run_cmd(cmd) == 0) {
         fprintf(stderr, "  tess exe should have failed (missing transitive dep)\n");
         return 1;
@@ -1723,23 +1719,21 @@ static int test_e2e_internal_module_accessible(void) {
     char path[512];
     snprintf(path, sizeof(path), "%spackage.tl", lib_dir);
     write_file(path,
-            "format(1)\n"
-            "package(\"MathPkg\")\n"
-            "version(\"1.0.0\")\n"
-            "export(\"MathPub\")\n"); // only MathPub is exported
+               "format(1)\n"
+               "package(\"MathPkg\")\n"
+               "version(\"1.0.0\")\n"
+               "export(\"MathPub\")\n"); // only MathPub is exported
 
     snprintf(path, sizeof(path), "%smathpub.tl", lib_dir);
-    write_file(path,
-            "#module MathPub\n"
-            "#import \"mathint.tl\"\n"
-            "\n"
-            "pub_val() { 10 }\n");
+    write_file(path, "#module MathPub\n"
+                     "#import \"mathint.tl\"\n"
+                     "\n"
+                     "pub_val() { 10 }\n");
 
     snprintf(path, sizeof(path), "%smathint.tl", lib_dir);
-    write_file(path,
-            "#module MathInt\n"
-            "\n"
-            "int_val() { 32 }\n");
+    write_file(path, "#module MathInt\n"
+                     "\n"
+                     "int_val() { 32 }\n");
 
     // -- Pack --
     char tlib_path[512];
@@ -1762,19 +1756,17 @@ static int test_e2e_internal_module_accessible(void) {
     test_mkdir_p(app_libs);
 
     snprintf(path, sizeof(path), "%spackage.tl", app_dir);
-    write_file(path,
-            "format(1)\n"
-            "package(\"App\")\n"
-            "version(\"0.1.0\")\n"
-            "depend(\"MathPkg\", \"1.0.0\")\n"
-            "depend_path(\"./libs\")\n");
+    write_file(path, "format(1)\n"
+                     "package(\"App\")\n"
+                     "version(\"0.1.0\")\n"
+                     "depend(\"MathPkg\", \"1.0.0\")\n"
+                     "depend_path(\"./libs\")\n");
 
     snprintf(path, sizeof(path), "%smain.tl", app_dir);
-    write_file(path,
-            "#module main\n\n"
-            "main() {\n"
-            "  MathPub.pub_val() + MathInt.int_val()\n"
-            "}\n");
+    write_file(path, "#module main\n\n"
+                     "main() {\n"
+                     "  MathPub.pub_val() + MathInt.int_val()\n"
+                     "}\n");
 
     char dst[512];
     snprintf(dst, sizeof(dst), "%sMathPkg.tlib", app_libs);
@@ -1784,8 +1776,8 @@ static int test_e2e_internal_module_accessible(void) {
     char out_exe[512];
     snprintf(out_exe, sizeof(out_exe), "%sapp", app_dir);
     snprintf(cmd, sizeof(cmd),
-             "cd \"%s\" && \"%s\" exe --no-standard-includes -S \"%s\" -o \"%s\" main.tl 2>&1",
-             app_dir, e2e_tess_exe, e2e_stdlib_dir, out_exe);
+             "cd \"%s\" && \"%s\" exe --no-standard-includes -S \"%s\" -o \"%s\" main.tl 2>&1", app_dir,
+             e2e_tess_exe, e2e_stdlib_dir, out_exe);
     if (run_cmd(cmd) != 0) {
         fprintf(stderr, "  tess exe failed (internal module should be accessible)\n");
         return 1;
@@ -1809,18 +1801,16 @@ static int test_e2e_generic_package(void) {
 
     char path[512];
     snprintf(path, sizeof(path), "%spackage.tl", lib_dir);
-    write_file(path,
-            "format(1)\n"
-            "package(\"GenLib\")\n"
-            "version(\"1.0.0\")\n"
-            "export(\"GenLib\")\n");
+    write_file(path, "format(1)\n"
+                     "package(\"GenLib\")\n"
+                     "version(\"1.0.0\")\n"
+                     "export(\"GenLib\")\n");
 
     snprintf(path, sizeof(path), "%sgenlib.tl", lib_dir);
-    write_file(path,
-            "#module GenLib\n"
-            "\n"
-            "identity(x) { x }\n"
-            "add(a, b) { a + b }\n");
+    write_file(path, "#module GenLib\n"
+                     "\n"
+                     "identity(x) { x }\n"
+                     "add(a, b) { a + b }\n");
 
     char tlib_path[512];
     snprintf(tlib_path, sizeof(tlib_path), "%sGenLib.tlib", lib_dir);
@@ -1842,20 +1832,18 @@ static int test_e2e_generic_package(void) {
     test_mkdir_p(app_libs);
 
     snprintf(path, sizeof(path), "%spackage.tl", app_dir);
-    write_file(path,
-            "format(1)\n"
-            "package(\"App\")\n"
-            "version(\"0.1.0\")\n"
-            "depend(\"GenLib\", \"1.0.0\")\n"
-            "depend_path(\"./libs\")\n");
+    write_file(path, "format(1)\n"
+                     "package(\"App\")\n"
+                     "version(\"0.1.0\")\n"
+                     "depend(\"GenLib\", \"1.0.0\")\n"
+                     "depend_path(\"./libs\")\n");
 
     snprintf(path, sizeof(path), "%smain.tl", app_dir);
-    write_file(path,
-            "#module main\n\n"
-            "main() {\n"
-            "  x := GenLib.identity(40)\n"
-            "  GenLib.add(x, 2)\n"
-            "}\n");
+    write_file(path, "#module main\n\n"
+                     "main() {\n"
+                     "  x := GenLib.identity(40)\n"
+                     "  GenLib.add(x, 2)\n"
+                     "}\n");
 
     char dst[512];
     snprintf(dst, sizeof(dst), "%sGenLib.tlib", app_libs);
@@ -1864,8 +1852,8 @@ static int test_e2e_generic_package(void) {
     char out_exe[512];
     snprintf(out_exe, sizeof(out_exe), "%sapp", app_dir);
     snprintf(cmd, sizeof(cmd),
-             "cd \"%s\" && \"%s\" exe --no-standard-includes -S \"%s\" -o \"%s\" main.tl 2>&1",
-             app_dir, e2e_tess_exe, e2e_stdlib_dir, out_exe);
+             "cd \"%s\" && \"%s\" exe --no-standard-includes -S \"%s\" -o \"%s\" main.tl 2>&1", app_dir,
+             e2e_tess_exe, e2e_stdlib_dir, out_exe);
     if (run_cmd(cmd) != 0) {
         fprintf(stderr, "  tess exe failed\n");
         return 1;
@@ -1884,45 +1872,45 @@ static int test_e2e_generic_package(void) {
 static int test_e2e_module_conflict(void) {
     allocator *alloc = default_allocator();
 
-    char libs_dir[512];
+    char       libs_dir[512];
     make_temp_path(libs_dir, sizeof(libs_dir), "e2e_modconflict_libs/");
     test_mkdir_p(libs_dir);
 
     // LibA with module "Utils"
     str a_modules[1];
-    a_modules[0] = str_init(alloc, "Utils");
+    a_modules[0]            = str_init(alloc, "Utils");
 
     tl_tlib_metadata meta_a = {
-        .name         = str_init(alloc, "LibA"),
-        .author       = str_empty(),
-        .version      = str_init(alloc, "1.0.0"),
-        .modules      = a_modules,
-        .module_count = 1,
+      .name         = str_init(alloc, "LibA"),
+      .author       = str_empty(),
+      .version      = str_init(alloc, "1.0.0"),
+      .modules      = a_modules,
+      .module_count = 1,
     };
 
-    char const *a_src = "#module Utils\n\nfoo() { 1 }\n";
+    char const   *a_src   = "#module Utils\n\nfoo() { 1 }\n";
     tl_tlib_entry a_entry = {"utils.tl", 8, (byte const *)a_src, (u32)strlen(a_src)};
 
-    char a_path[512];
+    char          a_path[512];
     snprintf(a_path, sizeof(a_path), "%sLibA.tlib", libs_dir);
     tl_tlib_write(alloc, a_path, &meta_a, &a_entry, 1);
 
     // LibB also with module "Utils" (conflict!)
     str b_modules[1];
-    b_modules[0] = str_init(alloc, "Utils");
+    b_modules[0]            = str_init(alloc, "Utils");
 
     tl_tlib_metadata meta_b = {
-        .name         = str_init(alloc, "LibB"),
-        .author       = str_empty(),
-        .version      = str_init(alloc, "1.0.0"),
-        .modules      = b_modules,
-        .module_count = 1,
+      .name         = str_init(alloc, "LibB"),
+      .author       = str_empty(),
+      .version      = str_init(alloc, "1.0.0"),
+      .modules      = b_modules,
+      .module_count = 1,
     };
 
-    char const *b_src = "#module Utils\n\nbar() { 2 }\n";
+    char const   *b_src   = "#module Utils\n\nbar() { 2 }\n";
     tl_tlib_entry b_entry = {"utils.tl", 8, (byte const *)b_src, (u32)strlen(b_src)};
 
-    char b_path[512];
+    char          b_path[512];
     snprintf(b_path, sizeof(b_path), "%sLibB.tlib", libs_dir);
     tl_tlib_write(alloc, b_path, &meta_b, &b_entry, 1);
 
@@ -1935,13 +1923,12 @@ static int test_e2e_module_conflict(void) {
 
     char path[512];
     snprintf(path, sizeof(path), "%spackage.tl", app_dir);
-    write_file(path,
-            "format(1)\n"
-            "package(\"App\")\n"
-            "version(\"0.1.0\")\n"
-            "depend(\"LibA\", \"1.0.0\")\n"
-            "depend(\"LibB\", \"1.0.0\")\n"
-            "depend_path(\"./libs\")\n");
+    write_file(path, "format(1)\n"
+                     "package(\"App\")\n"
+                     "version(\"0.1.0\")\n"
+                     "depend(\"LibA\", \"1.0.0\")\n"
+                     "depend(\"LibB\", \"1.0.0\")\n"
+                     "depend_path(\"./libs\")\n");
 
     snprintf(path, sizeof(path), "%smain.tl", app_dir);
     write_file(path, "#module main\n\nmain() { 0 }\n");
@@ -1957,8 +1944,8 @@ static int test_e2e_module_conflict(void) {
     snprintf(out_exe, sizeof(out_exe), "%sapp", app_dir);
     char cmd[2048];
     snprintf(cmd, sizeof(cmd),
-             "cd \"%s\" && \"%s\" exe --no-standard-includes -S \"%s\" -o \"%s\" main.tl 2>&1",
-             app_dir, e2e_tess_exe, e2e_stdlib_dir, out_exe);
+             "cd \"%s\" && \"%s\" exe --no-standard-includes -S \"%s\" -o \"%s\" main.tl 2>&1", app_dir,
+             e2e_tess_exe, e2e_stdlib_dir, out_exe);
     if (run_cmd(cmd) == 0) {
         fprintf(stderr, "  tess exe should have failed (module conflict)\n");
         return 1;
