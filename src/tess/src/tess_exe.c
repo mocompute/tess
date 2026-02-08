@@ -313,25 +313,127 @@ static void scan_file_directives(state *self, str path, str_array *resolved_path
     }
 }
 
-// Collect all imports from the given files
-// Returns the resolved paths in dependency order
-static str_sized collect_imports(state *self, c_string_csized files) {
+
+// Find a .tlib file for a dependency.
+// If dep->path is non-empty (3-arg depend()), use it directly.
+// Otherwise, search depend_path() directories for <name>.tlib.
+static str resolve_tlib_path(state *self, tl_package_dep const *dep,
+                             tl_package_info const *info) {
+    if (!str_is_empty(dep->path)) {
+        return dep->path;
+    }
+
+    str tlib_name = str_cat_c(self->arena, dep->name, ".tlib");
+    for (u32 i = 0; i < info->depend_path_count; i++) {
+        str candidate = str_cat_3(self->arena, info->depend_paths[i], S("/"), tlib_name);
+        if (file_exists(candidate)) {
+            return candidate;
+        }
+    }
+
+    return str_empty();
+}
+
+// Load package dependencies from package.tl in CWD.
+// Extracts .tlib archives to temp directories and returns extracted file paths.
+// Returns 0 on success (including no package.tl), 1 on error.
+static int load_package_deps(state *self, str_array *out_pkg_files) {
+    str pkg_path = str_init_static("package.tl");
+    if (!file_exists(pkg_path)) {
+        return 0;
+    }
+
+    tl_package pkg = {0};
+    if (tl_package_parse_file(self->arena, "package.tl", &pkg)) {
+        return 1;
+    }
+
+    if (pkg.dep_count == 0) {
+        return 0;
+    }
+
+    for (u32 i = 0; i < pkg.dep_count; i++) {
+        tl_package_dep *dep = &pkg.deps[i];
+
+        str tlib_path = resolve_tlib_path(self, dep, &pkg.info);
+        if (str_is_empty(tlib_path)) {
+            fprintf(stderr, "error: package '%s=%s' not found",
+                    str_cstr(&dep->name), str_cstr(&dep->version));
+            if (pkg.info.depend_path_count > 0) {
+                fprintf(stderr, "; searched:");
+                for (u32 j = 0; j < pkg.info.depend_path_count; j++) {
+                    fprintf(stderr, " %s", str_cstr(&pkg.info.depend_paths[j]));
+                }
+            }
+            fprintf(stderr, "\n");
+            return 1;
+        }
+
+        tl_tlib_archive archive;
+        if (tl_tlib_read(self->arena, str_cstr(&tlib_path), &archive)) {
+            fprintf(stderr, "error: failed to read package '%s' from '%s'\n",
+                    str_cstr(&dep->name), str_cstr(&tlib_path));
+            return 1;
+        }
+
+        if (!str_eq(archive.metadata.version, dep->version)) {
+            fprintf(stderr,
+                    "error: package '%s' version mismatch: expected '%s', found '%s' in '%s'\n",
+                    str_cstr(&dep->name), str_cstr(&dep->version),
+                    str_cstr(&archive.metadata.version), str_cstr(&tlib_path));
+            return 1;
+        }
+
+        // Create temp directory for extraction
+        char tmpdir[512];
+#ifdef MOS_WINDOWS
+        {
+            char tmp_base[MAX_PATH];
+            GetTempPathA(MAX_PATH, tmp_base);
+            snprintf(tmpdir, sizeof(tmpdir), "%stess-pkg-XXXXXX", tmp_base);
+        }
+        if (_mktemp(tmpdir) == null || _mkdir(tmpdir) != 0) {
+#else
+        snprintf(tmpdir, sizeof(tmpdir), "/tmp/tess-pkg-XXXXXX");
+        if (mkdtemp(tmpdir) == null) {
+#endif
+            fprintf(stderr, "error: failed to create temp directory for package '%s'\n",
+                    str_cstr(&dep->name));
+            return 1;
+        }
+
+        if (tl_tlib_extract(self->arena, &archive, tmpdir, out_pkg_files)) {
+            fprintf(stderr, "error: failed to extract package '%s'\n",
+                    str_cstr(&dep->name));
+            return 1;
+        }
+
+        if (self->verbose) {
+            fprintf(stderr, "Loaded package: %s=%s from %s (%u files to %s)\n",
+                    str_cstr(&dep->name), str_cstr(&dep->version),
+                    str_cstr(&tlib_path), archive.entries_count, tmpdir);
+        }
+    }
+
+    return 0;
+}
+
+static str_sized files_in_order(state *self, c_string_csized files, str_sized pkg_files) {
+    // Scan package files for directives first (discovers #module names, resolves imports)
     str_array resolved_paths = {.alloc = self->arena};
     array_reserve(resolved_paths, 32);
 
+    forall(i, pkg_files) {
+        scan_file_directives(self, pkg_files.v[i], &resolved_paths);
+    }
+
+    // Collect all imports from user files
     forall(i, files) {
         scan_file_directives(self, str_init_static(files.v[i]), &resolved_paths);
     }
 
-    return (str_sized)array_sized(resolved_paths);
-}
-
-static str_sized files_in_order(state *self, c_string_csized files) {
-    // Collect all imports (resolved paths in dependency order)
-    str_sized resolved_imports = collect_imports(self, files);
-
-    str_array files_in_order   = {.alloc = self->arena};
-    array_reserve(files_in_order, resolved_imports.size + files.size + 1);
+    str_array result = {.alloc = self->arena};
+    array_reserve(result, resolved_paths.size + pkg_files.size + files.size + 1);
 
     // Resolve builtin.tl (always first)
     str builtin = resolve_import(self, S("<builtin.tl>"), str_empty());
@@ -340,19 +442,27 @@ static str_sized files_in_order(state *self, c_string_csized files) {
         print_import_paths(self);
         exit(1);
     }
-    array_push(files_in_order, builtin);
+    array_push(result, builtin);
 
-    // Add resolved imports (already in correct order)
-    forall(i, resolved_imports) {
-        array_push(files_in_order, resolved_imports.v[i]);
+    // Add resolved imports (already in correct dependency order)
+    forall(i, resolved_paths) {
+        array_push(result, resolved_paths.v[i]);
     }
 
+    // Add package files not already in imports list
+    forall(i, pkg_files) {
+        if (!import_resolver_is_imported(self->resolver, pkg_files.v[i])) {
+            array_push(result, pkg_files.v[i]);
+        }
+    }
+
+    // Add user files
     forall(i, files) {
         str file = str_init(self->arena, files.v[i]);
-        array_push(files_in_order, file);
+        array_push(result, file);
     }
 
-    return (str_sized)array_sized(files_in_order);
+    return (str_sized)array_sized(result);
 }
 
 //
@@ -448,12 +558,16 @@ int compile(state *self) {
 
     c_string_csized paths       = {.v = &self->words.v[1], .size = self->words.size - 1};
 
+    // Load package dependencies (if package.tl exists with depend() declarations)
+    str_array pkg_files = {.alloc = self->arena};
+    if (load_package_deps(self, &pkg_files)) return 1;
+
     tl_infer_opts   infer_opts  = {.is_library = self->is_library};
     tl_infer       *infer       = tl_infer_create(default_allocator(), &infer_opts);
 
     parser_opts     parser_opts = {
           .registry = tl_infer_get_registry(infer),
-          .files    = files_in_order(self, paths),
+          .files    = files_in_order(self, paths, (str_sized)array_sized(pkg_files)),
           .prelude  = embed_prelude_tl,
           .defines  = self->defines,
     };
@@ -918,7 +1032,7 @@ static int pack_files(state *self) {
     str base_dir    = file_dirname(self->arena, first_norm);
 
     // Get all files in dependency order using existing infrastructure
-    str_sized all_files = files_in_order(self, input_files);
+    str_sized all_files = files_in_order(self, input_files, (str_sized){0});
 
     if (self->verbose) {
         fprintf(stderr, "Discovered modules:\n");
@@ -1012,7 +1126,7 @@ static int validate_files(state *self) {
     c_string_csized input_files = {.v = self->words.v + 1, .size = self->words.size - 1};
 
     // Scan all files in dependency order (populates scanner.modules_seen)
-    files_in_order(self, input_files);
+    files_in_order(self, input_files, (str_sized){0});
 
     // Parse package.tl
     tl_package pkg = {0};

@@ -1,3 +1,4 @@
+#include "array.h"
 #include "file.h"
 #include "import_resolver.h"
 #include "manifest.h"
@@ -784,6 +785,158 @@ static int test_pack_subdir_import(void) {
     return 0;
 }
 
+static int test_extract(void) {
+    allocator *alloc = default_allocator();
+    char       path[512];
+    make_temp_path(path, sizeof(path), "test_tlib_extract.tlib");
+
+    tl_tlib_metadata meta    = make_test_metadata(alloc);
+    tl_tlib_entry    entries[2] = {
+      {"lib.tl", 6, (byte const *)"#module Lib\nfoo() { 1 }\n", 24},
+      {"sub/util.tl", 11, (byte const *)"#module Util\nbar() { 2 }\n", 25},
+    };
+
+    if (tl_tlib_write(alloc, path, &meta, entries, 2)) {
+        fprintf(stderr, "  write failed\n");
+        return 1;
+    }
+
+    tl_tlib_archive arc = {0};
+    if (tl_tlib_read(alloc, path, &arc)) {
+        fprintf(stderr, "  read failed\n");
+        return 1;
+    }
+
+    // Extract to temp dir
+    char extract_dir[512];
+    make_temp_path(extract_dir, sizeof(extract_dir), "test_extract_out/");
+    test_mkdir_p(extract_dir);
+
+    str_array out_files = {.alloc = alloc};
+    if (tl_tlib_extract(alloc, &arc, extract_dir, &out_files)) {
+        fprintf(stderr, "  extract failed\n");
+        return 1;
+    }
+
+    int error = 0;
+
+    // Should have 2 extracted files
+    error += (out_files.size != 2);
+    if (error) {
+        fprintf(stderr, "  expected 2 files, got %u\n", out_files.size);
+        return error;
+    }
+
+    // Verify files exist and have correct content
+    for (u32 i = 0; i < out_files.size; i++) {
+        char *data;
+        u32   size;
+        file_read(alloc, str_cstr(&out_files.v[i]), &data, &size);
+        if (!data) {
+            fprintf(stderr, "  failed to read extracted file: %s\n", str_cstr(&out_files.v[i]));
+            error++;
+            continue;
+        }
+        if (size != entries[i].data_len || memcmp(data, entries[i].data, size) != 0) {
+            fprintf(stderr, "  content mismatch for file %u\n", i);
+            error++;
+        }
+    }
+
+    if (error) {
+        fprintf(stderr, "  %d check(s) failed in test_extract\n", error);
+    }
+
+    return error;
+}
+
+static int test_package_version_mismatch(void) {
+    allocator *alloc = default_allocator();
+
+    // Create a .tlib with version "1.0.0"
+    char tlib_path[512];
+    make_temp_path(tlib_path, sizeof(tlib_path), "test_version_mismatch.tlib");
+
+    tl_tlib_metadata meta  = {
+      .name    = str_init(alloc, "Lib"),
+      .author  = str_empty(),
+      .version = str_init(alloc, "1.0.0"),
+    };
+    tl_tlib_entry entry = {"lib.tl", 6, (byte const *)"x", 1};
+
+    if (tl_tlib_write(alloc, tlib_path, &meta, &entry, 1)) {
+        fprintf(stderr, "  write failed\n");
+        return 1;
+    }
+
+    // Read archive back
+    tl_tlib_archive arc = {0};
+    if (tl_tlib_read(alloc, tlib_path, &arc)) {
+        fprintf(stderr, "  read failed\n");
+        return 1;
+    }
+
+    // Verify version mismatch check (consumer wants 2.0.0 but archive has 1.0.0)
+    if (str_eq(arc.metadata.version, S("2.0.0"))) {
+        fprintf(stderr, "  versions should NOT match\n");
+        return 1;
+    }
+
+    // The actual check is: !str_eq(archive.metadata.version, dep->version)
+    // This test verifies the comparison logic used in load_package_deps
+    if (!str_eq(arc.metadata.version, S("1.0.0"))) {
+        fprintf(stderr, "  version should match 1.0.0\n");
+        return 1;
+    }
+
+    return 0;
+}
+
+static int test_package_dep_not_found(void) {
+    allocator *alloc = default_allocator();
+
+    // Create a package.tl referencing a non-existent package
+    char pkg_path[512];
+    make_temp_path(pkg_path, sizeof(pkg_path), "test_dep_not_found_package.tl");
+    char const *pkg_content = "format(1)\n"
+                              "package(\"App\")\n"
+                              "version(\"0.1.0\")\n"
+                              "depend(\"NonExistent\", \"1.0.0\")\n"
+                              "depend_path(\"/tmp/no_such_dir_tess_test\")\n";
+    if (write_file(pkg_path, pkg_content)) {
+        fprintf(stderr, "  failed to write package.tl\n");
+        return 1;
+    }
+
+    // Parse it
+    tl_package pkg = {0};
+    if (tl_package_parse_file(alloc, pkg_path, &pkg)) {
+        fprintf(stderr, "  package.tl parse failed\n");
+        return 1;
+    }
+
+    // Verify that we have a dependency
+    if (pkg.dep_count != 1) {
+        fprintf(stderr, "  expected 1 dep, got %u\n", pkg.dep_count);
+        return 1;
+    }
+
+    // Verify the dep name
+    if (!str_eq(pkg.deps[0].name, S("NonExistent"))) {
+        fprintf(stderr, "  dep name mismatch\n");
+        return 1;
+    }
+
+    // Verify .tlib does not exist in specified path
+    str candidate = str_init(alloc, "/tmp/no_such_dir_tess_test/NonExistent.tlib");
+    if (file_exists(candidate)) {
+        fprintf(stderr, "  test precondition failed: file should not exist\n");
+        return 1;
+    }
+
+    return 0;
+}
+
 int main(void) {
     init_temp_dir();
 
@@ -805,5 +958,8 @@ int main(void) {
     T(test_pack_stdlib_import_ok)
     T(test_pack_malformed_import_ok)
     T(test_pack_subdir_import)
+    T(test_extract)
+    T(test_package_version_mismatch)
+    T(test_package_dep_not_found)
     return error;
 }

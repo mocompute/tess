@@ -72,6 +72,12 @@ typedef struct {
 int tl_tlib_pack(allocator *alloc, char const *output_path, str_sized files, str base_dir,
                  struct import_resolver *resolver, tl_tlib_pack_opts opts);
 
+// Extract all entries from an already-loaded archive to output_dir.
+// Creates subdirectories as needed. Appends each written path to out_files.
+// Returns 0 on success, 1 on error.
+int tl_tlib_extract(allocator *alloc, tl_tlib_archive const *archive,
+                    char const *output_dir, str_array *out_files);
+
 // Unpack options
 typedef struct {
     int list_only; // print filenames only, don't extract

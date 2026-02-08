@@ -1,4 +1,5 @@
 #include "tlib.h"
+#include "array.h"
 #include "file.h"
 #include "hashmap.h"
 #include "import_resolver.h"
@@ -657,6 +658,47 @@ static int mkdir_p(char const *path) {
 #endif
     if (ret != 0 && errno != EEXIST) {
         return 1;
+    }
+
+    return 0;
+}
+
+int tl_tlib_extract(allocator *alloc, tl_tlib_archive const *archive,
+                    char const *output_dir, str_array *out_files) {
+    if (mkdir_p(output_dir) != 0) {
+        fprintf(stderr, "tlib: failed to create output directory: %s\n", output_dir);
+        return 1;
+    }
+
+    str out_dir = str_init(alloc, output_dir);
+
+    for (u32 i = 0; i < archive->entries_count; i++) {
+        tl_tlib_entry const *entry = &archive->entries[i];
+
+        str name     = str_init_n(alloc, entry->name, entry->name_len);
+        str out_path = file_path_join(alloc, out_dir, name);
+
+        str parent = file_dirname(alloc, out_path);
+        if (!str_is_empty(parent) && mkdir_p(str_cstr(&parent)) != 0) {
+            fprintf(stderr, "tlib: failed to create directory: %s\n", str_cstr(&parent));
+            return 1;
+        }
+
+        FILE *f = fopen(str_cstr(&out_path), "wb");
+        if (!f) {
+            fprintf(stderr, "tlib: failed to create file: %s\n", str_cstr(&out_path));
+            return 1;
+        }
+
+        size_t written = fwrite(entry->data, 1, entry->data_len, f);
+        fclose(f);
+
+        if (written != entry->data_len) {
+            fprintf(stderr, "tlib: failed to write file: %s\n", str_cstr(&out_path));
+            return 1;
+        }
+
+        array_push(*out_files, out_path);
     }
 
     return 0;
