@@ -19,9 +19,11 @@
 #include <io.h>
 #define ftruncate(fd, size) _chsize(fd, size)
 #define fileno              _fileno
+#define CD_CMD              "cd /d"
 #else
 #include <sys/wait.h>
 #include <unistd.h>
+#define CD_CMD "cd"
 #endif
 
 #define T(name)                                                                                            \
@@ -929,7 +931,7 @@ static int test_e2e_basic_package(void) {
 
     char cmd[2048];
     snprintf(cmd, sizeof(cmd),
-             "cd \"%s\" && \"%s\" pack --no-standard-includes -S \"%s\" greeter.tl -o Greeter.tlib 2>&1",
+             CD_CMD " \"%s\" && \"%s\" pack --no-standard-includes -S \"%s\" greeter.tl -o Greeter.tlib 2>&1",
              lib_dir, e2e_tess_exe, e2e_stdlib_dir);
     if (run_cmd(cmd) != 0) {
         fprintf(stderr, "  tess pack failed\n");
@@ -971,7 +973,7 @@ static int test_e2e_basic_package(void) {
     char out_exe[512];
     snprintf(out_exe, sizeof(out_exe), "%sapp", app_dir);
     snprintf(cmd, sizeof(cmd),
-             "cd \"%s\" && \"%s\" exe --no-standard-includes -S \"%s\" -o \"%s\" main.tl 2>&1", app_dir,
+             CD_CMD " \"%s\" && \"%s\" exe --no-standard-includes -S \"%s\" -o \"%s\" main.tl 2>&1", app_dir,
              e2e_tess_exe, e2e_stdlib_dir, out_exe);
     if (run_cmd(cmd) != 0) {
         fprintf(stderr, "  tess exe failed\n");
@@ -1008,7 +1010,7 @@ static int test_e2e_version_mismatch(void) {
 
     char cmd[2048];
     snprintf(cmd, sizeof(cmd),
-             "cd \"%s\" && \"%s\" pack --no-standard-includes -S \"%s\" greeter.tl -o Greeter.tlib 2>&1",
+             CD_CMD " \"%s\" && \"%s\" pack --no-standard-includes -S \"%s\" greeter.tl -o Greeter.tlib 2>&1",
              lib_dir, e2e_tess_exe, e2e_stdlib_dir);
     if (run_cmd(cmd) != 0) {
         fprintf(stderr, "  tess pack failed\n");
@@ -1040,7 +1042,7 @@ static int test_e2e_version_mismatch(void) {
     char out_exe[512];
     snprintf(out_exe, sizeof(out_exe), "%sapp", app_dir);
     snprintf(cmd, sizeof(cmd),
-             "cd \"%s\" && \"%s\" exe --no-standard-includes -S \"%s\" -o \"%s\" main.tl 2>&1", app_dir,
+             CD_CMD " \"%s\" && \"%s\" exe --no-standard-includes -S \"%s\" -o \"%s\" main.tl 2>&1", app_dir,
              e2e_tess_exe, e2e_stdlib_dir, out_exe);
     if (run_cmd(cmd) == 0) {
         fprintf(stderr, "  tess exe should have failed (version mismatch)\n");
@@ -1073,7 +1075,7 @@ static int test_e2e_dep_not_found(void) {
     char cmd[2048], out_exe[512];
     snprintf(out_exe, sizeof(out_exe), "%sapp", app_dir);
     snprintf(cmd, sizeof(cmd),
-             "cd \"%s\" && \"%s\" exe --no-standard-includes -S \"%s\" -o \"%s\" main.tl 2>&1", app_dir,
+             CD_CMD " \"%s\" && \"%s\" exe --no-standard-includes -S \"%s\" -o \"%s\" main.tl 2>&1", app_dir,
              e2e_tess_exe, e2e_stdlib_dir, out_exe);
     if (run_cmd(cmd) == 0) {
         fprintf(stderr, "  tess exe should have failed (package not found)\n");
@@ -1123,7 +1125,7 @@ static int test_e2e_multi_file_library(void) {
 
     char cmd[2048];
     snprintf(cmd, sizeof(cmd),
-             "cd \"%s\" && \"%s\" pack --no-standard-includes -S \"%s\" math.tl -o MathLib.tlib 2>&1",
+             CD_CMD " \"%s\" && \"%s\" pack --no-standard-includes -S \"%s\" math.tl -o MathLib.tlib 2>&1",
              lib_dir, e2e_tess_exe, e2e_stdlib_dir);
     // internal.tl is resolved automatically via #import in math.tl
     if (run_cmd(cmd) != 0) {
@@ -1161,7 +1163,7 @@ static int test_e2e_multi_file_library(void) {
     char out_exe[512];
     snprintf(out_exe, sizeof(out_exe), "%sapp", app_dir);
     snprintf(cmd, sizeof(cmd),
-             "cd \"%s\" && \"%s\" exe --no-standard-includes -S \"%s\" -o \"%s\" main.tl 2>&1", app_dir,
+             CD_CMD " \"%s\" && \"%s\" exe --no-standard-includes -S \"%s\" -o \"%s\" main.tl 2>&1", app_dir,
              e2e_tess_exe, e2e_stdlib_dir, out_exe);
     if (run_cmd(cmd) != 0) {
         fprintf(stderr, "  tess exe failed\n");
@@ -1193,7 +1195,7 @@ static int test_e2e_transitive_deps(void) {
 
     char cmd[2048];
     snprintf(cmd, sizeof(cmd),
-             "cd \"%s\" && \"%s\" pack --no-standard-includes -S \"%s\" logger.tl -o LogLib.tlib 2>&1",
+             CD_CMD " \"%s\" && \"%s\" pack --no-standard-includes -S \"%s\" logger.tl -o LogLib.tlib 2>&1",
              loglib_dir, e2e_tess_exe, e2e_stdlib_dir);
     if (run_cmd(cmd) != 0) {
         fprintf(stderr, "  tess pack LogLib failed\n");
@@ -1228,7 +1230,7 @@ static int test_e2e_transitive_deps(void) {
     copy_file(src_tlib, dst_tlib);
 
     snprintf(cmd, sizeof(cmd),
-             "cd \"%s\" && \"%s\" pack --no-standard-includes -S \"%s\" math.tl -o MathLib.tlib 2>&1",
+             CD_CMD " \"%s\" && \"%s\" pack --no-standard-includes -S \"%s\" math.tl -o MathLib.tlib 2>&1",
              mathlib_dir, e2e_tess_exe, e2e_stdlib_dir);
     if (run_cmd(cmd) != 0) {
         fprintf(stderr, "  tess pack MathLib failed\n");
@@ -1265,7 +1267,7 @@ static int test_e2e_transitive_deps(void) {
     char out_exe[512];
     snprintf(out_exe, sizeof(out_exe), "%sapp", app_dir);
     snprintf(cmd, sizeof(cmd),
-             "cd \"%s\" && \"%s\" exe --no-standard-includes -S \"%s\" -o \"%s\" main.tl 2>&1", app_dir,
+             CD_CMD " \"%s\" && \"%s\" exe --no-standard-includes -S \"%s\" -o \"%s\" main.tl 2>&1", app_dir,
              e2e_tess_exe, e2e_stdlib_dir, out_exe);
     if (run_cmd(cmd) != 0) {
         fprintf(stderr, "  tess exe failed\n");
@@ -1297,7 +1299,7 @@ static int test_e2e_diamond_deps(void) {
 
     char cmd[2048];
     snprintf(cmd, sizeof(cmd),
-             "cd \"%s\" && \"%s\" pack --no-standard-includes -S \"%s\" base.tl -o BaseLib.tlib 2>&1",
+             CD_CMD " \"%s\" && \"%s\" pack --no-standard-includes -S \"%s\" base.tl -o BaseLib.tlib 2>&1",
              base_dir, e2e_tess_exe, e2e_stdlib_dir);
     if (run_cmd(cmd) != 0) {
         fprintf(stderr, "  tess pack BaseLib failed\n");
@@ -1328,7 +1330,7 @@ static int test_e2e_diamond_deps(void) {
     copy_file(src_tlib, dst_tlib);
 
     snprintf(cmd, sizeof(cmd),
-             "cd \"%s\" && \"%s\" pack --no-standard-includes -S \"%s\" moda.tl -o LibA.tlib 2>&1",
+             CD_CMD " \"%s\" && \"%s\" pack --no-standard-includes -S \"%s\" moda.tl -o LibA.tlib 2>&1",
              liba_dir, e2e_tess_exe, e2e_stdlib_dir);
     if (run_cmd(cmd) != 0) {
         fprintf(stderr, "  tess pack LibA failed\n");
@@ -1357,7 +1359,7 @@ static int test_e2e_diamond_deps(void) {
     copy_file(src_tlib, dst_tlib);
 
     snprintf(cmd, sizeof(cmd),
-             "cd \"%s\" && \"%s\" pack --no-standard-includes -S \"%s\" modb.tl -o LibB.tlib 2>&1",
+             CD_CMD " \"%s\" && \"%s\" pack --no-standard-includes -S \"%s\" modb.tl -o LibB.tlib 2>&1",
              libb_dir, e2e_tess_exe, e2e_stdlib_dir);
     if (run_cmd(cmd) != 0) {
         fprintf(stderr, "  tess pack LibB failed\n");
@@ -1402,7 +1404,7 @@ static int test_e2e_diamond_deps(void) {
     char out_exe[512];
     snprintf(out_exe, sizeof(out_exe), "%sapp", app_dir);
     snprintf(cmd, sizeof(cmd),
-             "cd \"%s\" && \"%s\" exe --no-standard-includes -S \"%s\" -o \"%s\" main.tl 2>&1", app_dir,
+             CD_CMD " \"%s\" && \"%s\" exe --no-standard-includes -S \"%s\" -o \"%s\" main.tl 2>&1", app_dir,
              e2e_tess_exe, e2e_stdlib_dir, out_exe);
     if (run_cmd(cmd) != 0) {
         fprintf(stderr, "  tess exe failed\n");
@@ -1511,7 +1513,7 @@ static int test_e2e_circular_deps(void) {
     snprintf(out_exe, sizeof(out_exe), "%sapp", app_dir);
     char cmd[2048];
     snprintf(cmd, sizeof(cmd),
-             "cd \"%s\" && \"%s\" exe --no-standard-includes -S \"%s\" -o \"%s\" main.tl 2>&1", app_dir,
+             CD_CMD " \"%s\" && \"%s\" exe --no-standard-includes -S \"%s\" -o \"%s\" main.tl 2>&1", app_dir,
              e2e_tess_exe, e2e_stdlib_dir, out_exe);
     if (run_cmd(cmd) == 0) {
         fprintf(stderr, "  tess exe should have failed (circular dependency)\n");
@@ -1629,7 +1631,7 @@ static int test_e2e_version_conflict(void) {
     snprintf(out_exe, sizeof(out_exe), "%sapp", app_dir);
     char cmd[2048];
     snprintf(cmd, sizeof(cmd),
-             "cd \"%s\" && \"%s\" exe --no-standard-includes -S \"%s\" -o \"%s\" main.tl 2>&1", app_dir,
+             CD_CMD " \"%s\" && \"%s\" exe --no-standard-includes -S \"%s\" -o \"%s\" main.tl 2>&1", app_dir,
              e2e_tess_exe, e2e_stdlib_dir, out_exe);
     if (run_cmd(cmd) == 0) {
         fprintf(stderr, "  tess exe should have failed (version conflict)\n");
@@ -1699,7 +1701,7 @@ static int test_e2e_missing_transitive_dep(void) {
     snprintf(out_exe, sizeof(out_exe), "%sapp", app_dir);
     char cmd[2048];
     snprintf(cmd, sizeof(cmd),
-             "cd \"%s\" && \"%s\" exe --no-standard-includes -S \"%s\" -o \"%s\" main.tl 2>&1", app_dir,
+             CD_CMD " \"%s\" && \"%s\" exe --no-standard-includes -S \"%s\" -o \"%s\" main.tl 2>&1", app_dir,
              e2e_tess_exe, e2e_stdlib_dir, out_exe);
     if (run_cmd(cmd) == 0) {
         fprintf(stderr, "  tess exe should have failed (missing transitive dep)\n");
@@ -1741,7 +1743,7 @@ static int test_e2e_internal_module_accessible(void) {
 
     char cmd[2048];
     snprintf(cmd, sizeof(cmd),
-             "cd \"%s\" && \"%s\" pack --no-standard-includes -S \"%s\" mathpub.tl -o MathPkg.tlib 2>&1",
+             CD_CMD " \"%s\" && \"%s\" pack --no-standard-includes -S \"%s\" mathpub.tl -o MathPkg.tlib 2>&1",
              lib_dir, e2e_tess_exe, e2e_stdlib_dir);
     if (run_cmd(cmd) != 0) {
         fprintf(stderr, "  tess pack failed\n");
@@ -1776,7 +1778,7 @@ static int test_e2e_internal_module_accessible(void) {
     char out_exe[512];
     snprintf(out_exe, sizeof(out_exe), "%sapp", app_dir);
     snprintf(cmd, sizeof(cmd),
-             "cd \"%s\" && \"%s\" exe --no-standard-includes -S \"%s\" -o \"%s\" main.tl 2>&1", app_dir,
+             CD_CMD " \"%s\" && \"%s\" exe --no-standard-includes -S \"%s\" -o \"%s\" main.tl 2>&1", app_dir,
              e2e_tess_exe, e2e_stdlib_dir, out_exe);
     if (run_cmd(cmd) != 0) {
         fprintf(stderr, "  tess exe failed (internal module should be accessible)\n");
@@ -1817,7 +1819,7 @@ static int test_e2e_generic_package(void) {
 
     char cmd[2048];
     snprintf(cmd, sizeof(cmd),
-             "cd \"%s\" && \"%s\" pack --no-standard-includes -S \"%s\" genlib.tl -o GenLib.tlib 2>&1",
+             CD_CMD " \"%s\" && \"%s\" pack --no-standard-includes -S \"%s\" genlib.tl -o GenLib.tlib 2>&1",
              lib_dir, e2e_tess_exe, e2e_stdlib_dir);
     if (run_cmd(cmd) != 0) {
         fprintf(stderr, "  tess pack failed\n");
@@ -1852,7 +1854,7 @@ static int test_e2e_generic_package(void) {
     char out_exe[512];
     snprintf(out_exe, sizeof(out_exe), "%sapp", app_dir);
     snprintf(cmd, sizeof(cmd),
-             "cd \"%s\" && \"%s\" exe --no-standard-includes -S \"%s\" -o \"%s\" main.tl 2>&1", app_dir,
+             CD_CMD " \"%s\" && \"%s\" exe --no-standard-includes -S \"%s\" -o \"%s\" main.tl 2>&1", app_dir,
              e2e_tess_exe, e2e_stdlib_dir, out_exe);
     if (run_cmd(cmd) != 0) {
         fprintf(stderr, "  tess exe failed\n");
@@ -1944,7 +1946,7 @@ static int test_e2e_module_conflict(void) {
     snprintf(out_exe, sizeof(out_exe), "%sapp", app_dir);
     char cmd[2048];
     snprintf(cmd, sizeof(cmd),
-             "cd \"%s\" && \"%s\" exe --no-standard-includes -S \"%s\" -o \"%s\" main.tl 2>&1", app_dir,
+             CD_CMD " \"%s\" && \"%s\" exe --no-standard-includes -S \"%s\" -o \"%s\" main.tl 2>&1", app_dir,
              e2e_tess_exe, e2e_stdlib_dir, out_exe);
     if (run_cmd(cmd) == 0) {
         fprintf(stderr, "  tess exe should have failed (module conflict)\n");

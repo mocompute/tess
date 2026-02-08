@@ -627,8 +627,17 @@ static int mkdir_p(char const *path) {
 
     memcpy(tmp, path, len + 1);
 
+    // Skip drive letter on Windows (e.g. "C:\") — _mkdir("C:") can fail with
+    // EACCES instead of EEXIST on some environments (e.g. GitHub Actions runners).
+    char *start = tmp + 1;
+#ifdef MOS_WINDOWS
+    if (len >= 3 && tmp[1] == ':' && (tmp[2] == '/' || tmp[2] == '\\')) {
+        start = tmp + 3;
+    }
+#endif
+
     // Create each component
-    for (char *p = tmp + 1; *p; p++) {
+    for (char *p = start; *p; p++) {
         if (*p == '/' || *p == '\\') {
             char saved = *p;
             *p         = '\0';
