@@ -17,23 +17,23 @@
 #define TLIB_FIXED_HEADER  8u /* magic + version */
 #define TLIB_MAX_FILE_SIZE (64u * 1024u * 1024u)
 
-static inline void write_u32_be(byte *p, u32 v) {
+static void write_u32_be(byte *p, u32 v) {
     p[0] = (byte)(v >> 24);
     p[1] = (byte)(v >> 16);
     p[2] = (byte)(v >> 8);
     p[3] = (byte)(v);
 }
 
-static inline u32 read_u32_be(byte const *p) {
+static  u32 read_u32_be(byte const *p) {
     return ((u32)p[0] << 24) | ((u32)p[1] << 16) | ((u32)p[2] << 8) | (u32)p[3];
 }
 
-static inline void write_u16_be(byte *p, u16 v) {
+static  void write_u16_be(byte *p, u16 v) {
     p[0] = (byte)(v >> 8);
     p[1] = (byte)(v);
 }
 
-static inline u16 read_u16_be(byte const *p) {
+static  u16 read_u16_be(byte const *p) {
     return ((u16)p[0] << 8) | (u16)p[1];
 }
 
