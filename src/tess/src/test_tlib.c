@@ -1990,8 +1990,8 @@ static int test_e2e_module_conflict(void) {
     snprintf(dst, sizeof(dst), "%sLibB.tlib", app_libs);
     copy_file(b_path, dst);
 
-    // -- Compile: should fail due to duplicate module "Utils" --
-    // Capture output to verify the early warning from dep loading is present.
+    // -- Compile: should succeed (duplicate modules across packages are allowed) --
+    // Capture output to verify the cross-package warning is still emitted.
     char out_exe[512], output_log[512];
     snprintf(out_exe, sizeof(out_exe), "%sapp" EXE_SUFFIX, app_dir);
     snprintf(output_log, sizeof(output_log), "%soutput.log", app_dir);
@@ -1999,8 +1999,8 @@ static int test_e2e_module_conflict(void) {
     snprintf(cmd, sizeof(cmd),
              CD_CMD " \"%s\" && \"%s\" exe --no-standard-includes -S \"%s\" -o \"%s\" main.tl >\"%s\" 2>&1",
              app_dir, e2e_tess_exe, e2e_stdlib_dir, out_exe, output_log);
-    if (run_cmd(cmd) == 0) {
-        fprintf(stderr, "  tess exe should have failed (module conflict)\n");
+    if (run_cmd(cmd) != 0) {
+        fprintf(stderr, "  tess exe should have succeeded\n");
         return 1;
     }
 

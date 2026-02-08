@@ -37,10 +37,7 @@ void tl_source_scanner_define(tl_source_scanner *self, str symbol);
 // - Conditional compilation state (import_defines, conditional_skip_depth) is updated
 // - conditional_skip_depth and current_file_module are reset at the start of each call
 //
-// Errors:
-// - Duplicate module name (same module defined in two files): prints error and returns 1
-//
-// Returns 0 on success, 1 on error.
+// Returns 0 on success.
 int tl_source_scanner_scan(tl_source_scanner *self, str file_path, char_csized input, str_array *imports);
 
 // Result of cross-checking scanner state against export module list.

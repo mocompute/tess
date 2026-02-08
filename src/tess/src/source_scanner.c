@@ -22,7 +22,7 @@ void tl_source_scanner_define(tl_source_scanner *self, str symbol) {
 }
 
 // Process a single # directive line.
-// Returns 0 on success, 1 on error (duplicate module).
+// Returns 0 on success.
 static int process_hash_directive(tl_source_scanner *self, str file_path, str_array *imports,
                                   char const *data, u32 capture_start, u32 pos) {
     // Strip trailing newline so str_parse_words produces exact word counts.
@@ -60,18 +60,6 @@ static int process_hash_directive(tl_source_scanner *self, str file_path, str_ar
         if (str_eq(words.v[0], S("import"))) {
             array_push(*imports, words.v[1]);
         } else if (!is_stdlib_file && str_eq(words.v[0], S("module"))) {
-            if (str_map_contains(self->modules_seen, words.v[1])) {
-                str *existing = str_map_get(self->modules_seen, words.v[1]);
-                // Allow same file to re-declare the same module (happens when
-                // a package file is scanned both directly and via #import chain)
-                if (!str_eq(*existing, file_path)) {
-                    fprintf(stderr,
-                            "error: module '%s' defined in '%s' was already defined in '%s'\n",
-                            str_cstr(&words.v[1]), str_cstr(&file_path), str_cstr(existing));
-                    return 1;
-                }
-            }
-
             str_map_set(&self->modules_seen, words.v[1], &file_path);
             self->current_file_module = words.v[1];
         }
@@ -102,7 +90,7 @@ static int scan_directives(char_csized input, scan_directive_fn fn, void *ctx) {
         in_string,
         in_string_bs,
         in_comment
-    } state        = start;
+    } state = start;
 
     while (pos < size) {
         switch (state) {
@@ -175,10 +163,10 @@ static int scan_full_callback(void *raw_ctx, char const *data, u32 start, u32 en
 
 int tl_source_scanner_scan(tl_source_scanner *self, str file_path, char_csized input, str_array *imports) {
     // Reset per-file transient state
-    self->conditional_skip_depth  = 0;
-    self->current_file_module     = (str){0};
+    self->conditional_skip_depth = 0;
+    self->current_file_module    = (str){0};
 
-    scan_full_ctx ctx             = {.self = self, .file_path = file_path, .imports = imports};
+    scan_full_ctx ctx            = {.self = self, .file_path = file_path, .imports = imports};
 
     return scan_directives(input, scan_full_callback, &ctx);
 }

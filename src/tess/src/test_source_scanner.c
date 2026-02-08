@@ -76,8 +76,8 @@ static int test_multiple_modules(void) {
     return error;
 }
 
-// Duplicate module name from different files should fail
-static int test_duplicate_module_error(void) {
+// Duplicate module name from different files should succeed (compiler accepts it)
+static int test_duplicate_module_allowed(void) {
     int               error   = 0;
     allocator        *alloc   = default_allocator();
     import_resolver  *res     = import_resolver_create(alloc);
@@ -87,13 +87,12 @@ static int test_duplicate_module_error(void) {
     // First file defines Foo — should succeed
     error += scan(&s, "/src/a.tl", "#module Foo\na() { 1 }\n", &imports) != 0;
 
-    // Second file also defines Foo — should fail
-    int result = scan(&s, "/src/b.tl", "#module Foo\nb() { 2 }\n", &imports);
-    error += result != 1;
+    // Second file also defines Foo — should also succeed
+    error += scan(&s, "/src/b.tl", "#module Foo\nb() { 2 }\n", &imports) != 0;
 
-    // Original mapping should still be from first file
+    // Mapping should be updated to second file
     str *path = str_map_get(s.modules_seen, S("Foo"));
-    error += !path || !str_eq(*path, S("/src/a.tl"));
+    error += !path || !str_eq(*path, S("/src/b.tl"));
 
     if (error) fprintf(stderr, "  %d check(s) failed\n", error);
     return error;
@@ -622,7 +621,6 @@ static int test_validate_empty_modules(void) {
     return error;
 }
 
-
 // Internal module (in source, not in manifest, no exports) is fine
 static int test_validate_internal_module_ok(void) {
     int               error   = 0;
@@ -669,7 +667,7 @@ int main(void) {
     int this_error = 0;
     T(test_single_module)
     T(test_multiple_modules)
-    T(test_duplicate_module_error)
+    T(test_duplicate_module_allowed)
     T(test_imports_collected)
     T(test_ifdef_defined)
     T(test_ifdef_not_defined)
