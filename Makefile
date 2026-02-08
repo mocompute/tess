@@ -101,9 +101,9 @@ MOS_SOURCES =					\
 	$(MOS_SRC_DIR)/src/sexp_parser.c	\
 	$(MOS_SRC_DIR)/src/str.c
 
-MOS_OBJECTS = $(patsubst $(MOS_SRC_DIR)/%.c,$(BUILD_DIR)/mos/%.o,$(MOS_SOURCES))
+MOS_OBJECTS = $(patsubst $(MOS_SRC_DIR)/src/%.c,$(BUILD_DIR)/mos/%.o,$(MOS_SOURCES))
 
-$(BUILD_DIR)/mos/%.o: $(MOS_SRC_DIR)/%.c
+$(BUILD_DIR)/mos/%.o: $(MOS_SRC_DIR)/src/%.c
 	@mkdir -p $(dir $@)
 	$(MSG_CC) $<
 	$(Q)$(CC) $(CFLAGS) $(CPPFLAGS) -c -o $@ $<
@@ -128,9 +128,9 @@ TESS_SOURCES =				\
 	$(TESS_SRC_DIR)/src/tlib.c	\
 	$(TESS_SRC_DIR)/src/type.c
 
-TESS_OBJECTS = $(patsubst $(TESS_SRC_DIR)/%.c,$(BUILD_DIR)/tess/%.o,$(TESS_SOURCES))
+TESS_OBJECTS = $(patsubst $(TESS_SRC_DIR)/src/%.c,$(BUILD_DIR)/tess/%.o,$(TESS_SOURCES))
 
-$(BUILD_DIR)/tess/%.o: $(TESS_SRC_DIR)/%.c
+$(BUILD_DIR)/tess/%.o: $(TESS_SRC_DIR)/src/%.c
 	@mkdir -p $(dir $@)
 	$(MSG_CC) $<
 	$(Q)$(CC) $(CFLAGS) $(CPPFLAGS) -c -o $@ $<
