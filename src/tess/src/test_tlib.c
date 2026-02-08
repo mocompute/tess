@@ -1171,6 +1171,548 @@ static int test_e2e_multi_file_library(void) {
     return 0;
 }
 
+// Phase 8: Transitive dependency chain A -> B -> C
+static int test_e2e_transitive_deps(void) {
+    // -- Create LogLib (module Logger) --
+    char loglib_dir[512];
+    make_temp_path(loglib_dir, sizeof(loglib_dir), "e2e_trans_loglib/");
+    test_mkdir_p(loglib_dir);
+
+    char path[512];
+    snprintf(path, sizeof(path), "%spackage.tl", loglib_dir);
+    write_file(path, "format(1)\npackage(\"LogLib\")\nversion(\"1.0.0\")\nexport(\"Logger\")\n");
+
+    snprintf(path, sizeof(path), "%slogger.tl", loglib_dir);
+    write_file(path, "#module Logger\n\nlog_value() { 10 }\n");
+
+    char cmd[2048];
+    snprintf(cmd, sizeof(cmd),
+             "cd \"%s\" && \"%s\" pack --no-standard-includes -S \"%s\" logger.tl -o LogLib.tlib 2>&1",
+             loglib_dir, e2e_tess_exe, e2e_stdlib_dir);
+    if (run_cmd(cmd) != 0) {
+        fprintf(stderr, "  tess pack LogLib failed\n");
+        return 1;
+    }
+
+    // -- Create MathLib (module MathLib, depends on LogLib) --
+    char mathlib_dir[512], mathlib_libs[512];
+    make_temp_path(mathlib_dir, sizeof(mathlib_dir), "e2e_trans_mathlib/");
+    snprintf(mathlib_libs, sizeof(mathlib_libs), "%slibs/", mathlib_dir);
+    test_mkdir_p(mathlib_dir);
+    test_mkdir_p(mathlib_libs);
+
+    snprintf(path, sizeof(path), "%spackage.tl", mathlib_dir);
+    write_file(path,
+            "format(1)\n"
+            "package(\"MathLib\")\n"
+            "version(\"2.0.0\")\n"
+            "export(\"MathLib\")\n"
+            "depend(\"LogLib\", \"1.0.0\")\n"
+            "depend_path(\"./libs\")\n");
+
+    snprintf(path, sizeof(path), "%smath.tl", mathlib_dir);
+    write_file(path,
+            "#module MathLib\n\n"
+            "compute() {\n"
+            "  Logger.log_value() + 32\n"
+            "}\n");
+
+    // Copy LogLib.tlib to MathLib's libs/
+    char src_tlib[512], dst_tlib[512];
+    snprintf(src_tlib, sizeof(src_tlib), "%sLogLib.tlib", loglib_dir);
+    snprintf(dst_tlib, sizeof(dst_tlib), "%sLogLib.tlib", mathlib_libs);
+    copy_file(src_tlib, dst_tlib);
+
+    snprintf(cmd, sizeof(cmd),
+             "cd \"%s\" && \"%s\" pack --no-standard-includes -S \"%s\" math.tl -o MathLib.tlib 2>&1",
+             mathlib_dir, e2e_tess_exe, e2e_stdlib_dir);
+    if (run_cmd(cmd) != 0) {
+        fprintf(stderr, "  tess pack MathLib failed\n");
+        return 1;
+    }
+
+    // -- Create consumer App --
+    char app_dir[512], app_libs[512];
+    make_temp_path(app_dir, sizeof(app_dir), "e2e_trans_app/");
+    snprintf(app_libs, sizeof(app_libs), "%slibs/", app_dir);
+    test_mkdir_p(app_dir);
+    test_mkdir_p(app_libs);
+
+    snprintf(path, sizeof(path), "%spackage.tl", app_dir);
+    write_file(path,
+            "format(1)\n"
+            "package(\"App\")\n"
+            "version(\"0.1.0\")\n"
+            "depend(\"MathLib\", \"2.0.0\")\n"
+            "depend_path(\"./libs\")\n");
+
+    snprintf(path, sizeof(path), "%smain.tl", app_dir);
+    write_file(path, "#module main\n\nmain() {\n  MathLib.compute()\n}\n");
+
+    // Copy both .tlibs to App's libs/
+    snprintf(src_tlib, sizeof(src_tlib), "%sMathLib.tlib", mathlib_dir);
+    snprintf(dst_tlib, sizeof(dst_tlib), "%sMathLib.tlib", app_libs);
+    copy_file(src_tlib, dst_tlib);
+
+    snprintf(src_tlib, sizeof(src_tlib), "%sLogLib.tlib", loglib_dir);
+    snprintf(dst_tlib, sizeof(dst_tlib), "%sLogLib.tlib", app_libs);
+    copy_file(src_tlib, dst_tlib);
+
+    // -- Compile and run --
+    char out_exe[512];
+    snprintf(out_exe, sizeof(out_exe), "%sapp", app_dir);
+    snprintf(cmd, sizeof(cmd),
+             "cd \"%s\" && \"%s\" exe --no-standard-includes -S \"%s\" -o \"%s\" main.tl 2>&1",
+             app_dir, e2e_tess_exe, e2e_stdlib_dir, out_exe);
+    if (run_cmd(cmd) != 0) {
+        fprintf(stderr, "  tess exe failed\n");
+        return 1;
+    }
+
+    int exit_code = run_cmd(out_exe);
+    if (exit_code != 42) {
+        fprintf(stderr, "  expected exit code 42, got %d\n", exit_code);
+        return 1;
+    }
+
+    return 0;
+}
+
+// Phase 8: Diamond dependency (LibA and LibB both depend on BaseLib)
+static int test_e2e_diamond_deps(void) {
+    // -- Create BaseLib --
+    char base_dir[512];
+    make_temp_path(base_dir, sizeof(base_dir), "e2e_diamond_base/");
+    test_mkdir_p(base_dir);
+
+    char path[512];
+    snprintf(path, sizeof(path), "%spackage.tl", base_dir);
+    write_file(path, "format(1)\npackage(\"BaseLib\")\nversion(\"1.0.0\")\nexport(\"Base\")\n");
+
+    snprintf(path, sizeof(path), "%sbase.tl", base_dir);
+    write_file(path, "#module Base\n\nval() { 20 }\n");
+
+    char cmd[2048];
+    snprintf(cmd, sizeof(cmd),
+             "cd \"%s\" && \"%s\" pack --no-standard-includes -S \"%s\" base.tl -o BaseLib.tlib 2>&1",
+             base_dir, e2e_tess_exe, e2e_stdlib_dir);
+    if (run_cmd(cmd) != 0) {
+        fprintf(stderr, "  tess pack BaseLib failed\n");
+        return 1;
+    }
+
+    // -- Create LibA (depends on BaseLib) --
+    char liba_dir[512], liba_libs[512];
+    make_temp_path(liba_dir, sizeof(liba_dir), "e2e_diamond_liba/");
+    snprintf(liba_libs, sizeof(liba_libs), "%slibs/", liba_dir);
+    test_mkdir_p(liba_dir);
+    test_mkdir_p(liba_libs);
+
+    snprintf(path, sizeof(path), "%spackage.tl", liba_dir);
+    write_file(path,
+            "format(1)\n"
+            "package(\"LibA\")\n"
+            "version(\"1.0.0\")\n"
+            "export(\"ModA\")\n"
+            "depend(\"BaseLib\", \"1.0.0\")\n"
+            "depend_path(\"./libs\")\n");
+
+    snprintf(path, sizeof(path), "%smoda.tl", liba_dir);
+    write_file(path, "#module ModA\n\ncompute() { Base.val() + 1 }\n");
+
+    char src_tlib[512], dst_tlib[512];
+    snprintf(src_tlib, sizeof(src_tlib), "%sBaseLib.tlib", base_dir);
+    snprintf(dst_tlib, sizeof(dst_tlib), "%sBaseLib.tlib", liba_libs);
+    copy_file(src_tlib, dst_tlib);
+
+    snprintf(cmd, sizeof(cmd),
+             "cd \"%s\" && \"%s\" pack --no-standard-includes -S \"%s\" moda.tl -o LibA.tlib 2>&1",
+             liba_dir, e2e_tess_exe, e2e_stdlib_dir);
+    if (run_cmd(cmd) != 0) {
+        fprintf(stderr, "  tess pack LibA failed\n");
+        return 1;
+    }
+
+    // -- Create LibB (depends on BaseLib) --
+    char libb_dir[512], libb_libs[512];
+    make_temp_path(libb_dir, sizeof(libb_dir), "e2e_diamond_libb/");
+    snprintf(libb_libs, sizeof(libb_libs), "%slibs/", libb_dir);
+    test_mkdir_p(libb_dir);
+    test_mkdir_p(libb_libs);
+
+    snprintf(path, sizeof(path), "%spackage.tl", libb_dir);
+    write_file(path,
+            "format(1)\n"
+            "package(\"LibB\")\n"
+            "version(\"1.0.0\")\n"
+            "export(\"ModB\")\n"
+            "depend(\"BaseLib\", \"1.0.0\")\n"
+            "depend_path(\"./libs\")\n");
+
+    snprintf(path, sizeof(path), "%smodb.tl", libb_dir);
+    write_file(path, "#module ModB\n\ncompute() { Base.val() + 1 }\n");
+
+    snprintf(dst_tlib, sizeof(dst_tlib), "%sBaseLib.tlib", libb_libs);
+    copy_file(src_tlib, dst_tlib);
+
+    snprintf(cmd, sizeof(cmd),
+             "cd \"%s\" && \"%s\" pack --no-standard-includes -S \"%s\" modb.tl -o LibB.tlib 2>&1",
+             libb_dir, e2e_tess_exe, e2e_stdlib_dir);
+    if (run_cmd(cmd) != 0) {
+        fprintf(stderr, "  tess pack LibB failed\n");
+        return 1;
+    }
+
+    // -- Create App depending on both LibA and LibB --
+    char app_dir[512], app_libs[512];
+    make_temp_path(app_dir, sizeof(app_dir), "e2e_diamond_app/");
+    snprintf(app_libs, sizeof(app_libs), "%slibs/", app_dir);
+    test_mkdir_p(app_dir);
+    test_mkdir_p(app_libs);
+
+    snprintf(path, sizeof(path), "%spackage.tl", app_dir);
+    write_file(path,
+            "format(1)\n"
+            "package(\"App\")\n"
+            "version(\"0.1.0\")\n"
+            "depend(\"LibA\", \"1.0.0\")\n"
+            "depend(\"LibB\", \"1.0.0\")\n"
+            "depend_path(\"./libs\")\n");
+
+    snprintf(path, sizeof(path), "%smain.tl", app_dir);
+    write_file(path,
+            "#module main\n\n"
+            "main() {\n"
+            "  ModA.compute() + ModB.compute()\n"
+            "}\n");
+
+    // Copy all .tlibs to App's libs/
+    snprintf(src_tlib, sizeof(src_tlib), "%sLibA.tlib", liba_dir);
+    snprintf(dst_tlib, sizeof(dst_tlib), "%sLibA.tlib", app_libs);
+    copy_file(src_tlib, dst_tlib);
+
+    snprintf(src_tlib, sizeof(src_tlib), "%sLibB.tlib", libb_dir);
+    snprintf(dst_tlib, sizeof(dst_tlib), "%sLibB.tlib", app_libs);
+    copy_file(src_tlib, dst_tlib);
+
+    snprintf(src_tlib, sizeof(src_tlib), "%sBaseLib.tlib", base_dir);
+    snprintf(dst_tlib, sizeof(dst_tlib), "%sBaseLib.tlib", app_libs);
+    copy_file(src_tlib, dst_tlib);
+
+    // -- Compile and run --
+    char out_exe[512];
+    snprintf(out_exe, sizeof(out_exe), "%sapp", app_dir);
+    snprintf(cmd, sizeof(cmd),
+             "cd \"%s\" && \"%s\" exe --no-standard-includes -S \"%s\" -o \"%s\" main.tl 2>&1",
+             app_dir, e2e_tess_exe, e2e_stdlib_dir, out_exe);
+    if (run_cmd(cmd) != 0) {
+        fprintf(stderr, "  tess exe failed\n");
+        return 1;
+    }
+
+    int exit_code = run_cmd(out_exe);
+    if (exit_code != 42) {
+        fprintf(stderr, "  expected exit code 42, got %d\n", exit_code);
+        return 1;
+    }
+
+    return 0;
+}
+
+// Phase 8: Circular dependency detection (A -> B -> A)
+static int test_e2e_circular_deps(void) {
+    allocator *alloc = default_allocator();
+
+    // Create two .tlib files that reference each other via raw write API
+    char libs_dir[512];
+    make_temp_path(libs_dir, sizeof(libs_dir), "e2e_circular_libs/");
+    test_mkdir_p(libs_dir);
+
+    // A.tlib depends on B=1.0.0
+    str a_depends[1];
+    a_depends[0] = str_init(alloc, "PkgB=1.0.0");
+
+    str a_modules[1];
+    a_modules[0] = str_init(alloc, "ModA");
+
+    tl_tlib_metadata meta_a = {
+        .name           = str_init(alloc, "PkgA"),
+        .author         = str_empty(),
+        .version        = str_init(alloc, "1.0.0"),
+        .modules        = a_modules,
+        .module_count   = 1,
+        .depends        = a_depends,
+        .depends_count  = 1,
+    };
+
+    char const *a_src = "#module ModA\n\nfoo() { 1 }\n";
+    tl_tlib_entry a_entry = {"moda.tl", 7, (byte const *)a_src, (u32)strlen(a_src)};
+
+    char a_path[512];
+    snprintf(a_path, sizeof(a_path), "%sPkgA.tlib", libs_dir);
+    if (tl_tlib_write(alloc, a_path, &meta_a, &a_entry, 1)) {
+        fprintf(stderr, "  failed to write PkgA.tlib\n");
+        return 1;
+    }
+
+    // B.tlib depends on A=1.0.0
+    str b_depends[1];
+    b_depends[0] = str_init(alloc, "PkgA=1.0.0");
+
+    str b_modules[1];
+    b_modules[0] = str_init(alloc, "ModB");
+
+    tl_tlib_metadata meta_b = {
+        .name           = str_init(alloc, "PkgB"),
+        .author         = str_empty(),
+        .version        = str_init(alloc, "1.0.0"),
+        .modules        = b_modules,
+        .module_count   = 1,
+        .depends        = b_depends,
+        .depends_count  = 1,
+    };
+
+    char const *b_src = "#module ModB\n\nbar() { 2 }\n";
+    tl_tlib_entry b_entry = {"modb.tl", 7, (byte const *)b_src, (u32)strlen(b_src)};
+
+    char b_path[512];
+    snprintf(b_path, sizeof(b_path), "%sPkgB.tlib", libs_dir);
+    if (tl_tlib_write(alloc, b_path, &meta_b, &b_entry, 1)) {
+        fprintf(stderr, "  failed to write PkgB.tlib\n");
+        return 1;
+    }
+
+    // -- Create App depending on PkgA --
+    char app_dir[512], app_libs[512];
+    make_temp_path(app_dir, sizeof(app_dir), "e2e_circular_app/");
+    snprintf(app_libs, sizeof(app_libs), "%slibs/", app_dir);
+    test_mkdir_p(app_dir);
+    test_mkdir_p(app_libs);
+
+    char path[512];
+    snprintf(path, sizeof(path), "%spackage.tl", app_dir);
+    write_file(path,
+            "format(1)\n"
+            "package(\"App\")\n"
+            "version(\"0.1.0\")\n"
+            "depend(\"PkgA\", \"1.0.0\")\n"
+            "depend_path(\"./libs\")\n");
+
+    snprintf(path, sizeof(path), "%smain.tl", app_dir);
+    write_file(path, "#module main\n\nmain() { 0 }\n");
+
+    // Copy .tlibs to App's libs/
+    char dst[512];
+    snprintf(dst, sizeof(dst), "%sPkgA.tlib", app_libs);
+    copy_file(a_path, dst);
+    snprintf(dst, sizeof(dst), "%sPkgB.tlib", app_libs);
+    copy_file(b_path, dst);
+
+    // -- Compile: should fail with circular dependency error --
+    char out_exe[512];
+    snprintf(out_exe, sizeof(out_exe), "%sapp", app_dir);
+    char cmd[2048];
+    snprintf(cmd, sizeof(cmd),
+             "cd \"%s\" && \"%s\" exe --no-standard-includes -S \"%s\" -o \"%s\" main.tl 2>&1",
+             app_dir, e2e_tess_exe, e2e_stdlib_dir, out_exe);
+    if (run_cmd(cmd) == 0) {
+        fprintf(stderr, "  tess exe should have failed (circular dependency)\n");
+        return 1;
+    }
+
+    return 0;
+}
+
+// Phase 8: Version conflict in diamond (LibA needs Base=1.0.0, LibB needs Base=2.0.0)
+static int test_e2e_version_conflict(void) {
+    allocator *alloc = default_allocator();
+
+    char libs_dir[512];
+    make_temp_path(libs_dir, sizeof(libs_dir), "e2e_conflict_libs/");
+    test_mkdir_p(libs_dir);
+
+    // BaseLib v1.0.0
+    str base_modules[1];
+    base_modules[0] = str_init(alloc, "Base");
+
+    tl_tlib_metadata meta_base = {
+        .name         = str_init(alloc, "BaseLib"),
+        .author       = str_empty(),
+        .version      = str_init(alloc, "1.0.0"),
+        .modules      = base_modules,
+        .module_count = 1,
+    };
+
+    char const *base_src = "#module Base\n\nval() { 1 }\n";
+    tl_tlib_entry base_entry = {"base.tl", 7, (byte const *)base_src, (u32)strlen(base_src)};
+
+    char base_path[512];
+    snprintf(base_path, sizeof(base_path), "%sBaseLib.tlib", libs_dir);
+    tl_tlib_write(alloc, base_path, &meta_base, &base_entry, 1);
+
+    // LibA depends on BaseLib=1.0.0
+    str a_depends[1];
+    a_depends[0] = str_init(alloc, "BaseLib=1.0.0");
+
+    str a_modules[1];
+    a_modules[0] = str_init(alloc, "ModA");
+
+    tl_tlib_metadata meta_a = {
+        .name          = str_init(alloc, "LibA"),
+        .author        = str_empty(),
+        .version       = str_init(alloc, "1.0.0"),
+        .modules       = a_modules,
+        .module_count  = 1,
+        .depends       = a_depends,
+        .depends_count = 1,
+    };
+
+    char const *a_src = "#module ModA\n\nfoo() { Base.val() }\n";
+    tl_tlib_entry a_entry = {"moda.tl", 7, (byte const *)a_src, (u32)strlen(a_src)};
+
+    char a_path[512];
+    snprintf(a_path, sizeof(a_path), "%sLibA.tlib", libs_dir);
+    tl_tlib_write(alloc, a_path, &meta_a, &a_entry, 1);
+
+    // LibB depends on BaseLib=2.0.0 (conflict!)
+    str b_depends[1];
+    b_depends[0] = str_init(alloc, "BaseLib=2.0.0");
+
+    str b_modules[1];
+    b_modules[0] = str_init(alloc, "ModB");
+
+    tl_tlib_metadata meta_b = {
+        .name          = str_init(alloc, "LibB"),
+        .author        = str_empty(),
+        .version       = str_init(alloc, "1.0.0"),
+        .modules       = b_modules,
+        .module_count  = 1,
+        .depends       = b_depends,
+        .depends_count = 1,
+    };
+
+    char const *b_src = "#module ModB\n\nbar() { Base.val() }\n";
+    tl_tlib_entry b_entry = {"modb.tl", 7, (byte const *)b_src, (u32)strlen(b_src)};
+
+    char b_path[512];
+    snprintf(b_path, sizeof(b_path), "%sLibB.tlib", libs_dir);
+    tl_tlib_write(alloc, b_path, &meta_b, &b_entry, 1);
+
+    // -- Create App depending on LibA and LibB --
+    char app_dir[512], app_libs[512];
+    make_temp_path(app_dir, sizeof(app_dir), "e2e_conflict_app/");
+    snprintf(app_libs, sizeof(app_libs), "%slibs/", app_dir);
+    test_mkdir_p(app_dir);
+    test_mkdir_p(app_libs);
+
+    char path[512];
+    snprintf(path, sizeof(path), "%spackage.tl", app_dir);
+    write_file(path,
+            "format(1)\n"
+            "package(\"App\")\n"
+            "version(\"0.1.0\")\n"
+            "depend(\"LibA\", \"1.0.0\")\n"
+            "depend(\"LibB\", \"1.0.0\")\n"
+            "depend_path(\"./libs\")\n");
+
+    snprintf(path, sizeof(path), "%smain.tl", app_dir);
+    write_file(path, "#module main\n\nmain() { 0 }\n");
+
+    // Copy all .tlibs
+    char dst[512];
+    snprintf(dst, sizeof(dst), "%sLibA.tlib", app_libs);
+    copy_file(a_path, dst);
+    snprintf(dst, sizeof(dst), "%sLibB.tlib", app_libs);
+    copy_file(b_path, dst);
+    snprintf(dst, sizeof(dst), "%sBaseLib.tlib", app_libs);
+    copy_file(base_path, dst);
+
+    // -- Compile: should fail (LibA needs Base=1.0.0, LibB needs Base=2.0.0) --
+    char out_exe[512];
+    snprintf(out_exe, sizeof(out_exe), "%sapp", app_dir);
+    char cmd[2048];
+    snprintf(cmd, sizeof(cmd),
+             "cd \"%s\" && \"%s\" exe --no-standard-includes -S \"%s\" -o \"%s\" main.tl 2>&1",
+             app_dir, e2e_tess_exe, e2e_stdlib_dir, out_exe);
+    if (run_cmd(cmd) == 0) {
+        fprintf(stderr, "  tess exe should have failed (version conflict)\n");
+        return 1;
+    }
+
+    return 0;
+}
+
+// Phase 8: Missing transitive dependency
+static int test_e2e_missing_transitive_dep(void) {
+    allocator *alloc = default_allocator();
+
+    // Create MathLib that depends on LogLib=1.0.0 (via raw write)
+    char libs_dir[512];
+    make_temp_path(libs_dir, sizeof(libs_dir), "e2e_missing_trans_libs/");
+    test_mkdir_p(libs_dir);
+
+    str m_depends[1];
+    m_depends[0] = str_init(alloc, "LogLib=1.0.0");
+
+    str m_modules[1];
+    m_modules[0] = str_init(alloc, "MathLib");
+
+    tl_tlib_metadata meta_m = {
+        .name          = str_init(alloc, "MathLib"),
+        .author        = str_empty(),
+        .version       = str_init(alloc, "1.0.0"),
+        .modules       = m_modules,
+        .module_count  = 1,
+        .depends       = m_depends,
+        .depends_count = 1,
+    };
+
+    char const *m_src = "#module MathLib\n\nadd(a, b) { a + b }\n";
+    tl_tlib_entry m_entry = {"math.tl", 7, (byte const *)m_src, (u32)strlen(m_src)};
+
+    char m_path[512];
+    snprintf(m_path, sizeof(m_path), "%sMathLib.tlib", libs_dir);
+    tl_tlib_write(alloc, m_path, &meta_m, &m_entry, 1);
+
+    // -- Create App depending on MathLib, but LogLib is NOT available --
+    char app_dir[512], app_libs[512];
+    make_temp_path(app_dir, sizeof(app_dir), "e2e_missing_trans_app/");
+    snprintf(app_libs, sizeof(app_libs), "%slibs/", app_dir);
+    test_mkdir_p(app_dir);
+    test_mkdir_p(app_libs);
+
+    char path[512];
+    snprintf(path, sizeof(path), "%spackage.tl", app_dir);
+    write_file(path,
+            "format(1)\n"
+            "package(\"App\")\n"
+            "version(\"0.1.0\")\n"
+            "depend(\"MathLib\", \"1.0.0\")\n"
+            "depend_path(\"./libs\")\n");
+
+    snprintf(path, sizeof(path), "%smain.tl", app_dir);
+    write_file(path, "#module main\n\nmain() { 0 }\n");
+
+    // Copy only MathLib.tlib (NOT LogLib.tlib)
+    char dst[512];
+    snprintf(dst, sizeof(dst), "%sMathLib.tlib", app_libs);
+    copy_file(m_path, dst);
+
+    // -- Compile: should fail with missing transitive dep --
+    char out_exe[512];
+    snprintf(out_exe, sizeof(out_exe), "%sapp", app_dir);
+    char cmd[2048];
+    snprintf(cmd, sizeof(cmd),
+             "cd \"%s\" && \"%s\" exe --no-standard-includes -S \"%s\" -o \"%s\" main.tl 2>&1",
+             app_dir, e2e_tess_exe, e2e_stdlib_dir, out_exe);
+    if (run_cmd(cmd) == 0) {
+        fprintf(stderr, "  tess exe should have failed (missing transitive dep)\n");
+        return 1;
+    }
+
+    return 0;
+}
+
 int main(void) {
     init_temp_dir();
     init_e2e_paths();
@@ -1198,5 +1740,10 @@ int main(void) {
     T(test_e2e_version_mismatch)
     T(test_e2e_dep_not_found)
     T(test_e2e_multi_file_library)
+    T(test_e2e_transitive_deps)
+    T(test_e2e_diamond_deps)
+    T(test_e2e_circular_deps)
+    T(test_e2e_version_conflict)
+    T(test_e2e_missing_transitive_dep)
     return error;
 }

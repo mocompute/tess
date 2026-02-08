@@ -575,40 +575,45 @@ E2E tests in `test_tlib.c`: `test_e2e_basic_package`, `test_e2e_version_mismatch
 
 ---
 
-### Remaining Phases
-
-The remaining work is organized into phases that build incrementally. Each phase has clear validation criteria and can be tested before proceeding.
-
-#### Phase 8: Inter-Package Dependencies
+#### Phase 8: Inter-Package Dependencies ✓
 
 **Goal:** Package A can declare and use Package B as a dependency.
 
 **Implementation:**
 
-**During pack:**
-1. Load dependency packages from `package.tl`'s `depend()` declarations (resolved via `depend_path()` or explicit path)
-2. Verify each package's version matches `depend()` declaration
-3. Write all `depend()` declarations to the archive's `depends` field
-4. Optional dependencies (`depend_optional()`) are written to the `depends-optional` field
+**During pack (`pack_files()` in `tess_exe.c`):**
+1. Validate declared dependencies exist and versions match before writing the archive
+2. Write all `depend()` declarations to the archive's `depends` field
+3. Optional dependencies (`depend_optional()`) are written to the `depends-optional` field
 
 Dependencies are declared in `package.tl`, not auto-detected from source. If a producer declares a `depend()` they don't actually use, it is still recorded in the archive — consumers will need to provide it. This is accepted for simplicity; a future lint pass could warn about unused declarations.
 
-**During compile (transitive dependency resolution):**
-1. When loading a package, check its `depends` field
+**During compile (transitive dependency resolution in `load_package_deps()`):**
+1. When loading a package, check its `depends` field (parsed via `parse_dep_string()`)
 2. For each required dependency, search the consumer's `depend_path()` directories for `<PackageName>.tlib`
 3. Read metadata and verify version matches exactly
-4. Recurse: load the transitive dependency's own `depends` the same way
-5. Detect cycles during resolution (A→B→A) and emit an error listing the cycle path
-6. Error on missing dependencies with helpful message: `"package 'MathUtils' requires 'LoggingLib=2.0.0', not found in library search paths"`
+4. Recurse: `resolve_dep_recursive()` loads transitive dependencies the same way
+5. Detect cycles during resolution (A→B→A) via resolution stack, emit error listing the cycle path
+6. Detect version conflicts in diamond dependencies (A needs C=1.0, B needs C=2.0) via loaded map
+7. Deduplicate: diamond dependencies where both require the same version are loaded once
 
-Consumers only list direct dependencies via `depend()`. Transitive dependencies are resolved automatically from `depend_path()` directories. This keeps `package.tl` concise while enabling reproducible builds with pinned versions.
+Key functions added to `tess_exe.c`:
+- `parse_dep_string()`: Splits "Name=Version" archive metadata strings into components
+- `resolve_dep_recursive()`: Recursive resolver with cycle detection (stack) and dedup/conflict detection (loaded hashmap)
+- `dep_resolve_ctx`: Tracking struct with `loaded` map (str→str) and `stack` array
 
-**Validation:**
-- Integration test: MathUtils→LoggingLib example from this document
-- Test version mismatch detection (transitive dep version doesn't match)
-- Test missing transitive dependency detection (helpful error message)
-- Test transitive dependency auto-resolution from `depend_path()`
-- Test circular dependency detection
+E2E tests in `test_tlib.c`:
+- `test_e2e_transitive_deps`: A→B→C chain (LogLib→MathLib→App, exit code 42)
+- `test_e2e_diamond_deps`: LibA and LibB both depend on BaseLib (loaded once, exit code 42)
+- `test_e2e_circular_deps`: A→B→A cycle detection (compile error)
+- `test_e2e_version_conflict`: Diamond with version mismatch (compile error)
+- `test_e2e_missing_transitive_dep`: Transitive dep not available (compile error with helpful message)
+
+---
+
+### Remaining Phases
+
+The remaining work is organized into phases that build incrementally. Each phase has clear validation criteria and can be tested before proceeding.
 
 #### Phase 9: Module-Level Access Control (Documentation Only)
 
@@ -664,7 +669,7 @@ Phase 6b (Module Discovery — pack integration) ✓
     ↓
 Phase 7 (Basic Consumption) ✓  ←── First end-to-end validation
     ↓
-Phase 8 (Inter-Package Dependencies)
+Phase 8 (Inter-Package Dependencies) ✓
     ↓
 Phase 9 (Module Access Control — documentation only)
     ↓
@@ -675,7 +680,7 @@ Phase 10 (Test Suite)
 - After Phase 5: `package.tl` parser works standalone with full test coverage
 - After Phase 6/6b: Module discovery, validation, and self-containment checking complete
 - After Phase 7: Can pack and consume a simple library (with version verification)
-- After Phase 8: Can handle library chains with transitive resolution (A uses B uses C)
+- After Phase 8: Can handle library chains with transitive resolution (A uses B uses C) ✓
 - After Phase 9: Export declarations validated, tree shaking of unused internals verified
 
 Each phase can be merged independently, allowing incremental progress and early feedback on the design
