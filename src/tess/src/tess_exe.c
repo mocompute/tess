@@ -249,6 +249,10 @@ static void add_standard_include_paths(state *self, char const *cwd) {
         str exe_dir       = str_init(self->arena, exe_buf);
         str installed_std = str_cat(self->arena, exe_dir, S("/../lib/tess/std"));
         import_resolver_add_standard_path(self->resolver, installed_std);
+
+        // 1b. add <exe_dir>/src/tl/std (for development builds)
+        str development_std = str_cat(self->arena, exe_dir, S("/src/tl/std"));
+        import_resolver_add_standard_path(self->resolver, development_std);
     }
 
     // 2. Add <cwd>/src/tl/std (for development builds)
@@ -1371,20 +1375,21 @@ static int validate_files(state *self) {
       tl_source_scanner_validate(&self->scanner, pkg.info.exports, pkg.info.export_count, self->verbose);
 
     if (result.error_count > 0) {
-        fprintf(stderr, "validation failed: %d error(s)\n", result.error_count);
+        fprintf(stderr, "error: validation failed: %d error(s)\n", result.error_count);
         return 1;
     }
 
     if (result.warning_count > 0) {
-        fprintf(stderr, "validation passed with %d warning(s)\n", result.warning_count);
-    } else if (self->verbose) {
-        fprintf(stderr, "validation passed\n");
+        fprintf(stderr, "ok: validation passed with %d warning(s)\n", result.warning_count);
+    } else {
+        fprintf(stderr, "ok: validation passed\n");
     }
 
     return 0;
 }
 
 static int init_package(state *self) {
+    (void)self;
     // Check if package.tl already exists
     str pkg_path = str_init_static("package.tl");
     if (file_exists(pkg_path)) {
@@ -1411,9 +1416,7 @@ static int init_package(state *self) {
     fprintf(f, "version(\"0.0.1\")\n");
     fclose(f);
 
-    if (self->verbose) {
-        fprintf(stderr, "Created package.tl for package \"%s\"\n", name);
-    }
+    fprintf(stderr, "Created package.tl for package \"%s\"\n", name);
 
     return 0;
 }
