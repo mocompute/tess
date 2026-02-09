@@ -166,9 +166,9 @@ str file_path_join(allocator *alloc, str dir, str file) {
     if (str_is_empty(file)) return str_copy(alloc, dir);
 
     // Check if dir already ends with separator
-    span   dir_span = str_span(&dir);
-    char   last     = dir_span.buf[dir_span.len - 1];
-    int    has_sep  = (last == '/' || last == '\\');
+    span dir_span = str_span(&dir);
+    char last     = dir_span.buf[dir_span.len - 1];
+    int  has_sep  = (last == '/' || last == '\\');
 
     if (has_sep) {
         return str_cat(alloc, dir, file);
@@ -204,14 +204,14 @@ str file_path_normalize(allocator *alloc, str path) {
 
     // Stack of component start/length pairs
     // Maximum depth is s.len/2 (alternating char/separator)
-    size_t max_components = s.len / 2 + 1;
-    size_t *comp_start    = alloc_malloc(alloc, max_components * sizeof(size_t));
-    size_t *comp_len      = alloc_malloc(alloc, max_components * sizeof(size_t));
-    size_t  comp_count    = 0;
-    int     depth         = 0; // Track depth for relative paths
+    size_t      max_components = s.len / 2 + 1;
+    size_t     *comp_start     = alloc_malloc(alloc, max_components * sizeof(size_t));
+    size_t     *comp_len       = alloc_malloc(alloc, max_components * sizeof(size_t));
+    size_t      comp_count     = 0;
+    int         depth          = 0; // Track depth for relative paths
 
-    char const *p   = start;
-    char const *end = s.buf + s.len;
+    char const *p              = start;
+    char const *end            = s.buf + s.len;
 
     while (p < end) {
         // Skip separators
@@ -273,7 +273,8 @@ str file_path_normalize(allocator *alloc, str path) {
 
     // Add components
     for (size_t i = 0; i < comp_count; i++) {
-        if (i > 0 || (is_abs && prefix_len > 0 && s.buf[prefix_len - 1] != '/' && s.buf[prefix_len - 1] != '\\')) {
+        if (i > 0 ||
+            (is_abs && prefix_len > 0 && s.buf[prefix_len - 1] != '/' && s.buf[prefix_len - 1] != '\\')) {
             str_build_cat(&build, S("/"));
         }
         str_build_cat(&build, str_init_n(alloc, s.buf + comp_start[i], comp_len[i]));
@@ -323,6 +324,8 @@ str file_path_relative(allocator *alloc, str from_dir, str to_path) {
     str to_norm   = file_path_normalize(alloc, to_path);
 
     if (str_is_empty(from_norm) || str_is_empty(to_norm)) {
+        str_deinit(alloc, &from_norm);
+        str_deinit(alloc, &to_norm);
         return str_empty();
     }
 
@@ -339,14 +342,22 @@ str file_path_relative(allocator *alloc, str from_dir, str to_path) {
 
         if (!from_abs) {
             str abs_from = file_path_join(alloc, cwd, from_norm);
-            from_norm    = file_path_normalize(alloc, abs_from);
+
+            str_deinit(alloc, &from_norm);
+            from_norm = file_path_normalize(alloc, abs_from);
+            str_deinit(alloc, &abs_from);
         }
         if (!to_abs) {
             str abs_to = file_path_join(alloc, cwd, to_norm);
-            to_norm    = file_path_normalize(alloc, abs_to);
+
+            str_deinit(alloc, &to_norm);
+            to_norm = file_path_normalize(alloc, abs_to);
+            str_deinit(alloc, &abs_to);
         }
 
         if (str_is_empty(from_norm) || str_is_empty(to_norm)) {
+            str_deinit(alloc, &from_norm);
+            str_deinit(alloc, &to_norm);
             return str_empty();
         }
     }
@@ -362,6 +373,8 @@ str file_path_relative(allocator *alloc, str from_dir, str to_path) {
         if (from_drive >= 'a' && from_drive <= 'z') from_drive -= 32;
         if (to_drive >= 'a' && to_drive <= 'z') to_drive -= 32;
         if (from_drive != to_drive) {
+            str_deinit(alloc, &from_norm);
+            str_deinit(alloc, &to_norm);
             return str_empty(); // Different drives
         }
     }
@@ -372,9 +385,9 @@ str file_path_relative(allocator *alloc, str from_dir, str to_path) {
     span to_span   = str_span(&to_norm);
 
     // Find common prefix length (by path components)
-    size_t from_pos  = 0;
-    size_t to_pos    = 0;
-    size_t last_sep  = 0;
+    size_t from_pos = 0;
+    size_t to_pos   = 0;
+    size_t last_sep = 0;
 
     // Skip initial path prefix (/ or C:/)
     if (from_span.len > 0 && (from_span.buf[0] == '/' || from_span.buf[0] == '\\')) {
@@ -422,6 +435,8 @@ str file_path_relative(allocator *alloc, str from_dir, str to_path) {
         if (tc == '/' || tc == '\\') last_sep = from_pos;
         if (from_pos == from_span.len && to_pos == to_span.len) {
             // Paths are identical
+            str_deinit(alloc, &from_norm);
+            str_deinit(alloc, &to_norm);
             return str_init(alloc, ".");
         }
         if (from_pos == from_span.len && (tc == '/' || tc == '\\')) {
@@ -462,8 +477,8 @@ str file_path_relative(allocator *alloc, str from_dir, str to_path) {
         if (up_count > 0) {
             str_build_cat(&build, S("/"));
         }
-        str remaining = str_init_n(alloc, to_span.buf + to_remaining_start,
-                                   to_span.len - to_remaining_start);
+        str remaining =
+          str_init_n(alloc, to_span.buf + to_remaining_start, to_span.len - to_remaining_start);
         str_build_cat(&build, remaining);
     }
 
@@ -471,6 +486,9 @@ str file_path_relative(allocator *alloc, str from_dir, str to_path) {
     if (build.size == 0) {
         str_build_cat(&build, S("."));
     }
+
+    str_deinit(alloc, &from_norm);
+    str_deinit(alloc, &to_norm);
 
     return str_build_finish(&build);
 }

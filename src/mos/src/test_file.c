@@ -22,6 +22,7 @@ static int test_file_path_normalize(void) {
             fprintf(stderr, "  simple path: expected '/a/b/c', got '%s'\n", str_cstr(&result));
             error++;
         }
+        str_deinit(alloc, &result);
     }
 
     // Test 2: Remove single dot components
@@ -31,6 +32,7 @@ static int test_file_path_normalize(void) {
             fprintf(stderr, "  dot removal: expected '/a/b/c', got '%s'\n", str_cstr(&result));
             error++;
         }
+        str_deinit(alloc, &result);
     }
 
     // Test 3: Resolve parent directory references
@@ -40,6 +42,7 @@ static int test_file_path_normalize(void) {
             fprintf(stderr, "  dotdot resolution: expected '/a/c', got '%s'\n", str_cstr(&result));
             error++;
         }
+        str_deinit(alloc, &result);
     }
 
     // Test 4: Multiple parent references
@@ -49,6 +52,7 @@ static int test_file_path_normalize(void) {
             fprintf(stderr, "  multiple dotdot: expected '/a/d', got '%s'\n", str_cstr(&result));
             error++;
         }
+        str_deinit(alloc, &result);
     }
 
     // Test 5: Redundant separators
@@ -58,6 +62,7 @@ static int test_file_path_normalize(void) {
             fprintf(stderr, "  redundant sep: expected '/a/b/c', got '%s'\n", str_cstr(&result));
             error++;
         }
+        str_deinit(alloc, &result);
     }
 
     // Test 6: Relative path with dotdot
@@ -67,6 +72,7 @@ static int test_file_path_normalize(void) {
             fprintf(stderr, "  relative dotdot: expected 'a/c', got '%s'\n", str_cstr(&result));
             error++;
         }
+        str_deinit(alloc, &result);
     }
 
     // Test 7: Leading dotdot in relative path
@@ -76,6 +82,7 @@ static int test_file_path_normalize(void) {
             fprintf(stderr, "  leading dotdot: expected '../a/b', got '%s'\n", str_cstr(&result));
             error++;
         }
+        str_deinit(alloc, &result);
     }
 
     // Test 8: Empty path returns "."
@@ -88,6 +95,7 @@ static int test_file_path_normalize(void) {
                 error++;
             }
         }
+        str_deinit(alloc, &result);
     }
 
     // Test 9: Root path stays root
@@ -97,6 +105,7 @@ static int test_file_path_normalize(void) {
             fprintf(stderr, "  root path: expected '/', got '%s'\n", str_cstr(&result));
             error++;
         }
+        str_deinit(alloc, &result);
     }
 
     // Test 10: Current directory
@@ -106,6 +115,7 @@ static int test_file_path_normalize(void) {
             fprintf(stderr, "  current dir: expected '.', got '%s'\n", str_cstr(&result));
             error++;
         }
+        str_deinit(alloc, &result);
     }
 
     // Test 11: Dotdot at root is ignored
@@ -115,6 +125,7 @@ static int test_file_path_normalize(void) {
             fprintf(stderr, "  dotdot at root: expected '/a', got '%s'\n", str_cstr(&result));
             error++;
         }
+        str_deinit(alloc, &result);
     }
 
     return error;
@@ -138,6 +149,7 @@ static int test_file_path_relative(void) {
             fprintf(stderr, "  same path should return '.', got '%s'\n", str_cstr(&result));
             error++;
         }
+        str_deinit(alloc, &result);
     }
 
     // Test 2: File in same directory
@@ -147,6 +159,7 @@ static int test_file_path_relative(void) {
             fprintf(stderr, "  file in same dir: expected 'file.txt', got '%s'\n", str_cstr(&result));
             error++;
         }
+        str_deinit(alloc, &result);
     }
 
     // Test 3: File in parent directory
@@ -156,6 +169,7 @@ static int test_file_path_relative(void) {
             fprintf(stderr, "  file in parent: expected '../file.txt', got '%s'\n", str_cstr(&result));
             error++;
         }
+        str_deinit(alloc, &result);
     }
 
     // Test 4: File in sibling directory
@@ -165,6 +179,7 @@ static int test_file_path_relative(void) {
             fprintf(stderr, "  file in sibling: expected '../d/file.txt', got '%s'\n", str_cstr(&result));
             error++;
         }
+        str_deinit(alloc, &result);
     }
 
     // Test 5: File two levels up
@@ -175,6 +190,7 @@ static int test_file_path_relative(void) {
                     str_cstr(&result));
             error++;
         }
+        str_deinit(alloc, &result);
     }
 
     // Test 6: Relative paths (uses cwd internally)
@@ -187,6 +203,7 @@ static int test_file_path_relative(void) {
             fprintf(stderr, "  relative path: expected 'file.c', got '%s'\n", str_cstr(&result));
             error++;
         }
+        str_deinit(alloc, &result);
     }
 
     // Test 7: Empty input should return empty
@@ -196,6 +213,7 @@ static int test_file_path_relative(void) {
             fprintf(stderr, "  empty from_dir should return empty, got '%s'\n", str_cstr(&result));
             error++;
         }
+        str_deinit(alloc, &result);
     }
 
     // Test 8: Deeply nested relative path
@@ -206,6 +224,7 @@ static int test_file_path_relative(void) {
                     str_cstr(&result));
             error++;
         }
+        str_deinit(alloc, &result);
     }
 
     return error;
@@ -248,11 +267,11 @@ static int test_file_exe_directory(void) {
     return error;
 }
 
-#define T(name)                                                                \
-    this_error = name();                                                       \
-    if (this_error) {                                                          \
-        fprintf(stderr, "FAILED: %s\n", #name);                                \
-        error += this_error;                                                   \
+#define T(name)                                                                                            \
+    this_error = name();                                                                                   \
+    if (this_error) {                                                                                      \
+        fprintf(stderr, "FAILED: %s\n", #name);                                                            \
+        error += this_error;                                                                               \
     }
 
 int main(void) {
