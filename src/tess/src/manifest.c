@@ -86,10 +86,14 @@ int tl_package_parse_file(allocator *alloc, char const *path, tl_package *out) {
         fprintf(stderr, "error: '%s' not found (required for pack/validate commands)\n", path);
         return 1;
     }
-    file_read(alloc, path, &data, &size);
-    if (!data) {
-        fprintf(stderr, "error: cannot read '%s'\n", path);
-        return 1;
+    {
+        // test if file is readable
+        file_read(alloc, path, &data, &size);
+        if (!data) {
+            fprintf(stderr, "error: cannot read '%s'\n", path);
+            return 1;
+        }
+        alloc_free(alloc, data);
     }
 
     // Create minimal type infrastructure for parser
@@ -348,4 +352,23 @@ int tl_package_parse_file(allocator *alloc, char const *path, tl_package *out) {
     arena_destroy(&parse_arena);
 
     return error ? 1 : 0;
+}
+
+void tl_package_deinit(allocator *alloc, tl_package *self) {
+    if (!self) return;
+    alloc_free(alloc, self->info.exports);
+    alloc_free(alloc, self->info.depend_paths);
+    for (u32 i = 0; i < self->dep_count; i++) {
+        str_deinit(alloc, &self->deps[i].name);
+        str_deinit(alloc, &self->deps[i].version);
+        str_deinit(alloc, &self->deps[i].path);
+    }
+    alloc_free(alloc, self->deps);
+
+    for (u32 i = 0; i < self->optional_dep_count; i++) {
+        str_deinit(alloc, &self->optional_deps[i].name);
+        str_deinit(alloc, &self->optional_deps[i].version);
+        str_deinit(alloc, &self->optional_deps[i].path);
+    }
+    alloc_free(alloc, self->optional_deps);
 }

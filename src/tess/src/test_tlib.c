@@ -77,6 +77,8 @@ static tl_tlib_metadata make_test_metadata(allocator *alloc) {
 }
 
 static int test_roundtrip(void) {
+    int        error = 0;
+
     allocator *alloc = default_allocator();
     char       path[512];
     make_temp_path(path, sizeof(path), "test_tlib_roundtrip.tlib");
@@ -97,38 +99,46 @@ static int test_roundtrip(void) {
     tl_tlib_archive arc = {0};
     if (tl_tlib_read(alloc, path, &arc)) {
         fprintf(stderr, "  read failed\n");
-        return 1;
+        error = 1;
+        goto cleanup;
     }
 
     if (arc.entries_count != 3) {
         fprintf(stderr, "  expected 3 entries, got %u\n", arc.entries_count);
-        return 1;
+        error = 1;
+        goto cleanup;
     }
 
     // Verify metadata roundtrip
     if (!str_eq(arc.metadata.name, meta.name)) {
         fprintf(stderr, "  metadata.name mismatch\n");
-        return 1;
+        error = 1;
+        goto cleanup;
     }
     if (!str_eq(arc.metadata.version, meta.version)) {
         fprintf(stderr, "  metadata.version mismatch\n");
-        return 1;
+        error = 1;
+        goto cleanup;
     }
 
     for (u32 i = 0; i < 3; i++) {
         if (arc.entries[i].name_len != entries[i].name_len ||
             memcmp(arc.entries[i].name, entries[i].name, entries[i].name_len) != 0) {
             fprintf(stderr, "  name mismatch at entry %u\n", i);
-            return 1;
+            error = 1;
+            goto cleanup;
         }
         if (arc.entries[i].data_len != entries[i].data_len ||
             memcmp(arc.entries[i].data, entries[i].data, entries[i].data_len) != 0) {
             fprintf(stderr, "  data mismatch at entry %u\n", i);
-            return 1;
+            error = 1;
+            goto cleanup;
         }
     }
 
-    return 0;
+cleanup:
+    tl_tlib_archive_deinit(alloc, &arc);
+    return error;
 }
 
 static int test_empty_archive(void) {
@@ -692,6 +702,7 @@ static int test_pack_with_manifest(void) {
         fprintf(stderr, "  %d check(s) failed in test_pack_with_manifest\n", error);
     }
 
+    tl_package_deinit(alloc, &pkg);
     return error;
 }
 
@@ -771,6 +782,7 @@ static int pack_test_files(char const **file_names, char const **file_contents, 
         remove(str_cstr(&file_paths[i]));
     }
 
+    alloc_free(alloc, file_paths);
     return result;
 }
 
@@ -864,6 +876,7 @@ static int test_extract(void) {
         fprintf(stderr, "  extract failed\n");
         return 1;
     }
+    tl_tlib_archive_deinit(alloc, &arc);
 
     int error = 0;
 
@@ -911,6 +924,8 @@ static int test_extract(void) {
         fprintf(stderr, "  %d check(s) failed in test_extract\n", error);
     }
 
+    forall(i, out_files) str_deinit(alloc, &out_files.v[i]);
+    array_free(out_files);
     return error;
 }
 

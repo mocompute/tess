@@ -386,15 +386,20 @@ int tl_tlib_read(allocator *alloc, char const *input_path, tl_tlib_archive *out)
         byte const *data = pp;
         pp += data_len;
 
-        entries[i].name     = name;
         entries[i].name_len = name_len;
-        entries[i].data     = data;
+        entries[i].name     = alloc_malloc(alloc, name_len);
+        if (!entries[i].name) return 1;
+        memcpy((char *)entries[i].name, name, name_len);
+
         entries[i].data_len = data_len;
+        entries[i].data     = alloc_malloc(alloc, data_len);
+        if (!entries[i].data) return 1;
+        memcpy((char *)entries[i].data, data, data_len);
     }
 
     out->entries       = entries;
     out->entries_count = entry_count;
-    /* caller owns both entries and payload (entries point into payload) */
+    alloc_free(alloc, payload);
     return 0;
 
 corrupt_entries:
@@ -416,6 +421,8 @@ corrupt_meta:
 // Uses tl_source_scanner_collect_imports() for correct string/comment handling.
 // Returns 0 if self-contained, 1 if an import escapes the archive.
 static int check_self_containment(allocator *alloc, tl_tlib_entry const *entries, u32 count) {
+    int error = 0;
+
     // Build hashset of entry names
     hashmap *entry_names = hset_create(alloc, count * 2);
     for (u32 i = 0; i < count; i++) {
@@ -454,15 +461,23 @@ static int check_self_containment(allocator *alloc, tl_tlib_entry const *entries
                         "error: self-containment check failed: '%s' (imported from '%s') "
                         "not found in archive\n",
                         str_cstr(&import_path), entries[i].name);
-                return 1;
+                error = 1;
+                // fallthrough to break
             }
+
+            if (error) break;
         }
+
+        forall(i, imports) str_deinit(alloc, &imports.v[i]);
+        array_free(imports);
 
         str_deinit(alloc, &entry_dir);
         str_deinit(alloc, &entry_name);
+        if (error) break;
     }
 
-    return 0;
+    hset_destroy(&entry_names);
+    return error;
 }
 
 int tl_tlib_pack(allocator *alloc, char const *output_path, str_sized files, str base_dir,
@@ -722,6 +737,7 @@ int tl_tlib_extract(allocator *alloc, tl_tlib_archive const *archive, char const
         }
 
         str normed = file_path_normalize(alloc, out_path);
+        str_deinit(alloc, &out_path);
         array_push(*out_files, normed);
     }
 
@@ -831,4 +847,32 @@ int tl_tlib_unpack(allocator *alloc, char const *archive_path, char const *outpu
     }
 
     return 0;
+}
+
+void tl_tlib_archive_deinit(allocator *alloc, tl_tlib_archive *self) {
+    if (!self) return;
+    str_deinit(alloc, &self->metadata.name);
+    str_deinit(alloc, &self->metadata.author);
+    str_deinit(alloc, &self->metadata.version);
+
+    for (u32 i = 0; i < self->metadata.module_count; i++) {
+        str_deinit(alloc, &self->metadata.modules[i]);
+    }
+    alloc_free(alloc, self->metadata.modules);
+
+    for (u32 i = 0; i < self->metadata.depends_count; i++) {
+        str_deinit(alloc, &self->metadata.depends[i]);
+    }
+    alloc_free(alloc, self->metadata.depends);
+
+    for (u32 i = 0; i < self->metadata.depends_optional_count; i++) {
+        str_deinit(alloc, &self->metadata.depends_optional[i]);
+    }
+    alloc_free(alloc, self->metadata.depends_optional);
+
+    for (u32 i = 0; i < self->entries_count; i++) {
+        alloc_free(alloc, (void *)self->entries[i].name);
+        alloc_free(alloc, (void *)self->entries[i].data);
+    }
+    alloc_free(alloc, self->entries);
 }

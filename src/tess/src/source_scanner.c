@@ -189,8 +189,12 @@ static int collect_imports_callback(void *raw_ctx, char const *data, u32 start, 
     str_parse_words(command, &words);
 
     if (words.size >= 2 && str_eq(words.v[0], S("import"))) {
-        array_push(*ctx->imports, words.v[1]);
+        str _t = str_copy(ctx->alloc, words.v[1]);
+        array_push(*ctx->imports, _t);
     }
+
+    forall(i, words) str_deinit(ctx->alloc, &words.v[i]);
+    array_free(words);
 
     return 0;
 }
