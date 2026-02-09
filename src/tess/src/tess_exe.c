@@ -120,7 +120,7 @@ noreturn void version() {
 
 void state_init(state *self) {
     alloc_zero(self);
-    self->arena    = arena_create(default_allocator(), 4096);
+    self->arena    = arena_create(default_allocator(), 1024 * 1024);
     self->argv0    = null;
     self->out_path = null;
     self->words    = (c_string_carray){.alloc = self->arena};
@@ -765,7 +765,7 @@ int compile(state *self) {
     if (load_package_deps(self, &pkg_files)) return 1;
 
     tl_infer_opts infer_opts  = {.is_library = self->is_library};
-    tl_infer     *infer       = tl_infer_create(default_allocator(), &infer_opts);
+    tl_infer     *infer       = tl_infer_create(self->arena, &infer_opts);
 
     parser_opts   parser_opts = {
         .registry = tl_infer_get_registry(infer),
@@ -782,11 +782,11 @@ int compile(state *self) {
     // === PARSING PHASE ===
     hires_timer_start(&phase_timer);
 
-    parser *parser = parser_create(default_allocator(), &parser_opts);
+    parser *parser = parser_create(self->arena, &parser_opts);
     if (!parser) fatal("could not create parser");
     parser_set_verbose(parser, self->verbose_parse);
 
-    allocator     *nodes_alloc = arena_create(default_allocator(), 64 * 1024);
+    allocator     *nodes_alloc = arena_create(self->arena, 64 * 1024);
     ast_node_array nodes       = {.alloc = nodes_alloc};
 
     // parser first pass
@@ -800,7 +800,7 @@ int compile(state *self) {
     parser_destroy(&parser);
 
     // parser second pass
-    parser = parser_create(default_allocator(), &parser_opts);
+    parser = parser_create(self->arena, &parser_opts);
 
     parser_set_module_symbols(parser, syms);
 
@@ -857,7 +857,7 @@ int compile(state *self) {
       .no_line_directive = self->no_line_directive,
       .verbose           = self->verbose,
     };
-    transpile *transpile = transpile_create(default_allocator(), &transpile_opts);
+    transpile *transpile = transpile_create(self->arena, &transpile_opts);
 
     str_build  program_build;
     if (transpile_compile(transpile, &program_build)) goto cleanup_tp;
@@ -883,15 +883,15 @@ int compile(state *self) {
         output_program(self);
     }
 
-    str_deinit(default_allocator(), &program);
+    str_deinit(self->arena, &program);
 
 done:
     // is_executable || is_library: Caller will take over program
 cleanup_tp:
-    transpile_destroy(default_allocator(), &transpile);
+    transpile_destroy(self->arena, &transpile);
 
 cleanup_ti:
-    tl_infer_destroy(default_allocator(), &infer);
+    tl_infer_destroy(self->arena, &infer);
 
 cleanup_parser:
     parser_destroy(&parser);
@@ -1038,7 +1038,7 @@ int compile_c(state *self) {
     }
     fwrite(str_buf(&self->program), 1, str_len(self->program), f);
     fclose(f);
-    str_deinit(default_allocator(), &self->program);
+    str_deinit(self->arena, &self->program);
 
     c_string_array argv;
     if (is_msvc_compiler(self)) {
@@ -1070,7 +1070,7 @@ int compile_c(state *self) {
          .verbose    = self->verbose,
     };
     result = platform_exec(&opts);
-    str_deinit(default_allocator(), &self->program);
+    str_deinit(self->arena, &self->program);
 #endif
 
     hires_timer_stop(&cc_timer);
@@ -1105,7 +1105,7 @@ int compile_c_obj(state *self) {
     }
     fwrite(str_buf(&self->program), 1, str_len(self->program), f);
     fclose(f);
-    str_deinit(default_allocator(), &self->program);
+    str_deinit(self->arena, &self->program);
 
     c_string_array argv;
     if (is_msvc_compiler(self)) {
@@ -1138,7 +1138,7 @@ int compile_c_obj(state *self) {
          .verbose    = self->verbose,
     };
     result = platform_exec(&opts);
-    str_deinit(default_allocator(), &self->program);
+    str_deinit(self->arena, &self->program);
 #endif
 
     hires_timer_stop(&cc_timer);
