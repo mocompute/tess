@@ -2785,7 +2785,7 @@ static str tl_fatal(transpile *self, ast_node const *node, eval_ctx *ctx, void *
 
     str msg                = ast_node_str(arg);
 
-    return str_cat_3(self->transient, S("(fprintf(stderr, \""), msg, S("\"), exit(1))"));
+    return str_cat_3(self->transient, S("(fprintf(stderr, \""), msg, S("\\n\"), exit(1))"));
 }
 
 static str generate_funcall_intrinsic(transpile *self, ast_node const *node, eval_ctx *ctx) {
