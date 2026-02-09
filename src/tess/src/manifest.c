@@ -59,8 +59,8 @@ typedef struct {
 
 static void dep_array_push(dep_array *a, tl_package_dep dep) {
     if (a->size == a->capacity) {
-        u32 new_cap = a->capacity ? a->capacity * 2 : 4;
-        tl_package_dep *new_v = alloc_malloc(a->alloc, new_cap * sizeof(tl_package_dep));
+        u32             new_cap = a->capacity ? a->capacity * 2 : 4;
+        tl_package_dep *new_v   = alloc_malloc(a->alloc, new_cap * sizeof(tl_package_dep));
         if (a->v) memcpy(new_v, a->v, a->size * sizeof(tl_package_dep));
         a->v        = new_v;
         a->capacity = new_cap;
@@ -79,8 +79,8 @@ int tl_package_parse_file(allocator *alloc, char const *path, tl_package *out) {
     out->info.author  = str_empty();
 
     // Read file
-    char *data = 0;
-    u32   size = 0;
+    char *data     = 0;
+    u32   size     = 0;
     str   path_str = str_init_static(path);
     if (!file_exists(path_str)) {
         fprintf(stderr, "error: '%s' not found (required for pack/validate commands)\n", path);
@@ -93,26 +93,26 @@ int tl_package_parse_file(allocator *alloc, char const *path, tl_package *out) {
     }
 
     // Create minimal type infrastructure for parser
-    allocator    *parse_arena = arena_create(default_allocator(), 4096);
-    tl_type_subs *subs        = tl_type_subs_create(parse_arena);
-    tl_type_registry *registry = tl_type_registry_create(parse_arena, parse_arena, subs);
+    allocator        *parse_arena = arena_create(default_allocator(), 4096);
+    tl_type_subs     *subs        = tl_type_subs_create(parse_arena);
+    tl_type_registry *registry    = tl_type_registry_create(parse_arena, parse_arena, subs);
 
     // Set up parser opts
-    str       file_str = str_init(parse_arena, path);
-    str_sized files    = {.v = &file_str, .size = 1};
+    str         file_str = str_init(parse_arena, path);
+    str_sized   files    = {.v = &file_str, .size = 1};
 
-    parser_opts opts   = {
-        .registry = registry,
-        .files    = files,
-        .prelude  = null,
-        .defines  = {0},
+    parser_opts opts     = {
+          .registry = registry,
+          .files    = files,
+          .prelude  = null,
+          .defines  = {0},
     };
 
     parser *p = parser_create(parse_arena, &opts);
 
     // Parse toplevel funcalls
-    ast_node_array nodes = {.alloc = parse_arena};
-    int parse_rc = parser_parse_all_toplevel_funcalls(p, &nodes);
+    ast_node_array nodes    = {.alloc = parse_arena};
+    int            parse_rc = parser_parse_all_toplevel_funcalls(p, &nodes);
     if (parse_rc) {
         parser_report_errors(p);
         parser_destroy(&p);
@@ -121,15 +121,15 @@ int tl_package_parse_file(allocator *alloc, char const *path, tl_package *out) {
     }
 
     // Dynamic arrays for building results
-    str_array  exports      = {.alloc = alloc};
-    str_array  depend_paths = {.alloc = alloc};
-    dep_array  deps         = {.alloc = alloc};
-    dep_array  opt_deps     = {.alloc = alloc};
+    str_array exports      = {.alloc = alloc};
+    str_array depend_paths = {.alloc = alloc};
+    dep_array deps         = {.alloc = alloc};
+    dep_array opt_deps     = {.alloc = alloc};
 
-    int error        = 0;
-    int format_seen  = 0;
-    int package_seen = 0;
-    int version_seen = 0;
+    int       error        = 0;
+    int       format_seen  = 0;
+    int       package_seen = 0;
+    int       version_seen = 0;
 
     // Walk AST nodes
     for (u32 i = 0; i < nodes.size; i++) {
@@ -141,9 +141,9 @@ int tl_package_parse_file(allocator *alloc, char const *path, tl_package *out) {
             continue;
         }
 
-        struct ast_named_application *nfa = &node->named_application;
-        str func_name = nfa->name->symbol.name;
-        u8  argc      = nfa->n_arguments;
+        struct ast_named_application *nfa       = &node->named_application;
+        str                           func_name = nfa->name->symbol.name;
+        u8                            argc      = nfa->n_arguments;
 
         if (str_eq(func_name, S("format"))) {
             if (i != 0) {
@@ -158,7 +158,10 @@ int tl_package_parse_file(allocator *alloc, char const *path, tl_package *out) {
                 continue;
             }
             i64 val = extract_int(nfa->arguments[0], "format", 0);
-            if (val < 0) { error = 1; continue; }
+            if (val < 0) {
+                error = 1;
+                continue;
+            }
             if (val != 1) {
                 fprintf(stderr, "package.tl: error: unsupported format version %d (expected 1)\n",
                         (int)val);
@@ -166,7 +169,7 @@ int tl_package_parse_file(allocator *alloc, char const *path, tl_package *out) {
                 continue;
             }
             out->info.format = (u32)val;
-            format_seen = 1;
+            format_seen      = 1;
 
         } else if (str_eq(func_name, S("package"))) {
             if (package_seen) {
@@ -181,7 +184,10 @@ int tl_package_parse_file(allocator *alloc, char const *path, tl_package *out) {
                 continue;
             }
             out->info.name = extract_string(alloc, nfa->arguments[0], "package", 0);
-            if (str_is_empty(out->info.name)) { error = 1; continue; }
+            if (str_is_empty(out->info.name)) {
+                error = 1;
+                continue;
+            }
             package_seen = 1;
 
         } else if (str_eq(func_name, S("version"))) {
@@ -197,7 +203,10 @@ int tl_package_parse_file(allocator *alloc, char const *path, tl_package *out) {
                 continue;
             }
             out->info.version = extract_string(alloc, nfa->arguments[0], "version", 0);
-            if (str_is_empty(out->info.version)) { error = 1; continue; }
+            if (str_is_empty(out->info.version)) {
+                error = 1;
+                continue;
+            }
             version_seen = 1;
 
         } else if (str_eq(func_name, S("author"))) {
@@ -208,17 +217,24 @@ int tl_package_parse_file(allocator *alloc, char const *path, tl_package *out) {
                 continue;
             }
             out->info.author = extract_string(alloc, nfa->arguments[0], "author", 0);
-            if (str_is_empty(out->info.author)) { error = 1; continue; }
+            if (str_is_empty(out->info.author)) {
+                error = 1;
+                continue;
+            }
 
         } else if (str_eq(func_name, S("export"))) {
             if (argc < 1) {
-                fprintf(stderr, "package.tl: error: export() expects at least 1 string argument(s), got 0\n");
+                fprintf(stderr,
+                        "package.tl: error: export() expects at least 1 string argument(s), got 0\n");
                 error = 1;
                 continue;
             }
             for (u8 j = 0; j < argc; j++) {
                 str val = extract_string(alloc, nfa->arguments[j], "export", j);
-                if (str_is_empty(val)) { error = 1; continue; }
+                if (str_is_empty(val)) {
+                    error = 1;
+                    continue;
+                }
                 array_push(exports, val);
             }
 
@@ -230,14 +246,23 @@ int tl_package_parse_file(allocator *alloc, char const *path, tl_package *out) {
                 continue;
             }
             tl_package_dep dep = {0};
-            dep.name = extract_string(alloc, nfa->arguments[0], "depend", 0);
-            if (str_is_empty(dep.name)) { error = 1; continue; }
+            dep.name           = extract_string(alloc, nfa->arguments[0], "depend", 0);
+            if (str_is_empty(dep.name)) {
+                error = 1;
+                continue;
+            }
             dep.version = extract_string(alloc, nfa->arguments[1], "depend", 1);
-            if (str_is_empty(dep.version)) { error = 1; continue; }
+            if (str_is_empty(dep.version)) {
+                error = 1;
+                continue;
+            }
             dep.path = str_empty();
             if (argc == 3) {
                 dep.path = extract_string(alloc, nfa->arguments[2], "depend", 2);
-                if (str_is_empty(dep.path)) { error = 1; continue; }
+                if (str_is_empty(dep.path)) {
+                    error = 1;
+                    continue;
+                }
             }
             dep_array_push(&deps, dep);
 
@@ -250,14 +275,23 @@ int tl_package_parse_file(allocator *alloc, char const *path, tl_package *out) {
                 continue;
             }
             tl_package_dep dep = {0};
-            dep.name = extract_string(alloc, nfa->arguments[0], "depend_optional", 0);
-            if (str_is_empty(dep.name)) { error = 1; continue; }
+            dep.name           = extract_string(alloc, nfa->arguments[0], "depend_optional", 0);
+            if (str_is_empty(dep.name)) {
+                error = 1;
+                continue;
+            }
             dep.version = extract_string(alloc, nfa->arguments[1], "depend_optional", 1);
-            if (str_is_empty(dep.version)) { error = 1; continue; }
+            if (str_is_empty(dep.version)) {
+                error = 1;
+                continue;
+            }
             dep.path = str_empty();
             if (argc == 3) {
                 dep.path = extract_string(alloc, nfa->arguments[2], "depend_optional", 2);
-                if (str_is_empty(dep.path)) { error = 1; continue; }
+                if (str_is_empty(dep.path)) {
+                    error = 1;
+                    continue;
+                }
             }
             dep_array_push(&opt_deps, dep);
 
@@ -269,12 +303,11 @@ int tl_package_parse_file(allocator *alloc, char const *path, tl_package *out) {
                 continue;
             }
             str val = extract_string(alloc, nfa->arguments[0], "depend_path", 0);
-            if (str_is_empty(val)) { error = 1; continue; }
+            if (str_is_empty(val)) {
+                error = 1;
+                continue;
+            }
             array_push(depend_paths, val);
-
-        } else {
-            fprintf(stderr, "package.tl: error: unknown function '%s'\n", str_cstr(&func_name));
-            error = 1;
         }
     }
 

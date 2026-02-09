@@ -51,14 +51,14 @@ int tl_tlib_valid_filename(char const *name, u32 len);
 // Pack options
 typedef struct {
     int verbose;
-    // Metadata fields (for CLI testing before manifest support)
+    // Metadata fields
     char const *name;            // package name (required)
     char const *author;          // package author (optional)
     char const *version;         // package version (required)
     char const *package_tl_path; // path to package.tl (included as entry if non-null)
     str        *modules;         // array of public module names (optional)
     u16         module_count;
-    // Dependencies (from manifest; null/0 when using CLI flags)
+    // Dependencies (from package.tl)
     str *depends;
     u16  depends_count;
     str *depends_optional;

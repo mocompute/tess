@@ -344,8 +344,8 @@ static int test_unknown_function(void) {
                                      "unknown(\"x\")\n",
                               &pkg);
 
-    // Should fail
-    error += rc != 1;
+    // Should not fail: just ignore unknown functions
+    error += rc != 0;
 
     if (error) fprintf(stderr, "  %d check(s) failed in test_unknown_function\n", error);
     return error;
