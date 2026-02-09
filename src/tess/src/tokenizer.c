@@ -17,6 +17,7 @@
 struct tokenizer {
     allocator     *parent;
     allocator     *strings;
+    allocator     *arena; // lifetime = same as tokenizer
     allocator     *transient;
     tokenizer_opts opts;
 
@@ -36,7 +37,7 @@ struct tokenizer {
 
 static void tok_error(tokenizer *self, tokenizer_error *err, tl_error_tag tag) {
     err->tag  = tag;
-    err->file = str_cstr(&self->file);
+    err->file = alloc_strdup(self->arena, str_cstr(&self->file)); // lifetime = tokenizer's lifetime
     err->line = self->line;
     err->col  = self->col;
 }
@@ -47,7 +48,8 @@ tokenizer *tokenizer_create(allocator *alloc, tokenizer_opts const *opts) {
     tokenizer *self = alloc_calloc(alloc, 1, sizeof(tokenizer));
 
     self->parent    = alloc;
-    self->strings   = arena_create(alloc, 4096);
+    self->strings   = alloc; // same as parent
+    self->arena     = arena_create(alloc, 4096);
     self->transient = arena_create(alloc, 4096);
     self->opts      = *opts;
     self->input     = self->opts.input;
@@ -73,15 +75,19 @@ tokenizer *tokenizer_create(allocator *alloc, tokenizer_opts const *opts) {
 }
 
 void tokenizer_destroy(tokenizer **self) {
+    str_deinit((*self)->parent, &(*self)->file);
+
     hset_destroy(&(*self)->defines);
 
+    arena_destroy(&(*self)->arena);
     arena_destroy(&(*self)->transient);
-    arena_destroy(&(*self)->strings);
 
     array_free((*self)->backtrack);
     array_free((*self)->buf);
 
-    alloc_free((*self)->parent, *self);
+    allocator *parent = (*self)->parent;
+    alloc_invalidate(*self);
+    alloc_free(parent, *self);
     *self = null;
 }
 

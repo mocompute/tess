@@ -3,6 +3,7 @@
 #include "ast.h"
 #include "dbg.h"
 #include "parser.h"
+#include "token.h"
 #include "tokenizer.h"
 
 #include <assert.h>
@@ -77,13 +78,15 @@ static int test_tokenizer_basic(void) {
         error += 1 == tokenizer_next(t, &tok, &err) ? 0 : 1;
         if (error) return error;
         error += tl_err_eof == err.tag ? 0 : 1;
-        token_deinit(alloc, &tok);
+        // token is not valid upon error
+        if (err.tag == tl_err_ok) token_deinit(alloc, &tok);
 
         // still eof
         error += 1 == tokenizer_next(t, &tok, &err) ? 0 : 1;
         if (error) return error;
         error += tl_err_eof == err.tag ? 0 : 1;
-        token_deinit(alloc, &tok);
+        // token is not valid upon error
+        if (err.tag == tl_err_ok) token_deinit(alloc, &tok);
     }
 
     tokenizer_destroy(&t);
@@ -113,6 +116,7 @@ static int test_tokenizer_string(void) {
         if (error) return error;
         error += tok_string == tok.tag ? 0 : 1;
         error += 0 == strcmp("abcdef", tok.s) ? 0 : 1;
+        token_deinit(alloc, &tok);
     }
 
     tokenizer_destroy(&t);
@@ -142,6 +146,7 @@ static int test_tokenizer_terminal_static_string(void) {
         if (error) return error;
         error += tok_symbol == tok.tag ? 0 : 1;
         error += 0 == strcmp("-", tok.s) ? 0 : 1;
+        token_deinit(alloc, &tok);
     }
 
     tokenizer_destroy(&t);

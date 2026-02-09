@@ -86,6 +86,8 @@ void token_deinit(allocator *alloc, token *tok) {
     case tok_hash_command:        alloc_free(alloc, tok->s); break;
     }
 
+    if (tok->file) alloc_free(alloc, (void *)tok->file);
+
     alloc_invalidate(tok);
 }
 

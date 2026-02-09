@@ -9,7 +9,7 @@
 
 typedef struct tokenizer_error {
     tl_error_tag tag;
-    char const  *file;
+    char const  *file; // lifetime = tokenizer lifetime
     u32          line;
     u16          col;
 } tokenizer_error;
