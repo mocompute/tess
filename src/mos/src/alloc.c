@@ -93,7 +93,7 @@ void *alloc_malloc_i(allocator *alloc, size_t sz, char const *file, int line) {
 }
 
 void *alloc_calloc_i(allocator *alloc, size_t count, size_t sz, char const *file, int line) {
-    if (!sz) return null;
+    if (!sz || !count) return null;
     void *ptr = alloc->calloc(alloc, count, sz, file, line);
     if (!ptr) fatal("calloc failed\n");
     return ptr;
