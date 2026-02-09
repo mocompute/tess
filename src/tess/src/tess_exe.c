@@ -625,15 +625,6 @@ static str_sized files_in_order(state *self, c_string_csized files, str_sized pk
     str_array resolved_paths = {.alloc = self->arena};
     array_reserve(resolved_paths, 32);
 
-    forall(i, pkg_files) {
-        scan_file_directives(self, pkg_files.v[i], &resolved_paths);
-    }
-
-    // Collect all imports from user files
-    forall(i, files) {
-        scan_file_directives(self, str_init_static(files.v[i]), &resolved_paths);
-    }
-
     str_array result = {.alloc = self->arena};
     array_reserve(result, resolved_paths.size + pkg_files.size + files.size + 1);
 
@@ -644,7 +635,26 @@ static str_sized files_in_order(state *self, c_string_csized files, str_sized pk
         print_import_paths(self);
         exit(1);
     }
+    scan_file_directives(self, builtin, &resolved_paths);
+
+    // push builtin's dependencies first
+    array_copy(result, resolved_paths);
+
+    // push builtin
     array_push(result, builtin);
+
+    // reset resolved_paths after processing builtin
+    resolved_paths.size = 0;
+
+    // process package files
+    forall(i, pkg_files) {
+        scan_file_directives(self, pkg_files.v[i], &resolved_paths);
+    }
+
+    // Collect all imports from user files
+    forall(i, files) {
+        scan_file_directives(self, str_init_static(files.v[i]), &resolved_paths);
+    }
 
     // Add resolved imports (already in correct dependency order)
     forall(i, resolved_paths) {
