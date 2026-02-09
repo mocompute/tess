@@ -108,6 +108,7 @@
                   # some perf things
                   linuxKernel.packages.linux_6_6.perf
                   poop
+                  valgrind-light
 
                 ]) ++ (pkgs.lib.optionals (pkgs.stdenv.isDarwin) [
                   # I don't know why this is necessary
