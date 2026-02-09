@@ -1,3 +1,4 @@
+#include "alloc.h"
 #include "manifest.h"
 #include "platform.h"
 
@@ -48,11 +49,11 @@ static int write_file(char const *path, char const *content) {
 }
 
 // Helper: write package.tl content to temp file, parse, return result
-static int parse_pkg(char const *content, tl_package *out) {
+static int parse_pkg(allocator *alloc, char const *content, tl_package *out) {
     char path[512];
     make_temp_path(path, sizeof(path), "test_package.tl");
     if (write_file(path, content)) return -1;
-    return tl_package_parse_file(default_allocator(), path, out);
+    return tl_package_parse_file(alloc, path, out);
 }
 
 // ---------------------------------------------------------------------------
@@ -61,9 +62,11 @@ static int parse_pkg(char const *content, tl_package *out) {
 
 static int test_basic_package(void) {
     int        error = 0;
+    allocator *alloc = arena_create(default_allocator(), 1024);
     tl_package pkg;
 
-    int        rc = parse_pkg("format(1)\n"
+    int        rc = parse_pkg(alloc,
+                              "format(1)\n"
                                      "package(\"Foo\")\n"
                                      "version(\"1.0\")\n"
                                      "author(\"Alice\")\n"
@@ -73,7 +76,7 @@ static int test_basic_package(void) {
                               &pkg);
 
     error += rc != 0;
-    if (rc) return error;
+    if (rc) goto error;
 
     error += pkg.info.format != 1;
     error += !str_eq(pkg.info.name, S("Foo"));
@@ -95,20 +98,25 @@ static int test_basic_package(void) {
     }
 
     if (error) fprintf(stderr, "  %d check(s) failed in test_basic_package\n", error);
+
+error:
+    arena_destroy(&alloc);
     return error;
 }
 
 static int test_minimal_package(void) {
     int        error = 0;
+    allocator *alloc = arena_create(default_allocator(), 1024);
     tl_package pkg;
 
-    int        rc = parse_pkg("format(1)\n"
+    int        rc = parse_pkg(alloc,
+                              "format(1)\n"
                                      "package(\"Foo\")\n"
                                      "version(\"1.0\")\n",
                               &pkg);
 
     error += rc != 0;
-    if (rc) return error;
+    if (rc) goto error;
 
     error += pkg.info.format != 1;
     error += !str_eq(pkg.info.name, S("Foo"));
@@ -120,14 +128,19 @@ static int test_minimal_package(void) {
     error += pkg.optional_dep_count != 0;
 
     if (error) fprintf(stderr, "  %d check(s) failed in test_minimal_package\n", error);
+
+error:
+    arena_destroy(&alloc);
     return error;
 }
 
 static int test_multiple_depends(void) {
     int        error = 0;
+    allocator *alloc = arena_create(default_allocator(), 1024);
     tl_package pkg;
 
-    int        rc = parse_pkg("format(1)\n"
+    int        rc = parse_pkg(alloc,
+                              "format(1)\n"
                                      "package(\"App\")\n"
                                      "version(\"0.1\")\n"
                                      "depend(\"Lib1\", \"1.0\")\n"
@@ -136,7 +149,7 @@ static int test_multiple_depends(void) {
                               &pkg);
 
     error += rc != 0;
-    if (rc) return error;
+    if (rc) goto error;
 
     error += pkg.dep_count != 2;
     if (pkg.dep_count == 2) {
@@ -152,21 +165,25 @@ static int test_multiple_depends(void) {
     }
 
     if (error) fprintf(stderr, "  %d check(s) failed in test_multiple_depends\n", error);
+error:
+    arena_destroy(&alloc);
     return error;
 }
 
 static int test_depend_with_path(void) {
     int        error = 0;
+    allocator *alloc = arena_create(default_allocator(), 1024);
     tl_package pkg;
 
-    int        rc = parse_pkg("format(1)\n"
+    int        rc = parse_pkg(alloc,
+                              "format(1)\n"
                                      "package(\"App\")\n"
                                      "version(\"0.1\")\n"
                                      "depend(\"Lib\", \"1.0\", \"./path/Lib.tlib\")\n",
                               &pkg);
 
     error += rc != 0;
-    if (rc) return error;
+    if (rc) goto error;
 
     error += pkg.dep_count != 1;
     if (pkg.dep_count == 1) {
@@ -176,14 +193,19 @@ static int test_depend_with_path(void) {
     }
 
     if (error) fprintf(stderr, "  %d check(s) failed in test_depend_with_path\n", error);
+
+error:
+    arena_destroy(&alloc);
     return error;
 }
 
 static int test_multiple_depend_paths(void) {
     int        error = 0;
+    allocator *alloc = arena_create(default_allocator(), 1024);
     tl_package pkg;
 
-    int        rc = parse_pkg("format(1)\n"
+    int        rc = parse_pkg(alloc,
+                              "format(1)\n"
                                      "package(\"App\")\n"
                                      "version(\"0.1\")\n"
                                      "depend_path(\"./libs\")\n"
@@ -191,7 +213,7 @@ static int test_multiple_depend_paths(void) {
                               &pkg);
 
     error += rc != 0;
-    if (rc) return error;
+    if (rc) goto error;
 
     error += pkg.info.depend_path_count != 2;
     if (pkg.info.depend_path_count == 2) {
@@ -200,21 +222,25 @@ static int test_multiple_depend_paths(void) {
     }
 
     if (error) fprintf(stderr, "  %d check(s) failed in test_multiple_depend_paths\n", error);
+error:
+    arena_destroy(&alloc);
     return error;
 }
 
 static int test_export_multiple_args(void) {
     int        error = 0;
+    allocator *alloc = arena_create(default_allocator(), 1024);
     tl_package pkg;
 
-    int        rc = parse_pkg("format(1)\n"
+    int        rc = parse_pkg(alloc,
+                              "format(1)\n"
                                      "package(\"App\")\n"
                                      "version(\"0.1\")\n"
                                      "export(\"A\", \"B\", \"C\")\n",
                               &pkg);
 
     error += rc != 0;
-    if (rc) return error;
+    if (rc) goto error;
 
     error += pkg.info.export_count != 3;
     if (pkg.info.export_count == 3) {
@@ -224,14 +250,18 @@ static int test_export_multiple_args(void) {
     }
 
     if (error) fprintf(stderr, "  %d check(s) failed in test_export_multiple_args\n", error);
+error:
+    arena_destroy(&alloc);
     return error;
 }
 
 static int test_export_multiple_lines(void) {
     int        error = 0;
+    allocator *alloc = arena_create(default_allocator(), 1024);
     tl_package pkg;
 
-    int        rc = parse_pkg("format(1)\n"
+    int        rc = parse_pkg(alloc,
+                              "format(1)\n"
                                      "package(\"App\")\n"
                                      "version(\"0.1\")\n"
                                      "export(\"A\", \"B\")\n"
@@ -240,7 +270,7 @@ static int test_export_multiple_lines(void) {
                               &pkg);
 
     error += rc != 0;
-    if (rc) return error;
+    if (rc) goto error;
 
     error += pkg.info.export_count != 6;
     if (pkg.info.export_count == 6) {
@@ -253,15 +283,19 @@ static int test_export_multiple_lines(void) {
     }
 
     if (error) fprintf(stderr, "  %d check(s) failed in test_export_multiple_lines\n", error);
+error:
+    arena_destroy(&alloc);
     return error;
 }
 
 static int test_missing_format(void) {
     int        error = 0;
+    allocator *alloc = arena_create(default_allocator(), 1024);
     tl_package pkg;
 
     // No format() call
-    int rc = parse_pkg("package(\"Foo\")\n"
+    int rc = parse_pkg(alloc,
+                       "package(\"Foo\")\n"
                        "version(\"1.0\")\n",
                        &pkg);
 
@@ -269,14 +303,17 @@ static int test_missing_format(void) {
     error += rc != 1;
 
     if (error) fprintf(stderr, "  %d check(s) failed in test_missing_format\n", error);
+    arena_destroy(&alloc);
     return error;
 }
 
 static int test_format_not_first(void) {
     int        error = 0;
+    allocator *alloc = arena_create(default_allocator(), 1024);
     tl_package pkg;
 
-    int        rc = parse_pkg("package(\"Foo\")\n"
+    int        rc = parse_pkg(alloc,
+                              "package(\"Foo\")\n"
                                      "format(1)\n"
                                      "version(\"1.0\")\n",
                               &pkg);
@@ -285,14 +322,18 @@ static int test_format_not_first(void) {
     error += rc != 1;
 
     if (error) fprintf(stderr, "  %d check(s) failed in test_format_not_first\n", error);
+
+    arena_destroy(&alloc);
     return error;
 }
 
 static int test_unsupported_format(void) {
     int        error = 0;
+    allocator *alloc = arena_create(default_allocator(), 1024);
     tl_package pkg;
 
-    int        rc = parse_pkg("format(2)\n"
+    int        rc = parse_pkg(alloc,
+                              "format(2)\n"
                                      "package(\"Foo\")\n"
                                      "version(\"1.0\")\n",
                               &pkg);
@@ -301,14 +342,18 @@ static int test_unsupported_format(void) {
     error += rc != 1;
 
     if (error) fprintf(stderr, "  %d check(s) failed in test_unsupported_format\n", error);
+
+    arena_destroy(&alloc);
     return error;
 }
 
 static int test_missing_package(void) {
     int        error = 0;
+    allocator *alloc = arena_create(default_allocator(), 1024);
     tl_package pkg;
 
-    int        rc = parse_pkg("format(1)\n"
+    int        rc = parse_pkg(alloc,
+                              "format(1)\n"
                                      "version(\"1.0\")\n",
                               &pkg);
 
@@ -316,14 +361,18 @@ static int test_missing_package(void) {
     error += rc != 1;
 
     if (error) fprintf(stderr, "  %d check(s) failed in test_missing_package\n", error);
+
+    arena_destroy(&alloc);
     return error;
 }
 
 static int test_missing_version(void) {
     int        error = 0;
+    allocator *alloc = arena_create(default_allocator(), 1024);
     tl_package pkg;
 
-    int        rc = parse_pkg("format(1)\n"
+    int        rc = parse_pkg(alloc,
+                              "format(1)\n"
                                      "package(\"Foo\")\n",
                               &pkg);
 
@@ -331,14 +380,18 @@ static int test_missing_version(void) {
     error += rc != 1;
 
     if (error) fprintf(stderr, "  %d check(s) failed in test_missing_version\n", error);
+
+    arena_destroy(&alloc);
     return error;
 }
 
 static int test_unknown_function(void) {
     int        error = 0;
+    allocator *alloc = arena_create(default_allocator(), 1024);
     tl_package pkg;
 
-    int        rc = parse_pkg("format(1)\n"
+    int        rc = parse_pkg(alloc,
+                              "format(1)\n"
                                      "package(\"Foo\")\n"
                                      "version(\"1.0\")\n"
                                      "unknown(\"x\")\n",
@@ -348,14 +401,18 @@ static int test_unknown_function(void) {
     error += rc != 0;
 
     if (error) fprintf(stderr, "  %d check(s) failed in test_unknown_function\n", error);
+
+    arena_destroy(&alloc);
     return error;
 }
 
 static int test_wrong_arg_count(void) {
     int        error = 0;
+    allocator *alloc = arena_create(default_allocator(), 1024);
     tl_package pkg;
 
-    int        rc = parse_pkg("format(1)\n"
+    int        rc = parse_pkg(alloc,
+                              "format(1)\n"
                                      "package(\"a\", \"b\")\n"
                                      "version(\"1.0\")\n",
                               &pkg);
@@ -364,14 +421,18 @@ static int test_wrong_arg_count(void) {
     error += rc != 1;
 
     if (error) fprintf(stderr, "  %d check(s) failed in test_wrong_arg_count\n", error);
+
+    arena_destroy(&alloc);
     return error;
 }
 
 static int test_non_string_arg(void) {
     int        error = 0;
+    allocator *alloc = arena_create(default_allocator(), 1024);
     tl_package pkg;
 
-    int        rc = parse_pkg("format(1)\n"
+    int        rc = parse_pkg(alloc,
+                              "format(1)\n"
                                      "package(42)\n"
                                      "version(\"1.0\")\n",
                               &pkg);
@@ -380,14 +441,18 @@ static int test_non_string_arg(void) {
     error += rc != 1;
 
     if (error) fprintf(stderr, "  %d check(s) failed in test_non_string_arg\n", error);
+
+    arena_destroy(&alloc);
     return error;
 }
 
 static int test_duplicate_package(void) {
     int        error = 0;
+    allocator *alloc = arena_create(default_allocator(), 1024);
     tl_package pkg;
 
-    int        rc = parse_pkg("format(1)\n"
+    int        rc = parse_pkg(alloc,
+                              "format(1)\n"
                                      "package(\"Foo\")\n"
                                      "version(\"1.0\")\n"
                                      "package(\"Bar\")\n",
@@ -397,14 +462,18 @@ static int test_duplicate_package(void) {
     error += rc != 1;
 
     if (error) fprintf(stderr, "  %d check(s) failed in test_duplicate_package\n", error);
+
+    arena_destroy(&alloc);
     return error;
 }
 
 static int test_duplicate_version(void) {
     int        error = 0;
+    allocator *alloc = arena_create(default_allocator(), 1024);
     tl_package pkg;
 
-    int        rc = parse_pkg("format(1)\n"
+    int        rc = parse_pkg(alloc,
+                              "format(1)\n"
                                      "package(\"Foo\")\n"
                                      "version(\"1.0\")\n"
                                      "version(\"2.0\")\n",
@@ -414,11 +483,14 @@ static int test_duplicate_version(void) {
     error += rc != 1;
 
     if (error) fprintf(stderr, "  %d check(s) failed in test_duplicate_version\n", error);
+
+    arena_destroy(&alloc);
     return error;
 }
 
 static int test_missing_file(void) {
     int        error = 0;
+    allocator *alloc = arena_create(default_allocator(), 1024);
     tl_package pkg;
     char       path[512];
 
@@ -430,6 +502,8 @@ static int test_missing_file(void) {
     error += rc != 1;
 
     if (error) fprintf(stderr, "  %d check(s) failed in test_missing_file\n", error);
+
+    arena_destroy(&alloc);
     return error;
 }
 

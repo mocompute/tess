@@ -1,3 +1,4 @@
+#include "alloc.h"
 #include "import_resolver.h"
 #include "platform.h"
 
@@ -8,7 +9,6 @@
 #if defined(__GNUC__) && !defined(__clang__)
 #pragma GCC diagnostic ignored "-Wformat-truncation"
 #endif
-
 
 #define T(name)                                                                                            \
     this_error = name();                                                                                   \
@@ -44,7 +44,7 @@ static int mkdirp(char const *path) {
     for (p = tmp + 1; *p; p++) {
         if (*p == '/' || *p == '\\') {
             char saved = *p;
-            *p = 0;
+            *p         = 0;
             platform_mkdir(tmp);
             *p = saved;
         }
@@ -68,7 +68,7 @@ static int create_test_file(char const *path) {
 
 // Test that the same file imported via different paths is detected as duplicate
 static int test_duplicate_different_paths(void) {
-    allocator *alloc = default_allocator();
+    allocator *alloc = arena_create(default_allocator(), 1024);
 
     // Create test directory structure:
     // test_base/dup1/
@@ -85,7 +85,7 @@ static int test_duplicate_different_paths(void) {
     build_path(file_path, sizeof(file_path), test_base, "dup1/lib/helper.tl");
     if (create_test_file(file_path)) {
         fprintf(stderr, "  failed to create test file\n");
-        return 1;
+        goto error;
     }
 
     import_resolver *resolver = import_resolver_create(alloc);
@@ -100,11 +100,11 @@ static int test_duplicate_different_paths(void) {
     import_result r1 = import_resolver_resolve(resolver, S("\"lib/helper.tl\""), str_empty());
     if (str_is_empty(r1.canonical_path)) {
         fprintf(stderr, "  first resolve failed\n");
-        return 1;
+        goto error;
     }
     if (r1.is_duplicate) {
         fprintf(stderr, "  first import should not be duplicate\n");
-        return 1;
+        goto error;
     }
 
     // Mark it as imported
@@ -114,13 +114,13 @@ static int test_duplicate_different_paths(void) {
     import_result r2 = import_resolver_resolve(resolver, S("\"helper.tl\""), str_empty());
     if (str_is_empty(r2.canonical_path)) {
         fprintf(stderr, "  second resolve failed\n");
-        return 1;
+        goto error;
     }
     if (!r2.is_duplicate) {
         fprintf(stderr, "  second import should be duplicate\n");
         fprintf(stderr, "  path1: %s\n", str_cstr(&r1.canonical_path));
         fprintf(stderr, "  path2: %s\n", str_cstr(&r2.canonical_path));
-        return 1;
+        goto error;
     }
 
     // Verify canonical paths are the same
@@ -128,15 +128,20 @@ static int test_duplicate_different_paths(void) {
         fprintf(stderr, "  canonical paths should match\n");
         fprintf(stderr, "  path1: %s\n", str_cstr(&r1.canonical_path));
         fprintf(stderr, "  path2: %s\n", str_cstr(&r2.canonical_path));
-        return 1;
+        goto error;
     }
 
+    arena_destroy(&alloc);
     return 0;
+
+error:
+    arena_destroy(&alloc);
+    return 1;
 }
 
 // Test duplicate detection with relative paths containing ..
 static int test_duplicate_with_dotdot(void) {
-    allocator *alloc = default_allocator();
+    allocator *alloc = arena_create(default_allocator(), 1024);
 
     // Create test directory structure:
     // test_base/dup2/
@@ -158,7 +163,7 @@ static int test_duplicate_with_dotdot(void) {
     build_path(file_path, sizeof(file_path), test_base, "dup2/lib/helper.tl");
     if (create_test_file(file_path)) {
         fprintf(stderr, "  failed to create test file\n");
-        return 1;
+        goto error;
     }
 
     import_resolver *resolver = import_resolver_create(alloc);
@@ -169,7 +174,7 @@ static int test_duplicate_with_dotdot(void) {
     import_result r1 = import_resolver_resolve(resolver, S("\"lib/helper.tl\""), str_empty());
     if (str_is_empty(r1.canonical_path)) {
         fprintf(stderr, "  first resolve failed\n");
-        return 1;
+        goto error;
     }
     import_resolver_mark_imported(resolver, r1.canonical_path);
 
@@ -179,21 +184,25 @@ static int test_duplicate_with_dotdot(void) {
       import_resolver_resolve(resolver, S("\"../lib/helper.tl\""), str_init_static(main_path));
     if (str_is_empty(r2.canonical_path)) {
         fprintf(stderr, "  second resolve failed\n");
-        return 1;
+        goto error;
     }
     if (!r2.is_duplicate) {
         fprintf(stderr, "  second import should be duplicate\n");
         fprintf(stderr, "  path1: %s\n", str_cstr(&r1.canonical_path));
         fprintf(stderr, "  path2: %s\n", str_cstr(&r2.canonical_path));
-        return 1;
+        goto error;
     }
 
+    arena_destroy(&alloc);
     return 0;
+error:
+    arena_destroy(&alloc);
+    return 1;
 }
 
 // Test that different files are not marked as duplicates
 static int test_not_duplicate(void) {
-    allocator *alloc = default_allocator();
+    allocator *alloc = arena_create(default_allocator(), 1024);
 
     char       dir_path[PLATFORM_PATH_MAX];
     char       file_a[PLATFORM_PATH_MAX];
@@ -207,11 +216,11 @@ static int test_not_duplicate(void) {
 
     if (create_test_file(file_a)) {
         fprintf(stderr, "  failed to create test file a.tl\n");
-        return 1;
+        goto error;
     }
     if (create_test_file(file_b)) {
         fprintf(stderr, "  failed to create test file b.tl\n");
-        return 1;
+        goto error;
     }
 
     import_resolver *resolver = import_resolver_create(alloc);
@@ -220,26 +229,31 @@ static int test_not_duplicate(void) {
     import_result r1 = import_resolver_resolve(resolver, S("\"a.tl\""), str_empty());
     if (str_is_empty(r1.canonical_path) || r1.is_duplicate) {
         fprintf(stderr, "  first resolve failed or unexpected duplicate\n");
-        return 1;
+        goto error;
     }
     import_resolver_mark_imported(resolver, r1.canonical_path);
 
     import_result r2 = import_resolver_resolve(resolver, S("\"b.tl\""), str_empty());
     if (str_is_empty(r2.canonical_path)) {
         fprintf(stderr, "  second resolve failed\n");
-        return 1;
+        goto error;
     }
     if (r2.is_duplicate) {
         fprintf(stderr, "  different files should not be duplicates\n");
-        return 1;
+        goto error;
     }
 
+    arena_destroy(&alloc);
     return 0;
+
+error:
+    arena_destroy(&alloc);
+    return 1;
 }
 
 // Test that quoted imports do NOT search standard paths
 static int test_quoted_ignores_standard_paths(void) {
-    allocator *alloc = default_allocator();
+    allocator *alloc = arena_create(default_allocator(), 1024);
 
     // Create a file ONLY in standard paths, not in user paths
     char dir_path[PLATFORM_PATH_MAX];
@@ -251,7 +265,7 @@ static int test_quoted_ignores_standard_paths(void) {
     build_path(file_path, sizeof(file_path), test_base, "std_only/std_only.tl");
     if (create_test_file(file_path)) {
         fprintf(stderr, "  failed to create test file\n");
-        return 1;
+        goto error;
     }
 
     import_resolver *resolver = import_resolver_create(alloc);
@@ -264,15 +278,20 @@ static int test_quoted_ignores_standard_paths(void) {
     if (!str_is_empty(r.canonical_path)) {
         fprintf(stderr, "  quoted import should NOT search standard paths\n");
         fprintf(stderr, "  unexpectedly found: %s\n", str_cstr(&r.canonical_path));
-        return 1;
+        goto error;
     }
 
+    arena_destroy(&alloc);
     return 0;
+
+error:
+    arena_destroy(&alloc);
+    return 1;
 }
 
 // Test that angle bracket imports DO search standard paths
 static int test_angle_bracket_finds_standard_paths(void) {
-    allocator *alloc = default_allocator();
+    allocator *alloc = arena_create(default_allocator(), 1024);
 
     char       dir_path[PLATFORM_PATH_MAX];
     char       file_path[PLATFORM_PATH_MAX];
@@ -283,7 +302,7 @@ static int test_angle_bracket_finds_standard_paths(void) {
     build_path(file_path, sizeof(file_path), test_base, "std_find/stdlib.tl");
     if (create_test_file(file_path)) {
         fprintf(stderr, "  failed to create test file\n");
-        return 1;
+        goto error;
     }
 
     import_resolver *resolver = import_resolver_create(alloc);
@@ -293,15 +312,20 @@ static int test_angle_bracket_finds_standard_paths(void) {
     import_result r = import_resolver_resolve(resolver, S("<stdlib.tl>"), str_empty());
     if (str_is_empty(r.canonical_path)) {
         fprintf(stderr, "  angle bracket import should find file in standard paths\n");
-        return 1;
+        goto error;
     }
 
+    arena_destroy(&alloc);
     return 0;
+
+error:
+    arena_destroy(&alloc);
+    return 1;
 }
 
 // Test that angle bracket imports do NOT search user paths (-I)
 static int test_angle_bracket_ignores_user_paths(void) {
-    allocator *alloc = default_allocator();
+    allocator *alloc = arena_create(default_allocator(), 1024);
 
     // Create a file ONLY in user paths, not in standard paths
     char dir_path[PLATFORM_PATH_MAX];
@@ -313,7 +337,7 @@ static int test_angle_bracket_ignores_user_paths(void) {
     build_path(file_path, sizeof(file_path), test_base, "user_only/user_only.tl");
     if (create_test_file(file_path)) {
         fprintf(stderr, "  failed to create test file\n");
-        return 1;
+        goto error;
     }
 
     import_resolver *resolver = import_resolver_create(alloc);
@@ -326,15 +350,20 @@ static int test_angle_bracket_ignores_user_paths(void) {
     if (!str_is_empty(r.canonical_path)) {
         fprintf(stderr, "  angle bracket import should NOT search user paths\n");
         fprintf(stderr, "  unexpectedly found: %s\n", str_cstr(&r.canonical_path));
-        return 1;
+        goto error;
     }
 
+    arena_destroy(&alloc);
     return 0;
+
+error:
+    arena_destroy(&alloc);
+    return 1;
 }
 
 // Test that angle bracket imports do NOT search relative to importing file
 static int test_angle_bracket_ignores_relative(void) {
-    allocator *alloc = default_allocator();
+    allocator *alloc = arena_create(default_allocator(), 1024);
 
     // Create a file next to the "importing" file
     char dir_path[PLATFORM_PATH_MAX];
@@ -347,7 +376,7 @@ static int test_angle_bracket_ignores_relative(void) {
     build_path(file_path, sizeof(file_path), test_base, "rel_ignore/src/sibling.tl");
     if (create_test_file(file_path)) {
         fprintf(stderr, "  failed to create test file\n");
-        return 1;
+        goto error;
     }
 
     import_resolver *resolver = import_resolver_create(alloc);
@@ -360,15 +389,20 @@ static int test_angle_bracket_ignores_relative(void) {
     if (!str_is_empty(r.canonical_path)) {
         fprintf(stderr, "  angle bracket import should NOT search relative paths\n");
         fprintf(stderr, "  unexpectedly found: %s\n", str_cstr(&r.canonical_path));
-        return 1;
+        goto error;
     }
 
+    arena_destroy(&alloc);
     return 0;
+
+error:
+    arena_destroy(&alloc);
+    return 1;
 }
 
 // Test that quoted imports search relative to importing file FIRST, before -I paths
 static int test_quoted_relative_precedence(void) {
-    allocator *alloc = default_allocator();
+    allocator *alloc = arena_create(default_allocator(), 1024);
 
     // Create two files with the same name in different locations
     // One relative to importing file, one in -I path
@@ -388,7 +422,7 @@ static int test_quoted_relative_precedence(void) {
     FILE *f1 = fopen(lib_file, "w");
     if (!f1) {
         fprintf(stderr, "  failed to create lib file\n");
-        return 1;
+        goto error;
     }
     fprintf(f1, "#module common_lib\n");
     fclose(f1);
@@ -398,7 +432,7 @@ static int test_quoted_relative_precedence(void) {
     FILE *f2 = fopen(src_file, "w");
     if (!f2) {
         fprintf(stderr, "  failed to create src file\n");
-        return 1;
+        goto error;
     }
     fprintf(f2, "#module common_src\n");
     fclose(f2);
@@ -413,7 +447,7 @@ static int test_quoted_relative_precedence(void) {
 
     if (str_is_empty(r.canonical_path)) {
         fprintf(stderr, "  resolve failed\n");
-        return 1;
+        goto error;
     }
 
     // The path should be the one relative to importing file
@@ -423,15 +457,20 @@ static int test_quoted_relative_precedence(void) {
         fprintf(stderr, "  should find relative file, not -I path file\n");
         fprintf(stderr, "  found: %s\n", path);
         fprintf(stderr, "  expected path containing: /src/common.tl or \\src\\common.tl\n");
-        return 1;
+        goto error;
     }
 
+    arena_destroy(&alloc);
     return 0;
+
+error:
+    arena_destroy(&alloc);
+    return 1;
 }
 
 // Test that quoted imports fall back to -I paths when relative not found
 static int test_quoted_fallback_to_user_paths(void) {
-    allocator *alloc = default_allocator();
+    allocator *alloc = arena_create(default_allocator(), 1024);
 
     // Create a file ONLY in -I path, not relative to importing file
     char src_dir[PLATFORM_PATH_MAX];
@@ -447,7 +486,7 @@ static int test_quoted_fallback_to_user_paths(void) {
     build_path(file_path, sizeof(file_path), test_base, "fallback/lib/libonly.tl");
     if (create_test_file(file_path)) {
         fprintf(stderr, "  failed to create test file\n");
-        return 1;
+        goto error;
     }
 
     import_resolver *resolver = import_resolver_create(alloc);
@@ -460,7 +499,7 @@ static int test_quoted_fallback_to_user_paths(void) {
 
     if (str_is_empty(r.canonical_path)) {
         fprintf(stderr, "  quoted import should fall back to -I paths\n");
-        return 1;
+        goto error;
     }
 
     char const *path = str_cstr(&r.canonical_path);
@@ -468,15 +507,20 @@ static int test_quoted_fallback_to_user_paths(void) {
     if (strstr(path, "/lib/libonly.tl") == NULL && strstr(path, "\\lib\\libonly.tl") == NULL) {
         fprintf(stderr, "  should find file in -I path\n");
         fprintf(stderr, "  found: %s\n", path);
-        return 1;
+        goto error;
     }
 
+    arena_destroy(&alloc);
     return 0;
+
+error:
+    arena_destroy(&alloc);
+    return 1;
 }
 
 // Test cycle detection
 static int test_cycle_detection(void) {
-    allocator *alloc = default_allocator();
+    allocator *alloc = arena_create(default_allocator(), 1024);
 
     char       dir_path[PLATFORM_PATH_MAX];
     char       file_path[PLATFORM_PATH_MAX];
@@ -487,7 +531,7 @@ static int test_cycle_detection(void) {
     build_path(file_path, sizeof(file_path), test_base, "cycle/cycle.tl");
     if (create_test_file(file_path)) {
         fprintf(stderr, "  failed to create test file\n");
-        return 1;
+        goto error;
     }
 
     import_resolver *resolver = import_resolver_create(alloc);
@@ -496,19 +540,19 @@ static int test_cycle_detection(void) {
     import_result r = import_resolver_resolve(resolver, S("\"cycle.tl\""), str_empty());
     if (str_is_empty(r.canonical_path)) {
         fprintf(stderr, "  resolve failed\n");
-        return 1;
+        goto error;
     }
 
     // Begin import - should succeed
     if (import_resolver_begin_import(resolver, r.canonical_path)) {
         fprintf(stderr, "  begin_import should succeed first time\n");
-        return 1;
+        goto error;
     }
 
     // Begin same import again - should detect cycle
     if (!import_resolver_begin_import(resolver, r.canonical_path)) {
         fprintf(stderr, "  begin_import should detect cycle\n");
-        return 1;
+        goto error;
     }
 
     // End import
@@ -517,15 +561,20 @@ static int test_cycle_detection(void) {
     // Begin again - should succeed now
     if (import_resolver_begin_import(resolver, r.canonical_path)) {
         fprintf(stderr, "  begin_import should succeed after end_import\n");
-        return 1;
+        goto error;
     }
 
+    arena_destroy(&alloc);
     return 0;
+
+error:
+    arena_destroy(&alloc);
+    return 1;
 }
 
 // Test import_resolver_is_stdlib_file()
 static int test_is_stdlib_file(void) {
-    allocator *alloc = default_allocator();
+    allocator *alloc = arena_create(default_allocator(), 1024);
 
     // Create resolver with known standard paths
     import_resolver *resolver = import_resolver_create(alloc);
@@ -609,6 +658,7 @@ static int test_is_stdlib_file(void) {
         }
     }
 
+    arena_destroy(&alloc);
     return error;
 }
 

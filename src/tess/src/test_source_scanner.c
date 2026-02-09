@@ -27,7 +27,7 @@ static int scan(tl_source_scanner *s, char const *file_path, char const *content
 // Basic: single module discovered with correct file path mapping
 static int test_single_module(void) {
     int               error   = 0;
-    allocator        *alloc   = default_allocator();
+    allocator        *alloc   = arena_create(default_allocator(), 1024);
     import_resolver  *res     = import_resolver_create(alloc);
     tl_source_scanner s       = tl_source_scanner_create(alloc, res);
     str_array         imports = {.alloc = alloc};
@@ -48,13 +48,14 @@ static int test_single_module(void) {
     error += imports.size != 0;
 
     if (error) fprintf(stderr, "  %d check(s) failed\n", error);
+    arena_destroy(&alloc);
     return error;
 }
 
 // Multiple modules from different files
 static int test_multiple_modules(void) {
     int               error   = 0;
-    allocator        *alloc   = default_allocator();
+    allocator        *alloc   = arena_create(default_allocator(), 1024);
     import_resolver  *res     = import_resolver_create(alloc);
     tl_source_scanner s       = tl_source_scanner_create(alloc, res);
     str_array         imports = {.alloc = alloc};
@@ -73,13 +74,14 @@ static int test_multiple_modules(void) {
     error += !bar_path || !str_eq(*bar_path, S("/src/bar.tl"));
 
     if (error) fprintf(stderr, "  %d check(s) failed\n", error);
+    arena_destroy(&alloc);
     return error;
 }
 
 // Duplicate module name from different files should succeed (compiler accepts it)
 static int test_duplicate_module_allowed(void) {
     int               error   = 0;
-    allocator        *alloc   = default_allocator();
+    allocator        *alloc   = arena_create(default_allocator(), 1024);
     import_resolver  *res     = import_resolver_create(alloc);
     tl_source_scanner s       = tl_source_scanner_create(alloc, res);
     str_array         imports = {.alloc = alloc};
@@ -95,13 +97,14 @@ static int test_duplicate_module_allowed(void) {
     error += !path || !str_eq(*path, S("/src/b.tl"));
 
     if (error) fprintf(stderr, "  %d check(s) failed\n", error);
+    arena_destroy(&alloc);
     return error;
 }
 
 // Imports are collected correctly
 static int test_imports_collected(void) {
     int               error   = 0;
-    allocator        *alloc   = default_allocator();
+    allocator        *alloc   = arena_create(default_allocator(), 1024);
     import_resolver  *res     = import_resolver_create(alloc);
     tl_source_scanner s       = tl_source_scanner_create(alloc, res);
     str_array         imports = {.alloc = alloc};
@@ -120,13 +123,14 @@ static int test_imports_collected(void) {
     }
 
     if (error) fprintf(stderr, "  %d check(s) failed\n", error);
+    arena_destroy(&alloc);
     return error;
 }
 
 // Conditional compilation: #ifdef with define present — module is discovered
 static int test_ifdef_defined(void) {
     int               error   = 0;
-    allocator        *alloc   = default_allocator();
+    allocator        *alloc   = arena_create(default_allocator(), 1024);
     import_resolver  *res     = import_resolver_create(alloc);
     tl_source_scanner s       = tl_source_scanner_create(alloc, res);
     str_array         imports = {.alloc = alloc};
@@ -143,13 +147,14 @@ static int test_ifdef_defined(void) {
     error += !str_map_contains(s.modules_seen, S("Foo"));
 
     if (error) fprintf(stderr, "  %d check(s) failed\n", error);
+    arena_destroy(&alloc);
     return error;
 }
 
 // Conditional compilation: #ifdef without define — module is NOT discovered
 static int test_ifdef_not_defined(void) {
     int               error   = 0;
-    allocator        *alloc   = default_allocator();
+    allocator        *alloc   = arena_create(default_allocator(), 1024);
     import_resolver  *res     = import_resolver_create(alloc);
     tl_source_scanner s       = tl_source_scanner_create(alloc, res);
     str_array         imports = {.alloc = alloc};
@@ -166,13 +171,14 @@ static int test_ifdef_not_defined(void) {
     error += str_map_contains(s.modules_seen, S("Foo"));
 
     if (error) fprintf(stderr, "  %d check(s) failed\n", error);
+    arena_destroy(&alloc);
     return error;
 }
 
 // Conditional compilation: #ifndef
 static int test_ifndef(void) {
     int               error   = 0;
-    allocator        *alloc   = default_allocator();
+    allocator        *alloc   = arena_create(default_allocator(), 1024);
     import_resolver  *res     = import_resolver_create(alloc);
     tl_source_scanner s       = tl_source_scanner_create(alloc, res);
     str_array         imports = {.alloc = alloc};
@@ -187,13 +193,14 @@ static int test_ifndef(void) {
     error += !str_map_contains(s.modules_seen, S("Fallback"));
 
     if (error) fprintf(stderr, "  %d check(s) failed\n", error);
+    arena_destroy(&alloc);
     return error;
 }
 
 // Conditional compilation: nested #ifdef, module in inner branch
 static int test_nested_ifdef(void) {
     int               error   = 0;
-    allocator        *alloc   = default_allocator();
+    allocator        *alloc   = arena_create(default_allocator(), 1024);
     import_resolver  *res     = import_resolver_create(alloc);
     tl_source_scanner s       = tl_source_scanner_create(alloc, res);
     str_array         imports = {.alloc = alloc};
@@ -216,13 +223,14 @@ static int test_nested_ifdef(void) {
     error += !str_map_contains(s.modules_seen, S("Visible"));
 
     if (error) fprintf(stderr, "  %d check(s) failed\n", error);
+    arena_destroy(&alloc);
     return error;
 }
 
 // #define inside source affects subsequent #ifdef
 static int test_define_in_source(void) {
     int               error   = 0;
-    allocator        *alloc   = default_allocator();
+    allocator        *alloc   = arena_create(default_allocator(), 1024);
     import_resolver  *res     = import_resolver_create(alloc);
     tl_source_scanner s       = tl_source_scanner_create(alloc, res);
     str_array         imports = {.alloc = alloc};
@@ -237,13 +245,14 @@ static int test_define_in_source(void) {
     error += !str_map_contains(s.modules_seen, S("Feature"));
 
     if (error) fprintf(stderr, "  %d check(s) failed\n", error);
+    arena_destroy(&alloc);
     return error;
 }
 
 // #undef removes a define
 static int test_undef(void) {
     int               error   = 0;
-    allocator        *alloc   = default_allocator();
+    allocator        *alloc   = arena_create(default_allocator(), 1024);
     import_resolver  *res     = import_resolver_create(alloc);
     tl_source_scanner s       = tl_source_scanner_create(alloc, res);
     str_array         imports = {.alloc = alloc};
@@ -261,13 +270,14 @@ static int test_undef(void) {
     error += str_map_contains(s.modules_seen, S("Gone"));
 
     if (error) fprintf(stderr, "  %d check(s) failed\n", error);
+    arena_destroy(&alloc);
     return error;
 }
 
 // Stdlib files should not have their modules tracked
 static int test_stdlib_modules_ignored(void) {
     int               error   = 0;
-    allocator        *alloc   = default_allocator();
+    allocator        *alloc   = arena_create(default_allocator(), 1024);
     import_resolver  *res     = import_resolver_create(alloc);
     tl_source_scanner s       = tl_source_scanner_create(alloc, res);
     str_array         imports = {.alloc = alloc};
@@ -284,13 +294,14 @@ static int test_stdlib_modules_ignored(void) {
     error += str_map_contains(s.modules_seen, S("StdModule"));
 
     if (error) fprintf(stderr, "  %d check(s) failed\n", error);
+    arena_destroy(&alloc);
     return error;
 }
 
 // Conditional skip depth resets between files
 static int test_skip_depth_resets(void) {
     int               error   = 0;
-    allocator        *alloc   = default_allocator();
+    allocator        *alloc   = arena_create(default_allocator(), 1024);
     import_resolver  *res     = import_resolver_create(alloc);
     tl_source_scanner s       = tl_source_scanner_create(alloc, res);
     str_array         imports = {.alloc = alloc};
@@ -309,13 +320,14 @@ static int test_skip_depth_resets(void) {
     error += !str_map_contains(s.modules_seen, S("Found"));
 
     if (error) fprintf(stderr, "  %d check(s) failed\n", error);
+    arena_destroy(&alloc);
     return error;
 }
 
 // Module directive at end of file without trailing newline
 static int test_module_at_eof(void) {
     int               error   = 0;
-    allocator        *alloc   = default_allocator();
+    allocator        *alloc   = arena_create(default_allocator(), 1024);
     import_resolver  *res     = import_resolver_create(alloc);
     tl_source_scanner s       = tl_source_scanner_create(alloc, res);
     str_array         imports = {.alloc = alloc};
@@ -329,13 +341,14 @@ static int test_module_at_eof(void) {
     (void)found; // Accept either behavior, just don't crash
 
     if (error) fprintf(stderr, "  %d check(s) failed\n", error);
+    arena_destroy(&alloc);
     return error;
 }
 
 // No #module directive — modules_seen stays empty
 static int test_no_module(void) {
     int               error   = 0;
-    allocator        *alloc   = default_allocator();
+    allocator        *alloc   = arena_create(default_allocator(), 1024);
     import_resolver  *res     = import_resolver_create(alloc);
     tl_source_scanner s       = tl_source_scanner_create(alloc, res);
     str_array         imports = {.alloc = alloc};
@@ -346,13 +359,14 @@ static int test_no_module(void) {
     error += imports.size != 0;
 
     if (error) fprintf(stderr, "  %d check(s) failed\n", error);
+    arena_destroy(&alloc);
     return error;
 }
 
 // Multiline string containing #module should be ignored
 static int test_string_hides_directive(void) {
     int               error   = 0;
-    allocator        *alloc   = default_allocator();
+    allocator        *alloc   = arena_create(default_allocator(), 1024);
     import_resolver  *res     = import_resolver_create(alloc);
     tl_source_scanner s       = tl_source_scanner_create(alloc, res);
     str_array         imports = {.alloc = alloc};
@@ -369,13 +383,14 @@ static int test_string_hides_directive(void) {
     error += str_map_contains(s.modules_seen, S("Fake"));
 
     if (error) fprintf(stderr, "  %d check(s) failed\n", error);
+    arena_destroy(&alloc);
     return error;
 }
 
 // String with escaped quote should not prematurely end string tracking
 static int test_string_escaped_quote(void) {
     int               error   = 0;
-    allocator        *alloc   = default_allocator();
+    allocator        *alloc   = arena_create(default_allocator(), 1024);
     import_resolver  *res     = import_resolver_create(alloc);
     tl_source_scanner s       = tl_source_scanner_create(alloc, res);
     str_array         imports = {.alloc = alloc};
@@ -392,13 +407,14 @@ static int test_string_escaped_quote(void) {
     error += str_map_contains(s.modules_seen, S("Fake"));
 
     if (error) fprintf(stderr, "  %d check(s) failed\n", error);
+    arena_destroy(&alloc);
     return error;
 }
 
 // Single-line string with # inside should not be treated as directive
 static int test_string_single_line(void) {
     int               error   = 0;
-    allocator        *alloc   = default_allocator();
+    allocator        *alloc   = arena_create(default_allocator(), 1024);
     import_resolver  *res     = import_resolver_create(alloc);
     tl_source_scanner s       = tl_source_scanner_create(alloc, res);
     str_array         imports = {.alloc = alloc};
@@ -414,13 +430,14 @@ static int test_string_single_line(void) {
     error += str_map_contains(s.modules_seen, S("Fake"));
 
     if (error) fprintf(stderr, "  %d check(s) failed\n", error);
+    arena_destroy(&alloc);
     return error;
 }
 
 // Line comment should not hide next line's directive
 static int test_comment_does_not_span_lines(void) {
     int               error   = 0;
-    allocator        *alloc   = default_allocator();
+    allocator        *alloc   = arena_create(default_allocator(), 1024);
     import_resolver  *res     = import_resolver_create(alloc);
     tl_source_scanner s       = tl_source_scanner_create(alloc, res);
     str_array         imports = {.alloc = alloc};
@@ -433,13 +450,14 @@ static int test_comment_does_not_span_lines(void) {
     error += !str_map_contains(s.modules_seen, S("Real"));
 
     if (error) fprintf(stderr, "  %d check(s) failed\n", error);
+    arena_destroy(&alloc);
     return error;
 }
 
 // Comment containing directive-like text should be ignored
 static int test_comment_hides_directive(void) {
     int               error   = 0;
-    allocator        *alloc   = default_allocator();
+    allocator        *alloc   = arena_create(default_allocator(), 1024);
     import_resolver  *res     = import_resolver_create(alloc);
     tl_source_scanner s       = tl_source_scanner_create(alloc, res);
     str_array         imports = {.alloc = alloc};
@@ -455,13 +473,14 @@ static int test_comment_hides_directive(void) {
     error += imports.size != 0;
 
     if (error) fprintf(stderr, "  %d check(s) failed\n", error);
+    arena_destroy(&alloc);
     return error;
 }
 
 // Unterminated string hides all subsequent directives until EOF
 static int test_string_unterminated(void) {
     int               error   = 0;
-    allocator        *alloc   = default_allocator();
+    allocator        *alloc   = arena_create(default_allocator(), 1024);
     import_resolver  *res     = import_resolver_create(alloc);
     tl_source_scanner s       = tl_source_scanner_create(alloc, res);
     str_array         imports = {.alloc = alloc};
@@ -481,6 +500,7 @@ static int test_string_unterminated(void) {
     error += imports.size != 0;
 
     if (error) fprintf(stderr, "  %d check(s) failed\n", error);
+    arena_destroy(&alloc);
     return error;
 }
 
@@ -497,7 +517,7 @@ static str_array collect(allocator *alloc, char const *content) {
 // Extracts both quoted and angle-bracket imports
 static int test_collect_basic(void) {
     int        error   = 0;
-    allocator *alloc   = default_allocator();
+    allocator *alloc   = arena_create(default_allocator(), 1024);
     str_array  imports = collect(alloc, "#import \"foo.tl\"\n#import <stdio.tl>\n");
 
     error += imports.size != 2;
@@ -507,13 +527,14 @@ static int test_collect_basic(void) {
     }
 
     if (error) fprintf(stderr, "  %d check(s) failed\n", error);
+    arena_destroy(&alloc);
     return error;
 }
 
 // Ignores #import inside a string literal
 static int test_collect_ignores_string(void) {
     int        error   = 0;
-    allocator *alloc   = default_allocator();
+    allocator *alloc   = arena_create(default_allocator(), 1024);
     str_array  imports = collect(alloc, "x = \"\n#import \"fake.tl\"\n\"\n#import \"real.tl\"\n");
 
     error += imports.size != 1;
@@ -522,13 +543,14 @@ static int test_collect_ignores_string(void) {
     }
 
     if (error) fprintf(stderr, "  %d check(s) failed\n", error);
+    arena_destroy(&alloc);
     return error;
 }
 
 // Ignores #import inside a comment
 static int test_collect_ignores_comment(void) {
     int        error   = 0;
-    allocator *alloc   = default_allocator();
+    allocator *alloc   = arena_create(default_allocator(), 1024);
     str_array  imports = collect(alloc, "// #import \"fake.tl\"\n#import \"real.tl\"\n");
 
     error += imports.size != 1;
@@ -537,13 +559,14 @@ static int test_collect_ignores_comment(void) {
     }
 
     if (error) fprintf(stderr, "  %d check(s) failed\n", error);
+    arena_destroy(&alloc);
     return error;
 }
 
 // Collects imports from inside #ifdef blocks (no conditional filtering)
 static int test_collect_ignores_conditionals(void) {
     int        error   = 0;
-    allocator *alloc   = default_allocator();
+    allocator *alloc   = arena_create(default_allocator(), 1024);
     str_array  imports = collect(alloc, "#ifdef FEATURE\n"
                                          "#import \"conditional.tl\"\n"
                                          "#endif\n"
@@ -557,6 +580,7 @@ static int test_collect_ignores_conditionals(void) {
     }
 
     if (error) fprintf(stderr, "  %d check(s) failed\n", error);
+    arena_destroy(&alloc);
     return error;
 }
 
@@ -565,7 +589,7 @@ static int test_collect_ignores_conditionals(void) {
 // Manifest declares module not found in source -> error
 static int test_validate_missing_module(void) {
     int               error   = 0;
-    allocator        *alloc   = default_allocator();
+    allocator        *alloc   = arena_create(default_allocator(), 1024);
     import_resolver  *res     = import_resolver_create(alloc);
     tl_source_scanner s       = tl_source_scanner_create(alloc, res);
     str_array         imports = {.alloc = alloc};
@@ -579,13 +603,14 @@ static int test_validate_missing_module(void) {
     error += result.warning_count != 0;
 
     if (error) fprintf(stderr, "  %d check(s) failed\n", error);
+    arena_destroy(&alloc);
     return error;
 }
 
 // Manifest module found with [[export]] -> no errors, no warnings
 static int test_validate_ok(void) {
     int               error   = 0;
-    allocator        *alloc   = default_allocator();
+    allocator        *alloc   = arena_create(default_allocator(), 1024);
     import_resolver  *res     = import_resolver_create(alloc);
     tl_source_scanner s       = tl_source_scanner_create(alloc, res);
     str_array         imports = {.alloc = alloc};
@@ -599,13 +624,14 @@ static int test_validate_ok(void) {
     error += result.warning_count != 0;
 
     if (error) fprintf(stderr, "  %d check(s) failed\n", error);
+    arena_destroy(&alloc);
     return error;
 }
 
 // Empty manifest modules list -> skip validation entirely
 static int test_validate_empty_modules(void) {
     int               error   = 0;
-    allocator        *alloc   = default_allocator();
+    allocator        *alloc   = arena_create(default_allocator(), 1024);
     import_resolver  *res     = import_resolver_create(alloc);
     tl_source_scanner s       = tl_source_scanner_create(alloc, res);
     str_array         imports = {.alloc = alloc};
@@ -618,13 +644,14 @@ static int test_validate_empty_modules(void) {
     error += result.warning_count != 0;
 
     if (error) fprintf(stderr, "  %d check(s) failed\n", error);
+    arena_destroy(&alloc);
     return error;
 }
 
 // Internal module (in source, not in manifest, no exports) is fine
 static int test_validate_internal_module_ok(void) {
     int               error   = 0;
-    allocator        *alloc   = default_allocator();
+    allocator        *alloc   = arena_create(default_allocator(), 1024);
     import_resolver  *res     = import_resolver_create(alloc);
     tl_source_scanner s       = tl_source_scanner_create(alloc, res);
     str_array         imports = {.alloc = alloc};
@@ -639,13 +666,14 @@ static int test_validate_internal_module_ok(void) {
     error += result.warning_count != 0;
 
     if (error) fprintf(stderr, "  %d check(s) failed\n", error);
+    arena_destroy(&alloc);
     return error;
 }
 
 // Multiple manifest modules, one missing -> error (warnings skipped)
 static int test_validate_multiple_one_missing(void) {
     int               error   = 0;
-    allocator        *alloc   = default_allocator();
+    allocator        *alloc   = arena_create(default_allocator(), 1024);
     import_resolver  *res     = import_resolver_create(alloc);
     tl_source_scanner s       = tl_source_scanner_create(alloc, res);
     str_array         imports = {.alloc = alloc};
@@ -659,6 +687,7 @@ static int test_validate_multiple_one_missing(void) {
     error += result.warning_count != 0;
 
     if (error) fprintf(stderr, "  %d check(s) failed\n", error);
+    arena_destroy(&alloc);
     return error;
 }
 
