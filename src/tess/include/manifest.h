@@ -33,8 +33,6 @@ typedef struct {
 // Parse a package.tl file. Returns 0 on success, 1 on error.
 // Errors are printed to stderr with "package.tl:" prefix.
 // All strings are allocated from alloc.
-int  tl_package_parse_file(allocator *alloc, char const *path, tl_package *out);
-
-void tl_package_deinit(allocator *, tl_package *);
+int tl_package_parse_file(allocator *alloc, char const *path, tl_package *out);
 
 #endif

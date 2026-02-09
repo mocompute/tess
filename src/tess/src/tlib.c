@@ -850,31 +850,3 @@ int tl_tlib_unpack(allocator *alloc, char const *archive_path, char const *outpu
 
     return 0;
 }
-
-void tl_tlib_archive_deinit(allocator *alloc, tl_tlib_archive *self) {
-    if (!self) return;
-    str_deinit(alloc, &self->metadata.name);
-    str_deinit(alloc, &self->metadata.author);
-    str_deinit(alloc, &self->metadata.version);
-
-    for (u32 i = 0; i < self->metadata.module_count; i++) {
-        str_deinit(alloc, &self->metadata.modules[i]);
-    }
-    alloc_free(alloc, self->metadata.modules);
-
-    for (u32 i = 0; i < self->metadata.depends_count; i++) {
-        str_deinit(alloc, &self->metadata.depends[i]);
-    }
-    alloc_free(alloc, self->metadata.depends);
-
-    for (u32 i = 0; i < self->metadata.depends_optional_count; i++) {
-        str_deinit(alloc, &self->metadata.depends_optional[i]);
-    }
-    alloc_free(alloc, self->metadata.depends_optional);
-
-    for (u32 i = 0; i < self->entries_count; i++) {
-        alloc_free(alloc, (void *)self->entries[i].name);
-        alloc_free(alloc, (void *)self->entries[i].data);
-    }
-    alloc_free(alloc, self->entries);
-}

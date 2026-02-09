@@ -44,9 +44,7 @@ int tl_tlib_write(allocator *alloc, char const *output_path, tl_tlib_metadata co
 int tl_tlib_read(allocator *alloc, char const *input_path, tl_tlib_archive *out);
 
 // Validate a filename (no absolute paths, no ".." components). Returns 1 if valid.
-int  tl_tlib_valid_filename(char const *name, u32 len);
-
-void tl_tlib_archive_deinit(allocator *, tl_tlib_archive *);
+int tl_tlib_valid_filename(char const *name, u32 len);
 
 // -- High-level operations --
 

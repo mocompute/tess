@@ -353,22 +353,3 @@ int tl_package_parse_file(allocator *alloc, char const *path, tl_package *out) {
 
     return error ? 1 : 0;
 }
-
-void tl_package_deinit(allocator *alloc, tl_package *self) {
-    if (!self) return;
-    alloc_free(alloc, self->info.exports);
-    alloc_free(alloc, self->info.depend_paths);
-    for (u32 i = 0; i < self->dep_count; i++) {
-        str_deinit(alloc, &self->deps[i].name);
-        str_deinit(alloc, &self->deps[i].version);
-        str_deinit(alloc, &self->deps[i].path);
-    }
-    alloc_free(alloc, self->deps);
-
-    for (u32 i = 0; i < self->optional_dep_count; i++) {
-        str_deinit(alloc, &self->optional_deps[i].name);
-        str_deinit(alloc, &self->optional_deps[i].version);
-        str_deinit(alloc, &self->optional_deps[i].path);
-    }
-    alloc_free(alloc, self->optional_deps);
-}
