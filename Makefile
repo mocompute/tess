@@ -7,7 +7,7 @@
 # ------------------------------------------------------------------------------
 
 CONFIG ?= release
-ASAN_OPTIONS ?= detect_leaks=0
+ASAN_OPTIONS ?= detect_leaks=1
 
 ifeq ($(CONFIG),release)
   CFLAGS_CONFIG = -O2 -DNDEBUG
