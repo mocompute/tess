@@ -79,7 +79,7 @@ static tl_tlib_metadata make_test_metadata(allocator *alloc) {
 static int test_roundtrip(void) {
     int        error = 0;
 
-    allocator *alloc = default_allocator();
+    allocator *alloc = arena_create(default_allocator(), 4096);
     char       path[512];
     make_temp_path(path, sizeof(path), "test_tlib_roundtrip.tlib");
 
@@ -93,7 +93,8 @@ static int test_roundtrip(void) {
 
     if (tl_tlib_write(alloc, path, &meta, entries, 3)) {
         fprintf(stderr, "  write failed\n");
-        return 1;
+        error = 1;
+        goto cleanup;
     }
 
     tl_tlib_archive arc = {0};
@@ -129,7 +130,8 @@ static int test_roundtrip(void) {
             goto cleanup;
         }
         if (arc.entries[i].data_len != entries[i].data_len ||
-            memcmp(arc.entries[i].data, entries[i].data, entries[i].data_len) != 0) {
+            (entries[i].data_len > 0 &&
+             memcmp(arc.entries[i].data, entries[i].data, entries[i].data_len) != 0)) {
             fprintf(stderr, "  data mismatch at entry %u\n", i);
             error = 1;
             goto cleanup;
@@ -137,12 +139,13 @@ static int test_roundtrip(void) {
     }
 
 cleanup:
-    tl_tlib_archive_deinit(alloc, &arc);
+    arena_destroy(&alloc);
     return error;
 }
 
 static int test_empty_archive(void) {
-    allocator *alloc = default_allocator();
+    int        error = 0;
+    allocator *alloc = arena_create(default_allocator(), 4096);
     char       path[512];
     make_temp_path(path, sizeof(path), "test_tlib_empty.tlib");
 
@@ -150,21 +153,25 @@ static int test_empty_archive(void) {
 
     if (tl_tlib_write(alloc, path, &meta, null, 0)) {
         fprintf(stderr, "  write failed\n");
-        return 1;
+        error = 1;
+        goto cleanup;
     }
 
     tl_tlib_archive arc = {0};
     if (tl_tlib_read(alloc, path, &arc)) {
         fprintf(stderr, "  read failed\n");
-        return 1;
+        error = 1;
+        goto cleanup;
     }
 
     if (arc.entries_count != 0) {
         fprintf(stderr, "  expected 0 entries, got %u\n", arc.entries_count);
-        return 1;
+        error = 1;
     }
 
-    return 0;
+cleanup:
+    arena_destroy(&alloc);
+    return error;
 }
 
 static int test_filename_validation(void) {
@@ -192,7 +199,8 @@ static int test_filename_validation(void) {
 }
 
 static int test_byte_order(void) {
-    allocator *alloc = default_allocator();
+    int        error = 0;
+    allocator *alloc = arena_create(default_allocator(), 4096);
     char       path[512];
     make_temp_path(path, sizeof(path), "test_tlib_byteorder.tlib");
 
@@ -201,21 +209,24 @@ static int test_byte_order(void) {
 
     if (tl_tlib_write(alloc, path, &meta, &entry, 1)) {
         fprintf(stderr, "  write failed\n");
-        return 1;
+        error = 1;
+        goto cleanup;
     }
 
     // Read raw bytes and verify header is big-endian
     FILE *f = fopen(path, "rb");
     if (!f) {
         fprintf(stderr, "  open failed\n");
-        return 1;
+        error = 1;
+        goto cleanup;
     }
 
     byte header[8];
     if (fread(header, 1, 8, f) != 8) {
         fclose(f);
         fprintf(stderr, "  read failed\n");
-        return 1;
+        error = 1;
+        goto cleanup;
     }
     fclose(f);
 
@@ -223,20 +234,24 @@ static int test_byte_order(void) {
     if (header[0] != 'T' || header[1] != 'L' || header[2] != 'I' || header[3] != 'B') {
         fprintf(stderr, "  magic mismatch: expected TLIB, got %c%c%c%c\n", header[0], header[1], header[2],
                 header[3]);
-        return 1;
+        error = 1;
+        goto cleanup;
     }
 
     // Verify version is 1 in big-endian (0x00000001)
     if (header[4] != 0 || header[5] != 0 || header[6] != 0 || header[7] != 1) {
         fprintf(stderr, "  version mismatch\n");
-        return 1;
+        error = 1;
     }
 
-    return 0;
+cleanup:
+    arena_destroy(&alloc);
+    return error;
 }
 
 static int test_large_payload(void) {
-    allocator *alloc = default_allocator();
+    int        error = 0;
+    allocator *alloc = arena_create(default_allocator(), 3 * 1024 * 1024);
     char       path[512];
     make_temp_path(path, sizeof(path), "test_tlib_large.tlib");
 
@@ -249,31 +264,32 @@ static int test_large_payload(void) {
     tl_tlib_entry entry = {"big.tl", 6, data, size};
 
     if (tl_tlib_write(alloc, path, &meta, &entry, 1)) {
-        alloc_free(alloc, data);
         fprintf(stderr, "  write failed\n");
-        return 1;
+        error = 1;
+        goto cleanup;
     }
 
     tl_tlib_archive arc = {0};
     if (tl_tlib_read(alloc, path, &arc)) {
-        alloc_free(alloc, data);
         fprintf(stderr, "  read failed\n");
-        return 1;
+        error = 1;
+        goto cleanup;
     }
 
-    int result = 0;
     if (arc.entries_count != 1 || arc.entries[0].data_len != size ||
         memcmp(arc.entries[0].data, data, size) != 0) {
         fprintf(stderr, "  large payload data mismatch\n");
-        result = 1;
+        error = 1;
     }
 
-    alloc_free(alloc, data);
-    return result;
+cleanup:
+    arena_destroy(&alloc);
+    return error;
 }
 
 static int test_metadata_roundtrip(void) {
-    allocator *alloc = default_allocator();
+    int        error = 0;
+    allocator *alloc = arena_create(default_allocator(), 4096);
     char       path[512];
     make_temp_path(path, sizeof(path), "test_tlib_metadata.tlib");
 
@@ -304,16 +320,17 @@ static int test_metadata_roundtrip(void) {
 
     if (tl_tlib_write(alloc, path, &meta, &entry, 1)) {
         fprintf(stderr, "  write failed\n");
-        return 1;
+        error = 1;
+        goto cleanup;
     }
 
     tl_tlib_archive arc = {0};
     if (tl_tlib_read(alloc, path, &arc)) {
         fprintf(stderr, "  read failed\n");
-        return 1;
+        error = 1;
+        goto cleanup;
     }
 
-    int error = 0;
     error += !str_eq(arc.metadata.name, meta.name);
     error += !str_eq(arc.metadata.author, meta.author);
     error += !str_eq(arc.metadata.version, meta.version);
@@ -334,11 +351,14 @@ static int test_metadata_roundtrip(void) {
         fprintf(stderr, "  metadata mismatch (%d fields)\n", error);
     }
 
+cleanup:
+    arena_destroy(&alloc);
     return error;
 }
 
 static int test_metadata_empty_fields(void) {
-    allocator *alloc = default_allocator();
+    int        error = 0;
+    allocator *alloc = arena_create(default_allocator(), 4096);
     char       path[512];
     make_temp_path(path, sizeof(path), "test_tlib_metadata_empty.tlib");
 
@@ -358,16 +378,17 @@ static int test_metadata_empty_fields(void) {
 
     if (tl_tlib_write(alloc, path, &meta, &entry, 1)) {
         fprintf(stderr, "  write failed\n");
-        return 1;
+        error = 1;
+        goto cleanup;
     }
 
     tl_tlib_archive arc = {0};
     if (tl_tlib_read(alloc, path, &arc)) {
         fprintf(stderr, "  read failed\n");
-        return 1;
+        error = 1;
+        goto cleanup;
     }
 
-    int error = 0;
     error += !str_eq(arc.metadata.name, meta.name);
     error += !str_is_empty(arc.metadata.author);
     error += !str_eq(arc.metadata.version, meta.version);
@@ -380,11 +401,14 @@ static int test_metadata_empty_fields(void) {
         fprintf(stderr, "  empty field handling failed (%d errors)\n", error);
     }
 
+cleanup:
+    arena_destroy(&alloc);
     return error;
 }
 
 static int test_metadata_unicode(void) {
-    allocator *alloc = default_allocator();
+    int        error = 0;
+    allocator *alloc = arena_create(default_allocator(), 4096);
     char       path[512];
     make_temp_path(path, sizeof(path), "test_tlib_metadata_unicode.tlib");
 
@@ -408,16 +432,17 @@ static int test_metadata_unicode(void) {
 
     if (tl_tlib_write(alloc, path, &meta, &entry, 1)) {
         fprintf(stderr, "  write failed\n");
-        return 1;
+        error = 1;
+        goto cleanup;
     }
 
     tl_tlib_archive arc = {0};
     if (tl_tlib_read(alloc, path, &arc)) {
         fprintf(stderr, "  read failed\n");
-        return 1;
+        error = 1;
+        goto cleanup;
     }
 
-    int error = 0;
     error += !str_eq(arc.metadata.name, meta.name);
     error += !str_eq(arc.metadata.author, meta.author);
     error += !str_eq(arc.metadata.version, meta.version);
@@ -430,11 +455,14 @@ static int test_metadata_unicode(void) {
         fprintf(stderr, "  unicode metadata mismatch (%d fields)\n", error);
     }
 
+cleanup:
+    arena_destroy(&alloc);
     return error;
 }
 
 static int test_corrupted_metadata(void) {
-    allocator *alloc = default_allocator();
+    int        error = 0;
+    allocator *alloc = arena_create(default_allocator(), 4096);
     char       path[512];
     make_temp_path(path, sizeof(path), "test_tlib_corrupted_meta.tlib");
 
@@ -457,14 +485,16 @@ static int test_corrupted_metadata(void) {
 
     if (tl_tlib_write(alloc, path, &meta, &entry, 1)) {
         fprintf(stderr, "  write failed\n");
-        return 1;
+        error = 1;
+        goto cleanup;
     }
 
     // Truncate the file to corrupt it (CRC32 will not match)
     FILE *f = fopen(path, "r+b");
     if (!f) {
         fprintf(stderr, "  open for truncate failed\n");
-        return 1;
+        error = 1;
+        goto cleanup;
     }
 
     // Truncate after magic(4) + version(4) + partial metadata = 12 bytes
@@ -473,7 +503,8 @@ static int test_corrupted_metadata(void) {
 
     if (trunc_result != 0) {
         fprintf(stderr, "  truncate failed\n");
-        return 1;
+        error = 1;
+        goto cleanup;
     }
 
     // Try to read - should fail gracefully
@@ -482,14 +513,17 @@ static int test_corrupted_metadata(void) {
 
     if (read_result == 0) {
         fprintf(stderr, "  read should have failed on corrupted metadata\n");
-        return 1;
+        error = 1;
     }
 
-    return 0;
+cleanup:
+    arena_destroy(&alloc);
+    return error;
 }
 
 static int test_crc32_integrity(void) {
-    allocator *alloc = default_allocator();
+    int        error = 0;
+    allocator *alloc = arena_create(default_allocator(), 4096);
     char       path[512];
     make_temp_path(path, sizeof(path), "test_tlib_crc32.tlib");
 
@@ -498,14 +532,16 @@ static int test_crc32_integrity(void) {
 
     if (tl_tlib_write(alloc, path, &meta, &entry, 1)) {
         fprintf(stderr, "  write failed\n");
-        return 1;
+        error = 1;
+        goto cleanup;
     }
 
     // Read the file, flip a byte in the metadata region, write it back
     FILE *f = fopen(path, "r+b");
     if (!f) {
         fprintf(stderr, "  open failed\n");
-        return 1;
+        error = 1;
+        goto cleanup;
     }
 
     // Flip a byte at offset 10 (inside the name field)
@@ -514,14 +550,16 @@ static int test_crc32_integrity(void) {
     if (fread(&b, 1, 1, f) != 1) {
         fclose(f);
         fprintf(stderr, "  read byte failed\n");
-        return 1;
+        error = 1;
+        goto cleanup;
     }
     b ^= 0xFF;
     fseek(f, 10, SEEK_SET);
     if (fwrite(&b, 1, 1, f) != 1) {
         fclose(f);
         fprintf(stderr, "  write byte failed\n");
-        return 1;
+        error = 1;
+        goto cleanup;
     }
     fclose(f);
 
@@ -531,10 +569,12 @@ static int test_crc32_integrity(void) {
 
     if (read_result == 0) {
         fprintf(stderr, "  read should have failed on CRC mismatch\n");
-        return 1;
+        error = 1;
     }
 
-    return 0;
+cleanup:
+    arena_destroy(&alloc);
+    return error;
 }
 
 // Helper to write a string to a file
@@ -563,7 +603,8 @@ static int write_file(char const *path, char const *content) {
 }
 
 static int test_pack_with_manifest(void) {
-    allocator *alloc = default_allocator();
+    int        error = 0;
+    allocator *alloc = arena_create(default_allocator(), 8192);
 
     // Create source file
     char src_path[512];
@@ -571,7 +612,8 @@ static int test_pack_with_manifest(void) {
     char const *src_content = "#module Foo\nfoo() { 1 }\n";
     if (write_file(src_path, src_content)) {
         fprintf(stderr, "  failed to write source file\n");
-        return 1;
+        error = 1;
+        goto cleanup;
     }
 
     // Create package.tl file
@@ -586,14 +628,16 @@ static int test_pack_with_manifest(void) {
                               "depend_optional(\"Debug\", \"0.1.0\")\n";
     if (write_file(pkg_path, pkg_content)) {
         fprintf(stderr, "  failed to write package.tl file\n");
-        return 1;
+        error = 1;
+        goto cleanup;
     }
 
     // Parse package.tl
     tl_package pkg = {0};
     if (tl_package_parse_file(alloc, pkg_path, &pkg)) {
         fprintf(stderr, "  package.tl parse failed\n");
-        return 1;
+        error = 1;
+        goto cleanup;
     }
 
     // Build pack opts from package (same logic as pack_files in tess_exe.c)
@@ -640,17 +684,17 @@ static int test_pack_with_manifest(void) {
     make_temp_path(out_path, sizeof(out_path), "test_manifest_pack.tlib");
     if (tl_tlib_pack(alloc, out_path, files, base_dir, resolver, opts)) {
         fprintf(stderr, "  pack failed\n");
-        return 1;
+        error = 1;
+        goto cleanup;
     }
 
     // Read back and verify
     tl_tlib_archive arc = {0};
     if (tl_tlib_read(alloc, out_path, &arc)) {
         fprintf(stderr, "  read failed\n");
-        return 1;
+        error = 1;
+        goto cleanup;
     }
-
-    int error = 0;
 
     // Verify metadata
     error += !str_eq(arc.metadata.name, S("TestPkg"));
@@ -702,7 +746,8 @@ static int test_pack_with_manifest(void) {
         fprintf(stderr, "  %d check(s) failed in test_pack_with_manifest\n", error);
     }
 
-    tl_package_deinit(alloc, &pkg);
+cleanup:
+    arena_destroy(&alloc);
     return error;
 }
 
@@ -736,7 +781,7 @@ static void test_mkdir_p(char const *path) {
 // file_names are relative paths within a temp directory.
 // Returns the result of tl_tlib_pack (0 = success).
 static int pack_test_files(char const **file_names, char const **file_contents, u32 count) {
-    allocator *alloc = default_allocator();
+    allocator *alloc = arena_create(default_allocator(), 8192);
 
     // Write files to temp directory
     char base_path[512];
@@ -759,6 +804,7 @@ static int pack_test_files(char const **file_names, char const **file_contents, 
 
         if (write_file(str_cstr(&full), file_contents[i])) {
             fprintf(stderr, "  pack_test_files: failed to write %s\n", str_cstr(&full));
+            arena_destroy(&alloc);
             return 1;
         }
     }
@@ -777,12 +823,12 @@ static int pack_test_files(char const **file_names, char const **file_contents, 
 
     int result = tl_tlib_pack(alloc, out_path, files, base_dir, resolver, opts);
 
-    // Clean up temp files
+    // Clean up temp files (need paths before arena destroy)
     for (u32 i = 0; i < count; i++) {
         remove(str_cstr(&file_paths[i]));
     }
 
-    alloc_free(alloc, file_paths);
+    arena_destroy(&alloc);
     return result;
 }
 
@@ -842,7 +888,8 @@ static int test_pack_subdir_import(void) {
 }
 
 static int test_extract(void) {
-    allocator *alloc = default_allocator();
+    int        error = 0;
+    allocator *alloc = arena_create(default_allocator(), 8192);
     char       path[512];
     make_temp_path(path, sizeof(path), "test_tlib_extract.tlib");
 
@@ -857,13 +904,15 @@ static int test_extract(void) {
 
     if (tl_tlib_write(alloc, path, &meta, entries, 3)) {
         fprintf(stderr, "  write failed\n");
-        return 1;
+        error = 1;
+        goto cleanup;
     }
 
     tl_tlib_archive arc = {0};
     if (tl_tlib_read(alloc, path, &arc)) {
         fprintf(stderr, "  read failed\n");
-        return 1;
+        error = 1;
+        goto cleanup;
     }
 
     // Extract to temp dir
@@ -874,17 +923,15 @@ static int test_extract(void) {
     str_array out_files = {.alloc = alloc};
     if (tl_tlib_extract(alloc, &arc, extract_dir, &out_files)) {
         fprintf(stderr, "  extract failed\n");
-        return 1;
+        error = 1;
+        goto cleanup;
     }
-    tl_tlib_archive_deinit(alloc, &arc);
-
-    int error = 0;
 
     // Should have 2 extracted source files (package.tl excluded from out_files)
     error += (out_files.size != 2);
     if (error) {
         fprintf(stderr, "  expected 2 files in out_files, got %u\n", out_files.size);
-        return error;
+        goto cleanup;
     }
 
     // Verify source files exist and have correct content
@@ -924,8 +971,8 @@ static int test_extract(void) {
         fprintf(stderr, "  %d check(s) failed in test_extract\n", error);
     }
 
-    forall(i, out_files) str_deinit(alloc, &out_files.v[i]);
-    array_free(out_files);
+cleanup:
+    arena_destroy(&alloc);
     return error;
 }
 
@@ -1518,7 +1565,7 @@ static int test_e2e_diamond_deps(void) {
 
 // Phase 8: Circular dependency detection (A -> B -> A)
 static int test_e2e_circular_deps(void) {
-    allocator *alloc = default_allocator();
+    allocator *alloc = arena_create(default_allocator(), 4096);
 
     // Create two .tlib files that reference each other via raw write API
     char libs_dir[512];
@@ -1549,6 +1596,7 @@ static int test_e2e_circular_deps(void) {
     snprintf(a_path, sizeof(a_path), "%sPkgA.tlib", libs_dir);
     if (tl_tlib_write(alloc, a_path, &meta_a, &a_entry, 1)) {
         fprintf(stderr, "  failed to write PkgA.tlib\n");
+        arena_destroy(&alloc);
         return 1;
     }
 
@@ -1576,8 +1624,12 @@ static int test_e2e_circular_deps(void) {
     snprintf(b_path, sizeof(b_path), "%sPkgB.tlib", libs_dir);
     if (tl_tlib_write(alloc, b_path, &meta_b, &b_entry, 1)) {
         fprintf(stderr, "  failed to write PkgB.tlib\n");
+        arena_destroy(&alloc);
         return 1;
     }
+
+    // Arena no longer needed after writes
+    arena_destroy(&alloc);
 
     // -- Create App depending on PkgA --
     char app_dir[512], app_libs[512];
@@ -1621,7 +1673,7 @@ static int test_e2e_circular_deps(void) {
 
 // Phase 8: Version conflict in diamond (LibA needs Base=1.0.0, LibB needs Base=2.0.0)
 static int test_e2e_version_conflict(void) {
-    allocator *alloc = default_allocator();
+    allocator *alloc = arena_create(default_allocator(), 4096);
 
     char       libs_dir[512];
     make_temp_path(libs_dir, sizeof(libs_dir), "e2e_conflict_libs/");
@@ -1694,6 +1746,9 @@ static int test_e2e_version_conflict(void) {
     snprintf(b_path, sizeof(b_path), "%sLibB.tlib", libs_dir);
     tl_tlib_write(alloc, b_path, &meta_b, &b_entry, 1);
 
+    // Arena no longer needed after writes
+    arena_destroy(&alloc);
+
     // -- Create App depending on LibA and LibB --
     char app_dir[512], app_libs[512];
     make_temp_path(app_dir, sizeof(app_dir), "e2e_conflict_app/");
@@ -1739,7 +1794,7 @@ static int test_e2e_version_conflict(void) {
 
 // Phase 8: Missing transitive dependency
 static int test_e2e_missing_transitive_dep(void) {
-    allocator *alloc = default_allocator();
+    allocator *alloc = arena_create(default_allocator(), 4096);
 
     // Create MathLib that depends on LogLib=1.0.0 (via raw write)
     char libs_dir[512];
@@ -1768,6 +1823,9 @@ static int test_e2e_missing_transitive_dep(void) {
     char          m_path[512];
     snprintf(m_path, sizeof(m_path), "%sMathLib.tlib", libs_dir);
     tl_tlib_write(alloc, m_path, &meta_m, &m_entry, 1);
+
+    // Arena no longer needed after writes
+    arena_destroy(&alloc);
 
     // -- Create App depending on MathLib, but LogLib is NOT available --
     char app_dir[512], app_libs[512];
@@ -1969,7 +2027,7 @@ static int test_e2e_generic_package(void) {
 
 // Phase 10: Module name conflict across packages
 static int test_e2e_module_conflict(void) {
-    allocator *alloc = default_allocator();
+    allocator *alloc = arena_create(default_allocator(), 4096);
 
     char       libs_dir[512];
     make_temp_path(libs_dir, sizeof(libs_dir), "e2e_modconflict_libs/");
@@ -2012,6 +2070,9 @@ static int test_e2e_module_conflict(void) {
     char          b_path[512];
     snprintf(b_path, sizeof(b_path), "%sLibB.tlib", libs_dir);
     tl_tlib_write(alloc, b_path, &meta_b, &b_entry, 1);
+
+    // Arena no longer needed after writes
+    arena_destroy(&alloc);
 
     // -- Consumer depends on both --
     char app_dir[512], app_libs[512];

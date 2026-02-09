@@ -362,7 +362,7 @@ int tl_tlib_read(allocator *alloc, char const *input_path, tl_tlib_archive *out)
     u32 entry_count = read_u32_be(pp);
     pp += 4;
 
-    tl_tlib_entry *entries = alloc_calloc(alloc, entry_count, sizeof(tl_tlib_entry));
+    tl_tlib_entry *entries = entry_count ? alloc_calloc(alloc, entry_count, sizeof(tl_tlib_entry)) : null;
 
     for (u32 i = 0; i < entry_count; i++) {
         if (pp + 4 > pend) goto corrupt_entries;
@@ -388,13 +388,15 @@ int tl_tlib_read(allocator *alloc, char const *input_path, tl_tlib_archive *out)
 
         entries[i].name_len = name_len;
         entries[i].name     = alloc_malloc(alloc, name_len);
-        if (!entries[i].name) return 1;
         memcpy((char *)entries[i].name, name, name_len);
 
         entries[i].data_len = data_len;
-        entries[i].data     = alloc_malloc(alloc, data_len);
-        if (!entries[i].data) return 1;
-        memcpy((char *)entries[i].data, data, data_len);
+        if (data_len > 0) {
+            entries[i].data = alloc_malloc(alloc, data_len);
+            memcpy((char *)entries[i].data, data, data_len);
+        } else {
+            entries[i].data = null;
+        }
     }
 
     out->entries       = entries;

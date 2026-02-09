@@ -24,7 +24,12 @@ import_resolver *import_resolver_create(allocator *arena) {
 
 void import_resolver_destroy(import_resolver **self) {
     if (!self || !*self) return;
-    // Arena-allocated, nothing to free individually
+    allocator *a = (*self)->arena;
+    hset_destroy(&(*self)->imported_files);
+    hset_destroy(&(*self)->active_imports);
+    array_free((*self)->user_include_paths);
+    array_free((*self)->standard_include_paths);
+    alloc_free(a, *self);
     *self = null;
 }
 
