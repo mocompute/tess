@@ -5,6 +5,60 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased] - 2026-02-03 to 2026-02-10 (5c41c59..1215d21)
+
+### Highlights
+
+- Complete package system with `.tlib` archive format for distributing reusable code libraries
+- Major performance optimizations: arena allocator tail caching and hashmap improvements for faster compilation
+- New `package.tl` DSL for declaring package metadata using native Tess syntax
+- Transitive dependency resolution automatically loads and version-checks multi-level package dependencies
+- Memory leak fixes and arena-based allocation throughout compiler infrastructure
+
+### Added
+
+- **Package System (`.tlib` archives)**: Complete library distribution system with binary archive format using DEFLATE compression and CRC32 checksums. Archives store package metadata (name, version, author, exported modules, dependencies) plus compressed source files in a portable, platform-independent format.
+- **`package.tl` DSL**: Declarative manifest format using Tess function-call syntax, parsed by the existing TL parser. Supports `format()`, `package()`, `version()`, `author()`, `export()`, `depend()`, `depend_optional()`, and `depend_path()` declarations. Replaces earlier INI manifest design.
+- **CLI Commands**: Three new subcommands for package management:
+  - `tess pack` - Create `.tlib` archives from source files with automatic `package.tl` discovery
+  - `tess validate` - Validate package structure and exports against manifest
+  - `tess init` - Generate skeleton `package.tl` file
+- **Import Resolution System**: Distinguishes between quoted imports (`"file.tl"` - relative then -I paths) and angle-bracket imports (`<file.tl>` - standard library only). Tracks canonical paths, detects import cycles, and filters stdlib files.
+- **Source Scanner**: Extracts `#module` and `#import` directives from source without full parsing. Handles conditional compilation (`#ifdef`/`#ifndef`), validates module declarations, and checks self-containment.
+- **Transitive Dependency Resolution**: Compiler automatically loads and version-checks multi-level package dependencies (A depends on B depends on C) from `depend_path()` directories.
+- **Module-Level Access Control**: `export()` declarations in `package.tl` document public API modules. Internal modules are accessible but removable via tree-shaking.
+- **Vendor Library**: Integrated libdeflate-1.25 for fast compression/decompression (15,000+ lines of vendored code).
+- **Toplevel Function Call Parser Mode**: New `mode_toplevel_funcall` parser mode that parses only top-level function calls using speculative arena allocation. Enables `package.tl` DSL interpretation without polluting the type registry.
+- **75+ new tests**: Comprehensive test coverage across unit tests (`test_tlib.c`, `test_manifest.c`, `test_source_scanner.c`, `test_import_resolver.c`, `test_deflate.c`), integration tests, and end-to-end package consumption tests.
+- **Documentation**: Complete package system guide (`docs/PACKAGES.md`), detailed 10-phase implementation plan (`docs/plans/TLIB_LIBRARIES.md`), and Windows build instructions (`docs/WINDOWS_BUILD.md`).
+- **GCC Support**: Enabled GCC in Nix devShells, disabled `-Wformat-truncation` warnings.
+
+### Changed
+
+- **Performance Optimizations**: Major compilation speed improvements:
+  - Arena allocator now caches tail pointer for O(1) fast-path allocation (previously walked linked list on every allocation)
+  - Hashmap optimizations: power-of-2 sizes for faster modulo via bitwise AND, cached entry size, increased default/initial sizes (8→64 or 1024)
+  - Type inference optimizations: generation counters for cycle detection, generation-based memoization for hash computation
+  - Larger initial hashmap sizes in type registry (64→1024 entries) to reduce rehashing
+- **Memory Management**: Parser, compiler, and test infrastructure now use arena allocators instead of `default_allocator()`, enabling bulk cleanup. Zero-size allocation handling fixed to return NULL instead of treating as failures.
+- **Module System**: Nested module validation now checks immediate parent declarations. Cross-file nested modules properly handled. Duplicate module names across packages generate warnings during dependency loading.
+- **Compiler Behavior**: Searches executable directory for `src/tl/std` in addition to other include paths. Silently ignores unknown `package.tl` DSL functions for forward compatibility. Cleans up temporary directories created during package extraction.
+- **Build System**: Makefile doesn't rebuild `version.h` on every invocation. Fixed object dependencies. Known failures framework distinguishes "known failures" (should pass but don't) from "known fail-failures" (`test_fail_*` tests not yet rejected).
+- **ASAN Configuration**: More granular AddressSanitizer control, leak detection can be toggled independently.
+
+### Fixed
+
+- **Memory Leaks**: Fixed leaks in tlib reader, import resolver, parser, and various test infrastructure components.
+- **Use-After-Free**: Fixed in tokenizer string/file lifetime management.
+- **Zero-Length Data Handling**: Handle zero-length `.tlib` entry data without allocating/copying. Guard `calloc()` when `entry_count` is 0.
+- **Nested Module Parent Check**: Validate that nested modules declare their immediate parent (not just any ancestor).
+- **AST Cloning**: Deep copy hash command words in `ast_clone()` for correct package parsing.
+- **Module Error Deduplication**: Remove duplicate "module already declared" errors from source scanner.
+- **Windows Path Handling**: Normalize backslash/forward-slash in path comparisons. Handle executable suffix in Windows test paths. Fix cross-drive navigation and proper quoting of paths with spaces.
+- **ASAN Build**: Re-enable and properly configure AddressSanitizer builds with proper leak detection settings.
+
+### Removed
+
 ## [Unreleased] - 2026-02-01 to 2026-02-03 (4699c0d..5c41c59)
 
 ### Highlights
