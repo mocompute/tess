@@ -132,6 +132,7 @@ depend_path("./libs")
 - Multiple `export()`, `depend()`, `depend_optional()`, and `depend_path()` calls accumulate.
 - `export()` accepts multiple arguments: `export("Mod1", "Mod2")`.
 - Version strings are compared as literal strings, not as semantic versions. `"1.0.0"` and `"1.0"` are different versions.
+- Unknown function calls are silently ignored. This allows `package.tl` to contain fields that older compiler versions do not recognize.
 
 ---
 
