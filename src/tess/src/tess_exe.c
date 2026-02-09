@@ -1306,6 +1306,7 @@ static int pack_files(state *self) {
     opts.name              = str_cstr(&pkg.info.name);
     opts.version           = str_cstr(&pkg.info.version);
     opts.author            = str_is_empty(pkg.info.author) ? null : str_cstr(&pkg.info.author);
+    opts.package_tl_path   = "package.tl";
 
     if (pkg.info.export_count > 0) {
         if (pkg.info.export_count > UINT16_MAX) {

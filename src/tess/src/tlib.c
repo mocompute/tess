@@ -577,6 +577,28 @@ int tl_tlib_pack(allocator *alloc, char const *output_path, str_sized files, str
         return 1;
     }
 
+    // Append package.tl as an entry (if provided)
+    if (opts.package_tl_path) {
+        char *pkg_data;
+        u32   pkg_size;
+        file_read(alloc, opts.package_tl_path, &pkg_data, &pkg_size);
+        if (!pkg_data) {
+            fprintf(stderr, "tlib: failed to read package.tl: %s\n", opts.package_tl_path);
+            return 1;
+        }
+
+        entries                 = alloc_realloc(alloc, entries, (entry_idx + 1) * sizeof(tl_tlib_entry));
+        entries[entry_idx].name = "package.tl";
+        entries[entry_idx].name_len = 10;
+        entries[entry_idx].data     = (byte const *)pkg_data;
+        entries[entry_idx].data_len = pkg_size;
+        entry_idx++;
+
+        if (opts.verbose) {
+            fprintf(stderr, "Packing: package.tl (%u bytes)\n", pkg_size);
+        }
+    }
+
     // Build metadata
     tl_tlib_metadata meta = {
       .name                   = str_init(alloc, opts.name),
@@ -692,6 +714,11 @@ int tl_tlib_extract(allocator *alloc, tl_tlib_archive const *archive, char const
         if (written != entry->data_len) {
             fprintf(stderr, "tlib: failed to write file: %s\n", str_cstr(&out_path));
             return 1;
+        }
+
+        // Skip package.tl from compilation list (it's not a source file)
+        if (entry->name_len == 10 && memcmp(entry->name, "package.tl", 10) == 0) {
+            continue;
         }
 
         str normed = file_path_normalize(alloc, out_path);

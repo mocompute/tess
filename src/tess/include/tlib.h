@@ -52,10 +52,11 @@ int tl_tlib_valid_filename(char const *name, u32 len);
 typedef struct {
     int verbose;
     // Metadata fields (for CLI testing before manifest support)
-    char const *name;    // package name (required)
-    char const *author;  // package author (optional)
-    char const *version; // package version (required)
-    str        *modules; // array of public module names (optional)
+    char const *name;            // package name (required)
+    char const *author;          // package author (optional)
+    char const *version;         // package version (required)
+    char const *package_tl_path; // path to package.tl (included as entry if non-null)
+    str        *modules;         // array of public module names (optional)
     u16         module_count;
     // Dependencies (from manifest; null/0 when using CLI flags)
     str *depends;
@@ -75,8 +76,8 @@ int tl_tlib_pack(allocator *alloc, char const *output_path, str_sized files, str
 // Extract all entries from an already-loaded archive to output_dir.
 // Creates subdirectories as needed. Appends each written path to out_files.
 // Returns 0 on success, 1 on error.
-int tl_tlib_extract(allocator *alloc, tl_tlib_archive const *archive,
-                    char const *output_dir, str_array *out_files);
+int tl_tlib_extract(allocator *alloc, tl_tlib_archive const *archive, char const *output_dir,
+                    str_array *out_files);
 
 // Unpack options
 typedef struct {

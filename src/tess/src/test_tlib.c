@@ -591,6 +591,7 @@ static int test_pack_with_manifest(void) {
     opts.name              = str_cstr(&pkg.info.name);
     opts.version           = str_cstr(&pkg.info.version);
     opts.author            = str_is_empty(pkg.info.author) ? null : str_cstr(&pkg.info.author);
+    opts.package_tl_path   = pkg_path;
 
     if (pkg.info.export_count > 0) {
         opts.modules      = pkg.info.exports;
@@ -666,12 +667,24 @@ static int test_pack_with_manifest(void) {
         error += !str_eq(arc.metadata.depends_optional[0], S("Debug=0.1.0"));
     }
 
-    // Verify file entries
-    error += (arc.entries_count != 1);
+    // Verify file entries (source file + package.tl)
+    error += (arc.entries_count != 2);
+    if (error) {
+        fprintf(stderr, "  expected 2 entries, got %u\n", arc.entries_count);
+    }
     if (arc.entries_count >= 1) {
         error += (arc.entries[0].data_len != strlen(src_content));
         if (arc.entries[0].data_len == strlen(src_content)) {
             error += memcmp(arc.entries[0].data, src_content, strlen(src_content)) != 0;
+        }
+    }
+    // Verify package.tl entry
+    if (arc.entries_count >= 2) {
+        error += (arc.entries[1].name_len != 10);
+        error += memcmp(arc.entries[1].name, "package.tl", 10) != 0;
+        error += (arc.entries[1].data_len != strlen(pkg_content));
+        if (arc.entries[1].data_len == strlen(pkg_content)) {
+            error += memcmp(arc.entries[1].data, pkg_content, strlen(pkg_content)) != 0;
         }
     }
 
@@ -821,13 +834,16 @@ static int test_extract(void) {
     char       path[512];
     make_temp_path(path, sizeof(path), "test_tlib_extract.tlib");
 
-    tl_tlib_metadata meta       = make_test_metadata(alloc);
-    tl_tlib_entry    entries[2] = {
+    char const      *pkg_content = "format(1)\npackage(\"TestLib\")\nversion(\"1.0.0\")\n";
+
+    tl_tlib_metadata meta        = make_test_metadata(alloc);
+    tl_tlib_entry    entries[3]  = {
       {"lib.tl", 6, (byte const *)"#module Lib\nfoo() { 1 }\n", 24},
       {"sub/util.tl", 11, (byte const *)"#module Util\nbar() { 2 }\n", 25},
+      {"package.tl", 10, (byte const *)pkg_content, (u32)strlen(pkg_content)},
     };
 
-    if (tl_tlib_write(alloc, path, &meta, entries, 2)) {
+    if (tl_tlib_write(alloc, path, &meta, entries, 3)) {
         fprintf(stderr, "  write failed\n");
         return 1;
     }
@@ -851,14 +867,14 @@ static int test_extract(void) {
 
     int error = 0;
 
-    // Should have 2 extracted files
+    // Should have 2 extracted source files (package.tl excluded from out_files)
     error += (out_files.size != 2);
     if (error) {
-        fprintf(stderr, "  expected 2 files, got %u\n", out_files.size);
+        fprintf(stderr, "  expected 2 files in out_files, got %u\n", out_files.size);
         return error;
     }
 
-    // Verify files exist and have correct content
+    // Verify source files exist and have correct content
     for (u32 i = 0; i < out_files.size; i++) {
         char *data;
         u32   size;
@@ -870,6 +886,23 @@ static int test_extract(void) {
         }
         if (size != entries[i].data_len || memcmp(data, entries[i].data, size) != 0) {
             fprintf(stderr, "  content mismatch for file %u\n", i);
+            error++;
+        }
+    }
+
+    // Verify package.tl was extracted to disk despite being excluded from out_files
+    {
+        char pkg_path[512];
+        snprintf(pkg_path, sizeof(pkg_path), "%spackage.tl", extract_dir);
+        normalize_seps(pkg_path);
+        char *data;
+        u32   size;
+        file_read(alloc, pkg_path, &data, &size);
+        if (!data) {
+            fprintf(stderr, "  package.tl not extracted to disk\n");
+            error++;
+        } else if (size != strlen(pkg_content) || memcmp(data, pkg_content, size) != 0) {
+            fprintf(stderr, "  package.tl content mismatch\n");
             error++;
         }
     }
