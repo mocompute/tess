@@ -7,6 +7,7 @@
 # ------------------------------------------------------------------------------
 
 CONFIG ?= release
+ASAN_OPTIONS ?= detect_leaks=0
 
 ifeq ($(CONFIG),release)
   CFLAGS_CONFIG = -O2 -DNDEBUG
@@ -246,7 +247,7 @@ cleanall:
 # $(3): test count
 define run_test_suite
 	@failed=0; \
-	export ASAN_OPTIONS=detect_leaks=0; \
+	export ASAN_OPTIONS=$(ASAN_OPTIONS); \
 	for test in $(2); do \
 		name=$$(basename $$test); \
 		$(MSG_TEST) $$name; \
@@ -576,7 +577,7 @@ $(TL_BUILD_DIR)/test_import_relative_dotdot: $(TL_TEST_DIR)/fixtures/test_import
 	@mkdir -p $(dir $@)
 	$(MSG_GEN) $@
 	@cd $(TL_TEST_DIR)/fixtures && \
-	export ASAN_OPTIONS=detect_leaks=0 && \
+	export ASAN_OPTIONS=$(ASAN_OPTIONS) && \
 	if ! $(CURDIR)/$(TESS_EXE) exe --no-standard-includes -S $(CURDIR)/$(TL_STD_DIR) -o $(CURDIR)/$@ test_import_relative_dotdot.tl ; then \
 		$(MSG_FAIL) $@; \
 	fi
@@ -584,7 +585,7 @@ $(TL_BUILD_DIR)/test_import_relative_dotdot: $(TL_TEST_DIR)/fixtures/test_import
 $(TL_BUILD_DIR)/test_%: $(TL_TEST_DIR)/test_%.tl $(TESS_EXE)
 	@mkdir -p $(dir $@)
 	$(MSG_GEN) $@
-	@export ASAN_OPTIONS=detect_leaks=0; \
+	@export ASAN_OPTIONS=$(ASAN_OPTIONS); \
 	if ! ./$(TESS_EXE) exe --no-standard-includes -S $(TL_STD_DIR) -o $@ $< ; then \
 		$(MSG_FAIL) $@; \
 	fi
@@ -593,7 +594,7 @@ build-tl-tests: $(TL_TEST_EXES)
 
 test-tl: build-tl-tests
 	@failed=0; \
-	export ASAN_OPTIONS=detect_leaks=0; \
+	export ASAN_OPTIONS=$(ASAN_OPTIONS); \
 	count_pass=0; \
 	count_fail=0; \
 	count_known=0; \
