@@ -748,6 +748,8 @@ static int process_annotation(tl_infer *self, traverse_ctx *ctx, ast_node *node,
         // FIXME: type arguments v2 may not be needed
         // map_merge(&ctx->type_arguments, result.type_arguments);
 
+        // FIXME: with v2 type arguments, they should already be added to lexicals by the time any
+        // annotation is processed; so this entire block could be removed.
         if (opts.add_to_lexicals) {
             str_array arr = str_map_keys(self->transient, result.type_arguments);
             forall(i, arr) {

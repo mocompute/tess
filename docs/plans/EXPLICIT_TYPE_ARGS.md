@@ -14,23 +14,23 @@ BEFORE                                      AFTER
 ──────                                      ─────
 Point(a) : { x: a, y: a }                  Point[a] : { x: a, y: a }
 Option(T) : | Some { v: T } | None         Option[T] : | Some { v: T } | None
-Pt = Point(Int)                             Pt = Point[Int]
+Pt = Point(Int)                            Pt = Point[Int]
 
-x: Ptr(Int)                                 x: Ptr[Int]
-s: Ptr(Const(CChar))                        s: Ptr[Const[CChar]]
-buf: CArray(CChar, 256)                     buf: CArray[CChar, 256]
-arr: Array(Int)                             arr: Array[Int]
+x: Ptr(Int)                                x: Ptr[Int]
+s: Ptr(Const(CChar))                       s: Ptr[Const[CChar]]
+buf: CArray(CChar, 256)                    buf: CArray[CChar, 256]
+arr: Array(Int)                            arr: Array[Int]
 
-empty(T: Type) -> Array(T) { ... }          empty[T]() -> Array[T] { ... }
-with_capacity(T: Type, n: Int)              with_capacity[T](n: Int)
-arr := empty(Int)                           arr := empty[Int]()
-map(f, arr) { ... }                         map[a, b](f: (a)->b, arr: Array[a]) -> Array[b]
+empty(T: Type) -> Array(T) { ... }         empty[T]() -> Array[T] { ... }
+with_capacity(T: Type, n: Int)             with_capacity[T](n: Int)
+arr := empty(Int)                          arr := empty[Int]()
+map(f, arr) { ... }                        map[a, b](f: (a)->b, arr: Array[a]) -> Array[b]
 
-sizeof(T)                                   sizeof(T)          // unchanged
-alignof(T)                                  alignof(T)         // unchanged
-sizeof(Ptr(Void))                           sizeof(Ptr[Void])  // inner types change
-Constructor(x = 1, y = 2)                   Constructor(x = 1, y = 2)  // unchanged
-Variant(42)                                 Variant(42)        // unchanged (value args)
+sizeof(T)                                  sizeof(T)          // unchanged
+alignof(T)                                 alignof(T)         // unchanged
+sizeof(Ptr(Void))                          sizeof(Ptr[Void])  // inner types change
+Constructor(x = 1, y = 2)                  Constructor(x = 1, y = 2)  // unchanged
+Variant(42)                                Variant(42)        // unchanged (value args)
 ```
 
 ### Disambiguation Rules (indexing vs type arguments)
