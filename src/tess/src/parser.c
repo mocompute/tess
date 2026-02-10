@@ -1214,26 +1214,34 @@ static ast_node *maybe_wrap_lambda_function_in_let_in(parser *self, ast_node *no
     return a;
 }
 
-static int a_funcall(parser *self) {
+static int maybe_type_arguments(parser *self, ast_node_array *type_args) {
+    *type_args = (ast_node_array){.alloc = self->ast_arena};
 
-    if (a_try(self, a_attributed_identifier)) return 1;
-    ast_node      *name      = self->result;
-
-    ast_node_array type_args = {.alloc = self->ast_arena};
     if (0 == a_try(self, a_open_square)) {
         if (0 == a_try(self, a_close_square)) goto type_args_done;
-        if (a_try(self, a_identifier)) return 1;
-        array_push(type_args, self->result);
+        if (a_try(self, a_identifier)) return ERROR_STOP;
+        array_push(*type_args, self->result);
 
         while (1) {
             if (0 == a_try(self, a_close_square)) goto type_args_done;
-            if (a_try(self, a_comma)) return 1;
-            if (a_try(self, a_identifier)) return 1;
-            array_push(type_args, self->result);
+            if (a_try(self, a_comma)) return ERROR_STOP;
+            if (a_try(self, a_identifier)) return ERROR_STOP;
+            array_push(*type_args, self->result);
         }
     }
 
 type_args_done:
+    return 0;
+}
+
+static int a_funcall(parser *self) {
+
+    if (a_try(self, a_attributed_identifier)) return 1;
+    ast_node      *name = self->result;
+
+    ast_node_array type_args;
+    if (ERROR_STOP == maybe_type_arguments(self, &type_args)) return ERROR_STOP;
+
     if (a_try(self, a_open_round)) return 1;
 
     ast_node_array args = {.alloc = self->ast_arena};
@@ -1269,8 +1277,10 @@ done:
 
 static int a_type_constructor(parser *self) {
     if (a_try(self, a_attributed_identifier)) return 1;
-    ast_node *name = self->result;
+    ast_node      *name = self->result;
 
+    ast_node_array type_args;
+    if (ERROR_STOP == maybe_type_arguments(self, &type_args)) return ERROR_STOP;
     if (a_try(self, a_open_round)) return 1;
 
     ast_node_array args = {.alloc = self->ast_arena};
@@ -1287,8 +1297,8 @@ static int a_type_constructor(parser *self) {
 done:
     array_shrink(args);
     mangle_name(self, name);
-    ast_node *node =
-      ast_node_create_nfa_tc(self->ast_arena, name, (ast_node_sized){0}, (ast_node_sized)sized_all(args));
+    ast_node *node = ast_node_create_nfa_tc(self->ast_arena, name, (ast_node_sized)sized_all(type_args),
+                                            (ast_node_sized)sized_all(args));
     return result_ast_node(self, node);
 }
 
@@ -2859,6 +2869,8 @@ static int parse_struct_fields(parser *self, str parent_prefix, u8 parent_n_type
                         }
                         ast_node *new_name = ast_node_create_sym(self->ast_arena, info->prefixed_name);
                         mangle_name(self, new_name);
+
+                        // FIXME: here we could use args as type_args, and make regular args empty, I think?
                         ast_node *new_ann =
                           ast_node_create_nfa(self->ast_arena, new_name, (ast_node_sized){0}, args);
                         out_fields->v[fi]->symbol.annotation = new_ann;
