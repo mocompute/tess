@@ -1,9 +1,10 @@
 #module main
-#import <string.tl>
+
+foo[T](x: T) { x }
+
 
 main() {
-    buffer := CArray(CChar, 256)
-    ptr : CString := buffer   // CArray decays to Ptr
-    c_strcpy(buffer, "hello")    // Can pass CArray where Ptr expected
-    0
+
+    foo[Int](0)
+
 }
