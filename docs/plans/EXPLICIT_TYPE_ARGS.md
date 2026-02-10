@@ -440,3 +440,125 @@ positions. Phase 4 (remove old syntax) immediately follows Phase 3. Phase 5
 
 Estimated touch points: `parser.c`, `type.c`, `infer.c`, `ast.h`, `ast.c`,
 `transpile.c`, plus ~80 .tl files for migration.
+
+---
+
+## Appendix A: Key Code Locations
+
+All paths relative to repo root. Line numbers as of commit `a9fec778`.
+
+### AST — `src/tess/include/ast.h`
+
+| Line | Symbol | Notes |
+|------|--------|-------|
+| 77 | `struct ast_let` | Function definition node |
+| 80-81 | `.type_parameters` / `.n_type_parameters` | NEW: `[T, U]` on function defs |
+| 94 | `struct ast_named_application` | Function call / type constructor node |
+| 97-98 | `.type_arguments` / `.n_type_arguments` | NEW: `[Int]` on function calls |
+| 158 | `struct ast_user_type_def` | Struct / union / tagged union / enum definition |
+| 160-165 | `.type_arguments` / `.n_type_arguments` | Pre-existing: `(a)` on type defs |
+| 249 | `ast_node_create_let(alloc, name, params, type_params, body)` | Constructor; `type_params` is `ast_node_sized` |
+| 251 | `ast_node_create_nfa(alloc, name, args, type_args)` | Constructor; `type_args` is `ast_node_sized` |
+| 252 | `ast_node_create_nfa_tc(alloc, name, args, type_args)` | Type constructor variant of NFA |
+
+### Parser — `src/tess/src/parser.c`
+
+| Line | Function | Role |
+|------|----------|------|
+| 629 | `a_open_square()` | NEW: tokenize `[` |
+| 643 | `a_close_square()` | NEW: tokenize `]` |
+| 1138 | `a_type_identifier()` | Parses type names; delegates to `a_funcall` for `Name(args)`. **Key change point**: currently `Name(a)` produces NFA with args in `arguments`; needs to handle `Name[a]` putting args in `type_arguments` |
+| 1176 | `a_type_annotation()` | Parses `: Type` annotations; calls `a_type_identifier` |
+| 1217 | `a_funcall()` | Parses function calls; **already handles** `name[T, U](args)` putting type args in `type_arguments` |
+| 1270 | `a_type_constructor()` | Parses type constructors in annotations; calls `a_funcall`. Needs `[]` support |
+| 2411 | `toplevel_defun()` | Parses function definitions; **already handles** `name[T, U](params) { body }` |
+| 2668 | `toplevel_type_alias()` | Parses `Foo = Bar(Int)`. RHS uses `a_type_identifier` |
+| 2879 | `toplevel_struct()` | Parses struct defs. Extracts type args from `type_ident` NFA (lines 2898-2901). **Key change point**: currently reads from `named_application.arguments` |
+| 2975 | `toplevel_union()` | Parses union defs. Same pattern as `toplevel_struct` (lines 3005-3008) |
+| 3031 | `annotation_uses_type_param()` | Checks if annotation references a type param. **FIXME at 3042**: needs to also check `type_arguments` |
+| 3098 | `create_struct_utd()` | Helper: creates UTD node from parsed fields + type args |
+| 3486 | `toplevel_tagged_union()` | Parses tagged union defs. Extracts type args from `type_ident` NFA (lines 3505-3508). **Key change point**: same pattern as `toplevel_struct` |
+
+**Parser flow for type definitions:** `a_type_identifier()` → tries `a_funcall()` first → if it matches `Name(args)`, returns NFA with type args in `arguments`. Then `toplevel_struct`/`toplevel_tagged_union` extract from `named_application.arguments`. With new syntax, `a_type_identifier` needs to produce NFA with args in `type_arguments` when `[]` is used.
+
+### Type System — `src/tess/src/type.c`
+
+| Line | Function | Role |
+|------|----------|------|
+| 74 | `make_unary_tc(self, S("Ptr"))` | Registers `Ptr` as unary type constructor |
+| 77 | `make_unary_tc(self, S("Const"))` | Registers `Const` as unary type constructor |
+| 201 | `make_unary_tc()` | Creates a unary type constructor in the registry |
+| 321 | `tl_type_registry_instantiate_carray()` | Special CArray instantiation (type + int count) |
+| 350 | `tl_type_registry_is_unary_type()` | Checks if name is a unary type constructor |
+| 502 | `tl_type_registry_add_type_argument()` | NEW: adds named type arg to context map |
+| 508 | `tl_type_registry_add_fresh_type_argument()` | NEW: creates fresh literal + adds to map |
+| 515 | `add_type_argument()` | NEW: local helper wrapping the above |
+| 522 | `is_type_argument()` | NEW: checks if name is a declared type arg |
+| 526 | `get_type_argument()` | NEW: retrieves type for a declared type arg |
+| 530 | `parse_type_specials()` | Handles special type names (e.g., `any`); uses `add_type_argument` |
+| 550 | `type_variable_sugar()` | Auto-creates type variables for unknown symbols. **FIXME at 621**: should not auto-create with v2 type args |
+| 577 | `tl_type_registry_parse_type_()` | **Main type parser**. Receives NFA nodes, dispatches based on name |
+| 645 | (in `parse_type_`) | Unary type check: `tl_type_registry_is_unary_type` branch — handles `Ptr(T)`, `Const(T)` |
+| 733 | (in `parse_type_`) | Union special case |
+| 739-741 | (in `parse_type_`) | CArray special case: `tl_type_registry_instantiate_carray` |
+| 875 | `tl_type_registry_parse_type_ctx_init()` | Initializes parse context (type_arguments map, etc.) |
+
+**Type parser flow for `Ptr(T)`:** `parse_type_()` receives NFA node → checks `is_unary_type("Ptr")` → reads single arg from `node->named_application.arguments[0]` → recursively parses arg → instantiates. **With new syntax:** must read from `type_arguments` instead.
+
+### Inference — `src/tess/src/infer.c`
+
+| Line | Function | Role |
+|------|----------|------|
+| 577 | `traverse_ctx_load_type_arguments()` | NEW: at start of `ast_let`, creates fresh type literals for each declared `[T, U]` type parameter |
+| 588 | `traverse_ctx_assign_type_arguments()` | NEW: at `ast_nfa`, matches call-site `[Int]` to definition's `[T]` by position |
+| 738 | `process_annotation()` | Processes type annotations. **FIXME at 748**: `map_merge` of type args commented out (v2 pre-loads them). **FIXME at 751**: `add_to_lexicals` block may be removable |
+| 1557 | (in traversal) | Where `load_type_arguments` is called for `ast_let` |
+| 1607 | (in traversal) | Where `assign_type_arguments` is called for `ast_nfa` |
+| 2268 | `check_type_predicate()` | Handles `T :: Int` and `x :: T` — already updated for type args |
+| 3236 | `rename_variables()` | Variable renaming pass; line 3436 recurses into type predicate RHS for type arg references |
+
+### Transpiler — `src/tess/src/transpile.c`
+
+Minimal changes needed. One call site updated to pass `(ast_node_sized){0}` for the new `type_args` parameter on `ast_node_create_nfa`. The transpiler works with resolved types, so syntax changes are mostly transparent.
+
+### FIXME Locations (v2 type args)
+
+| File | Line | Description |
+|------|------|-------------|
+| `parser.c` | 3042 | `annotation_uses_type_param`: should also check `node->named_application.type_arguments` |
+| `infer.c` | 748 | `process_annotation`: `map_merge` of type args commented out |
+| `infer.c` | 751 | `process_annotation`: `add_to_lexicals` block possibly removable |
+| `type.c` | 621 | `type_variable_sugar`: should not auto-create with v2 type args |
+
+---
+
+## Appendix B: Files Requiring `T: Type` Manual Conversion
+
+These files use the `T: Type` value-parameter pattern that must be manually converted
+to `[T]` type parameter syntax. This changes function arity and all call sites.
+
+| File | Occurrences | Functions |
+|------|-------------|-----------|
+| `src/tl/std/Array.tl` | 11 | `empty`, `with_capacity` (2 overloads), `_type_width_aligned`, `_ensure_capacity`, `push`, `pop`, `last`, `iter_init`, `iter_value`, `iter_ptr` |
+| `src/tl/std/Array-tutorial.tl` | 8 | Same functions (tutorial copy) |
+| `src/tess/tl/test_type_arguments_annotations.tl` | 1 | `array_new` |
+| `src/tess/tl/test_type_argument_field_annotation.tl` | 1 | `empty` |
+| `src/tess/tl/test_type_predicate_type_arg.tl` | 3 | `is_int_type`, `matches_param`, `combined` |
+| `src/tess/tl/test_lambda_immediate_type_argument.tl` | 1 | Lambda: `(x: Type) { sizeof(x) } (Int)` |
+| `src/tess/tl/syntax_exploration.tl` | 1 | `array_new` |
+
+---
+
+## Appendix C: Design Decisions (for context recovery)
+
+These decisions were made during planning and should be preserved:
+
+1. **Go-style square brackets** for all type arguments — no exceptions
+2. **No backward compatibility** — old `()` syntax will be removed after migration
+3. **Context-based disambiguation** — parser uses position context, not lookahead heuristics
+4. **Script-assisted migration** — Python script for bulk conversion, manual for `T: Type`
+5. **`sizeof(T)` / `alignof(T)` keep parentheses** — they are built-in operators, not type constructors; but inner type expressions use `[]`: `sizeof(Ptr[Void])`
+6. **Struct constructors unchanged** — `Point(x = 1, y = 2)` keeps `()` (value args)
+7. **Tagged union value constructors unchanged** — `Some(42)` keeps `()` (value args)
+8. **Type definitions use `[]`** — `Point[a] : { ... }`, `Option[T] : | ...`
+9. **All built-in type constructors use `[]`** — `Ptr[T]`, `CArray[T, N]`, `Const[T]`, `Array[T]`
