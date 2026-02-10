@@ -481,6 +481,7 @@ TL_TESTS =					\
 	type_predicate_branch			\
 	type_predicate_generic			\
 	type_predicate_generic_type		\
+	type_predicate_type_arg			\
 	tagged_union				\
 	tagged_union_generic_basic		\
 	tagged_union_generic_case		\

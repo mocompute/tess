@@ -2260,6 +2260,43 @@ static int check_type_predicate(tl_infer *self, traverse_ctx *traverse_ctx, ast_
         return 0;
     }
 
+    // Check if LHS is a type argument (pattern: T :: ConcreteType)
+    if (ast_node_is_symbol(node->type_predicate.lhs)) {
+        str lhs_name = ast_node_str(node->type_predicate.lhs);
+        tl_monotype *lhs_type_arg = str_map_get_ptr(traverse_ctx->type_arguments, lhs_name);
+
+        if (lhs_type_arg) {
+            // LHS is a type argument - handle it specially
+            tl_type_registry_parse_type_ctx parse_ctx;
+            tl_type_registry_parse_type_ctx_init(self->transient, &parse_ctx, traverse_ctx->type_arguments);
+
+            tl_monotype *rhs_type =
+                tl_type_registry_parse_type_with_ctx(self->registry, node->type_predicate.rhs, &parse_ctx);
+
+            // Unwrap type literal if needed
+            tl_monotype *lhs_mono = lhs_type_arg;
+            if (tl_monotype_is_type_literal(lhs_mono)) {
+                lhs_mono = tl_monotype_literal_target(lhs_mono);
+            }
+
+            // Compare types using constrain with error suppression
+            int save                        = self->is_constrain_ignore_error;
+            self->is_constrain_ignore_error = 1;
+
+            tl_polytype *lhs_poly = tl_polytype_absorb_mono(self->arena, lhs_mono);
+            if (!rhs_type || constrain_pm(self, lhs_poly, rhs_type, node)) {
+                node->type_predicate.is_valid = 0;
+            } else {
+                node->type_predicate.is_valid = 1;
+            }
+
+            self->is_constrain_ignore_error = save;
+            ast_node_type_set(node, tl_polytype_bool(self->arena, self->registry));
+            return 0;
+        }
+    }
+    // Fall through to existing expression handling...
+
     tl_type_registry_parse_type_ctx parse_ctx;
     tl_type_registry_parse_type_ctx_init(self->transient, &parse_ctx, traverse_ctx->type_arguments);
 
@@ -3337,6 +3374,8 @@ static void rename_variables(tl_infer *self, ast_node *node, rename_variables_ct
     case ast_type_predicate:
         //
         rename_variables(self, node->type_predicate.lhs, ctx, level + 1);
+        // Also rename type argument references in RHS (e.g., T in "x :: T")
+        rename_variables(self, node->type_predicate.rhs, ctx, level + 1);
         break;
 
     case ast_attribute_set:
