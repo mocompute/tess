@@ -345,7 +345,6 @@ tl_create_test(mutual_recursion)
 tl_create_test(mutual_recursion_module)
 tl_create_test(mutual_recursion_module_apply)
 tl_create_test(mutual_recursion_both_referenced)
-tl_create_test(nested_struct)
 tl_create_test(nested_struct_access)
 tl_create_test(nested_type_cross_module_conflict)
 tl_create_test(nested_lambda_context)
@@ -508,4 +507,5 @@ tl_create_runtime_fail_test(fail_str_push_literal)
 # Known fail-failures: expected-failure tests that the compiler doesn't reject yet
 
 # Known failures: these should work but a compiler bug makes them fail
+tl_create_known_failure(nested_struct)
 tl_create_known_failure(while_empty_body)

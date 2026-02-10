@@ -2870,9 +2870,8 @@ static int parse_struct_fields(parser *self, str parent_prefix, u8 parent_n_type
                         ast_node *new_name = ast_node_create_sym(self->ast_arena, info->prefixed_name);
                         mangle_name(self, new_name);
 
-                        // FIXME: here we could use args as type_args, and make regular args empty, I think?
                         ast_node *new_ann =
-                          ast_node_create_nfa(self->ast_arena, new_name, (ast_node_sized){0}, args);
+                          ast_node_create_nfa(self->ast_arena, new_name, args, (ast_node_sized){0});
                         out_fields->v[fi]->symbol.annotation = new_ann;
                     } else {
                         // Replace with just Foo_Bar (no type params)
