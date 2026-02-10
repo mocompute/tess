@@ -675,10 +675,13 @@ static void generate_toplevels(transpile *self) {
         assert(tl_monotype_is_list(poly->type));
         eval_ctx ctx      = {.free_variables = poly->type->list.fvs};
         str      body_res = generate_expr(self, return_type, body, &ctx);
-        if (!res_is_void && !str_is_empty(body_res)) {
+        if (!res_is_void && !str_is_empty(body_res) && !ctx.is_effective_void) {
             generate_decl(self, res, return_type);
             generate_assign(self, res, body_res);
             cat_return(self, res);
+        } else if (ctx.is_effective_void && !str_is_empty(body_res)) {
+            cat(self, body_res);
+            cat_semicolonln(self);
         }
         cat_close_curly(self);
         cat_nl(self);
@@ -1057,11 +1060,16 @@ static str generate_let_in_lambda(transpile *self, tl_monotype *result_type, ast
     // don't declare or assign to name, because it is hoisted to a toplevel.
 
     str body = generate_expr(self, null, node->let_in.body, ctx);
-    str res  = next_res(self);
-    generate_decl(self, res, result_type);
-    generate_assign(self, res, body);
-
-    return res;
+    if (!str_is_empty(body) && should_assign_result(ctx, result_type)) {
+        str res = next_res(self);
+        generate_decl(self, res, result_type);
+        generate_assign(self, res, body);
+        return res;
+    } else if (!str_is_empty(body)) {
+        cat(self, body);
+        cat_semicolonln(self);
+    }
+    return str_empty();
 }
 
 static str generate_let_in(transpile *self, tl_monotype *result_type, ast_node const *node, eval_ctx *ctx) {
@@ -1244,9 +1252,14 @@ static str generate_inline_lambda_with_args(transpile *self, tl_monotype *result
     // generate lambda body
     str lambda_res =
       generate_expr(self, result_type, node->lambda_application.lambda->lambda_function.body, ctx);
-    generate_assign_lhs(self, res);
-    cat(self, lambda_res);
-    cat_semicolonln(self);
+    if (!str_is_empty(res) && !ctx->is_effective_void) {
+        generate_assign_lhs(self, res);
+        cat(self, lambda_res);
+        cat_semicolonln(self);
+    } else if (!str_is_empty(lambda_res)) {
+        cat(self, lambda_res);
+        cat_semicolonln(self);
+    }
 
     // close lexical scope
     cat_close_curlyln(self);
@@ -1332,7 +1345,12 @@ static str generate_tagged_union_case(transpile *self, ast_node const *node, eva
                 fatal("else must be last");
             }
             str arm_body = generate_expr(self, null, node->case_.arms.v[i], ctx);
-            generate_assign(self, res, arm_body);
+            if (result_type && should_assign_result(ctx, result_type)) {
+                generate_assign(self, res, arm_body);
+            } else if (!str_is_empty(arm_body)) {
+                cat(self, arm_body);
+                cat_semicolonln(self);
+            }
 
             if (!str_is_empty(end_label)) {
                 cat(self, S("goto "));
@@ -1397,7 +1415,12 @@ static str generate_tagged_union_case(transpile *self, ast_node const *node, eva
 
         // Generate arm body
         str arm_body = generate_expr(self, null, node->case_.arms.v[i], ctx);
-        generate_assign(self, res, arm_body);
+        if (result_type && should_assign_result(ctx, result_type)) {
+            generate_assign(self, res, arm_body);
+        } else if (!str_is_empty(arm_body)) {
+            cat(self, arm_body);
+            cat_semicolonln(self);
+        }
 
         if (!str_is_empty(end_label)) {
             cat(self, S("goto "));
@@ -1577,7 +1600,12 @@ static str generate_short_circuit_op(transpile *self, tl_monotype *type, ast_nod
 
     // 4b. Non-short-circuit branch (evaluate right)
     str right = generate_expr(self, null, node->binary_op.right, ctx);
-    generate_assign(self, res, right);
+    if (should_assign_result(ctx, type)) {
+        generate_assign(self, res, right);
+    } else {
+        cat(self, right);
+        cat_semicolonln(self);
+    }
 
     cat(self, S("}\n"));
 
@@ -2191,7 +2219,7 @@ int transpile_compile(transpile *self, str_build *out_build) {
 //
 
 transpile *transpile_create(allocator *alloc, transpile_opts const *opts) {
-    transpile *self = new (alloc, transpile);
+    transpile *self = new(alloc, transpile);
 
     self->opts      = *opts;
 
