@@ -1,4 +1,5 @@
 #module builtin
+#import <fatal.tl>
 #include <stddef.h>
 
 // Symbols in the builtin module are available without qualification.
