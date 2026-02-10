@@ -75,8 +75,10 @@ typedef struct ast_node {
         } lambda_function;
 
         struct ast_let {
-            struct ast_node **parameters;
+            struct ast_node **parameters; // formal params first
             u8                n_parameters;
+            struct ast_node **type_parameters;
+            u8                n_type_parameters;
             struct ast_node  *name;
             struct ast_node  *body;
             int               is_specialized;
@@ -90,8 +92,10 @@ typedef struct ast_node {
         } lambda_application;
 
         struct ast_named_application {
-            struct ast_node **arguments;
+            struct ast_node **arguments; // formal arguments first
             u8                n_arguments;
+            struct ast_node **type_arguments;
+            u8                n_type_arguments;
             struct ast_node  *name;
             int               is_specialized;
             int               is_type_constructor;
@@ -242,9 +246,11 @@ nodiscard ast_node *ast_node_create_unary_op(allocator *, ast_node *, ast_node *
 nodiscard ast_node *ast_node_create_return(allocator *, ast_node *, int) mallocfun;
 nodiscard ast_node *ast_node_create_while(allocator *, ast_node *, ast_node *, ast_node *) mallocfun;
 nodiscard ast_node *ast_node_create_let_in(allocator *, ast_node *, ast_node *, ast_node *) mallocfun;
-nodiscard ast_node *ast_node_create_let(allocator *, ast_node *, ast_node_sized, ast_node *) mallocfun;
-nodiscard ast_node *ast_node_create_nfa(allocator *, ast_node *, ast_node_sized) mallocfun;
-nodiscard ast_node *ast_node_create_nfa_tc(allocator *, ast_node *, ast_node_sized) mallocfun;
+nodiscard ast_node *ast_node_create_let(allocator *, ast_node *, ast_node_sized, ast_node_sized,
+                                        ast_node *) mallocfun;
+nodiscard ast_node *ast_node_create_nfa(allocator *, ast_node *, ast_node_sized, ast_node_sized) mallocfun;
+nodiscard ast_node *ast_node_create_nfa_tc(allocator *, ast_node *, ast_node_sized,
+                                           ast_node_sized) mallocfun;
 nodiscard ast_node *ast_node_create_lfa(allocator *, ast_node *, ast_node_sized) mallocfun;
 nodiscard ast_node *ast_node_create_tuple(allocator *, ast_node_sized) mallocfun;
 nodiscard ast_node *ast_node_create_type_alias(allocator *, ast_node *, ast_node *) mallocfun;

@@ -49,17 +49,21 @@ ast_node *ast_node_create_f64(allocator *alloc, f64 x) {
     self->f64.val  = x;
     return self;
 }
-ast_node *ast_node_create_nfa(allocator *alloc, ast_node *name, ast_node_sized args) {
+ast_node *ast_node_create_nfa(allocator *alloc, ast_node *name, ast_node_sized type_args,
+                              ast_node_sized args) {
     ast_node *self                              = ast_node_create(alloc, ast_named_function_application);
     self->named_application.name                = name;
+    self->named_application.n_type_arguments    = type_args.size;
+    self->named_application.type_arguments      = type_args.v;
     self->named_application.n_arguments         = args.size;
     self->named_application.arguments           = args.v;
     self->named_application.is_specialized      = 0;
     self->named_application.is_type_constructor = 0;
     return self;
 }
-ast_node *ast_node_create_nfa_tc(allocator *alloc, ast_node *name, ast_node_sized args) {
-    ast_node *self                              = ast_node_create_nfa(alloc, name, args);
+ast_node *ast_node_create_nfa_tc(allocator *alloc, ast_node *name, ast_node_sized type_args,
+                                 ast_node_sized args) {
+    ast_node *self                              = ast_node_create_nfa(alloc, name, type_args, args);
     self->named_application.is_type_constructor = 1;
     return self;
 }
@@ -177,13 +181,16 @@ ast_node *ast_node_create_let_in(allocator *alloc, ast_node *name, ast_node *val
     self->let_in.body  = body;
     return self;
 }
-ast_node *ast_node_create_let(allocator *alloc, ast_node *name, ast_node_sized args, ast_node *body) {
-    ast_node *self           = ast_node_create(alloc, ast_let);
-    self->let.name           = name;
-    self->let.n_parameters   = args.size;
-    self->let.parameters     = args.v;
-    self->let.body           = body;
-    self->let.is_specialized = 0;
+ast_node *ast_node_create_let(allocator *alloc, ast_node *name, ast_node_sized type_args,
+                              ast_node_sized args, ast_node *body) {
+    ast_node *self              = ast_node_create(alloc, ast_let);
+    self->let.name              = name;
+    self->let.n_type_parameters = type_args.size;
+    self->let.type_parameters   = type_args.v;
+    self->let.n_parameters      = args.size;
+    self->let.parameters        = args.v;
+    self->let.body              = body;
+    self->let.is_specialized    = 0;
     return self;
 }
 ast_node *ast_node_create_tuple(allocator *alloc, ast_node_sized xs) {
@@ -334,6 +341,13 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
 
     case ast_let: {
         struct ast_let *vclone = ast_node_let(clone), *vorig = ast_node_let((ast_node *)orig);
+
+        vclone->n_type_parameters = vorig->n_type_parameters;
+        vclone->type_parameters =
+          alloc_malloc(alloc, vclone->n_type_parameters * sizeof vclone->type_parameters[0]);
+        for (u32 i = 0; i < vclone->n_type_parameters; ++i)
+            vclone->type_parameters[i] = ast_node_clone(alloc, vorig->type_parameters[i]);
+
         vclone->name = ast_node_clone(alloc, vorig->name);
         vclone->body = ast_node_clone(alloc, vorig->body);
     } break;
@@ -361,9 +375,16 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
     case ast_named_function_application: {
         struct ast_named_application *vclone = ast_node_named(clone),
                                      *vorig  = ast_node_named((ast_node *)orig);
-        vclone->name                         = ast_node_clone(alloc, vorig->name);
-        vclone->is_specialized               = vorig->is_specialized;
-        vclone->is_type_constructor          = vorig->is_type_constructor;
+
+        vclone->n_type_arguments             = vorig->n_type_arguments;
+        vclone->type_arguments =
+          alloc_malloc(alloc, vclone->n_type_arguments * sizeof vclone->type_arguments[0]);
+        for (u32 i = 0; i < vclone->n_type_arguments; ++i)
+            vclone->type_arguments[i] = ast_node_clone(alloc, vorig->type_arguments[i]);
+
+        vclone->name                = ast_node_clone(alloc, vorig->name);
+        vclone->is_specialized      = vorig->is_specialized;
+        vclone->is_type_constructor = vorig->is_type_constructor;
     } break;
 
     case ast_type_alias: {
@@ -1424,29 +1445,21 @@ u64 ast_node_hash(ast_node const *self) {
 
     case ast_lambda_function:
         //
-        for (u32 i = 0, n = self->lambda_function.n_parameters; i < n; ++i) {
-            combine_node(self->lambda_function.parameters[i]);
-        }
         combine_node(self->lambda_function.body);
         break;
 
-    case ast_lambda_function_application:
-        combine_node(self->lambda_application.lambda);
-        for (u32 i = 0, n = self->lambda_application.n_arguments; i < n; ++i) {
-            combine_node(self->lambda_application.arguments[i]);
-        }
-        break;
+    case ast_lambda_function_application: combine_node(self->lambda_application.lambda); break;
 
     case ast_let:
+        for (u32 i = 0; i < self->let.n_type_parameters; ++i) combine_node(self->let.type_parameters[i]);
         combine_node(self->let.name);
         combine_node(self->let.body);
         break;
 
     case ast_named_function_application:
+        for (u32 i = 0; i < self->named_application.n_type_arguments; ++i)
+            combine_node(self->named_application.type_arguments[i]);
         combine_node(self->named_application.name);
-        for (u32 i = 0, n = self->named_application.n_arguments; i < n; ++i) {
-            combine_node(self->named_application.arguments[i]);
-        }
         break;
 
     case ast_body:

@@ -1469,8 +1469,8 @@ static str generate_case(transpile *self, tl_monotype *type, ast_node const *nod
 
         } else {
             // predicate is an identifier, wrap it in a named function application
-            nfa =
-              ast_node_create_nfa(self->transient, bin_pred, (ast_node_sized){.size = 2, .v = lfa_args});
+            nfa = ast_node_create_nfa(self->transient, bin_pred, (ast_node_sized){0},
+                                      (ast_node_sized){.size = 2, .v = lfa_args});
         }
 
         // allocate room for conditional arm arguments
