@@ -113,7 +113,7 @@ static void      log_env(tl_infer const *);
 static void      log_subs(tl_infer *);
 
 tl_infer        *tl_infer_create(allocator *alloc, tl_infer_opts const *opts) {
-    tl_infer *self           = new (alloc, tl_infer);
+    tl_infer *self           = new(alloc, tl_infer);
 
     self->opts               = *opts;
 
@@ -562,7 +562,7 @@ hashmap *tree_shake(tl_infer *self, ast_node const *node) {
 
 static traverse_ctx *traverse_ctx_create(allocator *transient) {
     // Use a transient allocator because the destroy function leaks the maps.
-    traverse_ctx *out   = new (transient, traverse_ctx);
+    traverse_ctx *out   = new(transient, traverse_ctx);
     out->lexical_names  = hset_create(transient, 64);
     out->type_arguments = map_create_ptr(transient, 64);
     out->user           = null;
@@ -572,6 +572,49 @@ static traverse_ctx *traverse_ctx_create(allocator *transient) {
     out->is_annotation  = 0;
 
     return out;
+}
+
+static void traverse_ctx_load_type_arguments(tl_infer *self, traverse_ctx *ctx, ast_node const *node) {
+    // read type arguments out of ast node
+    if (ast_node_is_let(node)) {
+        for (u32 i = 0; i < node->let.n_type_parameters; i++) {
+            assert(ast_node_is_symbol(node->let.type_parameters[i]));
+            tl_type_registry_add_fresh_type_argument(
+              self->registry, node->let.type_parameters[i]->symbol.name, &ctx->type_arguments);
+        }
+    }
+}
+
+static int traverse_ctx_assign_type_arguments(tl_infer *self, traverse_ctx *ctx, ast_node const *node) {
+    if (ast_node_is_nfa(node)) {
+        ast_node *let = toplevel_get(self, ast_node_str(node->named_application.name));
+        if (!let || !ast_node_is_let(let)) return 0;
+
+        u32                             argc   = node->named_application.n_type_arguments;
+        u32                             paramc = let->let.n_type_parameters;
+
+        tl_type_registry_parse_type_ctx parse_ctx;
+        tl_type_registry_parse_type_ctx_init(self->transient, &parse_ctx, ctx->type_arguments);
+
+        for (u32 i = 0; i < paramc && i < argc; i++) {
+            assert(ast_node_is_symbol(let->let.type_parameters[i]));
+
+            tl_monotype *parsed = tl_type_registry_parse_type_with_ctx(
+              self->registry, node->named_application.type_arguments[i], &parse_ctx);
+
+            if (!parsed) {
+                fatal("could not parse type"); // FIXME better error
+            }
+
+            // wrap in type literal
+            tl_monotype *literal = tl_monotype_create_literal(self->arena, parsed);
+
+            // add to type argument context
+            tl_type_registry_add_type_argument(self->registry, let->let.type_parameters[i]->symbol.name,
+                                               literal, &ctx->type_arguments);
+        }
+    }
+    return 0;
 }
 
 static int traverse_ctx_is_param(traverse_ctx *self, str name) {
@@ -702,7 +745,8 @@ static int process_annotation(tl_infer *self, traverse_ctx *ctx, ast_node *node,
 
     // Merge type arguments into context
     if (ctx) {
-        map_merge(&ctx->type_arguments, result.type_arguments);
+        // FIXME: type arguments v2 may not be needed
+        // map_merge(&ctx->type_arguments, result.type_arguments);
 
         if (opts.add_to_lexicals) {
             str_array arr = str_map_keys(self->transient, result.type_arguments);
@@ -1508,6 +1552,8 @@ static int traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, trave
         map_reset(ctx->type_arguments);
         map_reset(ctx->lexical_names);
 
+        traverse_ctx_load_type_arguments(self, ctx, node);
+
         ctx->node_pos = npos_toplevel;
         // Note: traversing the name as a symbol currently causes invalid constraints to be applied when
         // specializing generic functions. The name's node->type should not in any case be relied upon: the
@@ -1555,6 +1601,8 @@ static int traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, trave
     } break;
 
     case ast_named_function_application: {
+
+        if (traverse_ctx_assign_type_arguments(self, ctx, node)) return 1;
 
         // traverse arguments
 
@@ -2262,7 +2310,7 @@ static int check_type_predicate(tl_infer *self, traverse_ctx *traverse_ctx, ast_
 
     // Check if LHS is a type argument (pattern: T :: ConcreteType)
     if (ast_node_is_symbol(node->type_predicate.lhs)) {
-        str lhs_name = ast_node_str(node->type_predicate.lhs);
+        str          lhs_name     = ast_node_str(node->type_predicate.lhs);
         tl_monotype *lhs_type_arg = str_map_get_ptr(traverse_ctx->type_arguments, lhs_name);
 
         if (lhs_type_arg) {
@@ -2271,7 +2319,7 @@ static int check_type_predicate(tl_infer *self, traverse_ctx *traverse_ctx, ast_
             tl_type_registry_parse_type_ctx_init(self->transient, &parse_ctx, traverse_ctx->type_arguments);
 
             tl_monotype *rhs_type =
-                tl_type_registry_parse_type_with_ctx(self->registry, node->type_predicate.rhs, &parse_ctx);
+              tl_type_registry_parse_type_with_ctx(self->registry, node->type_predicate.rhs, &parse_ctx);
 
             // Unwrap type literal if needed
             tl_monotype *lhs_mono = lhs_type_arg;
@@ -2279,11 +2327,19 @@ static int check_type_predicate(tl_infer *self, traverse_ctx *traverse_ctx, ast_
                 lhs_mono = tl_monotype_literal_target(lhs_mono);
             }
 
+            if (!tl_monotype_is_concrete(lhs_mono)) {
+                tl_monotype_substitute(self->arena, lhs_mono, self->subs, null);
+                if (!tl_monotype_is_concrete(lhs_mono)) {
+                    log_subs(self);
+                    return unresolved_type_error(self, node->type_predicate.lhs);
+                }
+            }
+
             // Compare types using constrain with error suppression
             int save                        = self->is_constrain_ignore_error;
             self->is_constrain_ignore_error = 1;
 
-            tl_polytype *lhs_poly = tl_polytype_absorb_mono(self->arena, lhs_mono);
+            tl_polytype *lhs_poly           = tl_polytype_absorb_mono(self->arena, lhs_mono);
             if (!rhs_type || constrain_pm(self, lhs_poly, rhs_type, node)) {
                 node->type_predicate.is_valid = 0;
             } else {

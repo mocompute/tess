@@ -1,7 +1,8 @@
 #module main
 
-foo[T](x: T) { x }
-
+foo[T, U](x: T) {
+    if T :: Int { x } else { 1 }
+}
 
 main() {
 

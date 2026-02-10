@@ -499,11 +499,23 @@ tl_monotype *tl_type_registry_ptr_char(tl_type_registry *self) {
 
 // -- parse_type
 
+void tl_type_registry_add_type_argument(tl_type_registry *self, str name, tl_monotype *mono,
+                                        hashmap **type_arguments) {
+    (void)self;
+    str_map_set_ptr(type_arguments, name, mono);
+}
+
+tl_monotype *tl_type_registry_add_fresh_type_argument(tl_type_registry *self, str name,
+                                                      hashmap **type_arguments) {
+    tl_monotype *mono = tl_monotype_create_fresh_literal(self->alloc, self->subs);
+    tl_type_registry_add_type_argument(self, name, mono, type_arguments);
+    return mono;
+}
+
 static tl_monotype *add_type_argument(tl_type_registry *self, tl_type_registry_parse_type_ctx *ctx,
                                       str name) {
     // create a fresh type argument with the given name
-    tl_monotype *mono = tl_monotype_create_fresh_literal(self->alloc, self->subs);
-    str_map_set_ptr(&ctx->type_arguments, name, mono);
+    tl_monotype *mono = tl_type_registry_add_fresh_type_argument(self, name, &ctx->type_arguments);
     return mono;
 }
 

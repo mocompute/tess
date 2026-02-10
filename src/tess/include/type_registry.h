@@ -71,6 +71,10 @@ void         tl_type_registry_parse_type_ctx_reset(tl_type_registry_parse_type_c
 void         tl_type_registry_insert(tl_type_registry *, str, tl_polytype *);
 void         tl_type_registry_insert_mono(tl_type_registry *, str, tl_monotype *);
 
+void tl_type_registry_add_type_argument(tl_type_registry *, str, tl_monotype *, hashmap **type_arguments);
+tl_monotype *tl_type_registry_add_fresh_type_argument(tl_type_registry *self, str name,
+                                                      hashmap **type_arguments);
+
 tl_monotype *tl_type_registry_create_arrow(tl_type_registry *, tl_monotype *lhs, tl_monotype *rhs);
 
 tl_monotype *tl_type_registry_nil(tl_type_registry *);
