@@ -499,6 +499,22 @@ tl_monotype *tl_type_registry_ptr_char(tl_type_registry *self) {
 
 // -- parse_type
 
+static tl_monotype *add_type_argument(tl_type_registry *self, tl_type_registry_parse_type_ctx *ctx,
+                                      str name) {
+    // create a fresh type argument with the given name
+    tl_monotype *mono = tl_monotype_create_fresh_literal(self->alloc, self->subs);
+    str_map_set_ptr(&ctx->type_arguments, name, mono);
+    return mono;
+}
+
+static int is_type_argument(tl_type_registry_parse_type_ctx const *ctx, str name) {
+    return str_map_contains(ctx->type_arguments, name);
+}
+
+static tl_monotype *get_type_argument(tl_type_registry_parse_type_ctx const *ctx, str name) {
+    return str_map_get_ptr(ctx->type_arguments, name);
+}
+
 static tl_monotype *parse_type_specials(tl_type_registry *self, tl_type_registry_parse_type_ctx *ctx,
                                         ast_node const *node) {
 
@@ -511,11 +527,8 @@ static tl_monotype *parse_type_specials(tl_type_registry *self, tl_type_registry
         else if (str_eq(name, S("Type"))) {
             // Create a fresh type literal (target is a fresh type variable)
             assert(ctx->annotation_target);
-            mono = tl_monotype_create_fresh_literal(self->alloc, self->subs);
-
-            // Add to context type arguments
             str ta = ast_node_str(ctx->annotation_target);
-            str_map_set_ptr(&ctx->type_arguments, ta, mono);
+            mono   = add_type_argument(self, ctx, ta);
         }
     }
 
@@ -524,20 +537,14 @@ static tl_monotype *parse_type_specials(tl_type_registry *self, tl_type_registry
 
 static tl_monotype *type_variable_sugar(tl_type_registry *self, tl_type_registry_parse_type_ctx *ctx,
                                         ast_node const *node) {
-    tl_monotype *result = null;
-    result              = tl_monotype_create_fresh_literal(self->alloc, self->subs);
-    str ta              = ast_node_str(node);
-    if (0) {
-        fprintf(stderr, "type variable sugar: '%s'\n", str_cstr(&ta));
-    }
-    str_map_set_ptr(&ctx->type_arguments, ta, result);
-
+    str          ta     = ast_node_str(node);
+    tl_monotype *result = add_type_argument(self, ctx, ta);
     return tl_monotype_literal_target(result);
 }
 
 static tl_monotype *defer_parse(tl_type_registry *self, tl_type_registry_parse_type_ctx *ctx, str name) {
     if (str_hset_contains(ctx->in_progress, name) || str_map_contains(ctx->deferred_parse, name) ||
-        (!str_map_get_ptr(ctx->type_arguments, name) && !tl_type_registry_get(self, name))) {
+        (!is_type_argument(ctx, name) && !tl_type_registry_get(self, name))) {
 
         // target cannot be parsed yet: create a placeholder type for it: Ptr(any)
 
@@ -582,7 +589,7 @@ static tl_monotype *tl_type_registry_parse_type_(tl_type_registry               
         }
 
         // or else is it a type argument previously defined?
-        result = str_map_get_ptr(ctx->type_arguments, name);
+        result = get_type_argument(ctx, name);
         if (result) {
             // Note: type arguments will need to be handled in a context-sensitive way by the caller.
 
@@ -599,6 +606,7 @@ static tl_monotype *tl_type_registry_parse_type_(tl_type_registry               
 
             // If the annotation produces nothing, and the annotation is a symbol, it's sugar for a type
             // variable.
+            // FIXME: not with v2 type args
             if (!result && ast_node_is_symbol(node->symbol.annotation)) {
                 result = type_variable_sugar(self, ctx, node->symbol.annotation);
             }
@@ -782,9 +790,7 @@ static tl_monotype *tl_type_registry_parse_type_(tl_type_registry               
 
         for (u32 i = 0, n = n_type_arguments; i < n; ++i) {
             assert(ast_node_is_symbol(type_arguments[i]));
-            tl_monotype *mono = tl_monotype_create_fresh_literal(self->alloc, self->subs);
-            str_map_set_ptr(&ctx->type_arguments, ast_node_str(type_arguments[i]), mono);
-
+            tl_monotype *mono = mono = add_type_argument(self, ctx, ast_node_str(type_arguments[i]));
             array_push(type_argument_tvs, tl_monotype_literal_target(mono)->var);
         }
 
@@ -2141,7 +2147,7 @@ tl_monotype *tl_monotype_arrow_result(tl_monotype *self) {
 // -- substitutions --
 
 tl_type_subs *tl_type_subs_create(allocator *alloc) {
-    tl_type_subs *self = new (alloc, tl_type_subs);
+    tl_type_subs *self = new(alloc, tl_type_subs);
     *self              = (tl_type_subs){
                    .data = (tl_type_uf_node_array){.alloc = alloc},
     };
