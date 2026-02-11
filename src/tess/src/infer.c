@@ -3211,19 +3211,45 @@ static void rename_let_in(tl_infer *self, ast_node *node, rename_variables_ctx *
     str_map_set(&ctx->lex, name, &newvar);
 }
 
-static hashmap *rename_function_params(tl_infer *self, ast_node *node, rename_variables_ctx *ctx,
-                                       int level) {
-    hashmap           *save = map_copy(ctx->lex);
+static void rename_one_function_param(tl_infer *self, ast_node *param, rename_variables_ctx *ctx,
+                                      int level) {
+    if (ast_node_is_nfa(param)) {
+        // T[a] vs T[Int] -- what to do?
+        rename_one_function_param(self, param->named_application.name, ctx, level + 1);
 
-    ast_arguments_iter iter = ast_node_arguments_iter(node);
-    ast_node          *param;
-    while ((param = ast_arguments_next(&iter))) {
-        assert(ast_node_is_symbol(param));
+        u32        argc = param->named_application.n_type_arguments;
+        ast_node **argv = param->named_application.type_arguments;
+        for (u32 i = 0; i < argc; i++) {
+            rename_one_function_param(self, argv[i], ctx, level + 1);
+        }
+
+    } else if (ast_node_is_symbol(param)) {
+
         str name   = param->symbol.name;
         str newvar = next_variable_name(self, name);
         ast_node_name_replace(param, newvar);
         str_map_set(&ctx->lex, name, &newvar);
         rename_variables(self, param, ctx, level + 1);
+    }
+}
+
+static hashmap *rename_function_params(tl_infer *self, ast_node *node, rename_variables_ctx *ctx,
+                                       int level) {
+    hashmap *save = map_copy(ctx->lex);
+
+    // alpha conversion of type arguments
+    if (ast_node_is_let(node)) {
+        u32        argc = node->let.n_type_parameters;
+        ast_node **argv = node->let.type_parameters;
+        for (u32 i = 0; i < argc; i++) {
+            rename_one_function_param(self, argv[i], ctx, level);
+        }
+    }
+
+    ast_arguments_iter iter = ast_node_arguments_iter(node);
+    ast_node          *param;
+    while ((param = ast_arguments_next(&iter))) {
+        rename_one_function_param(self, param, ctx, level);
     }
 
     return save;
@@ -3348,6 +3374,13 @@ static void rename_variables(tl_infer *self, ast_node *node, rename_variables_ct
         ast_node          *arg;
 
         while ((arg = ast_arguments_next(&iter))) rename_variables(self, arg, ctx, level + 1);
+
+        // type arguments
+        u32        argc = node->named_application.n_type_arguments;
+        ast_node **argv = node->named_application.type_arguments;
+        for (u32 i = 0; i < argc; i++) {
+            rename_variables(self, argv[i], ctx, level + 1);
+        }
 
     } break;
 
