@@ -1385,9 +1385,19 @@ static int a_value(parser *self) {
     if (0 == a_try(self, a_nil)) return 0;
     if (0 == a_try(self, a_null)) return 0;
     if (0 == a_try(self, a_attributed_identifier)) {
-        dbg(self, "a_value: '%s'", str_cstr(&self->result->symbol.name));
-        mangle_name(self, self->result);
-        return 0;
+
+        ast_node *ident = self->result;
+        mangle_name(self, ident);
+
+        ast_node_array type_args;
+        if (ERROR_STOP == maybe_type_arguments(self, &type_args)) return ERROR_STOP;
+        if (type_args.size) {
+            ast_node *r = ast_node_create_nfa(self->ast_arena, ident, (ast_node_sized)sized_all(type_args),
+                                              (ast_node_sized){0});
+            return result_ast_node(self, r);
+        } else {
+            return result_ast_node(self, ident);
+        }
     }
     if (0 == a_try(self, a_attribute_set)) return 0;
 
@@ -2535,7 +2545,10 @@ static int toplevel_assign(parser *self) {
 
 static int toplevel_forward(parser *self) {
     if (a_try(self, a_attributed_identifier)) return 1;
-    ast_node *name = self->result;
+    ast_node      *name = self->result;
+
+    ast_node_array type_args;
+    if (ERROR_STOP == maybe_type_arguments(self, &type_args)) return ERROR_STOP;
 
     if (a_try(self, a_type_arrow)) return 1;
     ast_node *arrow = self->result;
