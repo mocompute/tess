@@ -11,7 +11,7 @@
   ;; Test 1: Load and analyze Array.tl
   (message "Test 1: Loading Array.tl...")
   (with-temp-buffer
-    (insert-file-contents (expand-file-name "../src/tl/std/Array.tl" tools-dir))
+    (insert-file-contents (expand-file-name "../../src/tl/std/Array.tl" tools-dir))
     (tl-mode)
     (message "  ✓ File loaded, mode activated")
     (message "  ✓ Major mode: %s" major-mode)
@@ -53,7 +53,7 @@
   (message "\nTest 4: Testing imenu...")
   (require 'imenu)
   (with-temp-buffer
-    (insert-file-contents (expand-file-name "../src/tl/std/Array.tl" tools-dir))
+    (insert-file-contents (expand-file-name "../../src/tl/std/Array.tl" tools-dir))
     (tl-mode)
     (let ((imenu-auto-rescan t))
       (condition-case err
@@ -65,9 +65,9 @@
 
   ;; Test 5: Test on various test files
   (message "\nTest 5: Testing on various TL files...")
-  (dolist (file '("../src/tess/tl/test_if_expression.tl"
-                  "../src/tess/tl/test_case_basic_else.tl"
-                  "../src/tl/std/Alloc.tl"))
+  (dolist (file '("../../src/tess/tl/test_if_expression.tl"
+                  "../../src/tess/tl/test_case_basic_else.tl"
+                  "../../src/tl/std/Alloc.tl"))
     (let ((full-path (expand-file-name file tools-dir)))
       (when (file-exists-p full-path)
         (with-temp-buffer

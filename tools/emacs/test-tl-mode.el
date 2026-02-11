@@ -40,7 +40,7 @@
 
 ;; Test 6: Load a TL file and enable the mode
 (message "Test 6: Testing mode activation on a TL file...")
-(let ((test-file "../src/tl/std/Array.tl"))
+(let ((test-file "../../src/tl/std/Array.tl"))
   (when (file-exists-p test-file)
     (with-temp-buffer
       (insert-file-contents test-file)
