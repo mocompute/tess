@@ -381,6 +381,22 @@ static char *normalize_ops(allocator *alloc, char const *line) {
             continue;
         }
 
+        // Square brackets (type arguments) — attach to preceding identifier
+        if (c == '[') {
+            while (out.size > 0 && out.v[out.size - 1] == ' ') out.size--;
+            EMIT_CHAR(out, c);
+            continue;
+        }
+
+        // Open paren after type args — no space: foo[T]( not foo[T] (
+        if (c == '(') {
+            if (out.size > 0 && last_nonspace(&out) == ']') {
+                while (out.size > 0 && out.v[out.size - 1] == ' ') out.size--;
+            }
+            EMIT_CHAR(out, c);
+            continue;
+        }
+
         if (c == '{') {
             if (out.size > 0 && out.v[out.size - 1] != ' ') EMIT_CHAR(out, ' ');
             EMIT_CHAR(out, c);

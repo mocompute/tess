@@ -167,6 +167,26 @@ static int test_normalize_ops(void) {
         "a.*",
         "a.*\n");
 
+    error += check(alloc, "type args attached to name",
+        "foo [T](x: T)",
+        "foo[T](x: T)\n");
+
+    error += check(alloc, "type args no space before (",
+        "foo[T] (x: T)",
+        "foo[T](x: T)\n");
+
+    error += check(alloc, "type args already attached",
+        "foo[T](x: T)",
+        "foo[T](x: T)\n");
+
+    error += check(alloc, "nested type args",
+        "foo [Array[Int]](x: Int)",
+        "foo[Array[Int]](x: Int)\n");
+
+    error += check(alloc, "dot-paren indexing",
+        "arr.(0)",
+        "arr.(0)\n");
+
     arena_destroy(&alloc);
     return error;
 }
