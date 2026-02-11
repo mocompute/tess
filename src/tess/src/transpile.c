@@ -2730,6 +2730,28 @@ static str tl_sizeof(transpile *self, ast_node const *node, eval_ctx *ctx, void 
 
     assert(ast_node_is_nfa(node));
 
+    // nullary with type argument: sizeof[T]()
+    if (node->named_application.n_arguments == 0 && node->named_application.n_type_arguments == 1) {
+        ast_node const *type_arg = node->named_application.type_arguments[0];
+        tl_monotype    *type     = null;
+
+        // The type argument has been processed by inference; its type should be a type literal.
+        if (type_arg->type && tl_monotype_is_type_literal(type_arg->type->type)) {
+            type = tl_monotype_literal_target(type_arg->type->type);
+        } else if (ast_node_is_nfa(type_arg)) {
+            type = tl_type_registry_parse_type(self->registry, type_arg);
+        } else if (ast_node_is_symbol(type_arg)) {
+            tl_polytype *poly = tl_type_env_lookup(self->env, ast_node_str(type_arg));
+            if (poly && tl_monotype_is_type_literal(poly->type)) {
+                type = tl_monotype_literal_target(poly->type);
+            }
+        }
+        if (!type) fatal("sizeof: could not resolve type argument");
+        update_type(self, &type);
+        str ctype = type_to_c_mono(self, type);
+        return str_cat_3(self->transient, S("sizeof("), ctype, S(")"));
+    }
+
     // single argument may be an expression or a type constructor
     if (1 != node->named_application.n_arguments) fatal("wrong number of arguments");
     ast_node const *arg = node->named_application.arguments[0];
@@ -2775,6 +2797,27 @@ static str tl_alignof(transpile *self, ast_node const *node, eval_ctx *ctx, void
     (void)extra;
 
     assert(ast_node_is_nfa(node));
+
+    // nullary with type argument: alignof[T]()
+    if (node->named_application.n_arguments == 0 && node->named_application.n_type_arguments == 1) {
+        ast_node const *type_arg = node->named_application.type_arguments[0];
+        tl_monotype    *type     = null;
+
+        if (type_arg->type && tl_monotype_is_type_literal(type_arg->type->type)) {
+            type = tl_monotype_literal_target(type_arg->type->type);
+        } else if (ast_node_is_nfa(type_arg)) {
+            type = tl_type_registry_parse_type(self->registry, type_arg);
+        } else if (ast_node_is_symbol(type_arg)) {
+            tl_polytype *poly = tl_type_env_lookup(self->env, ast_node_str(type_arg));
+            if (poly && tl_monotype_is_type_literal(poly->type)) {
+                type = tl_monotype_literal_target(poly->type);
+            }
+        }
+        if (!type) fatal("alignof: could not resolve type argument");
+        update_type(self, &type);
+        str ctype = type_to_c_mono(self, type);
+        return str_cat_3(self->transient, S("_Alignof("), ctype, S(")"));
+    }
 
     // single argument may be an expression or a type constructor
     if (1 != node->named_application.n_arguments) fatal("wrong number of arguments");

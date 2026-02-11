@@ -587,18 +587,16 @@ static void traverse_ctx_load_type_arguments(tl_infer *self, traverse_ctx *ctx, 
 
 static int traverse_ctx_assign_type_arguments(tl_infer *self, traverse_ctx *ctx, ast_node const *node) {
     if (ast_node_is_nfa(node)) {
-        ast_node *let = toplevel_get(self, ast_node_str(node->named_application.name));
-        if (!let || !ast_node_is_let(let)) return 0;
+        u32 argc = node->named_application.n_type_arguments;
+        if (argc == 0) return 0;
 
-        u32                             argc   = node->named_application.n_type_arguments;
-        u32                             paramc = let->let.n_type_parameters;
+        ast_node *let    = toplevel_get(self, ast_node_str(node->named_application.name));
+        u32       paramc = (let && ast_node_is_let(let)) ? let->let.n_type_parameters : 0;
 
         tl_type_registry_parse_type_ctx parse_ctx;
         tl_type_registry_parse_type_ctx_init(self->transient, &parse_ctx, ctx->type_arguments);
 
-        for (u32 i = 0; i < paramc && i < argc; i++) {
-            assert(ast_node_is_symbol(let->let.type_parameters[i]));
-
+        for (u32 i = 0; i < argc; i++) {
             tl_monotype *parsed = tl_type_registry_parse_type_with_ctx(
               self->registry, node->named_application.type_arguments[i], &parse_ctx);
 
@@ -609,9 +607,16 @@ static int traverse_ctx_assign_type_arguments(tl_infer *self, traverse_ctx *ctx,
             // wrap in type literal
             tl_monotype *literal = tl_monotype_create_literal(self->arena, parsed);
 
-            // add to type argument context
-            tl_type_registry_add_type_argument(self->registry, let->let.type_parameters[i]->symbol.name,
-                                               literal, &ctx->type_arguments);
+            // If the callee has a matching type parameter, add to the type argument context
+            if (i < paramc) {
+                assert(ast_node_is_symbol(let->let.type_parameters[i]));
+                tl_type_registry_add_type_argument(self->registry, let->let.type_parameters[i]->symbol.name,
+                                                   literal, &ctx->type_arguments);
+            }
+
+            // Set type on the type argument AST node for the transpiler.
+            ast_node_type_set((ast_node *)node->named_application.type_arguments[i],
+                              tl_polytype_absorb_mono(self->arena, literal));
         }
     }
     return 0;
