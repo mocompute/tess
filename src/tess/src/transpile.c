@@ -1721,11 +1721,15 @@ static str generate_binary_op(transpile *self, tl_monotype *type, ast_node const
             generate_assign_lhs(self, res);
         }
         cat(self, left);
-        cat(self, op);
-        cat(self, right);
-
-        // Note: special case: if op is [ close square bracket
-        if (0 == str_cmp_c(op, "[")) cat_close_square(self);
+        int is_index = is_index_operator(str_cstr(&op));
+        if (is_index) {
+            cat(self, S("["));
+            cat(self, right);
+            cat_close_square(self);
+        } else {
+            cat(self, op);
+            cat(self, right);
+        }
         cat_semicolonln(self);
         return res;
     }
@@ -1733,11 +1737,15 @@ static str generate_binary_op(transpile *self, tl_monotype *type, ast_node const
     else {
         str_build b = str_build_init(self->transient, 64);
         str_build_cat(&b, left);
-        str_build_cat(&b, op);
-        str_build_cat(&b, right);
-
-        // Note: special case: if op is [ close square bracket
-        if (0 == str_cmp_c(op, "[")) str_build_cat(&b, S("]"));
+        int is_index = is_index_operator(str_cstr(&op));
+        if (is_index) {
+            str_build_cat(&b, S("["));
+            str_build_cat(&b, right);
+            str_build_cat(&b, S("]"));
+        } else {
+            str_build_cat(&b, op);
+            str_build_cat(&b, right);
+        }
         return str_build_finish(&b);
     }
 }

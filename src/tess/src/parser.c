@@ -424,7 +424,7 @@ int is_bitwise_operator(char const *s) {
 }
 
 int is_index_operator(char const *s) {
-    return 0 == strcmp(s, "[");
+    return 0 == strcmp(s, ".(");
 }
 
 int is_dot_operator(char const *s) {
@@ -1820,8 +1820,18 @@ static ast_node *parse_expression(parser *self, int min_prec) {
             ast_node *op = self->result;
 
             // Note: special case: .* and .& are converted to unary_op for legacy reasons
+            // Note: special case: .( index ) is pointer/CArray indexing
             if (0 == str_cmp_c(op->symbol.name, ".")) {
-                if (0 == a_try(self, a_star)) {
+                if (0 == a_try(self, a_open_round)) {
+                    ast_node *index_expr = parse_expression(self, INT_MIN);
+                    if (!index_expr) return null;
+                    if (a_try(self, a_close_round)) return null;
+                    ast_node *index_op = ast_node_create_sym_c(self->ast_arena, ".(");
+                    ast_node *binop    = ast_node_create_binary_op(self->ast_arena, index_op, left, index_expr);
+                    set_node_file(self, binop);
+                    left = binop;
+                    continue;
+                } else if (0 == a_try(self, a_star)) {
                     op              = self->result;
                     ast_node *unary = ast_node_create_unary_op(self->ast_arena, op, left);
                     set_node_file(self, unary);
