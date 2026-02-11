@@ -5,7 +5,7 @@ cmp_asc(a, b) { a - b }
 
 test_empty() {
     error := 0
-    arr   := Array.empty(Int)
+    arr   := Array.empty[Int]()
     Array.sort(arr.&, (a, b) { a - b })
     if arr.size != 0 { error += 1 }
     error
@@ -13,7 +13,7 @@ test_empty() {
 
 test_single() {
     error := 0
-    arr   := Array.empty(Int)
+    arr   := Array.empty[Int]()
     Array.push(arr.&, 42)
     Array.sort(arr.&, (a, b) { a - b })
     if arr.size != 1 { error += 1 }
@@ -24,7 +24,7 @@ test_single() {
 
 test_ascending() {
     error := 0
-    arr   := Array.empty(Int)
+    arr   := Array.empty[Int]()
     Array.push(arr.&, 5)
     Array.push(arr.&, 3)
     Array.push(arr.&, 1)
@@ -42,7 +42,7 @@ test_ascending() {
 
 test_descending() {
     error := 0
-    arr   := Array.empty(Int)
+    arr   := Array.empty[Int]()
     Array.push(arr.&, 1)
     Array.push(arr.&, 2)
     Array.push(arr.&, 3)
@@ -60,7 +60,7 @@ test_descending() {
 
 test_named_comparator() {
     error := 0
-    arr   := Array.empty(Int)
+    arr   := Array.empty[Int]()
     Array.push(arr.&, 3)
     Array.push(arr.&, 1)
     Array.push(arr.&, 2)
@@ -74,7 +74,7 @@ test_named_comparator() {
 
 test_sorted() {
     error := 0
-    arr   := Array.empty(Int)
+    arr   := Array.empty[Int]()
     Array.push(arr.&, 3)
     Array.push(arr.&, 1)
     Array.push(arr.&, 2)
@@ -94,7 +94,7 @@ test_sorted() {
 
 test_already_sorted() {
     error := 0
-    arr   := Array.empty(Int)
+    arr   := Array.empty[Int]()
     Array.push(arr.&, 1)
     Array.push(arr.&, 2)
     Array.push(arr.&, 3)
@@ -110,7 +110,7 @@ test_already_sorted() {
 
 test_sort_with_allocator() {
     error := 0
-    arr   := Array.empty(Int)
+    arr   := Array.empty[Int]()
     Array.push(arr.&, 5)
     Array.push(arr.&, 3)
     Array.push(arr.&, 1)

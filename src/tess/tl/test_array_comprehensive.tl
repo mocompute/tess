@@ -37,7 +37,7 @@ test_init_struct() {
 
 test_with_capacity_undefined_basic() {
     error := 0
-    arr   := Array.with_capacity_undefined(Int, 10)
+    arr   := Array.with_capacity_undefined[Int](10)
     if arr.size != 10 { error += 1 }
     if arr.capacity != 10 { error += 1 }
     // Write values and read them back
@@ -57,7 +57,7 @@ test_with_capacity_undefined_basic() {
 
 test_reserve_empty() {
     error := 0
-    arr   := Array.empty(Int)
+    arr   := Array.empty[Int]()
     Array.reserve(arr.&, 10)
     if arr.capacity < 10 { error += 1 }
     if arr.size != 0 { error += 1 }
@@ -67,7 +67,7 @@ test_reserve_empty() {
 
 test_reserve_growth() {
     error := 0
-    arr   := Array.with_capacity(Int, 2)
+    arr   := Array.with_capacity[Int](2)
     Array.push(arr.&, 111)
     Array.push(arr.&, 222)
     Array.reserve(arr.&, 100)
@@ -82,7 +82,7 @@ test_reserve_growth() {
 
 test_reserve_noop() {
     error             := 0
-    arr               := Array.with_capacity(Int, 50)
+    arr               := Array.with_capacity[Int](50)
     original_capacity := arr.capacity
     Array.reserve(arr.&, 10)
     // reserve is no-op when capacity is already sufficient
@@ -93,7 +93,7 @@ test_reserve_noop() {
 
 test_push_growth() {
     error := 0
-    arr   := Array.with_capacity(Int, 2)
+    arr   := Array.with_capacity[Int](2)
     Array.push(arr.&, 10)
     Array.push(arr.&, 20)
     Array.push(arr.&, 30)               // Forces growth
@@ -108,7 +108,7 @@ test_push_growth() {
 
 test_push_many() {
     error := 0
-    arr   := Array.empty(Int)
+    arr   := Array.empty[Int]()
     i     := 0
     while i < 100 {
         Array.push(arr.&, i)
@@ -126,7 +126,7 @@ test_push_many() {
 
 test_iter_empty() {
     error := 0
-    arr   := Array.empty(Int)
+    arr   := Array.empty[Int]()
     count := 0
     for x in arr {
         count = count + 1

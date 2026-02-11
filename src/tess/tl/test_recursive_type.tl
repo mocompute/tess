@@ -4,7 +4,7 @@
 
 Point: { x: Int, y: Int, next: Ptr[Point] }
 
-make_points(count) { Array.with_capacity(Point, count) }
+make_points(count) { Array.with_capacity[Point](count) }
 
 main() {
     points := make_points(8)

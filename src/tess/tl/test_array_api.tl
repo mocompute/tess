@@ -15,7 +15,7 @@ test_get() {
 
 test_front_back() {
     error := 0
-    arr   := Array.empty(Int)
+    arr   := Array.empty[Int]()
     Array.push(arr.&, 10)
     Array.push(arr.&, 20)
     Array.push(arr.&, 30)
@@ -27,7 +27,7 @@ test_front_back() {
 
 test_pop() {
     error := 0
-    arr   := Array.empty(Int)
+    arr   := Array.empty[Int]()
     Array.push(arr.&, 1)
     Array.push(arr.&, 2)
     Array.push(arr.&, 3)
@@ -51,7 +51,7 @@ test_clear() {
 
 test_insert() {
     error := 0
-    arr   := Array.empty(Int)
+    arr   := Array.empty[Int]()
     Array.push(arr.&, 1)
     Array.push(arr.&, 3)
     Array.push(arr.&, 4)
@@ -76,7 +76,7 @@ test_insert() {
 
 test_remove() {
     error := 0
-    arr   := Array.empty(Int)
+    arr   := Array.empty[Int]()
     Array.push(arr.&, 10)
     Array.push(arr.&, 20)
     Array.push(arr.&, 30)
@@ -94,7 +94,7 @@ test_remove() {
 
 test_swap_remove() {
     error := 0
-    arr   := Array.empty(Int)
+    arr   := Array.empty[Int]()
     Array.push(arr.&, 10)
     Array.push(arr.&, 20)
     Array.push(arr.&, 30)
@@ -112,7 +112,7 @@ test_swap_remove() {
 
 test_resize() {
     error := 0
-    arr   := Array.empty(Int)
+    arr   := Array.empty[Int]()
     Array.push(arr.&, 1)
     Array.push(arr.&, 2)
     // Grow to 5 with fill value 99
@@ -134,7 +134,7 @@ test_resize() {
 
 test_shrink_to_fit() {
     error := 0
-    arr   := Array.with_capacity(Int, 100)
+    arr   := Array.with_capacity[Int](100)
     Array.push(arr.&, 1)
     Array.push(arr.&, 2)
     Array.push(arr.&, 3)
@@ -165,10 +165,10 @@ test_truncate() {
 
 test_append() {
     error := 0
-    a     := Array.empty(Int)
+    a     := Array.empty[Int]()
     Array.push(a.&, 1)
     Array.push(a.&, 2)
-    b := Array.empty(Int)
+    b := Array.empty[Int]()
     Array.push(b.&, 3)
     Array.push(b.&, 4)
     Array.append(a.&, b)
@@ -184,7 +184,7 @@ test_append() {
 
 test_clone() {
     error := 0
-    arr   := Array.empty(Int)
+    arr   := Array.empty[Int]()
     Array.push(arr.&, 10)
     Array.push(arr.&, 20)
     Array.push(arr.&, 30)
@@ -203,7 +203,7 @@ test_clone() {
 
 test_slice() {
     error := 0
-    arr   := Array.empty(Int)
+    arr   := Array.empty[Int]()
     i     := 0
     while i < 5, i += 1 { Array.push(arr.&, i * 10) }
     // slice [1, 4) -> [10, 20, 30]
@@ -238,7 +238,7 @@ test_from_ptr() {
 
 test_is_empty() {
     error := 0
-    arr   := Array.empty(Int)
+    arr   := Array.empty[Int]()
     if !Array.is_empty(arr) { error += 1 }
     Array.push(arr.&, 1)
     if Array.is_empty(arr) { error += 1 }
@@ -248,7 +248,7 @@ test_is_empty() {
 
 test_contains() {
     error := 0
-    arr   := Array.empty(Int)
+    arr   := Array.empty[Int]()
     Array.push(arr.&, 10)
     Array.push(arr.&, 20)
     Array.push(arr.&, 30)
@@ -260,7 +260,7 @@ test_contains() {
 
 test_index_of() {
     error := 0
-    arr   := Array.empty(Int)
+    arr   := Array.empty[Int]()
     Array.push(arr.&, 10)
     Array.push(arr.&, 20)
     Array.push(arr.&, 30)
@@ -273,7 +273,7 @@ test_index_of() {
 
 test_reverse() {
     error := 0
-    arr   := Array.empty(Int)
+    arr   := Array.empty[Int]()
     Array.push(arr.&, 1)
     Array.push(arr.&, 2)
     Array.push(arr.&, 3)
@@ -294,7 +294,7 @@ test_reverse() {
 
 test_swap() {
     error := 0
-    arr   := Array.empty(Int)
+    arr   := Array.empty[Int]()
     Array.push(arr.&, 10)
     Array.push(arr.&, 20)
     Array.push(arr.&, 30)
@@ -308,7 +308,7 @@ test_swap() {
 
 test_map() {
     error := 0
-    arr   := Array.empty(Int)
+    arr   := Array.empty[Int]()
     Array.push(arr.&, 1)
     Array.push(arr.&, 2)
     Array.push(arr.&, 3)
@@ -320,7 +320,7 @@ test_map() {
     // Original unchanged
     if arr.v.(0) != 1 { error += 1 }
     // Empty array
-    e := Array.empty(Int)
+    e := Array.empty[Int]()
     r := Array.map(e, (x) { x * 10 })
     if r.size != 0 { error += 1 }
     Array.free(arr.&)
@@ -330,7 +330,7 @@ test_map() {
 
 test_filter() {
     error := 0
-    arr   := Array.empty(Int)
+    arr   := Array.empty[Int]()
     Array.push(arr.&, 1)
     Array.push(arr.&, 2)
     Array.push(arr.&, 3)
@@ -351,14 +351,14 @@ test_filter() {
 
 test_any_of() {
     error := 0
-    arr   := Array.empty(Int)
+    arr   := Array.empty[Int]()
     Array.push(arr.&, 1)
     Array.push(arr.&, 2)
     Array.push(arr.&, 3)
     if !Array.any_of(arr, (x) { x == 2 }) { error += 1 }
     if Array.any_of(arr, (x) { x == 99 }) { error += 1 }
     // Empty array
-    e := Array.empty(Int)
+    e := Array.empty[Int]()
     if Array.any_of(e, (x) { x == 1 }) { error += 1 }
     Array.free(arr.&)
     error
@@ -366,14 +366,14 @@ test_any_of() {
 
 test_all() {
     error := 0
-    arr   := Array.empty(Int)
+    arr   := Array.empty[Int]()
     Array.push(arr.&, 2)
     Array.push(arr.&, 4)
     Array.push(arr.&, 6)
     if !Array.all(arr, (x) { x > 0 }) { error += 1 }
     if Array.all(arr, (x) { x > 3 }) { error += 1 }
     // Empty array -> all is vacuously true
-    e := Array.empty(Int)
+    e := Array.empty[Int]()
     if !Array.all(e, (x) { x > 0 }) { error += 1 }
     Array.free(arr.&)
     error
@@ -381,7 +381,7 @@ test_all() {
 
 test_find() {
     error := 0
-    arr   := Array.empty(Int)
+    arr   := Array.empty[Int]()
     Array.push(arr.&, 10)
     Array.push(arr.&, 20)
     Array.push(arr.&, 30)
@@ -394,7 +394,7 @@ test_find() {
 
 test_find_value() {
     error := 0
-    arr   := Array.empty(Int)
+    arr   := Array.empty[Int]()
     Array.push(arr.&, 10)
     Array.push(arr.&, 20)
     Array.push(arr.&, 30)
@@ -406,7 +406,7 @@ test_find_value() {
 
 test_foreach() {
     error := 0
-    arr   := Array.empty(Int)
+    arr   := Array.empty[Int]()
     Array.push(arr.&, 1)
     Array.push(arr.&, 2)
     Array.push(arr.&, 3)
@@ -419,7 +419,7 @@ test_foreach() {
 
 test_reduce() {
     error := 0
-    arr   := Array.empty(Int)
+    arr   := Array.empty[Int]()
     Array.push(arr.&, 1)
     Array.push(arr.&, 2)
     Array.push(arr.&, 3)
@@ -430,7 +430,7 @@ test_reduce() {
     sum2 := Array.reduce(arr, 100, (acc, x) { acc + x })
     if sum2 != 110 { error += 1 }
     // Empty array
-    e    := Array.empty(Int)
+    e    := Array.empty[Int]()
     sum3 := Array.reduce(e, 42, (acc, x) { acc + x })
     if sum3 != 42 { error += 1 }
     Array.free(arr.&)
