@@ -33,22 +33,13 @@ Constructor(x = 1, y = 2)                  Constructor(x = 1, y = 2)  // unchang
 Variant(42)                                Variant(42)        // unchanged (value args)
 ```
 
-### Disambiguation Rules (indexing vs type arguments)
+### Indexing Syntax
 
-Square brackets `[]` are used for both pointer indexing and type arguments.
-Context-based disambiguation:
+Pointer/CArray indexing uses `.()` syntax: `ptr.(i)`, `arr.(0) = 10`.
+This means `[]` is **unambiguously** type arguments — no disambiguation needed.
 
-| Context | Syntax | Interpretation |
-|---------|--------|---------------|
-| After identifier, before `(` | `name[T](args)` | Type args on function call |
-| After known type name | `Ptr[T]` | Type constructor |
-| In type position (after `:`, `->`) | `name[T]` | Type constructor |
-| In type definition (before `:`) | `Name[a] :` | Type parameter declaration |
-| In expression position, no `(` following | `arr[i]` | Pointer indexing |
-
-**Key heuristic:** In expression position, `name[args]` is type arguments if followed
-by `(`, otherwise indexing. In type position (annotations, definitions, return types),
-`name[args]` is always type arguments.
+The `.()` syntax fits naturally with the existing postfix family: `.field`, `.*`,
+`.&`, `->`. See `test_index_dot_paren.tl` for examples.
 
 ### Scope
 
@@ -81,7 +72,6 @@ Not yet implemented:
 - `[]` in type annotations (`Ptr[T]`, `Array[Int]`, etc.)
 - `[]` in type/union definitions (`Point[a] : { ... }`)
 - `[]` in type aliases
-- Context-based disambiguation
 - Migration of existing .tl files
 - Required type parameter declarations on all generic functions
 - Removal of `T: Type` pattern
@@ -130,19 +120,10 @@ Same as 1b but for tagged unions: `Option[T] : | Some { v: T } | None`
 **Files:** `parser.c` — type alias parsing. The RHS is already parsed as a type
 expression, so this should work once 1a is complete.
 
-### 1e. Disambiguation
+### ~~1e. Disambiguation~~ (eliminated)
 
-Implement context-based rules so `arr[i]` (indexing) and `foo[Int](0)` (type args)
-are distinguished correctly.
-
-**Files:** `parser.c`
-
-- In expression position: `name[...]` is type args only if followed by `(`
-- In type position: `name[...]` is always type args
-- The parser may need a flag or context variable to know whether it's in type position
-
-**Verification:** Write small test files exercising both `arr[i]` indexing and
-`Ptr[T]` type args in the same file.
+No longer needed. Indexing now uses `.()` syntax (`ptr.(i)`), so `[]` is
+unambiguously type arguments in all positions.
 
 ---
 
@@ -425,7 +406,7 @@ development.
 | Risk | Likelihood | Mitigation |
 |------|-----------|------------|
 | Migration script misses edge cases | High | Manual review of full diff; run tests after each batch |
-| Disambiguation bugs (indexing vs type args) | Medium | Dedicated test file with both patterns; parser context flag |
+| ~~Disambiguation bugs~~ | ~~N/A~~ | Eliminated: indexing uses `.()`, `[]` is unambiguously type args |
 | `sizeof(Ptr[Void])` parsing interaction | Medium | Test sizeof/alignof with complex type expressions early |
 | Breaking monomorphization | Medium | Existing monomorphization tests catch regressions |
 | `CArray[T, N]` mixed type/value args | Low | CArray is already special-cased; extend special case for `[]` |
@@ -555,7 +536,7 @@ These decisions were made during planning and should be preserved:
 
 1. **Go-style square brackets** for all type arguments — no exceptions
 2. **No backward compatibility** — old `()` syntax will be removed after migration
-3. **Context-based disambiguation** — parser uses position context, not lookahead heuristics
+3. **No disambiguation needed** — indexing uses `.()` syntax, so `[]` is unambiguously type arguments
 4. **Script-assisted migration** — Python script for bulk conversion, manual for `T: Type`
 5. **`sizeof(T)` / `alignof(T)` keep parentheses** — they are built-in operators, not type constructors; but inner type expressions use `[]`: `sizeof(Ptr[Void])`
 6. **Struct constructors unchanged** — `Point(x = 1, y = 2)` keeps `()` (value args)
