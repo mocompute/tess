@@ -62,19 +62,21 @@ The `.()` syntax fits naturally with the existing postfix family: `.field`, `.*`
 
 Already implemented:
 - **AST**: `ast_let` has `type_parameters[]`, `ast_named_function_application` has `type_arguments[]`
-- **Parser**: `a_funcall()` and `toplevel_defun()` parse `[T, U]` before `(args)`
+- **Parser**: `a_funcall()` and `toplevel_defun()` parse `[T, U]` before `(args)` for function calls/defs
+- **Type System**: `type.c` already reads exclusively from `type_arguments` field (no fallback to old `arguments` field)
 - **Inference**: `load_type_arguments()` pre-populates type arg context for `ast_let`;
   `assign_type_arguments()` matches call-site type args to definition params
 - **Type predicates**: `T :: Int` works when `T` is an explicit type argument
 - **Test**: `test.tl` at repo root exercises basic function def + call + type predicate
 
 Not yet implemented:
-- `[]` in type annotations (`Ptr[T]`, `Array[Int]`, etc.)
-- `[]` in type/union definitions (`Point[a] : { ... }`)
-- `[]` in type aliases
-- Migration of existing .tl files
+- `[]` in type annotations (`Ptr[T]`, `Array[Int]`, etc.) — parser must populate `type_arguments`
+- `[]` in type/union definitions (`Point[a] : { ... }`) — parser must populate `type_arguments`
+- `[]` in type aliases — parser work
+- Migration of existing .tl files (must be atomic since no type system fallback exists)
 - Required type parameter declarations on all generic functions
 - Removal of `T: Type` pattern
+
 
 ---
 
@@ -129,24 +131,19 @@ unambiguously type arguments in all positions.
 
 ## Phase 2: Type System Integration
 
-**Goal:** The type parser (`tl_type_registry_parse_type_()`) correctly handles NFA
-nodes that carry type arguments in `type_arguments` instead of `arguments`.
+**Goal:** Verify that the type parser (`tl_type_registry_parse_type_()`) correctly
+handles NFA nodes that carry type arguments in `type_arguments`.
 
-### 2a. Type parser reads from `type_arguments`
+### 2a. Type parser — Already complete
 
 **Files:** `type.c` — `tl_type_registry_parse_type_()`
 
-Currently this function reads `node->named_application.arguments` to get type
-constructor arguments. Add logic:
+**Status:** The type parser already reads exclusively from `type_arguments` (lines
+650-654, 711-712, 740-742). No changes needed. There is **no fallback** to the old
+`arguments` field, which means once the parser produces `[]` syntax in `type_arguments`,
+the migration must be complete and atomic.
 
-```
-if node has type_arguments (n_type_arguments > 0):
-    use type_arguments as the type constructor args
-else:
-    fall back to arguments (old syntax, during transition)
-```
-
-This must work for:
+Handles:
 - Built-in unary types: `Ptr[T]`, `Const[T]`
 - Built-in special types: `CArray[T, N]`, `Union[a, b]`
 - User-defined generic types: `Array[T]`, `Map[K, V]`, `Point[a]`
@@ -168,8 +165,8 @@ parse the inside of `sizeof(...)` as a type expression that supports `[]`.
 ### 2d. Type variable sugar
 
 Currently `type_variable_sugar()` auto-creates type variables for unknown symbols in
-type annotations. With explicit type args, this behavior should eventually be removed
-(Phase 5), but during the transition it must continue to work for the old syntax.
+type annotations. This behavior will be removed in Phase 5 (required type parameter
+declarations), but for now it continues to work as-is.
 
 **Verification:** `test.tl` and new focused test files covering `Ptr[Int]`,
 `Array[Ptr[Int]]`, `CArray[CChar, 256]`, `Point[Int]` in various positions.
@@ -180,6 +177,16 @@ type annotations. With explicit type args, this behavior should eventually be re
 
 **Goal:** Convert all .tl files from old `()` syntax to new `[]` syntax for type
 arguments. Verify all tests pass.
+
+**IMPORTANT:** This phase must happen atomically after Phase 1 is complete. Since
+there is no fallback to the old `arguments` syntax in `type.c`, once the parser starts
+populating `type_arguments` from `[]` syntax, all existing code using `()` syntax will
+break. Therefore:
+
+1. Complete all parser changes (Phase 1) first
+2. Run the migration script on all `.tl` files in one commit
+3. The parser should still accept `()` for type constructors temporarily, but put the
+   args into `type_arguments` field (dual syntax support in parser only, not type system)
 
 ### 3a. Write migration script
 
@@ -271,19 +278,14 @@ for value arguments, struct constructors, and tagged union constructors.
 
 **Files:** `parser.c`
 
-- `a_type_constructor()`: Remove `()` path for type constructor arguments
+- `a_type_constructor()`: Remove `()` path for type constructor arguments (the dual
+  syntax support added in Phase 1/3)
 - Type definition parsing: Only accept `[params]`, not `(params)`
 - Type annotation parsing: Only accept `Name[args]` for parameterized types
 
-### 4b. Type parser cleanup
+**Note:** No changes needed in `type.c` — it already only reads from `type_arguments`.
 
-**Files:** `type.c`
-
-- `tl_type_registry_parse_type_()`: Remove fallback to `arguments` for type
-  constructor args; only use `type_arguments`
-- Remove any dual-syntax handling
-
-### 4c. Error messages
+### 4b. Error messages
 
 Add clear error messages when old syntax is detected:
 ```
@@ -414,13 +416,25 @@ development.
 
 ## Execution Order
 
-Phases 1 and 2 can be interleaved (parser change + type system change for each
-position). Phase 3 (migration) must happen after Phases 1-2 are complete for all
-positions. Phase 4 (remove old syntax) immediately follows Phase 3. Phase 5
-(required declarations) is the final semantic change. Phase 6 is cleanup.
+**Phase 1** (Parser): Implement `[]` syntax in parser, populating `type_arguments` field.
+Parser should temporarily accept both `()` and `[]` syntax, putting args into
+`type_arguments` in both cases.
 
-Estimated touch points: `parser.c`, `type.c`, `infer.c`, `ast.h`, `ast.c`,
-`transpile.c`, plus ~80 .tl files for migration.
+**Phase 2** (Type System): Verification only — confirm `type.c` already reads from
+`type_arguments` (it does).
+
+**Phase 3** (Migration): Atomic migration of all `.tl` files from `()` to `[]` syntax.
+Must be done in one commit since there's no fallback in type system.
+
+**Phase 4** (Cleanup): Remove `()` support from parser; only accept `[]` for type args.
+
+**Phase 5** (Semantics): Require explicit type parameter declarations (`[T]`); remove
+implicit type variable creation.
+
+**Phase 6** (Documentation): Update docs and remove FIXMEs.
+
+Estimated touch points: `parser.c`, ~~`type.c` (no changes needed)~~, `infer.c`,
+`ast.h`, `ast.c`, `transpile.c`, plus ~80 .tl files for migration.
 
 ---
 
@@ -471,20 +485,21 @@ All paths relative to repo root. Line numbers as of commit `a9fec778`.
 | 201 | `make_unary_tc()` | Creates a unary type constructor in the registry |
 | 321 | `tl_type_registry_instantiate_carray()` | Special CArray instantiation (type + int count) |
 | 350 | `tl_type_registry_is_unary_type()` | Checks if name is a unary type constructor |
-| 502 | `tl_type_registry_add_type_argument()` | NEW: adds named type arg to context map |
-| 508 | `tl_type_registry_add_fresh_type_argument()` | NEW: creates fresh literal + adds to map |
-| 515 | `add_type_argument()` | NEW: local helper wrapping the above |
-| 522 | `is_type_argument()` | NEW: checks if name is a declared type arg |
-| 526 | `get_type_argument()` | NEW: retrieves type for a declared type arg |
+| 502 | `tl_type_registry_add_type_argument()` | Adds named type arg to context map |
+| 508 | `tl_type_registry_add_fresh_type_argument()` | Creates fresh literal + adds to map |
+| 515 | `add_type_argument()` | Local helper wrapping the above |
+| 522 | `is_type_argument()` | Checks if name is a declared type arg |
+| 526 | `get_type_argument()` | Retrieves type for a declared type arg |
 | 530 | `parse_type_specials()` | Handles special type names (e.g., `any`); uses `add_type_argument` |
 | 550 | `type_variable_sugar()` | Auto-creates type variables for unknown symbols. **FIXME at 621**: should not auto-create with v2 type args |
 | 577 | `tl_type_registry_parse_type_()` | **Main type parser**. Receives NFA nodes, dispatches based on name |
-| 645 | (in `parse_type_`) | Unary type check: `tl_type_registry_is_unary_type` branch — handles `Ptr(T)`, `Const(T)` |
+| 650-654 | (in `parse_type_`) | Unary type check: reads from `type_arguments[0]` — **already uses new field** |
+| 711-712 | (in `parse_type_`) | General type constructor: reads from `type_arguments` — **already uses new field** |
 | 733 | (in `parse_type_`) | Union special case |
-| 739-741 | (in `parse_type_`) | CArray special case: `tl_type_registry_instantiate_carray` |
+| 740-742 | (in `parse_type_`) | CArray special case: uses `type_arguments` — **already uses new field** |
 | 875 | `tl_type_registry_parse_type_ctx_init()` | Initializes parse context (type_arguments map, etc.) |
 
-**Type parser flow for `Ptr(T)`:** `parse_type_()` receives NFA node → checks `is_unary_type("Ptr")` → reads single arg from `node->named_application.arguments[0]` → recursively parses arg → instantiates. **With new syntax:** must read from `type_arguments` instead.
+**Type parser flow:** `parse_type_()` receives NFA node → checks type constructor kind → reads args from `node->named_application.type_arguments` → recursively parses args → instantiates. **Already complete** — no changes needed for `[]` syntax.
 
 ### Inference — `src/tess/src/infer.c`
 
