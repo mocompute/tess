@@ -138,7 +138,7 @@ free(self) {
 
 
 with_capacity[T](alloc, count) {
-    width     := _type_width_aligned(T)
+    width     := _type_width_aligned[T]()
     p: Ptr[T] := alloc->malloc(alloc, count * width)
     Array ( v = p, capacity = count, size = 0 )
 }
@@ -159,7 +159,7 @@ with_capacity_undefined[T](count) {
 
 reserve(self: Ptr[Array[T]], alloc, count: Int) {
     if self->capacity < count {
-        p := alloc->realloc(alloc, self->v, count * _type_width_aligned(T))
+        p := alloc->realloc(alloc, self->v, count * _type_width_aligned[T]())
         if p == null { _tl_fatal_(c"oom") }
         self->v        = p
         self->capacity = count
@@ -215,7 +215,7 @@ insert(self: Ptr[Array[T]], alloc, index: Int, val: T) {
     if index < 0 || index > self->size { _tl_fatal_(c"Array.insert: index out of bounds") }
     if _is_full(self) { _grow(self, alloc, self->capacity + 1) }
     if index < self->size {
-        width       := _type_width_aligned(T)
+        width       := _type_width_aligned[T]()
         dst: Ptr[T] := self->v.(index + 1).&
         src: Ptr[T] := self->v.(index).&
         c_memmove(dst, src, (self->size - index) * width)
@@ -233,7 +233,7 @@ remove(self: Ptr[Array[T]], index: Int) -> T {
     val := self->v.(index)
     self->size = self->size - 1
     if index < self->size {
-        width       := _type_width_aligned(T)
+        width       := _type_width_aligned[T]()
         dst: Ptr[T] := self->v.(index).&
         src: Ptr[T] := self->v.(index + 1).&
         c_memmove(dst, src, (self->size - index) * width)
@@ -277,7 +277,7 @@ shrink_to_fit(self: Ptr[Array[T]], alloc) {
             self->v        = null
             self->capacity = 0
         } else {
-            width := _type_width_aligned(T)
+            width := _type_width_aligned[T]()
             p     := alloc->realloc(alloc, self->v, self->size * width)
             if p != null {
                 self->v        = p
@@ -324,7 +324,7 @@ reverse(self: Ptr[Array[T]]) {
 append(self: Ptr[Array[T]], alloc, other: Array[T]) {
     if other.size == 0 { return void }
     _grow(self, alloc, self->size + other.size)
-    width       := _type_width_aligned(T)
+    width       := _type_width_aligned[T]()
     dst: Ptr[T] := self->v.(self->size).&
     c_memcpy(dst, other.v, other.size * width)
     self->size = self->size + other.size
@@ -338,7 +338,7 @@ clone(alloc, arr: Array[T]) -> Array[T] {
     if arr.size == 0 { return empty(T) }
     result := with_capacity(alloc, T, arr.size)
     result.size = arr.size
-    width := _type_width_aligned(T)
+    width := _type_width_aligned[T]()
     c_memcpy(result.v, arr.v, arr.size * width)
     result
 }
@@ -353,7 +353,7 @@ slice(alloc, arr: Array[T], start: Int, end: Int) -> Array[T] {
     if len == 0 { return empty(T) }
     result := with_capacity(alloc, T, len)
     result.size = len
-    width       := _type_width_aligned(T)
+    width       := _type_width_aligned[T]()
     src: Ptr[T] := arr.v.(start).&
     c_memcpy(result.v, src, len * width)
     result
@@ -392,7 +392,7 @@ from_ptr(alloc, ptr: Ptr[T], len: Int) -> Array[T] {
     if len <= 0 { return empty(T) }
     result := with_capacity(alloc, T, len)
     result.size = len
-    width := _type_width_aligned(T)
+    width := _type_width_aligned[T]()
     c_memcpy(result.v, ptr, len * width)
     result
 }
@@ -511,7 +511,7 @@ _merge(v: Ptr[T], tmp: Ptr[T], lo: Int, mid: Int, hi: Int, cmp: (T, T) -> Int, w
 sort(self: Ptr[Array[T]], tmp_alloc, cmp: (T, T) -> Int) {
     n := self->size
     if n <= 1 { return void }
-    width       := _type_width_aligned(T)
+    width       := _type_width_aligned[T]()
     tmp: Ptr[T] := tmp_alloc->malloc(tmp_alloc, n * width)
     if tmp == null { _tl_fatal_(c"Array.sort: oom") }
     w := 1
@@ -572,9 +572,9 @@ iter_deinit(iter) {                                                  }
 
 // -- Private functions --
 
-_grow               (self: Ptr[T], alloc: Ptr[Allocator], at_least: Int) -> Void
-_is_full            (self: Ptr[T])                                       -> Bool
-_type_width_aligned (T: Type)                                            -> Int
+_grow                  (self: Ptr[T], alloc: Ptr[Allocator], at_least: Int) -> Void
+_is_full               (self: Ptr[T])                                       -> Bool
+_type_width_aligned[T] ()                                                   -> Int
 
 // --
 
@@ -592,7 +592,7 @@ _grow(self, alloc, at_least) {
     reserve(self, alloc, count)
 }
 
-_type_width_aligned(T: Type) { Alloc.align(sizeof(T), alignof(T)) }
+_type_width_aligned[T]() { Alloc.align(sizeof[T](), alignof[T]()) }
 
 
 // -- Array.Indexed --

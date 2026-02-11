@@ -156,7 +156,7 @@ with_capacity(alloc, T: Type, count) {
     //
     // This statement also introduces the use of a type variable (`T`) as a type argument to another function
     // call.
-    width := _type_width_aligned(T)
+    width := _type_width_aligned[T]()
 
     // This statement demonstrates the use of a type annotation on a variable being declared. In this case,
     // since `alloc->malloc` returns a generic type, the annotation effectively casts the return value to the
@@ -187,7 +187,7 @@ reserve(self: Ptr[Array(T]), alloc, count: Int) {
     // This is an if statement. Round braces are optional around the condition.
     if self->capacity < count {
         // The `: Ptr[T]` annotation is required here, so the compiler knows what concrete type to assign to `p`
-        p: Ptr[T] := alloc->realloc(alloc, self->v, count * _type_width_aligned(T))
+        p: Ptr[T] := alloc->realloc(alloc, self->v, count * _type_width_aligned[T]())
 
         // _tl_fatal_ is a TL intrinsic that prints a message to stderr and exits with status 1.
         if p == null { _tl_fatal_(c"oom") }
@@ -237,8 +237,8 @@ iter_update (iter: Ptr[Iter(T])) -> Void
 iter_deinit (iter: Ptr[Iter(T])) -> Void
 
 iter_init  (arr)  { Iter ( v = arr->v, size = arr->size, index = 0 ) }
-iter_ptr   (iter) { iter->v.(iter->index).&                           }
-iter_value (iter) { iter->v.(iter->index)                             }
+iter_ptr   (iter) { iter->v.(iter->index).&                          }
+iter_value (iter) { iter->v.(iter->index)                            }
 iter_cond  (iter) { iter->index < iter->size                         }
 iter_update(iter) { iter->index = iter->index + 1                    }
 iter_deinit(iter) {                                                  }
@@ -252,9 +252,9 @@ iter_deinit(iter) {                                                  }
 
 // Forward declarations are NOT required, but they can be useful for documentation.
 
-_grow               (self: Ptr[Array(T]), alloc: Ptr[Allocator], at_least: Int) -> Void
-_is_full            (self: Ptr[Array(T]))                                       -> Bool
-_type_width_aligned (T: Type)                                                   -> Int
+_grow                  (self: Ptr[Array(T]), alloc: Ptr[Allocator], at_least: Int) -> Void
+_is_full               (self: Ptr[Array(T]))                                       -> Bool
+_type_width_aligned[T] ()                                                          -> Int
 
 // --
 
@@ -283,7 +283,7 @@ _grow(self, alloc, at_least) {
 // `T` is annotated as a type argument, which are handled carefully to interface with C's sizeof and alignof
 // builtins. If you examine the TL `builtin` module you'll see sizeof and alignof are implemented as
 // wrappers around TL intrinsic functions.
-_type_width_aligned(T: Type) { Alloc.align(sizeof(T), alignof(T)) }
+_type_width_aligned[T]() { Alloc.align(sizeof[T](), alignof[T]()) }
 
 
 // Start a new module. A single file may contain multiple modules, but the same module cannot be implemented
@@ -326,6 +326,6 @@ iter_init(arr) { Iter (v = arr->v, size = arr->size, index = 0,
 
 iter_ptr   (iter) { iter->ivp.ptr  = iter->v.(iter->index).& iter->ivp.index = iter->index iter->ivp }
 iter_value (iter) { iter->iv.value = iter->v.(iter->index) iter->iv.index = iter->index iter->iv     }
-iter_cond  (iter) { iter->index < iter->size                                                        }
-iter_update(iter) { iter->index = iter->index + 1                                                   }
-iter_deinit(iter) {                                                                                 }
+iter_cond  (iter) { iter->index < iter->size                                                         }
+iter_update(iter) { iter->index = iter->index + 1                                                    }
+iter_deinit(iter) {                                                                                  }
