@@ -419,6 +419,11 @@ static void load_toplevel(tl_infer *self, ast_node_sized nodes) {
             } else {
                 create_type_constructor_from_user_type(self, node);
                 str_map_set(&self->toplevels, name_str, &node);
+#if DEBUG_EXPLICIT_TYPE_ARGS
+                fprintf(stderr, "[DEBUG UTD] Added to toplevels (%p): '%s' (len=%zu, hash=%llu) -> %p\n",
+                        (void *)self->toplevels, str_cstr(&name_str), str_len(name_str),
+                        (unsigned long long)str_hash64(name_str), (void *)node);
+#endif
             }
         }
 
@@ -594,6 +599,10 @@ static void traverse_ctx_load_type_arguments(tl_infer *self, traverse_ctx *ctx, 
     }
 }
 
+// Forward declaration for explicit type argument specialization
+static str specialize_type_constructor(tl_infer *self, str name, tl_monotype_sized args,
+                                       tl_polytype **out_type);
+
 static int traverse_ctx_assign_type_arguments(tl_infer *self, traverse_ctx *ctx, ast_node const *node) {
     if (ast_node_is_nfa(node)) {
         u32 argc = node->named_application.n_type_arguments;
@@ -624,6 +633,20 @@ static int traverse_ctx_assign_type_arguments(tl_infer *self, traverse_ctx *ctx,
             str parsed_str = tl_monotype_to_string(self->transient, parsed);
             fprintf(stderr, "  type_arg[%u]: parsed = %s\n", i, str_cstr(&parsed_str));
 #endif
+
+            // If the type argument is a type constructor instance with arguments, specialize it.
+            // This is an exception to the normal design where specialization happens in
+            // specialize_applications_cb. We must do it here because intrinsics (like
+            // _tl_sizeof_) are skipped by specialize_applications_cb, so their explicit
+            // type arguments would never be specialized otherwise.
+            if (tl_monotype_is_inst(parsed) && parsed->cons_inst->args.size > 0) {
+                tl_polytype *specialized = null;
+                (void)specialize_type_constructor(self, parsed->cons_inst->def->generic_name,
+                                                  parsed->cons_inst->args, &specialized);
+                if (specialized && tl_monotype_is_inst_specialized(specialized->type)) {
+                    parsed = specialized->type;
+                }
+            }
 
             // wrap in type literal
             tl_monotype *literal = tl_monotype_create_literal(self->arena, parsed);
@@ -2753,7 +2776,17 @@ static str specialize_type_constructor_(tl_infer *self, str name, tl_monotype_si
     tl_type_registry_specialize_ctx inst_ctx =
       tl_type_registry_specialize_begin(self->registry, name, name_inst, args);
 
-    if (!inst_ctx.specialized) goto cancel;
+#if DEBUG_EXPLICIT_TYPE_ARGS
+    fprintf(stderr, "[DEBUG specialize_type_constructor_] name=%s\n", str_cstr(&name));
+    fprintf(stderr, "  inst_ctx.specialized = %p\n", (void *)inst_ctx.specialized);
+#endif
+
+    if (!inst_ctx.specialized) {
+#if DEBUG_EXPLICIT_TYPE_ARGS
+        fprintf(stderr, "  -> cancel: inst_ctx.specialized is null\n");
+#endif
+        goto cancel;
+    }
     if (!tl_monotype_is_inst(inst_ctx.specialized)) fatal("runtime error");
 
     name_and_type key      = make_instance_key(name, inst_ctx.specialized);
@@ -2763,13 +2796,29 @@ static str specialize_type_constructor_(tl_infer *self, str name, tl_monotype_si
         if (out_type) *out_type = poly;
         out_str = *existing;
 
+#if DEBUG_EXPLICIT_TYPE_ARGS
+        fprintf(stderr, "  -> cancel: existing instance found: %s\n", str_cstr(existing));
+#endif
         goto cancel;
     }
 
     // Look up generic type using the generic_name field, not the name parameter, because the latter may be
     // a type alias.
     ast_node *utd = toplevel_get(self, inst_ctx.specialized->cons_inst->def->generic_name);
-    if (!utd) goto cancel;
+#if DEBUG_EXPLICIT_TYPE_ARGS
+    {
+        str gn = inst_ctx.specialized->cons_inst->def->generic_name;
+        fprintf(stderr, "  generic_name for toplevel_get: '%s' (len=%zu, hash=%llu)\n", str_cstr(&gn),
+                str_len(gn), (unsigned long long)str_hash64(gn));
+        fprintf(stderr, "  utd = %p, toplevels = %p\n", (void *)utd, (void *)self->toplevels);
+    }
+#endif
+    if (!utd) {
+#if DEBUG_EXPLICIT_TYPE_ARGS
+        fprintf(stderr, "  -> cancel: utd not found\n");
+#endif
+        goto cancel;
+    }
 
     instance_add(self, &key, name_inst);
 
@@ -2783,6 +2832,10 @@ static str specialize_type_constructor_(tl_infer *self, str name, tl_monotype_si
 
     assert(tl_monotype_is_inst_specialized(utd->type->type));
     if (out_type) *out_type = utd->type; // Note: this helps the transpiler
+
+#if DEBUG_EXPLICIT_TYPE_ARGS
+    fprintf(stderr, "[DEBUG specialize] Added synthesized node: %s\n", str_cstr(&name_inst));
+#endif
 
     // fixup recur refs
     forall(i, recur_refs) {
@@ -4258,6 +4311,20 @@ tl_monotype *tl_infer_update_specialized_type_(tl_infer *self, tl_monotype *mono
         tl_polytype *replace = null;
         (void)specialize_type_constructor(self, mono->cons_inst->def->generic_name, mono->cons_inst->args,
                                           &replace);
+
+#if DEBUG_EXPLICIT_TYPE_ARGS
+        {
+            str gn = mono->cons_inst->def->generic_name;
+            fprintf(stderr, "[DEBUG UPDATE_SPECIALIZED] specialize_type_constructor('%s'):\n",
+                    str_cstr(&gn));
+            fprintf(stderr, "  replace = %p\n", (void *)replace);
+            if (replace) {
+                str ts = tl_monotype_to_string(self->transient, replace->type);
+                fprintf(stderr, "  replace->type = %s\n", str_cstr(&ts));
+                fprintf(stderr, "  is_specialized = %d\n", tl_monotype_is_inst_specialized(replace->type));
+            }
+        }
+#endif
 
         if (replace && !tl_monotype_is_inst_specialized(replace->type)) fatal("unreachable");
 
