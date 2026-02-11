@@ -23,31 +23,31 @@ _STR_LITERAL_TAG: Byte := 0x02
 // The following are in prelude.tl:
 // _Big: {
 //     len: CSize,
-//     buf: Ptr(CChar),
+//     buf: Ptr[CChar],
 // }
 // _Small: {
-//     buf:     CArray(CChar, 15),
+//     buf:     CArray[CChar, 15],
 //     tag_len: CUnsignedChar,
 // }
 // Str: { | big: _Big
 //        | small: _Small }
 //
 // from_literal is directly invoked by compiler to generate string literals
-// from_literal(s: Ptr(Const(CChar))) -> Str
+// from_literal(s: Ptr[Const[CChar]]) -> Str
 
 
 // -- Synopsis --
 
 // Construction.
 empty     ()                                                      -> Str
-from_cstr (alloc: Ptr(Allocator), s: Ptr(Const(CChar)))           -> Str
-from_bytes(alloc: Ptr(Allocator), s: Ptr(Const(CChar)), n: CSize) -> Str
-from_bytes(s: Ptr(Const(CChar)), n: CSize)                        -> Str
-copy      (alloc: Ptr(Allocator), s: Str)                         -> Str
+from_cstr (alloc: Ptr[Allocator], s: Ptr[Const[CChar]])           -> Str
+from_bytes(alloc: Ptr[Allocator], s: Ptr[Const[CChar]], n: CSize) -> Str
+from_bytes(s: Ptr[Const[CChar]], n: CSize)                        -> Str
+copy      (alloc: Ptr[Allocator], s: Str)                         -> Str
 copy      (s: Str)                                                -> Str
-from_int  (alloc: Ptr(Allocator), n: Int)                         -> Str
+from_int  (alloc: Ptr[Allocator], n: Int)                         -> Str
 from_int  (n: Int)                                                -> Str
-from_float(alloc: Ptr(Allocator), f: Float)                       -> Str
+from_float(alloc: Ptr[Allocator], f: Float)                       -> Str
 from_float(f: Float)                                              -> Str
 
 // Queries.
@@ -55,7 +55,7 @@ len       (s: Str)               -> CSize
 is_empty  (s: Str)               -> Bool
 _is_small (s: Str)               -> Bool
 byte_at   (s: Str, index: CSize) -> Byte
-cstr      (s: Ptr(Str))          -> CString
+cstr      (s: Ptr[Str])          -> CString
 
 // Comparison.
 eq           (a: Str, b: Str)             -> Bool
@@ -66,29 +66,29 @@ contains     (haystack: Str, needle: Str) -> Bool
 contains_byte(s: Str, b: Byte)            -> Bool
 
 // Concatenation.
-cat   (alloc: Ptr(Allocator), a: Str, b: Str)                 -> Str
+cat   (alloc: Ptr[Allocator], a: Str, b: Str)                 -> Str
 cat   (a: Str, b: Str)                                        -> Str
-cat_3 (alloc: Ptr(Allocator), a: Str, b: Str, c: Str)         -> Str
+cat_3 (alloc: Ptr[Allocator], a: Str, b: Str, c: Str)         -> Str
 cat_3 (a: Str, b: Str, c: Str)                                -> Str
-cat_4 (alloc: Ptr(Allocator), a: Str, b: Str, c: Str, d: Str) -> Str
+cat_4 (alloc: Ptr[Allocator], a: Str, b: Str, c: Str, d: Str) -> Str
 cat_4 (a: Str, b: Str, c: Str, d: Str)                        -> Str
-push  (self: Ptr(Str), alloc: Ptr(Allocator), other: Str)     -> Void
-push  (self: Ptr(Str), other: Str)                            -> Void
+push  (self: Ptr[Str], alloc: Ptr[Allocator], other: Str)     -> Void
+push  (self: Ptr[Str], other: Str)                            -> Void
 
 // Slicing.
-slice (alloc: Ptr(Allocator), s: Str, start: CSize, end: CSize) -> Str
+slice (alloc: Ptr[Allocator], s: Str, start: CSize, end: CSize) -> Str
 slice (s: Str, start: CSize, end: CSize)                        -> Str
 
 // Search.
 index_of_byte(s: Str, b: Byte) -> Int
 
 // Mutation.
-replace_byte(alloc: Ptr(Allocator), s: Str, find: Byte, replace: Byte) -> Str
+replace_byte(alloc: Ptr[Allocator], s: Str, find: Byte, replace: Byte) -> Str
 replace_byte(s: Str, find: Byte, replace: Byte)                        -> Str
 
 // Memory.
-free(self: Ptr(Str), alloc: Ptr(Allocator)) -> Void
-free(self: Ptr(Str))                        -> Void
+free(self: Ptr[Str], alloc: Ptr[Allocator]) -> Void
+free(self: Ptr[Str])                        -> Void
 
 
 // -- Implementation --
@@ -103,7 +103,7 @@ _small_len(s: Str) -> CSize {
     (s.small.tag_len & 0xF0) >> 4
 }
 
-_buf(s: Ptr(Str)) -> Ptr(CChar) {
+_buf(s: Ptr[Str]) -> Ptr[CChar] {
     return if _is_small(s.*) { s->small.buf } else { s->big.buf }
 }
 
@@ -169,10 +169,10 @@ static int tl_str_literal_set_has(void *p) {
 }
 #endc
 
-c_tl_str_literal_set_add(p: Ptr(CChar)) -> Void
-c_tl_str_literal_set_has(p: Ptr(CChar)) -> Bool
+c_tl_str_literal_set_add(p: Ptr[CChar]) -> Void
+c_tl_str_literal_set_has(p: Ptr[CChar]) -> Bool
 
-_mark_literal(s: Ptr(Str)) {
+_mark_literal(s: Ptr[Str]) {
     if _is_small(s.*) {
         s->small.tag_len = s->small.tag_len | _STR_LITERAL_TAG
     } else {
@@ -191,17 +191,17 @@ _is_literal(s: Str) -> Bool {
 #endif
 
 
-_init_small(src: Ptr(Const(CChar)), n: CSize) -> Str {
+_init_small(src: Ptr[Const[CChar]], n: CSize) -> Str {
     s := Str(small = _Small(buf = void, tag_len = _make_tag_len(n)))
     if n > 0 {
-        dst: Ptr(CChar) := s.small.buf
+        dst: Ptr[CChar] := s.small.buf
         c_memcpy(dst, src, n)
     }
     s
 }
 
-_init_big(alloc: Ptr(Allocator), src: Ptr(Const(CChar)), n: CSize) -> Str {
-    buf: Ptr(CChar) := alloc->malloc(alloc, n + 1)
+_init_big(alloc: Ptr[Allocator], src: Ptr[Const[CChar]], n: CSize) -> Str {
+    buf: Ptr[CChar] := alloc->malloc(alloc, n + 1)
     if buf == null { _tl_fatal_(c"Str: out of memory") }
     if n > 0 { c_memcpy(buf, src, n) }
     Str(big = _Big(len = n, buf = buf))
@@ -214,7 +214,7 @@ empty() -> Str {
     Str(small = _Small(buf = void, tag_len = _make_tag_len(0)))
 }
 
-from_bytes(alloc, s: Ptr(Const(CChar)), n: CSize) -> Str {
+from_bytes(alloc, s: Ptr[Const[CChar]], n: CSize) -> Str {
     return
     if n <= _STR_MAX_SMALL {
         _init_small(s, n)
@@ -224,16 +224,16 @@ from_bytes(alloc, s: Ptr(Const(CChar)), n: CSize) -> Str {
     }
 }
 
-from_bytes(s: Ptr(Const(CChar)), n: CSize) -> Str {
+from_bytes(s: Ptr[Const[CChar]], n: CSize) -> Str {
     from_bytes(Alloc.context.default, s, n)
 }
 
-from_cstr(alloc, s: Ptr(Const(CChar))) -> Str {
+from_cstr(alloc, s: Ptr[Const[CChar]]) -> Str {
     n := c_strlen(s)
     from_bytes(alloc, s, n)
 }
 
-from_cstr(s: Ptr(Const(CChar))) -> Str {
+from_cstr(s: Ptr[Const[CChar]]) -> Str {
     from_cstr(Alloc.context.default, s)
 }
 
@@ -250,7 +250,7 @@ from_literal(s: CString) -> Str {
 
 #ifndef DEBUG
 
-from_literal(s: Ptr(Const(CChar))) -> Str {
+from_literal(s: Ptr[Const[CChar]]) -> Str {
     from_cstr(Alloc.context.string_literals, s)
 }
 
@@ -275,12 +275,12 @@ static long long tl_string_snprintf_float(char *buf, size_t sz, double f) {
 }
 #endc
 
-c_tl_string_snprintf_int  (buf: Ptr(CChar), sz: CSize, n: Int)   -> Int
-c_tl_string_snprintf_float(buf: Ptr(CChar), sz: CSize, f: Float) -> Int
+c_tl_string_snprintf_int  (buf: Ptr[CChar], sz: CSize, n: Int)   -> Int
+c_tl_string_snprintf_float(buf: Ptr[CChar], sz: CSize, f: Float) -> Int
 
 from_int(alloc, n: Int) -> Str {
-    buf: CArray(CChar, 32) := void
-    ptr: Ptr(CChar)        := buf
+    buf: CArray[CChar, 32] := void
+    ptr: Ptr[CChar]        := buf
     written                := c_tl_string_snprintf_int(ptr, 32, n)
     if written < 0 { _tl_fatal_(c"from_int: underflow") }
     n: CSize := written
@@ -292,8 +292,8 @@ from_int(n: Int) -> Str {
 }
 
 from_float(alloc, f: Float) -> Str {
-    buf: CArray(CChar, 32) := void
-    ptr: Ptr(CChar)        := buf
+    buf: CArray[CChar, 32] := void
+    ptr: Ptr[CChar]        := buf
     written                := c_tl_string_snprintf_float(ptr, 32, f)
     if written < 0 { _tl_fatal_(c"from_int: underflow") }
     n: CSize := written
@@ -320,13 +320,13 @@ byte_at(s: Str, index: CSize) -> Byte {
     n := len(s)
     if index >= n { _tl_fatal_(c"Str.byte_at: index out of bounds") }
     p := _buf(s.&)
-    p[index]
+    p.(index)
 }
 
-cstr(s: Ptr(Str)) -> CString {
+cstr(s: Ptr[Str]) -> CString {
     n := len(s.*)
     p := _buf(s)
-    p[n] = 0
+    p.(n) = 0
     cs: CString := p
     cs
 }
@@ -367,7 +367,7 @@ ends_with(s: Str, suffix: Str) -> Bool {
     if xn > sn { return 0 }
     if xn == 0 { return 1 }
     sp               := _buf(s.&)
-    tail: Ptr(CChar) := Unsafe.pointer_add(sp, sn - xn)
+    tail: Ptr[CChar] := Unsafe.pointer_add(sp, sn - xn)
     xp               := _buf(suffix.&)
     c_memcmp(tail, xp, xn) == 0
 }
@@ -381,7 +381,7 @@ contains(haystack: Str, needle: Str) -> Bool {
     np       := _buf(needle.&)
     i: CSize := 0
     while i <= hn - nn, i += 1 {
-        candidate: Ptr(CChar) := Unsafe.pointer_add(hp, i)
+        candidate: Ptr[CChar] := Unsafe.pointer_add(hp, i)
         if c_memcmp(candidate, np, nn) == 0 { return 1 }
     }
     0
@@ -392,7 +392,7 @@ contains_byte(s: Str, b: Byte) -> Bool {
     sp       := _buf(s.&)
     i: CSize := 0
     while i < n, i += 1 {
-        if sp[i] == b { return 1 }
+        if sp.(i) == b { return 1 }
     }
     0
 }
@@ -400,47 +400,47 @@ contains_byte(s: Str, b: Byte) -> Bool {
 
 // -- Concatenation --
 
-_cat_impl(alloc: Ptr(Allocator), bufs: Ptr(Ptr(CChar)), lens: Ptr(CSize), count: CSize) -> Str {
+_cat_impl(alloc: Ptr[Allocator], bufs: Ptr[Ptr[CChar]], lens: Ptr[CSize], count: CSize) -> Str {
     total: CSize := 0
     i:     CSize := 0
-    while i < count, i += 1 { total = total + lens[i] }
+    while i < count, i += 1 { total = total + lens.(i) }
 
     if total <= _STR_MAX_SMALL {
         s               := Str(small = _Small(buf = void, tag_len = _make_tag_len(total)))
-        dst: Ptr(CChar) := s.small.buf
+        dst: Ptr[CChar] := s.small.buf
         off: CSize      := 0
         j:   CSize      := 0
         while j < count, j += 1 {
-            if lens[j] > 0 {
-                d: Ptr(CChar) := Unsafe.pointer_add(dst, off)
-                c_memcpy(d, bufs[j], lens[j])
+            if lens.(j) > 0 {
+                d: Ptr[CChar] := Unsafe.pointer_add(dst, off)
+                c_memcpy(d, bufs.(j), lens.(j))
             }
-            off = off + lens[j]
+            off = off + lens.(j)
         }
         return s
     }
 
-    buf: Ptr(CChar) := alloc->malloc(alloc, total + 1)
+    buf: Ptr[CChar] := alloc->malloc(alloc, total + 1)
     if buf == null { _tl_fatal_(c"Str: out of memory") }
     off: CSize := 0
     j:   CSize := 0
     while j < count, j += 1 {
-        if lens[j] > 0 {
-            d: Ptr(CChar) := Unsafe.pointer_add(buf, off)
-            c_memcpy(d, bufs[j], lens[j])
+        if lens.(j) > 0 {
+            d: Ptr[CChar] := Unsafe.pointer_add(buf, off)
+            c_memcpy(d, bufs.(j), lens.(j))
         }
-        off = off + lens[j]
+        off = off + lens.(j)
     }
     Str(big = _Big(len = total, buf = buf))
 }
 
 cat(alloc, a: Str, b: Str) -> Str {
-    bufs: CArray(Ptr(CChar), 2) := void
-    lens: CArray(CSize, 2)      := void
-    bufs[0] = _buf(a.&) lens[0] = len(a)
-    bufs[1] = _buf(b.&) lens[1] = len(b)
-    bp: Ptr(Ptr(CChar)) := bufs
-    lp: Ptr(CSize)      := lens
+    bufs: CArray[Ptr[CChar], 2] := void
+    lens: CArray[CSize, 2]      := void
+    bufs.(0) = _buf(a.&) lens.(0) = len(a)
+    bufs.(1) = _buf(b.&) lens.(1) = len(b)
+    bp: Ptr[Ptr[CChar]] := bufs
+    lp: Ptr[CSize]      := lens
     _cat_impl(alloc, bp, lp, 2)
 }
 
@@ -449,13 +449,13 @@ cat(a: Str, b: Str) -> Str {
 }
 
 cat_3(alloc, a: Str, b: Str, c: Str) -> Str {
-    bufs: CArray(Ptr(CChar), 3) := void
-    lens: CArray(CSize, 3)      := void
-    bufs[0] = _buf(a.&) lens[0] = len(a)
-    bufs[1] = _buf(b.&) lens[1] = len(b)
-    bufs[2] = _buf(c.&) lens[2] = len(c)
-    bp: Ptr(Ptr(CChar)) := bufs
-    lp: Ptr(CSize)      := lens
+    bufs: CArray[Ptr[CChar], 3] := void
+    lens: CArray[CSize, 3]      := void
+    bufs.(0) = _buf(a.&) lens.(0) = len(a)
+    bufs.(1) = _buf(b.&) lens.(1) = len(b)
+    bufs.(2) = _buf(c.&) lens.(2) = len(c)
+    bp: Ptr[Ptr[CChar]] := bufs
+    lp: Ptr[CSize]      := lens
     _cat_impl(alloc, bp, lp, 3)
 }
 
@@ -464,14 +464,14 @@ cat_3(a: Str, b: Str, c: Str) -> Str {
 }
 
 cat_4(alloc, a: Str, b: Str, c: Str, d: Str) -> Str {
-    bufs: CArray(Ptr(CChar), 4) := void
-    lens: CArray(CSize, 4)      := void
-    bufs[0] = _buf(a.&) lens[0] = len(a)
-    bufs[1] = _buf(b.&) lens[1] = len(b)
-    bufs[2] = _buf(c.&) lens[2] = len(c)
-    bufs[3] = _buf(d.&) lens[3] = len(d)
-    bp: Ptr(Ptr(CChar)) := bufs
-    lp: Ptr(CSize)      := lens
+    bufs: CArray[Ptr[CChar], 4] := void
+    lens: CArray[CSize, 4]      := void
+    bufs.(0) = _buf(a.&) lens.(0) = len(a)
+    bufs.(1) = _buf(b.&) lens.(1) = len(b)
+    bufs.(2) = _buf(c.&) lens.(2) = len(c)
+    bufs.(3) = _buf(d.&) lens.(3) = len(d)
+    bp: Ptr[Ptr[CChar]] := bufs
+    lp: Ptr[CSize]      := lens
     _cat_impl(alloc, bp, lp, 4)
 }
 
@@ -481,7 +481,7 @@ cat_4(a: Str, b: Str, c: Str, d: Str) -> Str {
 
 #ifdef DEBUG
 
-push(self: Ptr(Str), alloc, other: Str) {
+push(self: Ptr[Str], alloc, other: Str) {
     if _is_literal(self.*) {
         _tl_fatal_(c"Str.push: cannot push to a string literal")
     }
@@ -494,7 +494,7 @@ push(self: Ptr(Str), alloc, other: Str) {
 
 #ifndef DEBUG
 
-push(self: Ptr(Str), alloc, other: Str) {
+push(self: Ptr[Str], alloc, other: Str) {
     result := cat(alloc, self.*, other)
     free(self, alloc)
     self.* = result
@@ -502,7 +502,7 @@ push(self: Ptr(Str), alloc, other: Str) {
 
 #endif
 
-push(self: Ptr(Str), other: Str) {
+push(self: Ptr[Str], other: Str) {
     push(self, Alloc.context.default, other)
 }
 
@@ -515,7 +515,7 @@ slice(alloc, s: Str, start: CSize, end: CSize) -> Str {
     slen := end - start
     if slen == 0 { return empty() }
     sp              := _buf(s.&)
-    src: Ptr(CChar) := Unsafe.pointer_add(sp, start)
+    src: Ptr[CChar] := Unsafe.pointer_add(sp, start)
     from_bytes(alloc, src, slen)
 }
 
@@ -531,7 +531,7 @@ index_of_byte(s: Str, b: Byte) -> Int {
     sp       := _buf(s.&)
     i: CSize := 0
     while i < n, i += 1 {
-        if sp[i] == b { return i }
+        if sp.(i) == b { return i }
     }
     -1
 }
@@ -545,7 +545,7 @@ replace_byte(alloc, s: Str, find: Byte, replace: Byte) -> Str {
     rp       := _buf(result.&)
     i: CSize := 0
     while i < n, i += 1 {
-        if rp[i] == find { rp[i] = replace }
+        if rp.(i) == find { rp.(i) = replace }
     }
     result
 }
@@ -559,7 +559,7 @@ replace_byte(s: Str, find: Byte, replace: Byte) -> Str {
 
 #ifdef DEBUG
 
-free(self: Ptr(Str), alloc) {
+free(self: Ptr[Str], alloc) {
     if _is_literal(self.*) {
         _tl_fatal_(c"Str.free: cannot free a string literal")
     }
@@ -573,7 +573,7 @@ free(self: Ptr(Str), alloc) {
 
 #ifndef DEBUG
 
-free(self: Ptr(Str), alloc) {
+free(self: Ptr[Str], alloc) {
     if !_is_small(self.*) {
         alloc->free(alloc, self->big.buf)
     }
@@ -582,6 +582,6 @@ free(self: Ptr(Str), alloc) {
 
 #endif
 
-free(self: Ptr(Str)) {
+free(self: Ptr[Str]) {
     free(self, Alloc.context.default)
 }

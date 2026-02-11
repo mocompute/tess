@@ -2,7 +2,7 @@
 #import <stdlib.tl>
 
 // Define a struct with multiple fields
-Buffer: { data: Ptr(CChar), size: Int, capacity: Int }
+Buffer: { data: Ptr[CChar], size: Int, capacity: Int }
 
 // Another test struct
 Point: { x: Int, y: Int, z: Int }

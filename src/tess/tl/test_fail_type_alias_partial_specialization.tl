@@ -1,5 +1,5 @@
 #module Collections
-Map(K, V): { keys: Ptr(K), values: Ptr(V), size: Int }
+Map(K, V): { keys: Ptr[K], values: Ptr[V], size: Int }
 
 #module App
 // Aliases which partially specialize a generic type are not supported. This line generates an error:

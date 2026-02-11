@@ -8,7 +8,7 @@ main() {
     error = error + if unwrap(opt_some, 0) == 42 { 0 } else { 1 }
 
     // Test unwrap with Option: None
-    opt_none: Option(Int) := None()
+    opt_none: Option[Int] := None()
     error = error + if unwrap(opt_none, 99) == 99 { 0 } else { 1 }
 
     // Test unwrap with Result: Ok

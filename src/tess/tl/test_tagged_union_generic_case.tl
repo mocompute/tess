@@ -1,7 +1,7 @@
 #module main
 
 // renamed due to new conflict with builtin Some/None
-T(a): | MySome { v: a }
+T[a]: | MySome { v: a }
       | MyNone
 
 main() {

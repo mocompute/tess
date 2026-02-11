@@ -111,13 +111,13 @@ find_value(arr: Array[T], f: (T) -> Bool)                        -> T
 
 // -- Implementation --
 
-empty(T: Type) -> Array[T] {
+empty[T]() -> Array[T] {
     Array ( v: Ptr[T] = null, capacity = 0, size = 0 )
 }
 
 
-init(alloc, val: T, count) {
-    arr := with_capacity(alloc, T, count)
+init[T](alloc, val: T, count) {
+    arr := with_capacity[T](alloc, count)
     arr.size             = count
     for p.& in arr { p.* = val }
     arr
@@ -137,24 +137,24 @@ free(self) {
 }
 
 
-with_capacity(alloc, T: Type, count) {
+with_capacity[T](alloc, count) {
     width     := _type_width_aligned(T)
     p: Ptr[T] := alloc->malloc(alloc, count * width)
     Array ( v = p, capacity = count, size = 0 )
 }
 
-with_capacity(T: Type, count: Int) {
-    with_capacity(Alloc.context.default, T, count)
+with_capacity[T](count: Int) {
+    with_capacity[T](Alloc.context.default, count)
 }
 
-with_capacity_undefined(alloc, T: Type, count) {
-    result := with_capacity(alloc, T, count)
+with_capacity_undefined[T](alloc, count) {
+    result := with_capacity[T](alloc, count)
     result.size = count
     result
 }
 
-with_capacity_undefined(T: Type, count) {
-    with_capacity_undefined(Alloc.context.default, T, count)
+with_capacity_undefined[T](count) {
+    with_capacity_undefined[T](Alloc.context.default, count)
 }
 
 reserve(self: Ptr[Array[T]], alloc, count: Int) {
@@ -484,26 +484,26 @@ find_value(arr: Array[T], f: (T) -> Bool) -> T {
 // -- Sorting --
 
 _merge(v: Ptr[T], tmp: Ptr[T], lo: Int, mid: Int, hi: Int, cmp: (T, T) -> Int, width: Int) {
-    c_memcpy(tmp[lo].&, v.(lo).&, (hi - lo) * width)
+    c_memcpy(tmp.(lo).&, v.(lo).&, (hi - lo) * width)
     i := lo
     j := mid
     k := lo
     while i < mid && j < hi {
-        if cmp(tmp[i], tmp[j]) <= 0 {
-            v.(k) = tmp[i]
+        if cmp(tmp.(i), tmp.(j)) <= 0 {
+            v.(k) = tmp.(i)
             i     = i + 1
         } else {
-            v.(k) = tmp[j]
+            v.(k) = tmp.(j)
             j     = j + 1
         }
         k = k + 1
     }
     while i < mid, i += 1 {
-        v.(k) = tmp[i]
+        v.(k) = tmp.(i)
         k     = k + 1
     }
     while j < hi, j += 1 {
-        v.(k) = tmp[j]
+        v.(k) = tmp.(j)
         k     = k + 1
     }
 }

@@ -1,6 +1,6 @@
 #module MyOption
 
-T(a): | Has { v: a }
+T[a]: | Has { v: a }
       | Empty
 
 test1() {

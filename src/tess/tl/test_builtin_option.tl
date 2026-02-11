@@ -20,7 +20,7 @@ test1() {
 
     // Test an alternative to casting at the point of assignment: declare an uninitialized variable of the correct type,
     // and compiler will infer the correct type on a later mutation (assignment)
-    nopt: Option(Float) := void
+    nopt: Option[Float] := void
     nopt = None()
 
     result := case nopt: Option {

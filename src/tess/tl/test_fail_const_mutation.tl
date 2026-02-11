@@ -1,6 +1,6 @@
 #module main
 
-mutate_const(p: Ptr(Const(Int))) {
+mutate_const(p: Ptr[Const[Int]]) {
     p.* = 10    // error: const violation
     0
 }

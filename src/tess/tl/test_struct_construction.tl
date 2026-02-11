@@ -7,7 +7,7 @@ Point: { x: Int, y: Int }
 Color: { r: Int, g: Int, b: Int }
 
 // Generic struct
-Pair(a, b): { first: a, second: b }
+Pair[a, b]: { first: a, second: b }
 
 main() {
     error := 0

@@ -1,6 +1,6 @@
 #module main
 
-MyOption(a): | Has { v: a }
+MyOption[a]: | Has { v: a }
              | Empty
 
 main() {

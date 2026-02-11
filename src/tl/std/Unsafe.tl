@@ -8,17 +8,17 @@ int       tl_unsafe_pointer_compare    (void *lhs, void *rhs)    { return lhs < 
 long long tl_unsafe_float_to_int       (double d)                { return (long long) d; }
 #endc
 
-c_tl_unsafe_pointer_add        (ptr: Ptr(any), n: CPtrDiff)   -> Ptr(any)
-c_tl_unsafe_pointer_difference (lhs: Ptr(any), rhs: Ptr(any)) -> CPtrDiff
-c_tl_unsafe_pointer_compare    (lhs: Ptr(any), rhs: Ptr(any)) -> CInt
+c_tl_unsafe_pointer_add        (ptr: Ptr[any], n: CPtrDiff)   -> Ptr[any]
+c_tl_unsafe_pointer_difference (lhs: Ptr[any], rhs: Ptr[any]) -> CPtrDiff
+c_tl_unsafe_pointer_compare    (lhs: Ptr[any], rhs: Ptr[any]) -> CInt
 
 c_tl_unsafe_float_to_int (d: CDouble) -> CLongLong
 
-pointer_add      (ptr: Ptr(any), n: CPtrDiff)   -> Ptr(any) { c_tl_unsafe_pointer_add(ptr, n)       }
-pointer_subtract (ptr: Ptr(any), n: CPtrDiff)   -> Ptr(any) { c_tl_unsafe_pointer_add(ptr, -n)      }
-pointer_compare  (lhs: Ptr(any), rhs: Ptr(any)) -> CInt     { c_tl_unsafe_pointer_compare(lhs, rhs) }
+pointer_add      (ptr: Ptr[any], n: CPtrDiff)   -> Ptr[any] { c_tl_unsafe_pointer_add(ptr, n)       }
+pointer_subtract (ptr: Ptr[any], n: CPtrDiff)   -> Ptr[any] { c_tl_unsafe_pointer_add(ptr, -n)      }
+pointer_compare  (lhs: Ptr[any], rhs: Ptr[any]) -> CInt     { c_tl_unsafe_pointer_compare(lhs, rhs) }
 
-pointer_difference(lhs: Ptr(any), rhs: Ptr(any)) -> CPtrDiff {
+pointer_difference(lhs: Ptr[any], rhs: Ptr[any]) -> CPtrDiff {
     c_tl_unsafe_pointer_difference(lhs, rhs)
 }
 

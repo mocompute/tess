@@ -1,8 +1,8 @@
 #module Foo
-Span(T): { v: Ptr(T), sz: CSize }
+Span[T]: { v: Ptr[T], sz: CSize }
 
 #module Bar
-Chars = Foo.Span(CChar)
+Chars = Foo.Span[CChar]
 
 #module main
 

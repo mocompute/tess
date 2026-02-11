@@ -1,10 +1,10 @@
 #module main
 
 // renamed due to new conflict with builtin Some/None
-T(a): | MySome { v: a }
+T[a]: | MySome { v: a }
       | MyNone
 
-my_unwrap(opt: T(Int)) -> Int {
+my_unwrap(opt: T[Int]) -> Int {
     case opt: T {
         s: MySome { s.v }
         n: MyNone { 0 }

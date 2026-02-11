@@ -3,15 +3,15 @@
 
 main() {
     data                 := 0x0102030405060708
-    arr: CArray(Int, 16) := void
-    arr[0] = data
+    arr: CArray[Int, 16] := void
+    arr.(0) = data
 
     // explicit decay to pointer, then cast to a different type
-    p: Ptr(Int)           := arr
-    b: Ptr(CUnsignedChar) := p
-    c_printf(c"b[0] = 0x%x\n", b[0])
-    c_printf(c"b[1] = 0x%x\n", b[1])
-    c_printf(c"b[2] = 0x%x\n", b[2])
+    p: Ptr[Int]           := arr
+    b: Ptr[CUnsignedChar] := p
+    c_printf(c"b.(0) = 0x%x\n", b.(0))
+    c_printf(c"b.(1) = 0x%x\n", b.(1))
+    c_printf(c"b.(2) = 0x%x\n", b.(2))
 
     pp := p.&
 
@@ -20,8 +20,8 @@ main() {
     error := val - data
 
     // Note: assumes little-endian
-    error += if (0x08 == b[0]) {0} else {1}
-    error += if (0x07 == b[1]) {0} else {1}
-    error += if (0x06 == b[2]) {0} else {1}
+    error += if (0x08 == b.(0)) {0} else {1}
+    error += if (0x07 == b.(1)) {0} else {1}
+    error += if (0x06 == b.(2)) {0} else {1}
     error
 }

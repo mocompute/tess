@@ -11,7 +11,7 @@ negate    (x: Int) -> Int { 0 - x }
 IntHandler: { fn: (Int) -> Int }
 
 // Generic tagged union with a variant that contains function pointer struct
-Outcome(T): | Success { value: T }
+Outcome[T]: | Success { value: T }
             | Failure { code: Int, handler: IntHandler }
 
 // Helper function to apply handler
@@ -40,7 +40,7 @@ main() {
 
     // Test 3: Failure variant with double handler
     h1                                 := IntHandler(fn = double_int/1)
-    err1:                 Outcome(Int) := Failure(5, h1)
+    err1:                 Outcome[Int] := Failure(5, h1)
     result3                            := case err1: Outcome {
         o: Success { 0 }
         e: Failure { apply_int_handler(e.handler, e.code) }
@@ -49,7 +49,7 @@ main() {
 
     // Test 4: Failure variant with negate handler
     h2                                 := IntHandler(fn = negate/1)
-    err2:                 Outcome(Int) := Failure(7, h2)
+    err2:                 Outcome[Int] := Failure(7, h2)
     result4                            := case err2: Outcome {
         o: Success { 0 }
         e: Failure { apply_int_handler(e.handler, e.code) }

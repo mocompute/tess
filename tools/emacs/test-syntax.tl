@@ -18,7 +18,7 @@ identity(x: a) -> a {
 }
 
 // Test with operators and types
-process(arr: Ptr(Array.T(Int))) -> Bool {
+process(arr: Ptr[Array.T(Int])) -> Bool {
     size := Array.size(arr)
     i := 0
     while i < size {
@@ -30,7 +30,7 @@ process(arr: Ptr(Array.T(Int))) -> Bool {
 }
 
 // Test struct definition with type constructor
-Point(a) : {
+Point[a] : {
     x: a,
     y: a,
 }
@@ -64,7 +64,7 @@ make_adder(n: Int) -> (Int -> Int) {
 }
 
 // Test C types
-c_function(p: Ptr(CInt), size: CSize) -> CDouble {
+c_function(p: Ptr[CInt], size: CSize) -> CDouble {
     result : CDouble := 0.0
     i : CSize := 0
     while i < size {

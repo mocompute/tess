@@ -2,7 +2,7 @@
 #import <stdlib.tl>
 
 Arr(a): {
-    v:        Ptr(a),
+    v:        Ptr[a],
     size:     Int,
     capacity: Int,
 }
@@ -14,13 +14,13 @@ map(f: (a) -> b, arr: Arr(a)) -> Arr(b)
 // fails, whereas using a temporary variable (out_p) works.
 map(f, arr) {
     // This should be equivalent to:
-    //   out_p: Ptr(b) := c_malloc(sizeof(b) * arr.size)
+    //   out_p: Ptr[b] := c_malloc(sizeof(b) * arr.size)
     //   out := Arr(v = out_p, size = arr.size, capacity = arr.size)
-    out := Arr(v: Ptr(b) = c_malloc(sizeof(b) * arr.size), size = arr.size, capacity = arr.size)
+    out := Arr(v: Ptr[b] = c_malloc(sizeof(b) * arr.size), size = arr.size, capacity = arr.size)
 
     i := 0
     while i < arr.size {
-        out.v[i] = f(arr.v[i])
+        out.v.(i) = f(arr.v.(i))
         i        = i + 1
     }
     out
@@ -29,11 +29,11 @@ map(f, arr) {
 add1(x) { x + 1 }
 
 main() {
-    vals := Arr(v: Ptr(Int) = c_malloc(sizeof(Int) * 4), size = 0, capacity = 4)
-    vals.v[0] = 0
-    vals.v[1] = 1
-    vals.v[2] = 2
-    vals.v[3] = 3
+    vals := Arr(v: Ptr[Int] = c_malloc(sizeof(Int) * 4), size = 0, capacity = 4)
+    vals.v.(0) = 0
+    vals.v.(1) = 1
+    vals.v.(2) = 2
+    vals.v.(3) = 3
     vals.size = 4
 
     res := map(add1/1, vals)
@@ -41,7 +41,7 @@ main() {
     sum := 0
     i   := 0
     while i < res.size, i = i + 1 {
-        sum = sum + res.v[i]
+        sum = sum + res.v.(i)
     }
     sum - 10
 }

@@ -2,7 +2,7 @@
 
 Point: { x: Int, y: Int }
 
-mutate_field(p: Ptr(Const(Point))) {
+mutate_field(p: Ptr[Const[Point]]) {
     p->x = 10    // error: const violation
     0
 }

@@ -1,8 +1,8 @@
 #module Foo
 
-A: { b: Ptr(B), val: Int }
-B: { c: Ptr(C)           }
-C: { a: Ptr(A)           }
+A: { b: Ptr[B], val: Int }
+B: { c: Ptr[C]           }
+C: { a: Ptr[A]           }
 
 
 #module main

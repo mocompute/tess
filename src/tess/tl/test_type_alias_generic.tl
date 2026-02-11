@@ -1,6 +1,6 @@
 #module Foo
-Point     (T): {x: T, y: T}
-Pt = Point(Int)
+Point[T]: {x: T, y: T}
+Pt = Point[Int]
 
 #module main
 

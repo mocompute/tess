@@ -1,11 +1,11 @@
 #module Foo
 
 // A pre-existing generic struct
-Pair(a): { x: a, y: a }
+Pair[a]: { x: a, y: a }
 
 // Tagged union that references an existing generic type as a variant
-Shape(T): | Circle { radius: T }
-          | Foo.Pair(T)
+Shape[T]: | Circle { radius: T }
+          | Foo.Pair[T]
           | MyNone
 
 #module main
