@@ -2899,7 +2899,9 @@ static int toplevel_struct(parser *self) {
     // Check for reserved type keywords to disallow
     if (is_reserved_type_name(type_ident)) return ERROR_STOP;
 
-    // Extract parent name and type args
+    // Extract parent name and type args.
+    // a_type_identifier -> a_funcall parses e.g. Point[a, b] as an NFA where the type params
+    // (a, b) are in .type_arguments (via maybe_type_arguments which parses [...]).
     ast_node  *parent_name = null;
     u8         n_type_args = 0;
     ast_node **type_args   = null;
@@ -2908,8 +2910,8 @@ static int toplevel_struct(parser *self) {
         parent_name = type_ident;
     } else if (ast_node_is_nfa(type_ident)) {
         parent_name = type_ident->named_application.name;
-        n_type_args = type_ident->named_application.n_arguments;
-        type_args   = type_ident->named_application.arguments;
+        n_type_args = type_ident->named_application.n_type_arguments;
+        type_args   = type_ident->named_application.type_arguments;
     } else fatal("logic error");
 
     str parent_prefix = parent_name->symbol.name;
@@ -2927,8 +2929,8 @@ static int toplevel_struct(parser *self) {
         r->user_type_def.type_arguments   = null;
         r->user_type_def.name             = type_ident;
     } else if (ast_node_is_nfa(type_ident)) {
-        r->user_type_def.n_type_arguments = type_ident->named_application.n_arguments;
-        r->user_type_def.type_arguments   = type_ident->named_application.arguments;
+        r->user_type_def.n_type_arguments = type_ident->named_application.n_type_arguments;
+        r->user_type_def.type_arguments   = type_ident->named_application.type_arguments;
         r->user_type_def.name             = type_ident->named_application.name;
     } else fatal("logic error");
 
@@ -3015,8 +3017,8 @@ static int toplevel_union(parser *self) {
         r->user_type_def.type_arguments   = null;
         r->user_type_def.name             = type_ident;
     } else if (ast_node_is_nfa(type_ident)) {
-        r->user_type_def.n_type_arguments = type_ident->named_application.n_arguments;
-        r->user_type_def.type_arguments   = type_ident->named_application.arguments;
+        r->user_type_def.n_type_arguments = type_ident->named_application.n_type_arguments;
+        r->user_type_def.type_arguments   = type_ident->named_application.type_arguments;
         r->user_type_def.name             = type_ident->named_application.name;
     } else fatal("logic error");
 
@@ -3049,10 +3051,14 @@ static int annotation_uses_type_param(ast_node *node, str param_name) {
     }
 
     if (ast_node_is_nfa(node)) {
-        // Check the nfa arguments recursively
-        // FIXME: type args v2
+        // Check the nfa arguments recursively.
+        // Since it's possible type arguments are reference in both the explicit type arguments and the
+        // value arguments, iterate through both.
         for (u32 i = 0; i < node->named_application.n_arguments; i++) {
             if (annotation_uses_type_param(node->named_application.arguments[i], param_name)) return 1;
+        }
+        for (u32 i = 0; i < node->named_application.n_type_arguments; i++) {
+            if (annotation_uses_type_param(node->named_application.type_arguments[i], param_name)) return 1;
         }
     }
 
@@ -3203,7 +3209,7 @@ static ast_node *create_variant_constructor(parser *self,
 
     // 3. Build the return type annotation
     // For non-generic: Shape
-    // For generic: Shape(T)
+    // For generic: Shape[T]
     ast_node *return_type = null;
     if (n_type_args) {
         ast_node_sized args = {.size = n_type_args,
@@ -3213,7 +3219,8 @@ static ast_node *create_variant_constructor(parser *self,
         }
         ast_node *wrapper_name = ast_node_create_sym(arena, tu_name_str);
         mangle_name(self, wrapper_name);
-        return_type = ast_node_create_nfa(arena, wrapper_name, (ast_node_sized){0}, args);
+        // TYPE ANNOTATION NFA: Shape[T] — type params in type_args slot.
+        return_type = ast_node_create_nfa(arena, wrapper_name, args, (ast_node_sized){0});
     } else {
         return_type = ast_node_create_sym(arena, tu_name_str);
         mangle_name(self, return_type);
@@ -3244,6 +3251,7 @@ static ast_node *create_variant_constructor(parser *self,
     str       var_struct_str  = str_cat_3(arena, tu_name_str, S("__"), var_name_str);
     ast_node *inner_call_name = ast_node_create_sym(arena, var_struct_str);
     mangle_name(self, inner_call_name);
+    // VALUE CONSTRUCTION NFA: Shape__Circle(radius = radius) — field assignments are value args.
     ast_node *inner_call = ast_node_create_nfa(arena, inner_call_name, (ast_node_sized){0},
                                                (ast_node_sized)array_sized(inner_args));
     set_node_file(self, inner_call);
@@ -3258,7 +3266,7 @@ static ast_node *create_variant_constructor(parser *self,
     array_push(union_args, union_assign);
     array_shrink(union_args);
 
-    // Union call just passes the variant assignment - type parameters are inferred
+    // VALUE CONSTRUCTION NFA: __Shape__Union_(Circle = innerCall) — field assignment is a value arg.
     ast_node *union_call_name = ast_node_create_sym(arena, union_name_str);
     mangle_name(self, union_call_name);
     ast_node *union_call = ast_node_create_nfa(arena, union_call_name, (ast_node_sized){0},
@@ -3290,7 +3298,7 @@ static ast_node *create_variant_constructor(parser *self,
     array_push(wrapper_args, u_assign);
     array_shrink(wrapper_args);
 
-    // Wrapper call just passes tag and union fields - type parameters are inferred
+    // VALUE CONSTRUCTION NFA: Shape(tag = tagAccess, u = unionCall) — field assignments are value args.
     ast_node *wrapper_call_name = ast_node_create_sym(arena, tu_name_str);
     mangle_name(self, wrapper_call_name);
     ast_node *wrapper_call = ast_node_create_nfa(arena, wrapper_call_name, (ast_node_sized){0},
@@ -3347,7 +3355,7 @@ create_variant_make_function(parser *self,
     }
     ast_node *param = ast_node_create_sym_c(arena, "v");
 
-    // Build type annotation for the parameter: Shape__Circle or Shape__Circle(a) for generics
+    // Build type annotation for the parameter: Shape__Circle or Shape__Circle[a] for generics
     // For existing types, use explicit type args; for new variants, scan fields
     ast_node **var_type_args   = null;
     u8         var_n_type_args = 0;
@@ -3368,7 +3376,8 @@ create_variant_make_function(parser *self,
         ast_node *param_type_name = ast_node_create_sym(arena, var_struct_str);
         // For existing types, name is already fully mangled; skip mangle_name
         if (!is_existing_type) mangle_name(self, param_type_name);
-        param->symbol.annotation = ast_node_create_nfa(arena, param_type_name, (ast_node_sized){0}, args);
+        // TYPE ANNOTATION NFA: e.g. Shape__Circle[a] — type params in type_args slot.
+        param->symbol.annotation = ast_node_create_nfa(arena, param_type_name, args, (ast_node_sized){0});
     } else {
         ast_node *param_type = ast_node_create_sym(arena, var_struct_str);
         // For existing types, name is already fully mangled; skip mangle_name
@@ -3380,7 +3389,7 @@ create_variant_make_function(parser *self,
     array_push(params, param);
     array_shrink(params);
 
-    // 3. Build the return type annotation: Shape or Shape(T)
+    // 3. Build the return type annotation: Shape or Shape[T]
     ast_node *return_type = null;
     if (n_type_args) {
         ast_node_sized args = {.size = n_type_args,
@@ -3390,7 +3399,8 @@ create_variant_make_function(parser *self,
         }
         ast_node *wrapper_name = ast_node_create_sym(arena, tu_name_str);
         mangle_name(self, wrapper_name);
-        return_type = ast_node_create_nfa(arena, wrapper_name, (ast_node_sized){0}, args);
+        // TYPE ANNOTATION NFA: Shape[T] — type params in type_args slot.
+        return_type = ast_node_create_nfa(arena, wrapper_name, args, (ast_node_sized){0});
     } else {
         return_type = ast_node_create_sym(arena, tu_name_str);
         mangle_name(self, return_type);
@@ -3415,6 +3425,7 @@ create_variant_make_function(parser *self,
     array_push(union_args, union_assign);
     array_shrink(union_args);
 
+    // VALUE CONSTRUCTION NFA: __Shape__Union_(Circle = v) — field assignment is a value arg.
     ast_node *union_call_name = ast_node_create_sym(arena, union_name_str);
     mangle_name(self, union_call_name);
     ast_node *union_call = ast_node_create_nfa(arena, union_call_name, (ast_node_sized){0},
@@ -3446,6 +3457,7 @@ create_variant_make_function(parser *self,
     array_push(wrapper_args, u_assign);
     array_shrink(wrapper_args);
 
+    // VALUE CONSTRUCTION NFA: Shape(tag = tagAccess, u = unionCall) — field assignments are value args.
     ast_node *wrapper_call_name = ast_node_create_sym(arena, tu_name_str);
     mangle_name(self, wrapper_call_name);
     ast_node *wrapper_call = ast_node_create_nfa(arena, wrapper_call_name, (ast_node_sized){0},
@@ -3478,7 +3490,7 @@ create_variant_make_function(parser *self,
 //           | Rectangle { length: Float, height: Float }
 //
 // Or with generics:
-//   Option(T) = | Some { value: T }
+//   Option[T] : | Some { value: T }
 //               | None
 //
 // Desugars to:
@@ -3506,7 +3518,8 @@ static int toplevel_tagged_union(parser *self) {
     // Parse first '|'
     if (a_try(self, a_vertical_bar)) return 1;
 
-    // Extract type name and type arguments
+    // Extract type name and type arguments.
+    // a_type_identifier -> a_funcall parses e.g. Option[T] with type params in .type_arguments.
     ast_node  *tu_name     = null;
     u8         n_type_args = 0;
     ast_node **type_args   = null;
@@ -3515,8 +3528,8 @@ static int toplevel_tagged_union(parser *self) {
         tu_name = type_ident;
     } else if (ast_node_is_nfa(type_ident)) {
         tu_name     = type_ident->named_application.name;
-        n_type_args = type_ident->named_application.n_arguments;
-        type_args   = type_ident->named_application.arguments;
+        n_type_args = type_ident->named_application.n_type_arguments;
+        type_args   = type_ident->named_application.type_arguments;
     } else {
         return 1;
     }
@@ -3534,7 +3547,7 @@ static int toplevel_tagged_union(parser *self) {
         int            is_existing_type; // 1 if variant references a pre-existing type
         str            existing_module;  // module name for existing type (e.g., "Foo" from | Foo.Special)
         ast_node *
-          *existing_type_args; // explicit type args for generic existing types (e.g., (a) in | Foo.Pair(a))
+          *existing_type_args; // explicit type args for generic existing types (e.g., [a] in | Foo.Pair[a])
         u8 n_existing_type_args;
     } variant;
 
@@ -3564,13 +3577,13 @@ static int toplevel_tagged_union(parser *self) {
             var_name    = self->result;
             is_existing = 1;
 
-            // Parse optional type args: Module.Type(a, b)
-            if (0 == a_try(self, a_open_round)) {
+            // Parse optional type args: Module.Type[a, b]
+            if (0 == a_try(self, a_open_square)) {
                 ast_node_array ta = {.alloc = self->ast_arena};
                 while (1) {
                     if (0 == a_try(self, a_comma)) { /* skip comma */
                     }
-                    if (0 == a_try(self, a_close_round)) break;
+                    if (0 == a_try(self, a_close_square)) break;
                     if (a_try(self, a_identifier)) return ERROR_STOP;
                     array_push(ta, self->result);
                 }
@@ -3714,7 +3727,8 @@ static int toplevel_tagged_union(parser *self) {
                 ast_node_sized args          = {.size = n_used_type_args, .v = used_type_args};
                 ast_node      *var_type_name = ast_node_create_sym(self->ast_arena, var_struct_name);
                 if (!v->is_existing_type) mangle_name(self, var_type_name);
-                field_ann = ast_node_create_nfa(self->ast_arena, var_type_name, (ast_node_sized){0}, args);
+                // TYPE ANNOTATION NFA: e.g. Shape__Circle[a] — type params in type_args slot.
+                field_ann = ast_node_create_nfa(self->ast_arena, var_type_name, args, (ast_node_sized){0});
             } else {
                 // Non-generic variant (no fields or no type params used)
                 field_ann = ast_node_create_sym(self->ast_arena, var_struct_name);
@@ -3759,7 +3773,7 @@ static int toplevel_tagged_union(parser *self) {
             array_push(wrapper_fields, tag_field);
         }
 
-        // Field: u: __Shape__Union_ (or __Shape__Union_(T) for generics)
+        // Field: u: __Shape__Union_ (or __Shape__Union_[T] for generics)
         {
             ast_node *u_field        = ast_node_create_sym_c(self->ast_arena, "u");
             str       union_type_str = str_cat_3(self->ast_arena, S("__"), tu_name_str, S("__Union_"));
@@ -3774,7 +3788,8 @@ static int toplevel_tagged_union(parser *self) {
                 }
                 ast_node *union_type_name = ast_node_create_sym(self->ast_arena, union_type_str);
                 mangle_name(self, union_type_name);
-                u_ann = ast_node_create_nfa(self->ast_arena, union_type_name, (ast_node_sized){0}, args);
+                // TYPE ANNOTATION NFA: __Shape__Union_[T] — type params in type_args slot.
+                u_ann = ast_node_create_nfa(self->ast_arena, union_type_name, args, (ast_node_sized){0});
             } else {
                 u_ann = ast_node_create_sym(self->ast_arena, union_type_str);
                 mangle_name(self, u_ann);
