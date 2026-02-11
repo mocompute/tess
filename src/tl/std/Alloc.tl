@@ -21,22 +21,22 @@ initialTransientSize:      CSize := 0
 initialStringLiteralsSize: CSize := 0
 
 Allocator: {
-    malloc:  (a: Ptr(Allocator), sz: CSize)              -> Ptr(any),
-    calloc:  (a: Ptr(Allocator), num: CSize, sz: CSize)  -> Ptr(any),
-    realloc: (a: Ptr(Allocator), p: Ptr(any), sz: CSize) -> Ptr(any),
-    free:    (a: Ptr(Allocator), p: Ptr(any))            -> Void,
+    malloc:  (a: Ptr[Allocator], sz: CSize)              -> Ptr[any],
+    calloc:  (a: Ptr[Allocator], num: CSize, sz: CSize)  -> Ptr[any],
+    realloc: (a: Ptr[Allocator], p: Ptr[any], sz: CSize) -> Ptr[any],
+    free:    (a: Ptr[Allocator], p: Ptr[any])            -> Void,
 }
 
 Context: {
-    transient:       Ptr(Allocator),
-    managed:         Ptr(Allocator),
-    string_literals: Ptr(Allocator),    // used by default by Str.from_cstr/1
-    default:         Ptr(Allocator),
+    transient:       Ptr[Allocator],
+    managed:         Ptr[Allocator],
+    string_literals: Ptr[Allocator],    // used by default by Str.from_cstr/1
+    default:         Ptr[Allocator],
 }
 
 // Bump allocator bucket header. A bucket is a header followed by zero or more _BumpBlocks.
 _BumpHeader: {
-    next:     Ptr(_BumpHeader),
+    next:     Ptr[_BumpHeader],
     capacity: CSize,
     size:     CSize,
 }
@@ -48,8 +48,8 @@ _BumpBlock: {
 
 BumpAllocator: {
     allocator: Allocator,
-    parent:    Ptr(Allocator),
-    head:      Ptr(_BumpHeader),
+    parent:    Ptr[Allocator],
+    head:      Ptr[_BumpHeader],
 }
 
 //
@@ -57,15 +57,15 @@ BumpAllocator: {
 align     (n: CSize, alignment: CSize) -> CSize
 align_max (n: CSize)                   -> CSize
 
-transient_alloc   (sz: CSize)              -> Ptr(any)
-transient_clear   (num: CSize, sz: CSize)  -> Ptr(any)
-transient_realloc (p: Ptr(any), sz: CSize) -> Ptr(any)
-transient_free    (p: Ptr(any))            -> Void
+transient_alloc   (sz: CSize)              -> Ptr[any]
+transient_clear   (num: CSize, sz: CSize)  -> Ptr[any]
+transient_realloc (p: Ptr[any], sz: CSize) -> Ptr[any]
+transient_free    (p: Ptr[any])            -> Void
 
-managed_alloc   (sz: CSize)              -> Ptr(any)
-managed_clear   (num: CSize, sz: CSize)  -> Ptr(any)
-managed_realloc (p: Ptr(any), sz: CSize) -> Ptr(any)
-managed_free    (p: Ptr(any))            -> Void
+managed_alloc   (sz: CSize)              -> Ptr[any]
+managed_clear   (num: CSize, sz: CSize)  -> Ptr[any]
+managed_realloc (p: Ptr[any], sz: CSize) -> Ptr[any]
+managed_free    (p: Ptr[any])            -> Void
 
 // -- Implementation --
 
@@ -83,20 +83,20 @@ align_max(n: CSize) {
 // -- wrappers around stdlib allocator --
 // Access them via managed_alloc, etc.
 
-_malloc  (a: Ptr(Allocator), sz: CSize)              -> Ptr(any) { c_malloc(sz)      }
-_calloc  (a: Ptr(Allocator), num: CSize, sz: CSize)  -> Ptr(any) { c_calloc(num, sz) }
-_realloc (a: Ptr(Allocator), p: Ptr(any), sz: CSize) -> Ptr(any) { c_realloc(p, sz)  }
-_free    (a: Ptr(Allocator), p: Ptr(any))            -> Void     { c_free(p)         }
+_malloc  (a: Ptr[Allocator], sz: CSize)              -> Ptr[any] { c_malloc(sz)      }
+_calloc  (a: Ptr[Allocator], num: CSize, sz: CSize)  -> Ptr[any] { c_calloc(num, sz) }
+_realloc (a: Ptr[Allocator], p: Ptr[any], sz: CSize) -> Ptr[any] { c_realloc(p, sz)  }
+_free    (a: Ptr[Allocator], p: Ptr[any])            -> Void     { c_free(p)         }
 
 // -- BumpAllocator --
 
-_bump_malloc  (a: Ptr(Allocator), sz: CSize)              -> Ptr(any)
-_bump_calloc  (a: Ptr(Allocator), num: CSize, sz: CSize)  -> Ptr(any)
-_bump_realloc (a: Ptr(Allocator), p: Ptr(any), sz: CSize) -> Ptr(any)
-_bump_free    (a: Ptr(Allocator), p: Ptr(any))            -> Void
+_bump_malloc  (a: Ptr[Allocator], sz: CSize)              -> Ptr[any]
+_bump_calloc  (a: Ptr[Allocator], num: CSize, sz: CSize)  -> Ptr[any]
+_bump_realloc (a: Ptr[Allocator], p: Ptr[any], sz: CSize) -> Ptr[any]
+_bump_free    (a: Ptr[Allocator], p: Ptr[any])            -> Void
 
-bump_create(alloc: Ptr(Allocator), size: CSize) -> Ptr(Allocator) {
-    out: Ptr(BumpAllocator) := alloc->malloc(alloc, sizeof(BumpAllocator))
+bump_create(alloc: Ptr[Allocator], size: CSize) -> Ptr[Allocator] {
+    out: Ptr[BumpAllocator] := alloc->malloc(alloc, sizeof(BumpAllocator))
     out->parent = alloc
     size := next_power_of_two(size)
     size = if size == 0 { 16 } else { size }
@@ -109,31 +109,31 @@ bump_create(alloc: Ptr(Allocator), size: CSize) -> Ptr(Allocator) {
     out->allocator.&
 }
 
-bump_destroy(alloc: Ptr(Allocator)) {
-    bump: Ptr(BumpAllocator) := alloc
+bump_destroy(alloc: Ptr[Allocator]) {
+    bump: Ptr[BumpAllocator] := alloc
     bump->parent->free(alloc, bump)
 }
 
-_bump_alloc_assume_capacity(bucket: Ptr(_BumpHeader), sz: CSize) -> Ptr(any) {
-    p: Ptr(Byte) := bucket                  // cast
+_bump_alloc_assume_capacity(bucket: Ptr[_BumpHeader], sz: CSize) -> Ptr[any] {
+    p: Ptr[Byte] := bucket                  // cast
     p = Unsafe.pointer_add(p, bucket->size) // advance to free section
 
-    block: Ptr(_BumpBlock) := p         // cast to block header and set size
+    block: Ptr[_BumpBlock] := p         // cast to block header and set size
     block->size = sz
 
     bucket->size += sz + sizeof(_BumpBlock)    // advance bucket size past header and requested size
     c_assert(bucket->size <= bucket->capacity) // this function assumes capacity
 
-    res: Ptr(Byte) := block                     // cast
+    res: Ptr[Byte] := block                     // cast
     Unsafe.pointer_add(res, sizeof(_BumpBlock)) // advance pointer past header and return it
 }
 
-_block_size(p: Ptr(any)) -> Ptr(CSize) {
-    block: Ptr(_BumpBlock) := Unsafe.pointer_subtract(p, sizeof(CSize))
+_block_size(p: Ptr[any]) -> Ptr[CSize] {
+    block: Ptr[_BumpBlock] := Unsafe.pointer_subtract(p, sizeof(CSize))
     block->size.&
 }
 
-_is_last_block(bucket: Ptr(_BumpHeader), p: Ptr(any)) {
+_is_last_block(bucket: Ptr[_BumpHeader], p: Ptr[any]) {
     if p < bucket { return 0 }
     sz         := _block_size(p).*
     p_end      := Unsafe.pointer_add(p, sz)
@@ -142,16 +142,16 @@ _is_last_block(bucket: Ptr(_BumpHeader), p: Ptr(any)) {
     p_end == bucket_end
 }
 
-_maybe_free_block(bucket: Ptr(_BumpHeader), p: Ptr(any)) {
+_maybe_free_block(bucket: Ptr[_BumpHeader], p: Ptr[any]) {
     if _is_last_block(bucket, p) { bucket->size -= _block_size(p).* + sizeof(_BumpBlock) }
     void
 }
 
-_bucket_has_capacity(bucket: Ptr(_BumpHeader), size: CSize) {
+_bucket_has_capacity(bucket: Ptr[_BumpHeader], size: CSize) {
     bucket->capacity - bucket->size >= sizeof(_BumpBlock) + size
 }
 
-_find_bucket(arena: Ptr(BumpAllocator), p: Ptr(any)) {
+_find_bucket(arena: Ptr[BumpAllocator], p: Ptr[any]) {
     bucket := arena->head
     c_assert(bucket != null)
     while bucket != null {
@@ -168,18 +168,18 @@ _find_bucket(arena: Ptr(BumpAllocator), p: Ptr(any)) {
 
 _BumpHeader_create(alloc, capacity) {
     c_assert(capacity > sizeof(_BumpHeader))
-    out: Ptr(_BumpHeader) := alloc->malloc(alloc, capacity)
+    out: Ptr[_BumpHeader] := alloc->malloc(alloc, capacity)
     out->next     = null
     out->capacity = capacity
     out->size     = sizeof(_BumpHeader)
     out
 }
 
-_bump_malloc(a: Ptr(Allocator), sz: CSize) -> Ptr(any) {
-    arena: Ptr(BumpAllocator) := a
+_bump_malloc(a: Ptr[Allocator], sz: CSize) -> Ptr[any] {
+    arena: Ptr[BumpAllocator] := a
 
     bucket                 := arena->head
-    last: Ptr(_BumpHeader) := null
+    last: Ptr[_BumpHeader] := null
     last_capacity          := 0
 
     sz = align_max(sz)
@@ -208,11 +208,11 @@ _bump_malloc(a: Ptr(Allocator), sz: CSize) -> Ptr(any) {
     _bump_alloc_assume_capacity(bucket, sz)
 }
 
-_bump_realloc(a: Ptr(Allocator), p: Ptr(any), sz: CSize) -> Ptr(any) {
+_bump_realloc(a: Ptr[Allocator], p: Ptr[any], sz: CSize) -> Ptr[any] {
     if p == null { return _bump_malloc(a, sz) }
 
     sz = align_max(sz)
-    arena: Ptr(BumpAllocator) := a
+    arena: Ptr[BumpAllocator] := a
     bucket                    := _find_bucket(arena, p)
     if bucket == null {
         c_assert(0)
@@ -249,17 +249,17 @@ _bump_realloc(a: Ptr(Allocator), p: Ptr(any), sz: CSize) -> Ptr(any) {
     new_block
 }
 
-_bump_calloc(a: Ptr(Allocator), num: CSize, sz: CSize) -> Ptr(any) {
+_bump_calloc(a: Ptr[Allocator], num: CSize, sz: CSize) -> Ptr[any] {
     sz = align_max(sz)
     out := _bump_malloc(a, num * sz)
     if out != null { c_memset(out, 0xCD, num * sz) } // TODO: uses 0xCD for debugging, not 0x00
     out
 }
 
-_bump_free(a: Ptr(Allocator), p: Ptr(any)) -> Void {
+_bump_free(a: Ptr[Allocator], p: Ptr[any]) -> Void {
     if p == null { return void }
 
-    arena: Ptr(BumpAllocator) := a
+    arena: Ptr[BumpAllocator] := a
     bucket                    := _find_bucket(arena, p)
     if bucket == null {
         c_assert(0)                     // attempt to free unknown pointer
