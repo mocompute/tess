@@ -98,6 +98,7 @@ static int           a_statement(parser *);
 static int           a_value(parser *);
 static ast_node     *create_body(parser *self, ast_node_array exprs);
 static ast_node     *create_body_fallback(parser *self, ast_node_array exprs, ast_node *);
+static int           maybe_type_arguments(parser *self, ast_node_array *type_args);
 static int           operator_precedence(char const *op, int is_prefix);
 static ast_node     *parse_base_expression(parser *);
 static ast_node     *parse_expression(parser *, int min_preced);
@@ -1147,9 +1148,9 @@ static int a_type_identifier(parser *self) {
         return 0;
     }
     if (0 == a_try(self, a_attributed_identifier)) {
-        // Look for module-qualified identifier
         ast_node *ident = self->result;
 
+        // Look for module-qualified identifier
         if (0 == a_try(self, a_dot)) {
             ast_node *op = self->result;
 
@@ -1165,8 +1166,18 @@ static int a_type_identifier(parser *self) {
                 return 0;
             }
         } else {
-            mangle_name(self, self->result);
-            return 0;
+            ast_node_array type_args;
+            if (ERROR_STOP == maybe_type_arguments(self, &type_args)) return ERROR_STOP;
+
+            mangle_name(self, ident);
+
+            if (type_args.size) {
+                ast_node *r = ast_node_create_nfa(
+                  self->ast_arena, ident, (ast_node_sized)sized_all(type_args), (ast_node_sized){0});
+                return result_ast_node(self, r);
+            } else {
+                return result_ast_node(self, ident);
+            }
         }
     }
 
