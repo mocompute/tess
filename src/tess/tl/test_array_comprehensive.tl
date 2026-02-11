@@ -44,7 +44,7 @@ test_with_capacity_undefined_basic() {
     i := 0
     while i < 10 {
         arr.v.(i) = i * 10
-        i        = i + 1
+        i         = i + 1
     }
     i = 0
     while i < 10 {
@@ -170,7 +170,7 @@ test_iter_mutable() {
 
 test_capacity_boundary() {
     error := 0
-    arr   := Array.with_capacity(Int, 4)
+    arr   := Array.with_capacity[Int](4)
     Array.push(arr.&, 1)
     Array.push(arr.&, 2)
     Array.push(arr.&, 3)
@@ -188,7 +188,7 @@ test_capacity_boundary() {
 
 test_zero_capacity() {
     error := 0
-    arr   := Array.with_capacity(Int, 0)
+    arr   := Array.with_capacity[Int](0)
     if arr.capacity != 0 { error += 1 }
     Array.push(arr.&, 99)
     if arr.size != 1 { error += 1 }
@@ -200,7 +200,7 @@ test_zero_capacity() {
 
 test_indexed_iterator() {
     error := 0
-    arr   := Array.with_capacity_undefined(Int, 4)
+    arr   := Array.with_capacity_undefined[Int](4)
     // Use Array.Indexed to set values: ptr.* = index
     for it.& in Array.Indexed arr {
         it.ptr.* = it.index

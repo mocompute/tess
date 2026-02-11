@@ -21,92 +21,93 @@ Array[T]: {
 // with no allocator argument: these use the default managed allocator.
 
 // Construct an empty array with elements of type a.
-empty(T: Type) -> Array[T]
+empty[T]() -> Array[T]
 
 // Construct an array with count elements of type a, each initialised to val.
-init(alloc: Ptr[Allocator], val: T, count: Int) -> Array[T]
-init(val: T, count: Int)                        -> Array[T]
+init[T](alloc: Ptr[Allocator], val: T, count: Int) -> Array[T]
+init[T](val: T, count: Int)                        -> Array[T]
 
 // Allocate an empty array with elements of type a and an initial capacity of count.
-with_capacity(alloc: Ptr[Allocator], T: Type, count: Int) -> Array[T]
-with_capacity(T: Type, count: Int)                        -> Array[T]
+with_capacity[T](alloc: Ptr[Allocator], count: Int) -> Array[T]
+with_capacity[T](count: Int)                        -> Array[T]
 
 // Allocate an empty array with elements of type a and an initial capacity of count, and set the size to the
 // capacity, leaving the contents undefined.
-with_capacity_undefined(alloc: Ptr[Allocator], T: Type, count: Int) -> Array[T]
-with_capacity_undefined(T: Type, count: Int)                        -> Array[T]
+with_capacity_undefined[T](alloc: Ptr[Allocator], count: Int) -> Array[T]
+with_capacity_undefined[T](count: Int)                        -> Array[T]
 
 
 // Push an item to the back of the array, allocating to expand capacity if necessary.
-push(self: Ptr[Array[T]], alloc: Ptr[Allocator], x: T) -> Void
-push(self: Ptr[Array[T]], x: T)                        -> Void
+push[T](self: Ptr[Array[T]], alloc: Ptr[Allocator], x: T) -> Void
+push[T](self: Ptr[Array[T]], x: T)                        -> Void
 
 // Ensure the array's capacity is large enough for count items, allocating if necessary.
-reserve(self: Ptr[Array[T]], alloc: Ptr[Allocator], count: Int) -> Void
-reserve(self: Ptr[Array[T]], count: Int)                        -> Void
+reserve[T](self: Ptr[Array[T]], alloc: Ptr[Allocator], count: Int) -> Void
+reserve[T](self: Ptr[Array[T]], count: Int)                        -> Void
 
 // Deallocate array buffer.
+// FIXME: is this valid syntax? Array with no explicit type argument
 free(self: Ptr[Array], alloc: Ptr[Allocator]) -> Void
 free(self: Ptr[Array])                        -> Void
 
 // Element access (bounds-checked).
-get  (arr: Array[T], index: Int) -> T
-front(arr: Array[T])             -> T
-back (arr: Array[T])             -> T
+get[T]  (arr: Array[T], index: Int) -> T
+front[T](arr: Array[T])             -> T
+back[T] (arr: Array[T])             -> T
 
 // Removal / mutation.
-pop        (self: Ptr[Array[T]])                                            -> T
-clear      (self: Ptr[Array[T]])                                            -> Void
-insert     (self: Ptr[Array[T]], alloc: Ptr[Allocator], index: Int, val: T) -> Void
-insert     (self: Ptr[Array[T]], index: Int, val: T)                        -> Void
-remove     (self: Ptr[Array[T]], index: Int)                                -> T
-swap_remove(self: Ptr[Array[T]], index: Int)                                -> T
+pop[T]        (self: Ptr[Array[T]])                                            -> T
+clear[T]      (self: Ptr[Array[T]])                                            -> Void
+insert[T]     (self: Ptr[Array[T]], alloc: Ptr[Allocator], index: Int, val: T) -> Void
+insert[T]     (self: Ptr[Array[T]], index: Int, val: T)                        -> Void
+remove[T]     (self: Ptr[Array[T]], index: Int)                                -> T
+swap_remove[T](self: Ptr[Array[T]], index: Int)                                -> T
 
 // Sizing.
-resize       (self: Ptr[Array[T]], alloc: Ptr[Allocator], count: Int, val: T) -> Void
-resize       (self: Ptr[Array[T]], count: Int, val: T)                        -> Void
-shrink_to_fit(self: Ptr[Array[T]], alloc: Ptr[Allocator])                     -> Void
-shrink_to_fit(self: Ptr[Array[T]])                                            -> Void
-truncate     (self: Ptr[Array[T]], count: Int)                                -> Void
+resize[T]       (self: Ptr[Array[T]], alloc: Ptr[Allocator], count: Int, val: T) -> Void
+resize[T]       (self: Ptr[Array[T]], count: Int, val: T)                        -> Void
+shrink_to_fit[T](self: Ptr[Array[T]], alloc: Ptr[Allocator])                     -> Void
+shrink_to_fit[T](self: Ptr[Array[T]])                                            -> Void
+truncate [T]    (self: Ptr[Array[T]], count: Int)                                -> Void
 
 // Bulk operations.
-append(self: Ptr[Array[T]], alloc: Ptr[Allocator], other: Array[T]) -> Void
-append(self: Ptr[Array[T]], other: Array[T])                        -> Void
-clone (alloc: Ptr[Allocator], arr: Array[T])                        -> Array[T]
-clone (arr: Array[T])                                               -> Array[T]
-slice (alloc: Ptr[Allocator], arr: Array[T], start: Int, end: Int)  -> Array[T]
-slice (arr: Array[T], start: Int, end: Int)                         -> Array[T]
+append[T](self: Ptr[Array[T]], alloc: Ptr[Allocator], other: Array[T]) -> Void
+append[T](self: Ptr[Array[T]], other: Array[T])                        -> Void
+clone [T](alloc: Ptr[Allocator], arr: Array[T])                        -> Array[T]
+clone [T](arr: Array[T])                                               -> Array[T]
+slice [T](alloc: Ptr[Allocator], arr: Array[T], start: Int, end: Int)  -> Array[T]
+slice [T](arr: Array[T], start: Int, end: Int)                         -> Array[T]
 
 // Search / query.
-is_empty(arr: Array[T])         -> Bool
-contains(arr: Array[T], val: T) -> Bool
-index_of(arr: Array[T], val: T) -> Int
+is_empty[T](arr: Array[T])         -> Bool
+contains[T](arr: Array[T], val: T) -> Bool
+index_of[T](arr: Array[T], val: T) -> Int
 
 // Sorting.
-sort  (self: Ptr[Array[T]], tmp_alloc: Ptr[Allocator], cmp: (T, T) -> Int)                  -> Void
-sort  (self: Ptr[Array[T]], cmp: (T, T) -> Int)                                             -> Void
-sorted(alloc: Ptr[Allocator], tmp_alloc: Ptr[Allocator], arr: Array[T], cmp: (T, T) -> Int) -> Array[T]
-sorted(arr: Array[T], cmp: (T, T) -> Int)                                                   -> Array[T]
+sort[T]  (self: Ptr[Array[T]], tmp_alloc: Ptr[Allocator], cmp: (T, T) -> Int)                  -> Void
+sort[T]  (self: Ptr[Array[T]], cmp: (T, T) -> Int)                                             -> Void
+sorted[T](alloc: Ptr[Allocator], tmp_alloc: Ptr[Allocator], arr: Array[T], cmp: (T, T) -> Int) -> Array[T]
+sorted[T](arr: Array[T], cmp: (T, T) -> Int)                                                   -> Array[T]
 
 // Reordering.
-reverse(self: Ptr[Array[T]])                 -> Void
-swap   (self: Ptr[Array[T]], i: Int, j: Int) -> Void
+reverse[T](self: Ptr[Array[T]])                 -> Void
+swap[T]   (self: Ptr[Array[T]], i: Int, j: Int) -> Void
 
 // Construction.
-from_ptr(alloc: Ptr[Allocator], ptr: Ptr[T], len: Int) -> Array[T]
-from_ptr(ptr: Ptr[T], len: Int)                        -> Array[T]
+from_ptr[T](alloc: Ptr[Allocator], ptr: Ptr[T], len: Int) -> Array[T]
+from_ptr[T](ptr: Ptr[T], len: Int)                        -> Array[T]
 
 // Functional operations.
-map       (alloc: Ptr[Allocator], arr: Array[T], f: (T) -> U)    -> Array[U]
-map       (arr: Array[T], f: (T) -> U)                           -> Array[U]
-filter    (alloc: Ptr[Allocator], arr: Array[T], f: (T) -> Bool) -> Array[T]
-filter    (arr: Array[T], f: (T) -> Bool)                        -> Array[T]
-reduce    (arr: Array[T], init: U, f: (U, T) -> U)               -> U
-foreach   (arr: Array[T], f: (T) -> Void)                        -> Void
-any_of    (arr: Array[T], f: (T) -> Bool)                        -> Bool
-all       (arr: Array[T], f: (T) -> Bool)                        -> Bool
-find      (arr: Array[T], f: (T) -> Bool)                        -> Int
-find_value(arr: Array[T], f: (T) -> Bool)                        -> T
+map[T]       (alloc: Ptr[Allocator], arr: Array[T], f: (T) -> U)    -> Array[U]
+map[T]       (arr: Array[T], f: (T) -> U)                           -> Array[U]
+filter[T]    (alloc: Ptr[Allocator], arr: Array[T], f: (T) -> Bool) -> Array[T]
+filter[T]    (arr: Array[T], f: (T) -> Bool)                        -> Array[T]
+reduce[T]    (arr: Array[T], init: U, f: (U, T) -> U)               -> U
+foreach [T]  (arr: Array[T], f: (T) -> Void)                        -> Void
+any_of[T]    (arr: Array[T], f: (T) -> Bool)                        -> Bool
+all[T]       (arr: Array[T], f: (T) -> Bool)                        -> Bool
+find[T]      (arr: Array[T], f: (T) -> Bool)                        -> Int
+find_value[T](arr: Array[T], f: (T) -> Bool)                        -> T
 
 
 // -- Implementation --
