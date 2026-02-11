@@ -302,6 +302,18 @@ tl_monotype *tl_type_registry_instantiate(tl_type_registry *self, str name) {
     return type;
 }
 
+tl_monotype *tl_type_registry_instantiate_with(tl_type_registry *self, str name, tl_monotype_sized args) {
+    if (str_eq(name, S("Union"))) fatal("runtime error");
+    if (str_eq(name, S("Ptr"))) fatal("runtime error");
+    tl_monotype *type = null;
+    tl_polytype *poly = tl_type_registry_get(self, name);
+    if (!poly) return null;
+
+    type = tl_polytype_instantiate_with(self->alloc, poly, args, self->subs);
+
+    return type;
+}
+
 tl_monotype *tl_type_registry_instantiate_union(tl_type_registry *self, tl_monotype_sized args) {
     str          name = S("Union");
     tl_monotype *type = null;
@@ -709,7 +721,7 @@ static tl_monotype *tl_type_registry_parse_type_(tl_type_registry               
 
         tl_monotype_array args  = {.alloc = self->alloc};
         ast_node_sized    nodes = {.size = node->named_application.n_type_arguments,
-                                      .v    = node->named_application.type_arguments};
+                                   .v    = node->named_application.type_arguments};
 
         forall(i, nodes) {
             tl_monotype *mono = tl_type_registry_parse_type_(self, ctx, nodes.v[i]);
@@ -1243,6 +1255,7 @@ static void replace_tv_mono(tl_monotype *self, tl_type_subs *subs, hashmap **map
 // Internal implementation for polytype instantiation.
 // If args.v is NULL, creates fresh type variables for each quantifier.
 // If args.v is non-NULL, uses the provided monotypes as substitutions.
+// If args.v[i] is NULL, create fresh type variable for THAT quantifier.
 static tl_monotype *tl_polytype_instantiate_(allocator *alloc, tl_polytype *self, tl_type_subs *subs,
                                              tl_monotype_sized args) {
     tl_monotype *fresh = tl_monotype_clone(alloc, self->type);
@@ -1265,6 +1278,7 @@ static tl_monotype *tl_polytype_instantiate_(allocator *alloc, tl_polytype *self
         hashmap *q_to_t = map_create(transient_allocator, sizeof(tl_monotype *), args.size);
 
         forall(i, self->quantifiers) {
+            if (!args.v[i]) args.v[i] = tl_monotype_create_fresh_tv(subs);
             map_set(&q_to_t, &self->quantifiers.v[i], sizeof(tl_type_variable), &args.v[i]);
         }
 

@@ -16,9 +16,18 @@
 #include <stdarg.h>
 #include <stdio.h>
 
-#define DEBUG_RESOLVE   0
-#define DEBUG_RENAME    0
-#define DEBUG_CONSTRAIN 0
+#define DEBUG_RESOLVE            0
+#define DEBUG_RENAME             0
+#define DEBUG_CONSTRAIN          0
+#define DEBUG_EXPLICIT_TYPE_ARGS 0
+
+// Helper: unwrap a type literal to get its target type, or return the type as-is
+static inline tl_monotype *unwrap_type_literal(tl_monotype *mono) {
+    if (mono && tl_monotype_is_type_literal(mono)) {
+        return tl_monotype_literal_target(mono);
+    }
+    return mono;
+}
 
 typedef struct {
     enum tl_error_tag tag;
@@ -593,6 +602,13 @@ static int traverse_ctx_assign_type_arguments(tl_infer *self, traverse_ctx *ctx,
         ast_node *let    = toplevel_get(self, ast_node_str(node->named_application.name));
         u32       paramc = (let && ast_node_is_let(let)) ? let->let.n_type_parameters : 0;
 
+#if DEBUG_EXPLICIT_TYPE_ARGS
+        str name = ast_node_str(node->named_application.name);
+        fprintf(stderr, "[DEBUG EXPLICIT TYPE ARGS] traverse_ctx_assign_type_arguments:\n");
+        fprintf(stderr, "  callee: %s\n", str_cstr(&name));
+        fprintf(stderr, "  n_type_arguments: %u, n_type_parameters: %u\n", argc, paramc);
+#endif
+
         tl_type_registry_parse_type_ctx parse_ctx;
         tl_type_registry_parse_type_ctx_init(self->transient, &parse_ctx, ctx->type_arguments);
 
@@ -604,12 +620,23 @@ static int traverse_ctx_assign_type_arguments(tl_infer *self, traverse_ctx *ctx,
                 fatal("could not parse type"); // FIXME better error
             }
 
+#if DEBUG_EXPLICIT_TYPE_ARGS
+            str parsed_str = tl_monotype_to_string(self->transient, parsed);
+            fprintf(stderr, "  type_arg[%u]: parsed = %s\n", i, str_cstr(&parsed_str));
+#endif
+
             // wrap in type literal
             tl_monotype *literal = tl_monotype_create_literal(self->arena, parsed);
 
             // If the callee has a matching type parameter, add to the type argument context
             if (i < paramc) {
                 assert(ast_node_is_symbol(let->let.type_parameters[i]));
+#if DEBUG_EXPLICIT_TYPE_ARGS
+                str param_name  = let->let.type_parameters[i]->symbol.name;
+                str literal_str = tl_monotype_to_string(self->transient, literal);
+                fprintf(stderr, "  mapping type param '%s' -> %s\n", str_cstr(&param_name),
+                        str_cstr(&literal_str));
+#endif
                 tl_type_registry_add_type_argument(self->registry, let->let.type_parameters[i]->symbol.name,
                                                    literal, &ctx->type_arguments);
             }
@@ -658,12 +685,24 @@ static void type_error_cb(void *ctx_, tl_monotype *left, tl_monotype *right) {
 static int constrain_mono(tl_infer *self, tl_monotype *left, tl_monotype *right, ast_node const *node) {
     type_error_cb_ctx error_ctx = {.self = self, .node = node};
 
-    if (DEBUG_CONSTRAIN) {
-        log_constraint_mono(self, left, right, node);
+#if DEBUG_CONSTRAIN
+    {
+        str left_str  = tl_monotype_to_string(self->transient, left);
+        str right_str = tl_monotype_to_string(self->transient, right);
+        fprintf(stderr, "[DEBUG CONSTRAIN] constrain_mono: %s <=> %s  (at %s:%d)\n", str_cstr(&left_str),
+                str_cstr(&right_str), node->file, node->line);
     }
+#endif
 
     hashmap *seen = hset_create(self->transient, 64);
     int      res  = tl_type_subs_unify_mono(self->subs, left, right, type_error_cb, &error_ctx, &seen);
+
+#if DEBUG_CONSTRAIN
+    if (res) {
+        fprintf(stderr, "[DEBUG CONSTRAIN] constrain_mono: UNIFICATION FAILED\n");
+    }
+#endif
+
     return res;
 }
 
@@ -698,6 +737,16 @@ static int infer_literal_type(tl_infer *self, ast_node *node,
                               tl_monotype *(*get_type)(tl_type_registry *)) {
     tl_monotype *ty = get_type(self->registry);
     ensure_tv(self, &node->type);
+#if DEBUG_EXPLICIT_TYPE_ARGS
+    {
+        str ty_str        = tl_monotype_to_string(self->transient, ty);
+        str node_type_str = node->type ? tl_polytype_to_string(self->transient, node->type) : str_empty();
+        fprintf(stderr, "[DEBUG LITERAL] infer_literal_type at %s:%d:\n", node->file, node->line);
+        fprintf(stderr, "  literal type: %s\n", str_cstr(&ty_str));
+        fprintf(stderr, "  node->type before constrain: %s\n",
+                str_is_empty(node_type_str) ? "(null)" : str_cstr(&node_type_str));
+    }
+#endif
     return constrain_pm(self, node->type, ty, node);
 }
 
@@ -772,6 +821,10 @@ static int process_annotation(tl_infer *self, traverse_ctx *ctx, ast_node *node,
     if (opts.check_type_arg_self && ast_node_is_symbol(node)) {
         str          name  = ast_node_str(node);
         tl_monotype *found = str_map_get_ptr(result.type_arguments, name);
+        // FIXME explicit type args: do we need this secondary lookup? Doesn't seem to fix any of the
+        // failing tests, though.
+
+        // if (!found && ctx) found = str_map_get_ptr(ctx->type_arguments, name);
         if (found) mono = found;
     }
 
@@ -1404,11 +1457,56 @@ static int infer_named_function_application(tl_infer *self, traverse_ctx *ctx, a
             if (resolve_node(self, arg, ctx, npos_function_argument)) return 1;
         }
 
-        tl_monotype *inst = tl_type_registry_instantiate(self->registry, name);
+        tl_monotype *inst        = null;
+        u32          n_type_args = node->named_application.n_type_arguments;
+
+        if (n_type_args > 0) {
+            // Use explicit type arguments for instantiation
+            tl_monotype_sized args = {
+              .v    = alloc_malloc(self->transient, n_type_args * sizeof(tl_monotype *)),
+              .size = n_type_args,
+            };
+
+            for (u32 i = 0; i < n_type_args; i++) {
+                ast_node *type_arg_node = node->named_application.type_arguments[i];
+                if (type_arg_node && type_arg_node->type) {
+                    args.v[i] = unwrap_type_literal(type_arg_node->type->type);
+#if DEBUG_EXPLICIT_TYPE_ARGS
+                    str arg_str = tl_monotype_to_string(self->transient, args.v[i]);
+                    fprintf(
+                      stderr,
+                      "[DEBUG EXPLICIT TYPE ARGS] type constructor: using explicit type for arg %u: %s\n",
+                      i, str_cstr(&arg_str));
+#endif
+                } else {
+                    args.v[i] = null; // will create fresh type variable
+                }
+            }
+
+            inst = tl_type_registry_instantiate_with(self->registry, name, args);
+        } else {
+            inst = tl_type_registry_instantiate(self->registry, name);
+        }
+
         if (!inst) {
             wrong_number_of_arguments(self, node);
             return 1;
         }
+
+#if DEBUG_EXPLICIT_TYPE_ARGS
+        {
+            str inst_str = tl_monotype_to_string(self->transient, inst);
+            fprintf(stderr,
+                    "[DEBUG EXPLICIT TYPE ARGS] infer_named_function_application (type constructor):\n");
+            fprintf(stderr, "  name: %s\n", str_cstr(&name));
+            fprintf(stderr, "  instantiated type: %s\n", str_cstr(&inst_str));
+            fprintf(stderr, "  inst->cons_inst->args.size: %u\n", (u32)inst->cons_inst->args.size);
+            for (u32 j = 0; j < inst->cons_inst->args.size; j++) {
+                str arg_str = tl_monotype_to_string(self->transient, inst->cons_inst->args.v[j]);
+                fprintf(stderr, "    field[%u] type: %s\n", j, str_cstr(&arg_str));
+            }
+        }
+#endif
 
         {
             str          inst_str = tl_monotype_to_string(self->transient, inst);
@@ -1457,6 +1555,22 @@ static int infer_named_function_application(tl_infer *self, traverse_ctx *ctx, a
                     constrain_pm(self, arg->type, inst->cons_inst->args.v[found], node);
                     self->is_constrain_ignore_error = 0;
                 } else {
+#if DEBUG_EXPLICIT_TYPE_ARGS
+                    {
+                        str field_name = ast_node_name_original(arg->assignment.name);
+                        str field_type_str =
+                          tl_monotype_to_string(self->transient, inst->cons_inst->args.v[found]);
+                        fprintf(stderr, "[DEBUG EXPLICIT TYPE ARGS] constraining field '%s':\n",
+                                str_cstr(&field_name));
+                        if (arg->type) {
+                            str arg_type_str = tl_polytype_to_string(self->transient, arg->type);
+                            fprintf(stderr, "  arg->type (value): %s\n", str_cstr(&arg_type_str));
+                        } else {
+                            fprintf(stderr, "  arg->type (value): (null)\n");
+                        }
+                        fprintf(stderr, "  field type from inst: %s\n", str_cstr(&field_type_str));
+                    }
+#endif
                     if (constrain_pm(self, arg->type, inst->cons_inst->args.v[found], node)) return 1;
                 }
             } else {
@@ -1475,11 +1589,62 @@ static int infer_named_function_application(tl_infer *self, traverse_ctx *ctx, a
             }
         }
 
-        ast_arguments_iter iter     = ast_node_arguments_iter(node);
-        tl_monotype       *inst     = tl_polytype_instantiate(self->arena, type, self->subs);
-        str                inst_str = tl_monotype_to_string(self->transient, inst);
-        tl_polytype       *app      = make_arrow(self, ctx, iter.nodes, node, 0);
+        ast_arguments_iter iter = ast_node_arguments_iter(node);
+        tl_monotype       *inst = null;
+
+        // Check for explicit type arguments
+        u32       n_type_args = node->named_application.n_type_arguments;
+        ast_node *let         = toplevel_get(self, name);
+        u32       n_quants    = type->quantifiers.size;
+
+        if (n_type_args > 0 && let && ast_node_is_let(let) && n_quants > 0) {
+            // Build args array from explicit type arguments
+            tl_monotype_sized args = {
+              .v    = alloc_malloc(self->transient, n_quants * sizeof(tl_monotype *)),
+              .size = n_quants,
+            };
+
+            for (u32 i = 0; i < n_quants; i++) {
+                args.v[i] = null; // default: create fresh type variable
+
+                if (i < let->let.n_type_parameters) {
+                    str          param_name    = let->let.type_parameters[i]->symbol.name;
+                    tl_monotype *explicit_type = str_map_get_ptr(ctx->type_arguments, param_name);
+                    if (explicit_type) {
+                        args.v[i] = unwrap_type_literal(explicit_type);
+#if DEBUG_EXPLICIT_TYPE_ARGS
+                        str arg_str = tl_monotype_to_string(self->transient, args.v[i]);
+                        fprintf(stderr,
+                                "[DEBUG EXPLICIT TYPE ARGS] using explicit type for quantifier %u: %s\n", i,
+                                str_cstr(&arg_str));
+#endif
+                    }
+                }
+            }
+
+            inst = tl_polytype_instantiate_with(self->arena, type, args, self->subs);
+        } else {
+            inst = tl_polytype_instantiate(self->arena, type, self->subs);
+        }
+
+        str          inst_str = tl_monotype_to_string(self->transient, inst);
+        tl_polytype *app      = make_arrow(self, ctx, iter.nodes, node, 0);
         if (!app) return 1;
+
+#if DEBUG_EXPLICIT_TYPE_ARGS
+        {
+            str type_str = tl_polytype_to_string(self->transient, type);
+            str app_str  = tl_polytype_to_string(self->transient, app);
+            fprintf(stderr,
+                    "[DEBUG EXPLICIT TYPE ARGS] infer_named_function_application (function call):\n");
+            fprintf(stderr, "  name: %s\n", str_cstr(&name));
+            fprintf(stderr, "  callee type from env: %s\n", str_cstr(&type_str));
+            fprintf(stderr, "  instantiated: %s\n", str_cstr(&inst_str));
+            fprintf(stderr, "  callsite arrow: %s\n", str_cstr(&app_str));
+            fprintf(stderr, "  n_type_arguments: %u\n", node->named_application.n_type_arguments);
+        }
+#endif
+
         if (self->verbose) {
             str app_str = tl_polytype_to_string(self->transient, app);
             dbg(self, "application: callsite '%s' (%s) arrow: %s", str_cstr(&name), str_cstr(&inst_str),
@@ -2264,9 +2429,29 @@ static int resolve_node(tl_infer *self, ast_node *node, traverse_ctx *ctx, node_
 }
 
 static int is_type_literal(tl_infer *self, traverse_ctx const *ctx, ast_node const *node) {
+    // If the node has any assignment arguments (e.g., Wrapper[Int](v = 1.0)),
+    // it's a value constructor call, not a type literal.
+    if (ast_node_is_nfa(node)) {
+        ast_arguments_iter iter = ast_node_arguments_iter((ast_node *)node);
+        ast_node          *arg;
+        while ((arg = ast_arguments_next(&iter))) {
+            if (ast_node_is_assignment(arg)) {
+                return 0; // has value arguments, not a type literal
+            }
+        }
+    }
+
     tl_type_registry_parse_type_ctx parse_ctx;
     tl_monotype *mono = tl_type_registry_parse_type_out_ctx(self->registry, node, self->transient,
                                                             ctx->type_arguments, &parse_ctx);
+#if DEBUG_EXPLICIT_TYPE_ARGS
+    if (mono && ast_node_is_nfa(node)) {
+        str name     = ast_node_str(node->named_application.name);
+        str mono_str = tl_monotype_to_string(self->transient, mono);
+        fprintf(stderr, "[DEBUG EXPLICIT TYPE ARGS] is_type_literal: %s parsed as type: %s\n",
+                str_cstr(&name), str_cstr(&mono_str));
+    }
+#endif
     return !!mono;
 }
 
@@ -4641,8 +4826,8 @@ static void log_constraint(tl_infer *self, tl_polytype *left, tl_polytype *right
     dbg(self, "constrain: %s : %s from %s", str_cstr(&left_str), str_cstr(&right_str), str_cstr(&node_str));
 }
 
-static void log_constraint_mono(tl_infer *self, tl_monotype *left, tl_monotype *right,
-                                ast_node const *node) {
+__attribute__((unused)) static void log_constraint_mono(tl_infer *self, tl_monotype *left,
+                                                        tl_monotype *right, ast_node const *node) {
     if (!self->verbose) return;
     str left_str  = tl_monotype_to_string(self->transient, left);
     str right_str = tl_monotype_to_string(self->transient, right);
