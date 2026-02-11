@@ -1225,18 +1225,24 @@ static ast_node *maybe_wrap_lambda_function_in_let_in(parser *self, ast_node *no
     return a;
 }
 
+static int maybe_type_argument_element(parser *self) {
+    if (0 == a_try(self, a_type_identifier)) return 0;
+    if (0 == a_try(self, a_number)) return 0;
+    return 1;
+}
+
 static int maybe_type_arguments(parser *self, ast_node_array *type_args) {
     *type_args = (ast_node_array){.alloc = self->ast_arena};
 
     if (0 == a_try(self, a_open_square)) {
         if (0 == a_try(self, a_close_square)) goto type_args_done;
-        if (a_try(self, a_identifier)) return ERROR_STOP;
+        if (maybe_type_argument_element(self)) return ERROR_STOP;
         array_push(*type_args, self->result);
 
         while (1) {
             if (0 == a_try(self, a_close_square)) goto type_args_done;
             if (a_try(self, a_comma)) return ERROR_STOP;
-            if (a_try(self, a_identifier)) return ERROR_STOP;
+            if (maybe_type_argument_element(self)) return ERROR_STOP;
             array_push(*type_args, self->result);
         }
     }

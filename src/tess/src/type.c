@@ -647,11 +647,11 @@ static tl_monotype *tl_type_registry_parse_type_(tl_type_registry               
             // Note: returning null is valid, because this function may be called to try to parse things
             // which look like type literals for a while, but are actually type constructors.
 
-            if (1 != node->named_application.n_arguments) {
+            if (1 != node->named_application.n_type_arguments) {
                 result = null; // possibly not a type literal
                 goto top_success;
             }
-            ast_node const *target      = node->named_application.arguments[0];
+            ast_node const *target      = node->named_application.type_arguments[0];
 
             ast_node const *target_name = null;
             if (ast_node_is_symbol(target)) target_name = target;
@@ -708,7 +708,8 @@ static tl_monotype *tl_type_registry_parse_type_(tl_type_registry               
         };
 
         tl_monotype_array args  = {.alloc = self->alloc};
-        ast_node_sized    nodes = ast_node_sized_from_ast_array_const(node);
+        ast_node_sized    nodes = {.size = node->named_application.n_type_arguments,
+                                      .v    = node->named_application.type_arguments};
 
         forall(i, nodes) {
             tl_monotype *mono = tl_type_registry_parse_type_(self, ctx, nodes.v[i]);
