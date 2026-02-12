@@ -22,6 +22,7 @@
 #define DEBUG_CONSTRAIN          0
 #define DEBUG_EXPLICIT_TYPE_ARGS 0
 #define DEBUG_INVARIANTS         0 // Enable invariant checking at phase boundaries
+#define DEBUG_INSTANCE_CACHE     0 // Log instance cache hits/misses and key components
 
 #if DEBUG_INVARIANTS
 // Forward declarations for invariant checking
@@ -666,11 +667,13 @@ static void traverse_ctx_load_type_arguments(tl_infer *self, traverse_ctx *ctx, 
                         str  type_str  = tl_monotype_to_string(self->transient, substituted);
                         snprintf(detail, sizeof detail,
                                  "Specialized function '%.*s' type param '%.*s' already bound to '%s'",
-                                 str_ilen(func_name), str_buf(&func_name), str_ilen(type_param->symbol.name),
-                                 str_buf(&type_param->symbol.name), str_cstr(&type_str));
-                        report_invariant_failure(self, "traverse_ctx_load_type_arguments",
-                                                 "Specialized function type param already bound (reuse detected)",
-                                                 detail, type_param);
+                                 str_ilen(func_name), str_buf(&func_name),
+                                 str_ilen(type_param->symbol.name), str_buf(&type_param->symbol.name),
+                                 str_cstr(&type_str));
+                        report_invariant_failure(
+                          self, "traverse_ctx_load_type_arguments",
+                          "Specialized function type param already bound (reuse detected)", detail,
+                          type_param);
                     }
                 }
 #endif
@@ -3085,11 +3088,32 @@ static name_and_type make_instance_key(tl_infer *self, str generic_name, tl_mono
         type_arg_types.v[i] = tl_type_registry_parse_type_with_ctx(self->registry, type_arg, &parse_ctx);
     }
 
-    return (name_and_type){
+    name_and_type key = {
       .name_hash      = str_hash64(generic_name),
       .type_hash      = tl_monotype_hash64(arrow),
       .type_args_hash = tl_monotype_sized_hash64(hash64("args", 4), type_arg_types),
     };
+
+#if DEBUG_INSTANCE_CACHE
+    {
+        str arrow_str = tl_monotype_to_string(self->transient, arrow);
+        fprintf(stderr, "[INSTANCE_KEY] name='%s' arrow='%s' n_type_args=%u\n", str_cstr(&generic_name),
+                str_cstr(&arrow_str), type_arguments.size);
+        fprintf(stderr, "  -> name_hash=%016llx type_hash=%016llx type_args_hash=%016llx\n",
+                (unsigned long long)key.name_hash, (unsigned long long)key.type_hash,
+                (unsigned long long)key.type_args_hash);
+        forall(i, type_arg_types) {
+            str ta_str = tl_monotype_to_string(self->transient, type_arg_types.v[i]);
+            fprintf(stderr, "  type_arg[%u] = '%s' (hash=%016llx)\n", i, str_cstr(&ta_str),
+                    (unsigned long long)tl_monotype_hash64(type_arg_types.v[i]));
+        }
+        if (outer_type_arguments) {
+            fprintf(stderr, "  outer_type_arguments present (size=%zu)\n", map_size(outer_type_arguments));
+        }
+    }
+#endif
+
+    return key;
 }
 
 static str *instance_lookup(tl_infer *self, name_and_type *key) {
@@ -3102,8 +3126,18 @@ static str *instance_lookup_arrow(tl_infer *self, str generic_name, tl_monotype 
 
     // de-duplicate instances: hashes give us structural equality (barring hash collisions), which we need
     // because types are frequently cloned.
-    name_and_type key = make_instance_key(self, generic_name, arrow, type_arguments, outer_type_arguments);
-    return instance_lookup(self, &key);
+    name_and_type key    = make_instance_key(self, generic_name, arrow, type_arguments, outer_type_arguments);
+    str          *result = instance_lookup(self, &key);
+
+#if DEBUG_INSTANCE_CACHE
+    if (result) {
+        fprintf(stderr, "[CACHE HIT] '%s' -> '%s'\n", str_cstr(&generic_name), str_cstr(result));
+    } else {
+        fprintf(stderr, "[CACHE MISS] '%s'\n", str_cstr(&generic_name));
+    }
+#endif
+
+    return result;
 }
 
 static int instance_name_exists(tl_infer *self, str instance_name) {
@@ -3112,6 +3146,14 @@ static int instance_name_exists(tl_infer *self, str instance_name) {
 }
 
 static void instance_add(tl_infer *self, name_and_type *key, str instance_name) {
+#if DEBUG_INSTANCE_CACHE
+    size_t count_before = map_size(self->instances);
+    fprintf(stderr, "[INSTANCE ADD] '%s' (cache size: %zu -> %zu)\n", str_cstr(&instance_name), count_before,
+            count_before + 1);
+    fprintf(stderr, "  key: name_hash=%016llx type_hash=%016llx type_args_hash=%016llx\n",
+            (unsigned long long)key->name_hash, (unsigned long long)key->type_hash,
+            (unsigned long long)key->type_args_hash);
+#endif
     map_set(&self->instances, key, sizeof *key, &instance_name);
     str_hset_insert(&self->instance_names, instance_name);
 }
@@ -5538,6 +5580,13 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *out_resu
         out_result->synthesized_nodes = (ast_node_sized)sized_all(self->synthesized_nodes);
         out_result->hash_includes     = (str_sized)sized_all(self->hash_includes);
     }
+
+#if DEBUG_INSTANCE_CACHE
+    fprintf(stderr, "\n[INSTANCE CACHE SUMMARY]\n");
+    fprintf(stderr, "  Total specializations: %zu\n", map_size(self->instances));
+    fprintf(stderr, "  Unique instance names: %zu\n", hset_size(self->instance_names));
+#endif
+
     arena_reset(self->transient);
     return 0;
 }
