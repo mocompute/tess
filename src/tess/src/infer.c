@@ -23,9 +23,6 @@
 
 // Helper: unwrap a type literal to get its target type, or return the type as-is
 static inline tl_monotype *unwrap_type_literal(tl_monotype *mono) {
-    if (mono && tl_monotype_is_type_literal(mono)) {
-        return tl_monotype_literal_target(mono);
-    }
     return mono;
 }
 
@@ -87,7 +84,7 @@ typedef enum {
 
 typedef struct {
     hashmap      *lexical_names;  // exists only during traverse_ast: hset str
-    hashmap      *type_arguments; // map str -> tl_monotype*: arguments which are type literals
+    hashmap      *type_arguments; // map str -> tl_monotype*
     void         *user;
     tl_monotype  *result_type; // result type of current function being traversed
     node_position node_pos;    // set by traverse_ast based on parent node
@@ -606,9 +603,7 @@ static void traverse_ctx_load_type_arguments(tl_infer *self, traverse_ctx *ctx, 
                         str_cstr(&node->let.name->symbol.name), str_cstr(&type_param->symbol.name),
                         str_cstr(&mono_str));
 #endif
-                // Wrap in a type literal for the type_arguments map
-                tl_monotype *literal = tl_monotype_create_literal(self->arena, mono);
-                tl_type_registry_add_type_argument(self->registry, type_param->symbol.name, literal,
+                tl_type_registry_add_type_argument(self->registry, type_param->symbol.name, mono,
                                                    &ctx->type_arguments);
                 assert(str_map_contains(ctx->type_arguments, type_param->symbol.name));
 
@@ -684,10 +679,7 @@ static int traverse_ctx_assign_type_arguments(tl_infer *self, traverse_ctx *ctx,
             // unified later.
             if (type_arg_node->type) { // Re-enabled: use existing type on node
                 parsed = type_arg_node->type->type;
-                // Unwrap type literal if present
-                if (tl_monotype_is_type_literal(parsed)) {
-                    parsed = tl_monotype_literal_target(parsed);
-                }
+
 #if DEBUG_EXPLICIT_TYPE_ARGS
                 str reused_str = tl_monotype_to_string(self->transient, parsed);
                 fprintf(stderr, "  type_arg[%u]: reused existing type = %s\n", i, str_cstr(&reused_str));
@@ -718,9 +710,6 @@ static int traverse_ctx_assign_type_arguments(tl_infer *self, traverse_ctx *ctx,
                 }
             }
 
-            // wrap in type literal (unwrap first to avoid double-wrapping)
-            tl_monotype *literal = tl_monotype_create_literal(self->arena, unwrap_type_literal(parsed));
-
             // If the callee has a matching type parameter, add to the type argument context
             if (i < paramc) {
                 assert(ast_node_is_symbol(let->let.type_parameters[i]));
@@ -730,18 +719,18 @@ static int traverse_ctx_assign_type_arguments(tl_infer *self, traverse_ctx *ctx,
                 str param_name = let->let.type_parameters[i]->symbol.name;
 
 #if DEBUG_EXPLICIT_TYPE_ARGS
-                str literal_str = tl_monotype_to_string(self->transient, literal);
+                str parsed_str = tl_monotype_to_string(self->transient, parsed);
                 fprintf(stderr, "  mapping type param '%s' -> %s\n", str_cstr(&param_name),
-                        str_cstr(&literal_str));
+                        str_cstr(&parsed_str));
 #endif
-                tl_type_registry_add_type_argument(self->registry, param_name, literal,
+                tl_type_registry_add_type_argument(self->registry, param_name, parsed,
                                                    &ctx->type_arguments);
                 assert(str_map_contains(ctx->type_arguments, param_name));
             }
 
             // Set type on the type argument AST node for the transpiler.
             ast_node_type_set((ast_node *)node->named_application.type_arguments[i],
-                              tl_polytype_absorb_mono(self->arena, literal));
+                              tl_polytype_absorb_mono(self->arena, parsed));
         }
     }
 
@@ -873,7 +862,6 @@ static annotation_parse_result parse_type_annotation(tl_infer *self, traverse_ct
 }
 
 typedef struct {
-    int wrap_in_literal;     // Wrap parsed type in tl_literal
     int add_to_lexicals;     // Add type args to ctx->lexical_names
     int check_type_arg_self; // Check if name is in type_arguments (for formal params)
 } annotation_opts;
@@ -928,15 +916,10 @@ static int process_annotation(tl_infer *self, traverse_ctx *ctx, ast_node *node,
         if (found) mono = found;
     }
 
-    // Wrap in literal if needed, or unwrap if not
-    if (opts.wrap_in_literal) {
-        mono = tl_monotype_create_literal(self->arena, mono);
-    } else {
-        // For value annotations (not type arguments), unwrap any literal wrapper.
-        // Type arguments stored in ctx->type_arguments are wrapped in literals,
-        // but when used to annotate a value parameter, we need the underlying type.
-        mono = unwrap_type_literal(mono);
-    }
+    // For value annotations (not type arguments), unwrap any literal wrapper.
+    // Type arguments stored in ctx->type_arguments are wrapped in literals,
+    // but when used to annotate a value parameter, we need the underlying type.
+    mono = unwrap_type_literal(mono);
 
     // Set annotation_type field of symbol nodes
     if (ast_node_is_symbol(node)) {
@@ -1561,6 +1544,7 @@ static int infer_named_function_application(tl_infer *self, traverse_ctx *ctx, a
     if (is_type_literal(self, ctx, node)) return 0;
 
     if (tl_polytype_is_type_constructor(type)) {
+        // FIXME: this comment is incorrect about type literals.
         // This nfa can be either a type literal, or a type value constructor. Value constructors are of the
         // form `Foo(a=1, b=2)`. Type literals are of the form `Foo(Int)` for generics or plain `Foo` for
         // concrete.
@@ -2255,14 +2239,6 @@ finish:
     if (!node->type) node->type = tl_polytype_create_fresh_tv(self->arena, self->subs);
 }
 
-static int reject_type_literal(tl_infer *self, ast_node const *node) {
-    if (node->type && tl_monotype_is_type_literal(node->type->type)) {
-        array_push(self->errors, ((tl_infer_error){.tag = tl_err_unexpected_type_literal, .node = node}));
-        return 1;
-    }
-    return 0;
-}
-
 static int check_is_pointer(tl_infer *self, tl_polytype *type, ast_node *node) {
     if (tl_monotype_is_inst(type->type)) {
         if (!tl_monotype_is_ptr(type->type)) {
@@ -2323,11 +2299,6 @@ static int infer_struct_access(tl_infer *self, ast_node *node) {
 
     // Note: must substitute to resolve type of chained field access, eg: foo.bar.baz
     tl_monotype_substitute(self->arena, struct_type, self->subs, null); // needed
-
-    if (tl_monotype_is_type_literal(struct_type)) {
-        // enum access is through a type literal
-        struct_type = struct_type->literal;
-    }
 
     // Const(T) is transparent for field access: unwrap to access T's fields
     if (tl_monotype_is_const(struct_type)) {
@@ -2457,15 +2428,6 @@ static int resolve_node(tl_infer *self, ast_node *node, traverse_ctx *ctx, node_
 #endif
                 return 1;
             }
-
-            // For formal parameters, unwrap any type literal wrapper from the annotation.
-            // Type literals are used when passing types as type arguments (e.g., sizeof[T]()),
-            // but value parameters should have the underlying type, not the literal wrapper.
-            if (node->symbol.annotation_type &&
-                tl_monotype_is_type_literal(node->symbol.annotation_type->type)) {
-                tl_monotype *unwrapped       = unwrap_type_literal(node->symbol.annotation_type->type);
-                node->symbol.annotation_type = tl_polytype_absorb_mono(self->arena, unwrapped);
-            }
         }
 
         if (ctx) {
@@ -2486,34 +2448,32 @@ static int resolve_node(tl_infer *self, ast_node *node, traverse_ctx *ctx, node_
         if (ast_node_is_symbol(node) || ast_node_is_nfa(node)) {
             if (!ctx) fatal("logic error");
 
-            // Try to parse as type literal; if successful, wrap in tl_literal
-            int res = process_annotation(self, ctx, node, (annotation_opts){.wrap_in_literal = 1});
-            if (res < 0) {
-#if DEBUG_RESOLVE
-                str name = ast_node_is_symbol(node) ? node->symbol.name : S("<nfa>");
-                fprintf(
-                  stderr,
-                  "[DEBUG resolve_node] ERROR: npos_function_argument process_annotation failed for '%s'\n",
-                  str_cstr(&name));
-#endif
-                return 1;
-            }
-            if (res == 0) {
-                // Not a type literal: ensure fresh type variable and update environment
-                sync_with_env(self, ctx, node, 1);
-            }
-            // If res > 0 (was type literal): do not sync_with_env
+            // Note: type literals as arguments are no longer supported. They must be supplied as explicit
+            // type arguments.
+            sync_with_env(self, ctx, node, 1);
+
+            //             // Try to parse as type literal; if successful, wrap in tl_literal
+            //             int res = process_annotation(self, ctx, node, (annotation_opts){.wrap_in_literal
+            //             = 1}); if (res < 0) {
+            // #if DEBUG_RESOLVE
+            //                 str name = ast_node_is_symbol(node) ? node->symbol.name : S("<nfa>");
+            //                 fprintf(
+            //                   stderr,
+            //                   "[DEBUG resolve_node] ERROR: npos_function_argument process_annotation
+            //                   failed for '%s'\n", str_cstr(&name));
+            // #endif
+            //                 return 1;
+            //             }
+            //             if (res == 0) {
+            //                 // Not a type literal: ensure fresh type variable and update environment
+            //                 sync_with_env(self, ctx, node, 1);
+            //             }
+            //             // If res > 0 (was type literal): do not sync_with_env
         }
 
         break;
 
     case npos_assign_lhs:
-        if (reject_type_literal(self, node)) {
-#if DEBUG_RESOLVE
-            fprintf(stderr, "[DEBUG resolve_node] ERROR: npos_assign_lhs reject_type_literal\n");
-#endif
-            return 1;
-        }
         if (ast_node_is_binary_op_struct_access(node)) return infer_struct_access(self, node);
 
         // Support annotations on lhs of field name assignments
@@ -2534,12 +2494,6 @@ static int resolve_node(tl_infer *self, ast_node *node, traverse_ctx *ctx, node_
         break;
 
     case npos_reassign_lhs:
-        if (reject_type_literal(self, node)) {
-#if DEBUG_RESOLVE
-            fprintf(stderr, "[DEBUG resolve_node] ERROR: npos_reassign_lhs reject_type_literal\n");
-#endif
-            return 1;
-        }
         if (ast_node_is_binary_op_struct_access(node)) return infer_struct_access(self, node);
 
         // Take symbol's existing type: this ensures let-in symbols retain their type info through
@@ -2549,12 +2503,6 @@ static int resolve_node(tl_infer *self, ast_node *node, traverse_ctx *ctx, node_
 
     case npos_field_name:
         if (ast_node_is_binary_op_struct_access(node)) return infer_struct_access(self, node);
-        if (reject_type_literal(self, node)) {
-#if DEBUG_RESOLVE
-            fprintf(stderr, "[DEBUG resolve_node] ERROR: npos_field_name reject_type_literal\n");
-#endif
-            return 1;
-        }
 
         // assign a fresh type variable to field name, because we can't know its generic instantiated type
         ensure_tv(self, &node->type);
@@ -2567,28 +2515,23 @@ static int resolve_node(tl_infer *self, ast_node *node, traverse_ctx *ctx, node_
 
         maybe_handle_null(self, node);
 
-        // Try to parse as type literal; if successful, wrap in tl_literal
-        int res = process_annotation(self, ctx, node, (annotation_opts){.wrap_in_literal = 1});
-        if (res < 0) {
-#if DEBUG_RESOLVE
-            str name = ast_node_is_symbol(node) ? node->symbol.name : S("<non-symbol>");
-            fprintf(stderr, "[DEBUG resolve_node] ERROR: npos_operand process_annotation failed for '%s'\n",
-                    str_cstr(&name));
-#endif
-            return 1;
-        }
+        //         // Try to parse as type literal; if successful, wrap in tl_literal
+        //         int res = process_annotation(self, ctx, node, (annotation_opts){.wrap_in_literal = 1});
+        //         if (res < 0) {
+        // #if DEBUG_RESOLVE
+        //             str name = ast_node_is_symbol(node) ? node->symbol.name : S("<non-symbol>");
+        //             fprintf(stderr, "[DEBUG resolve_node] ERROR: npos_operand process_annotation failed
+        //             for '%s'\n",
+        //                     str_cstr(&name));
+        // #endif
+        //             return 1;
+        //         }
 
         // always sync with environment
         sync_with_env(self, ctx, node, 0);
     } break;
 
     case npos_value_rhs:
-        if (reject_type_literal(self, node)) {
-#if DEBUG_RESOLVE
-            fprintf(stderr, "[DEBUG resolve_node] ERROR: npos_value_rhs reject_type_literal\n");
-#endif
-            return 1;
-        }
 
         maybe_handle_null(self, node);
 
@@ -2698,11 +2641,7 @@ static int check_type_predicate(tl_infer *self, traverse_ctx *traverse_ctx, ast_
             tl_monotype *rhs_type =
               tl_type_registry_parse_type_with_ctx(self->registry, node->type_predicate.rhs, &parse_ctx);
 
-            // Unwrap type literal if needed
             tl_monotype *lhs_mono = lhs_type_arg;
-            if (tl_monotype_is_type_literal(lhs_mono)) {
-                lhs_mono = tl_monotype_literal_target(lhs_mono);
-            }
 
             if (!tl_monotype_is_concrete(lhs_mono)) {
                 tl_monotype_substitute(self->arena, lhs_mono, self->subs, null);
@@ -3076,8 +3015,8 @@ static int specialize_user_type(tl_infer *self, traverse_ctx *traverse_ctx, ast_
             if ((type_id = tl_type_registry_parse_type(self->registry, arg))) {
                 // a literal type
                 {
-                    tl_monotype *_t = tl_monotype_create_literal(self->arena, type_id);
-                    array_push(arr, _t);
+                    fatal("oops: a type literal?");
+                    array_push(arr, type_id);
                 }
                 continue;
             }
@@ -3271,7 +3210,7 @@ static int specialize_operand(tl_infer *self, traverse_ctx *traverse_ctx, ast_no
 
     str value_name = ast_node_str(node);
     str inst_name  = specialize_arrow(self, traverse_ctx, value_name, value_type->type);
-    if (str_is_empty(inst_name)) return 0;
+    if (str_is_empty(inst_name)) return 0; // FIXME: ignores error
     ast_node_name_replace(node, inst_name);
     return 0;
 }
@@ -3352,7 +3291,7 @@ static int specialize_case(tl_infer *self, traverse_ctx *traverse_ctx, ast_node 
 
     str predicate_name = ast_node_str(predicate);
     str inst_name      = specialize_arrow(self, traverse_ctx, predicate_name, pred_arrow->type);
-    if (str_is_empty(inst_name)) return 0;
+    if (str_is_empty(inst_name)) return 0; // FIXME: ignores error
     ast_node_name_replace(predicate, inst_name);
 
     return 0;
@@ -4003,16 +3942,11 @@ static void concretize_params(tl_infer *self, ast_node *node, tl_monotype *calls
             tl_monotype *bound_type = str_map_get_ptr(type_arguments, param_name);
 
 #if DEBUG_EXPLICIT_TYPE_ARGS
-            fprintf(stderr,
-                    "[DEBUG CONCRETIZE TYPE PARAMS] type_param[%u]: name='%s', bound=%p\n",
-                    i, str_cstr(&param_name), (void *)bound_type);
+            fprintf(stderr, "[DEBUG CONCRETIZE TYPE PARAMS] type_param[%u]: name='%s', bound=%p\n", i,
+                    str_cstr(&param_name), (void *)bound_type);
 #endif
 
             if (bound_type) {
-                // Unwrap if it's a type literal
-                if (tl_monotype_is_type_literal(bound_type)) {
-                    bound_type = bound_type->literal;
-                }
 
                 tl_polytype *callsite_type = tl_polytype_absorb_mono(self->arena, bound_type);
 #if DEBUG_EXPLICIT_TYPE_ARGS
@@ -4533,13 +4467,7 @@ tl_monotype *tl_infer_update_specialized_type_(tl_infer *self, tl_monotype *mono
     case tl_var:
     case tl_weak:        break;
 
-    case tl_literal:     {
-        tl_monotype *target  = tl_monotype_literal_target(mono);
-        tl_monotype *replace = tl_infer_update_specialized_type_(self, target, in_progress);
-        if (replace) return tl_monotype_create_literal(self->arena, replace);
-    } break;
-
-    case tl_cons_inst: {
+    case tl_cons_inst:   {
 
         int did_replace  = !tl_monotype_is_inst_specialized(mono);
         str generic_name = mono->cons_inst->def->generic_name;
@@ -4618,8 +4546,7 @@ tl_monotype *tl_infer_update_specialized_type(tl_infer *self, tl_monotype *mono)
 
     case tl_cons_inst:
     case tl_arrow:
-    case tl_tuple:
-    case tl_literal:     {
+    case tl_tuple:       {
         hashmap     *in_progress = hset_create(self->transient, 64);
         tl_monotype *out         = tl_infer_update_specialized_type_(self, mono, &in_progress);
         return out;
@@ -4648,8 +4575,7 @@ static void update_types_one_type(tl_infer *self, update_types_ctx *ctx, tl_poly
 
     case tl_cons_inst:
     case tl_arrow:
-    case tl_tuple:
-    case tl_literal:     {
+    case tl_tuple:       {
         // For recursive types, bounce until no changes. update_specialized_type returns null if there is no
         // need to replace the type being tested.
         int tries = 3;
@@ -4715,10 +4641,7 @@ static int update_types_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_node 
         // Note: ensure name's type in the environment matches a specialized type constructor on the rhs
         {
             tl_monotype *value_type = node->let_in.value->type->type;
-            // Also check for type literals whose target is a specialized instance
-            if (tl_monotype_is_type_literal(value_type)) {
-                value_type = tl_monotype_literal_target(value_type);
-            }
+
             if (tl_monotype_is_inst_specialized(value_type)) {
                 tl_polytype *new_type = tl_polytype_absorb_mono(self->arena, value_type);
                 ast_node_type_set(node->let_in.name, new_type);
@@ -4895,6 +4818,7 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *out_resu
                     }
 
                     str inst_name = specialize_arrow(self, traverse_ctx, fun_name, callsite->type);
+                    // FIXME: ignores specialize_arrow error
                     dbg(self, "library: exporting '%s' => '%s'", str_cstr(&fun_name), str_cstr(&inst_name));
                 }
             }

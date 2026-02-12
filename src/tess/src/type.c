@@ -279,11 +279,11 @@ static void make_carray(tl_type_registry *self) {
     field_names.v[1]              = str_init(self->alloc, "count");
 
     tl_monotype_sized field_types = {.size = 2, .v = alloc_malloc(self->alloc, 2 * sizeof(tl_monotype *))};
-    field_types.v[0]              = tl_monotype_create_fresh_literal(self->alloc, self->subs);
+    field_types.v[0]              = tl_monotype_create_fresh_tv(self->subs);
     field_types.v[1]              = tl_type_registry_int(self);
 
     tl_type_variable_sized tvs    = {.size = 1, .v = alloc_malloc(self->alloc, sizeof(tl_type_variable))};
-    tvs.v[0]                      = tl_monotype_tv(tl_monotype_literal_target(field_types.v[0]));
+    tvs.v[0]                      = tl_monotype_tv(field_types.v[0]);
 
     tl_type_constructor_def_create(self, name, tvs, field_names, field_types);
 }
@@ -519,7 +519,8 @@ void tl_type_registry_add_type_argument(tl_type_registry *self, str name, tl_mon
 
 tl_monotype *tl_type_registry_add_fresh_type_argument(tl_type_registry *self, str name,
                                                       hashmap **type_arguments) {
-    tl_monotype *mono = tl_monotype_create_fresh_literal(self->alloc, self->subs);
+    // Type arguments will be looked up in a value context, so they should not be wrapped in a literal.
+    tl_monotype *mono = tl_monotype_create_fresh_tv(self->subs);
     tl_type_registry_add_type_argument(self, name, mono, type_arguments);
     return mono;
 }
@@ -561,7 +562,7 @@ static tl_monotype *type_variable_sugar(tl_type_registry *self, tl_type_registry
                                         ast_node const *node) {
     str          ta     = ast_node_str(node);
     tl_monotype *result = add_type_argument(self, ctx, ta);
-    return tl_monotype_literal_target(result);
+    return result;
 }
 
 static tl_monotype *defer_parse(tl_type_registry *self, tl_type_registry_parse_type_ctx *ctx, str name) {
@@ -614,8 +615,6 @@ static tl_monotype *tl_type_registry_parse_type_(tl_type_registry               
         result = get_type_argument(ctx, name);
         if (result) {
             // Note: type arguments will need to be handled in a context-sensitive way by the caller.
-
-            if (tl_monotype_is_type_literal(result)) result = tl_monotype_literal_target(result);
             goto top_success;
         }
 
@@ -814,7 +813,7 @@ static tl_monotype *tl_type_registry_parse_type_(tl_type_registry               
         for (u32 i = 0, n = n_type_arguments; i < n; ++i) {
             assert(ast_node_is_symbol(type_arguments[i]));
             tl_monotype *mono = mono = add_type_argument(self, ctx, ast_node_str(type_arguments[i]));
-            array_push(type_argument_tvs, tl_monotype_literal_target(mono)->var);
+            array_push(type_argument_tvs, mono->var);
         }
 
         str_array         field_names = {.alloc = self->alloc};
@@ -1060,15 +1059,6 @@ tl_polytype *tl_polytype_create_fresh_tv(allocator *alloc, tl_type_subs *subs) {
     return tl_polytype_create_tv(alloc, tl_type_subs_fresh(subs));
 }
 
-tl_polytype *tl_polytype_create_fresh_literal(allocator *alloc, tl_type_subs *subs) {
-    return tl_polytype_absorb_mono(alloc, tl_monotype_create_fresh_literal(alloc, subs));
-}
-
-tl_polytype *tl_polytype_create_literal_with(allocator *alloc, tl_monotype *target) {
-    tl_monotype *literal = tl_monotype_create_literal(alloc, target);
-    return tl_polytype_absorb_mono(alloc, literal);
-}
-
 tl_polytype *tl_polytype_clone(allocator *alloc, tl_polytype *orig) {
     tl_polytype *clone = alloc_malloc(alloc, sizeof *clone);
     clone->quantifiers = orig->quantifiers;
@@ -1106,7 +1096,6 @@ void tl_polytype_list_append(allocator *alloc, tl_polytype *lhs, tl_polytype *rh
     case tl_placeholder:
     case tl_any:
     case tl_ellipsis:
-    case tl_literal:
     case tl_var:
     case tl_weak:
     case tl_cons_inst:   array_push(arr, right); break;
@@ -1183,11 +1172,6 @@ static void replace_tv(tl_monotype *self, tl_type_subs *subs, hashmap **map, has
 
     } break;
 
-    case tl_literal:
-        //
-        replace_tv(self->literal, subs, map, seen);
-        break;
-
     case tl_cons_inst:
     case tl_arrow:
     case tl_tuple:     {
@@ -1224,14 +1208,6 @@ static void replace_tv_mono(tl_monotype *self, tl_type_subs *subs, hashmap **map
             self->var = fresh;
         }
     } break;
-
-    case tl_literal:
-        //
-        if (tl_monotype_is_tv(self->literal) &&
-            map_contains(*map, &self->literal->var, sizeof(tl_type_variable)))
-            self->literal = map_get_ptr(*map, &self->literal->var, sizeof(tl_type_variable));
-        else replace_tv_mono(self->literal, subs, map, seen);
-        break;
 
     case tl_cons_inst:
     case tl_arrow:
@@ -1367,12 +1343,7 @@ static void generalize(tl_monotype *self, tl_type_variable_array *quant, hashmap
         array_set_insert(*quant, self->var);
         break;
 
-    case tl_weak: break;
-
-    case tl_literal:
-        //
-        generalize(self->literal, quant, seen);
-        break;
+    case tl_weak:      break;
 
     case tl_cons_inst:
     case tl_arrow:
@@ -1448,24 +1419,9 @@ tl_monotype *tl_monotype_create_integer(allocator *alloc, i32 integer) {
     return self;
 }
 
-tl_monotype *tl_monotype_create_literal(allocator *alloc, tl_monotype *target) {
-    tl_monotype *self = alloc_malloc(alloc, sizeof *self);
-    *self             = (tl_monotype){.tag = tl_literal, .literal = target};
-    return self;
-}
-
 tl_monotype *tl_monotype_create_fresh_tv(tl_type_subs *subs) {
     tl_type_variable tv = tl_type_subs_fresh(subs);
     return tl_monotype_create_tv(subs->data.alloc, tv);
-}
-
-tl_monotype *tl_monotype_create_fresh_literal(allocator *alloc, tl_type_subs *subs) {
-    tl_type_variable tv     = tl_type_subs_fresh(subs);
-    tl_monotype     *target = tl_monotype_create_tv(alloc, tv);
-
-    tl_monotype     *self   = alloc_malloc(alloc, sizeof *self);
-    *self                   = (tl_monotype){.tag = tl_literal, .literal = target};
-    return self;
 }
 
 tl_monotype *tl_monotype_create_weak(allocator *alloc, tl_type_variable tv) {
@@ -1551,7 +1507,6 @@ static tl_monotype *tl_monotype_clone_(allocator *alloc, tl_monotype *orig, hash
         break;
 
     case tl_integer:     clone->integer = orig->integer; return clone;
-    case tl_literal:     clone->literal = tl_monotype_clone_(alloc, orig->literal, mapping); break;
 
     case tl_any:
     case tl_ellipsis:    return clone;
@@ -1596,10 +1551,6 @@ int tl_monotype_is_concrete_(tl_monotype *self, hashmap **seen) {
         forall(i, self->list.xs) if (!tl_monotype_is_concrete_(self->list.xs.v[i], seen)) return 0;
         return 1;
     }
-
-    case tl_literal:
-        //
-        return tl_monotype_is_concrete_(self->literal, seen);
     }
     fatal("unreachable");
 }
@@ -1641,10 +1592,6 @@ int tl_monotype_is_weak_(tl_monotype *self, hashmap **seen) {
         forall(i, self->list.xs) if (tl_monotype_is_weak_(self->list.xs.v[i], seen)) return 1;
         return 0;
     }
-
-    case tl_literal:
-        //
-        return tl_monotype_is_weak_(self->literal, seen);
     }
     fatal("unreachable");
 }
@@ -1797,10 +1744,6 @@ int tl_monotype_arrow_has_arrow(tl_monotype *self) {
     return has_arrow;
 }
 
-int tl_monotype_is_type_literal(tl_monotype *self) {
-    return (tl_literal == self->tag);
-}
-
 int tl_monotype_is_integer_convertible(tl_monotype *self) {
     return tl_monotype_is_inst(self) && self->cons_inst->def->is_integer_convertible;
 }
@@ -1897,11 +1840,6 @@ void tl_monotype_ptr_set_target(tl_monotype *ptr, tl_monotype *target) {
     assert(target);
     ptr->cons_inst->args.v[0] = target;
     assert(tl_monotype_ptr_target(ptr) == target);
-}
-
-tl_monotype *tl_monotype_literal_target(tl_monotype *self) {
-    if (tl_monotype_is_type_literal(self)) return self->literal;
-    fatal("logic error");
 }
 
 tl_monotype *tl_monotype_arrow_args(tl_monotype *self) {
@@ -2022,12 +1960,6 @@ u64 tl_monotype_hash64_(tl_monotype *self, u32 gen, hashmap **in_progress) {
         hash = tl_monotype_sized_hash64_(hash, self->list.xs, gen, in_progress);
         if (tl_arrow == self->tag) hash = str_array_hash64(hash, self->list.fvs);
     } break;
-
-    case tl_literal: {
-        hash  = str_hash64_combine(hash, S("Literal"));
-        u64 h = tl_monotype_hash64_(self->literal, gen, in_progress);
-        hash  = hash64_combine(hash, &h, sizeof h);
-    } break;
     }
 
     // Cache result
@@ -2124,12 +2056,6 @@ str tl_monotype_to_string_(allocator *alloc, tl_monotype *self, hashmap **map) {
         }
         str_build_cat(&b, S(")"));
 
-    } break;
-
-    case tl_literal: {
-        str_build_cat(&b, S("(literal "));
-        str_build_cat(&b, tl_monotype_to_string_(alloc, self->literal, map));
-        str_build_cat(&b, S(")"));
     } break;
     }
 
@@ -2250,8 +2176,7 @@ int unify_type_constructor_union(tl_type_subs *subs, tl_monotype *left, tl_monot
 
     switch (right->tag) {
     case tl_integer:
-    case tl_placeholder:
-    case tl_literal:     return 1;
+    case tl_placeholder: return 1;
 
     case tl_any:
     case tl_ellipsis:    return 0;
@@ -2300,8 +2225,7 @@ int unify_type_constructor(tl_type_subs *subs, tl_monotype *left, tl_monotype *r
     switch (right->tag) {
     case tl_integer:     return !tl_monotype_is_integer_convertible(left);
 
-    case tl_placeholder:
-    case tl_literal:     return 1;
+    case tl_placeholder: return 1;
 
     case tl_any:
     case tl_ellipsis:    return 0;
@@ -2326,49 +2250,6 @@ int unify_type_constructor(tl_type_subs *subs, tl_monotype *left, tl_monotype *r
         return 1;
     }
     fatal("unreachable");
-}
-
-int unify_type_literal(tl_type_subs *subs, tl_monotype *left, tl_monotype *right, type_error_cb_fun cb,
-                       void *user, hashmap **seen) {
-    assert(tl_monotype_is_type_literal(left));
-
-    // A type literal starts life with a type variable target. It will unify with any other literal by
-    // unifying its targets. It will also unify with type variables. It will not unify with any other type.
-    // In particular, note that it does NOT unify with any or ellipsis.
-
-    if (tl_monotype_is_tv(left->literal)) {
-        switch (right->tag) {
-        case tl_literal:
-        case tl_var:
-        case tl_weak:
-            // handled below. E.g. (literal t0) :: (literal t1)
-            break;
-
-        case tl_integer:
-        case tl_placeholder:
-        case tl_any:
-        case tl_ellipsis:
-        case tl_cons_inst:
-        case tl_arrow:
-        case tl_tuple:       return tl_type_subs_unify_tv_mono(subs, left->literal->var, right, cb, user, seen);
-        }
-    }
-
-    switch (right->tag) {
-    case tl_literal:     return tl_type_subs_unify_mono(subs, left->literal, right->literal, cb, user, seen);
-
-    case tl_var:         return tl_type_subs_unify_tv_mono(subs, right->var, left, cb, user, seen);
-    case tl_weak:        return tl_type_subs_unify_weak(subs, right, left, cb, user, seen);
-
-    case tl_integer:
-    case tl_placeholder:
-    case tl_any:
-    case tl_ellipsis:
-    case tl_cons_inst:
-    case tl_arrow:
-    case tl_tuple:       return 1;
-    }
-    return 1;
 }
 
 int tl_type_subs_unify_mono(tl_type_subs *subs, tl_monotype *left, tl_monotype *right, type_error_cb_fun cb,
@@ -2398,16 +2279,13 @@ int tl_type_subs_unify_mono(tl_type_subs *subs, tl_monotype *left, tl_monotype *
     // float-convertible types always unify
     if (tl_monotype_is_float_convertible(left) && tl_monotype_is_float_convertible(right)) return 0;
 
-    if (tl_monotype_is_type_literal(left)) return unify_type_literal(subs, left, right, cb, user, seen);
-    if (tl_monotype_is_type_literal(right)) return unify_type_literal(subs, right, left, cb, user, seen);
     if (tl_monotype_is_inst(left)) return unify_type_constructor(subs, left, right, cb, user, seen);
     if (tl_monotype_is_inst(right)) return unify_type_constructor(subs, right, left, cb, user, seen);
 
     switch (left->tag) {
     case tl_placeholder:
     case tl_any:
-    case tl_ellipsis:
-    case tl_literal:     fatal("unreachable");
+    case tl_ellipsis:    fatal("unreachable");
 
     case tl_integer:     return !(tl_integer == right->tag && left->integer == right->integer);
 
@@ -2417,8 +2295,7 @@ int tl_type_subs_unify_mono(tl_type_subs *subs, tl_monotype *left, tl_monotype *
 
         case tl_placeholder:
         case tl_any:
-        case tl_ellipsis:
-        case tl_literal:     fatal("unreachable");
+        case tl_ellipsis:    fatal("unreachable");
 
         case tl_var:         return tl_type_subs_unity_tv_tv(subs, left->var, right->var, cb, user, seen);
         case tl_weak:        return tl_type_subs_unify_tv_weak(subs, left->var, right, cb, user, seen);
@@ -2436,8 +2313,7 @@ int tl_type_subs_unify_mono(tl_type_subs *subs, tl_monotype *left, tl_monotype *
 
         case tl_placeholder:
         case tl_any:
-        case tl_ellipsis:
-        case tl_literal:     fatal("unreachable");
+        case tl_ellipsis:    fatal("unreachable");
 
         case tl_var:         return tl_type_subs_unify_tv_weak(subs, right->var, left, cb, user, seen);
 
@@ -2459,8 +2335,7 @@ int tl_type_subs_unify_mono(tl_type_subs *subs, tl_monotype *left, tl_monotype *
 
         case tl_placeholder:
         case tl_any:
-        case tl_ellipsis:
-        case tl_literal:     fatal("unreachable");
+        case tl_ellipsis:    fatal("unreachable");
 
         case tl_var:         return tl_type_subs_unify_tv_mono(subs, right->var, left, cb, user, seen);
         case tl_weak:        return tl_type_subs_unify_weak(subs, right, left, cb, user, seen);
@@ -2481,8 +2356,7 @@ int tl_type_subs_unify_mono(tl_type_subs *subs, tl_monotype *left, tl_monotype *
 
         case tl_placeholder:
         case tl_any:
-        case tl_ellipsis:
-        case tl_literal:     fatal("unreachable");
+        case tl_ellipsis:    fatal("unreachable");
 
         case tl_var:         return tl_type_subs_unify_tv_mono(subs, right->var, left, cb, user, seen);
         case tl_weak:        return tl_type_subs_unify_weak(subs, right, left, cb, user, seen);
@@ -2564,10 +2438,6 @@ static int tl_type_subs_monotype_occurs_(tl_type_subs *self, tl_type_variable tv
         if (resolved) return tl_type_subs_monotype_occurs_(self, tv, resolved, seen);
 
     } break;
-
-    case tl_literal:
-        //
-        return tl_type_subs_monotype_occurs_(self, tv, mono->literal, seen);
 
     case tl_cons_inst:
     case tl_arrow:
@@ -2690,8 +2560,7 @@ int tl_type_subs_unify_tv_mono(tl_type_subs *self, tl_type_variable tv, tl_monot
     case tl_integer:
     case tl_cons_inst:
     case tl_arrow:
-    case tl_tuple:
-    case tl_literal:   {
+    case tl_tuple:     {
         // case 3: tv = concrete type or arrow or tuple
         tl_monotype *tv_type = self->data.v[tv_root].type;
         if (tv_type) {
@@ -2742,11 +2611,6 @@ static void tl_monotype_substitute_(allocator *alloc, tl_monotype *self, tl_type
         }
 
     } break;
-
-    case tl_literal:
-        //
-        tl_monotype_substitute_(alloc, self->literal, subs, exclude, gen);
-        break;
 
     case tl_cons_inst:
     case tl_arrow:

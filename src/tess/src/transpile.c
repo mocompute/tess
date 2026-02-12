@@ -126,7 +126,6 @@ static str   ptr_to_arrow_to_c(transpile *, tl_monotype *);
 static str   ptr_to_arrow_decl(transpile *, tl_monotype *, str);
 static void  generate_function_signature(transpile *, str, tl_polytype *, str_sized);
 static void  exit_error(char const *file, u32 line, char const *restrict fmt, ...);
-static str   type_literal_name(tl_monotype *type);
 static void  update_type(transpile *, tl_monotype **);
 
 // Escape Tess identifiers that clash with C reserved keywords by prefixing them with tl_kw_.
@@ -489,10 +488,6 @@ static str generate_expr_symbol(transpile *self, tl_monotype *type, str symbol_n
 
     if (tl_monotype_is_arrow(type)) name = mangle_fun(self, name);
 
-    if (tl_monotype_is_type_literal(type)) {
-        return str_init(self->transient, "0");
-    }
-
     // c_ prefixed symbols are always emitted literally
     if (is_c_symbol(name)) {
         return remove_c_prefix(self->transient, name);
@@ -852,11 +847,6 @@ static str generate_type_constructor(transpile *self, ast_node const *node, eval
     // divert if named arguments
     if (node->named_application.n_arguments && ast_node_is_assignment(node->named_application.arguments[0]))
         return generate_type_constructor_named(self, node, ctx);
-
-    // detect if type literal
-    if (tl_monotype_is_type_literal(node->type->type)) {
-        return str_init(self->transient, "0");
-    }
 
     str          name = ast_node_str(node->named_application.name);
     tl_monotype *type = env_lookup(self, name);
@@ -1905,30 +1895,6 @@ static str generate_continue(transpile *self, tl_monotype *type, ast_node const 
     return str_empty();
 }
 
-static str type_literal_name(tl_monotype *type) {
-    if (tl_monotype_is_type_literal(type)) {
-        tl_monotype *target = tl_monotype_literal_target(type);
-        if (tl_monotype_is_inst(target)) {
-            if (!str_is_empty(target->cons_inst->special_name)) return target->cons_inst->special_name;
-            return target->cons_inst->def->name;
-        }
-        return S("[not a type constructor]");
-    }
-    return S("[not a type literal]");
-}
-
-static str generate_type_literal(transpile *self, eval_ctx *ctx, tl_monotype *type) {
-    (void)ctx;
-
-    str res = next_res(self);
-    cat(self, S("int "));
-    cat(self, res);
-    cat(self, S(" = 0; /*Type literal: "));
-    cat(self, type_literal_name(type));
-    cat(self, S("*/;\n"));
-    return res;
-}
-
 static str generate_expr(transpile *self, tl_monotype *type, ast_node const *node, eval_ctx *ctx) {
     // This function is used to generate output to evaluate an expression with a given type, for example
     // for function arguments. If type is null, then the type is taken from the expression. The str
@@ -1948,11 +1914,6 @@ static str generate_expr(transpile *self, tl_monotype *type, ast_node const *nod
             ctx->last_line_directive = line;
             cat(self, line);
         }
-    }
-
-    // if type is a type literal, generate it
-    if (tl_monotype_is_type_literal(type)) {
-        return generate_type_literal(self, ctx, type);
     }
 
     switch (node->tag) {
@@ -2134,10 +2095,6 @@ static void generate_decl(transpile *self, str name, tl_monotype *type) {
         cat_sp(self);
         cat(self, name);
         cat_semicolonln(self);
-    }
-
-    else if (tl_monotype_is_type_literal(type)) {
-        generate_decl(self, name, tl_monotype_literal_target(type));
     }
 
     else if (tl_monotype_is_tv(type)) {
@@ -2566,8 +2523,6 @@ static str type_to_c(transpile *self, tl_polytype *type) {
     else if (tl_monotype_is_tuple(mono)) {
         str struct_name = make_struct_name(self->transient, mono, null);
         return struct_name;
-    } else if (tl_monotype_is_type_literal(mono)) {
-        return str_cat_3(self->transient, S("/*Type literal: "), type_literal_name(mono), S("*/int"));
     } else if (tl_monotype_is_any(mono)) {
         return S("/*any*/void");
     } else if (tl_monotype_is_tv(mono)) {
@@ -2735,15 +2690,15 @@ static str tl_sizeof(transpile *self, ast_node const *node, eval_ctx *ctx, void 
         ast_node const *type_arg = node->named_application.type_arguments[0];
         tl_monotype    *type     = null;
 
-        // The type argument has been processed by inference; its type should be a type literal.
-        if (type_arg->type && tl_monotype_is_type_literal(type_arg->type->type)) {
-            type = tl_monotype_literal_target(type_arg->type->type);
+        // The type argument has been processed by inference
+        if (type_arg->type) {
+            type = type_arg->type->type;
         } else if (ast_node_is_nfa(type_arg)) {
             type = tl_type_registry_parse_type(self->registry, type_arg);
         } else if (ast_node_is_symbol(type_arg)) {
             tl_polytype *poly = tl_type_env_lookup(self->env, ast_node_str(type_arg));
-            if (poly && tl_monotype_is_type_literal(poly->type)) {
-                type = tl_monotype_literal_target(poly->type);
+            if (poly) {
+                type = poly->type;
             }
         }
         if (!type) fatal("sizeof: could not resolve type argument");
@@ -2756,25 +2711,11 @@ static str tl_sizeof(transpile *self, ast_node const *node, eval_ctx *ctx, void 
     if (1 != node->named_application.n_arguments) fatal("wrong number of arguments");
     ast_node const *arg = node->named_application.arguments[0];
 
-    // Note: The environment contains the most current type for a symbol argument.
-    tl_polytype *poly = arg->type;
-    if (ast_node_is_symbol(arg)) poly = tl_type_env_lookup(self->env, ast_node_str(arg));
+    // // Note: The environment contains the most current type for a symbol argument.
+    // tl_polytype *poly = arg->type;
+    // if (ast_node_is_symbol(arg)) poly = tl_type_env_lookup(self->env, ast_node_str(arg));
 
-    if (tl_monotype_is_type_literal(poly->type)) {
-        // type literal
-
-        tl_monotype *type = tl_monotype_literal_target(poly->type);
-
-        // if type is undetermined, look up in environment
-        // if (!type || !tl_monotype_is_concrete(self->transient, type)) {
-        //     type = env_lookup(self, ast_node_str(arg));
-        // }
-
-        update_type(self, &type);
-        str ctype = type_to_c_mono(self, type);
-        return str_cat_3(self->transient, S("sizeof("), ctype, S(")"));
-
-    } else if (ast_node_is_nfa(arg)) {
+    if (ast_node_is_nfa(arg)) {
         // type constructor
         tl_monotype *type = tl_type_registry_parse_type(self->registry, arg);
         if (!type) fatal("missing type");
@@ -2803,14 +2744,14 @@ static str tl_alignof(transpile *self, ast_node const *node, eval_ctx *ctx, void
         ast_node const *type_arg = node->named_application.type_arguments[0];
         tl_monotype    *type     = null;
 
-        if (type_arg->type && tl_monotype_is_type_literal(type_arg->type->type)) {
-            type = tl_monotype_literal_target(type_arg->type->type);
+        if (type_arg->type) {
+            type = type_arg->type->type;
         } else if (ast_node_is_nfa(type_arg)) {
             type = tl_type_registry_parse_type(self->registry, type_arg);
         } else if (ast_node_is_symbol(type_arg)) {
             tl_polytype *poly = tl_type_env_lookup(self->env, ast_node_str(type_arg));
-            if (poly && tl_monotype_is_type_literal(poly->type)) {
-                type = tl_monotype_literal_target(poly->type);
+            if (poly) {
+                type = poly->type;
             }
         }
         if (!type) fatal("alignof: could not resolve type argument");
@@ -2827,14 +2768,7 @@ static str tl_alignof(transpile *self, ast_node const *node, eval_ctx *ctx, void
     if (ast_node_is_symbol(arg) && !tl_polytype_is_concrete(poly))
         poly = tl_type_env_lookup(self->env, ast_node_str(arg));
 
-    if (tl_monotype_is_type_literal(poly->type)) {
-        // type literal
-        tl_monotype *type = tl_monotype_literal_target(poly->type);
-        update_type(self, &type);
-        str ctype = type_to_c_mono(self, type);
-        return str_cat_3(self->transient, S("_Alignof("), ctype, S(")"));
-
-    } else if (ast_node_is_nfa(arg)) {
+    if (ast_node_is_nfa(arg)) {
         // type constructor
         tl_monotype *type = tl_type_registry_parse_type(self->registry, arg);
         if (!type) fatal("missing type");
