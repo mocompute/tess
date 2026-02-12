@@ -595,27 +595,37 @@ static void traverse_ctx_load_type_arguments(tl_infer *self, traverse_ctx *ctx, 
             ast_node *type_param = node->let.type_parameters[i];
             assert(ast_node_is_symbol(type_param));
 
-            // If the type parameter already has a concrete type (set by concretize_params during
-            // specialization), use that instead of creating a fresh type variable.
-            if (type_param->type && tl_polytype_is_concrete(type_param->type)) {
+            // If the type parameter already has a type (set by concretize_params during
+            // specialization, or by a previous traversal), use that instead of creating a fresh
+            // type variable.
+            if (type_param->type) {
                 tl_monotype *mono = type_param->type->type;
 #if DEBUG_EXPLICIT_TYPE_ARGS
                 str mono_str = tl_monotype_to_string(self->transient, mono);
-                fprintf(stderr, "[DEBUG LOAD TYPE ARGS] type_param '%s' has concrete type: %s\n",
-                        str_cstr(&type_param->symbol.name), str_cstr(&mono_str));
+                fprintf(stderr, "[DEBUG LOAD TYPE ARGS] '%s' type_param '%s' has existing type: %s\n",
+                        str_cstr(&node->let.name->symbol.name), str_cstr(&type_param->symbol.name),
+                        str_cstr(&mono_str));
 #endif
                 // Wrap in a type literal for the type_arguments map
                 tl_monotype *literal = tl_monotype_create_literal(self->arena, mono);
                 tl_type_registry_add_type_argument(self->registry, type_param->symbol.name, literal,
                                                    &ctx->type_arguments);
+                assert(str_map_contains(ctx->type_arguments, type_param->symbol.name));
+
             } else {
+
 #if DEBUG_EXPLICIT_TYPE_ARGS
-                fprintf(stderr,
-                        "[DEBUG LOAD TYPE ARGS] type_param '%s' has NO concrete type, creating fresh\n",
-                        str_cstr(&type_param->symbol.name));
+                fprintf(
+                  stderr,
+                  "[DEBUG LOAD TYPE ARGS] '%s' type_param '%s' has NO existing type, creating fresh\n",
+                  str_cstr(&node->let.name->symbol.name), str_cstr(&type_param->symbol.name));
 #endif
-                tl_type_registry_add_fresh_type_argument(self->registry, type_param->symbol.name,
-                                                         &ctx->type_arguments);
+                tl_monotype *mono = tl_type_registry_add_fresh_type_argument(
+                  self->registry, type_param->symbol.name, &ctx->type_arguments);
+
+                ast_node_type_set(type_param, tl_polytype_absorb_mono(self->arena, mono));
+
+                assert(str_map_contains(ctx->type_arguments, type_param->symbol.name));
             }
         }
     }
@@ -638,6 +648,7 @@ static int traverse_ctx_assign_type_arguments(tl_infer *self, traverse_ctx *ctx,
         fprintf(stderr, "[DEBUG EXPLICIT TYPE ARGS] traverse_ctx_assign_type_arguments:\n");
         fprintf(stderr, "  callee: %s\n", str_cstr(&name));
         fprintf(stderr, "  n_type_arguments: %u, n_type_parameters: %u\n", argc, paramc);
+        fprintf(stderr, "  type_arguments contains: %i\n", str_map_contains(ctx->type_arguments, name));
 #endif
 
         tl_type_registry_parse_type_ctx parse_ctx;
@@ -650,6 +661,8 @@ static int traverse_ctx_assign_type_arguments(tl_infer *self, traverse_ctx *ctx,
             if (ast_node_is_symbol(type_arg_node)) {
                 str n = type_arg_node->symbol.name;
                 fprintf(stderr, " name='%s'", str_cstr(&n));
+                fprintf(stderr, " type_arguments contains: %i", str_map_contains(ctx->type_arguments, n));
+
             } else if (ast_node_is_nfa(type_arg_node)) {
                 str n = ast_node_str(type_arg_node->named_application.name);
                 fprintf(stderr, " nfa='%s' n_type_args=%u", str_cstr(&n),
@@ -669,7 +682,7 @@ static int traverse_ctx_assign_type_arguments(tl_infer *self, traverse_ctx *ctx,
             // argument AST nodes (e.g., sizeof[T]() and alignof[T]() both reference the same T).
             // We don't require the type to be concrete - type variables are valid and will be
             // unified later.
-            if (type_arg_node->type) {
+            if (type_arg_node->type) { // Re-enabled: use existing type on node
                 parsed = type_arg_node->type->type;
                 // Unwrap type literal if present
                 if (tl_monotype_is_type_literal(parsed)) {
@@ -705,16 +718,17 @@ static int traverse_ctx_assign_type_arguments(tl_infer *self, traverse_ctx *ctx,
                 }
             }
 
-            // wrap in type literal
-            tl_monotype *literal = tl_monotype_create_literal(self->arena, parsed);
+            // wrap in type literal (unwrap first to avoid double-wrapping)
+            tl_monotype *literal = tl_monotype_create_literal(self->arena, unwrap_type_literal(parsed));
 
             // If the callee has a matching type parameter, add to the type argument context
             if (i < paramc) {
                 assert(ast_node_is_symbol(let->let.type_parameters[i]));
-                // Use the original name if available, so the key matches what concretize_params expects.
-                str orig_name = let->let.type_parameters[i]->symbol.original;
-                str param_name =
-                  str_is_empty(orig_name) ? let->let.type_parameters[i]->symbol.name : orig_name;
+                // Always use the alpha-converted name, not the original, because the type
+                // environment relies on alpha conversion to prevent pollution between generic
+                // and specialized phases.
+                str param_name = let->let.type_parameters[i]->symbol.name;
+
 #if DEBUG_EXPLICIT_TYPE_ARGS
                 str literal_str = tl_monotype_to_string(self->transient, literal);
                 fprintf(stderr, "  mapping type param '%s' -> %s\n", str_cstr(&param_name),
@@ -722,6 +736,7 @@ static int traverse_ctx_assign_type_arguments(tl_infer *self, traverse_ctx *ctx,
 #endif
                 tl_type_registry_add_type_argument(self->registry, param_name, literal,
                                                    &ctx->type_arguments);
+                assert(str_map_contains(ctx->type_arguments, param_name));
             }
 
             // Set type on the type argument AST node for the transpiler.
@@ -729,6 +744,7 @@ static int traverse_ctx_assign_type_arguments(tl_infer *self, traverse_ctx *ctx,
                               tl_polytype_absorb_mono(self->arena, literal));
         }
     }
+
     return 0;
 }
 
@@ -891,7 +907,8 @@ static int process_annotation(tl_infer *self, traverse_ctx *ctx, ast_node *node,
             str_array arr = str_map_keys(self->transient, result.type_arguments);
             forall(i, arr) {
 #if DEBUG_RESOLVE
-                dbg(self, "resolve_node: adding type argument to lexicals: '%s'", str_cstr(&arr.v[i]));
+                fprintf(stderr, "resolve_node: adding type argument to lexicals: '%s'\n",
+                        str_cstr(&arr.v[i]));
 #endif
                 str_hset_insert(&ctx->lexical_names, arr.v[i]);
             }
@@ -907,13 +924,18 @@ static int process_annotation(tl_infer *self, traverse_ctx *ctx, ast_node *node,
         // FIXME explicit type args: do we need this secondary lookup? Doesn't seem to fix any of the
         // failing tests, though.
 
-        // if (!found && ctx) found = str_map_get_ptr(ctx->type_arguments, name);
+        if (!found && ctx) found = str_map_get_ptr(ctx->type_arguments, name);
         if (found) mono = found;
     }
 
-    // Wrap in literal if needed
+    // Wrap in literal if needed, or unwrap if not
     if (opts.wrap_in_literal) {
         mono = tl_monotype_create_literal(self->arena, mono);
+    } else {
+        // For value annotations (not type arguments), unwrap any literal wrapper.
+        // Type arguments stored in ctx->type_arguments are wrapped in literals,
+        // but when used to annotate a value parameter, we need the underlying type.
+        mono = unwrap_type_literal(mono);
     }
 
     // Set annotation_type field of symbol nodes
@@ -929,10 +951,18 @@ static int process_annotation(tl_infer *self, traverse_ctx *ctx, ast_node *node,
 #if DEBUG_RESOLVE
     str node_str = v2_ast_node_to_string(self->transient, node);
     str mono_str = tl_monotype_to_string(self->transient, mono);
-    dbg(self, "process_annotation %s : %s", str_cstr(&node_str), str_cstr(&mono_str));
+    fprintf(stderr, "process_annotation %s : %s\n", str_cstr(&node_str), str_cstr(&mono_str));
 #endif
 
-    if (constrain_or_set(self, node, poly)) return -1;
+    if (constrain_or_set(self, node, poly)) {
+#if DEBUG_RESOLVE
+        str node_str = v2_ast_node_to_string(self->transient, node);
+        str poly_str = tl_polytype_to_string(self->transient, poly);
+        fprintf(stderr, "[DEBUG process_annotation] ERROR: constrain_or_set failed for %s : %s\n",
+                str_cstr(&node_str), str_cstr(&poly_str));
+#endif
+        return -1;
+    }
 
     return 1;
 }
@@ -2178,15 +2208,15 @@ static int constrain_or_set(tl_infer *self, ast_node *node, tl_polytype *type) {
     if (node->type) {
 #if DEBUG_RESOLVE
         str node_type_str = tl_polytype_to_string(self->transient, node->type);
-        dbg(self, "constrain_or_set: '%s' : %s :: %s", str_cstr(&name), str_cstr(&node_type_str),
-            str_cstr(&poly_str));
+        fprintf(stderr, "constrain_or_set: '%s' : %s :: %s\n", str_cstr(&name), str_cstr(&node_type_str),
+                str_cstr(&poly_str));
 #endif
         if (constrain(self, node->type, type, node)) return type_error(self, node);
     }
 
     else {
 #if DEBUG_RESOLVE
-        dbg(self, "constrain_or_set: '%s': %s", str_cstr(&name), str_cstr(&poly_str));
+        fprintf(stderr, "constrain_or_set: '%s': %s\n", str_cstr(&name), str_cstr(&poly_str));
 #endif
         ast_node_type_set(node, type);
     }
@@ -2403,14 +2433,40 @@ static int resolve_node(tl_infer *self, ast_node *node, traverse_ctx *ctx, node_
 
     case npos_toplevel:
     case npos_formal_parameter:
-        if (!ast_node_is_symbol(node)) return expected_symbol(self, node);
+        if (!ast_node_is_symbol(node)) {
+#if DEBUG_RESOLVE
+            fprintf(stderr, "[DEBUG resolve_node] ERROR: npos_toplevel/formal_parameter expected symbol\n");
+#endif
+            return expected_symbol(self, node);
+        }
 
-        if (process_annotation(self, ctx, node,
-                               (annotation_opts){
-                                 .add_to_lexicals = 1, // Add type args (e.g., T in `x: T`) to lexical_names
-                                 .check_type_arg_self = 1, // Handle self-referential type args
-                               }) < 0)
-            return 1;
+        {
+            int res = process_annotation(
+              self, ctx, node,
+              (annotation_opts){
+                .add_to_lexicals     = 1, // Add type args (e.g., T in `x: T`) to lexical_names
+                .check_type_arg_self = 1, // Handle self-referential type args
+              });
+            if (res < 0) {
+#if DEBUG_RESOLVE
+                str name = ast_node_is_symbol(node) ? node->symbol.name : S("<non-symbol>");
+                fprintf(stderr,
+                        "[DEBUG resolve_node] ERROR: npos_toplevel/formal_parameter process_annotation "
+                        "failed for '%s'\n",
+                        str_cstr(&name));
+#endif
+                return 1;
+            }
+
+            // For formal parameters, unwrap any type literal wrapper from the annotation.
+            // Type literals are used when passing types as type arguments (e.g., sizeof[T]()),
+            // but value parameters should have the underlying type, not the literal wrapper.
+            if (node->symbol.annotation_type &&
+                tl_monotype_is_type_literal(node->symbol.annotation_type->type)) {
+                tl_monotype *unwrapped       = unwrap_type_literal(node->symbol.annotation_type->type);
+                node->symbol.annotation_type = tl_polytype_absorb_mono(self->arena, unwrapped);
+            }
+        }
 
         if (ctx) {
             // Add the symbol's own name to lexical_names (distinct from type args added above)
@@ -2432,7 +2488,16 @@ static int resolve_node(tl_infer *self, ast_node *node, traverse_ctx *ctx, node_
 
             // Try to parse as type literal; if successful, wrap in tl_literal
             int res = process_annotation(self, ctx, node, (annotation_opts){.wrap_in_literal = 1});
-            if (res < 0) return 1;
+            if (res < 0) {
+#if DEBUG_RESOLVE
+                str name = ast_node_is_symbol(node) ? node->symbol.name : S("<nfa>");
+                fprintf(
+                  stderr,
+                  "[DEBUG resolve_node] ERROR: npos_function_argument process_annotation failed for '%s'\n",
+                  str_cstr(&name));
+#endif
+                return 1;
+            }
             if (res == 0) {
                 // Not a type literal: ensure fresh type variable and update environment
                 sync_with_env(self, ctx, node, 1);
@@ -2443,7 +2508,12 @@ static int resolve_node(tl_infer *self, ast_node *node, traverse_ctx *ctx, node_
         break;
 
     case npos_assign_lhs:
-        if (reject_type_literal(self, node)) return 1;
+        if (reject_type_literal(self, node)) {
+#if DEBUG_RESOLVE
+            fprintf(stderr, "[DEBUG resolve_node] ERROR: npos_assign_lhs reject_type_literal\n");
+#endif
+            return 1;
+        }
         if (ast_node_is_binary_op_struct_access(node)) return infer_struct_access(self, node);
 
         // Support annotations on lhs of field name assignments
@@ -2451,13 +2521,25 @@ static int resolve_node(tl_infer *self, ast_node *node, traverse_ctx *ctx, node_
             if (!ctx) fatal("logic error");
             // No special opts - just parse the annotation if present, which mutates the ctx
             int res = process_annotation(self, ctx, node, (annotation_opts){0});
-            if (res < 0) return 1;
+            if (res < 0) {
+#if DEBUG_RESOLVE
+                fprintf(stderr,
+                        "[DEBUG resolve_node] ERROR: npos_assign_lhs process_annotation failed for '%s'\n",
+                        str_cstr(&node->symbol.name));
+#endif
+                return 1;
+            }
             ensure_tv(self, &node->type);
         }
         break;
 
     case npos_reassign_lhs:
-        if (reject_type_literal(self, node)) return 1;
+        if (reject_type_literal(self, node)) {
+#if DEBUG_RESOLVE
+            fprintf(stderr, "[DEBUG resolve_node] ERROR: npos_reassign_lhs reject_type_literal\n");
+#endif
+            return 1;
+        }
         if (ast_node_is_binary_op_struct_access(node)) return infer_struct_access(self, node);
 
         // Take symbol's existing type: this ensures let-in symbols retain their type info through
@@ -2467,7 +2549,12 @@ static int resolve_node(tl_infer *self, ast_node *node, traverse_ctx *ctx, node_
 
     case npos_field_name:
         if (ast_node_is_binary_op_struct_access(node)) return infer_struct_access(self, node);
-        if (reject_type_literal(self, node)) return 1;
+        if (reject_type_literal(self, node)) {
+#if DEBUG_RESOLVE
+            fprintf(stderr, "[DEBUG resolve_node] ERROR: npos_field_name reject_type_literal\n");
+#endif
+            return 1;
+        }
 
         // assign a fresh type variable to field name, because we can't know its generic instantiated type
         ensure_tv(self, &node->type);
@@ -2482,14 +2569,26 @@ static int resolve_node(tl_infer *self, ast_node *node, traverse_ctx *ctx, node_
 
         // Try to parse as type literal; if successful, wrap in tl_literal
         int res = process_annotation(self, ctx, node, (annotation_opts){.wrap_in_literal = 1});
-        if (res < 0) return 1;
+        if (res < 0) {
+#if DEBUG_RESOLVE
+            str name = ast_node_is_symbol(node) ? node->symbol.name : S("<non-symbol>");
+            fprintf(stderr, "[DEBUG resolve_node] ERROR: npos_operand process_annotation failed for '%s'\n",
+                    str_cstr(&name));
+#endif
+            return 1;
+        }
 
         // always sync with environment
         sync_with_env(self, ctx, node, 0);
     } break;
 
     case npos_value_rhs:
-        if (reject_type_literal(self, node)) return 1;
+        if (reject_type_literal(self, node)) {
+#if DEBUG_RESOLVE
+            fprintf(stderr, "[DEBUG resolve_node] ERROR: npos_value_rhs reject_type_literal\n");
+#endif
+            return 1;
+        }
 
         maybe_handle_null(self, node);
 
@@ -2503,7 +2602,7 @@ static int resolve_node(tl_infer *self, ast_node *node, traverse_ctx *ctx, node_
         str name = ast_node_str(node);
         str tmp  = tl_polytype_to_string(self->transient, node->type);
 
-        dbg(self, "resolve_node '%s' : %s", str_cstr(&name), str_cstr(&tmp));
+        fprintf(stderr, "resolve_node '%s' : %s\n", str_cstr(&name), str_cstr(&tmp));
     }
 
     str node_str = v2_ast_node_to_string(self->transient, node);
@@ -2680,7 +2779,7 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
 
 #if DEBUG_RESOLVE
     str node_str = v2_ast_node_to_string(self->transient, node);
-    dbg(self, "infer_traverse_cb: %s:  %s", ast_tag_to_string(node->tag), str_cstr(&node_str));
+    fprintf(stderr, "infer_traverse_cb: %s:  %s\n", ast_tag_to_string(node->tag), str_cstr(&node_str));
 #endif
 
     switch (node->tag) {
@@ -3532,11 +3631,39 @@ static void rename_one_function_param(tl_infer *self, ast_node *param, rename_va
 
     } else if (ast_node_is_symbol(param)) {
 
-        str name   = param->symbol.name;
-        str newvar = next_variable_name(self, name);
-        ast_node_name_replace(param, newvar);
-        str_map_set(&ctx->lex, name, &newvar);
-        rename_variables(self, param, ctx, level + 1);
+        ast_node_type_set(param, null);
+
+        str *found;
+
+        if ((found = str_map_get(ctx->lex, param->symbol.name))) {
+            ast_node_name_replace(param, *found);
+#if DEBUG_RENAME
+            fprintf(stderr, "rename %.*s => %.*s\n", str_ilen(param->symbol.original),
+                    str_buf(&param->symbol.original), str_ilen(param->symbol.name),
+                    str_buf(&param->symbol.name));
+#endif
+        } else if (param->symbol.is_mangled && (found = str_map_get(ctx->lex, param->symbol.original))) {
+            // name was mangled because it conflicts with a toplevel name. But lexical rename is meant
+            // to take precedence over mangling to match toplevel names.
+            ast_node_name_replace(param, *found);
+#if DEBUG_RENAME
+            fprintf(stderr, "rename mangled %.*s => %.*s\n", str_ilen(param->symbol.original),
+                    str_buf(&param->symbol.original), str_ilen(param->symbol.name),
+                    str_buf(&param->symbol.name));
+#endif
+        } else {
+            // a param or type argument seen for the first time: add renamed var to lexical scope
+
+            str name   = param->symbol.name;
+            str newvar = next_variable_name(self, name);
+            ast_node_name_replace(param, newvar);
+            str_map_set(&ctx->lex, name, &newvar);
+            rename_variables(self, param, ctx, level + 1);
+
+#if DEBUG_RENAME
+            fprintf(stderr, "rename new %s => %s\n", str_cstr(&name), str_cstr(&newvar));
+#endif
+        }
     }
 }
 
@@ -3869,18 +3996,16 @@ static void concretize_params(tl_infer *self, ast_node *node, tl_monotype *calls
             ast_node *type_param = node->let.type_parameters[i];
             assert(ast_node_is_symbol(type_param));
 
-            // Use the original name (before rename_variables) to look up in type_arguments,
-            // since the caller's context uses the original name.
-            str          orig_name  = type_param->symbol.original;
-            str          param_name = str_is_empty(orig_name) ? type_param->symbol.name : orig_name;
+            // Always use the alpha-converted name, not the original, because the type
+            // environment relies on alpha conversion to prevent pollution between generic
+            // and specialized phases.
+            str          param_name = type_param->symbol.name;
             tl_monotype *bound_type = str_map_get_ptr(type_arguments, param_name);
 
 #if DEBUG_EXPLICIT_TYPE_ARGS
             fprintf(stderr,
-                    "[DEBUG CONCRETIZE TYPE PARAMS] type_param[%u]: name='%s', orig='%s', lookup='%s', "
-                    "bound=%p\n",
-                    i, str_cstr(&type_param->symbol.name), str_cstr(&orig_name), str_cstr(&param_name),
-                    (void *)bound_type);
+                    "[DEBUG CONCRETIZE TYPE PARAMS] type_param[%u]: name='%s', bound=%p\n",
+                    i, str_cstr(&param_name), (void *)bound_type);
 #endif
 
             if (bound_type) {
