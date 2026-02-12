@@ -787,6 +787,24 @@ static int traverse_ctx_assign_type_arguments(tl_infer *self, traverse_ctx *ctx,
                 if (specialized && tl_monotype_is_inst_specialized(specialized->type)) {
                     parsed = specialized->type;
                 }
+
+#if DEBUG_INVARIANTS
+                // Invariant: Type constructor instances in explicit type arguments must be specialized
+                // After attempting specialization, verify the result is properly specialized.
+                // If parsed is still an unspecialized type constructor instance, specialization failed.
+                if (tl_monotype_is_inst(parsed) && !tl_monotype_is_inst_specialized(parsed)) {
+                    char detail[256];
+                    str  type_str = tl_monotype_to_string(self->transient, parsed);
+                    str  callee   = ast_node_str(node->named_application.name);
+                    snprintf(detail, sizeof detail,
+                             "Type argument %u '%s' in call to '%.*s' was not specialized", i,
+                             str_cstr(&type_str), str_ilen(callee), str_buf(&callee));
+                    report_invariant_failure(self, "traverse_ctx_assign_type_arguments",
+                                             "Type constructor instances in explicit type args must be "
+                                             "specialized",
+                                             detail, (ast_node *)node);
+                }
+#endif
             }
 
             // If the callee has a matching type parameter, add to the type argument context
