@@ -3,6 +3,7 @@
 #include "array.h"
 #include "ast_tags.h"
 #include "error.h"
+#include "hash.h"
 #include "parser.h"
 #include "str.h"
 #include "type.h"
@@ -69,6 +70,7 @@ struct tl_infer {
 typedef struct {
     u64 name_hash;
     u64 type_hash;
+    u64 type_args_hash;
 } name_and_type;
 
 typedef enum {
@@ -603,9 +605,15 @@ static void traverse_ctx_load_type_arguments(tl_infer *self, traverse_ctx *ctx, 
                         str_cstr(&node->let.name->symbol.name), str_cstr(&type_param->symbol.name),
                         str_cstr(&mono_str));
 #endif
-                tl_type_registry_add_type_argument(self->registry, type_param->symbol.name, mono,
-                                                   &ctx->type_arguments);
-                assert(str_map_contains(ctx->type_arguments, type_param->symbol.name));
+                str param_name = type_param->symbol.name;
+
+                tl_type_registry_add_type_argument(self->registry, param_name, mono, &ctx->type_arguments);
+                assert(str_map_contains(ctx->type_arguments, param_name));
+
+                // param names are alpha converted, and we use the environment to ensure constraints are
+                // fully propagated
+                tl_polytype *poly = tl_polytype_absorb_mono(self->arena, mono);
+                env_insert_constrain(self, param_name, poly, type_param);
 
             } else {
 
@@ -632,11 +640,14 @@ static str specialize_type_constructor(tl_infer *self, str name, tl_monotype_siz
 
 static int traverse_ctx_assign_type_arguments(tl_infer *self, traverse_ctx *ctx, ast_node const *node) {
     if (ast_node_is_nfa(node)) {
+        if (!node->named_application.is_specialized) return 0;
+
         u32 argc = node->named_application.n_type_arguments;
         if (argc == 0) return 0;
+        ast_node **argv   = node->named_application.type_arguments;
 
-        ast_node *let    = toplevel_get(self, ast_node_str(node->named_application.name));
-        u32       paramc = (let && ast_node_is_let(let)) ? let->let.n_type_parameters : 0;
+        ast_node  *let    = toplevel_get(self, ast_node_str(node->named_application.name));
+        u32        paramc = (let && ast_node_is_let(let)) ? let->let.n_type_parameters : 0;
 
 #if DEBUG_EXPLICIT_TYPE_ARGS
         str name = ast_node_str(node->named_application.name);
@@ -650,7 +661,8 @@ static int traverse_ctx_assign_type_arguments(tl_infer *self, traverse_ctx *ctx,
         tl_type_registry_parse_type_ctx_init(self->transient, &parse_ctx, ctx->type_arguments);
 
         for (u32 i = 0; i < argc; i++) {
-            ast_node *type_arg_node = node->named_application.type_arguments[i];
+            ast_node *type_arg_node = argv[i];
+
 #if DEBUG_EXPLICIT_TYPE_ARGS
             fprintf(stderr, "  type_arg[%u] AST tag=%d", i, type_arg_node->tag);
             if (ast_node_is_symbol(type_arg_node)) {
@@ -725,6 +737,12 @@ static int traverse_ctx_assign_type_arguments(tl_infer *self, traverse_ctx *ctx,
 #endif
                 tl_type_registry_add_type_argument(self->registry, param_name, parsed,
                                                    &ctx->type_arguments);
+
+                // param names are alpha converted, and we use the environment to ensure constraints are
+                // fully propagated
+                tl_polytype *poly = tl_polytype_absorb_mono(self->arena, parsed);
+                env_insert_constrain(self, param_name, poly, argv[i]);
+
                 assert(str_map_contains(ctx->type_arguments, param_name));
             }
 
@@ -2792,20 +2810,41 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
     return 0;
 }
 
-static name_and_type make_instance_key(str generic_name, tl_monotype *arrow) {
-    return (name_and_type){.name_hash = str_hash64(generic_name), .type_hash = tl_monotype_hash64(arrow)};
+static name_and_type make_instance_key(tl_infer *self, str generic_name, tl_monotype *arrow,
+                                       ast_node_sized type_arguments) {
+
+    // TODO: we shouldn't make a new one every time this is called.
+    tl_type_registry_parse_type_ctx parse_ctx;
+    tl_type_registry_parse_type_ctx_init(self->transient, &parse_ctx, null);
+
+    tl_monotype_sized type_arg_types = {
+      .size = type_arguments.size,
+      .v    = alloc_malloc(self->transient, type_arguments.size * sizeof(tl_monotype *)),
+    };
+
+    forall(i, type_arguments) {
+        ast_node *type_arg  = type_arguments.v[i];
+        type_arg_types.v[i] = tl_type_registry_parse_type_with_ctx(self->registry, type_arg, &parse_ctx);
+    }
+
+    return (name_and_type){
+      .name_hash      = str_hash64(generic_name),
+      .type_hash      = tl_monotype_hash64(arrow),
+      .type_args_hash = tl_monotype_sized_hash64(hash64("args", 4), type_arg_types),
+    };
 }
 
 static str *instance_lookup(tl_infer *self, name_and_type *key) {
     return map_get(self->instances, key, sizeof *key);
 }
 
-static str *instance_lookup_arrow(tl_infer *self, str generic_name, tl_monotype *arrow) {
+static str *instance_lookup_arrow(tl_infer *self, str generic_name, tl_monotype *arrow,
+                                  ast_node_sized type_arguments) {
     if (!tl_monotype_is_concrete(arrow)) return null;
 
     // de-duplicate instances: hashes give us structural equality (barring hash collisions), which we need
     // because types are frequently cloned.
-    name_and_type key = make_instance_key(generic_name, arrow);
+    name_and_type key = make_instance_key(self, generic_name, arrow, type_arguments);
     return instance_lookup(self, &key);
 }
 
@@ -2890,7 +2929,7 @@ static str specialize_type_constructor_(tl_infer *self, str name, tl_monotype_si
     }
     if (!tl_monotype_is_inst(inst_ctx.specialized)) fatal("runtime error");
 
-    name_and_type key      = make_instance_key(name, inst_ctx.specialized);
+    name_and_type key      = make_instance_key(self, name, inst_ctx.specialized, (ast_node_sized){0});
     str          *existing = instance_lookup(self, &key);
     if (existing) {
         tl_polytype *poly = tl_type_env_lookup(self->env, *existing);
@@ -2932,6 +2971,7 @@ static str specialize_type_constructor_(tl_infer *self, str name, tl_monotype_si
     array_push(self->synthesized_nodes, utd);
 
     assert(tl_monotype_is_inst_specialized(utd->type->type));
+    tl_polytype *save_type = utd->type;
     if (out_type) *out_type = utd->type; // Note: this helps the transpiler
 
 #if DEBUG_EXPLICIT_TYPE_ARGS
@@ -2945,6 +2985,16 @@ static str specialize_type_constructor_(tl_infer *self, str name, tl_monotype_si
     array_free(recur_refs);
 
     tl_type_registry_specialize_commit(self->registry, inst_ctx);
+
+    // rename variables: also erases type information
+    {
+        rename_variables_ctx ctx = {.lex = map_new(self->transient, str, str, 16)};
+        rename_variables(self, utd, &ctx, 0);
+
+        // restore type, for the transpiler
+        utd->type = save_type;
+    }
+
     return name_inst;
 
 cancel:
@@ -3147,13 +3197,14 @@ static int post_specialize(tl_infer *self, traverse_ctx *traverse_ctx, ast_node 
 
 static void add_free_variables_to_arrow(tl_infer *self, ast_node *node, tl_polytype *arrow);
 
-static str  specialize_arrow(tl_infer *self, traverse_ctx *traverse_ctx, str name, tl_monotype *arrow) {
+static str  specialize_arrow(tl_infer *self, traverse_ctx *traverse_ctx, str name, tl_monotype *arrow,
+                             ast_node_sized callsite_type_arguments) {
 
     // 1. Check if already specialized
     if (instance_name_exists(self, name)) return name;
 
     // 2. Check cache for this name+type combination
-    str *found = instance_lookup_arrow(self, name, arrow);
+    str *found = instance_lookup_arrow(self, name, arrow, callsite_type_arguments);
     if (found) return *found;
 
     // 2a. Check that name is valid
@@ -3161,7 +3212,7 @@ static str  specialize_arrow(tl_infer *self, traverse_ctx *traverse_ctx, str nam
     if (!toplevel) return str_empty();
 
     // 3. Create unique instance name(e.g., "identity_0")
-    name_and_type key       = make_instance_key(name, arrow);
+    name_and_type key       = make_instance_key(self, name, arrow, callsite_type_arguments);
     str           inst_name = next_instantiation(self, name);
     instance_add(self, &key, inst_name);
 
@@ -3182,10 +3233,11 @@ static str  specialize_arrow(tl_infer *self, traverse_ctx *traverse_ctx, str nam
 }
 
 static int specialize_arrow_with_name(tl_infer *self, traverse_ctx *traverse_ctx, ast_node *fun_name_node,
-                                      tl_monotype *callsite) {
+                                      tl_monotype *callsite, ast_node_sized callsite_type_arguments) {
     if (!tl_monotype_is_arrow(callsite)) return 0;
 
-    str instance_name = specialize_arrow(self, traverse_ctx, ast_node_str(fun_name_node), callsite);
+    str instance_name =
+      specialize_arrow(self, traverse_ctx, ast_node_str(fun_name_node), callsite, callsite_type_arguments);
     if (str_is_empty(instance_name)) return 1;
     ast_node_name_replace(fun_name_node, instance_name);
     return 0;
@@ -3209,7 +3261,8 @@ static int specialize_operand(tl_infer *self, traverse_ctx *traverse_ctx, ast_no
     if (!ast_node_is_symbol(node)) return 0;
 
     str value_name = ast_node_str(node);
-    str inst_name  = specialize_arrow(self, traverse_ctx, value_name, value_type->type);
+    // TODO: function pointers with callsite type arguments
+    str inst_name = specialize_arrow(self, traverse_ctx, value_name, value_type->type, (ast_node_sized){0});
     if (str_is_empty(inst_name)) return 0; // FIXME: ignores error
     ast_node_name_replace(node, inst_name);
     return 0;
@@ -3290,7 +3343,9 @@ static int specialize_case(tl_infer *self, traverse_ctx *traverse_ctx, ast_node 
       make_binary_predicate_arrow(self, traverse_ctx, node->case_.expression, node->case_.conditions.v[0]);
 
     str predicate_name = ast_node_str(predicate);
-    str inst_name      = specialize_arrow(self, traverse_ctx, predicate_name, pred_arrow->type);
+    str inst_name =
+      specialize_arrow(self, traverse_ctx, predicate_name, pred_arrow->type, (ast_node_sized){0});
+
     if (str_is_empty(inst_name)) return 0; // FIXME: ignores error
     ast_node_name_replace(predicate, inst_name);
 
@@ -3353,7 +3408,8 @@ static int specialize_value_arguments(tl_infer *self, traverse_ctx *traverse_ctx
             str old_name = name_node->symbol.name;
 
             // Specialize the lambda argument
-            if (specialize_arrow_with_name(self, traverse_ctx, name_node, expected)) return 1;
+            if (specialize_arrow_with_name(self, traverse_ctx, name_node, expected, (ast_node_sized){0}))
+                return 1;
 
             str new_name = name_node->symbol.name;
 
@@ -3377,7 +3433,8 @@ static int specialize_value_arguments(tl_infer *self, traverse_ctx *traverse_ctx
         if (!ast_node_is_symbol(arg)) goto next;
         if (!is_toplevel_function_name(self, arg)) goto next;
         if (i >= expected_types.size) fatal("runtime error");
-        if (specialize_arrow_with_name(self, traverse_ctx, arg, expected_types.v[i])) return 1;
+        if (specialize_arrow_with_name(self, traverse_ctx, arg, expected_types.v[i], (ast_node_sized){0}))
+            return 1;
 
     next:
         ++i;
@@ -3494,14 +3551,40 @@ static int specialize_applications_cb(tl_infer *self, traverse_ctx *traverse_ctx
             }
         }
 
-        if (self->verbose) {
-            str app_str = tl_polytype_to_string(self->transient, callsite);
-            dbg(self, "specialize application: callsite '%.*s' arrow: %.*s", str_ilen(name), str_buf(&name),
-                str_ilen(app_str), str_buf(&app_str));
+#if DEBUG_SPECIALIZE
+        str app_str = tl_polytype_to_string(self->transient, callsite);
+        fprintf(stderr, "specialize application: callsite '%s' arrow: %s\n",
+                str_cstr(&name) str_cstr(&app_str));
+
+        {
+            u32                             argc = node->named_application.n_type_arguments;
+            ast_node                      **argv = node->named_application.type_arguments;
+
+            tl_type_registry_parse_type_ctx parse_ctx;
+            tl_type_registry_parse_type_ctx_init(self->transient, &parse_ctx, null);
+
+            tl_monotype_sized type_arg_types = {
+              .size = argc,
+              .v    = alloc_malloc(self->transient, argc * sizeof(tl_monotype *)),
+            };
+
+            for (u32 i = 0; i < argc; i++) {
+                ast_node *type_arg = argv[i];
+                type_arg_types.v[i] =
+                  tl_type_registry_parse_type_with_ctx(self->registry, type_arg, &parse_ctx);
+            }
+
+            u64 type_args_hash = tl_monotype_sized_hash64(hash64("args", 4), type_arg_types);
+
+            fprintf(stderr, "  type_args_hash = %llu\n", type_args_hash);
         }
 
+#endif
         // try to specialize
-        if (specialize_arrow_with_name(self, traverse_ctx, node->named_application.name, callsite->type)) {
+        ast_node_sized callsite_type_args = {.size = node->named_application.n_type_arguments,
+                                             .v    = node->named_application.type_arguments};
+        if (specialize_arrow_with_name(self, traverse_ctx, node->named_application.name, callsite->type,
+                                       callsite_type_args)) {
             dbg(self, "note: failed to specialize '%s'", str_cstr(&name));
             return 1;
         }
@@ -3761,16 +3844,29 @@ static void rename_variables(tl_infer *self, ast_node *node, rename_variables_ct
     case ast_named_function_application: {
         rename_variables(self, node->named_application.name, ctx, level + 1);
 
+        // type arguments
+        u32        argc = node->named_application.n_type_arguments;
+        ast_node **argv = node->named_application.type_arguments;
+        for (u32 i = 0; i < argc; i++) rename_variables(self, argv[i], ctx, level + 1);
+
         ast_arguments_iter iter = ast_node_arguments_iter(node);
         ast_node          *arg;
 
         while ((arg = ast_arguments_next(&iter))) rename_variables(self, arg, ctx, level + 1);
 
+    } break;
+
+    case ast_user_type_definition: {
         // type arguments
-        u32        argc = node->named_application.n_type_arguments;
-        ast_node **argv = node->named_application.type_arguments;
-        for (u32 i = 0; i < argc; i++) {
-            rename_variables(self, argv[i], ctx, level + 1);
+        u32        argc = node->user_type_def.n_type_arguments;
+        ast_node **argv = node->user_type_def.type_arguments;
+        for (u32 i = 0; i < argc; i++) rename_variables(self, argv[i], ctx, level + 1);
+
+        // traverse into field annotations
+        if (node->user_type_def.field_annotations) { // may be null for enums
+            argc = node->user_type_def.n_fields;
+            argv = node->user_type_def.field_annotations;
+            for (u32 i = 0; i < argc; i++) rename_variables(self, argv[i], ctx, level + 1);
         }
 
     } break;
@@ -3875,8 +3971,7 @@ static void rename_variables(tl_infer *self, ast_node *node, rename_variables_ct
     case ast_f64:
     case ast_i64:
     case ast_u64:
-    case ast_type_alias:
-    case ast_user_type_definition: break;
+    case ast_type_alias:    break;
     }
 }
 
@@ -4537,10 +4632,11 @@ tl_monotype *tl_infer_update_specialized_type_(tl_infer *self, tl_monotype *mono
 
 tl_monotype *tl_infer_update_specialized_type(tl_infer *self, tl_monotype *mono) {
     switch (mono->tag) {
+    case tl_var:         tl_monotype_substitute(self->arena, mono, self->subs, null); break;
+
     case tl_any:
     case tl_ellipsis:
     case tl_integer:
-    case tl_var:
     case tl_weak:
     case tl_placeholder: return null;
 
@@ -4600,9 +4696,10 @@ static void fixup_arrow_name(tl_infer *self, ast_node *ident) {
     if (ast_node_is_symbol(ident)) {
         tl_monotype *type = ident->type->type;
         if (!tl_monotype_is_arrow(type)) return;
-        str  name      = ast_node_str(ident);
+        str name = ast_node_str(ident);
 
-        str *inst_name = instance_lookup_arrow(self, name, type);
+        // TODO: function pointers with type arguments
+        str *inst_name = instance_lookup_arrow(self, name, type, (ast_node_sized){0});
         if (inst_name) ast_node_name_replace(ident, *inst_name);
     }
 }
@@ -4817,7 +4914,8 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *out_resu
                         continue;
                     }
 
-                    str inst_name = specialize_arrow(self, traverse_ctx, fun_name, callsite->type);
+                    str inst_name =
+                      specialize_arrow(self, traverse_ctx, fun_name, callsite->type, (ast_node_sized){0});
                     // FIXME: ignores specialize_arrow error
                     dbg(self, "library: exporting '%s' => '%s'", str_cstr(&fun_name), str_cstr(&inst_name));
                 }

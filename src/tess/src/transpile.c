@@ -364,6 +364,7 @@ static void generate_one_user_type_forward(transpile *self, ast_node *node) {
     if (!ast_node_is_utd(node)) return;
     str          name = toplevel_name(node);
     tl_polytype *poly = node->type;
+    if (!poly) fatal("missing type");
     if (!tl_monotype_is_inst(poly->type)) fatal("not a type constructor instance");
     if (!tl_polytype_is_concrete(poly)) return;
 

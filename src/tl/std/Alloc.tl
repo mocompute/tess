@@ -96,7 +96,7 @@ _bump_realloc (a: Ptr[Allocator], p: Ptr[any], sz: CSize) -> Ptr[any]
 _bump_free    (a: Ptr[Allocator], p: Ptr[any])            -> Void
 
 bump_create(alloc: Ptr[Allocator], size: CSize) -> Ptr[Allocator] {
-    out: Ptr[BumpAllocator] := alloc->malloc(alloc, sizeof(BumpAllocator))
+    out: Ptr[BumpAllocator] := alloc->malloc(alloc, sizeof[BumpAllocator]())
     out->parent = alloc
     size := next_power_of_two(size)
     size = if size == 0 { 16 } else { size }
@@ -121,15 +121,15 @@ _bump_alloc_assume_capacity(bucket: Ptr[_BumpHeader], sz: CSize) -> Ptr[any] {
     block: Ptr[_BumpBlock] := p         // cast to block header and set size
     block->size = sz
 
-    bucket->size += sz + sizeof(_BumpBlock)    // advance bucket size past header and requested size
+    bucket->size += sz + sizeof[_BumpBlock]()  // advance bucket size past header and requested size
     c_assert(bucket->size <= bucket->capacity) // this function assumes capacity
 
-    res: Ptr[Byte] := block                     // cast
-    Unsafe.pointer_add(res, sizeof(_BumpBlock)) // advance pointer past header and return it
+    res: Ptr[Byte] := block                       // cast
+    Unsafe.pointer_add(res, sizeof[_BumpBlock]()) // advance pointer past header and return it
 }
 
 _block_size(p: Ptr[any]) -> Ptr[CSize] {
-    block: Ptr[_BumpBlock] := Unsafe.pointer_subtract(p, sizeof(CSize))
+    block: Ptr[_BumpBlock] := Unsafe.pointer_subtract(p, sizeof[CSize]())
     block->size.&
 }
 
@@ -143,19 +143,19 @@ _is_last_block(bucket: Ptr[_BumpHeader], p: Ptr[any]) {
 }
 
 _maybe_free_block(bucket: Ptr[_BumpHeader], p: Ptr[any]) {
-    if _is_last_block(bucket, p) { bucket->size -= _block_size(p).* + sizeof(_BumpBlock) }
+    if _is_last_block(bucket, p) { bucket->size -= _block_size(p).* + sizeof[_BumpBlock]() }
     void
 }
 
 _bucket_has_capacity(bucket: Ptr[_BumpHeader], size: CSize) {
-    bucket->capacity - bucket->size >= sizeof(_BumpBlock) + size
+    bucket->capacity - bucket->size >= sizeof[_BumpBlock]() + size
 }
 
 _find_bucket(arena: Ptr[BumpAllocator], p: Ptr[any]) {
     bucket := arena->head
     c_assert(bucket != null)
     while bucket != null {
-        if Unsafe.pointer_compare(p, Unsafe.pointer_add(bucket, sizeof(_BumpHeader))) == 1 &&
+        if Unsafe.pointer_compare(p, Unsafe.pointer_add(bucket, sizeof[_BumpHeader]())) == 1 &&
            Unsafe.pointer_compare(p, Unsafe.pointer_add(bucket, bucket->size)) == -1
         {
             return bucket
@@ -167,11 +167,11 @@ _find_bucket(arena: Ptr[BumpAllocator], p: Ptr[any]) {
 }
 
 _BumpHeader_create(alloc, capacity) {
-    c_assert(capacity > sizeof(_BumpHeader))
+    c_assert(capacity > sizeof[_BumpHeader]())
     out: Ptr[_BumpHeader] := alloc->malloc(alloc, capacity)
     out->next     = null
     out->capacity = capacity
-    out->size     = sizeof(_BumpHeader)
+    out->size     = sizeof[_BumpHeader]()
     out
 }
 
@@ -197,7 +197,7 @@ _bump_malloc(a: Ptr[Allocator], sz: CSize) -> Ptr[any] {
     }
 
     // otherwise, need to allocate a new bucket
-    needed       := sz + sizeof(_BumpHeader)
+    needed       := sz + sizeof[_BumpHeader]()
     new_capacity := last_capacity * 2
     if new_capacity < needed { new_capacity = next_power_of_two(needed) }
     if new_capacity == 0 { return null } // overflow
@@ -267,7 +267,7 @@ _bump_free(a: Ptr[Allocator], p: Ptr[any]) -> Void {
     }
 
     if _is_last_block(bucket, p) {
-        bucket->size -= _block_size(p).* + sizeof(_BumpBlock)
+        bucket->size -= _block_size(p).* + sizeof[_BumpBlock]()
     }
 }
 

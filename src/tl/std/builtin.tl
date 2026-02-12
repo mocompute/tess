@@ -12,10 +12,10 @@ _tl_alignof_[T](x: T) -> CSize
 Byte    = CUnsignedChar
 CString = Ptr[CChar]
 
-sizeof[T] ()  { _tl_sizeof_[T]()  }
-sizeof    (x) { _tl_sizeof_(x)    }
-alignof[T]()  { _tl_alignof_[T]() }
-alignof   (x) { _tl_alignof_(x)   }
+sizeof[T] ()  -> CSize { _tl_sizeof_[T]()  }
+sizeof    (x) -> CSize { _tl_sizeof_(x)    }
+alignof[T]()  -> CSize { _tl_alignof_[T]() }
+alignof   (x) -> CSize { _tl_alignof_(x)   }
 
 // Option type
 

@@ -2736,6 +2736,7 @@ u64 tl_monotype_sized_hash64_(u64 seed, tl_monotype_sized arr, u32 gen, hashmap 
 }
 
 u64 tl_monotype_sized_hash64(u64 seed, tl_monotype_sized arr) {
+    if (!arr.size) return seed;
     u32 gen = hash_gen++;
     if (gen == 0) gen = hash_gen++; // skip 0 on wraparound
     hashmap *in_progress = map_new(transient_allocator, u64, u64, 8);
