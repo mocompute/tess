@@ -12,10 +12,9 @@ Arr[T]: {
 // Annotation not required, but can be good for documentation: f is a function pointer (noted by the
 // presence of the arrow `->` operator), which takes an arbitrary type `T` and returns an arbitrary type `U`
 // (which may or may not differ from `T`).
-// map(f: (T) -> U, arr: Arr(T)) -> Arr(U)
 
-map(f, arr) {
-    // out_p must be annotated as a `Ptr[U]`, allowing `U` to be inferred as a type argument.
+map[U](f, arr) {
+    // out_p must be annotated as a `Ptr[U]}. U is declared as an explicit type parameter above.
     out_p: Ptr[U] := c_malloc(sizeof[U]() * arr.size)
 
     // Construct an Arr object on the stack

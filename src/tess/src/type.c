@@ -918,10 +918,11 @@ tl_monotype *tl_type_registry_parse_type_with_ctx(tl_type_registry *self, ast_no
 
     tl_monotype *result = tl_type_registry_parse_type_(self, ctx, node);
 
-    if (1) {
+    if (0) {
         if (!result) {
             str tmp = v2_ast_node_to_string(self->transient, node);
-            fprintf(stderr, "failed to parse '%s'\n", str_cstr(&tmp));
+            fprintf(stderr, "failed to parse '%s' (ctx->type_arguments has %zu keys)\n",
+                    str_cstr(&tmp), (size_t)map_size(ctx->type_arguments));
         }
     }
 
