@@ -651,6 +651,30 @@ static void traverse_ctx_load_type_arguments(tl_infer *self, traverse_ctx *ctx, 
                         str_cstr(&node->let.name->symbol.name), str_cstr(&type_param->symbol.name),
                         str_cstr(&mono_str));
 #endif
+
+#if DEBUG_INVARIANTS
+                // Invariant: When loading a type param for a specialized function,
+                // if its type variable is already bound to a concrete type in substitutions,
+                // that indicates the specialized function is being reused - potential pollution.
+                // Note: This is informational - not all reuse is bad, but it helps debug pollution.
+                if (tl_monotype_is_tv(mono) && ast_node_is_specialized(node)) {
+                    tl_monotype *substituted = tl_monotype_clone(self->transient, mono);
+                    tl_monotype_substitute(self->transient, substituted, self->subs, null);
+                    if (tl_monotype_is_concrete(substituted) && !tl_monotype_is_tv(substituted)) {
+                        char detail[512];
+                        str  func_name = ast_node_str(node->let.name);
+                        str  type_str  = tl_monotype_to_string(self->transient, substituted);
+                        snprintf(detail, sizeof detail,
+                                 "Specialized function '%.*s' type param '%.*s' already bound to '%s'",
+                                 str_ilen(func_name), str_buf(&func_name), str_ilen(type_param->symbol.name),
+                                 str_buf(&type_param->symbol.name), str_cstr(&type_str));
+                        report_invariant_failure(self, "traverse_ctx_load_type_arguments",
+                                                 "Specialized function type param already bound (reuse detected)",
+                                                 detail, type_param);
+                    }
+                }
+#endif
+
                 str param_name = type_param->symbol.name;
 
                 tl_type_registry_add_type_argument(self->registry, param_name, mono, &ctx->type_arguments);
@@ -820,6 +844,26 @@ static int traverse_ctx_assign_type_arguments(tl_infer *self, traverse_ctx *ctx,
                 fprintf(stderr, "  mapping type param '%s' -> %s\n", str_cstr(&param_name),
                         str_cstr(&parsed_str));
 #endif
+
+#if DEBUG_INVARIANTS
+                // Invariant: If type parameter already has a binding, it must be the same type
+                // Type pollution occurs when the same alpha-converted name gets different types
+                // in different specialization contexts
+                tl_monotype *existing_binding = str_map_get_ptr(ctx->type_arguments, param_name);
+                if (existing_binding && existing_binding != parsed) {
+                    char detail[512];
+                    str  existing_str = tl_monotype_to_string(self->transient, existing_binding);
+                    str  new_str      = tl_monotype_to_string(self->transient, parsed);
+                    snprintf(detail, sizeof detail,
+                             "Type parameter '%.*s' already bound to '%s', cannot rebind to '%s'",
+                             str_ilen(param_name), str_buf(&param_name), str_cstr(&existing_str),
+                             str_cstr(&new_str));
+                    report_invariant_failure(self, "traverse_ctx_assign_type_arguments",
+                                             "Type parameter binding conflict (type pollution)", detail,
+                                             (ast_node *)node);
+                }
+#endif
+
                 tl_type_registry_add_type_argument(self->registry, param_name, parsed,
                                                    &ctx->type_arguments);
 
