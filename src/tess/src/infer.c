@@ -610,7 +610,8 @@ static void traverse_ctx_load_type_arguments(tl_infer *self, traverse_ctx *ctx, 
                                                    &ctx->type_arguments);
             } else {
 #if DEBUG_EXPLICIT_TYPE_ARGS
-                fprintf(stderr, "[DEBUG LOAD TYPE ARGS] type_param '%s' has NO concrete type, creating fresh\n",
+                fprintf(stderr,
+                        "[DEBUG LOAD TYPE ARGS] type_param '%s' has NO concrete type, creating fresh\n",
                         str_cstr(&type_param->symbol.name));
 #endif
                 tl_type_registry_add_fresh_type_argument(self->registry, type_param->symbol.name,
@@ -643,11 +644,44 @@ static int traverse_ctx_assign_type_arguments(tl_infer *self, traverse_ctx *ctx,
         tl_type_registry_parse_type_ctx_init(self->transient, &parse_ctx, ctx->type_arguments);
 
         for (u32 i = 0; i < argc; i++) {
-            tl_monotype *parsed = tl_type_registry_parse_type_with_ctx(
-              self->registry, node->named_application.type_arguments[i], &parse_ctx);
+            ast_node *type_arg_node = node->named_application.type_arguments[i];
+#if DEBUG_EXPLICIT_TYPE_ARGS
+            fprintf(stderr, "  type_arg[%u] AST tag=%d", i, type_arg_node->tag);
+            if (ast_node_is_symbol(type_arg_node)) {
+                str n = type_arg_node->symbol.name;
+                fprintf(stderr, " name='%s'", str_cstr(&n));
+            } else if (ast_node_is_nfa(type_arg_node)) {
+                str n = ast_node_str(type_arg_node->named_application.name);
+                fprintf(stderr, " nfa='%s' n_type_args=%u", str_cstr(&n),
+                        type_arg_node->named_application.n_type_arguments);
+            }
+            if (type_arg_node->type) {
+                str t = tl_polytype_to_string(self->transient, type_arg_node->type);
+                fprintf(stderr, " type=%s", str_cstr(&t));
+            }
+            fprintf(stderr, "\n");
+#endif
 
-            if (!parsed) {
-                fatal("could not parse type"); // FIXME better error
+            tl_monotype *parsed = null;
+
+            // If the type argument node already has a type set (from a previous pass), reuse it.
+            // This happens when multiple calls within the same specialized function share type
+            // argument AST nodes (e.g., sizeof[T]() and alignof[T]() both reference the same T).
+            if (type_arg_node->type && tl_polytype_is_concrete(type_arg_node->type)) {
+                parsed = type_arg_node->type->type;
+                // Unwrap type literal if present
+                if (tl_monotype_is_type_literal(parsed)) {
+                    parsed = tl_monotype_literal_target(parsed);
+                }
+#if DEBUG_EXPLICIT_TYPE_ARGS
+                str reused_str = tl_monotype_to_string(self->transient, parsed);
+                fprintf(stderr, "  type_arg[%u]: reused existing type = %s\n", i, str_cstr(&reused_str));
+#endif
+            } else {
+                parsed = tl_type_registry_parse_type_with_ctx(self->registry, type_arg_node, &parse_ctx);
+                if (!parsed) {
+                    fatal("could not parse type"); // FIXME better error
+                }
             }
 
 #if DEBUG_EXPLICIT_TYPE_ARGS
@@ -676,14 +710,16 @@ static int traverse_ctx_assign_type_arguments(tl_infer *self, traverse_ctx *ctx,
             if (i < paramc) {
                 assert(ast_node_is_symbol(let->let.type_parameters[i]));
                 // Use the original name if available, so the key matches what concretize_params expects.
-                str orig_name  = let->let.type_parameters[i]->symbol.original;
-                str param_name = str_is_empty(orig_name) ? let->let.type_parameters[i]->symbol.name : orig_name;
+                str orig_name = let->let.type_parameters[i]->symbol.original;
+                str param_name =
+                  str_is_empty(orig_name) ? let->let.type_parameters[i]->symbol.name : orig_name;
 #if DEBUG_EXPLICIT_TYPE_ARGS
                 str literal_str = tl_monotype_to_string(self->transient, literal);
                 fprintf(stderr, "  mapping type param '%s' -> %s\n", str_cstr(&param_name),
                         str_cstr(&literal_str));
 #endif
-                tl_type_registry_add_type_argument(self->registry, param_name, literal, &ctx->type_arguments);
+                tl_type_registry_add_type_argument(self->registry, param_name, literal,
+                                                   &ctx->type_arguments);
             }
 
             // Set type on the type argument AST node for the transpiler.
@@ -1715,7 +1751,8 @@ static int          traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *no
 //
 
 static void      add_free_variables_to_arrow(tl_infer *self, ast_node *node, tl_polytype *arrow);
-static void      concretize_params(tl_infer *self, ast_node *node, tl_monotype *callsite, hashmap *type_arguments);
+static void      concretize_params(tl_infer *self, ast_node *node, tl_monotype *callsite,
+                                   hashmap *type_arguments);
 static void      toplevel_name_replace(ast_node *node, str name_replace);
 
 static ast_node *clone_generic_for_arrow(tl_infer *self, ast_node const *node, tl_monotype *arrow,
@@ -3819,8 +3856,11 @@ static void concretize_params(tl_infer *self, ast_node *node, tl_monotype *calls
             tl_monotype *bound_type = str_map_get_ptr(type_arguments, param_name);
 
 #if DEBUG_EXPLICIT_TYPE_ARGS
-            fprintf(stderr, "[DEBUG CONCRETIZE TYPE PARAMS] type_param[%u]: name='%s', orig='%s', lookup='%s', bound=%p\n",
-                    i, str_cstr(&type_param->symbol.name), str_cstr(&orig_name), str_cstr(&param_name), (void *)bound_type);
+            fprintf(stderr,
+                    "[DEBUG CONCRETIZE TYPE PARAMS] type_param[%u]: name='%s', orig='%s', lookup='%s', "
+                    "bound=%p\n",
+                    i, str_cstr(&type_param->symbol.name), str_cstr(&orig_name), str_cstr(&param_name),
+                    (void *)bound_type);
 #endif
 
             if (bound_type) {
