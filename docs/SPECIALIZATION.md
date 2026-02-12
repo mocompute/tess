@@ -42,6 +42,7 @@ Specialization is integrated into the type inference phase. The key entry point 
 ├─────────────────────────────────────────────────────────────────────────────┤
 │  1. Parse AST                                                               │
 │  2. Rename variables (alpha-conversion for unique names)                    │
+│     See ALPHA_CONVERSION.md for details                                     │
 │  3. Assign type variables to symbols                                        │
 │  4. Collect constraints                                                     │
 │  5. Satisfy constraints via unification                                     │
@@ -238,3 +239,10 @@ The specialization system uses several data structures for caching and cycle det
 - **Instance cache**: Maps (name, type) → specialized name to avoid duplicate specializations
 - **Seen set**: Tracks types currently being specialized to prevent infinite recursion
 - **Toplevel map**: Stores all function and type definitions, including specialized ones
+
+---
+
+## See Also
+
+- [ALPHA_CONVERSION.md](ALPHA_CONVERSION.md) - Variable renaming system that ensures type safety across specializations
+- [NAME_MANGLING.md](NAME_MANGLING.md) - Name mangling for arity, modules, and instantiation naming
