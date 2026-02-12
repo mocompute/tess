@@ -169,8 +169,11 @@
       ;; Generic types with type arguments without parens (e.g., Array[Int])
       ("\\<\\([A-Z][a-zA-Z0-9_]*\\)\\[" (1 font-lock-type-face))
 
-      ;; Type parameters inside square brackets (e.g., [T], [Int, Bool])
-      ("\\[\\([A-Z][a-zA-Z0-9_]*\\)" (1 font-lock-type-face))
+      ;; Type parameters inside square brackets (e.g., [T], [a], [Int, Bool])
+      ;; First type arg after opening bracket
+      ("\\[\\([a-zA-Z][a-zA-Z0-9_]*\\)" (1 font-lock-type-face))
+      ;; Subsequent type args: ", x]" or ", x," pattern (not ", x)")
+      (",[ \t]*\\([a-zA-Z][a-zA-Z0-9_]*\\)[ \t]*[],]" (1 font-lock-type-face))
 
       ;; Multi-character operators (use default punctuation face, no special highlighting)
       ;; Operators like ->, :=, ::, .&, .*, ==, !=, <=, >=, &&, || are left unhighlighted
