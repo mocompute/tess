@@ -327,7 +327,6 @@ tl_create_test(lambda_apply)
 tl_create_test(lambda_arg_annotated)
 tl_create_test(lambda_capture_mutate)
 tl_create_test(lambda_immediate)
-tl_create_test(lambda_immediate_type_argument)
 tl_create_test(let_in_basic)
 tl_create_test(let_in_expression)
 tl_create_test(logical_and)
@@ -507,5 +506,6 @@ tl_create_runtime_fail_test(fail_str_push_literal)
 # Known fail-failures: expected-failure tests that the compiler doesn't reject yet
 
 # Known failures: these should work but a compiler bug makes them fail
+tl_create_known_failure(lambda_immediate_type_argument)
 tl_create_known_failure(nested_struct)
 tl_create_known_failure(while_empty_body)

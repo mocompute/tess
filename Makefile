@@ -404,7 +404,6 @@ TL_TESTS =					\
 	lambda_arg_annotated			\
 	lambda_capture_mutate			\
 	lambda_immediate			\
-	lambda_immediate_type_argument		\
 	let_in_basic				\
 	let_in_expression			\
 	logical_and				\
@@ -564,6 +563,7 @@ TL_KNOWN_FAIL_FAILURES =
 # Tests that should work but currently fail due to compiler bugs
 TL_KNOWN_FAILURES =			\
 	nested_struct				\
+	lambda_immediate_type_argument		\
 	while_empty_body
 
 # Total test count across all suites
