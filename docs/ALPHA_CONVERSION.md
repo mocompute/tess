@@ -12,6 +12,12 @@ This document describes the alpha conversion (variable renaming) system in the T
 6. [Critical Invariants](#critical-invariants)
 7. [Key Functions Reference](#key-functions-reference)
 8. [Debugging](#debugging)
+9. [Potential Bug Areas](#potential-bug-areas)
+10. [Compilation Pipeline Overview](#compilation-pipeline-overview)
+11. [Arena Management](#arena-management)
+12. [Type Attachment Timeline](#type-attachment-timeline)
+13. [Violation Detection Checklist](#violation-detection-checklist)
+14. [Key Source Locations](#key-source-locations)
 
 ---
 
@@ -350,3 +356,226 @@ if (param->symbol.is_mangled &&
 ```
 
 Failure to check this causes type environment mismatches.
+
+---
+
+## Compilation Pipeline Overview
+
+Alpha conversion is Phase 1 of a 7-phase type inference pipeline. Understanding the full pipeline is essential for understanding why alpha conversion's invariants matter.
+
+### Pipeline Phases
+
+```
+Parsing Phase
+    ↓ (AST with null types)
+Phase 1: Alpha Conversion
+    ↓ (Alpha-converted names, all types erased)
+Phase 2: Load Top-level Definitions
+    ↓ (Top-level map populated)
+Phase 3: Generic Type Inference
+    ↓ (Generic quantified types in environment)
+Phase 4: Check Free Variables & Apply Substitutions
+    ↓ (Substitutions applied)
+Phase 5: Specialization
+    ↓ (Concrete monomorphic functions)
+Phase 6: Tree Shaking
+    ↓ (Unreachable code removed)
+Phase 7: Type Specialization Updates
+    ↓ (Type registry finalized)
+Transpilation Phase
+    ↓ (Generate C code)
+```
+
+### Phase-by-Phase Invariants
+
+#### Phase 1: Alpha Conversion (infer.c:4953-4965)
+
+| Pre-condition | Post-condition |
+|---------------|----------------|
+| Fresh AST from parser | All bound variables renamed (`tl_T_v0`) |
+| No types attached | ALL AST types erased (set to null) |
+| Original variable names | Lexical scope preserved |
+
+**Critical operations:**
+```c
+rename_let_in(self, node, &ctx);           // Toplevel let-in only
+rename_variables(self, node, &ctx, 0);     // All nodes
+```
+
+#### Phase 2: Load Top-level (infer.c:4967-4976)
+
+| Pre-condition | Post-condition |
+|---------------|----------------|
+| Alpha conversion complete | `self->toplevels` map populated |
+| All names globally unique | Type aliases registered |
+| All types null | Forward declarations processed |
+
+**Critical:** Names in toplevels map are alpha-converted (e.g., `tl_identity_v0`).
+
+#### Phase 3: Generic Inference (infer.c:4977-4998)
+
+| Pre-condition | Post-condition |
+|---------------|----------------|
+| Top-level map ready | Each function has quantified polytype |
+| Types erased | Type schemes: `∀a. a→a` |
+| Type environment empty | Environment populated with schemes |
+
+**Key function:** `add_generic()` - infers type for one function, then generalizes (quantifies free type variables).
+
+#### Phase 4: Free Variables & Substitutions (infer.c:4989-5009)
+
+| Pre-condition | Post-condition |
+|---------------|----------------|
+| Generic types inferred | All free variables verified |
+| Substitutions collected | Substitutions applied to env |
+| | Substitutions applied to AST |
+
+#### Phase 5: Specialization (infer.c:5021-5089)
+
+| Pre-condition | Post-condition |
+|---------------|----------------|
+| Generic types quantified | All reachable generics specialized |
+| Main function identified | Each specialization: unique name + concrete type |
+| | Nested calls recursively specialized |
+
+**Specialization flow for each call:**
+```c
+// 1. Create concrete callsite arrow from argument types
+callsite = make_arrow_with(self, traverse_ctx, node, type);
+
+// 2. Check cache
+if (instance_lookup_arrow(self, name, arrow)) return cached;
+
+// 3. Create unique name
+inst_name = next_instantiation(self, name);  // "identity_0"
+
+// 4. Clone generic AST
+clone = clone_generic_for_arrow(self, generic, arrow, inst_name);
+
+// 5. Add to toplevel
+toplevel_add(self, inst_name, clone);
+
+// 6. Process specialized body (CRITICAL)
+post_specialize(self, traverse_ctx, clone, arrow);
+```
+
+**Inside `clone_generic_for_arrow()`:**
+- Clone AST node
+- Types already null (from Phase 1)
+- Run `rename_variables()` AGAIN → fresh names for this specialization
+- Concretize parameters from callsite arrow
+
+**Inside `post_specialize()`:**
+- Re-run type inference on specialized body
+- Apply substitutions
+- Recursively specialize nested calls
+
+#### Phase 6: Tree Shaking (infer.c:5107-5116)
+
+| Pre-condition | Post-condition |
+|---------------|----------------|
+| All specializations created | Only reachable functions remain |
+| Main function processed | Dead code eliminated |
+
+#### Phase 7: Type Updates (infer.c:5118-5134)
+
+| Pre-condition | Post-condition |
+|---------------|----------------|
+| Specialization complete | Type registry finalized |
+| Tree shaking complete | All types resolved |
+| | Ready for codegen |
+
+---
+
+## Arena Management
+
+### Arena Types
+
+| Arena | Allocation Lifetime | Reset Frequency |
+|-------|---------------------|-----------------|
+| `self->arena` (persistent) | Entire compilation | Never |
+| `self->transient` | Per-phase working data | After each phase |
+
+### What Goes Where
+
+**Persistent arena (`self->arena`):**
+- Alpha-converted variable names
+- Type environment
+- Type substitutions
+- Cloned AST nodes for specializations
+- Final output structures
+
+**Transient arena (`self->transient`):**
+- Phase 1: Name mapping during alpha conversion
+- Phase 3: Type inference working data
+- Phase 5: Specialization context, cloning scratch
+- Temporary hash tables, arrays
+
+**Critical rule:** Any data that must survive `arena_reset(self->transient)` must be allocated in `self->arena`.
+
+---
+
+## Type Attachment Timeline
+
+| Phase | AST Type Status | Purpose |
+|-------|-----------------|---------|
+| Parser | null | Parser doesn't infer types |
+| Phase 1 | **ALL ERASED** | Prevents pollution |
+| Phase 2 | null | Inherited from Phase 1 |
+| Phase 3 | Types attached | Generic type variables |
+| Phase 4 | Substitutions applied | Some types made concrete |
+| Phase 5 (clone) | **ERASED again** | Each specialization independent |
+| Phase 5 (post_specialize) | Types re-attached | Specialized monomorphic types |
+| Phase 6-7 | Concrete types | Final types for codegen |
+
+**Critical pattern:** Types are erased TWICE:
+1. Phase 1: On original AST
+2. Phase 5: When cloning for specialization (inherited null from generic, but `rename_variables` is called again which re-erases)
+
+---
+
+## Violation Detection Checklist
+
+### Type Pollution Red Flags
+
+- [ ] Type attached to AST node after Phase 1 but before Phase 3
+- [ ] Original names (`T`) used in type environment instead of alpha-converted (`tl_T_v0`)
+- [ ] Specialized clones sharing `ctx.lex` (should be independent)
+- [ ] `post_specialize()` not called for a cloned generic function
+- [ ] Generic function appears in final transpiled code
+
+### Lexical Scope Red Flags
+
+- [ ] Type variable from outer scope re-renamed in inner scope
+- [ ] `map_copy(ctx.lex)` not called before entering lambda/let scope
+- [ ] `ctx->lex = save` not called after exiting scope
+- [ ] Mangled name checked but original name in scope not consulted
+
+### Specialization Red Flags
+
+- [ ] Two specializations with different types have same instance name
+- [ ] Type variables remain in final function types (should be concrete)
+- [ ] Function pointer type arguments not specialized
+- [ ] Nested generic calls not recursively specialized
+
+### Arena Red Flags
+
+- [ ] Data accessed after arena reset (use-after-free)
+- [ ] Persistent data allocated in transient arena (lost on reset)
+- [ ] Missing `ast_node_clone()` before arena reset
+
+---
+
+## Key Source Locations
+
+| Component | File | Lines |
+|-----------|------|-------|
+| Main compilation flow | tess_exe.c | 762-911 |
+| Alpha conversion entry | infer.c | 4953-4965 |
+| `rename_variables` | infer.c | 3852 |
+| `rename_one_function_param` | infer.c | 3763 |
+| Generic inference | infer.c | 4442-4555 |
+| Specialization entry | infer.c | 5021-5089 |
+| `clone_generic_for_arrow` | infer.c | 1800-1868 |
+| `post_specialize` | infer.c | 3230-3252 |
+| All 7 phases | infer.c | 4950-5156 |
