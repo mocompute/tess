@@ -62,6 +62,53 @@
     (message "✓ Imenu support is defined")
   (error "✗ Imenu support is missing"))
 
+;; Test 9: Font-lock for type arguments in brackets
+(message "Test 9: Checking font-lock for type arguments...")
+
+(defun tl-test-get-faces (text)
+  "Return alist of (substring . face) for TEXT after applying tl-mode font-lock."
+  (with-temp-buffer
+    (insert text)
+    (tl-mode)
+    (font-lock-ensure)
+    (let ((result nil)
+          (pos 1))
+      (while (<= pos (point-max))
+        (let ((face (get-text-property pos 'face)))
+          (push (cons (buffer-substring-no-properties pos (1+ pos)) face) result))
+        (setq pos (1+ pos)))
+      (nreverse result))))
+
+(defun tl-test-check-type-face (text type-name)
+  "Check that TYPE-NAME has font-lock-type-face in TEXT."
+  (with-temp-buffer
+    (insert text)
+    (tl-mode)
+    (font-lock-ensure)
+    (goto-char (point-min))
+    (if (search-forward type-name nil t)
+        (let ((face (get-text-property (match-beginning 0) 'face)))
+          (if (eq face 'font-lock-type-face)
+              (message "  ✓ %s is highlighted as type" type-name)
+            (error "  ✗ %s not highlighted as type (got %s)" type-name face)))
+      (error "  ✗ %s not found in text" type-name))))
+
+;; Test simple case with lowercase type params: [xx, yy]
+(message "  Testing func[xx, yy](v: xx)...")
+(let ((code "func[xx, yy](v: xx) {"))
+  (tl-test-check-type-face code "xx")
+  (tl-test-check-type-face code "yy"))
+
+;; Test nested type arguments - mixed case, all unique names
+(message "  Testing nested [aa, Option[bb], Result[cc, dd]]...")
+(let ((code "func2[aa, Option[bb], Result[cc, dd]]()"))
+  (tl-test-check-type-face code "aa")
+  (tl-test-check-type-face code "Option")
+  (tl-test-check-type-face code "bb")
+  (tl-test-check-type-face code "Result")
+  (tl-test-check-type-face code "cc")
+  (tl-test-check-type-face code "dd"))
+
 (message "\n========================================")
 (message "All tests passed! tl-mode is working correctly.")
 (message "========================================\n")
