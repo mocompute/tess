@@ -1834,6 +1834,7 @@ static ast_node *clone_generic_for_arrow(tl_infer *self, ast_node const *node, t
         forall(i, keys) {
             str original = keys.v[i];
             // Type variables are typically lowercase letters
+            // FIXME: do NOT assume any convention about uppercase, lowercase, length, etc.
             char first = str_len(original) > 0 ? str_buf(&original)[0] : 0;
             if (first >= 'a' && first <= 'z' && str_len(original) <= 3) {
                 str *renamed = str_map_get(ctx.lex, original);
