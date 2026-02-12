@@ -1910,8 +1910,8 @@ static ast_node *clone_generic_for_arrow(tl_infer *self, ast_node const *node, t
     // This ensures each specialization gets truly fresh names
     if (ast_node_is_let(clone)) {
         for (u32 i = 0; i < clone->let.n_type_parameters; i++) {
-            ast_node *tp      = clone->let.type_parameters[i];
-            str       tp_name = tp->symbol.name;
+            ast_node    *tp       = clone->let.type_parameters[i];
+            str          tp_name  = tp->symbol.name;
 
             tl_polytype *existing = tl_type_env_lookup(self->env, tp_name);
             if (existing) {
@@ -4723,7 +4723,6 @@ void remove_generic_toplevels(tl_infer *self) {
         tl_polytype *type = tl_type_env_lookup(self->env, name);
         if (!type) fatal("runtime error");
 
-        if (tl_monotype_is_arrow(type->type) && tl_monotype_arrow_is_concrete(type->type)) continue;
         if (!tl_polytype_is_concrete(type)) array_push(names, name);
     }
 
