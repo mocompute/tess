@@ -31,6 +31,21 @@ struct check_types_null_ctx {
     int              failures;
 };
 static void check_types_null_cb(void *ctx_ptr, ast_node *node);
+static void report_invariant_failure(tl_infer *self, char const *phase, char const *invariant,
+                                     char const *detail, ast_node const *node);
+static int  check_specialized_nfa_type_args(tl_infer *self, ast_node *node, char const *phase);
+
+// Helper: check if a name is alpha-converted (contains "_v" followed by digits)
+static int is_alpha_converted_name(str name) {
+    char const *buf = str_buf(&name);
+    u32         len = str_len(name);
+    for (u32 i = 0; i + 2 < len; i++) {
+        if (buf[i] == '_' && buf[i + 1] == 'v' && buf[i + 2] >= '0' && buf[i + 2] <= '9') {
+            return 1;
+        }
+    }
+    return 0;
+}
 #endif
 
 // Helper: unwrap a type literal to get its target type, or return the type as-is
@@ -605,6 +620,26 @@ static void traverse_ctx_load_type_arguments(tl_infer *self, traverse_ctx *ctx, 
             ast_node *type_param = node->let.type_parameters[i];
             assert(ast_node_is_symbol(type_param));
 
+#if DEBUG_INVARIANTS
+            // Invariant: Type parameter names must be alpha-converted
+            if (!is_alpha_converted_name(type_param->symbol.name)) {
+                char detail[256];
+                snprintf(detail, sizeof detail, "Type parameter '%.*s' is not alpha-converted",
+                         str_ilen(type_param->symbol.name), str_buf(&type_param->symbol.name));
+                report_invariant_failure(self, "traverse_ctx_load_type_arguments",
+                                         "Type parameter name must be alpha-converted", detail, type_param);
+            }
+
+            // Invariant: No duplicate type parameter names in ctx->type_arguments
+            if (str_map_contains(ctx->type_arguments, type_param->symbol.name)) {
+                char detail[256];
+                snprintf(detail, sizeof detail, "Duplicate type parameter name '%.*s'",
+                         str_ilen(type_param->symbol.name), str_buf(&type_param->symbol.name));
+                report_invariant_failure(self, "traverse_ctx_load_type_arguments",
+                                         "No duplicate type parameter names allowed", detail, type_param);
+            }
+#endif
+
             // If the type parameter already has a type (set by concretize_params during
             // specialization, or by a previous traversal), use that instead of creating a fresh
             // type variable.
@@ -659,6 +694,20 @@ static int traverse_ctx_assign_type_arguments(tl_infer *self, traverse_ctx *ctx,
 
         ast_node  *let    = toplevel_get(self, ast_node_str(node->named_application.name));
         u32        paramc = (let && ast_node_is_let(let)) ? let->let.n_type_parameters : 0;
+
+#if DEBUG_INVARIANTS
+        // Invariant: Type argument count must match type parameter count
+        if (argc > 0 && paramc > 0 && argc != paramc) {
+            str  callee_name = ast_node_str(node->named_application.name);
+            char detail[256];
+            snprintf(detail, sizeof detail,
+                     "Call site has %u type arguments but function '%.*s' has %u type parameters", argc,
+                     str_ilen(callee_name), str_buf(&callee_name), paramc);
+            report_invariant_failure(self, "traverse_ctx_assign_type_arguments",
+                                     "Type argument count must match type parameter count", detail,
+                                     (ast_node *)node);
+        }
+#endif
 
 #if DEBUG_EXPLICIT_TYPE_ARGS
         str name = ast_node_str(node->named_application.name);
@@ -1741,7 +1790,21 @@ static int infer_named_function_application(tl_infer *self, traverse_ctx *ctx, a
                 args.v[i] = null; // default: create fresh type variable
 
                 if (i < let->let.n_type_parameters) {
-                    str          param_name    = let->let.type_parameters[i]->symbol.name;
+                    str param_name = let->let.type_parameters[i]->symbol.name;
+
+#if DEBUG_INVARIANTS
+                    // Invariant: Type argument lookup must use alpha-converted names
+                    if (!is_alpha_converted_name(param_name)) {
+                        char detail[256];
+                        snprintf(detail, sizeof detail,
+                                 "Looking up '%.*s' which is not alpha-converted in type_arguments",
+                                 str_ilen(param_name), str_buf(&param_name));
+                        report_invariant_failure(self, "infer_named_function_application",
+                                                 "Type argument lookup must use alpha-converted names", detail,
+                                                 node);
+                    }
+#endif
+
                     tl_monotype *explicit_type = str_map_get_ptr(ctx->type_arguments, param_name);
                     if (explicit_type) {
                         args.v[i] = unwrap_type_literal(explicit_type);
@@ -1885,6 +1948,39 @@ static ast_node *clone_generic_for_arrow(tl_infer *self, ast_node const *node, t
     add_free_variables_to_arrow(self, clone, &wrap);
 
     concretize_params(self, clone, arrow, type_arguments);
+
+#if DEBUG_INVARIANTS
+    // Invariant: Type parameters with explicit bindings in type_arguments must have concrete types
+    if (ast_node_is_let(clone) && type_arguments) {
+        for (u32 i = 0; i < clone->let.n_type_parameters; i++) {
+            ast_node *tp      = clone->let.type_parameters[i];
+            str       tp_name = tp->symbol.name;
+
+            // Only check type parameters that have an explicit binding in type_arguments
+            tl_monotype *bound_type = str_map_get_ptr(type_arguments, tp_name);
+            if (!bound_type) continue; // No explicit binding, skip this type parameter
+
+            if (!tp->type || !tl_polytype_is_concrete(tp->type)) {
+                char detail[256];
+                if (tp->type) {
+                    str type_str = tl_polytype_to_string(self->transient, tp->type);
+                    snprintf(detail, sizeof detail,
+                             "Type parameter '%.*s' with explicit binding has non-concrete type: %s",
+                             str_ilen(tp_name), str_buf(&tp_name), str_cstr(&type_str));
+                } else {
+                    snprintf(detail, sizeof detail,
+                             "Type parameter '%.*s' with explicit binding has null type", str_ilen(tp_name),
+                             str_buf(&tp_name));
+                }
+                report_invariant_failure(
+                  self, "clone_generic_for_arrow",
+                  "Type parameter with explicit binding must have concrete type after concretize_params",
+                  detail, tp);
+            }
+        }
+    }
+#endif
+
     toplevel_name_replace(clone, inst_name);
 
     return clone;
@@ -3270,6 +3366,11 @@ static int post_specialize(tl_infer *self, traverse_ctx *traverse_ctx, ast_node 
             dbg(self, "note: post_specialize failed specialize");
             return 1;
         }
+
+#if DEBUG_INVARIANTS
+        // Invariant: After specialization, all specialized NFA type arguments must be concrete
+        check_specialized_nfa_type_args(self, infer_target, "post_specialize");
+#endif
     }
     return 0;
 }
@@ -5085,6 +5186,32 @@ static int check_no_generic_toplevels(tl_infer *self, char const *phase) {
         }
     }
     return failures;
+}
+
+// Check that specialized NFA type arguments have concrete types
+static void check_specialized_nfa_type_args_cb(void *ctx_ptr, ast_node *node) {
+    struct check_types_null_ctx *ctx = ctx_ptr;
+    if (!ast_node_is_nfa(node)) return;
+    if (!node->named_application.is_specialized) return;
+
+    for (u8 i = 0; i < node->named_application.n_type_arguments; i++) {
+        ast_node *ta = node->named_application.type_arguments[i];
+        if (ta && ta->type && !tl_polytype_is_concrete(ta->type)) {
+            char detail[256];
+            str  type_str = tl_polytype_to_string(ctx->self->transient, ta->type);
+            snprintf(detail, sizeof detail, "Type argument %u has non-concrete type: %s", i,
+                     str_cstr(&type_str));
+            report_invariant_failure(ctx->self, ctx->phase, "Specialized NFA type arguments must be concrete",
+                                     detail, ta);
+            ctx->failures++;
+        }
+    }
+}
+
+static int check_specialized_nfa_type_args(tl_infer *self, ast_node *node, char const *phase) {
+    struct check_types_null_ctx ctx = {.self = self, .phase = phase, .failures = 0};
+    ast_node_dfs(&ctx, node, check_specialized_nfa_type_args_cb);
+    return ctx.failures;
 }
 
 #endif // DEBUG_INVARIANTS
