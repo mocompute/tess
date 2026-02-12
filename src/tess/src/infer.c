@@ -21,6 +21,17 @@
 #define DEBUG_RENAME             0
 #define DEBUG_CONSTRAIN          0
 #define DEBUG_EXPLICIT_TYPE_ARGS 0
+#define DEBUG_INVARIANTS         0 // Enable invariant checking at phase boundaries
+
+#if DEBUG_INVARIANTS
+// Forward declarations for invariant checking
+struct check_types_null_ctx {
+    struct tl_infer *self;
+    char const      *phase;
+    int              failures;
+};
+static void check_types_null_cb(void *ctx_ptr, ast_node *node);
+#endif
 
 // Helper: unwrap a type literal to get its target type, or return the type as-is
 static inline tl_monotype *unwrap_type_literal(tl_monotype *mono) {
@@ -1814,12 +1825,24 @@ static ast_node *clone_generic_for_arrow(tl_infer *self, ast_node const *node, t
     }
 
     // Count type variables collected from annotation
-    u32 n_annotation_type_vars = map_size(ctx.lex);
+    u32 n_annotation_type_vars   = map_size(ctx.lex);
 
     name->symbol.annotation_type = null;
     name->symbol.annotation      = null;
 
     rename_variables(self, clone, &ctx, 0);
+
+#if DEBUG_INVARIANTS
+    // Invariant: After clone + rename_variables, all types must be erased (null)
+    {
+        struct check_types_null_ctx check_ctx = {
+          .self = self, .phase = "clone_generic_for_arrow", .failures = 0};
+        ast_node_dfs(&check_ctx, clone, check_types_null_cb);
+        if (check_ctx.failures) {
+            fprintf(stderr, "ERROR: Type pollution detected in cloned AST\n");
+        }
+    }
+#endif
 
     // If we collected type variables from the annotation, add them as type parameters to the let node.
     // This ensures traverse_ctx_load_type_arguments can find them later.
@@ -1828,7 +1851,7 @@ static ast_node *clone_generic_for_arrow(tl_infer *self, ast_node const *node, t
 
         // Filter to just the type variables we added (not value parameters)
         // Type vars are lowercase, single letter or short names
-        ast_node **type_params = alloc_malloc(self->arena, sizeof(ast_node *) * keys.size);
+        ast_node **type_params   = alloc_malloc(self->arena, sizeof(ast_node *) * keys.size);
         u32        n_type_params = 0;
 
         forall(i, keys) {
@@ -1839,20 +1862,20 @@ static ast_node *clone_generic_for_arrow(tl_infer *self, ast_node const *node, t
             if (first >= 'a' && first <= 'z' && str_len(original) <= 3) {
                 str *renamed = str_map_get(ctx.lex, original);
                 if (renamed) {
-                    ast_node *type_param = ast_node_create(self->arena, ast_symbol);
-                    type_param->symbol.name = *renamed;
-                    type_param->symbol.original = original;
+                    ast_node *type_param         = ast_node_create(self->arena, ast_symbol);
+                    type_param->symbol.name      = *renamed;
+                    type_param->symbol.original  = original;
                     type_params[n_type_params++] = type_param;
 #if DEBUG_RENAME
-                    fprintf(stderr, "[DEBUG] Added type_parameter: %s (original: %s)\n",
-                            str_cstr(renamed), str_cstr(&original));
+                    fprintf(stderr, "[DEBUG] Added type_parameter: %s (original: %s)\n", str_cstr(renamed),
+                            str_cstr(&original));
 #endif
                 }
             }
         }
 
         if (n_type_params > 0) {
-            clone->let.type_parameters = type_params;
+            clone->let.type_parameters   = type_params;
             clone->let.n_type_parameters = (u8)n_type_params;
         }
     }
@@ -3261,7 +3284,7 @@ static str  specialize_arrow(tl_infer *self, traverse_ctx *traverse_ctx, str nam
 
     // 2. Check cache for this name+type combination
     hashmap *outer_type_args = traverse_ctx ? traverse_ctx->type_arguments : null;
-    str     *found           = instance_lookup_arrow(self, name, arrow, callsite_type_arguments, outer_type_args);
+    str     *found = instance_lookup_arrow(self, name, arrow, callsite_type_arguments, outer_type_args);
     if (found) return *found;
 
     // 2a. Check that name is valid
@@ -3269,7 +3292,7 @@ static str  specialize_arrow(tl_infer *self, traverse_ctx *traverse_ctx, str nam
     if (!toplevel) return str_empty();
 
     // 3. Create unique instance name(e.g., "identity_0")
-    name_and_type key       = make_instance_key(self, name, arrow, callsite_type_arguments, outer_type_args);
+    name_and_type key = make_instance_key(self, name, arrow, callsite_type_arguments, outer_type_args);
     str           inst_name = next_instantiation(self, name);
     instance_add(self, &key, inst_name);
 
@@ -3827,10 +3850,10 @@ static hashmap *rename_function_params(tl_infer *self, ast_node *node, rename_va
         // to be added to the lexical scope so they get renamed consistently in the body.
         if (node->let.name && ast_node_is_symbol(node->let.name)) {
 #if DEBUG_RENAME
-            str fn_name = node->let.name->symbol.name;
-            ast_node *annot = node->let.name->symbol.annotation;
+            str       fn_name = node->let.name->symbol.name;
+            ast_node *annot   = node->let.name->symbol.annotation;
             fprintf(stderr, "[DEBUG] rename_function_params: fn='%s', annotation=%p (tag=%d)\n",
-                    str_cstr(&fn_name), (void*)annot, annot ? (int)annot->tag : -1);
+                    str_cstr(&fn_name), (void *)annot, annot ? (int)annot->tag : -1);
 #endif
             collect_annotation_type_vars(self, node->let.name->symbol.annotation, ctx);
         }
@@ -4947,6 +4970,125 @@ static void check_unresolved_types(tl_infer *self) {
     arena_reset(self->transient);
 }
 
+// -- invariant checking --
+
+#if DEBUG_INVARIANTS
+
+static void report_invariant_failure(tl_infer *self, char const *phase, char const *invariant,
+                                     char const *detail, ast_node const *node) {
+    fprintf(stderr, "\nINVARIANT VIOLATION [%s]\n", phase);
+    fprintf(stderr, "  Invariant: %s\n", invariant);
+    fprintf(stderr, "  Detail:    %s\n", detail);
+    if (node) {
+        fprintf(stderr, "  Location:  %s:%u\n", node->file, node->line);
+        str s = ast_node_to_short_string(self->transient, node);
+        fprintf(stderr, "  Node:      %.*s\n", str_ilen(s), str_buf(&s));
+        str_deinit(self->transient, &s);
+    }
+    fprintf(stderr, "\n");
+}
+
+static void check_types_null_cb(void *ctx_ptr, ast_node *node) {
+    struct check_types_null_ctx *ctx = ctx_ptr;
+    if (node->type != null) {
+        char detail[256];
+        snprintf(detail, sizeof detail, "Node has non-null type at %s:%u", node->file, node->line);
+        report_invariant_failure(ctx->self, ctx->phase, "All AST node types must be null", detail, node);
+        ctx->failures++;
+    }
+}
+
+static int check_all_types_null(tl_infer *self, ast_node_sized nodes, char const *phase) {
+    struct check_types_null_ctx ctx = {.self = self, .phase = phase, .failures = 0};
+    forall(i, nodes) {
+        ast_node_dfs(&ctx, nodes.v[i], check_types_null_cb);
+    }
+    return ctx.failures;
+}
+
+static void check_type_arg_types_null_one(struct check_types_null_ctx *ctx, ast_node *node) {
+    // Check type parameters on let nodes
+    if (ast_node_is_let(node)) {
+        struct ast_let *let = &node->let;
+        for (u8 i = 0; i < let->n_type_parameters; ++i) {
+            if (let->type_parameters[i] && let->type_parameters[i]->type != null) {
+                char detail[256];
+                snprintf(detail, sizeof detail, "Type parameter %u has non-null type", i);
+                report_invariant_failure(ctx->self, ctx->phase, "Type parameter types must be null", detail,
+                                         let->type_parameters[i]);
+                ctx->failures++;
+            }
+        }
+    }
+    // Check type arguments on named function applications
+    else if (ast_node_is_nfa(node)) {
+        struct ast_named_application *nfa = &node->named_application;
+        for (u8 i = 0; i < nfa->n_type_arguments; ++i) {
+            if (nfa->type_arguments[i] && nfa->type_arguments[i]->type != null) {
+                char detail[256];
+                snprintf(detail, sizeof detail, "Type argument %u has non-null type", i);
+                report_invariant_failure(ctx->self, ctx->phase, "Type argument types must be null", detail,
+                                         nfa->type_arguments[i]);
+                ctx->failures++;
+            }
+        }
+    }
+    // Check type arguments on user type definitions
+    else if (ast_node_is_utd(node)) {
+        struct ast_user_type_def *utd = &node->user_type_def;
+        for (u8 i = 0; i < utd->n_type_arguments; ++i) {
+            if (utd->type_arguments[i] && utd->type_arguments[i]->type != null) {
+                char detail[256];
+                snprintf(detail, sizeof detail, "UTD type argument %u has non-null type", i);
+                report_invariant_failure(ctx->self, ctx->phase, "Type argument types must be null", detail,
+                                         utd->type_arguments[i]);
+                ctx->failures++;
+            }
+        }
+    }
+}
+
+static void check_type_arg_types_null_cb(void *ctx_ptr, ast_node *node) {
+    check_type_arg_types_null_one(ctx_ptr, node);
+}
+
+static int check_type_arg_types_null(tl_infer *self, ast_node_sized nodes, char const *phase) {
+    struct check_types_null_ctx ctx = {.self = self, .phase = phase, .failures = 0};
+    forall(i, nodes) {
+        ast_node_dfs(&ctx, nodes.v[i], check_type_arg_types_null_cb);
+    }
+    return ctx.failures;
+}
+
+static int check_no_generic_toplevels(tl_infer *self, char const *phase) {
+    int              failures = 0;
+    hashmap_iterator iter     = {0};
+    ast_node        *node;
+    while ((node = toplevel_iter(self, &iter))) {
+        if (!ast_node_is_let(node)) continue;
+        if (ast_node_is_specialized(node)) continue; // specialized is OK
+
+        // Check if this function has type parameters (generic)
+        struct ast_let *let = &node->let;
+        if (let->n_type_parameters > 0) {
+            // Generic function - check that it has been fully specialized
+            str          name = ast_node_str(let->name);
+            tl_polytype *poly = tl_type_env_lookup(self->env, name);
+            if (poly && !tl_polytype_is_concrete(poly)) {
+                str  tmp = tl_polytype_to_string(self->transient, poly);
+                char detail[512];
+                snprintf(detail, sizeof detail, "Generic function '%s' still has type variables: %s",
+                         str_cstr(&name), str_cstr(&tmp));
+                report_invariant_failure(self, phase, "No generic functions should remain", detail, node);
+                failures++;
+            }
+        }
+    }
+    return failures;
+}
+
+#endif // DEBUG_INVARIANTS
+
 int tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *out_result) {
     dbg(self, "-- start inference --");
 
@@ -4963,6 +5105,13 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *out_resu
         forall(i, nodes) rename_variables(self, nodes.v[i], &ctx, 0);
         arena_reset(self->transient);
     }
+
+#if DEBUG_INVARIANTS
+    // Invariant: After alpha conversion, all AST types must still be null
+    if (check_all_types_null(self, nodes, "Phase 1: Alpha Conversion")) return 1;
+    if (check_type_arg_types_null(self, nodes, "Phase 1: Alpha Conversion")) return 1;
+    arena_reset(self->transient);
+#endif
 
     // Phase 2: Load top-level definitions
     // Load all top level forms.
@@ -4985,6 +5134,29 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *out_resu
     arena_reset(self->transient);
 
     if (self->errors.size) return 1;
+
+#if DEBUG_INVARIANTS
+    // Invariant: After generic inference, all let-bound functions should have polytypes in env
+    {
+        int failures = 0;
+        forall(i, nodes) {
+            ast_node *node = nodes.v[i];
+            if (!ast_node_is_let(node)) continue;
+            str          name = ast_node_str(node->let.name);
+            tl_polytype *poly = tl_type_env_lookup(self->env, name);
+            if (!poly) {
+                char detail[256];
+                snprintf(detail, sizeof detail, "Function '%.*s' not found in type environment",
+                         str_ilen(name), str_buf(&name));
+                report_invariant_failure(self, "Phase 3: Generic Inference",
+                                         "All functions must have polytypes in env", detail, node);
+                failures++;
+            }
+        }
+        if (failures) return 1;
+        arena_reset(self->transient);
+    }
+#endif
 
     // Phase 4: Check free variables
     // check if free variables are present
@@ -5103,6 +5275,12 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *out_resu
 
     remove_generic_toplevels(self);
     arena_reset(self->transient);
+
+#if DEBUG_INVARIANTS
+    // Invariant: After specialization, no generic toplevels should remain
+    if (check_no_generic_toplevels(self, "Phase 5: Specialization")) return 1;
+    arena_reset(self->transient);
+#endif
 
     // Phase 6: Tree shaking
     // tree shake
