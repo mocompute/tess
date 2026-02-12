@@ -667,7 +667,9 @@ static int traverse_ctx_assign_type_arguments(tl_infer *self, traverse_ctx *ctx,
             // If the type argument node already has a type set (from a previous pass), reuse it.
             // This happens when multiple calls within the same specialized function share type
             // argument AST nodes (e.g., sizeof[T]() and alignof[T]() both reference the same T).
-            if (type_arg_node->type && tl_polytype_is_concrete(type_arg_node->type)) {
+            // We don't require the type to be concrete - type variables are valid and will be
+            // unified later.
+            if (type_arg_node->type) {
                 parsed = type_arg_node->type->type;
                 // Unwrap type literal if present
                 if (tl_monotype_is_type_literal(parsed)) {
@@ -3572,6 +3574,24 @@ static void rename_variables(tl_infer *self, ast_node *node, rename_variables_ct
 
     // ensure all types are removed: important for the post-clone rename of functions being specialized.
     ast_node_type_set(node, null);
+
+    // also clear types attached to any explicit type arguments
+    {
+        u32        argc = 0;
+        ast_node **argv = null;
+        if (ast_node_is_let(node)) {
+            argc = node->let.n_type_parameters;
+            argv = node->let.type_parameters;
+        } else if (ast_node_is_nfa(node)) {
+            argc = node->named_application.n_type_arguments;
+            argv = node->named_application.type_arguments;
+        } else if (ast_node_is_utd(node)) {
+            argc = node->user_type_def.n_type_arguments;
+            argv = node->user_type_def.type_arguments;
+        }
+
+        for (u32 i = 0; i < argc; i++) ast_node_type_set(argv[i], null);
+    }
 
     switch (node->tag) {
 
