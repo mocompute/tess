@@ -542,6 +542,7 @@ static tl_monotype *get_type_argument(tl_type_registry_parse_type_ctx const *ctx
 static tl_monotype *parse_type_specials(tl_type_registry *self, tl_type_registry_parse_type_ctx *ctx,
                                         ast_node const *node) {
 
+    (void)ctx;
     tl_monotype *mono = null;
 
     if (ast_node_is_symbol(node)) {
@@ -549,10 +550,7 @@ static tl_monotype *parse_type_specials(tl_type_registry *self, tl_type_registry
         if (str_eq(name, S("any"))) mono = tl_monotype_create_any(self->alloc);
         else if (str_eq(name, S("..."))) mono = tl_monotype_create_ellipsis(self->alloc);
         else if (str_eq(name, S("Type"))) {
-            // Create a fresh type literal (target is a fresh type variable)
-            assert(ctx->annotation_target);
-            str ta = ast_node_str(ctx->annotation_target);
-            mono   = add_type_argument(self, ctx, ta);
+            fatal("var: Type is no longer valid syntax.");
         }
     }
 
@@ -621,7 +619,7 @@ static tl_monotype *tl_type_registry_parse_type_(tl_type_registry               
             goto top_success;
         }
 
-        // or else is it an annotated symbol? E.g. `count: Int` or `T: Type`
+        // or else is it an annotated symbol? E.g. `count: Int`
         if (node->symbol.annotation) {
             ast_node const *save   = ctx->annotation_target;
             ctx->annotation_target = node;
@@ -631,9 +629,9 @@ static tl_monotype *tl_type_registry_parse_type_(tl_type_registry               
             // If the annotation produces nothing, and the annotation is a symbol, it's sugar for a type
             // variable.
             // FIXME: not with v2 type args
-            if (!result && ast_node_is_symbol(node->symbol.annotation)) {
-                result = type_variable_sugar(self, ctx, node->symbol.annotation);
-            }
+            // if (!result && ast_node_is_symbol(node->symbol.annotation)) {
+            //     result = type_variable_sugar(self, ctx, node->symbol.annotation);
+            // }
         }
 
         goto top_success;
