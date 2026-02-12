@@ -16,7 +16,7 @@ Arr(T): {
 
 map(f, arr) {
     // out_p must be annotated as a `Ptr[U]`, allowing `U` to be inferred as a type argument.
-    out_p: Ptr[U] := c_malloc(sizeof(U) * arr.size)
+    out_p: Ptr[U] := c_malloc(sizeof[U]() * arr.size)
 
     // Construct an Arr object on the stack
     out := Arr(v = out_p, size = arr.size, capacity = arr.size)
@@ -38,11 +38,11 @@ main() {
 
     // When constructing an object, all fields must be provided. But they may be assigned `void`, which leaves
     // them uninitialised, shown here for the purpose of an example.
-    vals := Arr(v: Ptr[Int] = c_malloc(sizeof(Int) * 4), size = void, capacity = 4)
+    vals := Arr(v: Ptr[Int] = c_malloc(sizeof[Int]() * 4), size = void, capacity = 4)
 
     // Note that `:=` always defines a new variable. A plain `=` is used to assign to an existing variable (or
     // a field or indexed location).
-    vals.size = 4
+    vals.size  = 4
     vals.v.(0) = 0
     vals.v.(1) = 1
     vals.v.(2) = 2

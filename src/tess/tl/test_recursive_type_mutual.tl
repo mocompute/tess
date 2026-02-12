@@ -1,7 +1,7 @@
 #module main
 #import <Array.tl>
 
-Tree [a]:  { value: a, children: Ptr[Forest[a]] }
+Tree[a]:   { value: a, children: Ptr[Forest[a]] }
 Forest[a]: { trees: Array.Array[Tree[a]]        }
 
 main() {

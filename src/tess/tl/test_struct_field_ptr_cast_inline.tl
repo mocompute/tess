@@ -21,7 +21,7 @@ map(f, arr) {
     i := 0
     while i < arr.size {
         out.v.(i) = f(arr.v.(i))
-        i        = i + 1
+        i         = i + 1
     }
     out
 }
@@ -29,12 +29,12 @@ map(f, arr) {
 add1(x) { x + 1 }
 
 main() {
-    vals := Arr(v: Ptr[Int] = c_malloc(sizeof(Int) * 4), size = 0, capacity = 4)
+    vals := Arr(v: Ptr[Int] = c_malloc(sizeof[Int]() * 4), size = 0, capacity = 4)
     vals.v.(0) = 0
     vals.v.(1) = 1
     vals.v.(2) = 2
     vals.v.(3) = 3
-    vals.size = 4
+    vals.size  = 4
 
     res := map(add1/1, vals)
 

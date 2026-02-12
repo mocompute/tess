@@ -4,14 +4,14 @@ test1() {
     error := 0
 
     good   := Some(123)
-    result := case good: Option {
+    result := case good: Option[Int] {
         x: Some { x.v }
         n: None { 456 }
     }
     error += if result - 123 == 0 {0} else {1}
 
     good   := Some(0.5)
-    result := case good: Option {
+    result := case good: Option[Float] {
         x: Some { x.v }
         n: None { 45.6 }
     }
@@ -23,7 +23,7 @@ test1() {
     nopt: Option[Float] := void
     nopt = None()
 
-    result := case nopt: Option {
+    result := case nopt: Option[Float] {
         x: Some { x.v }
         n: None { 3.14 }
     }
