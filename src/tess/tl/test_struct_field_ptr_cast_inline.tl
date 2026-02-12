@@ -1,14 +1,14 @@
 #module main
 #import <stdlib.tl>
 
-Arr(a): {
+Arr[a]: {
     v:        Ptr[a],
     size:     Int,
     capacity: Int,
 }
 
 // Forward declaration with two type variables
-map(f: (a) -> b, arr: Arr(a)) -> Arr(b)
+map(f: (a) -> b, arr: Arr[a]) -> Arr[b]
 
 // The bug: inlining c_malloc directly into the annotated struct field
 // fails, whereas using a temporary variable (out_p) works.
@@ -16,7 +16,7 @@ map(f, arr) {
     // This should be equivalent to:
     //   out_p: Ptr[b] := c_malloc(sizeof(b) * arr.size)
     //   out := Arr(v = out_p, size = arr.size, capacity = arr.size)
-    out := Arr(v: Ptr[b] = c_malloc(sizeof(b) * arr.size), size = arr.size, capacity = arr.size)
+    out := Arr(v: Ptr[b] = c_malloc(sizeof[b]() * arr.size), size = arr.size, capacity = arr.size)
 
     i := 0
     while i < arr.size {

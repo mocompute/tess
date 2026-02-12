@@ -3,7 +3,7 @@
 
 
 // A generic type definition
-Arr(T): {
+Arr[T]: {
     v:        Ptr[T],
     size:     Int,
     capacity: Int,
