@@ -1800,8 +1800,8 @@ static int infer_named_function_application(tl_infer *self, traverse_ctx *ctx, a
                                  "Looking up '%.*s' which is not alpha-converted in type_arguments",
                                  str_ilen(param_name), str_buf(&param_name));
                         report_invariant_failure(self, "infer_named_function_application",
-                                                 "Type argument lookup must use alpha-converted names", detail,
-                                                 node);
+                                                 "Type argument lookup must use alpha-converted names",
+                                                 detail, node);
                     }
 #endif
 
@@ -1903,6 +1903,27 @@ static ast_node *clone_generic_for_arrow(tl_infer *self, ast_node const *node, t
         ast_node_dfs(&check_ctx, clone, check_types_null_cb);
         if (check_ctx.failures) {
             fprintf(stderr, "ERROR: Type pollution detected in cloned AST\n");
+        }
+    }
+
+    // Invariant: Alpha-converted type parameter names must not already exist in the environment
+    // This ensures each specialization gets truly fresh names
+    if (ast_node_is_let(clone)) {
+        for (u32 i = 0; i < clone->let.n_type_parameters; i++) {
+            ast_node *tp      = clone->let.type_parameters[i];
+            str       tp_name = tp->symbol.name;
+
+            tl_polytype *existing = tl_type_env_lookup(self->env, tp_name);
+            if (existing) {
+                char detail[256];
+                str  type_str = tl_polytype_to_string(self->transient, existing);
+                snprintf(detail, sizeof detail,
+                         "Type parameter '%.*s' already exists in environment with type: %s",
+                         str_ilen(tp_name), str_buf(&tp_name), str_cstr(&type_str));
+                report_invariant_failure(self, "clone_generic_for_arrow",
+                                         "New specialization type parameters must have fresh names", detail,
+                                         tp);
+            }
         }
     }
 #endif
@@ -5201,8 +5222,8 @@ static void check_specialized_nfa_type_args_cb(void *ctx_ptr, ast_node *node) {
             str  type_str = tl_polytype_to_string(ctx->self->transient, ta->type);
             snprintf(detail, sizeof detail, "Type argument %u has non-concrete type: %s", i,
                      str_cstr(&type_str));
-            report_invariant_failure(ctx->self, ctx->phase, "Specialized NFA type arguments must be concrete",
-                                     detail, ta);
+            report_invariant_failure(ctx->self, ctx->phase,
+                                     "Specialized NFA type arguments must be concrete", detail, ta);
             ctx->failures++;
         }
     }
