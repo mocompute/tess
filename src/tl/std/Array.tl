@@ -68,15 +68,15 @@ resize[T]       (self: Ptr[Array[T]], alloc: Ptr[Allocator], count: Int, val: T)
 resize[T]       (self: Ptr[Array[T]], count: Int, val: T)                        -> Void
 shrink_to_fit[T](self: Ptr[Array[T]], alloc: Ptr[Allocator])                     -> Void
 shrink_to_fit[T](self: Ptr[Array[T]])                                            -> Void
-truncate [T]    (self: Ptr[Array[T]], count: Int)                                -> Void
+truncate[T]     (self: Ptr[Array[T]], count: Int)                                -> Void
 
 // Bulk operations.
 append[T](self: Ptr[Array[T]], alloc: Ptr[Allocator], other: Array[T]) -> Void
 append[T](self: Ptr[Array[T]], other: Array[T])                        -> Void
-clone [T](alloc: Ptr[Allocator], arr: Array[T])                        -> Array[T]
-clone [T](arr: Array[T])                                               -> Array[T]
-slice [T](alloc: Ptr[Allocator], arr: Array[T], start: Int, end: Int)  -> Array[T]
-slice [T](arr: Array[T], start: Int, end: Int)                         -> Array[T]
+clone[T] (alloc: Ptr[Allocator], arr: Array[T])                        -> Array[T]
+clone[T] (arr: Array[T])                                               -> Array[T]
+slice[T] (alloc: Ptr[Allocator], arr: Array[T], start: Int, end: Int)  -> Array[T]
+slice[T] (arr: Array[T], start: Int, end: Int)                         -> Array[T]
 
 // Search / query.
 is_empty[T](arr: Array[T])         -> Bool
@@ -103,7 +103,7 @@ map[T, U]    (arr: Array[T], f: (T) -> U)                           -> Array[U]
 filter[T]    (alloc: Ptr[Allocator], arr: Array[T], f: (T) -> Bool) -> Array[T]
 filter[T]    (arr: Array[T], f: (T) -> Bool)                        -> Array[T]
 reduce[T, U] (arr: Array[T], init: U, f: (U, T) -> U)               -> U
-foreach [T]  (arr: Array[T], f: (T) -> Void)                        -> Void
+foreach[T]   (arr: Array[T], f: (T) -> Void)                        -> Void
 any_of[T]    (arr: Array[T], f: (T) -> Bool)                        -> Bool
 all[T]       (arr: Array[T], f: (T) -> Bool)                        -> Bool
 find[T]      (arr: Array[T], f: (T) -> Bool)                        -> Int
@@ -556,12 +556,12 @@ Iter[T]: {
     index: Int,
 }
 
-iter_init[T]   (arr: Ptr[Array[T]]) -> Iter[T]
-iter_ptr[T]    (iter: Ptr[Iter[T]]) -> Ptr[T]
-iter_value[T]  (iter: Ptr[Iter[T]]) -> T
-iter_cond[T]   (iter: Ptr[Iter[T]]) -> Bool
-iter_update[T] (iter: Ptr[Iter[T]]) -> Void
-iter_deinit[T] (iter: Ptr[Iter[T]]) -> Void
+iter_init[T]  (arr: Ptr[Array[T]]) -> Iter[T]
+iter_ptr[T]   (iter: Ptr[Iter[T]]) -> Ptr[T]
+iter_value[T] (iter: Ptr[Iter[T]]) -> T
+iter_cond[T]  (iter: Ptr[Iter[T]]) -> Bool
+iter_update[T](iter: Ptr[Iter[T]]) -> Void
+iter_deinit[T](iter: Ptr[Iter[T]]) -> Void
 
 iter_init  (arr)  { Iter ( v = arr->v, size = arr->size, index = 0 ) }
 iter_ptr   (iter) { iter->v.(iter->index).&                          }
@@ -573,9 +573,9 @@ iter_deinit(iter) {                                                  }
 
 // -- Private functions --
 
-_grow[T]               (self: Ptr[T], alloc: Ptr[Allocator], at_least: Int) -> Void
-_is_full[T]            (self: Ptr[T])                                       -> Bool
-_type_width_aligned[T] ()                                                   -> Int
+_grow[T]              (self: Ptr[Array[T]], alloc: Ptr[Allocator], at_least: Int) -> Void
+_is_full[T]           (self: Ptr[Array[T]])                                       -> Bool
+_type_width_aligned[T]()                                                          -> Int
 
 // --
 
@@ -593,7 +593,7 @@ _grow(self, alloc, at_least) {
     reserve(self, alloc, count)
 }
 
-_type_width_aligned[T]() { Alloc.align(_tl_sizeof_[T](), _tl_alignof_[T]()) }
+_type_width_aligned[T]() { Alloc.align(sizeof[T](), alignof[T]()) }
 
 
 // -- Array.Indexed --
@@ -621,12 +621,12 @@ Iter[T]: {
 }
 
 
-iter_init[T]   (arr: Ptr[Array.Array[T]]) -> Iter[T]
-iter_ptr[T]    (iter: Ptr[Iter[T]])       -> IterValuePtr[T]
-iter_value[T]  (iter: Ptr[Iter[T]])       -> IterValue[T]
-iter_cond[T]   (iter: Ptr[Iter[T]])       -> Bool
-iter_update[T] (iter: Ptr[Iter[T]])       -> Void
-iter_deinit[T] (iter: Ptr[Iter[T]])       -> Void
+iter_init[T]  (arr: Ptr[Array.Array[T]]) -> Iter[T]
+iter_ptr[T]   (iter: Ptr[Iter[T]])       -> IterValuePtr[T]
+iter_value[T] (iter: Ptr[Iter[T]])       -> IterValue[T]
+iter_cond[T]  (iter: Ptr[Iter[T]])       -> Bool
+iter_update[T](iter: Ptr[Iter[T]])       -> Void
+iter_deinit[T](iter: Ptr[Iter[T]])       -> Void
 
 iter_init(arr) { Iter (v = arr->v,
                        size  = arr->size,
