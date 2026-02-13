@@ -7,7 +7,7 @@ T[a]: | MySome { v: a }
 main() {
     good := MySome(123)
 
-    res := case good: T {
+    res := case good: T[Int] {
         s: MySome { s.v }
         n: MyNone { 0 }
     }

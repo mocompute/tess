@@ -20,7 +20,7 @@ main() {
     shape := Foo.make_Shape_Pair(p)
 
     // Verify case expression works
-    r1 := case shape: Foo.Shape {
+    r1 := case shape: Foo.Shape[Pair[Int]] {
         c: Circle { c.radius }
         p: Pair { p.x + p.y }
         n: MyNone { 0 }
@@ -29,7 +29,7 @@ main() {
 
     // Verify circle still works with the generic type param
     circle := Foo.Circle(3.14)
-    r2     := case circle: Foo.Shape {
+    r2     := case circle: Foo.Shape[Float] {
         c: Circle { c.radius }
         p: Pair { 0.0 }
         n: MyNone { 0.0 }

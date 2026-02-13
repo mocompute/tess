@@ -7,14 +7,14 @@ test1() {
     error := 0
 
     good   := MyOption.Has(123)
-    result := case good: T {
+    result := case good: T[Int] {
         x: Has { x.v }
         n: Empty { 456 }
     }
     error += if result - 123 == 0 {0} else {1}
 
     good   := MyOption.Has(0.5)
-    result := case good: T {
+    result := case good: T[Float] {
         x: Has { x.v }
         n: Empty { 45.6 }
     }
