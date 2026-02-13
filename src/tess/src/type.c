@@ -594,11 +594,6 @@ static tl_monotype *tl_type_registry_parse_type_(tl_type_registry               
 
     if (ast_node_is_symbol(node)) {
 
-        // Note: `(x : T)` is sugar for `(T: Type, x: T)`. `T` is assigned a type variable and added to ctx
-        // as a type argument. Subsequent references to `T` will use the same type variable. The code often
-        // confusingly refers to T as a 'type literal', because at the callsite, a literal type specifier
-        // must be used, when T is explicity declared as a Type argument (`T : Type`).
-
         // is it a special: any, ..., Type
         result = parse_type_specials(self, ctx, node);
         if (result) goto top_success;
@@ -624,13 +619,6 @@ static tl_monotype *tl_type_registry_parse_type_(tl_type_registry               
             ctx->annotation_target = node;
             result                 = tl_type_registry_parse_type_(self, ctx, node->symbol.annotation);
             ctx->annotation_target = save;
-
-            // If the annotation produces nothing, and the annotation is a symbol, it's sugar for a type
-            // variable.
-            // FIXME: not with v2 type args
-            // if (!result && ast_node_is_symbol(node->symbol.annotation)) {
-            //     result = type_variable_sugar(self, ctx, node->symbol.annotation);
-            // }
         }
 
         goto top_success;
@@ -921,8 +909,8 @@ tl_monotype *tl_type_registry_parse_type_with_ctx(tl_type_registry *self, ast_no
     if (0) {
         if (!result) {
             str tmp = v2_ast_node_to_string(self->transient, node);
-            fprintf(stderr, "failed to parse '%s' (ctx->type_arguments has %zu keys)\n",
-                    str_cstr(&tmp), (size_t)map_size(ctx->type_arguments));
+            fprintf(stderr, "failed to parse '%s' (ctx->type_arguments has %zu keys)\n", str_cstr(&tmp),
+                    (size_t)map_size(ctx->type_arguments));
         }
     }
 
