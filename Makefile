@@ -421,6 +421,7 @@ TL_TESTS =					\
 	mutual_recursion_module			\
 	mutual_recursion_module_apply		\
 	mutual_recursion_both_referenced	\
+	nested_struct				\
 	nested_struct_access			\
 	nested_type_cross_module_conflict	\
 	nested_lambda_context			\
@@ -557,7 +558,6 @@ TL_KNOWN_FAIL_FAILURES =
 
 # Tests that should work but currently fail due to compiler bugs
 TL_KNOWN_FAILURES =			\
-	nested_struct				\
 	lambda_immediate_type_argument		\
 	recursive_type_mutual			\
 	recursive_type_mutual_simple		\

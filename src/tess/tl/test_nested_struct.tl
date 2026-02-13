@@ -1,6 +1,6 @@
 #module main
 
-Foo(T1, T2): {
+Foo[T1, T2]: {
     Bar: {
         barf: T1
     }
