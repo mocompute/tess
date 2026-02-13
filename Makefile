@@ -410,6 +410,7 @@ TL_TESTS =					\
 	logical_expression			\
 	logical_or				\
 	malloc_free				\
+	malloc_free_is_null			\
 	malloc_struct_basic			\
 	mapper_basic				\
 	mapper_lambda				\
@@ -556,7 +557,6 @@ TL_KNOWN_FAIL_FAILURES =
 
 # Tests that should work but currently fail due to compiler bugs
 TL_KNOWN_FAILURES =			\
-	malloc_free_is_null			\
 	nested_struct				\
 	lambda_immediate_type_argument		\
 	recursive_type_mutual			\

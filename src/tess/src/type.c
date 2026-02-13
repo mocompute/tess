@@ -973,7 +973,10 @@ int tl_type_env_check_missing_fvs(tl_type_env *self, missing_fv_cb cb, void *use
         str          name = str_init_n(transient_allocator, iter.key_ptr, iter.key_size);
         tl_polytype *type = *(tl_polytype **)iter.data;
 
-        str_sized    fvs  = tl_monotype_fvs(type->type);
+        // FIXME: observed a valid type with a null monotype here
+        if (!type || !type->type) continue;
+
+        str_sized fvs = tl_monotype_fvs(type->type);
         forall(i, fvs) {
             if (!str_map_contains(self->map, fvs.v[i])) {
                 if (cb) cb(user, name, fvs.v[i]);
