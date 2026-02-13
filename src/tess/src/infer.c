@@ -92,6 +92,7 @@ struct tl_infer {
     int                             indent_level;
 
     int is_constrain_ignore_error; // non-zero if no error should be reported during unification
+
 };
 
 typedef struct {
@@ -928,6 +929,28 @@ static int constrain_mono(tl_infer *self, tl_monotype *left, tl_monotype *right,
         str right_str = tl_monotype_to_string(self->transient, right);
         fprintf(stderr, "[DEBUG CONSTRAIN] constrain_mono: %s <=> %s  (at %s:%d)\n", str_cstr(&left_str),
                 str_cstr(&right_str), node->file, node->line);
+    }
+#endif
+
+#if DEBUG_INVARIANTS
+    // Invariant: should never constrain two different concrete cons_inst types directly
+    // (excluding integer-compatible pairs). If this fires, a type variable was already
+    // bound to the wrong type upstream.
+    if (tl_monotype_is_inst(left) && tl_monotype_is_concrete(left) && tl_monotype_is_inst(right) &&
+        tl_monotype_is_concrete(right) && !tl_monotype_is_integer_convertible(left) &&
+        !tl_monotype_is_integer_convertible(right)) {
+        if (!str_eq(left->cons_inst->def->name, right->cons_inst->def->name) &&
+            !str_eq(left->cons_inst->def->generic_name, right->cons_inst->def->generic_name)) {
+            char detail[512];
+            str  ls = tl_monotype_to_string(self->transient, left);
+            str  rs = tl_monotype_to_string(self->transient, right);
+            snprintf(detail, sizeof detail,
+                     "Constraining two different concrete type constructors: %s vs %s (left@%p right@%p)",
+                     str_cstr(&ls), str_cstr(&rs), (void *)left, (void *)right);
+            report_invariant_failure(self, "constrain_mono",
+                                     "Should never constrain two different concrete type constructors",
+                                     detail, node);
+        }
     }
 #endif
 
@@ -1919,7 +1942,8 @@ static int infer_named_function_application(tl_infer *self, traverse_ctx *ctx, a
 }
 
 static void         rename_variables(tl_infer *, ast_node *, rename_variables_ctx *, int);
-static void         concretize_params(tl_infer *self, ast_node *, tl_monotype *, hashmap *type_arguments);
+static void         concretize_params(tl_infer *self, ast_node *, tl_monotype *, hashmap *type_arguments,
+                                      ast_node_sized callsite_type_arguments);
 static tl_polytype *make_arrow(tl_infer *, traverse_ctx *, ast_node_sized, ast_node *, int is_params);
 static tl_polytype *make_arrow_result_type(tl_infer *, traverse_ctx *, ast_node_sized, tl_polytype *,
                                            int is_params);
@@ -1931,12 +1955,13 @@ static int          traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *no
 
 static void      add_free_variables_to_arrow(tl_infer *self, ast_node *node, tl_polytype *arrow);
 static void      concretize_params(tl_infer *self, ast_node *node, tl_monotype *callsite,
-                                   hashmap *type_arguments);
+                                   hashmap *type_arguments, ast_node_sized callsite_type_arguments);
 static void      toplevel_name_replace(ast_node *node, str name_replace);
 static void      collect_annotation_type_vars(tl_infer *self, ast_node *node, rename_variables_ctx *ctx);
 
 static ast_node *clone_generic_for_arrow(tl_infer *self, ast_node const *node, tl_monotype *arrow,
-                                         str inst_name, hashmap *type_arguments) {
+                                         str inst_name, hashmap *type_arguments,
+                                         ast_node_sized callsite_type_arguments) {
     ast_node *clone = ast_node_clone(self->arena, node);
     ast_node *name  = toplevel_name_node(clone);
     assert(ast_node_is_symbol(name));
@@ -2032,7 +2057,7 @@ static ast_node *clone_generic_for_arrow(tl_infer *self, ast_node const *node, t
     tl_polytype wrap = tl_polytype_wrap(arrow);
     add_free_variables_to_arrow(self, clone, &wrap);
 
-    concretize_params(self, clone, arrow, type_arguments);
+    concretize_params(self, clone, arrow, type_arguments, callsite_type_arguments);
 
 #if DEBUG_INVARIANTS
     // Invariant: Type parameters with explicit bindings in type_arguments must have concrete types
@@ -2097,6 +2122,11 @@ static int traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, trave
         break;
 
     case ast_let: {
+        // Save outer context: when specializing nested functions (via post_specialize → specialize_arrow),
+        // the inner function's let case would otherwise clobber the outer type_arguments and lexical_names.
+        hashmap *save_type_arguments = map_copy(ctx->type_arguments);
+        hashmap *save_lexical_names  = map_copy(ctx->lexical_names);
+
         // Note: this node is being processed as a toplevel function definition. It must clear all lexical
         // contexts.
         map_reset(ctx->type_arguments);
@@ -2116,6 +2146,12 @@ static int traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, trave
         if (traverse_ast(self, ctx, node->let.body, cb)) return 1;
 
         // Note: let nodes are intentionally not processed with the callback.
+
+        // Restore outer context
+        map_destroy(&ctx->type_arguments);
+        map_destroy(&ctx->lexical_names);
+        ctx->type_arguments = save_type_arguments;
+        ctx->lexical_names  = save_lexical_names;
 
     } break;
 
@@ -2151,7 +2187,6 @@ static int traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, trave
     } break;
 
     case ast_named_function_application: {
-
         if (traverse_ctx_assign_type_arguments(self, ctx, node)) return 1;
 
         // traverse arguments
@@ -3093,13 +3128,13 @@ static name_and_type make_instance_key(tl_infer *self, str generic_name, tl_mono
         }
 
         if (!tl_monotype_is_concrete(type_arg_types.v[i])) {
-
-#if DEBUG_INSTANCE_CACHE
-            str node_str = v2_ast_node_to_string(self->transient, type_arg);
-            str type_str = tl_monotype_to_string(self->transient, type_arg_types.v[i]);
-            fprintf(stderr, "[INSTANCE_KEY] TYPE PARSE: node='%s' result='%s'\n", str_cstr(&node_str),
-                    str_cstr(&type_str));
-#endif
+            // Non-concrete type arguments are nulled out so they don't contribute to the
+            // instance key hash.  This is safe because concretize_params (called from
+            // clone_generic_for_arrow) now resolves type parameters positionally from the
+            // callsite's explicit type argument AST nodes.  Before that fix, two calls
+            // with different non-concrete type args (e.g. sizeof[Point_T]() vs
+            // sizeof[Rect_T]()) would produce identical keys and incorrectly share a
+            // single specialization.
             type_arg_types.v[i] = null;
         }
     }
@@ -3503,6 +3538,55 @@ static int post_specialize(tl_infer *self, traverse_ctx *traverse_ctx, ast_node 
         }
         // Apply substitutions to AST before specialization, so types are concrete
         apply_subs_to_ast_node(self, infer_target);
+
+#if DEBUG_INVARIANTS
+        // Invariant: After infer + apply_subs, all types in a specialized function must be concrete.
+        // Non-concrete types indicate type variable leakage between specializations.
+        if (ast_node_is_let(infer_target) && ast_node_is_specialized(infer_target)) {
+            str func_name = ast_node_str(infer_target->let.name);
+            // Check parameter types
+            ast_node_sized params = ast_node_sized_from_ast_array(infer_target);
+            forall(i, params) {
+                if (params.v[i]->type) {
+                    tl_monotype *mono = params.v[i]->type->type;
+                    if (mono && !tl_monotype_is_concrete(mono)) {
+                        char detail[512];
+                        str  mono_str   = tl_monotype_to_string(self->transient, mono);
+                        str  param_name = ast_node_str(params.v[i]);
+                        snprintf(
+                          detail, sizeof detail,
+                          "In specialized '%.*s': param '%.*s' has non-concrete type after apply_subs: %s",
+                          str_ilen(func_name), str_buf(&func_name), str_ilen(param_name),
+                          str_buf(&param_name), str_cstr(&mono_str));
+                        report_invariant_failure(self, "post_specialize:apply_subs",
+                                                 "All param types must be concrete after apply_subs",
+                                                 detail, params.v[i]);
+                    }
+                }
+            }
+            // Check type parameter types
+            for (u32 i = 0; i < infer_target->let.n_type_parameters; i++) {
+                ast_node *tp = infer_target->let.type_parameters[i];
+                if (tp->type) {
+                    tl_monotype *mono = tp->type->type;
+                    if (mono && !tl_monotype_is_concrete(mono)) {
+                        char detail[512];
+                        str  mono_str = tl_monotype_to_string(self->transient, mono);
+                        str  tp_name  = ast_node_str(tp);
+                        snprintf(detail, sizeof detail,
+                                 "In specialized '%.*s': type param '%.*s' has non-concrete type after "
+                                 "apply_subs: %s",
+                                 str_ilen(func_name), str_buf(&func_name), str_ilen(tp_name),
+                                 str_buf(&tp_name), str_cstr(&mono_str));
+                        report_invariant_failure(self, "post_specialize:apply_subs",
+                                                 "All type param types must be concrete after apply_subs",
+                                                 detail, tp);
+                    }
+                }
+            }
+        }
+#endif
+
         if (traverse_ast(self, traverse_ctx, infer_target, specialize_applications_cb)) {
             dbg(self, "note: post_specialize failed specialize");
             return 1;
@@ -3520,6 +3604,18 @@ static void add_free_variables_to_arrow(tl_infer *self, ast_node *node, tl_polyt
 
 static str  specialize_arrow(tl_infer *self, traverse_ctx *traverse_ctx, str name, tl_monotype *arrow,
                              ast_node_sized callsite_type_arguments) {
+
+#if DEBUG_INVARIANTS
+    // Invariant: The callsite arrow type must be concrete when entering specialization.
+    // A non-concrete arrow means unresolved type variables from another context could leak in.
+    if (!tl_monotype_is_concrete(arrow)) {
+        char detail[512];
+        str  arrow_str = tl_monotype_to_string(self->transient, arrow);
+        snprintf(detail, sizeof detail, "Specializing '%.*s' with non-concrete callsite arrow: %s",
+                 str_ilen(name), str_buf(&name), str_cstr(&arrow_str));
+        report_invariant_failure(self, "specialize_arrow", "Callsite arrow must be concrete", detail, null);
+    }
+#endif
 
     // 1. Check if already specialized
     if (instance_name_exists(self, name)) return name;
@@ -3539,8 +3635,9 @@ static str  specialize_arrow(tl_infer *self, traverse_ctx *traverse_ctx, str nam
     instance_add(self, &key, inst_name);
 
     // 4. Clone generic function's AST
-    ast_node *generic_node = clone_generic_for_arrow(self, toplevel, arrow, inst_name,
-                                                     traverse_ctx ? traverse_ctx->type_arguments : null);
+    ast_node *generic_node =
+      clone_generic_for_arrow(self, toplevel, arrow, inst_name,
+                              traverse_ctx ? traverse_ctx->type_arguments : null, callsite_type_arguments);
 
     // 5. Add to environment and toplevel
     specialized_add_to_env(self, inst_name, arrow);
@@ -3923,7 +4020,7 @@ static int specialize_applications_cb(tl_infer *self, traverse_ctx *traverse_ctx
         dbg(self, "specialize_applications_cb: anon");
         callsite = make_arrow(self, traverse_ctx, ast_node_sized_from_ast_array(node), node, 0);
 
-        concretize_params(self, node, callsite->type, null);
+        concretize_params(self, node, callsite->type, null, (ast_node_sized){0});
         if (post_specialize(self, traverse_ctx, node->lambda_application.lambda, callsite->type)) {
             return 1;
         }
@@ -4377,7 +4474,7 @@ static void rename_variables(tl_infer *self, ast_node *node, rename_variables_ct
 static void add_free_variables_to_arrow(tl_infer *, ast_node *, tl_polytype *);
 
 static void concretize_params(tl_infer *self, ast_node *node, tl_monotype *callsite,
-                              hashmap *type_arguments) {
+                              hashmap *type_arguments, ast_node_sized callsite_type_arguments) {
     if (ast_node_is_symbol(node)) return;
 
     ast_node      *body   = null;
@@ -4434,6 +4531,42 @@ static void concretize_params(tl_infer *self, ast_node *node, tl_monotype *calls
             // and specialized phases.
             str          param_name = type_param->symbol.name;
             tl_monotype *bound_type = str_map_get_ptr(type_arguments, param_name);
+
+            // If direct lookup failed (because clone's alpha-converted name differs from caller's),
+            // resolve positionally through the callsite type arguments. The callsite NFA's i-th type
+            // argument corresponds to this clone's i-th type parameter.
+            if (!bound_type && i < callsite_type_arguments.size) {
+                ast_node *callsite_arg = callsite_type_arguments.v[i];
+
+                // Try 1: If the callsite type arg is a symbol, look up its name in type_arguments.
+                // This bridges from the caller's alpha-converted name to the concrete type.
+                if (ast_node_is_symbol(callsite_arg)) {
+                    bound_type = str_map_get_ptr(type_arguments, callsite_arg->symbol.name);
+                }
+
+                // Try 2: If the callsite type arg has a resolved type on it, use that.
+                if (!bound_type && callsite_arg->type) {
+                    tl_monotype *resolved = tl_monotype_clone(self->arena, callsite_arg->type->type);
+                    tl_monotype_substitute(self->arena, resolved, self->subs, null);
+                    if (tl_monotype_is_concrete(resolved)) {
+                        bound_type = resolved;
+                    }
+                }
+
+                // Try 3: Parse the callsite type arg node using the type_arguments context.
+                if (!bound_type) {
+                    tl_type_registry_parse_type_ctx parse_ctx;
+                    tl_type_registry_parse_type_ctx_init(self->transient, &parse_ctx, type_arguments);
+                    tl_monotype *parsed =
+                      tl_type_registry_parse_type_with_ctx(self->registry, callsite_arg, &parse_ctx);
+                    if (parsed) {
+                        tl_monotype_substitute(self->arena, parsed, self->subs, null);
+                        if (tl_monotype_is_concrete(parsed)) {
+                            bound_type = parsed;
+                        }
+                    }
+                }
+            }
 
 #if DEBUG_EXPLICIT_TYPE_ARGS
             fprintf(stderr, "[DEBUG CONCRETIZE TYPE PARAMS] type_param[%u]: name='%s', bound=%p\n", i,
