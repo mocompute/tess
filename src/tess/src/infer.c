@@ -1994,8 +1994,12 @@ static ast_node *clone_generic_for_arrow(tl_infer *self, ast_node const *node, t
         collect_annotation_type_vars(self, name->symbol.annotation, &ctx);
     }
 
-    // Count type variables collected from annotation
-    u32 n_annotation_type_vars   = map_size(ctx.lex);
+    // Snapshot annotation type variable keys before rename_variables adds value parameters.
+    // This gives us the exact set of type variables without needing casing heuristics.
+    u32       n_annotation_type_vars   = map_size(ctx.lex);
+    str_array annotation_type_var_keys = n_annotation_type_vars > 0
+                                           ? str_map_keys(self->transient, ctx.lex)
+                                           : (str_array){0};
 
     name->symbol.annotation_type = null;
     name->symbol.annotation      = null;
@@ -2038,30 +2042,23 @@ static ast_node *clone_generic_for_arrow(tl_infer *self, ast_node const *node, t
     // If we collected type variables from the annotation, add them as type parameters to the let node.
     // This ensures traverse_ctx_load_type_arguments can find them later.
     if (n_annotation_type_vars > 0 && ast_node_is_let(clone) && clone->let.n_type_parameters == 0) {
-        str_array keys = str_map_keys(self->transient, ctx.lex);
-
-        // Filter to just the type variables we added (not value parameters)
-        // Type vars are lowercase, single letter or short names
-        ast_node **type_params   = alloc_malloc(self->arena, sizeof(ast_node *) * keys.size);
+        // Use the snapshotted keys — these are exactly the type variables from the annotation,
+        // without any value parameters that rename_variables added later.
+        ast_node **type_params   = alloc_malloc(self->arena, sizeof(ast_node *) * annotation_type_var_keys.size);
         u32        n_type_params = 0;
 
-        forall(i, keys) {
-            str original = keys.v[i];
-            // Type variables are typically lowercase letters
-            // FIXME: do NOT assume any convention about uppercase, lowercase, length, etc.
-            char first = str_len(original) > 0 ? str_buf(&original)[0] : 0;
-            if (first >= 'a' && first <= 'z' && str_len(original) <= 3) {
-                str *renamed = str_map_get(ctx.lex, original);
-                if (renamed) {
-                    ast_node *type_param         = ast_node_create(self->arena, ast_symbol);
-                    type_param->symbol.name      = *renamed;
-                    type_param->symbol.original  = original;
-                    type_params[n_type_params++] = type_param;
+        forall(i, annotation_type_var_keys) {
+            str  original = annotation_type_var_keys.v[i];
+            str *renamed  = str_map_get(ctx.lex, original);
+            if (renamed) {
+                ast_node *type_param         = ast_node_create(self->arena, ast_symbol);
+                type_param->symbol.name      = *renamed;
+                type_param->symbol.original  = original;
+                type_params[n_type_params++] = type_param;
 #if DEBUG_RENAME
-                    fprintf(stderr, "[DEBUG] Added type_parameter: %s (original: %s)\n", str_cstr(renamed),
-                            str_cstr(&original));
+                fprintf(stderr, "[DEBUG] Added type_parameter: %s (original: %s)\n", str_cstr(renamed),
+                        str_cstr(&original));
 #endif
-                }
             }
         }
 
@@ -4346,12 +4343,20 @@ static void collect_annotation_type_vars(tl_infer *self, ast_node *node, rename_
         // Skip if already in lexical scope
         if (str_map_contains(ctx->lex, name)) return;
 
-        // Skip uppercase names (concrete types like Int, Ptr, etc.)
+        // Skip known concrete types from the type registry (built-in types like Int, Ptr, etc.)
+        if (tl_type_registry_get(self->registry, name)) return;
+
+        // Skip module-qualified names (e.g. Alloc__Allocator) — always concrete type references
+        if (str_contains(name, S("__"))) return;
+
+        // Skip C FFI symbols
+        if (is_c_symbol(name)) return;
+
+        // FIXME: Skip names starting with uppercase — relies on casing heuristic. User-defined
+        // type names are not yet in the registry during alpha conversion (Phase 1). To remove this,
+        // collect all type definition names into the registry (or a separate set) before Phase 1.
         char first = str_len(name) > 0 ? str_buf(&name)[0] : 0;
         if (first >= 'A' && first <= 'Z') return;
-
-        // Skip c_ prefixed names
-        if (str_len(name) >= 2 && str_buf(&name)[0] == 'c' && str_buf(&name)[1] == '_') return;
 
         // This looks like a type variable - add it to the lexical scope
         str newvar = next_variable_name(self, name);
