@@ -666,9 +666,8 @@ static void traverse_ctx_load_type_arguments(tl_infer *self, traverse_ctx *ctx, 
                         str  func_name = ast_node_str(node->let.name);
                         str  type_str  = tl_monotype_to_string(self->transient, substituted);
                         snprintf(detail, sizeof detail,
-                                 "Specialized function '%.*s' type param '%.*s' already bound to '%s'",
-                                 str_ilen(func_name), str_buf(&func_name),
-                                 str_ilen(type_param->symbol.name), str_buf(&type_param->symbol.name),
+                                 "Specialized function '%s' type param '%s' already bound to '%s'",
+                                 str_cstr(&func_name), str_cstr(&type_param->symbol.name),
                                  str_cstr(&type_str));
                         report_invariant_failure(
                           self, "traverse_ctx_load_type_arguments",
@@ -3086,6 +3085,23 @@ static name_and_type make_instance_key(tl_infer *self, str generic_name, tl_mono
     forall(i, type_arguments) {
         ast_node *type_arg  = type_arguments.v[i];
         type_arg_types.v[i] = tl_type_registry_parse_type_with_ctx(self->registry, type_arg, &parse_ctx);
+        if (!type_arg_types.v[i]) continue;
+
+        if (!tl_monotype_is_concrete(type_arg_types.v[i])) {
+            // attempt to substitute
+            tl_monotype_substitute(self->arena, type_arg_types.v[i], self->subs, null);
+        }
+
+        if (!tl_monotype_is_concrete(type_arg_types.v[i])) {
+
+#if DEBUG_INSTANCE_CACHE
+            str node_str = v2_ast_node_to_string(self->transient, type_arg);
+            str type_str = tl_monotype_to_string(self->transient, type_arg_types.v[i]);
+            fprintf(stderr, "[INSTANCE_KEY] TYPE PARSE: node='%s' result='%s'\n", str_cstr(&node_str),
+                    str_cstr(&type_str));
+#endif
+            type_arg_types.v[i] = null;
+        }
     }
 
     name_and_type key = {
@@ -3126,7 +3142,7 @@ static str *instance_lookup_arrow(tl_infer *self, str generic_name, tl_monotype 
 
     // de-duplicate instances: hashes give us structural equality (barring hash collisions), which we need
     // because types are frequently cloned.
-    name_and_type key    = make_instance_key(self, generic_name, arrow, type_arguments, outer_type_arguments);
+    name_and_type key = make_instance_key(self, generic_name, arrow, type_arguments, outer_type_arguments);
     str          *result = instance_lookup(self, &key);
 
 #if DEBUG_INSTANCE_CACHE
@@ -3148,8 +3164,8 @@ static int instance_name_exists(tl_infer *self, str instance_name) {
 static void instance_add(tl_infer *self, name_and_type *key, str instance_name) {
 #if DEBUG_INSTANCE_CACHE
     size_t count_before = map_size(self->instances);
-    fprintf(stderr, "[INSTANCE ADD] '%s' (cache size: %zu -> %zu)\n", str_cstr(&instance_name), count_before,
-            count_before + 1);
+    fprintf(stderr, "[INSTANCE ADD] '%s' (cache size: %zu -> %zu)\n", str_cstr(&instance_name),
+            count_before, count_before + 1);
     fprintf(stderr, "  key: name_hash=%016llx type_hash=%016llx type_args_hash=%016llx\n",
             (unsigned long long)key->name_hash, (unsigned long long)key->type_hash,
             (unsigned long long)key->type_args_hash);
