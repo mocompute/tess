@@ -5429,8 +5429,7 @@ static int check_unresolved_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_n
 
     if (ast_node_is_let_in(node) && !tl_monotype_is_arrow(node->let_in.value->type->type)) {
         if (!tl_polytype_is_concrete(node->let_in.name->type)) {
-            type_error(self, node->let_in.name);
-            type_error(self, node);
+            unresolved_type_error(self, node->let_in.name);
         }
     } else if (ast_node_is_reassignment(node) && !tl_polytype_is_concrete(node->type)) {
         unresolved_type_error(self, node);
