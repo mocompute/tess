@@ -12,10 +12,10 @@ Arr[a]: {
 // The first argument `f` is a generic unary function that maps a value of one type (`a`) to a value of another type (`b`).
 // The second argument `arr` is an `Arr` struct with elements of type `a`, passed by value.
 // The function returns an `Arr` struct with elements of type `b`.
-map(f: (a) -> b, arr: Arr[a]) -> Arr[b]
+map[a, b](f: (a) -> b, arr: Arr[a]) -> Arr[b]
 
 // Argument type annotations are not required.
-map(f, arr) {
+map[a, b](f, arr) {
 
     // Because of the `c_` prefix, `c_malloc` is compiled to a direct call to the C function `malloc`.
     // Because `malloc` returns `void*`, the `: Ptr[b]` type annotation is required.
