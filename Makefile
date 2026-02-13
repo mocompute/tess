@@ -441,6 +441,7 @@ TL_TESTS =					\
 	recursive_type_basic			\
 	recursive_type_cycle_3			\
 	recursive_type_generic			\
+	recursive_type_mutual			\
 	recursive_type_mutual_simple		\
 	regress_type_cons			\
 	relational_basic			\
@@ -564,7 +565,6 @@ TL_KNOWN_FAIL_FAILURES =
 # Tests that should work but currently fail due to compiler bugs
 TL_KNOWN_FAILURES =			\
 	lambda_immediate_type_argument		\
-	recursive_type_mutual			\
 	while_empty_body
 
 # Total test count across all suites

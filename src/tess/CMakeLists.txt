@@ -364,6 +364,7 @@ tl_create_test(recursive_type)
 tl_create_test(recursive_type_basic)
 tl_create_test(recursive_type_cycle_3)
 tl_create_test(recursive_type_generic)
+tl_create_test(recursive_type_mutual)
 tl_create_test(recursive_type_mutual_simple)
 tl_create_test(regress_type_cons)
 tl_create_test(relational_basic)
@@ -508,5 +509,4 @@ tl_create_runtime_fail_test(fail_str_push_literal)
 
 # Known failures: these should work but a compiler bug makes them fail
 tl_create_known_failure(lambda_immediate_type_argument)
-tl_create_known_failure(recursive_type_mutual)
 tl_create_known_failure(while_empty_body)

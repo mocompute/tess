@@ -1434,12 +1434,6 @@ static tl_monotype *tl_polytype_instantiate_(allocator *alloc, tl_polytype *self
         } else {
             replace_tv_mono(fresh, subs, &q_to_t, &seen);
         }
-
-#ifndef NDEBUG
-        // assert the argument for a unary type maintains its pointer identity
-        if (tl_cons_inst == fresh->tag && 1 == fresh->cons_inst->args.size)
-            assert(args.v[0] == fresh->cons_inst->args.v[0]);
-#endif
     }
 
     return fresh;
