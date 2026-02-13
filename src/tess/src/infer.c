@@ -1975,7 +1975,6 @@ static void      add_free_variables_to_arrow(tl_infer *self, ast_node *node, tl_
 static void      concretize_params(tl_infer *self, ast_node *node, tl_monotype *callsite,
                                    hashmap *type_arguments, ast_node_sized callsite_type_arguments);
 static void      toplevel_name_replace(ast_node *node, str name_replace);
-static void      collect_annotation_type_vars(tl_infer *self, ast_node *node, rename_variables_ctx *ctx);
 
 static ast_node *clone_generic_for_arrow(tl_infer *self, ast_node const *node, tl_monotype *arrow,
                                          str inst_name, hashmap *type_arguments,
@@ -1987,19 +1986,11 @@ static ast_node *clone_generic_for_arrow(tl_infer *self, ast_node const *node, t
     // rename variables: also erases type information
     rename_variables_ctx ctx = {.lex = map_new(self->transient, str, str, 16)};
 
-    // Before clearing the annotation, collect type variables from it.
-    // These are type variables like 'a', 'b' in forward declarations that appear in the
-    // function body (e.g., `sizeof[b]()`). They need to be in lexical scope for renaming.
-    if (name->symbol.annotation) {
-        collect_annotation_type_vars(self, name->symbol.annotation, &ctx);
-    }
-
     // Snapshot annotation type variable keys before rename_variables adds value parameters.
     // This gives us the exact set of type variables without needing casing heuristics.
-    u32       n_annotation_type_vars   = map_size(ctx.lex);
-    str_array annotation_type_var_keys = n_annotation_type_vars > 0
-                                           ? str_map_keys(self->transient, ctx.lex)
-                                           : (str_array){0};
+    u32       n_annotation_type_vars = map_size(ctx.lex);
+    str_array annotation_type_var_keys =
+      n_annotation_type_vars > 0 ? str_map_keys(self->transient, ctx.lex) : (str_array){0};
 
     name->symbol.annotation_type = null;
     name->symbol.annotation      = null;
@@ -2044,8 +2035,9 @@ static ast_node *clone_generic_for_arrow(tl_infer *self, ast_node const *node, t
     if (n_annotation_type_vars > 0 && ast_node_is_let(clone) && clone->let.n_type_parameters == 0) {
         // Use the snapshotted keys — these are exactly the type variables from the annotation,
         // without any value parameters that rename_variables added later.
-        ast_node **type_params   = alloc_malloc(self->arena, sizeof(ast_node *) * annotation_type_var_keys.size);
-        u32        n_type_params = 0;
+        ast_node **type_params =
+          alloc_malloc(self->arena, sizeof(ast_node *) * annotation_type_var_keys.size);
+        u32 n_type_params = 0;
 
         forall(i, annotation_type_var_keys) {
             str  original = annotation_type_var_keys.v[i];
@@ -4322,78 +4314,6 @@ static void rename_let_in(tl_infer *self, ast_node *node, rename_variables_ctx *
     str_map_set(&ctx->lex, name, &newvar);
 }
 
-// Helper to collect and rename type variables from annotation ASTs.
-// Type variables are lowercase symbols that appear in type position (not parameter names).
-// When a symbol has an annotation (like `f: (a) -> b`), `f` is a parameter name - skip it
-// and only recurse into its annotation where the actual type variables are.
-static void collect_annotation_type_vars(tl_infer *self, ast_node *node, rename_variables_ctx *ctx) {
-    if (!node) return;
-
-    if (ast_node_is_symbol(node)) {
-        // If symbol has an annotation, it's a parameter name (like `f` in `f: (a) -> b`).
-        // Skip the name itself, only recurse into the type annotation.
-        if (node->symbol.annotation) {
-            collect_annotation_type_vars(self, node->symbol.annotation, ctx);
-            return;
-        }
-
-        // Bare symbol in type position - this is a type variable candidate
-        str name = node->symbol.name;
-
-        // Skip if already in lexical scope
-        if (str_map_contains(ctx->lex, name)) return;
-
-        // Skip known concrete types from the type registry (built-in types like Int, Ptr, etc.)
-        if (tl_type_registry_get(self->registry, name)) return;
-
-        // Skip module-qualified names (e.g. Alloc__Allocator) — always concrete type references
-        if (str_contains(name, S("__"))) return;
-
-        // Skip C FFI symbols
-        if (is_c_symbol(name)) return;
-
-        // FIXME: Skip names starting with uppercase — relies on casing heuristic. User-defined
-        // type names are not yet in the registry during alpha conversion (Phase 1). To remove this,
-        // collect all type definition names into the registry (or a separate set) before Phase 1.
-        char first = str_len(name) > 0 ? str_buf(&name)[0] : 0;
-        if (first >= 'A' && first <= 'Z') return;
-
-        // This looks like a type variable - add it to the lexical scope
-        str newvar = next_variable_name(self, name);
-        str_map_set(&ctx->lex, name, &newvar);
-
-#if DEBUG_RENAME
-        fprintf(stderr, "rename type var %s => %s\n", str_cstr(&name), str_cstr(&newvar));
-#endif
-    }
-
-    else if (ast_node_is_arrow(node)) {
-        collect_annotation_type_vars(self, node->arrow.left, ctx);
-        collect_annotation_type_vars(self, node->arrow.right, ctx);
-    }
-
-    else if (ast_node_is_tuple(node)) {
-        for (u32 i = 0; i < node->tuple.n_elements; i++) {
-            collect_annotation_type_vars(self, node->tuple.elements[i], ctx);
-        }
-    }
-
-    else if (ast_node_is_nfa(node)) {
-        // For type applications like Arr[a], collect from type arguments
-        u32        argc = node->named_application.n_type_arguments;
-        ast_node **argv = node->named_application.type_arguments;
-        for (u32 i = 0; i < argc; i++) {
-            collect_annotation_type_vars(self, argv[i], ctx);
-        }
-        // Also check regular arguments for nested annotations
-        ast_arguments_iter iter = ast_node_arguments_iter(node);
-        ast_node          *arg;
-        while ((arg = ast_arguments_next(&iter))) {
-            collect_annotation_type_vars(self, arg, ctx);
-        }
-    }
-}
-
 static void rename_one_function_param(tl_infer *self, ast_node *param, rename_variables_ctx *ctx,
                                       int level) {
     if (ast_node_is_nfa(param)) {
@@ -4454,19 +4374,6 @@ static hashmap *rename_function_params(tl_infer *self, ast_node *node, rename_va
         ast_node **argv = node->let.type_parameters;
         for (u32 i = 0; i < argc; i++) {
             rename_one_function_param(self, argv[i], ctx, level);
-        }
-
-        // Also collect type variables from the function's annotation (from forward declarations).
-        // These type variables (like 'a', 'b' in `map(f: (a) -> b, arr: Arr[a]) -> Arr[b]`) need
-        // to be added to the lexical scope so they get renamed consistently in the body.
-        if (node->let.name && ast_node_is_symbol(node->let.name)) {
-#if DEBUG_RENAME
-            str       fn_name = node->let.name->symbol.name;
-            ast_node *annot   = node->let.name->symbol.annotation;
-            fprintf(stderr, "[DEBUG] rename_function_params: fn='%s', annotation=%p (tag=%d)\n",
-                    str_cstr(&fn_name), (void *)annot, annot ? (int)annot->tag : -1);
-#endif
-            collect_annotation_type_vars(self, node->let.name->symbol.annotation, ctx);
         }
     }
 
