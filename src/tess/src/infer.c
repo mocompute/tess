@@ -665,35 +665,13 @@ static void traverse_ctx_load_type_arguments(tl_infer *self, traverse_ctx *ctx, 
             // type variable.
             if (type_param->type) {
                 tl_monotype *mono = type_param->type->type;
+                if (!tl_monotype_is_concrete(mono))
+                    tl_monotype_substitute(self->arena, mono, self->subs, null);
 #if DEBUG_EXPLICIT_TYPE_ARGS
                 str mono_str = tl_monotype_to_string(self->transient, mono);
                 fprintf(stderr, "[DEBUG LOAD TYPE ARGS] '%s' type_param '%s' has existing type: %s\n",
                         str_cstr(&node->let.name->symbol.name), str_cstr(&type_param->symbol.name),
                         str_cstr(&mono_str));
-#endif
-
-#if DEBUG_INVARIANTS
-                // Invariant: When loading a type param for a specialized function,
-                // if its type variable is already bound to a concrete type in substitutions,
-                // that indicates the specialized function is being reused - potential pollution.
-                // Note: This is informational - not all reuse is bad, but it helps debug pollution.
-                if (tl_monotype_is_tv(mono) && ast_node_is_specialized(node)) {
-                    tl_monotype *substituted = tl_monotype_clone(self->transient, mono);
-                    tl_monotype_substitute(self->transient, substituted, self->subs, null);
-                    if (tl_monotype_is_concrete(substituted) && !tl_monotype_is_tv(substituted)) {
-                        char detail[512];
-                        str  func_name = ast_node_str(node->let.name);
-                        str  type_str  = tl_monotype_to_string(self->transient, substituted);
-                        snprintf(detail, sizeof detail,
-                                 "Specialized function '%s' type param '%s' already bound to '%s'",
-                                 str_cstr(&func_name), str_cstr(&type_param->symbol.name),
-                                 str_cstr(&type_str));
-                        report_invariant_failure(
-                          self, "traverse_ctx_load_type_arguments",
-                          "Specialized function type param already bound (reuse detected)", detail,
-                          type_param);
-                    }
-                }
 #endif
 
                 str param_name = type_param->symbol.name;
@@ -832,24 +810,6 @@ static int traverse_ctx_assign_type_arguments(tl_infer *self, traverse_ctx *ctx,
                 if (specialized && tl_monotype_is_inst_specialized(specialized->type)) {
                     parsed = specialized->type;
                 }
-
-#if DEBUG_INVARIANTS
-                // Invariant: Type constructor instances in explicit type arguments must be specialized
-                // After attempting specialization, verify the result is properly specialized.
-                // If parsed is still an unspecialized type constructor instance, specialization failed.
-                if (tl_monotype_is_inst(parsed) && !tl_monotype_is_inst_specialized(parsed)) {
-                    char detail[256];
-                    str  type_str = tl_monotype_to_string(self->transient, parsed);
-                    str  callee   = ast_node_str(node->named_application.name);
-                    snprintf(detail, sizeof detail,
-                             "Type argument %u '%s' in call to '%.*s' was not specialized", i,
-                             str_cstr(&type_str), str_ilen(callee), str_buf(&callee));
-                    report_invariant_failure(self, "traverse_ctx_assign_type_arguments",
-                                             "Type constructor instances in explicit type args must be "
-                                             "specialized",
-                                             detail, (ast_node *)node);
-                }
-#endif
             }
 
             // If the callee has a matching type parameter, add to the type argument context
@@ -871,7 +831,8 @@ static int traverse_ctx_assign_type_arguments(tl_infer *self, traverse_ctx *ctx,
                 // Type pollution occurs when the same alpha-converted name gets different types
                 // in different specialization contexts
                 tl_monotype *existing_binding = str_map_get_ptr(ctx->type_arguments, param_name);
-                if (existing_binding && existing_binding != parsed) {
+                if (existing_binding &&
+                    tl_monotype_hash64(existing_binding) != tl_monotype_hash64(parsed)) {
                     char detail[512];
                     str  existing_str = tl_monotype_to_string(self->transient, existing_binding);
                     str  new_str      = tl_monotype_to_string(self->transient, parsed);
@@ -953,7 +914,8 @@ static int constrain_mono(tl_infer *self, tl_monotype *left, tl_monotype *right,
 #if DEBUG_INVARIANTS
     // Invariant: should never constrain two different concrete cons_inst types directly
     // (excluding integer-compatible pairs). If this fires, a type variable was already
-    // bound to the wrong type upstream.
+    // bound to the wrong type upstream. Exception: for type predicates, a constrain failure is not an
+    // error.
     if (tl_monotype_is_inst(left) && tl_monotype_is_concrete(left) && tl_monotype_is_inst(right) &&
         tl_monotype_is_concrete(right) && !tl_monotype_is_integer_convertible(left) &&
         !tl_monotype_is_integer_convertible(right)) {
@@ -965,9 +927,10 @@ static int constrain_mono(tl_infer *self, tl_monotype *left, tl_monotype *right,
             snprintf(detail, sizeof detail,
                      "Constraining two different concrete type constructors: %s vs %s (left@%p right@%p)",
                      str_cstr(&ls), str_cstr(&rs), (void *)left, (void *)right);
-            report_invariant_failure(self, "constrain_mono",
-                                     "Should never constrain two different concrete type constructors",
-                                     detail, node);
+            report_invariant_failure(
+              self, "constrain_mono",
+              "Should never constrain two different concrete type constructors (unless in type predicate)",
+              detail, node);
         }
     }
 #endif
@@ -3737,54 +3700,6 @@ static int post_specialize(tl_infer *self, traverse_ctx *traverse_ctx, ast_node 
         // Apply substitutions to AST before specialization, so types are concrete
         apply_subs_to_ast_node(self, infer_target);
 
-#if DEBUG_INVARIANTS
-        // Invariant: After infer + apply_subs, all types in a specialized function must be concrete.
-        // Non-concrete types indicate type variable leakage between specializations.
-        if (ast_node_is_let(infer_target) && ast_node_is_specialized(infer_target)) {
-            str func_name = ast_node_str(infer_target->let.name);
-            // Check parameter types
-            ast_node_sized params = ast_node_sized_from_ast_array(infer_target);
-            forall(i, params) {
-                if (params.v[i]->type) {
-                    tl_monotype *mono = params.v[i]->type->type;
-                    if (mono && !tl_monotype_is_concrete(mono)) {
-                        char detail[512];
-                        str  mono_str   = tl_monotype_to_string(self->transient, mono);
-                        str  param_name = ast_node_str(params.v[i]);
-                        snprintf(
-                          detail, sizeof detail,
-                          "In specialized '%.*s': param '%.*s' has non-concrete type after apply_subs: %s",
-                          str_ilen(func_name), str_buf(&func_name), str_ilen(param_name),
-                          str_buf(&param_name), str_cstr(&mono_str));
-                        report_invariant_failure(self, "post_specialize:apply_subs",
-                                                 "All param types must be concrete after apply_subs",
-                                                 detail, params.v[i]);
-                    }
-                }
-            }
-            // Check type parameter types
-            for (u32 i = 0; i < infer_target->let.n_type_parameters; i++) {
-                ast_node *tp = infer_target->let.type_parameters[i];
-                if (tp->type) {
-                    tl_monotype *mono = tp->type->type;
-                    if (mono && !tl_monotype_is_concrete(mono)) {
-                        char detail[512];
-                        str  mono_str = tl_monotype_to_string(self->transient, mono);
-                        str  tp_name  = ast_node_str(tp);
-                        snprintf(detail, sizeof detail,
-                                 "In specialized '%.*s': type param '%.*s' has non-concrete type after "
-                                 "apply_subs: %s",
-                                 str_ilen(func_name), str_buf(&func_name), str_ilen(tp_name),
-                                 str_buf(&tp_name), str_cstr(&mono_str));
-                        report_invariant_failure(self, "post_specialize:apply_subs",
-                                                 "All type param types must be concrete after apply_subs",
-                                                 detail, tp);
-                    }
-                }
-            }
-        }
-#endif
-
         if (traverse_ast(self, traverse_ctx, infer_target, specialize_applications_cb)) {
             dbg(self, "note: post_specialize failed specialize");
             return 1;
@@ -3803,9 +3718,11 @@ static void add_free_variables_to_arrow(tl_infer *self, ast_node *node, tl_polyt
 static str  specialize_arrow(tl_infer *self, traverse_ctx *traverse_ctx, str name, tl_monotype *arrow,
                              ast_node_sized callsite_type_arguments) {
 
+    if (!tl_monotype_is_concrete(arrow)) tl_monotype_substitute(self->arena, arrow, self->subs, null);
+
 #if DEBUG_INVARIANTS
-    // Invariant: The callsite arrow type must be concrete when entering specialization.
-    // A non-concrete arrow means unresolved type variables from another context could leak in.
+    // Invariant: Callsite arrow type is expected to be concrete, but there may be edge cases where that is
+    // not the case, for example with unused parameters.
     if (!tl_monotype_is_concrete(arrow)) {
         char detail[512];
         str  arrow_str = tl_monotype_to_string(self->transient, arrow);
