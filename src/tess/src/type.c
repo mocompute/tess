@@ -21,7 +21,8 @@
 #define THREAD_LOCAL _Thread_local
 #endif
 
-#define DEBUG_ENV 1
+#define DEBUG_ENV             1
+#define DEBUG_RECURSIVE_TYPES 0 // Trace recursive type parsing, deferral, and placeholder resolution
 
 // Helper for cycle detection in recursive type traversals.
 // Returns 1 if ptr was already visited (cycle), 0 otherwise.
@@ -45,6 +46,11 @@ static void                      make_carray(tl_type_registry *);
 
 static void                      mark_integer_type(tl_type_registry *, str);
 static void                      mark_float_type(tl_type_registry *, str);
+
+// Forward declarations for post-resolution fixup
+static void generalize(tl_monotype *, tl_type_variable_array *, hashmap **);
+static int  tl_type_subs_unity_tv_tv(tl_type_subs *, tl_type_variable, tl_type_variable, type_error_cb_fun,
+                                     void *, hashmap **);
 
 // -- type constructor --
 
@@ -169,12 +175,18 @@ static tl_polytype *tl_type_constructor_create(tl_type_registry *self, str name,
 }
 
 void tl_type_registry_insert(tl_type_registry *self, str name, tl_polytype *poly) {
-    // fprintf(stderr, "type registry insert: %s\n", str_cstr(&name));
+#if DEBUG_RECURSIVE_TYPES
+    str tmp = tl_polytype_to_string(transient_allocator, poly);
+    fprintf(stderr, "[DEBUG_RECURSIVE_TYPES] registry_insert: %s : %s\n", str_cstr(&name), str_cstr(&tmp));
+    str_deinit(transient_allocator, &tmp);
+#endif
     str_map_set_ptr(&self->definitions, name, poly);
 }
 
 void tl_type_registry_insert_mono(tl_type_registry *self, str name, tl_monotype *mono) {
-    // fprintf(stderr, "type registry insert: %s\n", str_cstr(&name));
+#if DEBUG_RECURSIVE_TYPES
+    fprintf(stderr, "[DEBUG_RECURSIVE_TYPES] registry_insert_mono: %s\n", str_cstr(&name));
+#endif
     tl_polytype *poly = tl_monotype_generalize(self->alloc, mono);
     str_map_set_ptr(&self->definitions, name, poly);
 }
@@ -186,7 +198,9 @@ tl_polytype *tl_type_constructor_def_create_ext(tl_type_registry *self, str name
     tl_polytype *poly =
       tl_type_constructor_create_ext(self, name, generic_name, type_variables, field_names, field_types);
 
-    // fprintf(stderr, "type registry: insert %s\n", str_cstr(&name));
+#if DEBUG_RECURSIVE_TYPES
+    fprintf(stderr, "[DEBUG_RECURSIVE_TYPES] constructor_def_create: %s\n", str_cstr(&name));
+#endif
     tl_type_registry_insert(self, name, poly);
     return poly;
 }
@@ -565,21 +579,36 @@ static tl_monotype *type_variable_sugar(tl_type_registry *self, tl_type_registry
     return result;
 }
 
-static tl_monotype *defer_parse(tl_type_registry *self, tl_type_registry_parse_type_ctx *ctx, str name) {
+static tl_monotype *defer_parse(tl_type_registry *self, tl_type_registry_parse_type_ctx *ctx, str name,
+                                tl_monotype_sized type_args) {
     if (str_hset_contains(ctx->in_progress, name) || str_map_contains(ctx->deferred_parse, name) ||
         (!is_type_argument(ctx, name) && !tl_type_registry_get(self, name))) {
 
         // target cannot be parsed yet: create a placeholder type for it: Ptr(any)
 
-        // fprintf(stderr, "parse_type: defer %s\n", str_cstr(&name));
-
         tl_monotype *placeholder = str_map_get_ptr(ctx->deferred_parse, name);
         if (!placeholder) {
             placeholder = tl_monotype_create_placeholder(self->alloc, name);
             str_map_set_ptr(&ctx->deferred_parse, name, placeholder);
-        }
 
-        // fprintf(stderr, "parse_type: defer %s : %p\n", str_cstr(&name), placeholder);
+            tl_monotype_sized *stored = alloc_malloc(self->alloc, sizeof(tl_monotype_sized));
+            *stored                   = type_args;
+            str_map_set_ptr(&ctx->deferred_type_args, name, stored);
+
+            str_map_set(&ctx->deferred_source_names, name, &ctx->current_utd_name);
+            tl_type_variable_sized *sq = alloc_malloc(self->alloc, sizeof(tl_type_variable_sized));
+            *sq                        = ctx->current_utd_quantifiers;
+            str_map_set_ptr(&ctx->deferred_source_quantifiers, name, sq);
+#if DEBUG_RECURSIVE_TYPES
+            fprintf(stderr, "[DEBUG_RECURSIVE_TYPES] defer_parse: created placeholder for '%s' : %p\n",
+                    str_cstr(&name), (void *)placeholder);
+#endif
+        } else {
+#if DEBUG_RECURSIVE_TYPES
+            fprintf(stderr, "[DEBUG_RECURSIVE_TYPES] defer_parse: reusing placeholder for '%s' : %p\n",
+                    str_cstr(&name), (void *)placeholder);
+#endif
+        }
         return placeholder;
     }
     return null;
@@ -638,6 +667,10 @@ static tl_monotype *tl_type_registry_parse_type_(tl_type_registry               
         str name = ast_node_str(node->named_application.name);
 
         // Recursive types: check for indirection through Ptr (or any unary type) and defer it
+#if DEBUG_RECURSIVE_TYPES
+        fprintf(stderr, "[DEBUG_RECURSIVE_TYPES] parse_type_: nfa '%s' n_type_args=%u\n", str_cstr(&name),
+                node->named_application.n_type_arguments);
+#endif
 
         if (tl_type_registry_is_unary_type(self, name)) {
 
@@ -670,11 +703,26 @@ static tl_monotype *tl_type_registry_parse_type_(tl_type_registry               
                     }
                 } else {
                     // If target name is an in_progress utd, we must defer the parse.
-                    result = defer_parse(self, ctx, target_name_str);
+#if DEBUG_RECURSIVE_TYPES
+                    fprintf(stderr,
+                            "[DEBUG_RECURSIVE_TYPES] parse_type_: unary '%s' target '%s' is in_progress, "
+                            "deferring\n",
+                            str_cstr(&name), str_cstr(&target_name_str));
+#endif
+                    result = defer_parse(self, ctx, target_name_str, (tl_monotype_sized){0});
                 }
             } else {
-                // Maybe defer non-symbol target
-                result = defer_parse(self, ctx, target_name_str);
+                // Maybe defer non-symbol target: parse type args in caller's context before deferring
+                tl_monotype_array deferred_args = {.alloc = self->alloc};
+                for (u32 j = 0; j < target->named_application.n_type_arguments; j++) {
+                    tl_monotype *arg =
+                      tl_type_registry_parse_type_(self, ctx, target->named_application.type_arguments[j]);
+                    if (!arg)
+                        arg = type_variable_sugar(self, ctx, target->named_application.type_arguments[j]);
+                    array_push(deferred_args, arg);
+                }
+                result =
+                  defer_parse(self, ctx, target_name_str, (tl_monotype_sized)array_sized(deferred_args));
             }
 
             if (result) {
@@ -792,6 +840,11 @@ static tl_monotype *tl_type_registry_parse_type_(tl_type_registry               
         ast_node **fields           = node->user_type_def.field_names;
         ast_node **annotations      = node->user_type_def.field_annotations;
 
+#if DEBUG_RECURSIVE_TYPES
+        fprintf(stderr, "[DEBUG_RECURSIVE_TYPES] parse_type_: utd ENTER '%s' n_type_args=%u n_fields=%u\n",
+                str_cstr(&name), n_type_arguments, n_fields);
+#endif
+
         // Add name to in_progress
         str_hset_insert(&ctx->in_progress, name);
 
@@ -804,6 +857,9 @@ static tl_monotype *tl_type_registry_parse_type_(tl_type_registry               
             array_push(type_argument_tvs, mono->var);
         }
 
+        ctx->current_utd_name         = name;
+        ctx->current_utd_quantifiers  = (tl_type_variable_sized)array_sized(type_argument_tvs);
+
         str_array         field_names = {.alloc = self->alloc};
         tl_monotype_array field_types = {.alloc = self->alloc};
         array_reserve(field_names, n_fields);
@@ -815,12 +871,13 @@ static tl_monotype *tl_type_registry_parse_type_(tl_type_registry               
             // Note: enum types have no annotations
             if (annotations) {
                 tl_monotype *mono = tl_type_registry_parse_type_(self, ctx, annotations[i]);
-                if (1) {
-                    if (!mono) {
-                        str tmp = v2_ast_node_to_string(self->transient, annotations[i]);
-                        fprintf(stderr, "failed to parse '%s'\n", str_cstr(&tmp));
-                    }
+#if DEBUG_RECURSIVE_TYPES
+                if (!mono) {
+                    str tmp = v2_ast_node_to_string(self->transient, annotations[i]);
+                    fprintf(stderr, "[DEBUG_RECURSIVE_TYPES] parse_type: failed to parse field '%s'\n",
+                            str_cstr(&tmp));
                 }
+#endif
                 if (!mono) goto utd_error; // TODO: better error
 
                 array_push(field_types, mono);
@@ -831,10 +888,46 @@ static tl_monotype *tl_type_registry_parse_type_(tl_type_registry               
           self, name, (tl_type_variable_sized)array_sized(type_argument_tvs),
           (str_sized)array_sized(field_names), (tl_monotype_sized)array_sized(field_types));
 
-        // fprintf(stderr, "parse_type: registered %s\n", str_cstr(&name));
+#if DEBUG_RECURSIVE_TYPES
+        {
+            str tmp = tl_polytype_to_string(self->transient, poly);
+            fprintf(stderr, "[DEBUG_RECURSIVE_TYPES] parse_type: registered '%s' poly->type=%p: %s\n",
+                    str_cstr(&name), (void *)poly->type, str_cstr(&tmp));
+            // Print field type pointers for tracing placeholder identity
+            if (tl_monotype_is_inst(poly->type)) {
+                tl_monotype_sized fargs = poly->type->cons_inst->args;
+                for (u32 fi = 0; fi < fargs.size; ++fi) {
+                    str fs = tl_monotype_to_string(self->transient, fargs.v[fi]);
+                    fprintf(stderr, "[DEBUG_RECURSIVE_TYPES]   field[%u] = %p: %s\n", fi,
+                            (void *)fargs.v[fi], str_cstr(&fs));
+                }
+            }
+            str_deinit(self->transient, &tmp);
+        }
+#endif
 
         if (map_size(ctx->deferred_parse)) {
-            // Resolve placeholders
+            // Resolve deferred placeholders for (mutually) recursive types.
+            //
+            // During field parsing, references to not-yet-defined types become placeholder
+            // nodes. Once the target poly is available, we resolve each placeholder by
+            // instantiating the poly with the type args captured at the defer site, then
+            // mutating the placeholder in-place so all existing references see the resolved
+            // type.
+            //
+            // For mutual recursion (e.g. Foo[a] references Bar[a] and vice versa), the
+            // instantiated placeholder contains type variables from the *source* UTD's parse
+            // context, which are orphaned relative to both the target's and source's registry
+            // polytypes. The post-resolution fixup reconciles these by:
+            //   A. Unifying the stored arg vars with the target poly's quantifiers
+            //   B. Unifying the source UTD's parse-phase quantifiers with its registry quantifiers
+            //   C. Substituting + re-generalizing the target poly
+            //   D. Substituting + re-generalizing the source registry poly
+#if DEBUG_RECURSIVE_TYPES
+            fprintf(stderr,
+                    "[DEBUG_RECURSIVE_TYPES] parse_type: '%s' resolving %zu deferred placeholders\n",
+                    str_cstr(&name), (size_t)map_size(ctx->deferred_parse));
+#endif
             str_array keys = str_map_keys(self->transient, ctx->deferred_parse);
             forall(i, keys) {
                 tl_monotype *placeholder = str_map_get_ptr(ctx->deferred_parse, keys.v[i]);
@@ -843,9 +936,86 @@ static tl_monotype *tl_type_registry_parse_type_(tl_type_registry               
                     if (str_eq(poly->type->cons_inst->def->generic_name, keys.v[i])) {
                         // mutate placeholder to resolved type: dependent types which retained the
                         // placeholder pointer will automatically get resolved type
-                        // fprintf(stderr, "parse_type: defer resolve %s\n", str_cstr(&keys.v[i]));
-                        *placeholder = *poly->type;
+#if DEBUG_RECURSIVE_TYPES
+                        {
+                            str tmp = tl_monotype_to_string(self->transient, poly->type);
+                            fprintf(stderr,
+                                    "[DEBUG_RECURSIVE_TYPES] parse_type: defer resolve '%s' "
+                                    "placeholder=%p poly->type=%p: %s\n",
+                                    str_cstr(&keys.v[i]), (void *)placeholder, (void *)poly->type,
+                                    str_cstr(&tmp));
+                            str_deinit(self->transient, &tmp);
+                        }
+#endif
+                        tl_monotype_sized *stored_args =
+                          str_map_get_ptr(ctx->deferred_type_args, keys.v[i]);
+                        if (stored_args && stored_args->size > 0) {
+                            tl_monotype *instantiated =
+                              tl_polytype_instantiate_with(self->alloc, poly, *stored_args, self->subs);
+                            *placeholder = *instantiated;
+                        } else {
+                            *placeholder = *poly->type;
+                        }
+#if DEBUG_RECURSIVE_TYPES
+                        {
+                            str tmp = tl_monotype_to_string(self->transient, placeholder);
+                            fprintf(stderr,
+                                    "[DEBUG_RECURSIVE_TYPES] parse_type: AFTER resolve '%s' "
+                                    "placeholder=%p: %s\n",
+                                    str_cstr(&keys.v[i]), (void *)placeholder, str_cstr(&tmp));
+                            str_deinit(self->transient, &tmp);
+                        }
+#endif
                         str_map_erase(ctx->deferred_parse, keys.v[i]);
+
+                        // Post-resolution fixup: unify orphaned type variables
+
+                        // A. Unify stored_args vars with current poly's quantifiers
+                        //    (fixes the target type's parse polytype)
+                        if (stored_args && stored_args->size > 0) {
+                            hashmap *useen = hset_create(transient_allocator, 64);
+                            for (u32 j = 0; j < stored_args->size && j < poly->quantifiers.size; j++) {
+                                if (tl_monotype_is_tv(stored_args->v[j])) {
+                                    hset_reset(useen);
+                                    tl_type_subs_unity_tv_tv(self->subs, stored_args->v[j]->var,
+                                                             poly->quantifiers.v[j], null, null, &useen);
+                                }
+                            }
+                        }
+
+                        // B. Unify source parse-phase quantifiers with source registry quantifiers
+                        //    (fixes the source type's registry polytype)
+                        str *source_name_p = str_map_get(ctx->deferred_source_names, keys.v[i]);
+                        str  source_name   = source_name_p ? *source_name_p : str_empty();
+                        tl_type_variable_sized *source_q =
+                          str_map_get_ptr(ctx->deferred_source_quantifiers, keys.v[i]);
+                        tl_polytype *source_poly =
+                          !str_is_empty(source_name) ? tl_type_registry_get(self, source_name) : null;
+                        if (source_poly && source_q) {
+                            hashmap *useen = hset_create(transient_allocator, 64);
+                            for (u32 j = 0; j < source_q->size && j < source_poly->quantifiers.size; j++) {
+                                hset_reset(useen);
+                                tl_type_subs_unity_tv_tv(self->subs, source_q->v[j],
+                                                         source_poly->quantifiers.v[j], null, null, &useen);
+                            }
+                        }
+
+                        // C. Substitute + re-generalize current poly
+                        tl_monotype_substitute(self->alloc, poly->type, self->subs, null);
+                        {
+                            tl_type_variable_array quant = {.alloc = self->alloc};
+                            hashmap               *gseen = hset_create(transient_allocator, 64);
+                            generalize(poly->type, &quant, &gseen);
+                            poly->quantifiers = (tl_type_variable_sized)array_sized(quant);
+                        }
+
+                        // D. Clone + substitute + re-generalize + re-insert source registry poly
+                        if (source_poly) {
+                            tl_monotype *clone = tl_monotype_clone(self->alloc, source_poly->type);
+                            tl_monotype_substitute(self->alloc, clone, self->subs, null);
+                            tl_polytype *new_poly = tl_monotype_generalize(self->alloc, clone);
+                            tl_type_registry_insert(self, source_name, new_poly);
+                        }
                     }
                 } else {
                     fatal("logic error");
@@ -854,11 +1024,15 @@ static tl_monotype *tl_type_registry_parse_type_(tl_type_registry               
         }
 
         result = tl_polytype_instantiate(self->alloc, poly, self->subs);
-        // fprintf(stderr, "parse_type success: %s\n", str_cstr(&name));
+#if DEBUG_RECURSIVE_TYPES
+        fprintf(stderr, "[DEBUG_RECURSIVE_TYPES] parse_type: success '%s'\n", str_cstr(&name));
+#endif
         goto utd_success;
 
     utd_error:
-        // fprintf(stderr, "parse_type error: %s\n", str_cstr(&name));
+#if DEBUG_RECURSIVE_TYPES
+        fprintf(stderr, "[DEBUG_RECURSIVE_TYPES] parse_type: error '%s'\n", str_cstr(&name));
+#endif
         result = null;
 
     utd_success:
@@ -873,16 +1047,20 @@ top_success:
 void tl_type_registry_parse_type_ctx_init(allocator *alloc, tl_type_registry_parse_type_ctx *ctx,
                                           hashmap *type_arguments) {
     *ctx = (tl_type_registry_parse_type_ctx){
-      .memoize        = map_new(alloc, ast_node *, tl_monotype *, 64),
-      .type_arguments = type_arguments ? type_arguments : map_new(alloc, str, tl_monotype *, 64),
-      .deferred_parse = map_new(alloc, str, ast_node *, 64),
-      .in_progress    = hset_create(alloc, 64),
+      .memoize               = map_new(alloc, ast_node *, tl_monotype *, 64),
+      .type_arguments        = type_arguments ? type_arguments : map_new(alloc, str, tl_monotype *, 64),
+      .deferred_parse        = map_new(alloc, str, ast_node *, 64),
+      .deferred_type_args    = map_new(alloc, str, tl_monotype_sized *, 64),
+      .deferred_source_names = map_new(alloc, str, str, 64),
+      .deferred_source_quantifiers = map_new(alloc, str, tl_type_variable_sized *, 64),
+      .in_progress                 = hset_create(alloc, 64),
     };
 }
 
 void tl_type_registry_parse_type_ctx_reset(tl_type_registry_parse_type_ctx *ctx) {
-    // Note: does not reset deferred_parse, which is the whole point: to support single-pass fixups for
-    // mutually recursive types.
+    // Note: does not reset deferred_parse (or its associated maps deferred_type_args,
+    // deferred_source_names, deferred_source_quantifiers), which is the whole point: to support
+    // single-pass fixups for mutually recursive types.
 
     // Note: does not reset memoize
     map_reset(ctx->type_arguments);
@@ -906,13 +1084,15 @@ tl_monotype *tl_type_registry_parse_type_with_ctx(tl_type_registry *self, ast_no
 
     tl_monotype *result = tl_type_registry_parse_type_(self, ctx, node);
 
-    if (0) {
-        if (!result) {
-            str tmp = v2_ast_node_to_string(self->transient, node);
-            fprintf(stderr, "failed to parse '%s' (ctx->type_arguments has %zu keys)\n", str_cstr(&tmp),
-                    (size_t)map_size(ctx->type_arguments));
-        }
+#if DEBUG_RECURSIVE_TYPES
+    if (!result) {
+        str tmp = v2_ast_node_to_string(self->transient, node);
+        fprintf(stderr,
+                "[DEBUG_RECURSIVE_TYPES] parse_type_with_ctx: failed to parse '%s' "
+                "(ctx->type_arguments has %zu keys)\n",
+                str_cstr(&tmp), (size_t)map_size(ctx->type_arguments));
     }
+#endif
 
     return result;
 }

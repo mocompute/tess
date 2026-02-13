@@ -22,6 +22,15 @@ typedef struct {
     // Nodes which are deferred in first pass of parse.
     hashmap *deferred_parse; // str => ast_node*
 
+    // Type args captured at defer site for deferred placeholders
+    hashmap *deferred_type_args; // str => tl_monotype_sized*
+
+    // Source UTD info for deferred placeholders
+    str                    current_utd_name;        // name of UTD currently being parsed
+    tl_type_variable_sized current_utd_quantifiers; // parse-phase quantifiers of current UTD
+    hashmap *deferred_source_names;       // str => str (deferred name => source UTD name)
+    hashmap *deferred_source_quantifiers; // str => tl_type_variable_sized*
+
     // Type names which are in progress of being parsed
     hashmap *in_progress; // str hset
 

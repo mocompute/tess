@@ -4152,6 +4152,7 @@ static int specialize_applications_cb(tl_infer *self, traverse_ctx *traverse_ctx
                 if (!type_arg->type && type_arg->named_application.name->type) {
                     ast_node_type_set(type_arg, type_arg->named_application.name->type);
                 }
+
 #if DEBUG_RECURSIVE_TYPES
                 {
                     str ta_str = type_arg->type ? tl_polytype_to_string(self->transient, type_arg->type)
