@@ -21,9 +21,10 @@
 #define DEBUG_RENAME             0
 #define DEBUG_CONSTRAIN          0
 #define DEBUG_EXPLICIT_TYPE_ARGS 0
-#define DEBUG_INVARIANTS         0 // Enable invariant checking at phase boundaries
+#define DEBUG_INVARIANTS         1 // Enable invariant checking at phase boundaries
 #define DEBUG_INSTANCE_CACHE     0 // Log instance cache hits/misses and key components
 #define DEBUG_RECURSIVE_TYPES    0 // Trace mutually recursive type specialization
+#define DEBUG_TYPE_ALIAS         0 // Trace type alias registration and resolution
 
 #if DEBUG_INVARIANTS
 // Forward declarations for invariant checking
@@ -358,6 +359,16 @@ static void load_toplevel(tl_infer *self, ast_node_sized nodes) {
                 dbg(self, "type_alias: %s = %s", str_cstr(&name), str_cstr(&poly_str));
             }
             tl_type_registry_type_alias_insert(self->registry, name, poly);
+#if DEBUG_TYPE_ALIAS
+            {
+                tl_polytype *env_type = tl_type_env_lookup(self->env, name);
+                str          poly_dbg = tl_polytype_to_string(self->transient, poly);
+                fprintf(stderr, "[DEBUG_TYPE_ALIAS] load_toplevel: alias '%s' = %s\n",
+                        str_cstr(&name), str_cstr(&poly_dbg));
+                fprintf(stderr, "[DEBUG_TYPE_ALIAS]   in registry=YES, in env=%s\n",
+                        env_type ? "YES" : "NO");
+            }
+#endif
             specialize_type_alias(self, node);
         }
 
@@ -2561,6 +2572,14 @@ static void sync_with_env(tl_infer *self, traverse_ctx *ctx, ast_node *node, int
     } else {
         // No type: look up its type from the environment, if any
         tl_polytype *type = tl_type_env_lookup(self->env, name);
+#if DEBUG_TYPE_ALIAS
+        if (!type) {
+            int is_alias = tl_type_registry_is_type_alias(self->registry, name);
+            fprintf(stderr, "[DEBUG_TYPE_ALIAS] sync_with_env: '%s' not in type env\n", str_cstr(&name));
+            if (is_alias)
+                fprintf(stderr, "[DEBUG_TYPE_ALIAS]   BUT exists in registry as type alias!\n");
+        }
+#endif
         if (type) ast_node_type_set(node, type);
     }
 
@@ -2583,6 +2602,21 @@ static void ensure_symbol_type_from_env(tl_infer *self, ast_node *node) {
     if (!ast_node_is_symbol(node)) return;
 
     tl_polytype *poly = tl_type_env_lookup(self->env, ast_node_str(node));
+
+#if DEBUG_TYPE_ALIAS
+    {
+        str name_dbg = ast_node_str(node);
+        if (tl_type_registry_is_type_alias(self->registry, name_dbg)) {
+            char const *type_s = "(null)";
+            char const *node_s = "(null)";
+            str         type_dbg, node_dbg;
+            if (poly) { type_dbg = tl_polytype_to_string(self->transient, poly); type_s = str_cstr(&type_dbg); }
+            if (node->type) { node_dbg = tl_polytype_to_string(self->transient, node->type); node_s = str_cstr(&node_dbg); }
+            fprintf(stderr, "[DEBUG_TYPE_ALIAS] ensure_symbol_type_from_env: '%s' env_lookup=%s node_type=%s\n",
+                    str_cstr(&name_dbg), type_s, node_s);
+        }
+    }
+#endif
 
     // Note: do not override node->type if it is already concrete. There is some confusion with the handling
     // of type literals that makes the constrain fail unless it is guarded behind this if condition.
@@ -2625,6 +2659,17 @@ static int infer_struct_access(tl_infer *self, ast_node *node) {
     } else {
         ensure_symbol_type_from_env(self, left);
         struct_type = (tl_monotype *)left->type->type;
+#if DEBUG_TYPE_ALIAS
+        if (ast_node_is_symbol(left)) {
+            str left_name = ast_node_str(left);
+            if (tl_type_registry_is_type_alias(self->registry, left_name)) {
+                str st_str = tl_monotype_to_string(self->transient, struct_type);
+                fprintf(stderr,
+                        "[DEBUG_TYPE_ALIAS] infer_struct_access: left='%s' struct_type=%s is_inst=%d\n",
+                        str_cstr(&left_name), str_cstr(&st_str), tl_monotype_is_inst(struct_type));
+            }
+        }
+#endif
     }
 
     // Note: must substitute to resolve type of chained field access, eg: foo.bar.baz
@@ -2634,6 +2679,15 @@ static int infer_struct_access(tl_infer *self, ast_node *node) {
     if (tl_monotype_is_const(struct_type)) {
         struct_type = tl_monotype_const_target(struct_type);
     }
+
+#if DEBUG_TYPE_ALIAS
+    if (ast_node_is_symbol(left) && tl_type_registry_is_type_alias(self->registry, ast_node_str(left))) {
+        str st_str2 = tl_monotype_to_string(self->transient, struct_type);
+        fprintf(stderr,
+                "[DEBUG_TYPE_ALIAS] infer_struct_access: after subst, struct_type=%s is_inst=%d\n",
+                str_cstr(&st_str2), tl_monotype_is_inst(struct_type));
+    }
+#endif
 
     if (tl_monotype_is_inst(struct_type)) {
         // Note: this handling of nfas supports terms like: `obj.fun_ptr()` where a field called
@@ -2701,6 +2755,24 @@ static int infer_struct_access(tl_infer *self, ast_node *node) {
     else {
         // struct type is not a type constructor
         dbg(self, "warning: infer struct access without a struct type");
+#if DEBUG_TYPE_ALIAS
+        if (ast_node_is_symbol(left)) {
+            str left_name2 = ast_node_str(left);
+            int is_alias2  = tl_type_registry_is_type_alias(self->registry, left_name2);
+            str st_str3    = tl_monotype_to_string(self->transient, struct_type);
+            fprintf(stderr,
+                    "[DEBUG_TYPE_ALIAS] infer_struct_access: FALLTHROUGH left='%s' struct_type=%s is_alias=%d\n",
+                    str_cstr(&left_name2), str_cstr(&st_str3), is_alias2);
+            if (is_alias2) {
+                tl_polytype *alias_poly = tl_type_registry_get(self->registry, left_name2);
+                if (alias_poly) {
+                    str alias_str = tl_polytype_to_string(self->transient, alias_poly);
+                    fprintf(stderr,
+                            "[DEBUG_TYPE_ALIAS]   alias points to: %s\n", str_cstr(&alias_str));
+                }
+            }
+        }
+#endif
     }
 
 end_struct_access_op:
@@ -3904,6 +3976,16 @@ static void specialize_type_alias(tl_infer *self, ast_node *node) {
 
     ast_node    *target = node->type_alias.target;
     tl_monotype *parsed = tl_type_registry_parse_type(self->registry, target);
+#if DEBUG_TYPE_ALIAS
+    {
+        str name_dbg = toplevel_name(node);
+        str type_dbg = tl_monotype_to_string(self->transient, parsed);
+        fprintf(stderr,
+                "[DEBUG_TYPE_ALIAS] specialize_type_alias: '%s' parsed=%s is_inst=%d is_concrete=%d\n",
+                str_cstr(&name_dbg), str_cstr(&type_dbg), tl_monotype_is_inst(parsed),
+                tl_monotype_is_concrete(parsed));
+    }
+#endif
     if (tl_monotype_is_inst(parsed) && tl_monotype_is_concrete(parsed)) {
         str name = toplevel_name(node);
         str tmp  = tl_monotype_to_string(self->transient, parsed);
