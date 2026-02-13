@@ -21,8 +21,9 @@
 #define DEBUG_RENAME             0
 #define DEBUG_CONSTRAIN          0
 #define DEBUG_EXPLICIT_TYPE_ARGS 0
-#define DEBUG_INVARIANTS         0 // Enable invariant checking at phase boundaries
+#define DEBUG_INVARIANTS         1 // Enable invariant checking at phase boundaries
 #define DEBUG_INSTANCE_CACHE     0 // Log instance cache hits/misses and key components
+#define DEBUG_RECURSIVE_TYPES    1 // Trace mutually recursive type specialization
 
 #if DEBUG_INVARIANTS
 // Forward declarations for invariant checking
@@ -2456,12 +2457,28 @@ static int type_literal_specialize(tl_infer *self, ast_node *node) {
         if (!tl_monotype_is_inst(target)) return 1;
         str               name = target->cons_inst->def->generic_name;
 
+#if DEBUG_RECURSIVE_TYPES
+        {
+            str parsed_str = tl_monotype_to_string(self->transient, parsed);
+            fprintf(stderr, "[DEBUG_RECURSIVE_TYPES] type_literal_specialize: parsed=%s name='%s'\n",
+                    str_cstr(&parsed_str), str_cstr(&name));
+        }
+#endif
+
         tl_monotype_sized args = target->cons_inst->args;
         tl_monotype      *inst = tl_type_registry_get_cached_specialization(self->registry, name, args);
+#if DEBUG_RECURSIVE_TYPES
+        fprintf(stderr, "[DEBUG_RECURSIVE_TYPES] type_literal_specialize: cache %s for '%s'\n",
+                inst ? "HIT" : "MISS", str_cstr(&name));
+#endif
         str               name_inst    = str_empty();
         tl_polytype      *special_type = null;
         if (!inst) {
             name_inst = specialize_type_constructor(self, name, args, &special_type);
+#if DEBUG_RECURSIVE_TYPES
+            fprintf(stderr, "[DEBUG_RECURSIVE_TYPES] type_literal_specialize: specialize returned '%s' type=%p\n",
+                    str_is_empty(name_inst) ? "(empty)" : str_cstr(&name_inst), (void *)special_type);
+#endif
             // ok to fail: enums, nullary builtins, etc
             if (str_is_empty(name_inst)) return 0;
             if (!special_type) return 0;
@@ -3212,6 +3229,20 @@ static str specialize_type_constructor_(tl_infer *self, str name, tl_monotype_si
                                         tl_polytype **out_type, hashmap **seen) {
     if (out_type) *out_type = null;
 
+#if DEBUG_RECURSIVE_TYPES
+    {
+        fprintf(stderr, "[DEBUG_RECURSIVE_TYPES] specialize_type_constructor_ ENTER: name='%s' n_args=%u\n",
+                str_cstr(&name), args.size);
+        forall(i, args) {
+            str arg_str = tl_monotype_to_string(self->transient, args.v[i]);
+            fprintf(stderr, "[DEBUG_RECURSIVE_TYPES]   arg[%u] = %s  (is_inst=%d, is_inst_spec=%d)\n",
+                    i, str_cstr(&arg_str),
+                    tl_monotype_is_inst(args.v[i]),
+                    tl_monotype_is_inst(args.v[i]) ? tl_monotype_is_inst_specialized(args.v[i]) : 0);
+        }
+    }
+#endif
+
     // do not specialize if it's an enum
     {
         ast_node *utd = toplevel_get(self, name);
@@ -3220,8 +3251,18 @@ static str specialize_type_constructor_(tl_infer *self, str name, tl_monotype_si
 
     if (1) {
         name_and_type key = {.name_hash = str_hash64(name), .type_hash = tl_monotype_sized_hash64(0, args)};
-        if (hset_contains(*seen, &key, sizeof key)) return str_empty();
+        if (hset_contains(*seen, &key, sizeof key)) {
+#if DEBUG_RECURSIVE_TYPES
+            fprintf(stderr, "[DEBUG_RECURSIVE_TYPES]   CYCLE DETECTED in 'seen' for name='%s' "
+                    "(name_hash=%016llx, type_hash=%016llx)\n",
+                    str_cstr(&name), (unsigned long long)key.name_hash, (unsigned long long)key.type_hash);
+#endif
+            return str_empty();
+        }
         hset_insert(seen, &key, sizeof key);
+#if DEBUG_RECURSIVE_TYPES
+        fprintf(stderr, "[DEBUG_RECURSIVE_TYPES]   added to 'seen': name='%s'\n", str_cstr(&name));
+#endif
     }
 
     // To keep track of monotypes that are recursive references to the type being specialized.
@@ -3235,6 +3276,10 @@ static str specialize_type_constructor_(tl_infer *self, str name, tl_monotype_si
 
             // Do not recurse: fixup after
             if (str_eq(name, generic_name)) {
+#if DEBUG_RECURSIVE_TYPES
+                fprintf(stderr, "[DEBUG_RECURSIVE_TYPES]   DIRECT SELF-REF: arg[%u] '%s' matches name='%s'\n",
+                        i, str_cstr(&generic_name), str_cstr(&name));
+#endif
                 {
                     tl_monotype **_t = &args.v[i];
                     array_push(recur_refs, _t);
@@ -3246,6 +3291,10 @@ static str specialize_type_constructor_(tl_infer *self, str name, tl_monotype_si
             if (tl_monotype_is_ptr(args.v[i])) {
                 tl_monotype *target = tl_monotype_ptr_target(args.v[i]);
                 if (tl_monotype_is_inst(target) && str_eq(name, target->cons_inst->def->generic_name)) {
+#if DEBUG_RECURSIVE_TYPES
+                    fprintf(stderr, "[DEBUG_RECURSIVE_TYPES]   PTR SELF-REF: arg[%u] Ptr to '%s' matches name='%s'\n",
+                            i, str_cstr(&generic_name), str_cstr(&name));
+#endif
                     {
                         tl_monotype **_t = &args.v[i]->cons_inst->args.v[0];
                         array_push(recur_refs, _t);
@@ -3254,7 +3303,20 @@ static str specialize_type_constructor_(tl_infer *self, str name, tl_monotype_si
                 }
             }
 
+#if DEBUG_RECURSIVE_TYPES
+            fprintf(stderr, "[DEBUG_RECURSIVE_TYPES]   RECURSE for arg[%u]: generic_name='%s' (parent='%s')\n",
+                    i, str_cstr(&generic_name), str_cstr(&name));
+#endif
             (void)specialize_type_constructor_(self, generic_name, args.v[i]->cons_inst->args, &poly, seen);
+#if DEBUG_RECURSIVE_TYPES
+            {
+                str poly_str = poly ? tl_polytype_to_string(self->transient, poly)
+                                    : str_init(self->transient, "(null)");
+                fprintf(stderr, "[DEBUG_RECURSIVE_TYPES]   RECURSE result arg[%u] '%s': poly=%s concrete=%d\n",
+                        i, str_cstr(&generic_name), str_cstr(&poly_str),
+                        poly ? tl_polytype_is_concrete(poly) : 0);
+            }
+#endif
             if (poly && tl_polytype_is_concrete(poly)) {
                 args.v[i] = tl_polytype_concrete(poly);
             }
@@ -3265,6 +3327,15 @@ static str specialize_type_constructor_(tl_infer *self, str name, tl_monotype_si
     str                             name_inst = next_instantiation(self, name); // may be cancelled later
     tl_type_registry_specialize_ctx inst_ctx =
       tl_type_registry_specialize_begin(self->registry, name, name_inst, args);
+
+#if DEBUG_RECURSIVE_TYPES
+    fprintf(stderr, "[DEBUG_RECURSIVE_TYPES]   registry_begin: name='%s' name_inst='%s' specialized=%p\n",
+            str_cstr(&name), str_cstr(&name_inst), (void *)inst_ctx.specialized);
+    if (inst_ctx.specialized) {
+        str spec_str = tl_monotype_to_string(self->transient, inst_ctx.specialized);
+        fprintf(stderr, "[DEBUG_RECURSIVE_TYPES]   specialized type = %s\n", str_cstr(&spec_str));
+    }
+#endif
 
 #if DEBUG_EXPLICIT_TYPE_ARGS
     fprintf(stderr, "[DEBUG specialize_type_constructor_] name=%s\n", str_cstr(&name));
@@ -3282,6 +3353,10 @@ static str specialize_type_constructor_(tl_infer *self, str name, tl_monotype_si
     name_and_type key      = make_instance_key(self, name, inst_ctx.specialized, (ast_node_sized){0}, null);
     str          *existing = instance_lookup(self, &key);
     if (existing) {
+#if DEBUG_RECURSIVE_TYPES
+        fprintf(stderr, "[DEBUG_RECURSIVE_TYPES]   EXISTING instance: '%s' -> '%s'\n",
+                str_cstr(&name), str_cstr(existing));
+#endif
         tl_polytype *poly = tl_type_env_lookup(self->env, *existing);
         if (out_type) *out_type = poly;
         out_str = *existing;
@@ -3329,12 +3404,24 @@ static str specialize_type_constructor_(tl_infer *self, str name, tl_monotype_si
 #endif
 
     // fixup recur refs
+#if DEBUG_RECURSIVE_TYPES
+    fprintf(stderr, "[DEBUG_RECURSIVE_TYPES]   FIXUP: %u recur_refs for '%s'\n",
+            recur_refs.size, str_cstr(&name));
+    if (recur_refs.size) {
+        str fixup_str = tl_monotype_to_string(self->transient, utd->type->type);
+        fprintf(stderr, "[DEBUG_RECURSIVE_TYPES]   fixup target = %s\n", str_cstr(&fixup_str));
+    }
+#endif
     forall(i, recur_refs) {
         *recur_refs.v[i] = utd->type->type;
     }
     array_free(recur_refs);
 
     tl_type_registry_specialize_commit(self->registry, inst_ctx);
+#if DEBUG_RECURSIVE_TYPES
+    fprintf(stderr, "[DEBUG_RECURSIVE_TYPES]   COMMIT: '%s' -> '%s'\n",
+            str_cstr(&name), str_cstr(&name_inst));
+#endif
 
     // rename variables: also erases type information
     {
@@ -3355,8 +3442,20 @@ cancel:
 static str specialize_type_constructor(tl_infer *self, str name, tl_monotype_sized args,
                                        tl_polytype **out_type) {
 
+#if DEBUG_RECURSIVE_TYPES
+    fprintf(stderr, "[DEBUG_RECURSIVE_TYPES] specialize_type_constructor ENTRY: name='%s' n_args=%u\n",
+            str_cstr(&name), args.size);
+    forall(i, args) {
+        str arg_str = tl_monotype_to_string(self->transient, args.v[i]);
+        fprintf(stderr, "[DEBUG_RECURSIVE_TYPES]   arg[%u] = %s\n", i, str_cstr(&arg_str));
+    }
+#endif
     hashmap *seen = hset_create(self->transient, 64);
     str      out  = specialize_type_constructor_(self, name, args, out_type, &seen);
+#if DEBUG_RECURSIVE_TYPES
+    fprintf(stderr, "[DEBUG_RECURSIVE_TYPES] specialize_type_constructor RESULT: name='%s' => '%s'\n",
+            str_cstr(&name), str_is_empty(out) ? "(empty)" : str_cstr(&out));
+#endif
     return out;
 }
 
@@ -3376,6 +3475,9 @@ static int specialize_user_type(tl_infer *self, traverse_ctx *traverse_ctx, ast_
     if (!ast_node_is_nfa(node)) return 0;
 
     str               name      = node->named_application.name->symbol.name;
+#if DEBUG_RECURSIVE_TYPES
+    fprintf(stderr, "[DEBUG_RECURSIVE_TYPES] specialize_user_type ENTRY: name='%s'\n", str_cstr(&name));
+#endif
 
     tl_monotype_array arr       = {.alloc = self->transient};
     tl_monotype_sized arr_sized = {0};
@@ -3387,6 +3489,10 @@ static int specialize_user_type(tl_infer *self, traverse_ctx *traverse_ctx, ast_
         assert(tl_monotype_is_inst(existing->type));
 
         arr_sized = existing->type->cons_inst->args;
+#if DEBUG_RECURSIVE_TYPES
+        fprintf(stderr, "[DEBUG_RECURSIVE_TYPES] specialize_user_type: concrete existing for '%s' n_args=%u\n",
+                str_cstr(&name), arr_sized.size);
+#endif
 
         // If name is a type alias pointing to a concrete type, we want the transpiler to ignore the alias
         // name, and act as if the alias' target was referenced directly. This ensures the same type is used
@@ -3441,10 +3547,25 @@ static int specialize_user_type(tl_infer *self, traverse_ctx *traverse_ctx, ast_
 
         assert(arr.size == node->named_application.n_arguments);
         arr_sized = (tl_monotype_sized)array_sized(arr);
+#if DEBUG_RECURSIVE_TYPES
+        fprintf(stderr, "[DEBUG_RECURSIVE_TYPES] specialize_user_type: iterated args for '%s' n_args=%u\n",
+                str_cstr(&name), arr_sized.size);
+        forall(j, arr_sized) {
+            str arg_str = tl_monotype_to_string(self->transient, arr_sized.v[j]);
+            fprintf(stderr, "[DEBUG_RECURSIVE_TYPES]   arg[%u] = %s (concrete=%d)\n",
+                    j, str_cstr(&arg_str), tl_monotype_is_concrete(arr_sized.v[j]));
+        }
+#endif
     }
 
     tl_polytype *special_type = null;
     str          name_inst    = specialize_type_constructor(self, name, arr_sized, &special_type);
+#if DEBUG_RECURSIVE_TYPES
+    fprintf(stderr, "[DEBUG_RECURSIVE_TYPES] specialize_user_type: result for '%s' => '%s' type=%p\n",
+            str_cstr(&name),
+            str_is_empty(name_inst) ? "(empty)" : str_cstr(&name_inst),
+            (void *)special_type);
+#endif
     if (str_is_empty(name_inst)) return 0;
 
     // update callsite
@@ -3969,6 +4090,14 @@ static int specialize_applications_cb(tl_infer *self, traverse_ctx *traverse_ctx
             }
         }
 
+#if DEBUG_RECURSIVE_TYPES
+        {
+            str call_str = tl_polytype_to_string(self->transient, callsite);
+            fprintf(stderr, "[DEBUG_RECURSIVE_TYPES] specialize_applications_cb: name='%s' callsite=%s concrete=%d\n",
+                    str_cstr(&name), str_cstr(&call_str), tl_polytype_is_concrete(callsite));
+        }
+#endif
+
 #if DEBUG_SPECIALIZE
         str app_str = tl_polytype_to_string(self->transient, callsite);
         fprintf(stderr, "specialize application: callsite '%s' arrow: %s\n",
@@ -4000,6 +4129,12 @@ static int specialize_applications_cb(tl_infer *self, traverse_ctx *traverse_ctx
 #endif
         // Specialize type constructors appearing in explicit type arguments.
         // E.g., sizeof[Point[Int]]() needs Point[Int] specialized to Point_8.
+#if DEBUG_RECURSIVE_TYPES
+        if (node->named_application.n_type_arguments > 0) {
+            fprintf(stderr, "[DEBUG_RECURSIVE_TYPES] specialize_applications_cb: '%s' has %u explicit type args\n",
+                    str_cstr(&name), node->named_application.n_type_arguments);
+        }
+#endif
         for (u32 i = 0; i < node->named_application.n_type_arguments; i++) {
             ast_node *type_arg = node->named_application.type_arguments[i];
             if (ast_node_is_nfa(type_arg) && 0 == type_literal_specialize(self, type_arg)) {
@@ -4009,12 +4144,29 @@ static int specialize_applications_cb(tl_infer *self, traverse_ctx *traverse_ctx
                 if (!type_arg->type && type_arg->named_application.name->type) {
                     ast_node_type_set(type_arg, type_arg->named_application.name->type);
                 }
+#if DEBUG_RECURSIVE_TYPES
+                {
+                    str ta_str = type_arg->type
+                        ? tl_polytype_to_string(self->transient, type_arg->type)
+                        : str_init(self->transient, "(null)");
+                    fprintf(stderr, "[DEBUG_RECURSIVE_TYPES]   type_arg[%u] after specialize: %s\n",
+                            i, str_cstr(&ta_str));
+                }
+#endif
             }
         }
 
         // try to specialize
         ast_node_sized callsite_type_args = {.size = node->named_application.n_type_arguments,
                                              .v    = node->named_application.type_arguments};
+#if DEBUG_RECURSIVE_TYPES
+        {
+            str arrow_str = tl_monotype_to_string(self->transient, callsite->type);
+            fprintf(stderr, "[DEBUG_RECURSIVE_TYPES] specialize_applications_cb: about to specialize_arrow '%s' "
+                    "concrete=%d arrow=%s\n",
+                    str_cstr(&name), tl_monotype_is_concrete(callsite->type), str_cstr(&arrow_str));
+        }
+#endif
         if (specialize_arrow_with_name(self, traverse_ctx, node->named_application.name, callsite->type,
                                        callsite_type_args)) {
             dbg(self, "note: failed to specialize '%s'", str_cstr(&name));
@@ -4699,6 +4851,17 @@ static tl_polytype *make_arrow_with(tl_infer *self, traverse_ctx *ctx, ast_node 
     if (!out) return null;
     if (tl_monotype_is_list(out->type) && tl_monotype_is_list(type->type)) {
         (out->type)->list.fvs = type->type->list.fvs;
+#if DEBUG_RECURSIVE_TYPES
+        {
+            str out_str = tl_monotype_to_string(self->transient, out->type);
+            fprintf(stderr, "[DEBUG_RECURSIVE_TYPES] make_arrow_with: arrow=%s fvs_count=%u\n",
+                    str_cstr(&out_str), type->type->list.fvs.size);
+            forall(i, type->type->list.fvs) {
+                fprintf(stderr, "[DEBUG_RECURSIVE_TYPES]   fv[%u] = '%s'\n",
+                        i, str_cstr(&type->type->list.fvs.v[i]));
+            }
+        }
+#endif
     }
     return out;
 }
