@@ -422,6 +422,12 @@ static void load_toplevel(tl_infer *self, ast_node_sized nodes) {
                     ast_node *ast_param_tuple = ast_arrow->arrow.left;
                     assert(ast_node_is_tuple(ast_param_tuple));
 
+                    // copy explicit type arguments if the current node does not declare any
+                    if (!node->let.n_type_parameters) {
+                        node->let.n_type_parameters = ast_arrow->arrow.n_type_parameters;
+                        node->let.type_parameters   = ast_arrow->arrow.type_parameters;
+                    }
+
                     tl_polytype *arrow = (*p)->symbol.annotation_type;
                     assert(arrow && tl_monotype_is_arrow(arrow->type));
                     tl_monotype *param_tuple = arrow->type->list.xs.v[0];
@@ -789,6 +795,8 @@ static int traverse_ctx_assign_type_arguments(tl_infer *self, traverse_ctx *ctx,
 #endif
                 parsed = tl_type_registry_parse_type_with_ctx(self->registry, type_arg_node, &parse_ctx);
                 if (!parsed) {
+                    str tmp = v2_ast_node_to_string(self->transient, type_arg_node);
+                    fprintf(stderr, "error: parse failed: %s\n", str_cstr(&tmp));
                     fatal("could not parse type"); // FIXME better error
                 }
             }

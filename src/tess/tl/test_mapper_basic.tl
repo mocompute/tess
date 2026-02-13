@@ -15,7 +15,7 @@ Arr[a]: {
 map[a, b](f: (a) -> b, arr: Arr[a]) -> Arr[b]
 
 // Argument type annotations are not required.
-map[a, b](f, arr) {
+map(f, arr) {
 
     // Because of the `c_` prefix, `c_malloc` is compiled to a direct call to the C function `malloc`.
     // Because `malloc` returns `void*`, the `: Ptr[b]` type annotation is required.

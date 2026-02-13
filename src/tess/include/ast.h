@@ -46,8 +46,10 @@ typedef struct ast_node {
         } f64;
 
         struct ast_arrow {
-            struct ast_node *left;
-            struct ast_node *right;
+            struct ast_node  *left;
+            struct ast_node  *right;
+            struct ast_node **type_parameters;
+            u8                n_type_parameters;
         } arrow;
 
         struct ast_assignment {
@@ -227,7 +229,7 @@ nodiscard ast_node *ast_node_create(allocator *, ast_tag) mallocfun;
 nodiscard ast_node *ast_node_create_i64(allocator *, i64) mallocfun;
 nodiscard ast_node *ast_node_create_u64(allocator *, u64) mallocfun;
 nodiscard ast_node *ast_node_create_f64(allocator *, f64) mallocfun;
-nodiscard ast_node *ast_node_create_arrow(allocator *, ast_node *, ast_node *) mallocfun;
+nodiscard ast_node *ast_node_create_arrow(allocator *, ast_node *, ast_node *, ast_node_sized) mallocfun;
 nodiscard ast_node *ast_node_create_assignment(allocator *, ast_node *, ast_node *) mallocfun;
 nodiscard ast_node *ast_node_create_reassignment(allocator *, ast_node *, ast_node *) mallocfun;
 nodiscard ast_node *ast_node_create_reassignment_op(allocator *, ast_node *, ast_node *,

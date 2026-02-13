@@ -1127,8 +1127,8 @@ decl_done:
     ast_node *tup = ast_node_create_tuple(self->ast_arena, (ast_node_sized)array_sized(params));
     set_node_file(self, tup);
 
-    // make arrow
-    ast_node *arrow = ast_node_create_arrow(self->ast_arena, tup, rhs);
+    // make arrow: type arguments will be parsed separately
+    ast_node *arrow = ast_node_create_arrow(self->ast_arena, tup, rhs, (ast_node_sized){0});
     set_node_file(self, arrow);
 
     return result_ast_node(self, arrow);
@@ -1827,7 +1827,8 @@ static ast_node *parse_expression(parser *self, int min_prec) {
                     if (!index_expr) return null;
                     if (a_try(self, a_close_round)) return null;
                     ast_node *index_op = ast_node_create_sym_c(self->ast_arena, ".(");
-                    ast_node *binop    = ast_node_create_binary_op(self->ast_arena, index_op, left, index_expr);
+                    ast_node *binop =
+                      ast_node_create_binary_op(self->ast_arena, index_op, left, index_expr);
                     set_node_file(self, binop);
                     left = binop;
                     continue;
@@ -2502,7 +2503,8 @@ decl_done:
         set_node_file(self, tup);
 
         // make arrow
-        ast_node *arrow = ast_node_create_arrow(self->ast_arena, tup, ann);
+        ast_node *arrow =
+          ast_node_create_arrow(self->ast_arena, tup, ann, (ast_node_sized)sized_all(type_params));
         set_node_file(self, arrow);
 
         // attach to name
@@ -2571,6 +2573,11 @@ static int toplevel_forward(parser *self) {
 
     // Check for reserved type keywords to disallow
     if (is_reserved_type_name(name)) return ERROR_STOP;
+
+    // add type arguments
+    array_shrink(type_args);
+    arrow->arrow.n_type_parameters = type_args.size;
+    arrow->arrow.type_parameters   = type_args.v;
 
     // attach to name
     name->symbol.annotation = arrow;
@@ -3269,7 +3276,7 @@ static ast_node *create_variant_constructor(parser *self,
     // 4. Build the arrow annotation for function type: (params) -> ReturnType
     ast_node *param_tuple = ast_node_create_tuple(arena, (ast_node_sized)array_sized(params));
     set_node_file(self, param_tuple);
-    ast_node *arrow = ast_node_create_arrow(arena, param_tuple, return_type);
+    ast_node *arrow = ast_node_create_arrow(arena, param_tuple, return_type, (ast_node_sized){0});
     set_node_file(self, arrow);
     func_name->symbol.annotation = arrow;
 
@@ -3449,7 +3456,7 @@ create_variant_make_function(parser *self,
     // 4. Build arrow annotation
     ast_node *param_tuple = ast_node_create_tuple(arena, (ast_node_sized)array_sized(params));
     set_node_file(self, param_tuple);
-    ast_node *arrow = ast_node_create_arrow(arena, param_tuple, return_type);
+    ast_node *arrow = ast_node_create_arrow(arena, param_tuple, return_type, (ast_node_sized){0});
     set_node_file(self, arrow);
     func_name->symbol.annotation = arrow;
 

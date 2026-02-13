@@ -215,10 +215,13 @@ ast_node *ast_node_create_type_predicate(allocator *alloc, ast_node *name, ast_n
     return self;
 }
 
-ast_node *ast_node_create_arrow(allocator *alloc, ast_node *left, ast_node *right) {
-    ast_node *self    = ast_node_create(alloc, ast_arrow);
-    self->arrow.left  = left;
-    self->arrow.right = right;
+ast_node *ast_node_create_arrow(allocator *alloc, ast_node *left, ast_node *right,
+                                ast_node_sized type_parameters) {
+    ast_node *self                = ast_node_create(alloc, ast_arrow);
+    self->arrow.left              = left;
+    self->arrow.right             = right;
+    self->arrow.n_type_parameters = type_parameters.size;
+    self->arrow.type_parameters   = type_parameters.v;
     return self;
 }
 
@@ -287,8 +290,13 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
 
     case ast_arrow:         {
         struct ast_arrow *vclone = ast_node_arrow(clone), *vorig = ast_node_arrow((ast_node *)orig);
-        vclone->left  = ast_node_clone(alloc, vorig->left);
-        vclone->right = ast_node_clone(alloc, vorig->right);
+        vclone->left              = ast_node_clone(alloc, vorig->left);
+        vclone->right             = ast_node_clone(alloc, vorig->right);
+        u32        argc           = vorig->n_type_parameters;
+        ast_node **argv           = vorig->type_parameters;
+        vclone->n_type_parameters = argc;
+        vclone->type_parameters   = alloc_malloc(alloc, argc * sizeof(argv[0]));
+        for (u32 i = 0; i < argc; i++) vclone->type_parameters[i] = ast_node_clone(alloc, argv[i]);
     } break;
 
     case ast_reassignment:
@@ -1032,9 +1040,22 @@ str v2_ast_node_to_string(allocator *alloc, ast_node const *node) {
     }
 
     case ast_arrow: {
-        str out = str_cat_3(alloc, v2_ast_node_to_string(alloc, node->arrow.left), S(" -> "),
-                            v2_ast_node_to_string(alloc, node->arrow.right));
-        return out;
+        u32        argc = node->arrow.n_type_parameters;
+        ast_node **argv = node->arrow.type_parameters;
+        str_build  b    = str_build_init(alloc, 64);
+        if (argc) {
+            str_build_cat(&b, S("["));
+            for (u32 i = 0; i < argc; i++) {
+                str_build_cat(&b, v2_ast_node_to_string(alloc, argv[i]));
+                if (i + 1 < argc) str_build_cat(&b, S(", "));
+            }
+            str_build_cat(&b, S("]"));
+        }
+
+        str_build_cat(&b, v2_ast_node_to_string(alloc, node->arrow.left));
+        str_build_cat(&b, S(" -> "));
+        str_build_cat(&b, v2_ast_node_to_string(alloc, node->arrow.right));
+        return str_build_finish(&b);
     }
 
     case ast_lambda_function: {
@@ -1370,11 +1391,16 @@ u64 ast_node_hash(ast_node const *self) {
     case ast_ellipsis:
     case ast_eof:           break;
 
-    case ast_arrow:
+    case ast_arrow:         {
         //
         combine_node(self->arrow.left);
         combine_node(self->arrow.right);
-        break;
+
+        u32        argc = self->arrow.n_type_parameters;
+        ast_node **argv = self->arrow.type_parameters;
+        for (u32 i = 0; i < argc; i++) combine_node(argv[i]);
+
+    } break;
 
     case ast_assignment:
     case ast_reassignment:
