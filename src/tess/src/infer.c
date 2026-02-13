@@ -92,7 +92,6 @@ struct tl_infer {
     int                             indent_level;
 
     int is_constrain_ignore_error; // non-zero if no error should be reported during unification
-
 };
 
 typedef struct {
@@ -3999,6 +3998,20 @@ static int specialize_applications_cb(tl_infer *self, traverse_ctx *traverse_ctx
         }
 
 #endif
+        // Specialize type constructors appearing in explicit type arguments.
+        // E.g., sizeof[Point[Int]]() needs Point[Int] specialized to Point_8.
+        for (u32 i = 0; i < node->named_application.n_type_arguments; i++) {
+            ast_node *type_arg = node->named_application.type_arguments[i];
+            if (ast_node_is_nfa(type_arg) && 0 == type_literal_specialize(self, type_arg)) {
+                // type_literal_specialize sets the type on the NFA's name node, but
+                // concretize_params and traverse_ctx_assign_type_arguments check the NFA
+                // node itself. Propagate the type up so both paths find it.
+                if (!type_arg->type && type_arg->named_application.name->type) {
+                    ast_node_type_set(type_arg, type_arg->named_application.name->type);
+                }
+            }
+        }
+
         // try to specialize
         ast_node_sized callsite_type_args = {.size = node->named_application.n_type_arguments,
                                              .v    = node->named_application.type_arguments};
