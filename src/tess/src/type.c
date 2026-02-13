@@ -58,6 +58,32 @@ static THREAD_LOCAL allocator *transient_allocator; // initialized by tl_type_re
 static THREAD_LOCAL u32        substitute_gen = 1;  // generation counter for substitute cycle detection
 static THREAD_LOCAL u32        hash_gen       = 1;  // generation counter for hash memoization
 
+#define HASH_CYCLE_STACK_CAP 32
+
+typedef struct {
+    u64 entries[HASH_CYCLE_STACK_CAP];
+    u32 count;
+} hash_cycle_stack;
+
+static u64 *hash_cycle_find(hash_cycle_stack *s, u64 key) {
+    for (u32 i = 0; i < s->count; i++) {
+        if (s->entries[i] == key) return &s->entries[i];
+    }
+    return null;
+}
+
+static int hash_cycle_push(hash_cycle_stack *s, u64 key) {
+    assert(s->count < HASH_CYCLE_STACK_CAP);
+    if (s->count >= HASH_CYCLE_STACK_CAP) return 0;
+    s->entries[s->count++] = key;
+    return 1;
+}
+
+static void hash_cycle_pop(hash_cycle_stack *s) {
+    assert(s->count > 0);
+    if (s->count > 0) s->count--;
+}
+
 tl_type_registry *tl_type_registry_create(allocator *alloc, allocator *transient, tl_type_subs *subs) {
     tl_type_registry *self = alloc_malloc(alloc, sizeof *self);
     self->alloc            = alloc;
@@ -2044,9 +2070,9 @@ u64 tl_type_constructor_def_hash64(tl_type_constructor_def *self) {
     return hash;
 }
 
-u64 tl_monotype_sized_hash64_(u64, tl_monotype_sized, u32, hashmap **);
+u64 tl_monotype_sized_hash64_(u64, tl_monotype_sized, u32, hash_cycle_stack *);
 
-u64 tl_monotype_hash64_(tl_monotype *self, u32 gen, hashmap **in_progress) {
+u64 tl_monotype_hash64_(tl_monotype *self, u32 gen, hash_cycle_stack *in_progress) {
     if (!self) return 0;
 
     // Generation-based memoization
@@ -2073,14 +2099,14 @@ u64 tl_monotype_hash64_(tl_monotype *self, u32 gen, hashmap **in_progress) {
 
         // Check if self is an ancestor in progress
         u64 *ancestor = null;
-        ancestor      = map_get(*in_progress, &def_hash, sizeof def_hash);
+        ancestor      = hash_cycle_find(in_progress, def_hash);
         if (ancestor) {
             // back-reference: use the def hash as a stable hash
             hash = hash64_combine(hash, ancestor, sizeof *ancestor);
         } else {
 
             // Recursive types: mark this in-progress
-            map_set(in_progress, &def_hash, sizeof def_hash, &def_hash);
+            int pushed = hash_cycle_push(in_progress, def_hash);
 
             tl_monotype_sized args = self->cons_inst->args;
             forall(i, args) {
@@ -2095,7 +2121,7 @@ u64 tl_monotype_hash64_(tl_monotype *self, u32 gen, hashmap **in_progress) {
                     u64 *ancestor = null;
                     if (tl_monotype_is_inst(target)) {
                         u64 ancestor_hash = tl_type_constructor_def_hash64(target->cons_inst->def);
-                        ancestor          = map_get(*in_progress, &ancestor_hash, sizeof ancestor_hash);
+                        ancestor          = hash_cycle_find(in_progress, ancestor_hash);
                     }
                     if (ancestor) {
                         // back-reference: use the def hash as a stable hash
@@ -2113,7 +2139,7 @@ u64 tl_monotype_hash64_(tl_monotype *self, u32 gen, hashmap **in_progress) {
             }
 
             // Remove from in-progress
-            map_erase(*in_progress, &def_hash, sizeof def_hash);
+            if (pushed) hash_cycle_pop(in_progress);
         }
 
         // important: do not include special_name as part of hash, because specialize_user_type uses
@@ -2137,7 +2163,7 @@ u64 tl_monotype_hash64_(tl_monotype *self, u32 gen, hashmap **in_progress) {
 u64 tl_monotype_hash64(tl_monotype *self) {
     u32 gen = hash_gen++;
     if (gen == 0) gen = hash_gen++; // skip 0 on wraparound
-    hashmap *in_progress = map_new(transient_allocator, u64, u64, 8);
+    hash_cycle_stack in_progress = {.count = 0};
     return tl_monotype_hash64_(self, gen, &in_progress);
 }
 
@@ -2892,7 +2918,7 @@ void tl_type_subs_log(tl_type_subs *self) {
 
 //
 
-u64 tl_monotype_sized_hash64_(u64 seed, tl_monotype_sized arr, u32 gen, hashmap **in_progress) {
+u64 tl_monotype_sized_hash64_(u64 seed, tl_monotype_sized arr, u32 gen, hash_cycle_stack *in_progress) {
     u64 hash = seed;
     forall(i, arr) {
         u64 h = tl_monotype_hash64_(arr.v[i], gen, in_progress);
@@ -2905,7 +2931,7 @@ u64 tl_monotype_sized_hash64(u64 seed, tl_monotype_sized arr) {
     if (!arr.size) return seed;
     u32 gen = hash_gen++;
     if (gen == 0) gen = hash_gen++; // skip 0 on wraparound
-    hashmap *in_progress = map_new(transient_allocator, u64, u64, 8);
+    hash_cycle_stack in_progress = {.count = 0};
     return tl_monotype_sized_hash64_(seed, arr, gen, &in_progress);
 }
 
