@@ -141,7 +141,7 @@ typedef struct {
 static int resolve_node(tl_infer *, ast_node *sym, traverse_ctx *ctx, node_position pos);
 
 // ============================================================================
-// Public API
+// Public API: creation, destruction, accessors
 // ============================================================================
 
 static void      apply_subs_to_ast(tl_infer *);
@@ -243,6 +243,13 @@ void tl_infer_get_arena_stats(tl_infer *self, arena_stats *out) {
     arena_get_stats(self->arena, out);
 }
 
+// ============================================================================
+// Top-level loading and error helpers (Phase 2)
+// ============================================================================
+//
+// Populates the toplevel map from AST nodes (structs, enums, functions, let-in
+// bindings, type aliases, hash directives) and provides error-reporting helpers.
+
 static int constrain(tl_infer *self, tl_polytype *left, tl_polytype *right, ast_node const *node);
 
 static int env_insert_constrain(tl_infer *self, str name, tl_polytype *type, ast_node const *name_node) {
@@ -327,6 +334,89 @@ static int toplevel_hash_command(tl_infer *self, ast_node *node) {
 
 static void specialize_type_alias(tl_infer *, ast_node *);
 
+// Handle a let node during toplevel loading: merge forward declarations, copy annotations/attributes.
+static void load_toplevel_let(tl_infer *self, ast_node *node) {
+    str        name_str = ast_node_str(node->let.name);
+    ast_node **p        = str_map_get(self->toplevels, name_str);
+
+    if (p) {
+        // merge type if the existing node is a symbol; otherwise error
+        if (!ast_node_is_symbol(*p)) {
+            array_push(self->errors, ((tl_infer_error){.tag = tl_err_type_exists, .node = node}));
+            return;
+        }
+
+        // ignore prior type annotation if the current symbol is annotated: later
+        // declaration overrides
+
+        if (node->let.name->symbol.annotation) {
+            resolve_node(self, node->let.name, null, npos_toplevel);
+        } else {
+            // otherwise merge in the prior annotation
+            node->let.name->symbol.annotation      = (*p)->symbol.annotation;
+            node->let.name->symbol.annotation_type = (*p)->symbol.annotation_type;
+        }
+
+        // copy attributes over
+        if ((*p)->symbol.attributes) {
+            // reject attributes on current symbol if they exist
+            if (node->let.name->symbol.attributes) {
+                array_push(self->errors,
+                           ((tl_infer_error){.tag = tl_err_attributes_exist, .node = node}));
+                return;
+            }
+
+            node->let.name->symbol.attributes = (*p)->symbol.attributes;
+        }
+
+        // copy parameter annotations over
+        if ((*p)->symbol.annotation) {
+            // The annotation is an AST arrow, which includes param annotations, if any. These are
+            // important to copy over, because they may declare type arguments.
+            ast_node *ast_arrow = (*p)->symbol.annotation;
+            assert(ast_node_is_arrow(ast_arrow));
+            ast_node *ast_param_tuple = ast_arrow->arrow.left;
+            assert(ast_node_is_tuple(ast_param_tuple));
+
+            // copy explicit type arguments if the current node does not declare any
+            if (!node->let.n_type_parameters) {
+                node->let.n_type_parameters = ast_arrow->arrow.n_type_parameters;
+                node->let.type_parameters   = ast_arrow->arrow.type_parameters;
+            }
+
+            tl_polytype *arrow = (*p)->symbol.annotation_type;
+            assert(arrow && tl_monotype_is_arrow(arrow->type));
+            tl_monotype *param_tuple = arrow->type->list.xs.v[0];
+            assert(tl_tuple == param_tuple->tag);
+            ast_arguments_iter iter = ast_node_arguments_iter(node);
+            ast_node          *arg;
+            u32                j = 0;
+            while ((arg = ast_arguments_next(&iter))) {
+                if (j >= param_tuple->list.xs.size) fatal("runtime error");
+                if (j >= ast_param_tuple->tuple.n_elements) fatal("runtime error");
+
+                if (!ast_node_is_symbol(arg)) goto next;
+
+                // Do not overwrite let node's annotated parameters
+                if (arg->symbol.annotation) goto next;
+
+                arg->symbol.annotation = ast_param_tuple->tuple.elements[j];
+                arg->symbol.annotation_type =
+                  tl_polytype_absorb_mono(self->arena, param_tuple->list.xs.v[j]);
+
+            next:
+                j++;
+            }
+        }
+
+        // replace prior symbol entry with let node
+        *p = node;
+    } else {
+        str_map_set(&self->toplevels, name_str, &node);
+        resolve_node(self, node->let.name, null, npos_toplevel);
+    }
+}
+
 static void load_toplevel(tl_infer *self, ast_node_sized nodes) {
     // Types of toplevel nodes (see parser.c/toplevel())
     //
@@ -404,85 +494,7 @@ static void load_toplevel(tl_infer *self, ast_node_sized nodes) {
         }
 
         else if (ast_node_is_let(node)) {
-            str        name_str = ast_node_str(node->let.name);
-            ast_node **p        = str_map_get(self->toplevels, name_str);
-
-            if (p) {
-                // merge type if the existing node is a symbol; otherwise error
-                if (!ast_node_is_symbol(*p)) {
-                    array_push(self->errors, ((tl_infer_error){.tag = tl_err_type_exists, .node = node}));
-                    continue;
-                }
-
-                // ignore prior type annotation if the current symbol is annotated: later
-                // declaration overrides
-
-                if (node->let.name->symbol.annotation) {
-                    resolve_node(self, node->let.name, null, npos_toplevel);
-                } else {
-                    // otherwise merge in the prior annotation
-                    node->let.name->symbol.annotation      = (*p)->symbol.annotation;
-                    node->let.name->symbol.annotation_type = (*p)->symbol.annotation_type;
-                }
-
-                // copy attributes over
-                if ((*p)->symbol.attributes) {
-                    // reject attributes on current symbol if they exist
-                    if (node->let.name->symbol.attributes) {
-                        array_push(self->errors,
-                                   ((tl_infer_error){.tag = tl_err_attributes_exist, .node = node}));
-                        continue;
-                    }
-
-                    node->let.name->symbol.attributes = (*p)->symbol.attributes;
-                }
-
-                // copy parameter annotations over
-                if ((*p)->symbol.annotation) {
-                    // The annotation is an AST arrow, which includes param annotations, if any. These are
-                    // important to copy over, because they may declare type arguments.
-                    ast_node *ast_arrow = (*p)->symbol.annotation;
-                    assert(ast_node_is_arrow(ast_arrow));
-                    ast_node *ast_param_tuple = ast_arrow->arrow.left;
-                    assert(ast_node_is_tuple(ast_param_tuple));
-
-                    // copy explicit type arguments if the current node does not declare any
-                    if (!node->let.n_type_parameters) {
-                        node->let.n_type_parameters = ast_arrow->arrow.n_type_parameters;
-                        node->let.type_parameters   = ast_arrow->arrow.type_parameters;
-                    }
-
-                    tl_polytype *arrow = (*p)->symbol.annotation_type;
-                    assert(arrow && tl_monotype_is_arrow(arrow->type));
-                    tl_monotype *param_tuple = arrow->type->list.xs.v[0];
-                    assert(tl_tuple == param_tuple->tag);
-                    ast_arguments_iter iter = ast_node_arguments_iter(node);
-                    ast_node          *arg;
-                    u32                i = 0;
-                    while ((arg = ast_arguments_next(&iter))) {
-                        if (i >= param_tuple->list.xs.size) fatal("runtime error");
-                        if (i >= ast_param_tuple->tuple.n_elements) fatal("runtime error");
-
-                        if (!ast_node_is_symbol(arg)) goto next;
-
-                        // Do not overwrite let node's annotated parameters
-                        if (arg->symbol.annotation) goto next;
-
-                        arg->symbol.annotation = ast_param_tuple->tuple.elements[i];
-                        arg->symbol.annotation_type =
-                          tl_polytype_absorb_mono(self->arena, param_tuple->list.xs.v[i]);
-
-                    next:
-                        i++;
-                    }
-                }
-
-                // replace prior symbol entry with let node
-                *p = node;
-            } else {
-                str_map_set(&self->toplevels, name_str, &node);
-                resolve_node(self, node->let.name, null, npos_toplevel);
-            }
+            load_toplevel_let(self, node);
         }
 
         else if (ast_node_is_utd(node)) {
@@ -525,7 +537,14 @@ static void load_toplevel(tl_infer *self, ast_node_sized nodes) {
     arena_reset(self->transient);
 }
 
-// -- tree shake --
+// ============================================================================
+// Tree shaking (Phase 6)
+// ============================================================================
+//
+// Starting from main (or all exports in library mode), walks the call graph via
+// DFS and collects reachable names.  tree_shake_toplevels (in the validation
+// section below) uses this to remove unreachable definitions from the toplevels
+// map and the type environment.
 
 static ast_node *toplevel_get(tl_infer *, str);
 
@@ -647,7 +666,14 @@ hashmap *tree_shake(tl_infer *self, ast_node const *node) {
     return ctx.names;
 }
 
-// -- inference --
+// ============================================================================
+// Inference context and traversal
+// ============================================================================
+//
+// traverse_ctx tracks lexical scope, type arguments, and node position during
+// AST walks.  traverse_ast() is the recursive dispatcher used by both the
+// bottom-up inference pass (Phase 3, via infer_traverse_cb) and the top-down
+// specialization pass (Phase 5, via specialize_applications_cb).
 
 static traverse_ctx *traverse_ctx_create(allocator *transient) {
     // Use a transient allocator because the destroy function leaks the maps.
@@ -912,6 +938,14 @@ static int unresolved_type_error(tl_infer *self, ast_node const *node) {
     return 1;
 }
 
+// ============================================================================
+// Constraint generation and unification
+// ============================================================================
+//
+// constrain() / constrain_mono() are the core constraint engine. They call into
+// the substitution-based unifier (tl_type_subs_unify_mono in type.c) and report
+// type errors on failure.
+
 static void log_constraint(tl_infer *, tl_polytype *, tl_polytype *, ast_node const *);
 static void log_constraint_mono(tl_infer *, tl_monotype *, tl_monotype *, ast_node const *);
 static void log_type_error(tl_infer *, tl_polytype *, tl_polytype *, ast_node const *);
@@ -1137,7 +1171,7 @@ static int process_annotation(tl_infer *self, traverse_ctx *ctx, ast_node *node,
 }
 
 // ============================================================================
-// Special Case Handlers
+// Special case handlers
 // ============================================================================
 
 static int is_std_function(ast_node *node) {
@@ -1150,8 +1184,13 @@ static int is_ptr_cast_annotation(ast_node *node) {
 }
 
 // ============================================================================
-// Type Inference Helpers
+// Per-node type inference
 // ============================================================================
+//
+// Each infer_*() function handles bottom-up type inference for a specific AST
+// node kind: literals, if/else, case/match, binary/unary ops, assignments,
+// lambdas, named function applications, struct access, etc.  They generate type
+// constraints via constrain() and attach polytypes to AST nodes.
 
 static int infer_nil(tl_infer *self, ast_node *node) {
     ensure_tv(self, &node->type);
@@ -1483,6 +1522,120 @@ static int infer_unary_op(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
     return 0;
 }
 
+static int infer_tagged_union_case(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
+    tl_polytype *expr_type = node->case_.expression->type;
+
+    // Get wrapper type and extract valid variants
+    tl_monotype *wrapper_type = expr_type->type;
+    tl_monotype_substitute(self->arena, wrapper_type, self->subs, null); // needed
+
+    // If there is an explicit type annotation (e.g., "case x: Option(T)"), always parse and
+    // use it as the wrapper type. This is essential for generic functions with type-predicate
+    // branching (e.g., `if x :: Option { case x: Option(T) { ... } } else if x :: Result ...`)
+    // where different branches constrain the same variable to different tagged union types.
+    // Without this, the first branch's constraint would permanently unify the variable's type,
+    // making subsequent branches fail. The constraint is non-fatal here because after
+    // specialization, only the matching branch will be valid.
+    if (node->case_.union_annotation) {
+        annotation_parse_result result = parse_type_annotation(self, ctx, node->case_.union_annotation);
+        if (result.parsed && tl_monotype_is_inst(result.parsed)) {
+            wrapper_type = result.parsed;
+            // Constrain expression type to match annotation (non-fatal: in generic functions,
+            // a prior branch may have already constrained to a different type)
+            int save                        = self->is_constrain_ignore_error;
+            self->is_constrain_ignore_error = 1;
+            constrain_pm(self, expr_type, wrapper_type, node->case_.expression);
+            self->is_constrain_ignore_error = save;
+        }
+    }
+
+    if (!tl_monotype_is_inst(wrapper_type)) {
+        expected_tagged_union(self, node->case_.expression);
+        return 1;
+    }
+
+    // Find the 'u' (union) field in the wrapper type
+    i32 u_index = tl_monotype_type_constructor_field_index(wrapper_type, S("u"));
+    if (u_index < 0) {
+        // wrapper type missing 'u'
+        expected_tagged_union(self, node->case_.expression);
+        return 1;
+    }
+
+    tl_monotype *union_type     = wrapper_type->cons_inst->args.v[u_index];
+    str_sized    valid_variants = union_type->cons_inst->def->field_names;
+
+    // Track which variants are covered (for exhaustiveness checking)
+    int *variant_covered = alloc_malloc(self->transient, valid_variants.size * sizeof(int));
+    memset(variant_covered, 0, valid_variants.size * sizeof(int));
+    int has_else_arm = 0;
+
+    forall(i, node->case_.conditions) {
+        // Detect `else` condition on final arm
+        if (i + 1 == node->case_.conditions.size && ast_node_is_nil(node->case_.conditions.v[i])) {
+            has_else_arm = 1;
+            break;
+        }
+
+        ast_node *cond = node->case_.conditions.v[i];
+        if (!ast_node_is_symbol(cond) || !cond->symbol.annotation) {
+            // "tagged union case condition must be 'binding: VariantType'"
+            tagged_union_case_syntax_error(self, cond);
+        }
+
+        // Find the variant by name in the union type
+        // Use the original (unmangled) name from the annotation, as union field names are unmangled
+        str variant_name  = ast_node_name_original(cond->symbol.annotation);
+        int variant_found = -1;
+        forall(j, valid_variants) {
+            if (str_eq(valid_variants.v[j], variant_name)) {
+                variant_found = (int)j;
+                break;
+            }
+        }
+
+        if (variant_found < 0) {
+            array_push(self->errors,
+                       ((tl_infer_error){.tag = tl_err_tagged_union_unknown_variant, .node = cond}));
+            return 1;
+        }
+
+        // Mark this variant as covered
+        variant_covered[variant_found] = 1;
+
+        // Get the variant type from the union type (which already has concrete types after
+        // substitution) This handles both generic and non-generic variants correctly
+        tl_monotype *variant_type = union_type->cons_inst->args.v[variant_found];
+
+        // Set the binding's type (not as a literal - this is a value, not a type expression).
+        // Note that we set both the condition node and the annotation_type.
+        // If the case variable is mutable (var.&), we have a pointer type.
+        tl_polytype *variant_poly = null;
+        if (node->case_.is_union == AST_TAGGED_UNION_MUTABLE) {
+            variant_poly =
+              tl_polytype_absorb_mono(self->arena, tl_type_registry_ptr(self->registry, variant_type));
+        } else {
+            variant_poly = tl_polytype_absorb_mono(self->arena, variant_type);
+        }
+
+        ast_node_type_set(cond, variant_poly);
+        cond->symbol.annotation_type = variant_poly;
+    }
+
+    // Exhaustiveness check: if no else arm, verify all variants are covered
+    if (!has_else_arm) {
+        forall(j, valid_variants) {
+            if (!variant_covered[j]) {
+                array_push(self->errors,
+                           ((tl_infer_error){.tag = tl_err_tagged_union_missing_case, .node = node}));
+                return 1;
+            }
+        }
+    }
+
+    return 0;
+}
+
 static int infer_case(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
     if (resolve_node(self, node->case_.expression, ctx, npos_operand)) return 1;
     if (resolve_node(self, node->case_.binary_predicate, ctx, npos_operand)) return 1;
@@ -1495,117 +1648,7 @@ static int infer_case(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
     if (node->case_.conditions.size != node->case_.arms.size) fatal("logic error");
 
     if (node->case_.is_union) {
-        // Tagged union case expression: conditions are binding patterns like "c: Circle"
-        // The condition symbol (c) is bound to the variant type (Circle) for use in the arm
-
-        // Get wrapper type and extract valid variants
-        tl_monotype *wrapper_type = expr_type->type;
-        tl_monotype_substitute(self->arena, wrapper_type, self->subs, null); // needed
-
-        // If there is an explicit type annotation (e.g., "case x: Option(T)"), always parse and
-        // use it as the wrapper type. This is essential for generic functions with type-predicate
-        // branching (e.g., `if x :: Option { case x: Option(T) { ... } } else if x :: Result ...`)
-        // where different branches constrain the same variable to different tagged union types.
-        // Without this, the first branch's constraint would permanently unify the variable's type,
-        // making subsequent branches fail. The constraint is non-fatal here because after
-        // specialization, only the matching branch will be valid.
-        if (node->case_.union_annotation) {
-            annotation_parse_result result = parse_type_annotation(self, ctx, node->case_.union_annotation);
-            if (result.parsed && tl_monotype_is_inst(result.parsed)) {
-                wrapper_type = result.parsed;
-                // Constrain expression type to match annotation (non-fatal: in generic functions,
-                // a prior branch may have already constrained to a different type)
-                int save                        = self->is_constrain_ignore_error;
-                self->is_constrain_ignore_error = 1;
-                constrain_pm(self, expr_type, wrapper_type, node->case_.expression);
-                self->is_constrain_ignore_error = save;
-            }
-        }
-
-        if (!tl_monotype_is_inst(wrapper_type)) {
-            expected_tagged_union(self, node->case_.expression);
-            return 1;
-        }
-
-        // Find the 'u' (union) field in the wrapper type
-        i32 u_index = tl_monotype_type_constructor_field_index(wrapper_type, S("u"));
-        if (u_index < 0) {
-            // wrapper type missing 'u'
-            expected_tagged_union(self, node->case_.expression);
-            return 1;
-        }
-
-        tl_monotype *union_type     = wrapper_type->cons_inst->args.v[u_index];
-        str_sized    valid_variants = union_type->cons_inst->def->field_names;
-
-        // Track which variants are covered (for exhaustiveness checking)
-        int *variant_covered = alloc_malloc(self->transient, valid_variants.size * sizeof(int));
-        memset(variant_covered, 0, valid_variants.size * sizeof(int));
-        int has_else_arm = 0;
-
-        forall(i, node->case_.conditions) {
-            // Detect `else` condition on final arm
-            if (i + 1 == node->case_.conditions.size && ast_node_is_nil(node->case_.conditions.v[i])) {
-                has_else_arm = 1;
-                break;
-            }
-
-            ast_node *cond = node->case_.conditions.v[i];
-            if (!ast_node_is_symbol(cond) || !cond->symbol.annotation) {
-                // "tagged union case condition must be 'binding: VariantType'"
-                tagged_union_case_syntax_error(self, cond);
-            }
-
-            // Find the variant by name in the union type
-            // Use the original (unmangled) name from the annotation, as union field names are unmangled
-            str variant_name  = ast_node_name_original(cond->symbol.annotation);
-            int variant_found = -1;
-            forall(j, valid_variants) {
-                if (str_eq(valid_variants.v[j], variant_name)) {
-                    variant_found = (int)j;
-                    break;
-                }
-            }
-
-            if (variant_found < 0) {
-                array_push(self->errors,
-                           ((tl_infer_error){.tag = tl_err_tagged_union_unknown_variant, .node = cond}));
-                return 1;
-            }
-
-            // Mark this variant as covered
-            variant_covered[variant_found] = 1;
-
-            // Get the variant type from the union type (which already has concrete types after
-            // substitution) This handles both generic and non-generic variants correctly
-            tl_monotype *variant_type = union_type->cons_inst->args.v[variant_found];
-
-            // Set the binding's type (not as a literal - this is a value, not a type expression).
-            // Note that we set both the condition node and the annotation_type.
-            // If the case variable is mutable (var.&), we have a pointer type.
-            tl_polytype *variant_poly = null;
-            if (node->case_.is_union == AST_TAGGED_UNION_MUTABLE) {
-                variant_poly =
-                  tl_polytype_absorb_mono(self->arena, tl_type_registry_ptr(self->registry, variant_type));
-            } else {
-                variant_poly = tl_polytype_absorb_mono(self->arena, variant_type);
-            }
-
-            ast_node_type_set(cond, variant_poly);
-            cond->symbol.annotation_type = variant_poly;
-        }
-
-        // Exhaustiveness check: if no else arm, verify all variants are covered
-        if (!has_else_arm) {
-            forall(j, valid_variants) {
-                if (!variant_covered[j]) {
-                    array_push(self->errors,
-                               ((tl_infer_error){.tag = tl_err_tagged_union_missing_case, .node = node}));
-                    return 1;
-                }
-            }
-        }
-
+        if (infer_tagged_union_case(self, ctx, node)) return 1;
     } else {
         // Standard case expression: conditions are expressions compared for equality
         forall(i, node->case_.conditions) {
@@ -1716,6 +1759,139 @@ static int infer_let_in(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
     return 0;
 }
 
+// Infer type constructor application: Foo(a=1, b=2), Foo(Int), etc.
+static int infer_type_constructor_nfa(tl_infer *self, traverse_ctx *ctx, ast_node *node, str name) {
+    ast_arguments_iter iter = ast_node_arguments_iter(node);
+    ast_node          *arg;
+    while ((arg = ast_arguments_next(&iter))) {
+        if (resolve_node(self, arg, ctx, npos_function_argument)) return 1;
+    }
+
+    tl_monotype *inst        = null;
+    u32          n_type_args = node->named_application.n_type_arguments;
+
+    if (n_type_args > 0) {
+        // Use explicit type arguments for instantiation
+        tl_monotype_sized args = {
+          .v    = alloc_malloc(self->transient, n_type_args * sizeof(tl_monotype *)),
+          .size = n_type_args,
+        };
+
+        for (u32 i = 0; i < n_type_args; i++) {
+            ast_node *type_arg_node = node->named_application.type_arguments[i];
+            if (type_arg_node && type_arg_node->type) {
+                args.v[i] = unwrap_type_literal(type_arg_node->type->type);
+#if DEBUG_EXPLICIT_TYPE_ARGS
+                str arg_str = tl_monotype_to_string(self->transient, args.v[i]);
+                fprintf(
+                  stderr,
+                  "[DEBUG EXPLICIT TYPE ARGS] type constructor: using explicit type for arg %u: %s\n",
+                  i, str_cstr(&arg_str));
+#endif
+            } else {
+                args.v[i] = null; // will create fresh type variable
+            }
+        }
+
+        inst = tl_type_registry_instantiate_with(self->registry, name, args);
+    } else {
+        inst = tl_type_registry_instantiate(self->registry, name);
+    }
+
+    if (!inst) {
+        wrong_number_of_arguments(self, node);
+        return 1;
+    }
+
+#if DEBUG_EXPLICIT_TYPE_ARGS
+    {
+        str inst_str = tl_monotype_to_string(self->transient, inst);
+        fprintf(stderr,
+                "[DEBUG EXPLICIT TYPE ARGS] infer_named_function_application (type constructor):\n");
+        fprintf(stderr, "  name: %s\n", str_cstr(&name));
+        fprintf(stderr, "  instantiated type: %s\n", str_cstr(&inst_str));
+        fprintf(stderr, "  inst->cons_inst->args.size: %u\n", (u32)inst->cons_inst->args.size);
+        for (u32 j = 0; j < inst->cons_inst->args.size; j++) {
+            str arg_str = tl_monotype_to_string(self->transient, inst->cons_inst->args.v[j]);
+            fprintf(stderr, "    field[%u] type: %s\n", j, str_cstr(&arg_str));
+        }
+    }
+#endif
+
+    {
+        str          inst_str = tl_monotype_to_string(self->transient, inst);
+        tl_polytype *app      = make_arrow(self, ctx, iter.nodes, null, 0);
+        if (!app) return 1;
+
+        if (self->verbose) {
+            str app_str = tl_polytype_to_string(self->transient, app);
+            dbg(self, "type constructor: callsite '%s' (%s) arrow: %s", str_cstr(&name),
+                str_cstr(&inst_str), str_cstr(&app_str));
+        }
+    }
+
+    if (!is_union_struct(self, name)) {
+        iter = ast_node_arguments_iter(node);
+        if (iter.nodes.size != inst->cons_inst->args.size) {
+            wrong_number_of_arguments(self, node);
+            return 1;
+        }
+    }
+
+    u32 i = 0;
+    iter  = ast_node_arguments_iter(node);
+    while ((arg = ast_arguments_next(&iter))) {
+        if (i >= inst->cons_inst->args.size) fatal("runtime error");
+
+        if (ast_node_is_assignment(arg)) {
+            // This is a type value constructor
+            i32 found = tl_monotype_type_constructor_field_index(
+              inst, ast_node_name_original(arg->assignment.name));
+
+            if (-1 == found) {
+                array_push(self->errors,
+                           ((tl_infer_error){.tag = tl_err_field_not_found, .node = arg}));
+                return 1;
+            }
+            assert(found < (i32)inst->cons_inst->args.size);
+
+            int is_cast = is_ptr_cast_annotation(arg->assignment.name);
+            if (is_cast) {
+                tl_polytype *annotation_type = arg->assignment.name->symbol.annotation_type;
+                // Constrain annotation type against struct field to propagate concrete type info
+                if (constrain_pm(self, annotation_type, inst->cons_inst->args.v[found], node)) return 1;
+                // Constrain value type against annotation permissively (cast)
+                self->is_constrain_ignore_error = 1;
+                constrain_pm(self, arg->type, inst->cons_inst->args.v[found], node);
+                self->is_constrain_ignore_error = 0;
+            } else {
+#if DEBUG_EXPLICIT_TYPE_ARGS
+                {
+                    str field_name = ast_node_name_original(arg->assignment.name);
+                    str field_type_str =
+                      tl_monotype_to_string(self->transient, inst->cons_inst->args.v[found]);
+                    fprintf(stderr, "[DEBUG EXPLICIT TYPE ARGS] constraining field '%s':\n",
+                            str_cstr(&field_name));
+                    if (arg->type) {
+                        str arg_type_str = tl_polytype_to_string(self->transient, arg->type);
+                        fprintf(stderr, "  arg->type (value): %s\n", str_cstr(&arg_type_str));
+                    } else {
+                        fprintf(stderr, "  arg->type (value): (null)\n");
+                    }
+                    fprintf(stderr, "  field type from inst: %s\n", str_cstr(&field_type_str));
+                }
+#endif
+                if (constrain_pm(self, arg->type, inst->cons_inst->args.v[found], node)) return 1;
+            }
+        } else {
+            // In this branch, node is a type literal.
+        }
+        ++i;
+    }
+
+    return constrain_pm(self, node->type, inst, node);
+}
+
 static int infer_named_function_application(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
     if (resolve_node(self, node, ctx, ctx->node_pos)) return 1;
 
@@ -1730,140 +1906,7 @@ static int infer_named_function_application(tl_infer *self, traverse_ctx *ctx, a
     if (is_type_literal(self, ctx, node)) return 0;
 
     if (tl_polytype_is_type_constructor(type)) {
-        // FIXME: this comment is incorrect about type literals.
-        // This nfa can be either a type literal, or a type value constructor. Value constructors are of the
-        // form `Foo(a=1, b=2)`. Type literals are of the form `Foo(Int)` for generics or plain `Foo` for
-        // concrete.
-        ast_arguments_iter iter = ast_node_arguments_iter(node);
-        ast_node          *arg;
-        while ((arg = ast_arguments_next(&iter))) {
-            if (resolve_node(self, arg, ctx, npos_function_argument)) return 1;
-        }
-
-        tl_monotype *inst        = null;
-        u32          n_type_args = node->named_application.n_type_arguments;
-
-        if (n_type_args > 0) {
-            // Use explicit type arguments for instantiation
-            tl_monotype_sized args = {
-              .v    = alloc_malloc(self->transient, n_type_args * sizeof(tl_monotype *)),
-              .size = n_type_args,
-            };
-
-            for (u32 i = 0; i < n_type_args; i++) {
-                ast_node *type_arg_node = node->named_application.type_arguments[i];
-                if (type_arg_node && type_arg_node->type) {
-                    args.v[i] = unwrap_type_literal(type_arg_node->type->type);
-#if DEBUG_EXPLICIT_TYPE_ARGS
-                    str arg_str = tl_monotype_to_string(self->transient, args.v[i]);
-                    fprintf(
-                      stderr,
-                      "[DEBUG EXPLICIT TYPE ARGS] type constructor: using explicit type for arg %u: %s\n",
-                      i, str_cstr(&arg_str));
-#endif
-                } else {
-                    args.v[i] = null; // will create fresh type variable
-                }
-            }
-
-            inst = tl_type_registry_instantiate_with(self->registry, name, args);
-        } else {
-            inst = tl_type_registry_instantiate(self->registry, name);
-        }
-
-        if (!inst) {
-            wrong_number_of_arguments(self, node);
-            return 1;
-        }
-
-#if DEBUG_EXPLICIT_TYPE_ARGS
-        {
-            str inst_str = tl_monotype_to_string(self->transient, inst);
-            fprintf(stderr,
-                    "[DEBUG EXPLICIT TYPE ARGS] infer_named_function_application (type constructor):\n");
-            fprintf(stderr, "  name: %s\n", str_cstr(&name));
-            fprintf(stderr, "  instantiated type: %s\n", str_cstr(&inst_str));
-            fprintf(stderr, "  inst->cons_inst->args.size: %u\n", (u32)inst->cons_inst->args.size);
-            for (u32 j = 0; j < inst->cons_inst->args.size; j++) {
-                str arg_str = tl_monotype_to_string(self->transient, inst->cons_inst->args.v[j]);
-                fprintf(stderr, "    field[%u] type: %s\n", j, str_cstr(&arg_str));
-            }
-        }
-#endif
-
-        {
-            str          inst_str = tl_monotype_to_string(self->transient, inst);
-            tl_polytype *app      = make_arrow(self, ctx, iter.nodes, null, 0);
-            if (!app) return 1;
-
-            if (self->verbose) {
-                str app_str = tl_polytype_to_string(self->transient, app);
-                dbg(self, "type constructor: callsite '%s' (%s) arrow: %s", str_cstr(&name),
-                    str_cstr(&inst_str), str_cstr(&app_str));
-            }
-        }
-
-        if (!is_union_struct(self, name)) {
-            iter = ast_node_arguments_iter(node);
-            if (iter.nodes.size != inst->cons_inst->args.size) {
-                wrong_number_of_arguments(self, node);
-                return 1;
-            }
-        }
-
-        u32 i = 0;
-        iter  = ast_node_arguments_iter(node);
-        while ((arg = ast_arguments_next(&iter))) {
-            if (i >= inst->cons_inst->args.size) fatal("runtime error");
-
-            if (ast_node_is_assignment(arg)) {
-                // This is a type value constructor
-                i32 found = tl_monotype_type_constructor_field_index(
-                  inst, ast_node_name_original(arg->assignment.name));
-
-                if (-1 == found) {
-                    array_push(self->errors,
-                               ((tl_infer_error){.tag = tl_err_field_not_found, .node = arg}));
-                    return 1;
-                }
-                assert(found < (i32)inst->cons_inst->args.size);
-
-                int is_cast = is_ptr_cast_annotation(arg->assignment.name);
-                if (is_cast) {
-                    tl_polytype *annotation_type = arg->assignment.name->symbol.annotation_type;
-                    // Constrain annotation type against struct field to propagate concrete type info
-                    if (constrain_pm(self, annotation_type, inst->cons_inst->args.v[found], node)) return 1;
-                    // Constrain value type against annotation permissively (cast)
-                    self->is_constrain_ignore_error = 1;
-                    constrain_pm(self, arg->type, inst->cons_inst->args.v[found], node);
-                    self->is_constrain_ignore_error = 0;
-                } else {
-#if DEBUG_EXPLICIT_TYPE_ARGS
-                    {
-                        str field_name = ast_node_name_original(arg->assignment.name);
-                        str field_type_str =
-                          tl_monotype_to_string(self->transient, inst->cons_inst->args.v[found]);
-                        fprintf(stderr, "[DEBUG EXPLICIT TYPE ARGS] constraining field '%s':\n",
-                                str_cstr(&field_name));
-                        if (arg->type) {
-                            str arg_type_str = tl_polytype_to_string(self->transient, arg->type);
-                            fprintf(stderr, "  arg->type (value): %s\n", str_cstr(&arg_type_str));
-                        } else {
-                            fprintf(stderr, "  arg->type (value): (null)\n");
-                        }
-                        fprintf(stderr, "  field type from inst: %s\n", str_cstr(&field_type_str));
-                    }
-#endif
-                    if (constrain_pm(self, arg->type, inst->cons_inst->args.v[found], node)) return 1;
-                }
-            } else {
-                // In this branch, node is a type literal.
-            }
-            ++i;
-        }
-
-        if (constrain_pm(self, node->type, inst, node)) return 1;
-
+        return infer_type_constructor_nfa(self, ctx, node, name);
     } else {
         if (tl_polytype_is_concrete(type)) {
             if (!str_is_empty(original)) {
@@ -1955,6 +1998,15 @@ static int infer_named_function_application(tl_infer *self, traverse_ctx *ctx, a
     return 0;
 }
 
+// ============================================================================
+// Generic cloning and arrow construction
+// ============================================================================
+//
+// Utilities shared between inference and specialization: clone_generic_for_arrow
+// deep-clones a generic AST node (erasing types so the copy can be re-inferred),
+// make_arrow constructs arrow (function) types from parameter/result nodes, and
+// concretize_params fills in concrete types for function parameters.
+
 static void         rename_variables(tl_infer *, ast_node *, rename_variables_ctx *, int);
 static void         concretize_params(tl_infer *self, ast_node *, tl_monotype *, hashmap *type_arguments,
                                       ast_node_sized callsite_type_arguments);
@@ -1964,8 +2016,6 @@ static tl_polytype *make_arrow_result_type(tl_infer *, traverse_ctx *, ast_node_
 static tl_polytype *make_arrow_with(tl_infer *, traverse_ctx *, ast_node *, tl_polytype *);
 static tl_polytype *make_binary_predicate_arrow(tl_infer *, traverse_ctx *, ast_node *lhs, ast_node *rhs);
 static int          traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, traverse_cb cb);
-
-//
 
 static void      add_free_variables_to_arrow(tl_infer *self, ast_node *node, tl_polytype *arrow);
 static void      concretize_params(tl_infer *self, ast_node *node, tl_monotype *callsite,
@@ -2114,6 +2164,58 @@ static int traverse_ast_node_params(tl_infer *self, traverse_ctx *ctx, ast_node 
         if (cb(self, ctx, param)) return 1;
     }
     return 0;
+}
+
+static int traverse_ast(tl_infer *, traverse_ctx *, ast_node *, traverse_cb);
+
+static int traverse_ast_case(tl_infer *self, traverse_ctx *ctx, ast_node *node, traverse_cb cb) {
+    ctx->node_pos = npos_operand;
+    if (traverse_ast(self, ctx, node->case_.expression, cb)) return 1;
+
+    ctx->node_pos = npos_operand;
+    if (traverse_ast(self, ctx, node->case_.binary_predicate, cb)) return 1;
+
+    if (node->case_.is_union) {
+        // For union cases, conditions are handled by infer_case() directly.
+        // We only need to add condition symbols to lexical scope before traversing arms.
+        forall(i, node->case_.conditions) {
+            hashmap  *save = map_copy(ctx->lexical_names);
+            ast_node *cond = node->case_.conditions.v[i];
+
+            // Skip nil condition (else arm)
+            if (ast_node_is_nil(cond)) {
+                if (i < node->case_.arms.size) {
+                    ctx->node_pos = npos_operand;
+                    if (traverse_ast(self, ctx, node->case_.arms.v[i], cb)) return 1;
+                }
+                ctx->lexical_names = save;
+                continue;
+            }
+
+            // Add condition symbol to lexical scope (don't traverse it - infer_case handles it)
+            if (ast_node_is_symbol(cond)) {
+                str_hset_insert(&ctx->lexical_names, cond->symbol.name);
+            }
+
+            // Process only the corresponding arm (not the condition)
+            if (i < node->case_.arms.size) {
+                ctx->node_pos = npos_operand;
+                if (traverse_ast(self, ctx, node->case_.arms.v[i], cb)) return 1;
+            }
+
+            ctx->lexical_names = save;
+        }
+    } else {
+        forall(i, node->case_.conditions) {
+            ctx->node_pos = npos_operand;
+            if (traverse_ast(self, ctx, node->case_.conditions.v[i], cb)) return 1;
+        }
+        forall(i, node->case_.arms) {
+            ctx->node_pos = npos_operand;
+            if (traverse_ast(self, ctx, node->case_.arms.v[i], cb)) return 1;
+        }
+    }
+    return cb(self, ctx, node);
 }
 
 static int traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, traverse_cb cb) {
@@ -2269,56 +2371,9 @@ static int traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, trave
         if (cb(self, ctx, node)) return 1;
         break;
 
-    case ast_case: {
-        ctx->node_pos = npos_operand;
-        if (traverse_ast(self, ctx, node->case_.expression, cb)) return 1;
-
-        ctx->node_pos = npos_operand;
-        if (traverse_ast(self, ctx, node->case_.binary_predicate, cb)) return 1;
-
-        if (node->case_.is_union) {
-            // For union cases, conditions are handled by infer_case() directly.
-            // We only need to add condition symbols to lexical scope before traversing arms.
-            forall(i, node->case_.conditions) {
-                hashmap  *save = map_copy(ctx->lexical_names);
-                ast_node *cond = node->case_.conditions.v[i];
-
-                // Skip nil condition (else arm)
-                if (ast_node_is_nil(cond)) {
-                    if (i < node->case_.arms.size) {
-                        ctx->node_pos = npos_operand;
-                        if (traverse_ast(self, ctx, node->case_.arms.v[i], cb)) return 1;
-                    }
-                    ctx->lexical_names = save;
-                    continue;
-                }
-
-                // Add condition symbol to lexical scope (don't traverse it - infer_case handles it)
-                if (ast_node_is_symbol(cond)) {
-                    str_hset_insert(&ctx->lexical_names, cond->symbol.name);
-                }
-
-                // Process only the corresponding arm (not the condition)
-                if (i < node->case_.arms.size) {
-                    ctx->node_pos = npos_operand;
-                    if (traverse_ast(self, ctx, node->case_.arms.v[i], cb)) return 1;
-                }
-
-                ctx->lexical_names = save;
-            }
-        } else {
-            // Original behavior for non-union cases
-            forall(i, node->case_.conditions) {
-                ctx->node_pos = npos_operand;
-                if (traverse_ast(self, ctx, node->case_.conditions.v[i], cb)) return 1;
-            }
-            forall(i, node->case_.arms) {
-                ctx->node_pos = npos_operand;
-                if (traverse_ast(self, ctx, node->case_.arms.v[i], cb)) return 1;
-            }
-        }
-        if (cb(self, ctx, node)) return 1;
-    } break;
+    case ast_case:
+        if (traverse_ast_case(self, ctx, node, cb)) return 1;
+        break;
 
     case ast_binary_op:
         // don't traverse op, it's just an operator
@@ -3107,8 +3162,11 @@ static int check_type_predicate(tl_infer *self, traverse_ctx *traverse_ctx, ast_
 int is_union_struct(tl_infer *self, str name);
 
 // ============================================================================
-// Type Constraint Generation
+// Inference dispatch (infer_traverse_cb)
 // ============================================================================
+//
+// Main callback for Phase 3: dispatches each AST node to the appropriate
+// infer_*() handler during bottom-up type inference.
 
 static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_node *node) {
     if (null == node) return 0;
@@ -3188,6 +3246,14 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
 
     return 0;
 }
+
+// ============================================================================
+// Instance cache
+// ============================================================================
+//
+// Tracks which generic-function + concrete-type combinations have already been
+// specialized, keyed by (name_hash, type_hash, type_args_hash).  Prevents
+// duplicate specializations of the same generic at the same type.
 
 static name_and_type make_instance_key(tl_infer *self, str generic_name, tl_monotype *arrow,
                                        ast_node_sized type_arguments, hashmap *outer_type_arguments) {
@@ -4027,8 +4093,14 @@ static int specialize_arguments(tl_infer *self, traverse_ctx *traverse_ctx, ast_
 }
 
 // ============================================================================
-// Generic Function Specialization
+// Generic function specialization (Phase 5)
 // ============================================================================
+//
+// Top-down pass that monomorphizes generic functions. For each call site with
+// concrete argument types, clones the generic definition, re-infers the clone at
+// the concrete type, and registers it as a new top-level.  Handles type
+// constructor specialization, user-type specialization, and recursive descent
+// through let-in, case, and operand nodes.
 
 static int specialize_applications_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_node *node) {
     if (ast_node_is_nfa(node)) {
@@ -4135,35 +4207,6 @@ static int specialize_applications_cb(tl_infer *self, traverse_ctx *traverse_ctx
         }
 #endif
 
-#if DEBUG_SPECIALIZE
-        str app_str = tl_polytype_to_string(self->transient, callsite);
-        fprintf(stderr, "specialize application: callsite '%s' arrow: %s\n",
-                str_cstr(&name) str_cstr(&app_str));
-
-        {
-            u32                             argc = node->named_application.n_type_arguments;
-            ast_node                      **argv = node->named_application.type_arguments;
-
-            tl_type_registry_parse_type_ctx parse_ctx;
-            tl_type_registry_parse_type_ctx_init(self->transient, &parse_ctx, null);
-
-            tl_monotype_sized type_arg_types = {
-              .size = argc,
-              .v    = alloc_malloc(self->transient, argc * sizeof(tl_monotype *)),
-            };
-
-            for (u32 i = 0; i < argc; i++) {
-                ast_node *type_arg = argv[i];
-                type_arg_types.v[i] =
-                  tl_type_registry_parse_type_with_ctx(self->registry, type_arg, &parse_ctx);
-            }
-
-            u64 type_args_hash = tl_monotype_sized_hash64(hash64("args", 4), type_arg_types);
-
-            fprintf(stderr, "  type_args_hash = %llu\n", type_args_hash);
-        }
-
-#endif
         // Specialize type constructors appearing in explicit type arguments.
         // E.g., sizeof[Point[Int]]() needs Point[Int] specialized to Point_8.
 #if DEBUG_RECURSIVE_TYPES
@@ -4236,12 +4279,17 @@ static int specialize_applications_cb(tl_infer *self, traverse_ctx *traverse_ctx
     return 0;
 }
 
-// --
+// ============================================================================
+// Alpha conversion (Phase 1)
+// ============================================================================
+//
+// Gives every bound variable a globally unique name (e.g. x -> x_v3) to
+// eliminate shadowing before inference.  rename_let_in handles top-level let-in
+// symbols; rename_variables recurses through function params, let-in bindings,
+// case patterns, and lambda bodies.  rename_one_function_param respects lexical
+// scope to avoid renaming already-converted names.
 
 static str next_variable_name(tl_infer *, str);
-
-// Performs alpha-conversion on the AST to ensure all bound variables have globally unique names while
-// preserving lexical scope. This simplifies later passes by removing name collision concerns.
 
 static void rename_let_in(tl_infer *self, ast_node *node, rename_variables_ctx *ctx) {
     // For toplevel definitions, rename them and keep them in lexical scope.
@@ -4334,9 +4382,35 @@ static hashmap *rename_function_params(tl_infer *self, ast_node *node, rename_va
     return save;
 }
 
-// ============================================================================
-// Variable Renaming (Alpha Conversion)
-// ============================================================================
+// -- rename_variables (main recursive body) --
+
+static void rename_case_variables(tl_infer *self, ast_node *node, rename_variables_ctx *ctx, int level) {
+    int is_union = node->case_.is_union;
+
+    rename_variables(self, node->case_.expression, ctx, level + 1);
+    rename_variables(self, node->case_.binary_predicate, ctx, level + 1);
+    if (node->case_.conditions.size != node->case_.arms.size) fatal("runtime error");
+    forall(i, node->case_.conditions) {
+        hashmap *save = null;
+        if (is_union && ast_node_is_symbol(node->case_.conditions.v[i])) {
+            // node may be ast_nil for an else clause
+            str name   = ast_node_str(node->case_.conditions.v[i]);
+            str newvar = next_variable_name(self, name);
+
+            // establish lexical scope of the union case binding
+            save = map_copy(ctx->lex);
+            str_map_set(&ctx->lex, name, &newvar);
+        }
+
+        rename_variables(self, node->case_.conditions.v[i], ctx, level + 1);
+        rename_variables(self, node->case_.arms.v[i], ctx, level + 1);
+
+        if (save) {
+            map_destroy(&ctx->lex);
+            ctx->lex = save;
+        }
+    }
+}
 
 static void rename_variables(tl_infer *self, ast_node *node, rename_variables_ctx *ctx, int level) {
     // level should be 0 on entry. It is used to recognize toplevel let nodes which assign static values
@@ -4544,33 +4618,9 @@ static void rename_variables(tl_infer *self, ast_node *node, rename_variables_ct
         }
         break;
 
-    case ast_case: {
-        int is_union = node->case_.is_union;
-
-        rename_variables(self, node->case_.expression, ctx, level + 1);
-        rename_variables(self, node->case_.binary_predicate, ctx, level + 1);
-        if (node->case_.conditions.size != node->case_.arms.size) fatal("runtime error");
-        forall(i, node->case_.conditions) {
-            hashmap *save = null;
-            if (is_union && ast_node_is_symbol(node->case_.conditions.v[i])) {
-                // node may be ast_nil for an else clause
-                str name   = ast_node_str(node->case_.conditions.v[i]);
-                str newvar = next_variable_name(self, name);
-
-                // establish lexical scope of the union case binding
-                save = map_copy(ctx->lex);
-                str_map_set(&ctx->lex, name, &newvar);
-            }
-
-            rename_variables(self, node->case_.conditions.v[i], ctx, level + 1);
-            rename_variables(self, node->case_.arms.v[i], ctx, level + 1);
-
-            if (save) {
-                map_destroy(&ctx->lex);
-                ctx->lex = save;
-            }
-        }
-    } break;
+    case ast_case:
+        rename_case_variables(self, node, ctx, level);
+        break;
 
     case ast_type_predicate:
         //
@@ -4938,6 +4988,15 @@ static void add_free_variables_to_arrow(tl_infer *self, ast_node *node, tl_polyt
     }
 }
 
+// ============================================================================
+// Generic function registration (Phase 3)
+// ============================================================================
+//
+// add_generic() is called for each top-level definition during Phase 3. It
+// builds a provisional arrow type (for recursive calls), traverses the function
+// body via infer_one() -> infer_traverse_cb to generate constraints bottom-up,
+// then generalizes the result into a polytype in the type environment.
+
 static int generic_declaration(tl_infer *self, str name, ast_node const *name_node, ast_node *node) {
     // no function body, so let's treat this as a type declaration
     if (!name_node->symbol.annotation_type) {
@@ -5090,6 +5149,16 @@ static int add_generic(tl_infer *self, ast_node *node) {
     return 0;
 }
 
+// ============================================================================
+// Post-inference validation and cleanup (Phases 4-6)
+// ============================================================================
+//
+// Utility functions called from tl_infer_run between the major passes:
+//   check_missing_free_variables (Phase 4): verifies no unresolved free variables
+//   remove_generic_toplevels (after Phase 5): strips still-generic definitions
+//   tree_shake_toplevels (Phase 6): prunes unreachable toplevels using tree_shake
+//   check_main_function (after Phase 5): validates main's type signature
+
 void missing_fv_error_cb(void *ctx, str fun, str var) {
     tl_infer *self = ctx;
     ast_node *node = toplevel_get(self, fun);
@@ -5217,6 +5286,14 @@ static int check_main_function(tl_infer *self, ast_node *main) {
     }
     return error;
 }
+
+// ============================================================================
+// Type specialization updates (Phase 7)
+// ============================================================================
+//
+// After specialization and tree shaking, replaces generic type constructors in
+// the final AST with their specialized versions (e.g. Array(T) -> Array__Int).
+// Also checks for any remaining unresolved type variables.
 
 tl_monotype *tl_infer_update_specialized_type_(tl_infer *self, tl_monotype *mono, hashmap **in_progress) {
 
@@ -5481,7 +5558,13 @@ static void check_unresolved_types(tl_infer *self) {
     arena_reset(self->transient);
 }
 
-// -- invariant checking --
+// ============================================================================
+// Invariant checking (debug-only)
+// ============================================================================
+//
+// Enabled by DEBUG_INVARIANTS. Validates properties at phase boundaries:
+// all types null after alpha conversion, all functions in env after inference,
+// no generic toplevels after specialization, alpha-converted names in type args.
 
 #if DEBUG_INVARIANTS
 
@@ -5626,32 +5709,27 @@ static int check_specialized_nfa_type_args(tl_infer *self, ast_node *node, char 
 
 #endif // DEBUG_INVARIANTS
 
-int tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *out_result) {
-    dbg(self, "-- start inference --");
+// Phase 1: Alpha-conversion — ensure unique variable names.
+static int run_alpha_conversion(tl_infer *self, ast_node_sized nodes) {
+    rename_variables_ctx ctx = {.lex = map_new(self->transient, str, str, 16)};
+    // rename toplevel let-in symbols and keep them in global lexical scope
+    forall(i, nodes) rename_let_in(self, nodes.v[i], &ctx);
 
-    // Phase 1: Alpha-conversion - ensure unique variable names
-    // Performs alpha-conversion on the AST to ensure all bound variables have globally unique names
-    // while preserving lexical scope. This simplifies later passes by removing name collision concerns.
-    {
-        rename_variables_ctx ctx = {.lex = map_new(self->transient, str, str, 16)};
-        // rename toplevel let-in symbols and keep them in global lexical scope
-        forall(i, nodes) rename_let_in(self, nodes.v[i], &ctx);
-
-        // rename the rest
-        ctx = (rename_variables_ctx){.lex = ctx.lex};
-        forall(i, nodes) rename_variables(self, nodes.v[i], &ctx, 0);
-        arena_reset(self->transient);
-    }
+    // rename the rest
+    ctx = (rename_variables_ctx){.lex = ctx.lex};
+    forall(i, nodes) rename_variables(self, nodes.v[i], &ctx, 0);
+    arena_reset(self->transient);
 
 #if DEBUG_INVARIANTS
-    // Invariant: After alpha conversion, all AST types must still be null
     if (check_all_types_null(self, nodes, "Phase 1: Alpha Conversion")) return 1;
     if (check_type_arg_types_null(self, nodes, "Phase 1: Alpha Conversion")) return 1;
     arena_reset(self->transient);
 #endif
+    return 0;
+}
 
-    // Phase 2: Load top-level definitions
-    // Load all top level forms.
+// Phase 2: Load top-level definitions.
+static int run_load_toplevels(tl_infer *self, ast_node_sized nodes) {
     self->toplevels = ast_node_str_map_create(self->arena, 1024);
     load_toplevel(self, nodes);
     arena_reset(self->transient);
@@ -5659,10 +5737,11 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *out_resu
 
     dbg(self, "-- toplevels");
     log_toplevels(self);
+    return 0;
+}
 
-    // Phase 3: Generic function type inference
-    // now go through the toplevel let nodes and create generic functions: don't call add_generic from
-    // inside the iteration because infer will add lambda functions to the toplevel.
+// Phase 3: Generic function type inference.
+static int run_generic_inference(tl_infer *self, ast_node_sized nodes) {
     forall(i, nodes) {
         if (ast_node_is_hash_command(nodes.v[i])) continue;
         if (ast_node_is_type_alias(nodes.v[i])) continue;
@@ -5673,7 +5752,6 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *out_resu
     if (self->errors.size) return 1;
 
 #if DEBUG_INVARIANTS
-    // Invariant: After generic inference, all let-bound functions should have polytypes in env
     {
         int failures = 0;
         forall(i, nodes) {
@@ -5694,9 +5772,11 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *out_resu
         arena_reset(self->transient);
     }
 #endif
+    return 0;
+}
 
-    // Phase 4: Check free variables
-    // check if free variables are present
+// Phase 4: Check free variables and apply substitutions.
+static int run_check_free_variables(tl_infer *self) {
     if (check_missing_free_variables(self)) return 1;
     if (self->errors.size) return 1;
     arena_reset(self->transient);
@@ -5716,21 +5796,11 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *out_resu
     dbg(self, "-- env");
     log_env(self);
     arena_reset(self->transient);
+    return 0;
+}
 
-    ast_node *main = null;
-    if (!self->opts.is_library) {
-        ast_node **found_main = str_map_get(self->toplevels, S("main"));
-        if (!found_main) {
-            array_push(self->errors, ((tl_infer_error){.tag = tl_err_no_main_function}));
-            return 1;
-        }
-        main = *found_main;
-    }
-
-    // Phase 5: Generic function specialization
-    // Final phase: communiate type information top-down by following applications. This contrasts with
-    // the bottom-up inference we just completed. At this point the program is well-typed and we are
-    // setting up for the transpiler.
+// Phase 5: Generic function specialization.
+static int run_specialize(tl_infer *self, ast_node_sized nodes, ast_node *main) {
     dbg(self, "-- specialize phase");
 
     traverse_ctx *traverse = traverse_ctx_create(self->transient);
@@ -5785,12 +5855,9 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *out_resu
             if (ast_node_is_let(node)) {
                 str name = ast_node_str(node->let.name);
                 if (is_module_init(name)) {
-                    // These two things must be done in order for the transpiler to emit the function: It
-                    // must be specialized and it must not have a generic type.
                     ast_node_set_is_specialized(node);
                     tl_type_env_insert(self->env, name, callsite);
                     tl_infer_set_attributes(self, node->let.name);
-                    // recurse through init body as if we had specialized it
                     post_specialize(self, traverse, node, callsite->type);
                 }
             }
@@ -5814,24 +5881,27 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *out_resu
     arena_reset(self->transient);
 
 #if DEBUG_INVARIANTS
-    // Invariant: After specialization, no generic toplevels should remain
     if (check_no_generic_toplevels(self, "Phase 5: Specialization")) return 1;
     arena_reset(self->transient);
 #endif
+    return 0;
+}
 
-    // Phase 6: Tree shaking
-    // tree shake
-    if (main) {
-        tree_shake_toplevels(self, main);
-        arena_reset(self->transient);
+// Phase 6: Tree shaking.
+static int run_tree_shake(tl_infer *self, ast_node *main) {
+    if (!main) return 0;
 
-        // after tree shake, extraneous symbols will have been removed from environment
-        if (check_missing_free_variables(self)) return 1;
-        if (self->errors.size) return 1;
-    }
+    tree_shake_toplevels(self, main);
+    arena_reset(self->transient);
 
-    // Phase 7: Type specialization updates
-    // update type specialisations: replace generic constructors with specialised constructors.
+    // after tree shake, extraneous symbols will have been removed from environment
+    if (check_missing_free_variables(self)) return 1;
+    if (self->errors.size) return 1;
+    return 0;
+}
+
+// Phase 7: Type specialization updates.
+static int run_update_types(tl_infer *self) {
     update_specialized_types(self);
     arena_reset(self->transient);
 
@@ -5849,9 +5919,30 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *out_resu
     log_toplevels(self);
     arena_reset(self->transient);
 
-    if (self->errors.size) {
-        return 1;
+    return self->errors.size ? 1 : 0;
+}
+
+int tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *out_result) {
+    dbg(self, "-- start inference --");
+
+    if (run_alpha_conversion(self, nodes)) return 1;
+    if (run_load_toplevels(self, nodes)) return 1;
+    if (run_generic_inference(self, nodes)) return 1;
+    if (run_check_free_variables(self)) return 1;
+
+    ast_node *main = null;
+    if (!self->opts.is_library) {
+        ast_node **found_main = str_map_get(self->toplevels, S("main"));
+        if (!found_main) {
+            array_push(self->errors, ((tl_infer_error){.tag = tl_err_no_main_function}));
+            return 1;
+        }
+        main = *found_main;
     }
+
+    if (run_specialize(self, nodes, main)) return 1;
+    if (run_tree_shake(self, main)) return 1;
+    if (run_update_types(self)) return 1;
 
     if (out_result) {
         out_result->infer     = self;
@@ -5876,6 +5967,10 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *out_resu
     arena_reset(self->transient);
     return 0;
 }
+
+// ============================================================================
+// Error reporting and debug logging
+// ============================================================================
 
 void tl_infer_report_errors(tl_infer *self) {
     if (self->errors.size) {
@@ -5962,7 +6057,9 @@ static void apply_subs_to_ast(tl_infer *self) {
     }
 }
 
-//
+// ============================================================================
+// Name classification helpers and toplevel map accessors
+// ============================================================================
 
 int is_intrinsic(str name) {
     return (0 == str_cmp_nc(name, "_tl_", 4));
