@@ -20,7 +20,7 @@ map[a, b](f, arr) {
 
     i := 0
     while i < arr.size {
-        out.v.(i) = f(arr.v.(i))
+        out.v.[i] = f(arr.v.[i])
         i         = i + 1
     }
     out
@@ -30,10 +30,10 @@ add1(x) { x + 1 }
 
 main() {
     vals := Arr(v: Ptr[Int] = c_malloc(sizeof[Int]() * 4), size = 0, capacity = 4)
-    vals.v.(0) = 0
-    vals.v.(1) = 1
-    vals.v.(2) = 2
-    vals.v.(3) = 3
+    vals.v.[0] = 0
+    vals.v.[1] = 1
+    vals.v.[2] = 2
+    vals.v.[3] = 3
     vals.size  = 4
 
     res := map(add1/1, vals)
@@ -41,7 +41,7 @@ main() {
     sum := 0
     i   := 0
     while i < res.size, i = i + 1 {
-        sum = sum + res.v.(i)
+        sum = sum + res.v.[i]
     }
     sum - 10
 }

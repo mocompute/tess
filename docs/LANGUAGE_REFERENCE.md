@@ -973,8 +973,8 @@ ptr->field            // Equivalent to ptr.*.field
 ### Pointer Indexing
 
 ```tl
-ptr[i]                // Index into pointer (pointer arithmetic)
-ptr[i] = value        // Write through pointer index
+ptr.[i]               // Index into pointer (pointer arithmetic)
+ptr.[i] = value       // Write through pointer index
 ```
 
 ### Pointer Casts
@@ -1045,7 +1045,7 @@ CArray supports direct indexing without decay:
 
 ```tl
 arr: CArray(Int, 5) := void
-arr[0] = 42                           // Direct indexing on CArray
+arr.[0] = 42                          // Direct indexing on CArray
 ```
 
 CArray fields in structs automatically decay to pointers on access:

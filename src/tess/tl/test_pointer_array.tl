@@ -2,7 +2,7 @@
 
 main() {
     arr: CArray[Int, 16] := void
-    arr.(0) = 123456
+    arr.[0] = 123456
 
     // explicit decay to pointer
     p: Ptr[Int] := arr

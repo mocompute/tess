@@ -223,13 +223,13 @@ byte_at(s: Str, index: CSize) -> Byte {
     n := len(s)
     if index >= n { _tl_fatal_(c"Str.byte_at: index out of bounds") }
     p := _buf(s.&)
-    p.(index)
+    p.[index]
 }
 
 cstr(s: Ptr[Str]) -> CString {
     n := len(s.*)
     p := _buf(s)
-    p.(n) = 0
+    p.[n] = 0
     cs: CString := p
     cs
 }
@@ -295,7 +295,7 @@ contains_byte(s: Str, b: Byte) -> Bool {
     sp       := _buf(s.&)
     i: CSize := 0
     while i < n, i += 1 {
-        if sp.(i) == b { return 1 }
+        if sp.[i] == b { return 1 }
     }
     0
 }
@@ -306,7 +306,7 @@ contains_byte(s: Str, b: Byte) -> Bool {
 _cat_impl(alloc: Ptr[Allocator], bufs: Ptr[Ptr[CChar]], lens: Ptr[CSize], count: CSize) -> Str {
     total: CSize := 0
     i:     CSize := 0
-    while i < count, i += 1 { total = total + lens.(i) }
+    while i < count, i += 1 { total = total + lens.[i] }
 
     if total <= _STR_MAX_SMALL {
         s               := Str(small = _Small(buf = void, tag_len = _make_tag_len(total)))
@@ -314,11 +314,11 @@ _cat_impl(alloc: Ptr[Allocator], bufs: Ptr[Ptr[CChar]], lens: Ptr[CSize], count:
         off: CSize      := 0
         j:   CSize      := 0
         while j < count, j += 1 {
-            if lens.(j) > 0 {
+            if lens.[j] > 0 {
                 d: Ptr[CChar] := Unsafe.pointer_add(dst, off)
-                c_memcpy(d, bufs.(j), lens.(j))
+                c_memcpy(d, bufs.[j], lens.[j])
             }
-            off = off + lens.(j)
+            off = off + lens.[j]
         }
         return s
     }
@@ -328,11 +328,11 @@ _cat_impl(alloc: Ptr[Allocator], bufs: Ptr[Ptr[CChar]], lens: Ptr[CSize], count:
     off: CSize := 0
     j:   CSize := 0
     while j < count, j += 1 {
-        if lens.(j) > 0 {
+        if lens.[j] > 0 {
             d: Ptr[CChar] := Unsafe.pointer_add(buf, off)
-            c_memcpy(d, bufs.(j), lens.(j))
+            c_memcpy(d, bufs.[j], lens.[j])
         }
-        off = off + lens.(j)
+        off = off + lens.[j]
     }
     Str(big = _Big(len = total, buf = buf))
 }
@@ -340,8 +340,8 @@ _cat_impl(alloc: Ptr[Allocator], bufs: Ptr[Ptr[CChar]], lens: Ptr[CSize], count:
 cat(alloc, a: Str, b: Str) -> Str {
     bufs: CArray[Ptr[CChar], 2] := void
     lens: CArray[CSize, 2]      := void
-    bufs.(0) = _buf(a.&) lens.(0) = len(a)
-    bufs.(1) = _buf(b.&) lens.(1) = len(b)
+    bufs.[0] = _buf(a.&) lens.[0] = len(a)
+    bufs.[1] = _buf(b.&) lens.[1] = len(b)
     bp: Ptr[Ptr[CChar]] := bufs
     lp: Ptr[CSize]      := lens
     _cat_impl(alloc, bp, lp, 2)
@@ -354,9 +354,9 @@ cat(a: Str, b: Str) -> Str {
 cat_3(alloc, a: Str, b: Str, c: Str) -> Str {
     bufs: CArray[Ptr[CChar], 3] := void
     lens: CArray[CSize, 3]      := void
-    bufs.(0) = _buf(a.&) lens.(0) = len(a)
-    bufs.(1) = _buf(b.&) lens.(1) = len(b)
-    bufs.(2) = _buf(c.&) lens.(2) = len(c)
+    bufs.[0] = _buf(a.&) lens.[0] = len(a)
+    bufs.[1] = _buf(b.&) lens.[1] = len(b)
+    bufs.[2] = _buf(c.&) lens.[2] = len(c)
     bp: Ptr[Ptr[CChar]] := bufs
     lp: Ptr[CSize]      := lens
     _cat_impl(alloc, bp, lp, 3)
@@ -369,10 +369,10 @@ cat_3(a: Str, b: Str, c: Str) -> Str {
 cat_4(alloc, a: Str, b: Str, c: Str, d: Str) -> Str {
     bufs: CArray[Ptr[CChar], 4] := void
     lens: CArray[CSize, 4]      := void
-    bufs.(0) = _buf(a.&) lens.(0) = len(a)
-    bufs.(1) = _buf(b.&) lens.(1) = len(b)
-    bufs.(2) = _buf(c.&) lens.(2) = len(c)
-    bufs.(3) = _buf(d.&) lens.(3) = len(d)
+    bufs.[0] = _buf(a.&) lens.[0] = len(a)
+    bufs.[1] = _buf(b.&) lens.[1] = len(b)
+    bufs.[2] = _buf(c.&) lens.[2] = len(c)
+    bufs.[3] = _buf(d.&) lens.[3] = len(d)
     bp: Ptr[Ptr[CChar]] := bufs
     lp: Ptr[CSize]      := lens
     _cat_impl(alloc, bp, lp, 4)
@@ -419,7 +419,7 @@ index_of_byte(s: Str, b: Byte) -> Int {
     sp       := _buf(s.&)
     i: CSize := 0
     while i < n, i += 1 {
-        if sp.(i) == b { return i }
+        if sp.[i] == b { return i }
     }
     -1
 }
@@ -433,7 +433,7 @@ replace_byte(alloc, s: Str, find: Byte, replace: Byte) -> Str {
     rp       := _buf(result.&)
     i: CSize := 0
     while i < n, i += 1 {
-        if rp.(i) == find { rp.(i) = replace }
+        if rp.[i] == find { rp.[i] = replace }
     }
     result
 }

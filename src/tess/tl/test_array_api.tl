@@ -5,7 +5,7 @@ test_get() {
     error := 0
     arr   := Array.init(0, 5)
     i     := 0
-    while i < 5, i += 1 { arr.v.(i) = i * 10 }
+    while i < 5, i += 1 { arr.v.[i] = i * 10 }
     if Array.get(arr, 0) != 0 { error += 1 }
     if Array.get(arr, 2) != 20 { error += 1 }
     if Array.get(arr, 4) != 40 { error += 1 }
@@ -58,17 +58,17 @@ test_insert() {
     // Insert 2 at index 1: [1, 2, 3, 4]
     Array.insert(arr.&, 1, 2)
     if arr.size != 4 { error += 1 }
-    if arr.v.(0) != 1 { error += 1 }
-    if arr.v.(1) != 2 { error += 1 }
-    if arr.v.(2) != 3 { error += 1 }
-    if arr.v.(3) != 4 { error += 1 }
+    if arr.v.[0] != 1 { error += 1 }
+    if arr.v.[1] != 2 { error += 1 }
+    if arr.v.[2] != 3 { error += 1 }
+    if arr.v.[3] != 4 { error += 1 }
     // Insert 0 at front
     Array.insert(arr.&, 0, 0)
-    if arr.v.(0) != 0 { error += 1 }
+    if arr.v.[0] != 0 { error += 1 }
     if arr.size != 5 { error += 1 }
     // Insert 5 at end
     Array.insert(arr.&, 5, 5)
-    if arr.v.(5) != 5 { error += 1 }
+    if arr.v.[5] != 5 { error += 1 }
     if arr.size != 6 { error += 1 }
     Array.free(arr.&)
     error
@@ -85,9 +85,9 @@ test_remove() {
     val := Array.remove(arr.&, 1)
     if val != 20 { error += 1 }
     if arr.size != 3 { error += 1 }
-    if arr.v.(0) != 10 { error += 1 }
-    if arr.v.(1) != 30 { error += 1 }
-    if arr.v.(2) != 40 { error += 1 }
+    if arr.v.[0] != 10 { error += 1 }
+    if arr.v.[1] != 30 { error += 1 }
+    if arr.v.[2] != 40 { error += 1 }
     Array.free(arr.&)
     error
 }
@@ -103,9 +103,9 @@ test_swap_remove() {
     val := Array.swap_remove(arr.&, 1)
     if val != 20 { error += 1 }
     if arr.size != 3 { error += 1 }
-    if arr.v.(0) != 10 { error += 1 }
-    if arr.v.(1) != 40 { error += 1 }
-    if arr.v.(2) != 30 { error += 1 }
+    if arr.v.[0] != 10 { error += 1 }
+    if arr.v.[1] != 40 { error += 1 }
+    if arr.v.[2] != 30 { error += 1 }
     Array.free(arr.&)
     error
 }
@@ -118,16 +118,16 @@ test_resize() {
     // Grow to 5 with fill value 99
     Array.resize(arr.&, 5, 99)
     if arr.size != 5 { error += 1 }
-    if arr.v.(0) != 1 { error += 1 }
-    if arr.v.(1) != 2 { error += 1 }
-    if arr.v.(2) != 99 { error += 1 }
-    if arr.v.(3) != 99 { error += 1 }
-    if arr.v.(4) != 99 { error += 1 }
+    if arr.v.[0] != 1 { error += 1 }
+    if arr.v.[1] != 2 { error += 1 }
+    if arr.v.[2] != 99 { error += 1 }
+    if arr.v.[3] != 99 { error += 1 }
+    if arr.v.[4] != 99 { error += 1 }
     // Shrink to 2
     Array.resize(arr.&, 2, 0)
     if arr.size != 2 { error += 1 }
-    if arr.v.(0) != 1 { error += 1 }
-    if arr.v.(1) != 2 { error += 1 }
+    if arr.v.[0] != 1 { error += 1 }
+    if arr.v.[1] != 2 { error += 1 }
     Array.free(arr.&)
     error
 }
@@ -141,9 +141,9 @@ test_shrink_to_fit() {
     Array.shrink_to_fit(arr.&)
     if arr.size != 3 { error += 1 }
     if arr.capacity != 3 { error += 1 }
-    if arr.v.(0) != 1 { error += 1 }
-    if arr.v.(1) != 2 { error += 1 }
-    if arr.v.(2) != 3 { error += 1 }
+    if arr.v.[0] != 1 { error += 1 }
+    if arr.v.[1] != 2 { error += 1 }
+    if arr.v.[2] != 3 { error += 1 }
     // Shrink empty
     Array.clear(arr.&)
     Array.shrink_to_fit(arr.&)
@@ -173,10 +173,10 @@ test_append() {
     Array.push(b.&, 4)
     Array.append(a.&, b)
     if a.size != 4 { error += 1 }
-    if a.v.(0) != 1 { error += 1 }
-    if a.v.(1) != 2 { error += 1 }
-    if a.v.(2) != 3 { error += 1 }
-    if a.v.(3) != 4 { error += 1 }
+    if a.v.[0] != 1 { error += 1 }
+    if a.v.[1] != 2 { error += 1 }
+    if a.v.[2] != 3 { error += 1 }
+    if a.v.[3] != 4 { error += 1 }
     Array.free(a.&)
     Array.free(b.&)
     error
@@ -190,12 +190,12 @@ test_clone() {
     Array.push(arr.&, 30)
     c := Array.clone(arr)
     if c.size != 3 { error += 1 }
-    if c.v.(0) != 10 { error += 1 }
-    if c.v.(1) != 20 { error += 1 }
-    if c.v.(2) != 30 { error += 1 }
+    if c.v.[0] != 10 { error += 1 }
+    if c.v.[1] != 20 { error += 1 }
+    if c.v.[2] != 30 { error += 1 }
     // Modify original, clone should be independent
-    arr.v.(0) = 999
-    if c.v.(0) != 10 { error += 1 }
+    arr.v.[0] = 999
+    if c.v.[0] != 10 { error += 1 }
     Array.free(arr.&)
     Array.free(c.&)
     error
@@ -209,9 +209,9 @@ test_slice() {
     // slice [1, 4) -> [10, 20, 30]
     s := Array.slice(arr, 1, 4)
     if s.size != 3 { error += 1 }
-    if s.v.(0) != 10 { error += 1 }
-    if s.v.(1) != 20 { error += 1 }
-    if s.v.(2) != 30 { error += 1 }
+    if s.v.[0] != 10 { error += 1 }
+    if s.v.[1] != 20 { error += 1 }
+    if s.v.[2] != 30 { error += 1 }
     // Empty slice
     e := Array.slice(arr, 2, 2)
     if e.size != 0 { error += 1 }
@@ -223,14 +223,14 @@ test_slice() {
 test_from_ptr() {
     error := 0
     arr   := Array.init(0, 3)
-    arr.v.(0) = 100
-    arr.v.(1) = 200
-    arr.v.(2) = 300
+    arr.v.[0] = 100
+    arr.v.[1] = 200
+    arr.v.[2] = 300
     result := Array.from_ptr(arr.v, 3)
     if result.size != 3 { error += 1 }
-    if result.v.(0) != 100 { error += 1 }
-    if result.v.(1) != 200 { error += 1 }
-    if result.v.(2) != 300 { error += 1 }
+    if result.v.[0] != 100 { error += 1 }
+    if result.v.[1] != 200 { error += 1 }
+    if result.v.[2] != 300 { error += 1 }
     Array.free(arr.&)
     Array.free(result.&)
     error
@@ -279,15 +279,15 @@ test_reverse() {
     Array.push(arr.&, 3)
     Array.push(arr.&, 4)
     Array.reverse(arr.&)
-    if arr.v.(0) != 4 { error += 1 }
-    if arr.v.(1) != 3 { error += 1 }
-    if arr.v.(2) != 2 { error += 1 }
-    if arr.v.(3) != 1 { error += 1 }
+    if arr.v.[0] != 4 { error += 1 }
+    if arr.v.[1] != 3 { error += 1 }
+    if arr.v.[2] != 2 { error += 1 }
+    if arr.v.[3] != 1 { error += 1 }
     // Odd number of elements
     Array.push(arr.&, 5)
     Array.reverse(arr.&)
-    if arr.v.(0) != 5 { error += 1 }
-    if arr.v.(4) != 4 { error += 1 }
+    if arr.v.[0] != 5 { error += 1 }
+    if arr.v.[4] != 4 { error += 1 }
     Array.free(arr.&)
     error
 }
@@ -299,9 +299,9 @@ test_swap() {
     Array.push(arr.&, 20)
     Array.push(arr.&, 30)
     Array.swap(arr.&, 0, 2)
-    if arr.v.(0) != 30 { error += 1 }
-    if arr.v.(2) != 10 { error += 1 }
-    if arr.v.(1) != 20 { error += 1 }
+    if arr.v.[0] != 30 { error += 1 }
+    if arr.v.[2] != 10 { error += 1 }
+    if arr.v.[1] != 20 { error += 1 }
     Array.free(arr.&)
     error
 }
@@ -314,11 +314,11 @@ test_map() {
     Array.push(arr.&, 3)
     result := Array.map(arr, (x) { x * 10 })
     if result.size != 3 { error += 1 }
-    if result.v.(0) != 10 { error += 1 }
-    if result.v.(1) != 20 { error += 1 }
-    if result.v.(2) != 30 { error += 1 }
+    if result.v.[0] != 10 { error += 1 }
+    if result.v.[1] != 20 { error += 1 }
+    if result.v.[2] != 30 { error += 1 }
     // Original unchanged
-    if arr.v.(0) != 1 { error += 1 }
+    if arr.v.[0] != 1 { error += 1 }
     // Empty array
     e := Array.empty[Int]()
     r := Array.map(e, (x) { x * 10 })
@@ -338,8 +338,8 @@ test_filter() {
     Array.push(arr.&, 5)
     result := Array.filter(arr, (x) { x > 3 })
     if result.size != 2 { error += 1 }
-    if result.v.(0) != 4 { error += 1 }
-    if result.v.(1) != 5 { error += 1 }
+    if result.v.[0] != 4 { error += 1 }
+    if result.v.[1] != 5 { error += 1 }
     // Filter none
     r2 := Array.filter(arr, (x) { x > 100 })
     if r2.size != 0 { error += 1 }

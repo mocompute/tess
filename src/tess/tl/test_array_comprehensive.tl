@@ -43,12 +43,12 @@ test_with_capacity_undefined_basic() {
     // Write values and read them back
     i := 0
     while i < 10 {
-        arr.v.(i) = i * 10
+        arr.v.[i] = i * 10
         i         = i + 1
     }
     i = 0
     while i < 10 {
-        if arr.v.(i) != i * 10 { error += 1 }
+        if arr.v.[i] != i * 10 { error += 1 }
         i = i + 1
     }
     Array.free(arr.&)
@@ -74,8 +74,8 @@ test_reserve_growth() {
     if arr.capacity < 100 { error += 1 }
     if arr.size != 2 { error += 1 }
     // Verify elements are preserved
-    if arr.v.(0) != 111 { error += 1 }
-    if arr.v.(1) != 222 { error += 1 }
+    if arr.v.[0] != 111 { error += 1 }
+    if arr.v.[1] != 222 { error += 1 }
     Array.free(arr.&)
     error
 }
@@ -99,9 +99,9 @@ test_push_growth() {
     Array.push(arr.&, 30)               // Forces growth
     if arr.size != 3 { error += 1 }
     if arr.capacity < 3 { error += 1 }
-    if arr.v.(0) != 10 { error += 1 }
-    if arr.v.(1) != 20 { error += 1 }
-    if arr.v.(2) != 30 { error += 1 }
+    if arr.v.[0] != 10 { error += 1 }
+    if arr.v.[1] != 20 { error += 1 }
+    if arr.v.[2] != 30 { error += 1 }
     Array.free(arr.&)
     error
 }
@@ -117,7 +117,7 @@ test_push_many() {
     if arr.size != 100 { error += 1 }
     i = 0
     while i < 100 {
-        if arr.v.(i) != i { error += 1 }
+        if arr.v.[i] != i { error += 1 }
         i = i + 1
     }
     Array.free(arr.&)
@@ -161,7 +161,7 @@ test_iter_mutable() {
     // Verify elements are 0, 1, 2, 3, 4
     i := 0
     while i < 5 {
-        if arr.v.(i) != i { error += 1 }
+        if arr.v.[i] != i { error += 1 }
         i = i + 1
     }
     Array.free(arr.&)
@@ -193,7 +193,7 @@ test_zero_capacity() {
     Array.push(arr.&, 99)
     if arr.size != 1 { error += 1 }
     if arr.capacity < 1 { error += 1 }
-    if arr.v.(0) != 99 { error += 1 }
+    if arr.v.[0] != 99 { error += 1 }
     Array.free(arr.&)
     error
 }
@@ -208,7 +208,7 @@ test_indexed_iterator() {
     // Verify elements are 0, 1, 2, 3
     i := 0
     while i < 4 {
-        if arr.v.(i) != i { error += 1 }
+        if arr.v.[i] != i { error += 1 }
         i = i + 1
     }
     Array.free(arr.&)

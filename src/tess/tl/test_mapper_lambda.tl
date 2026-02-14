@@ -25,7 +25,7 @@ map[U](f, arr) {
     // provide custom iteration functions which can be access with a `for` statement.
     i := 0
     while i < arr.size, i = i + 1 {
-        out.v.(i) = f(arr.v.(i))
+        out.v.[i] = f(arr.v.[i])
     }
 
     // the value of the final expression is the return value. In this case, the struct will be copied to the
@@ -42,10 +42,10 @@ main() {
     // Note that `:=` always defines a new variable. A plain `=` is used to assign to an existing variable (or
     // a field or indexed location).
     vals.size  = 4
-    vals.v.(0) = 0
-    vals.v.(1) = 1
-    vals.v.(2) = 2
-    vals.v.(3) = 3
+    vals.v.[0] = 0
+    vals.v.[1] = 1
+    vals.v.[2] = 2
+    vals.v.[3] = 3
 
     // A lambda function is parsed as `(...) { ... }`, that is, a set of 0 or more parameters and a body.
     res := map( (x) { x + 1 }, vals )
@@ -54,14 +54,14 @@ main() {
     // any whitespace will do, or optional commas may be used.
     sum := 0, i := 0
     while i < vals.size, i = i + 1 {
-        sum = sum + vals.v.(i)
+        sum = sum + vals.v.[i]
     }
     c_assert(sum == 6)
 
     // verify that map returns an array with mapped values
     sum := 0, i := 0
     while i < vals.size, i = i + 1 {
-        sum = sum + res.v.(i)
+        sum = sum + res.v.[i]
     }
     c_assert(sum == 10)
 

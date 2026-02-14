@@ -183,9 +183,9 @@ static int test_normalize_ops(void) {
         "foo [Array[Int]](x: Int)",
         "foo[Array[Int]](x: Int)\n");
 
-    error += check(alloc, "dot-paren indexing",
-        "arr.(0)",
-        "arr.(0)\n");
+    error += check(alloc, "dot-bracket indexing",
+        "arr.[0]",
+        "arr.[0]\n");
 
     arena_destroy(&alloc);
     return error;

@@ -8,7 +8,7 @@ main() {
     // Initialize array with values 0..9
     i := 0
     while i < 10, i += 1 {
-        xs.(i) = i
+        xs.[i] = i
     }
 
     // Find first value >= 5 and exit
@@ -17,7 +17,7 @@ main() {
     i := 0
     x := -1
     while i < 10, i += 1 {
-        x = xs.(i)
+        x = xs.[i]
         if x >= 5 {
             found = x
             break

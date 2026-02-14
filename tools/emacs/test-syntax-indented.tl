@@ -68,7 +68,7 @@ c_function(p: Ptr[CInt], size: CSize) -> CDouble {
     result : CDouble := 0.0
     i : CSize := 0
     while i < size {
-        result = result + CDouble(p.*.(i))
+        result = result + CDouble(p.*.[i])
         i += 1
     }
     result
@@ -79,10 +79,10 @@ push[T](arr: Array[T], val: T) {
     // function with explicit type arg
 }
 
-// Test indexing with .()
+// Test indexing with .[]
 test_indexing(arr: Array[Int]) -> Int {
-    x := arr.(0)
-    arr.(1) = x + 1
+    x := arr.[0]
+    arr.[1] = x + 1
     x
 }
 

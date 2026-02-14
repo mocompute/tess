@@ -39,10 +39,10 @@ and `sizeof(x)` (value argument, arity 1). The type-as-value form `sizeof(T)` is
 
 ### Indexing Syntax
 
-Pointer/CArray indexing uses `.()` syntax: `ptr.(i)`, `arr.(0) = 10`.
+Pointer/CArray indexing uses `.[]` syntax: `ptr.[i]`, `arr.[0] = 10`.
 This means `[]` is **unambiguously** type arguments — no disambiguation needed.
 
-The `.()` syntax fits naturally with the existing postfix family: `.field`, `.*`,
+The `.[]` syntax fits naturally with the existing postfix family: `.field`, `.*`,
 `.&`, `->`. See `test_carray.tl` for examples.
 
 ---
@@ -57,7 +57,7 @@ The `.()` syntax fits naturally with the existing postfix family: `.field`, `.*`
    Built-ins like `sizeof` and `alignof` use type parameters (`sizeof[T]()`) instead of
    value arguments (`sizeof(T)`).
 
-3. **No disambiguation needed.** Indexing uses `.()` syntax, so `[]` is unambiguously
+3. **No disambiguation needed.** Indexing uses `.[]` syntax, so bare `[]` is unambiguously
    type arguments in all positions.
 
 4. **Required type parameter declarations.** All generic functions must explicitly
@@ -184,12 +184,11 @@ Function pointers currently use `/arity` notation (e.g., `double/1`, `empty/0`).
 unclear how this interacts with explicit type arguments. For example, how would one
 reference a specific specialization of a generic function as a pointer?
 
-### Indexing syntax: `.[]` instead of `.()`
+### ~~Indexing syntax: `.[]` instead of `.()`~~ (Resolved)
 
-Currently, indexing uses `.()` syntax (`ptr.(i)`, `arr.(0) = 10`). Considering a
-change to `.[]` syntax (`ptr.[i]`, `arr.[0] = 10`). This would reintroduce some
-ambiguity with `[]` type arguments, but the `.` prefix may be sufficient to
-disambiguate (`.[]` is always indexing; bare `[]` after a name is always type arguments).
+Resolved: indexing now uses `.[]` syntax (`ptr.[i]`, `arr.[0] = 10`). The `.`
+prefix fully disambiguates: `.[]` is always indexing; bare `[]` after a name is
+always type arguments.
 
 ### Eliding empty parentheses after type arguments
 

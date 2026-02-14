@@ -16,11 +16,11 @@ main() {
     // Test 1: Basic CArray struct field write/read via explicit decay
     b                    := Buffer(data = void, len = 0)
     data_ptr: Ptr[CChar] := b.data
-    data_ptr.(0) = 'H'
-    data_ptr.(1) = 'i'
-    data_ptr.(2) = '\0'
-    error += if data_ptr.(0) == 'H' {0} else {1}
-    error += if data_ptr.(1) == 'i' {0} else {1}
+    data_ptr.[0] = 'H'
+    data_ptr.[1] = 'i'
+    data_ptr.[2] = '\0'
+    error += if data_ptr.[0] == 'H' {0} else {1}
+    error += if data_ptr.[1] == 'i' {0} else {1}
 
     // Test 2: CArray field decay to pointer (pass to C function)
     c_strcpy(data_ptr, c"Hello")
@@ -31,14 +31,14 @@ main() {
     m                   := Matrix(row0 = void, row1 = void)
     row0_ptr: Ptr[CInt] := m.row0
     row1_ptr: Ptr[CInt] := m.row1
-    row0_ptr.(0) = 1
-    row0_ptr.(1) = 2
-    row0_ptr.(2) = 3
-    row1_ptr.(0) = 4
-    row1_ptr.(1) = 5
-    row1_ptr.(2) = 6
-    error += if row0_ptr.(0) == 1 {0} else {1}
-    error += if row1_ptr.(2) == 6 {0} else {1}
+    row0_ptr.[0] = 1
+    row0_ptr.[1] = 2
+    row0_ptr.[2] = 3
+    row1_ptr.[0] = 4
+    row1_ptr.[1] = 5
+    row1_ptr.[2] = 6
+    error += if row0_ptr.[0] == 1 {0} else {1}
+    error += if row1_ptr.[2] == 6 {0} else {1}
 
     // Test 4: CArray field access through pointer (the dangling pointer bug).
     // Without the lvalue fix, b2.data would copy Buffer to a temporary, then decay the CArray

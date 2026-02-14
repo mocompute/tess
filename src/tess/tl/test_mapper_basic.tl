@@ -23,8 +23,8 @@ map(f, arr) {
 
     i := 0
     while i < arr.size {
-        mapped := f(arr.v.(i))
-        out.v.(i) = mapped
+        mapped := f(arr.v.[i])
+        out.v.[i] = mapped
         i         = i + 1
     }
     out
@@ -39,10 +39,10 @@ main() {
 
     vals := Arr(v: Ptr[Int] = c_malloc(sizeof[Int]() * 4), size = 0, capacity = 4)
 
-    vals.v.(0) = 0
-    vals.v.(1) = 1
-    vals.v.(2) = 2
-    vals.v.(3) = 3
+    vals.v.[0] = 0
+    vals.v.[1] = 1
+    vals.v.[2] = 2
+    vals.v.[3] = 3
     vals.size  = 4
 
     res := map(add1/1, vals)
@@ -51,7 +51,7 @@ main() {
     sum := 0
     i   := 0
     while i < vals.size, i = i + 1 {
-        sum = sum + vals.v.(i)
+        sum = sum + vals.v.[i]
     }
     c_assert(sum == 6)
     error += sum - 6
@@ -60,24 +60,24 @@ main() {
     sum := 0
     i   := 0
     while i < vals.size, i = i + 1 {
-        sum = sum + res.v.(i)
+        sum = sum + res.v.[i]
     }
     c_assert(sum == 10)
     error += sum - 10
 
 
     floats := Arr(v: Ptr[Float] = c_malloc(sizeof[Float]() * 4), size = 0, capacity = 4)
-    floats.v.(0) = 0.0
-    floats.v.(1) = 1.0
-    floats.v.(2) = 2.0
-    floats.v.(3) = 3.0
+    floats.v.[0] = 0.0
+    floats.v.[1] = 1.0
+    floats.v.[2] = 2.0
+    floats.v.[3] = 3.0
     floats.size  = 4
 
     floats_res := map(add1f/1, floats)
     sum        := 0.0
     i          := 0
     while i < floats.size, i = i + 1 {
-        sum = sum + floats_res.v.(i)
+        sum = sum + floats_res.v.[i]
     }
 
     error += Unsafe.float_to_int(sum - 10.0)

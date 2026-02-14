@@ -3,7 +3,7 @@
 
 main() {
     p: Ptr[Int] := c_malloc(16)
-    p.(0) = 123
+    p.[0] = 123
     pp := p.&
 
     val := pp.*.*

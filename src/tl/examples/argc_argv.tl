@@ -9,7 +9,7 @@ main(argc: Int, argv: Ptr[CString]) {
 
     i := 0
     while i < argc, i = i + 1 {
-        c_printf(c"%s\n", argv.(i))
+        c_printf(c"%s\n", argv.[i])
     }
 
     0
