@@ -84,7 +84,7 @@ Module initialization functions are called in dependency order before `main()` e
 - `Float` - 64-bit floating point
 - `Bool` - Boolean (`true` or `false`)
 - `Void` - No value
-- `Type` - Type literals (used with `sizeof`)
+- `Type` - Type values (used with `sizeof`, `alignof`)
 
 ### C-compatible Types
 
@@ -105,40 +105,40 @@ Module initialization functions are called in dependency order before `main()` e
 ### Pointer Types
 
 ```tl
-Ptr(T)              // Mutable pointer to type T
-Ptr(Const(T))       // Const pointer to type T (read-only)
-CArray(T, N)        // C-style fixed-size array
+Ptr[T]              // Mutable pointer to type T
+Ptr[Const[T]]       // Const pointer to type T (read-only)
+CArray[T, N]        // C-style fixed-size array
 ```
 
-`Const(T)` is a built-in type qualifier. See [Const Pointers](#const-pointers) for details.
+`Const[T]` is a built-in type qualifier. See [Const Pointers](#const-pointers) for details.
 
 ### Generic Types
 
 Types can have type parameters:
 
 ```tl
-Point(a) : { x: a, y: a }
+Point[a] : { x: a, y: a }
 ```
 
 ### Type Aliases
 
 ```tl
-Pt = Point(Int)    // Creates a type alias
+Pt = Point[Int]    // Creates a type alias
 ```
 
-### Type as a Value
+### Explicit Type Parameters
 
-The `Type` type allows passing types as function arguments. This is used for generic function instantiation:
+Generic functions declare type parameters using square brackets. Square brackets always denote type arguments; parentheses always denote value arguments or constructors:
 
 ```tl
-// Function that takes a type parameter as a value
-empty(T: Type) -> Array(T) {
-  with_capacity(T, 16)
+// Function with explicit type parameter
+empty[T]() -> Array[T] {
+  with_capacity[T](16)
 }
 
 // Call with explicit type argument
-arr := empty(Int)           // Creates Array(Int)
-floats := empty(Float)      // Creates Array(Float)
+arr := empty[Int]()           // Creates Array[Int]
+floats := empty[Float]()      // Creates Array[Float]
 ```
 
 This pattern is commonly used in the standard library for functions that need to create values of a generic type.
@@ -157,7 +157,7 @@ The Tess compiler uses Hindley-Milner style type inference. Annotations are opti
 | Float literals | `x := 3.14` | Literal type is `Float` |
 | Struct constructors | `p := Point(x = 1, y = 2)` | Type inferred from constructor |
 | Tagged union constructors (with constraining fields) | `opt := Some(42)` | Type parameter inferred from argument value |
-| CArray declaration | `arr: CArray(Int, 10) := void` | CArray is a type annotation |
+| CArray declaration | `arr: CArray[Int, 10] := void` | CArray is a type annotation |
 | Function calls | `result := add(1, 2)` | Return type inferred from function |
 
 #### Function Parameters and Return Types
@@ -176,15 +176,15 @@ map(f, arr) { ... }           // Inferred from call sites
 #### C FFI Declarations
 
 ```tl
-c_malloc(size: CSize) -> Ptr(any)    // C functions need full signatures
+c_malloc(size: CSize) -> Ptr[any]    // C functions need full signatures
 c_printf(fmt: CString, ...) -> CInt
 ```
 
 #### Pointer Casts
 
 ```tl
-p : Ptr(Int) := some_ptr              // Casting from different pointer type
-bytes : Ptr(CUnsignedChar) := int_ptr // Explicit cast required
+p : Ptr[Int] := some_ptr              // Casting from different pointer type
+bytes : Ptr[CUnsignedChar] := int_ptr // Explicit cast required
 ```
 
 #### C Type Disambiguation
@@ -199,11 +199,11 @@ sz : CSize := 1024              // Force CSize
 
 #### c_malloc Return Type
 
-`c_malloc` returns `Ptr(any)` which must be annotated:
+`c_malloc` returns `Ptr[any]` which must be annotated:
 
 ```tl
-p : Ptr(Int) := c_malloc(sizeof(Int) * 10)    // Required
-buffer : Ptr(CChar) := c_malloc(256)          // Required
+p : Ptr[Int] := c_malloc(sizeof[Int]() * 10)    // Required
+buffer : Ptr[CChar] := c_malloc(256)            // Required
 ```
 
 #### Functions Only Used as Function Pointers
@@ -236,24 +236,24 @@ apply_handler(h: Handler, x: Int) -> Int {
 When a constructor doesn't constrain all type parameters:
 
 ```tl
-T(a) : | Some { v: a }
+T[a] : | Some { v: a }
        | None
 
-good: T(Int) := None()                // Required - None has no field with type `a`
+good: T[Int] := None()                // Required - None has no field with type `a`
 opt := Some(42)                       // Not required - argument constrains `a = Int`
 ```
 
 ```tl
-Either(a, b) : | Left  { v: a }
+Either[a, b] : | Left  { v: a }
                | Right { v: b }
 
-x: Either(Int, Bool) := Left(42)     // Required - Left only constrains `a`
+x: Either[Int, Bool] := Left(42)     // Required - Left only constrains `a`
 ```
 
 #### Functions Returning Untyped Values
 
 ```tl
-foo() -> Ptr(any) { return null }     // Required - null has no type
+foo() -> Ptr[any] { return null }     // Required - null has no type
 ```
 
 #### Tagged Union Case Expressions
@@ -261,7 +261,7 @@ foo() -> Ptr(any) { return null }     // Required - null has no type
 The case expression requires a type annotation:
 
 ```tl
-result := case opt: Option {          // `: Option` is required
+result := case opt: Option[Int] {     // type annotation with type args required
   s: Some { s.v }
   n: None { 0 }
 }
@@ -277,7 +277,7 @@ result := case opt: Option {          // `: Option` is required
 | Tagged union with constraining field | No |
 | Tagged union without constraining field | **Yes** |
 | CArray declaration | **Yes** (type annotation required) |
-| CArray decay to pointer | **Yes** (explicit `Ptr(T)` annotation) |
+| CArray decay to pointer | **Yes** (explicit `Ptr[T]` annotation) |
 | Pointer cast to different type | **Yes** |
 | C type (CInt, CFloat, etc.) | **Yes** |
 | c_malloc result | **Yes** |
@@ -443,7 +443,7 @@ Function pointers can be stored in structs:
 
 ```tl
 f1() { 1 }
-Ctx(T) : { callback: T }
+Ctx[T] : { callback: T }
 ctx := Ctx(callback = f1/0)
 ctx.callback()       // Call through struct field
 ```
@@ -451,7 +451,7 @@ ctx.callback()       // Call through struct field
 ### Generic Function Signatures
 
 ```tl
-map(f: (a) -> b, arr: Arr(a)) -> Arr(b)
+map[a, b](f: (a) -> b, arr: Arr[a]) -> Arr[b]
 ```
 
 ### Function Overloading by Arity
@@ -727,12 +727,12 @@ Iterator modules must implement these functions:
 
 | Function | Signature | Purpose |
 |----------|-----------|---------|
-| `iter_init` | `(Ptr(T)) -> Iter` | Initialize iterator from collection pointer |
-| `iter_value` | `(Ptr(Iter)) -> TValue` | Get current element value |
-| `iter_ptr` | `(Ptr(Iter)) -> Ptr(TValue)` | Get pointer to current element |
-| `iter_cond` | `(Ptr(Iter)) -> Bool` | Check if iteration should continue |
-| `iter_update` | `(Ptr(Iter)) -> Void` | Advance to next element |
-| `iter_deinit` | `(Ptr(Iter)) -> Void` | Clean up iterator resources |
+| `iter_init` | `(Ptr[T]) -> Iter` | Initialize iterator from collection pointer |
+| `iter_value` | `(Ptr[Iter]) -> TValue` | Get current element value |
+| `iter_ptr` | `(Ptr[Iter]) -> Ptr[TValue]` | Get pointer to current element |
+| `iter_cond` | `(Ptr[Iter]) -> Bool` | Check if iteration should continue |
+| `iter_update` | `(Ptr[Iter]) -> Void` | Advance to next element |
+| `iter_deinit` | `(Ptr[Iter]) -> Void` | Clean up iterator resources |
 
 The `Iter` type can contain arbitrary fields accessible in the loop body (like `index` in `Array.Indexed`).
 
@@ -784,7 +784,7 @@ Use `return` for early exit from a function. Since Tess is expression-based, imp
 ### Definition
 
 ```tl
-Point(a) : { x: a, y: a }              // Generic struct
+Point[a] : { x: a, y: a }              // Generic struct
 Circle : { radius: Float }             // Concrete struct
 Empty : { }                            // Empty struct
 ```
@@ -807,7 +807,7 @@ p.x = 10                               // Write field
 Use `void` to leave a field uninitialized during construction:
 
 ```tl
-Buffer : { data: Ptr(Byte), size: Int, capacity: Int }
+Buffer : { data: Ptr[Byte], size: Int, capacity: Int }
 
 buf := Buffer(
   data = c_malloc(1024),
@@ -824,7 +824,7 @@ This is useful when a field will be set immediately after construction or when w
 Structs can contain nested struct definitions. Nested types are accessed using dot syntax (`Parent.Child`):
 
 ```tl
-Outer(T) : {
+Outer[T] : {
   Inner : {
     value: T
   }
@@ -982,21 +982,21 @@ ptr.[i] = value       // Write through pointer index
 Pointers can be cast implicitly via type annotation:
 
 ```tl
-p : Ptr(Int) := c_malloc(sizeof(Int) * 10)
-b : Ptr(Byte) := p    // Cast to different pointer type
+p : Ptr[Int] := c_malloc(sizeof[Int]() * 10)
+b : Ptr[Byte] := p    // Cast to different pointer type
 ```
 
 ### Const Pointers
 
-`Ptr(Const(T))` declares a pointer through which the target cannot be modified.
+`Ptr[Const[T]]` declares a pointer through which the target cannot be modified.
 It transpiles to `const T*` in C.
 
 ```tl
-read_value(p: Ptr(Const(Int))) {
+read_value(p: Ptr[Const[Int]]) {
     p.*                       // OK: reading through const pointer
 }
 
-read_point(p: Ptr(Const(Point))) {
+read_point(p: Ptr[Const[Point]]) {
     p->x + p->y              // OK: reading struct fields through const pointer
 }
 ```
@@ -1004,15 +1004,15 @@ read_point(p: Ptr(Const(Point))) {
 **Implicit coercion:** A mutable pointer can be passed where a const pointer is expected:
 
 ```tl
-p : Ptr(Int) := c_malloc(8)
+p : Ptr[Int] := c_malloc(8)
 p.* = 42
-val := read_value(p)         // OK: Ptr(Int) -> Ptr(Const(Int))
+val := read_value(p)         // OK: Ptr[Int] -> Ptr[Const[Int]]
 ```
 
 **Mutation through const pointers is rejected:**
 
 ```tl
-mutate(p: Ptr(Const(Int))) {
+mutate(p: Ptr[Const[Int]]) {
     p.* = 10                  // Error: const violation
 }
 ```
@@ -1020,40 +1020,40 @@ mutate(p: Ptr(Const(Int))) {
 **Stripping const is rejected.** A const pointer cannot be passed where a mutable pointer is expected:
 
 ```tl
-write(p: Ptr(Int)) { p.* = 10; 0 }
+write(p: Ptr[Int]) { p.* = 10  0 }
 
-pass(p: Ptr(Const(Int))) {
+pass(p: Ptr[Const[Int]]) {
     write(p)                  // Error: const violation
 }
 ```
 
-This applies at any pointer nesting level: `Ptr(Ptr(Const(T)))` cannot be passed where `Ptr(Ptr(T))` is expected.
+This applies at any pointer nesting level: `Ptr[Ptr[Const[T]]]` cannot be passed where `Ptr[Ptr[T]]` is expected.
 
-**Limitation:** `Const(T)` cannot be used with generic type parameters. A function like `f(dst: Ptr(T), src: Ptr(Const(T)))` will fail because `T` cannot unify with both `X` and `Const(X)`. Use `Ptr(T)` for both parameters when `T` is generic, and reserve `Const` for concrete types like `Ptr(Const(CChar))`.
+**Limitation:** `Const[T]` cannot be used with generic type parameters. A function like `f(dst: Ptr[T], src: Ptr[Const[T]])` will fail because `T` cannot unify with both `X` and `Const[X]`. Use `Ptr[T]` for both parameters when `T` is generic, and reserve `Const` for concrete types like `Ptr[Const[CChar]]`.
 
 ### Array Decay
 
 `CArray` is used as a type annotation to declare fixed-size C arrays. Decay to pointer must be explicit:
 
 ```tl
-buffer: CArray(CChar, 256) := void    // Declare a fixed-size array
-ptr: Ptr(CChar) := buffer             // Explicit decay to pointer
+buffer: CArray[CChar, 256] := void    // Declare a fixed-size array
+ptr: Ptr[CChar] := buffer             // Explicit decay to pointer
 c_strcpy(ptr, "hello")                // Pass pointer to C functions
 ```
 
 CArray supports direct indexing without decay:
 
 ```tl
-arr: CArray(Int, 5) := void
+arr: CArray[Int, 5] := void
 arr.[0] = 42                          // Direct indexing on CArray
 ```
 
 CArray fields in structs automatically decay to pointers on access:
 
 ```tl
-Buffer: { data: CArray(CChar, 256), len: CInt }
+Buffer: { data: CArray[CChar, 256], len: CInt }
 b := Buffer(data = void, len = 0)
-data_ptr: Ptr(CChar) := b.data        // Struct field access decays to Ptr
+data_ptr: Ptr[CChar] := b.data        // Struct field access decays to Ptr
 ```
 
 ## C Interoperability
@@ -1072,14 +1072,14 @@ Functions with the `c_` prefix map directly to C functions:
 
 ```tl
 c_printf(fmt: CString, ...) -> CInt     // Declares printf
-c_malloc(size: CSize) -> Ptr(any)       // Declares malloc
+c_malloc(size: CSize) -> Ptr[any]       // Declares malloc
 ```
 
-Use `Ptr(Const(T))` for C functions that take `const` pointer parameters:
+Use `Ptr[Const[T]]` for C functions that take `const` pointer parameters:
 
 ```tl
-c_strlen(s: Ptr(Const(CChar))) -> CSize           // const char*
-c_strcmp(a: Ptr(Const(CChar)), b: Ptr(Const(CChar))) -> CInt
+c_strlen(s: Ptr[Const[CChar]]) -> CSize           // const char*
+c_strcmp(a: Ptr[Const[CChar]], b: Ptr[Const[CChar]]) -> CInt
 ```
 
 To call a C function named `foo`, declare it as `c_foo` in Tess.
@@ -1103,8 +1103,10 @@ c_struct_foo : { x: CInt, y: CInt }    // Annotate C struct layout
 ### Built-in Functions
 
 ```tl
-sizeof(T)           // Size of type or value in bytes
-alignof(T)          // Alignment of type or value
+sizeof[T]()         // Size of type T in bytes
+sizeof(x)           // Size of value x in bytes
+alignof[T]()        // Alignment of type T
+alignof(x)          // Alignment of value x
 ```
 
 ### Compiler Intrinsics
@@ -1112,16 +1114,16 @@ alignof(T)          // Alignment of type or value
 These low-level intrinsics are used internally by the standard library:
 
 ```tl
-_tl_sizeof_(T)      // Type-parameterized sizeof (for generic code)
-_tl_alignof_(T)     // Type-parameterized alignof (for generic code)
+_tl_sizeof_[T]()    // Type-parameterized sizeof (for generic code)
+_tl_alignof_[T]()   // Type-parameterized alignof (for generic code)
 _tl_fatal_(msg)     // Terminate with error message
 ```
 
 The `_tl_sizeof_` and `_tl_alignof_` intrinsics differ from `sizeof`/`alignof` in that they work with type variables in generic functions:
 
 ```tl
-allocate(a: Type) -> Ptr(a) {
-  c_malloc(_tl_sizeof_(a))   // Works with generic type parameter
+allocate[a]() -> Ptr[a] {
+  c_malloc(_tl_sizeof_[a]())   // Works with generic type parameter
 }
 ```
 
@@ -1154,7 +1156,7 @@ is_odd(n)  { if n == 0 { false } else { is_even(n - 1) } }
 Types can reference themselves through pointers:
 
 ```tl
-Node(a) : { value: T, next: Ptr(Node(T)) }
+Node[T] : { value: T, next: Ptr[Node[T]] }
 
 n1 := Node(value = 1, next = null)
 n2 := Node(value = 2, next = n1.&)
@@ -1163,11 +1165,11 @@ n2 := Node(value = 2, next = n1.&)
 Mutually recursive types are also supported—types can reference each other:
 
 ```tl
-Tree(a)   : { value: T, children: Ptr(Forest(T)) }
-Forest(a) : { trees: Array.Array(Tree(T)) }
+Tree[T]   : { value: T, children: Ptr[Forest[T]] }
+Forest[T] : { trees: Array.Array[Tree[T]] }
 
 t1 := Tree(value = 1, children = null)
-forest := Forest(trees = Array.with_capacity(Tree(Int), 16))
+forest := Forest(trees = Array.with_capacity[Tree[Int]](16))
 t1.children = forest.&
 ```
 
