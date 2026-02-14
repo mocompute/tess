@@ -30,7 +30,7 @@ endif
 # ------------------------------------------------------------------------------
 
 CC     ?= cc
-CFLAGS ?= $(CFLAGS_CONFIG)
+CFLAGS += $(CFLAGS_CONFIG)
 CFLAGS += -std=gnu11 -fPIE
 CFLAGS += -Werror -Wall -Wextra -Wswitch-enum -Wunused -Winline -Wimplicit-fallthrough
 
