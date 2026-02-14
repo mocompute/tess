@@ -133,8 +133,8 @@ parameterized over types:
 A new syntax is needed. The test `test_lambda_immediate_type_argument.tl` still uses
 the old pattern and needs to be redesigned once lambda type parameter syntax is decided.
 
-Additionally, generic lambdas currently rely on implicit type variable creation (type
-variable sugar) for specialization:
+Additionally, generic lambdas currently rely on implicit type variable creation for
+specialization:
 
 ```tl
 f := (a, b) { a + b }
