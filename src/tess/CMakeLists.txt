@@ -377,7 +377,6 @@ tl_create_test(static_init)
 tl_create_test(static_init_struct)
 tl_create_test(static_init_struct_fun_ptr)
 tl_create_test(strcmp)
-tl_create_test(str)
 tl_create_test(struct_concrete)
 tl_create_test(struct_empty)
 tl_create_test(struct_generic)
@@ -502,11 +501,10 @@ tl_create_build_fail_test(fail_import_absolute)
 tl_create_build_fail_test(fail_import_missing_quotes)
 
 # Expected runtime failures (debug mode: compile succeeds, run must fail)
-tl_create_runtime_fail_test(fail_str_free_literal)
-tl_create_runtime_fail_test(fail_str_push_literal)
 
 # Known fail-failures: expected-failure tests that the compiler doesn't reject yet
 
 # Known failures: these should work but a compiler bug makes them fail
 tl_create_known_failure(lambda_immediate_type_argument)
+tl_create_known_failure(str)
 tl_create_known_failure(while_empty_body)

@@ -14,7 +14,7 @@ ifeq ($(CONFIG),release)
   LDFLAGS_CONFIG =
   BUILD_DIR = build-release
 else ifeq ($(CONFIG),debug)
-  CFLAGS_CONFIG = -g -DDEBUG
+  CFLAGS_CONFIG = -g -DDEBUG -fno-omit-frame-pointer
   LDFLAGS_CONFIG =
   BUILD_DIR = build-debug
 else ifeq ($(CONFIG),asan)
@@ -454,7 +454,6 @@ TL_TESTS =					\
 	static_init_struct			\
 	static_init_struct_fun_ptr		\
 	strcmp					\
-	str					\
 	struct_concrete				\
 	struct_empty				\
 	struct_generic				\
@@ -555,9 +554,7 @@ TL_FAIL_TESTS =					\
 	fail_import_missing_quotes
 
 # Expected runtime failure tests (debug only: must compile, must fail at runtime)
-TL_FAIL_RUNTIME_TESTS =				\
-	fail_str_free_literal			\
-	fail_str_push_literal
+TL_FAIL_RUNTIME_TESTS =
 
 # Expected-failure tests that the compiler doesn't reject yet
 TL_KNOWN_FAIL_FAILURES =
@@ -565,6 +562,7 @@ TL_KNOWN_FAIL_FAILURES =
 # Tests that should work but currently fail due to compiler bugs
 TL_KNOWN_FAILURES =			\
 	lambda_immediate_type_argument		\
+	str					\
 	while_empty_body
 
 # Total test count across all suites

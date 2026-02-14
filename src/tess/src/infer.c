@@ -91,8 +91,8 @@ struct tl_infer {
     // use and capture the result into a local before calling anything that might re-enter
     // (e.g. specialize_type_constructor -> make_instance_key).  See hot_parse_ctx_reinit().
     tl_type_registry_parse_type_ctx hot_parse_ctx;
-    hashmap *hot_parse_ctx_own_ta; // saved own type_arguments ptr
-    int      hot_parse_ctx_guard;  // reentrancy detector: 1 while in use
+    hashmap                        *hot_parse_ctx_own_ta; // saved own type_arguments ptr
+    int                             hot_parse_ctx_guard;  // reentrancy detector: 1 while in use
 
     u32                             next_var_name;
     u32                             next_instantiation;
@@ -188,8 +188,8 @@ tl_infer        *tl_infer_create(allocator *alloc, tl_infer_opts const *opts) {
     tl_type_registry_parse_type_ctx_init(self->arena, &self->type_parse_ctx, null);
 
     tl_type_registry_parse_type_ctx_init(self->arena, &self->hot_parse_ctx, null);
-    self->hot_parse_ctx_own_ta    = self->hot_parse_ctx.type_arguments;
-    self->hot_parse_ctx_guard     = 0;
+    self->hot_parse_ctx_own_ta = self->hot_parse_ctx.type_arguments;
+    self->hot_parse_ctx_guard  = 0;
 
     return self;
 }
@@ -201,9 +201,8 @@ static void hot_parse_ctx_reinit(tl_infer *self, hashmap *outer_type_arguments) 
     assert(!self->hot_parse_ctx_guard && "reentrancy: hot_parse_ctx reinit while still in use");
     self->hot_parse_ctx_guard = 1;
     map_reset(self->hot_parse_ctx_own_ta);
-    tl_type_registry_parse_type_ctx_reinit(&self->hot_parse_ctx,
-                                           outer_type_arguments ? outer_type_arguments
-                                                                : self->hot_parse_ctx_own_ta);
+    tl_type_registry_parse_type_ctx_reinit(
+      &self->hot_parse_ctx, outer_type_arguments ? outer_type_arguments : self->hot_parse_ctx_own_ta);
 }
 
 void tl_infer_destroy(allocator *alloc, tl_infer **p) {
@@ -361,8 +360,7 @@ static void load_toplevel_let(tl_infer *self, ast_node *node) {
         if ((*p)->symbol.attributes) {
             // reject attributes on current symbol if they exist
             if (node->let.name->symbol.attributes) {
-                array_push(self->errors,
-                           ((tl_infer_error){.tag = tl_err_attributes_exist, .node = node}));
+                array_push(self->errors, ((tl_infer_error){.tag = tl_err_attributes_exist, .node = node}));
                 return;
             }
 
@@ -843,7 +841,8 @@ static int traverse_ctx_assign_type_arguments(tl_infer *self, traverse_ctx *ctx,
                 forall(j, keys) fprintf(stderr, " '%s'", str_cstr(&keys.v[j]));
                 fprintf(stderr, "\n");
 #endif
-                parsed = tl_type_registry_parse_type_with_ctx(self->registry, type_arg_node, &self->hot_parse_ctx);
+                parsed =
+                  tl_type_registry_parse_type_with_ctx(self->registry, type_arg_node, &self->hot_parse_ctx);
                 if (!parsed) {
                     str tmp = v2_ast_node_to_string(self->transient, type_arg_node);
                     fprintf(stderr, "error: parse failed: %s\n", str_cstr(&tmp));
@@ -1783,10 +1782,9 @@ static int infer_type_constructor_nfa(tl_infer *self, traverse_ctx *ctx, ast_nod
                 args.v[i] = unwrap_type_literal(type_arg_node->type->type);
 #if DEBUG_EXPLICIT_TYPE_ARGS
                 str arg_str = tl_monotype_to_string(self->transient, args.v[i]);
-                fprintf(
-                  stderr,
-                  "[DEBUG EXPLICIT TYPE ARGS] type constructor: using explicit type for arg %u: %s\n",
-                  i, str_cstr(&arg_str));
+                fprintf(stderr,
+                        "[DEBUG EXPLICIT TYPE ARGS] type constructor: using explicit type for arg %u: %s\n",
+                        i, str_cstr(&arg_str));
 #endif
             } else {
                 args.v[i] = null; // will create fresh type variable
@@ -1845,12 +1843,11 @@ static int infer_type_constructor_nfa(tl_infer *self, traverse_ctx *ctx, ast_nod
 
         if (ast_node_is_assignment(arg)) {
             // This is a type value constructor
-            i32 found = tl_monotype_type_constructor_field_index(
-              inst, ast_node_name_original(arg->assignment.name));
+            i32 found =
+              tl_monotype_type_constructor_field_index(inst, ast_node_name_original(arg->assignment.name));
 
             if (-1 == found) {
-                array_push(self->errors,
-                           ((tl_infer_error){.tag = tl_err_field_not_found, .node = arg}));
+                array_push(self->errors, ((tl_infer_error){.tag = tl_err_field_not_found, .node = arg}));
                 return 1;
             }
             assert(found < (i32)inst->cons_inst->args.size);
@@ -2017,14 +2014,14 @@ static tl_polytype *make_arrow_with(tl_infer *, traverse_ctx *, ast_node *, tl_p
 static tl_polytype *make_binary_predicate_arrow(tl_infer *, traverse_ctx *, ast_node *lhs, ast_node *rhs);
 static int          traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, traverse_cb cb);
 
-static void      add_free_variables_to_arrow(tl_infer *self, ast_node *node, tl_polytype *arrow);
-static void      concretize_params(tl_infer *self, ast_node *node, tl_monotype *callsite,
-                                   hashmap *type_arguments, ast_node_sized callsite_type_arguments);
-static void      toplevel_name_replace(ast_node *node, str name_replace);
+static void         add_free_variables_to_arrow(tl_infer *self, ast_node *node, tl_polytype *arrow);
+static void         concretize_params(tl_infer *self, ast_node *node, tl_monotype *callsite,
+                                      hashmap *type_arguments, ast_node_sized callsite_type_arguments);
+static void         toplevel_name_replace(ast_node *node, str name_replace);
 
-static ast_node *clone_generic_for_arrow(tl_infer *self, ast_node const *node, tl_monotype *arrow,
-                                         str inst_name, hashmap *type_arguments,
-                                         ast_node_sized callsite_type_arguments) {
+static ast_node    *clone_generic_for_arrow(tl_infer *self, ast_node const *node, tl_monotype *arrow,
+                                            str inst_name, hashmap *type_arguments,
+                                            ast_node_sized callsite_type_arguments) {
     ast_node *clone = ast_node_clone(self->arena, node);
     ast_node *name  = toplevel_name_node(clone);
     assert(ast_node_is_symbol(name));
@@ -2477,7 +2474,6 @@ static int traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, trave
     case ast_f64:
     case ast_i64:
     case ast_string:
-    case ast_c_string:
     case ast_char:
     case ast_symbol:
     case ast_u64:
@@ -3090,11 +3086,11 @@ static int check_type_predicate(tl_infer *self, traverse_ctx *traverse_ctx, ast_
         if (lhs_type_arg) {
             // LHS is a type argument - handle it specially
             hot_parse_ctx_reinit(self, traverse_ctx->type_arguments);
-            tl_monotype *rhs_type =
-              tl_type_registry_parse_type_with_ctx(self->registry, node->type_predicate.rhs, &self->hot_parse_ctx);
+            tl_monotype *rhs_type = tl_type_registry_parse_type_with_ctx(
+              self->registry, node->type_predicate.rhs, &self->hot_parse_ctx);
             self->hot_parse_ctx_guard = 0;
 
-            tl_monotype *lhs_mono = lhs_type_arg;
+            tl_monotype *lhs_mono     = lhs_type_arg;
 
             if (!tl_monotype_is_concrete(lhs_mono)) {
                 tl_monotype_substitute(self->arena, lhs_mono, self->subs, null);
@@ -3192,11 +3188,10 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
         // else handled by maybe_handle_null()
         return infer_void(self, traverse_ctx, node);
 
-    case ast_c_string: return infer_literal_type(self, node, tl_type_registry_ptr_char);
-    case ast_string:   fatal("logic error"); // parser should not generate
-    case ast_char:     return infer_literal_type(self, node, tl_type_registry_char);
-    case ast_f64:      return infer_literal_type(self, node, tl_type_registry_float);
-    case ast_i64:      return infer_literal_type(self, node, tl_type_registry_int);
+    case ast_string: return infer_literal_type(self, node, tl_type_registry_ptr_char);
+    case ast_char:   return infer_literal_type(self, node, tl_type_registry_char);
+    case ast_f64:    return infer_literal_type(self, node, tl_type_registry_float);
+    case ast_i64:    return infer_literal_type(self, node, tl_type_registry_int);
     case ast_u64: // FIXME unsigned
         return infer_literal_type(self, node, tl_type_registry_int);
     case ast_bool:      return infer_literal_type(self, node, tl_type_registry_bool);
@@ -3266,8 +3261,9 @@ static name_and_type make_instance_key(tl_infer *self, str generic_name, tl_mono
     };
 
     forall(i, type_arguments) {
-        ast_node *type_arg  = type_arguments.v[i];
-        type_arg_types.v[i] = tl_type_registry_parse_type_with_ctx(self->registry, type_arg, &self->hot_parse_ctx);
+        ast_node *type_arg = type_arguments.v[i];
+        type_arg_types.v[i] =
+          tl_type_registry_parse_type_with_ctx(self->registry, type_arg, &self->hot_parse_ctx);
         if (!type_arg_types.v[i]) continue;
 
         if (!tl_monotype_is_concrete(type_arg_types.v[i])) {
@@ -3288,10 +3284,10 @@ static name_and_type make_instance_key(tl_infer *self, str generic_name, tl_mono
     }
     self->hot_parse_ctx_guard = 0;
 
-    name_and_type key = {
-      .name_hash      = str_hash64(generic_name),
-      .type_hash      = tl_monotype_hash64(arrow),
-      .type_args_hash = tl_monotype_sized_hash64(hash64("args", 4), type_arg_types),
+    name_and_type key         = {
+              .name_hash      = str_hash64(generic_name),
+              .type_hash      = tl_monotype_hash64(arrow),
+              .type_args_hash = tl_monotype_sized_hash64(hash64("args", 4), type_arg_types),
     };
 
 #if DEBUG_INSTANCE_CACHE
@@ -4289,7 +4285,7 @@ static int specialize_applications_cb(tl_infer *self, traverse_ctx *traverse_ctx
 // case patterns, and lambda bodies.  rename_one_function_param respects lexical
 // scope to avoid renaming already-converted names.
 
-static str next_variable_name(tl_infer *, str);
+static str  next_variable_name(tl_infer *, str);
 
 static void rename_let_in(tl_infer *self, ast_node *node, rename_variables_ctx *ctx) {
     // For toplevel definitions, rename them and keep them in lexical scope.
@@ -4618,9 +4614,7 @@ static void rename_variables(tl_infer *self, ast_node *node, rename_variables_ct
         }
         break;
 
-    case ast_case:
-        rename_case_variables(self, node, ctx, level);
-        break;
+    case ast_case: rename_case_variables(self, node, ctx, level); break;
 
     case ast_type_predicate:
         //
@@ -4633,7 +4627,6 @@ static void rename_variables(tl_infer *self, ast_node *node, rename_variables_ct
     case ast_hash_command:
     case ast_continue:
     case ast_string:
-    case ast_c_string:
     case ast_char:
     case ast_nil:
     case ast_void:
@@ -4733,8 +4726,8 @@ static void concretize_params(tl_infer *self, ast_node *node, tl_monotype *calls
                 // Try 3: Parse the callsite type arg node using the type_arguments context.
                 if (!bound_type) {
                     hot_parse_ctx_reinit(self, type_arguments);
-                    tl_monotype *parsed =
-                      tl_type_registry_parse_type_with_ctx(self->registry, callsite_arg, &self->hot_parse_ctx);
+                    tl_monotype *parsed = tl_type_registry_parse_type_with_ctx(self->registry, callsite_arg,
+                                                                               &self->hot_parse_ctx);
                     self->hot_parse_ctx_guard = 0;
                     if (parsed) {
                         tl_monotype_substitute(self->arena, parsed, self->subs, null);

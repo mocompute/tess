@@ -1927,7 +1927,7 @@ static str generate_expr(transpile *self, tl_monotype *type, ast_node const *nod
     case ast_bool:                        return generate_str(self, node->bool_.val ? S("1 /*true*/") : S("0 /*false*/"), type);
     case ast_char:
         return generate_str(self, str_cat_3(self->transient, S("'"), node->symbol.name, S("'")), type);
-    case ast_c_string:
+    case ast_string:
         return generate_str(self, str_cat_3(self->transient, S("\""), node->symbol.name, S("\"")), type);
 
     case ast_symbol: {
@@ -1971,7 +1971,6 @@ static str generate_expr(transpile *self, tl_monotype *type, ast_node const *nod
         return str_copy(self->transient, S("FIXME_generate_expr"));
         break;
 
-    case ast_string:
     case ast_hash_command:
     case ast_type_alias:   fatal("logic error");
 
@@ -2790,7 +2789,7 @@ static str tl_fatal(transpile *self, ast_node const *node, eval_ctx *ctx, void *
 
     if (1 != node->named_application.n_arguments) fatal("wrong number of arguments");
     ast_node const *arg = node->named_application.arguments[0];
-    if (ast_c_string != arg->tag) {
+    if (ast_string != arg->tag) {
         // FIXME: report error
         fatal("expected string");
     }

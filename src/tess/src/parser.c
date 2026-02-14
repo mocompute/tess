@@ -146,7 +146,6 @@ static int           a_open_round(parser *);
 static int           a_open_square(parser *);
 static int           a_star(parser *);
 static int           a_string(parser *);
-static int           a_c_string(parser *);
 static int           the_symbol(parser *, char const *const);
 
 static int           string_to_number(parser *, char const *const);
@@ -941,30 +940,13 @@ static int the_symbol(parser *p, char const *const want) {
     return 1;
 }
 
-static int a_c_string(parser *p) {
+static int a_string(parser *p) {
     if (next_token(p)) return 1;
 
-    if (tok_c_string == p->token.tag) return result_ast_str(p, ast_c_string, p->token.s);
+    if (tok_string == p->token.tag || tok_c_string == p->token.tag)
+        return result_ast_str(p, ast_string, p->token.s);
 
     p->error.tag = tl_err_expected_string;
-    return 1;
-}
-
-static int a_string(parser *self) {
-    if (next_token(self)) return 1;
-
-    if (tok_string == self->token.tag) {
-        ast_node_sized args = {.size = 1, .v = alloc_malloc(self->ast_arena, sizeof(void *))};
-        args.v[0]           = ast_node_create_sym_c(self->ast_arena, self->token.s);
-        args.v[0]->tag      = ast_c_string;
-        set_node_file(self, args.v[0]);
-
-        ast_node *str_from_cstr = ast_node_create_sym_c(self->ast_arena, "Str__from_literal__1");
-        ast_node *r = ast_node_create_nfa(self->ast_arena, str_from_cstr, (ast_node_sized){0}, args);
-        return result_ast_node(self, r);
-    }
-
-    self->error.tag = tl_err_expected_string;
     return 1;
 }
 
@@ -1385,7 +1367,6 @@ static int a_value(parser *self) {
     if (0 == a_try(self, a_lambda_function)) return 0;
     if (0 == a_try(self, a_number)) return 0;
     if (0 == a_try(self, a_string)) return 0;
-    if (0 == a_try(self, a_c_string)) return 0;
     if (0 == a_try(self, a_char)) return 0;
     if (0 == a_try(self, a_bool)) return 0;
     if (0 == a_try(self, a_nil)) return 0;
