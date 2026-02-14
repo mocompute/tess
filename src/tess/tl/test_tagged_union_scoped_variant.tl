@@ -19,7 +19,7 @@ main() {
     shape := Foo.make_Shape_Circle(bare_circle)
 
     // Verify it works in a case expression
-    result := case shape: Foo.Shape {
+    result := when shape {
         c: Circle { c.radius }
         s: Square { s.length }
     }

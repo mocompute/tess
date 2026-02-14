@@ -7,7 +7,7 @@ MyOption[a]: | MySome { v: a }
 main() {
     good := MySome(123)
 
-    res := case good: MyOption {
+    res := when good {
         s: MySome { s.v }
         n: MyNone { 0 }
     }

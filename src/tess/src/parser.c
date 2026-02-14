@@ -345,8 +345,8 @@ static int result_ast_node(parser *p, ast_node *node) {
 
 static int is_reserved(char const *s) {
     static char const *strings[] = {
-      "break", "case",   "continue", "else", "false", "if",    "in",
-      "null",  "return", "then",     "true", "void",  "while", null,
+      "break",  "case", "continue", "else", "false", "if",    "in", "null",
+      "return", "then", "true",     "void", "when",  "while", null,
     };
     char const **it = strings;
     while (*it != null)
@@ -1654,6 +1654,84 @@ begin_body:
     return node;
 }
 
+static ast_node *parse_when_expr(parser *self) {
+    if (a_try_s(self, the_symbol, "when")) {
+        self->error.tag = tl_err_ok;
+        return null;
+    }
+
+    ast_node *expr = parse_expression(self, INT_MIN);
+    if (!expr) return null;
+
+    int is_pointer = 0;
+    if (ast_node_is_unary_op(expr)) {
+        if (is_ampersand(expr->unary_op.op)) is_pointer = 1;
+        else return null; // no other unary op is valid
+
+        // reset variable to the actual symbol
+        expr = expr->unary_op.operand;
+        if (!ast_node_is_symbol(expr)) return null;
+    }
+
+    if (a_try(self, a_open_curly)) return null;
+
+    ast_node_array conditions = {.alloc = self->ast_arena};
+    ast_node_array arms       = {.alloc = self->ast_arena};
+    ast_node      *else_arm   = null;
+    while (1) {
+        // check for else condition
+        if (0 == a_try_s(self, the_symbol, "else")) {
+            if (else_arm) {
+                self->error.tag = tl_err_unexpected_else;
+                return null;
+            }
+            else_arm = parse_body(self);
+            if (!else_arm) return null;
+            continue;
+        }
+        if (0 == a_try(self, a_close_curly)) break;
+
+        ast_node *cond = null;
+
+        // a union case expression: condition must be an annotated symbol: a symbol to be bound, and the
+        // desired variant type to be matched. The variant type must be mangled to the union_module.
+        // E.g. `c: Circle` is the symbol `c` with the annotation `Circle`, which must be mangled to
+        // `Foo.Circle`.
+        if (a_try(self, a_param)) return null;
+        cond = self->result;
+        if (!ast_node_is_symbol(cond) || !cond->symbol.annotation ||
+            !ast_node_is_symbol(cond->symbol.annotation))
+            return null;
+
+        // Note: Do not module-mangle annotation symbol: inference will use the unmangled name within the
+        // module scope of the tagged union.
+
+        if (!cond) return null;
+        ast_node *body = parse_body(self);
+        if (!body) return null;
+
+        array_push(conditions, cond);
+        array_push(arms, body);
+    }
+
+    if (else_arm) {
+        // else arm always goes at the end
+        ast_node *sentinel = ast_node_create_nil(self->ast_arena);
+        set_node_file(self, sentinel);
+        array_push(conditions, sentinel);
+        array_push(arms, else_arm);
+    }
+
+    int union_flag = 0;
+    if (is_pointer) union_flag = AST_TAGGED_UNION_MUTABLE;
+    else union_flag = AST_TAGGED_UNION_VALUE;
+
+    ast_node *node = ast_node_create_case(self->ast_arena, expr, (ast_node_sized)array_sized(conditions),
+                                          (ast_node_sized)array_sized(arms), null, null, union_flag);
+    set_node_file(self, node);
+    return node;
+}
+
 //
 
 static int maybe_mangle_binop(parser *self, ast_node *op, ast_node **inout, ast_node *right) {
@@ -1782,6 +1860,10 @@ static ast_node *parse_base_expression(parser *self) {
     if (self->error.tag != tl_err_ok) return null;
 
     node = parse_case_expr(self);
+    if (node) return node;
+    if (self->error.tag != tl_err_ok) return null;
+
+    node = parse_when_expr(self);
     if (node) return node;
     if (self->error.tag != tl_err_ok) return null;
 
