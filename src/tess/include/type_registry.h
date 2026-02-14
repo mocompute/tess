@@ -75,6 +75,8 @@ tl_monotype *tl_type_registry_parse_type_out_ctx(tl_type_registry *self, ast_nod
 
 void         tl_type_registry_parse_type_ctx_init(allocator *, tl_type_registry_parse_type_ctx *,
                                                   hashmap *type_arguments);
+void         tl_type_registry_parse_type_ctx_reinit(tl_type_registry_parse_type_ctx *,
+                                                    hashmap *type_arguments);
 void         tl_type_registry_parse_type_ctx_reset(tl_type_registry_parse_type_ctx *);
 
 void         tl_type_registry_insert(tl_type_registry *, str, tl_polytype *);

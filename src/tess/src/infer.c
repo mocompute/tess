@@ -86,6 +86,14 @@ struct tl_infer {
     // Context for single-pass parsing of user type definitions
     tl_type_registry_parse_type_ctx type_parse_ctx;
 
+    // Pre-allocated context for hot-path parse_type calls (reused via reinit).
+    // REENTRANCY: this is shared mutable state.  Every callsite must reinit immediately before
+    // use and capture the result into a local before calling anything that might re-enter
+    // (e.g. specialize_type_constructor -> make_instance_key).  See hot_parse_ctx_reinit().
+    tl_type_registry_parse_type_ctx hot_parse_ctx;
+    hashmap *hot_parse_ctx_own_ta; // saved own type_arguments ptr
+    int      hot_parse_ctx_guard;  // reentrancy detector: 1 while in use
+
     u32                             next_var_name;
     u32                             next_instantiation;
 
@@ -179,7 +187,23 @@ tl_infer        *tl_infer_create(allocator *alloc, tl_infer_opts const *opts) {
 
     tl_type_registry_parse_type_ctx_init(self->arena, &self->type_parse_ctx, null);
 
+    tl_type_registry_parse_type_ctx_init(self->arena, &self->hot_parse_ctx, null);
+    self->hot_parse_ctx_own_ta    = self->hot_parse_ctx.type_arguments;
+    self->hot_parse_ctx_guard     = 0;
+
     return self;
+}
+
+// Reinit the shared hot_parse_ctx for reuse.  Callers must reinit immediately before each use
+// and capture the parse result into a local before calling anything that could re-enter
+// (any path through specialize_type_constructor_ or specialize_arrow may call this again).
+static void hot_parse_ctx_reinit(tl_infer *self, hashmap *outer_type_arguments) {
+    assert(!self->hot_parse_ctx_guard && "reentrancy: hot_parse_ctx reinit while still in use");
+    self->hot_parse_ctx_guard = 1;
+    map_reset(self->hot_parse_ctx_own_ta);
+    tl_type_registry_parse_type_ctx_reinit(&self->hot_parse_ctx,
+                                           outer_type_arguments ? outer_type_arguments
+                                                                : self->hot_parse_ctx_own_ta);
 }
 
 void tl_infer_destroy(allocator *alloc, tl_infer **p) {
@@ -746,10 +770,10 @@ static int traverse_ctx_assign_type_arguments(tl_infer *self, traverse_ctx *ctx,
         fprintf(stderr, "  type_arguments contains: %i\n", str_map_contains(ctx->type_arguments, name));
 #endif
 
-        tl_type_registry_parse_type_ctx parse_ctx;
-        tl_type_registry_parse_type_ctx_init(self->transient, &parse_ctx, ctx->type_arguments);
-
         for (u32 i = 0; i < argc; i++) {
+            // Reinit per-iteration: specialize_type_constructor (below) can re-enter
+            // make_instance_key which clobbers hot_parse_ctx.
+            hot_parse_ctx_reinit(self, ctx->type_arguments);
             ast_node *type_arg_node = argv[i];
 
 #if DEBUG_EXPLICIT_TYPE_ARGS
@@ -788,18 +812,19 @@ static int traverse_ctx_assign_type_arguments(tl_infer *self, traverse_ctx *ctx,
             } else {
 #if DEBUG_EXPLICIT_TYPE_ARGS
                 // Debug: show what's in the parse context
-                str_array keys = str_map_keys(self->transient, parse_ctx.type_arguments);
-                fprintf(stderr, "  parse_ctx.type_arguments has %u keys:", keys.size);
+                str_array keys = str_map_keys(self->transient, self->hot_parse_ctx.type_arguments);
+                fprintf(stderr, "  hot_parse_ctx.type_arguments has %u keys:", keys.size);
                 forall(j, keys) fprintf(stderr, " '%s'", str_cstr(&keys.v[j]));
                 fprintf(stderr, "\n");
 #endif
-                parsed = tl_type_registry_parse_type_with_ctx(self->registry, type_arg_node, &parse_ctx);
+                parsed = tl_type_registry_parse_type_with_ctx(self->registry, type_arg_node, &self->hot_parse_ctx);
                 if (!parsed) {
                     str tmp = v2_ast_node_to_string(self->transient, type_arg_node);
                     fprintf(stderr, "error: parse failed: %s\n", str_cstr(&tmp));
                     fatal("could not parse type"); // FIXME better error
                 }
             }
+            self->hot_parse_ctx_guard = 0;
 
 #if DEBUG_EXPLICIT_TYPE_ARGS
             str parsed_str = tl_monotype_to_string(self->transient, parsed);
@@ -3009,11 +3034,10 @@ static int check_type_predicate(tl_infer *self, traverse_ctx *traverse_ctx, ast_
 
         if (lhs_type_arg) {
             // LHS is a type argument - handle it specially
-            tl_type_registry_parse_type_ctx parse_ctx;
-            tl_type_registry_parse_type_ctx_init(self->transient, &parse_ctx, traverse_ctx->type_arguments);
-
+            hot_parse_ctx_reinit(self, traverse_ctx->type_arguments);
             tl_monotype *rhs_type =
-              tl_type_registry_parse_type_with_ctx(self->registry, node->type_predicate.rhs, &parse_ctx);
+              tl_type_registry_parse_type_with_ctx(self->registry, node->type_predicate.rhs, &self->hot_parse_ctx);
+            self->hot_parse_ctx_guard = 0;
 
             tl_monotype *lhs_mono = lhs_type_arg;
 
@@ -3043,11 +3067,10 @@ static int check_type_predicate(tl_infer *self, traverse_ctx *traverse_ctx, ast_
     }
     // Fall through to existing expression handling...
 
-    tl_type_registry_parse_type_ctx parse_ctx;
-    tl_type_registry_parse_type_ctx_init(self->transient, &parse_ctx, traverse_ctx->type_arguments);
-
+    hot_parse_ctx_reinit(self, traverse_ctx->type_arguments);
     tl_monotype *type =
-      tl_type_registry_parse_type_with_ctx(self->registry, node->type_predicate.rhs, &parse_ctx);
+      tl_type_registry_parse_type_with_ctx(self->registry, node->type_predicate.rhs, &self->hot_parse_ctx);
+    self->hot_parse_ctx_guard = 0;
 
     if (resolve_node(self, node->type_predicate.lhs, traverse_ctx, npos_operand)) {
         dbg(self, "assert resolve node failed");
@@ -3169,9 +3192,7 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
 static name_and_type make_instance_key(tl_infer *self, str generic_name, tl_monotype *arrow,
                                        ast_node_sized type_arguments, hashmap *outer_type_arguments) {
 
-    // TODO: we shouldn't make a new one every time this is called.
-    tl_type_registry_parse_type_ctx parse_ctx;
-    tl_type_registry_parse_type_ctx_init(self->transient, &parse_ctx, outer_type_arguments);
+    hot_parse_ctx_reinit(self, outer_type_arguments);
 
     tl_monotype_sized type_arg_types = {
       .size = type_arguments.size,
@@ -3180,7 +3201,7 @@ static name_and_type make_instance_key(tl_infer *self, str generic_name, tl_mono
 
     forall(i, type_arguments) {
         ast_node *type_arg  = type_arguments.v[i];
-        type_arg_types.v[i] = tl_type_registry_parse_type_with_ctx(self->registry, type_arg, &parse_ctx);
+        type_arg_types.v[i] = tl_type_registry_parse_type_with_ctx(self->registry, type_arg, &self->hot_parse_ctx);
         if (!type_arg_types.v[i]) continue;
 
         if (!tl_monotype_is_concrete(type_arg_types.v[i])) {
@@ -3199,6 +3220,7 @@ static name_and_type make_instance_key(tl_infer *self, str generic_name, tl_mono
             type_arg_types.v[i] = null;
         }
     }
+    self->hot_parse_ctx_guard = 0;
 
     name_and_type key = {
       .name_hash      = str_hash64(generic_name),
@@ -4660,10 +4682,10 @@ static void concretize_params(tl_infer *self, ast_node *node, tl_monotype *calls
 
                 // Try 3: Parse the callsite type arg node using the type_arguments context.
                 if (!bound_type) {
-                    tl_type_registry_parse_type_ctx parse_ctx;
-                    tl_type_registry_parse_type_ctx_init(self->transient, &parse_ctx, type_arguments);
+                    hot_parse_ctx_reinit(self, type_arguments);
                     tl_monotype *parsed =
-                      tl_type_registry_parse_type_with_ctx(self->registry, callsite_arg, &parse_ctx);
+                      tl_type_registry_parse_type_with_ctx(self->registry, callsite_arg, &self->hot_parse_ctx);
+                    self->hot_parse_ctx_guard = 0;
                     if (parsed) {
                         tl_monotype_substitute(self->arena, parsed, self->subs, null);
                         if (tl_monotype_is_concrete(parsed)) {

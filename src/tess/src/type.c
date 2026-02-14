@@ -1083,6 +1083,22 @@ void tl_type_registry_parse_type_ctx_init(allocator *alloc, tl_type_registry_par
     };
 }
 
+void tl_type_registry_parse_type_ctx_reinit(tl_type_registry_parse_type_ctx *ctx,
+                                            hashmap *type_arguments) {
+    // Full reset of all fields for reuse.  Contrast with _reset, which preserves memoize and
+    // deferred maps for single-pass UTD fixups.
+    map_reset(ctx->memoize);
+    ctx->type_arguments              = type_arguments;
+    map_reset(ctx->deferred_parse);
+    map_reset(ctx->deferred_type_args);
+    map_reset(ctx->deferred_source_names);
+    map_reset(ctx->deferred_source_quantifiers);
+    hset_reset(ctx->in_progress);
+    ctx->current_utd_name            = str_empty();
+    ctx->current_utd_quantifiers     = (tl_type_variable_sized){0};
+    ctx->annotation_target           = null;
+}
+
 void tl_type_registry_parse_type_ctx_reset(tl_type_registry_parse_type_ctx *ctx) {
     // Note: does not reset deferred_parse (or its associated maps deferred_type_args,
     // deferred_source_names, deferred_source_quantifiers), which is the whole point: to support
