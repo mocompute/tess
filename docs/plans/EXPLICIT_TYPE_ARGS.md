@@ -117,6 +117,39 @@ New `test_fail_*` tests should be added to verify the parser rejects:
 
 ---
 
+## Testing Gaps
+
+### Missing error tests
+
+- **Type argument count mismatch.** No `test_fail_*` for passing the wrong number of
+  type arguments (e.g., `foo[Int, Float]()` when `foo[T]()` is declared).
+
+- **Undeclared type parameter.** No `test_fail_*` for using an undeclared type variable
+  in an annotation (e.g., `foo(x: T)` where `T` is not declared with `[T]`). Relevant
+  once type variable sugar is removed.
+
+- **Old syntax rejection.** No `test_fail_*` for `Foo(T):` or `Ptr(Int)` (see
+  "Parser: reject old syntax" above).
+
+### Missing positive tests
+
+- **Type parameter forwarding.** No test where a generic function forwards its type
+  parameter to another generic function: e.g., `foo[T]() { bar[T]() }`. All existing
+  cross-generic calls use concrete types at call sites.
+
+- **Type predicates with complex types.** All type predicate tests use simple types
+  (`T :: Int`, `T :: Float`). No coverage for `T :: Ptr[Int]` or `T :: Array[Int]`.
+
+- **sizeof/alignof with deeply nested types.** Only `sizeof[Ptr[Void]]()` and
+  `sizeof[Point[Int]]()` are tested. No coverage for deeply nested cases like
+  `sizeof[Ptr[Const[CChar]]]()`.
+
+- **Multiple explicit specializations in one scope.** No test that calls the same
+  generic function with different explicit type args in the same function body
+  (e.g., `empty[Int]()` and `empty[Float]()` side by side).
+
+---
+
 ## Open Design Questions
 
 ### Explicit type arguments for lambda functions
