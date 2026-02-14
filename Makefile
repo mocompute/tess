@@ -454,6 +454,7 @@ TL_TESTS =					\
 	static_init_struct			\
 	static_init_struct_fun_ptr		\
 	strcmp					\
+	str					\
 	struct_concrete				\
 	struct_empty				\
 	struct_generic				\
@@ -562,7 +563,6 @@ TL_KNOWN_FAIL_FAILURES =
 # Tests that should work but currently fail due to compiler bugs
 TL_KNOWN_FAILURES =			\
 	lambda_immediate_type_argument		\
-	str					\
 	while_empty_body
 
 # Total test count across all suites
