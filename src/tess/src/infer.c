@@ -1521,6 +1521,24 @@ static int infer_unary_op(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
     return 0;
 }
 
+// Find a variant type by name in a tagged union wrapper type.
+// Looks up the 'u' (union) field in the wrapper, then searches by variant name.
+// Returns the variant's monotype, or null if the wrapper has no 'u' field or variant not found.
+// If out_index is non-null, stores the variant's index within the union.
+static tl_monotype *tagged_union_find_variant(tl_monotype *wrapper_type, str variant_name, int *out_index) {
+    i32 u_index = tl_monotype_type_constructor_field_index(wrapper_type, S("u"));
+    if (u_index < 0) return null;
+    tl_monotype *union_type     = wrapper_type->cons_inst->args.v[u_index];
+    str_sized    field_names    = union_type->cons_inst->def->field_names;
+    forall(j, field_names) {
+        if (str_eq(field_names.v[j], variant_name)) {
+            if (out_index) *out_index = (int)j;
+            return union_type->cons_inst->args.v[j];
+        }
+    }
+    return null;
+}
+
 static int infer_tagged_union_case(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
     tl_polytype *expr_type = node->case_.expression->type;
 
@@ -1545,6 +1563,7 @@ static int infer_tagged_union_case(tl_infer *self, traverse_ctx *ctx, ast_node *
             self->is_constrain_ignore_error = 1;
             constrain_pm(self, expr_type, wrapper_type, node->case_.expression);
             self->is_constrain_ignore_error = save;
+            tl_monotype_substitute(self->arena, wrapper_type, self->subs, null);
         }
     }
 
@@ -1582,18 +1601,12 @@ static int infer_tagged_union_case(tl_infer *self, traverse_ctx *ctx, ast_node *
             tagged_union_case_syntax_error(self, cond);
         }
 
-        // Find the variant by name in the union type
-        // Use the original (unmangled) name from the annotation, as union field names are unmangled
+        // Find the variant by name in the wrapper type
         str variant_name  = ast_node_name_original(cond->symbol.annotation);
         int variant_found = -1;
-        forall(j, valid_variants) {
-            if (str_eq(valid_variants.v[j], variant_name)) {
-                variant_found = (int)j;
-                break;
-            }
-        }
+        tl_monotype *variant_type = tagged_union_find_variant(wrapper_type, variant_name, &variant_found);
 
-        if (variant_found < 0) {
+        if (!variant_type) {
             array_push(self->errors,
                        ((tl_infer_error){.tag = tl_err_tagged_union_unknown_variant, .node = cond}));
             return 1;
@@ -1601,10 +1614,6 @@ static int infer_tagged_union_case(tl_infer *self, traverse_ctx *ctx, ast_node *
 
         // Mark this variant as covered
         variant_covered[variant_found] = 1;
-
-        // Get the variant type from the union type (which already has concrete types after
-        // substitution) This handles both generic and non-generic variants correctly
-        tl_monotype *variant_type = union_type->cons_inst->args.v[variant_found];
 
         // Set the binding's type (not as a literal - this is a value, not a type expression).
         // Note that we set both the condition node and the annotation_type.
@@ -2274,6 +2283,7 @@ static int traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, trave
         // traverse value first, then traverse name and body
         ctx->node_pos = npos_value_rhs;
         if (traverse_ast(self, ctx, node->let_in.value, cb)) return 1;
+
         ctx->node_pos = npos_formal_parameter;
         if (traverse_ast(self, ctx, node->let_in.name, cb)) return 1;
         ctx->node_pos = npos_operand;
@@ -3935,8 +3945,28 @@ static int specialize_case(tl_infer *self, traverse_ctx *traverse_ctx, ast_node 
                 str               generic_name = inner_type->cons_inst->def->generic_name;
                 tl_monotype_sized args         = inner_type->cons_inst->args;
                 tl_polytype      *special_type = null;
+                str               inst_name    = str_empty();
 
-                str inst_name = specialize_type_constructor(self, generic_name, args, &special_type);
+                if (!tl_monotype_is_concrete(inner_type)) {
+                    // Variant type has unresolved type variables (e.g., from a case annotation
+                    // where the expression type wasn't concrete during inference). Re-derive
+                    // concrete variant types from the expression's now-concrete wrapper type.
+                    tl_monotype *expr_type = node->case_.expression->type
+                                               ? node->case_.expression->type->type
+                                               : null;
+                    if (expr_type) tl_monotype_substitute(self->arena, expr_type, self->subs, null);
+
+                    if (expr_type && tl_monotype_is_concrete(expr_type) && tl_monotype_is_inst(expr_type)) {
+                        str variant_name = ast_node_name_original(cond->symbol.annotation);
+                        tl_monotype *concrete_variant = tagged_union_find_variant(expr_type, variant_name, null);
+                        if (concrete_variant && tl_monotype_is_inst(concrete_variant)) {
+                            generic_name = concrete_variant->cons_inst->def->generic_name;
+                            args         = concrete_variant->cons_inst->args;
+                        }
+                    }
+                }
+
+                inst_name = specialize_type_constructor(self, generic_name, args, &special_type);
                 if (!str_is_empty(inst_name) && special_type) {
                     // Update the annotation_type with the specialized type
                     if (tl_monotype_is_ptr(variant_type)) {
