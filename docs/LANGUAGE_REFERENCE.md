@@ -266,6 +266,7 @@ foo() -> Ptr[any] { return null }     // Required - null has no type
 | Tagged union with constraining field | No |
 | Tagged union without constraining field | **Yes** (at binding site) |
 | Tagged union `when` expression | No (type inferred from scrutinee) |
+| Tagged union `case` expression | **Yes** (when type not inferrable) |
 | CArray declaration | **Yes** (type annotation required) |
 | CArray decay to pointer | **Yes** (explicit `Ptr[T]` annotation) |
 | Pointer cast to different type | **Yes** |
@@ -943,6 +944,40 @@ area := when circle {
 ```
 
 `when` expressions must be exhaustive: there must be one arm per variant, or an `else` arm.
+
+### Explicit Type Annotation (Case Expression)
+
+When the tagged union type cannot be inferred from the scrutinee, use `case` with an explicit type annotation:
+
+```tl
+result := case opt: Option[Int] {
+  s: Some { s.v }
+  n: None { 0 }
+}
+```
+
+This is needed when the scrutinee's type is ambiguous, such as inside a type predicate branch:
+
+```tl
+unwrap[T](opt_or_res, default: T) -> T {
+    if opt_or_res :: Option[T] {
+        case opt_or_res: Option[T] {
+            s: Some { s.v }
+            n: None { default }
+        }
+    } else if opt_or_res :: Result[T, U] {
+        case opt_or_res: Result[T, U] {
+            o: Ok { o.v }
+            e: Err { default }
+        }
+    }
+    else {
+        _tl_fatal_(c"unwrap: invalid type")
+    }
+}
+```
+
+Prefer `when` when the type is known; use `case var: Type` when it isn't.
 
 ### Mutable when
 
