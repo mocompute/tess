@@ -21,8 +21,8 @@ main() {
     // Wrap using make_Shape_Special
     shape := make_Shape_Special(sp)
 
-    // Verify case expression works
-    r1 := case shape: Shape {
+    // Verify when expression works
+    r1 := when shape {
         c: Circle  { c.radius }
         s: Special { s.x + s.y }
         n: MyNone    { 0.0 }
@@ -30,7 +30,7 @@ main() {
     error += if r1 >= 3.0 {0} else {1}
 
     // Verify circle constructor still works
-    r2 := case circle: Shape {
+    r2 := when circle {
         c: Circle  { c.radius }
         s: Special { 0.0 }
         n: MyNone    { 0.0 }

@@ -19,8 +19,8 @@ main() {
     // Wrap the existing type into the tagged union using make function
     shape := Foo.make_Shape_Pair(p)
 
-    // Verify case expression works
-    r1 := case shape: Foo.Shape[Pair[Int]] {
+    // Verify when expression works
+    r1 := when shape {
         c: Circle { c.radius }
         p: Pair { p.x + p.y }
         n: MyNone { 0 }
@@ -29,7 +29,7 @@ main() {
 
     // Verify circle still works with the generic type param
     circle := Foo.Circle(3.14)
-    r2     := case circle: Foo.Shape[Float] {
+    r2     := when circle {
         c: Circle { c.radius }
         p: Pair { 0.0 }
         n: MyNone { 0.0 }

@@ -24,7 +24,7 @@ main() {
 
     // Test 1: Success variant with Int value
     ok_int  := Success(42)
-    result1 := case ok_int: Outcome[Int] {
+    result1 := when ok_int {
         o: Success { o.value }
         e: Failure { apply_int_handler(e.handler, e.code) }
     }
@@ -32,7 +32,7 @@ main() {
 
     // Test 2: Success variant with Float value
     ok_float := Success(3.14)
-    result2  := case ok_float: Outcome[Float] {
+    result2  := when ok_float {
         o: Success { o.value }
         e: Failure { 0.0 }
     }
@@ -42,7 +42,7 @@ main() {
     h1                 := IntHandler(fn = double_int/1)
     err1: Outcome[Int] := Failure(5, h1)
 
-    result3 := case err1: Outcome[Int] {
+    result3 := when err1 {
         o: Success { 0 }
         e: Failure { apply_int_handler(e.handler, e.code) }
     }
@@ -52,7 +52,7 @@ main() {
     h2                 := IntHandler(fn = negate/1)
     err2: Outcome[Int] := Failure(7, h2)
 
-    result4 := case err2: Outcome[Int] {
+    result4 := when err2 {
         o: Success { 0 }
         e: Failure { apply_int_handler(e.handler, e.code) }
     }

@@ -10,7 +10,7 @@ main() {
     s := Foo.Circle(2.0)
 
     // Error: Missing case for 'None' variant (no else arm)
-    case s: Foo.Shape {
+    when s {
         c:  Circle { c.radius }
         sq: Square { sq.length }
     }

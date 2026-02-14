@@ -23,8 +23,8 @@ main() {
     // Wrap the existing type into the tagged union using make_Shape_Special
     shape := Foo.make_Shape_Special(sp)
 
-    // Verify case expression works with the existing type variant
-    r1 := case shape: Foo.Shape {
+    // Verify when expression works with the existing type variant
+    r1 := when shape {
         c: Circle  { c.radius }
         s: Special { s.x + s.y }
         n: MyNone    { 0.0 }
@@ -32,7 +32,7 @@ main() {
     error += if r1 >= 3.0 {0} else {1}
 
     // Verify circle constructor still works
-    r2 := case circle: Foo.Shape {
+    r2 := when circle {
         c: Circle  { c.radius }
         s: Special { 0.0 }
         n: MyNone    { 0.0 }

@@ -5,7 +5,7 @@ T[a]: | MySome { v: a }
       | MyNone
 
 my_unwrap[a](opt: T[a], default: a) -> a {
-    case opt: T {
+    when opt {
         s: MySome { s.v }
         n: MyNone { default }
     }

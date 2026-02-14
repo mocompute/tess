@@ -5,7 +5,7 @@ T[a]: | MySome { v: a }
       | MyNone
 
 my_unwrap(opt: T[Int]) -> Int {
-    case opt: T {
+    when opt {
         s: MySome { s.v }
         n: MyNone { 0 }
     }

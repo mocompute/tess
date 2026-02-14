@@ -4,7 +4,7 @@ Tess is a statically-typed, compiled programming language that transpiles to C. 
 
 ## Key Language Characteristics
 
-**Expression-based:** Nearly everything in Tess is an expression that produces a value. Control flow constructs like `if` and `case` can be used anywhere an expression is expected. Functions implicitly return the value of their final expression—no `return` keyword needed (though early `return` is supported). Note: assignment with `=` is a statement, not an expression, and has no value.
+**Expression-based:** Nearly everything in Tess is an expression that produces a value. Control flow constructs like `if`, `case`, and `when` can be used anywhere an expression is expected. Functions implicitly return the value of their final expression—no `return` keyword needed (though early `return` is supported). Note: assignment with `=` is a statement, not an expression, and has no value.
 
 **Implicit returns:** Functions return their last expression automatically. For functions that should return nothing, use `void` as the final expression after an expression that produces a value:
 
@@ -256,17 +256,6 @@ x: Either[Int, Bool] := Left(42)     // Required - Left only constrains `a`
 foo() -> Ptr[any] { return null }     // Required - null has no type
 ```
 
-#### Tagged Union Case Expressions
-
-The case expression requires a type annotation:
-
-```tl
-result := case opt: Option[Int] {     // type annotation with type args required
-  s: Some { s.v }
-  n: None { 0 }
-}
-```
-
 ### Quick Reference Table
 
 | Scenario | Annotation Required? |
@@ -275,7 +264,8 @@ result := case opt: Option[Int] {     // type annotation with type args required
 | Float literal `3.14` | No (inferred as `Float`) |
 | Struct constructor | No (inferred from constructor) |
 | Tagged union with constraining field | No |
-| Tagged union without constraining field | **Yes** |
+| Tagged union without constraining field | **Yes** (at binding site) |
+| Tagged union `when` expression | No (type inferred from scrutinee) |
 | CArray declaration | **Yes** (type annotation required) |
 | CArray decay to pointer | **Yes** (explicit `Ptr[T]` annotation) |
 | Pointer cast to different type | **Yes** |
@@ -285,7 +275,6 @@ result := case opt: Option[Int] {     // type annotation with type args required
 | Function called directly | No (params and return inferred) |
 | Function only used as pointer | **Yes** |
 | Function with struct param containing fn pointer | **Yes** |
-| Case expression type | **Yes** |
 | Return null | **Yes** |
 
 ## Variables and Assignment
@@ -633,9 +622,9 @@ result := if condition { expr1 } else { expr2 }
 result := if a { 1 } else if b { 2 } else { 3 }
 ```
 
-### Case/Match
+### Case/Match (Value Matching)
 
-Pattern matching on values using equality by default:
+Pattern matching on values using equality by default. For tagged union destructuring, see [`when`](#pattern-matching-when-expression).
 
 ```tl
 case n {
@@ -931,29 +920,40 @@ Shape: | Circle { radius: Float }
 
 For types in the `main` module, use `main.TypeName`. A bare name (e.g., `| None`) always creates a new variant. No constructor function is generated for existing type variants — use the type's own constructor and the make function.
 
-### Pattern Matching (Case Expression)
+### Pattern Matching (When Expression)
+
+The `when` keyword provides tagged union pattern matching with type inference. The tagged union type is inferred from the scrutinee — no type annotation needed:
 
 ```tl
-area := case s: Shape {
+area := when s {
   c:  Circle { c.radius * c.radius * 3.14159  }
   sq: Square { sq.length * sq.length }
 }
 ```
 
-The type annotation (`: Shape`) is required. `case` expressions for tagged unions must be exhaustive: there must be one arm per variant, or an `else` arm.
-
-### Mutable tagged union case
+Variant names in the arms are resolved automatically from the inferred type's module scope. For example, if `s` is a `Foo.Shape`, you write `Circle` in the arm — not `Foo.Circle`:
 
 ```tl
-case s.&: Shape {
+circle := Foo.Circle(2.0)
+area := when circle {
+  c:  Circle { c.radius * c.radius * 3.14159 }
+  sq: Square { sq.length * sq.length }
+  n:  None   { 0.0 }
+}
+```
+
+`when` expressions must be exhaustive: there must be one arm per variant, or an `else` arm.
+
+### Mutable when
+
+```tl
+when s.& {
   c:  Circle { c->radius *= 2.0  }
   sq: Square { sq->length * sq->length }
 }
 ```
 
-Use this syntax to access pointers to each variant. Note the `.&`
-suffix on the case variable. This is the same syntax used to access
-mutable iterators with the `for` statement.
+Use the `.&` suffix on the scrutinee to get pointers to each variant. This is the same syntax used to access mutable iterators with the `for` statement.
 
 ## Pointers
 

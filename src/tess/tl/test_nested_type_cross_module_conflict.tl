@@ -19,7 +19,7 @@ main() {
 
     // A.Circle — cross-module unscoped constructor (should work)
     circle := A.Circle(2.0)
-    area   := case circle: A.Shape {
+    area   := when circle {
         c: Circle { c.radius * c.radius }
         s: Square { s.length * s.length }
     }
