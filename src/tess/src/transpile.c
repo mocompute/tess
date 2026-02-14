@@ -1711,14 +1711,29 @@ static str generate_binary_op(transpile *self, tl_monotype *type, ast_node const
             generate_decl(self, res, type);
             generate_assign_lhs(self, res);
         }
-        cat(self, left);
+
         int is_index = is_index_operator(str_cstr(&op));
+        int is_ptr_cmp = !is_index &&
+                         is_relational_operator(str_cstr(&op)) &&
+                         node->binary_op.left->type &&
+                         node->binary_op.right->type &&
+                         tl_monotype_is_ptr(node->binary_op.left->type->type) &&
+                         tl_monotype_is_ptr(node->binary_op.right->type->type);
+
+        if (is_ptr_cmp) {
+            cat(self, S("(void*)"));
+        }
+        cat(self, left);
+
         if (is_index) {
             cat(self, S("["));
             cat(self, right);
             cat_close_square(self);
         } else {
             cat(self, op);
+            if (is_ptr_cmp) {
+                cat(self, S("(void*)"));
+            }
             cat(self, right);
         }
         cat_semicolonln(self);
