@@ -115,42 +115,29 @@ tl_type_registry *tl_type_registry_create(allocator *alloc, allocator *transient
     self->type_aliases     = map_new(self->alloc, str, tl_polytype *, 1024);
 
     // Nullary built-in types: {name, is_integer, is_float}
-    static const struct { char *name; u32 len; int integer; int floating; } builtin_nullary[] = {
-        #define BUILTIN(n, i, f) {n, sizeof(n) - 1, i, f}
-        BUILTIN("Void",              0, 0),
-        BUILTIN("Int",               1, 0),
-        BUILTIN("Bool",              1, 0),
-        BUILTIN("Float",             0, 1),
-        BUILTIN("CChar",             1, 0),
-        BUILTIN("CUnsignedChar",     1, 0),
-        BUILTIN("CSignedChar",       1, 0),
-        BUILTIN("CShort",            1, 0),
-        BUILTIN("CUnsignedShort",    1, 0),
-        BUILTIN("CInt",              1, 0),
-        BUILTIN("CUnsignedInt",      1, 0),
-        BUILTIN("CLong",             1, 0),
-        BUILTIN("CUnsignedLong",     1, 0),
-        BUILTIN("CLongLong",         1, 0),
-        BUILTIN("CUnsignedLongLong", 1, 0),
-        BUILTIN("CSize",             1, 0),
-        BUILTIN("CPtrDiff",          1, 0),
-        BUILTIN("CInt8",             1, 0),
-        BUILTIN("CUInt8",            1, 0),
-        BUILTIN("CInt16",            1, 0),
-        BUILTIN("CUInt16",           1, 0),
-        BUILTIN("CInt32",            1, 0),
-        BUILTIN("CUInt32",           1, 0),
-        BUILTIN("CInt64",            1, 0),
-        BUILTIN("CUInt64",           1, 0),
-        BUILTIN("CFloat",            0, 1),
-        BUILTIN("CDouble",           0, 1),
-        BUILTIN("CLongDouble",       0, 1),
-        #undef BUILTIN
+    static const struct {
+        char *name;
+        u32   len;
+        int   integer;
+        int   floating;
+    } builtin_nullary[] = {
+#define BUILTIN(n, i, f) {n, sizeof(n) - 1, i, f}
+      BUILTIN("Void", 0, 0),          BUILTIN("Int", 1, 0),          BUILTIN("Bool", 1, 0),
+      BUILTIN("Float", 0, 1),         BUILTIN("CChar", 1, 0),        BUILTIN("CUnsignedChar", 1, 0),
+      BUILTIN("CSignedChar", 1, 0),   BUILTIN("CShort", 1, 0),       BUILTIN("CUnsignedShort", 1, 0),
+      BUILTIN("CInt", 1, 0),          BUILTIN("CUnsignedInt", 1, 0), BUILTIN("CLong", 1, 0),
+      BUILTIN("CUnsignedLong", 1, 0), BUILTIN("CLongLong", 1, 0),    BUILTIN("CUnsignedLongLong", 1, 0),
+      BUILTIN("CSize", 1, 0),         BUILTIN("CPtrDiff", 1, 0),     BUILTIN("CInt8", 1, 0),
+      BUILTIN("CUInt8", 1, 0),        BUILTIN("CInt16", 1, 0),       BUILTIN("CUInt16", 1, 0),
+      BUILTIN("CInt32", 1, 0),        BUILTIN("CUInt32", 1, 0),      BUILTIN("CInt64", 1, 0),
+      BUILTIN("CUInt64", 1, 0),       BUILTIN("CFloat", 0, 1),       BUILTIN("CDouble", 0, 1),
+      BUILTIN("CLongDouble", 0, 1),
+#undef BUILTIN
     };
     for (u32 i = 0; i < sizeof builtin_nullary / sizeof builtin_nullary[0]; i++) {
         str name = (str){.big = {.buf = builtin_nullary[i].name, .len = builtin_nullary[i].len}};
         make_nullary_inst(self, name);
-        if (builtin_nullary[i].integer)  mark_integer_type(self, name);
+        if (builtin_nullary[i].integer) mark_integer_type(self, name);
         if (builtin_nullary[i].floating) mark_float_type(self, name);
     }
 
@@ -710,8 +697,8 @@ static void resolve_deferred_placeholders(tl_type_registry *self, tl_type_regist
 
                 // B. Unify source parse-phase quantifiers with source registry quantifiers
                 //    (fixes the source type's registry polytype)
-                str *source_name_p = str_map_get(ctx->deferred_source_names, keys.v[i]);
-                str  source_name   = source_name_p ? *source_name_p : str_empty();
+                str                    *source_name_p = str_map_get(ctx->deferred_source_names, keys.v[i]);
+                str                     source_name   = source_name_p ? *source_name_p : str_empty();
                 tl_type_variable_sized *source_q =
                   str_map_get_ptr(ctx->deferred_source_quantifiers, keys.v[i]);
                 tl_polytype *source_poly =
@@ -720,8 +707,8 @@ static void resolve_deferred_placeholders(tl_type_registry *self, tl_type_regist
                     hashmap *useen = hset_create(transient_allocator, 64);
                     for (u32 j = 0; j < source_q->size && j < source_poly->quantifiers.size; j++) {
                         hset_reset(useen);
-                        tl_type_subs_unity_tv_tv(self->subs, source_q->v[j],
-                                                 source_poly->quantifiers.v[j], null, null, &useen);
+                        tl_type_subs_unity_tv_tv(self->subs, source_q->v[j], source_poly->quantifiers.v[j],
+                                                 null, null, &useen);
                     }
                 }
 
@@ -765,16 +752,16 @@ static tl_monotype *parse_type_nfa(tl_type_registry *self, tl_type_registry_pars
         // which look like type literals for a while, but are actually type constructors.
 
         if (1 != node->named_application.n_type_arguments) return null;
-        ast_node const *target = node->named_application.type_arguments[0];
+        ast_node const *target      = node->named_application.type_arguments[0];
 
         ast_node const *target_name = null;
         if (ast_node_is_symbol(target)) target_name = target;
         else if (ast_node_is_nfa(target)) target_name = target->named_application.name;
         else return null;
 
-        str target_name_str = ast_node_str(target_name);
+        str          target_name_str = ast_node_str(target_name);
 
-        tl_monotype *result = null;
+        tl_monotype *result          = null;
         // If the target is a symbol and not a utd in_progress, it must either be a nullary type or it
         // is sugar for a type variable, e.g a function in stdlib.tl which returns a `Ptr(T)`.
         if (ast_node_is_symbol(target)) {
@@ -799,8 +786,7 @@ static tl_monotype *parse_type_nfa(tl_type_registry *self, tl_type_registry_pars
             for (u32 j = 0; j < target->named_application.n_type_arguments; j++) {
                 tl_monotype *arg =
                   tl_type_registry_parse_type_(self, ctx, target->named_application.type_arguments[j]);
-                if (!arg)
-                    arg = type_variable_sugar(self, ctx, target->named_application.type_arguments[j]);
+                if (!arg) arg = type_variable_sugar(self, ctx, target->named_application.type_arguments[j]);
                 array_push(deferred_args, arg);
             }
             result = defer_parse(self, ctx, target_name_str, (tl_monotype_sized)array_sized(deferred_args));
@@ -936,8 +922,7 @@ static tl_monotype *parse_type_utd(tl_type_registry *self, tl_type_registry_pars
         }
 #endif
 
-        if (map_size(ctx->deferred_parse))
-            resolve_deferred_placeholders(self, ctx, poly, name);
+        if (map_size(ctx->deferred_parse)) resolve_deferred_placeholders(self, ctx, poly, name);
 
         result = tl_polytype_instantiate(self->alloc, poly, self->subs);
 #if DEBUG_RECURSIVE_TYPES
@@ -947,8 +932,7 @@ static tl_monotype *parse_type_utd(tl_type_registry *self, tl_type_registry_pars
 
 done:
 #if DEBUG_RECURSIVE_TYPES
-    if (!result)
-        fprintf(stderr, "[DEBUG_RECURSIVE_TYPES] parse_type: error '%s'\n", str_cstr(&name));
+    if (!result) fprintf(stderr, "[DEBUG_RECURSIVE_TYPES] parse_type: error '%s'\n", str_cstr(&name));
 #endif
     str_hset_remove(ctx->in_progress, name);
     return result;
@@ -1070,20 +1054,19 @@ void tl_type_registry_parse_type_ctx_init(allocator *alloc, tl_type_registry_par
     };
 }
 
-void tl_type_registry_parse_type_ctx_reinit(tl_type_registry_parse_type_ctx *ctx,
-                                            hashmap *type_arguments) {
+void tl_type_registry_parse_type_ctx_reinit(tl_type_registry_parse_type_ctx *ctx, hashmap *type_arguments) {
     // Full reset of all fields for reuse.  Contrast with _reset, which preserves memoize and
     // deferred maps for single-pass UTD fixups.
     map_reset(ctx->memoize);
-    ctx->type_arguments              = type_arguments;
+    ctx->type_arguments = type_arguments;
     map_reset(ctx->deferred_parse);
     map_reset(ctx->deferred_type_args);
     map_reset(ctx->deferred_source_names);
     map_reset(ctx->deferred_source_quantifiers);
     hset_reset(ctx->in_progress);
-    ctx->current_utd_name            = str_empty();
-    ctx->current_utd_quantifiers     = (tl_type_variable_sized){0};
-    ctx->annotation_target           = null;
+    ctx->current_utd_name        = str_empty();
+    ctx->current_utd_quantifiers = (tl_type_variable_sized){0};
+    ctx->annotation_target       = null;
 }
 
 void tl_type_registry_parse_type_ctx_reset(tl_type_registry_parse_type_ctx *ctx) {
@@ -2125,9 +2108,9 @@ u64 tl_monotype_hash64_(tl_monotype *self, u32 gen, hash_cycle_stack *in_progres
         } else {
 
             // Recursive types: mark this in-progress
-            int pushed = hash_cycle_push(in_progress, def_hash);
+            int               pushed = hash_cycle_push(in_progress, def_hash);
 
-            tl_monotype_sized args = self->cons_inst->args;
+            tl_monotype_sized args   = self->cons_inst->args;
             forall(i, args) {
                 tl_monotype *arg = args.v[i];
 
@@ -2491,8 +2474,8 @@ static int unify_var_other(tl_type_subs *subs, tl_type_variable tv, tl_monotype 
 }
 
 // Unify when one side is a weak variable (tl_weak).
-static int unify_weak_other(tl_type_subs *subs, tl_monotype *weak, tl_monotype *other,
-                            type_error_cb_fun cb, void *user, hashmap **seen) {
+static int unify_weak_other(tl_type_subs *subs, tl_monotype *weak, tl_monotype *other, type_error_cb_fun cb,
+                            void *user, hashmap **seen) {
     switch (other->tag) {
     case tl_placeholder:
     case tl_any:
