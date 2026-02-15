@@ -2759,31 +2759,42 @@ static void update_type(transpile *self, tl_monotype **type) {
     if (replace) *type = replace;
 }
 
+// Resolve the type from a nullary call with a single type argument, e.g. sizeof[T]().
+// Returns the resolved monotype, or null if the node does not have that form.
+static tl_monotype *resolve_nullary_type_argument(transpile *self, ast_node const *node) {
+    if (node->named_application.n_arguments != 0 || node->named_application.n_type_arguments != 1)
+        return null;
+
+    ast_node const *type_arg = node->named_application.type_arguments[0];
+    tl_monotype    *type     = null;
+
+    if (type_arg->type) {
+        type = type_arg->type->type;
+    } else if (ast_node_is_nfa(type_arg)) {
+        type = tl_type_registry_parse_type(self->registry, type_arg);
+    } else if (ast_node_is_symbol(type_arg)) {
+        tl_polytype *poly = tl_type_env_lookup(self->env, ast_node_str(type_arg));
+        if (poly) {
+            type = poly->type;
+        }
+    }
+
+    if (type) update_type(self, &type);
+    return type;
+}
+
 static str tl_sizeof(transpile *self, ast_node const *node, eval_ctx *ctx, void *extra) {
     (void)extra;
 
     assert(ast_node_is_nfa(node));
 
     // nullary with type argument: sizeof[T]()
-    if (node->named_application.n_arguments == 0 && node->named_application.n_type_arguments == 1) {
-        ast_node const *type_arg = node->named_application.type_arguments[0];
-        tl_monotype    *type     = null;
-
-        // The type argument has been processed by inference
-        if (type_arg->type) {
-            type = type_arg->type->type;
-        } else if (ast_node_is_nfa(type_arg)) {
-            type = tl_type_registry_parse_type(self->registry, type_arg);
-        } else if (ast_node_is_symbol(type_arg)) {
-            tl_polytype *poly = tl_type_env_lookup(self->env, ast_node_str(type_arg));
-            if (poly) {
-                type = poly->type;
-            }
-        }
-        if (!type) fatal("sizeof: could not resolve type argument");
-        update_type(self, &type);
+    tl_monotype *type = resolve_nullary_type_argument(self, node);
+    if (type) {
         str ctype = type_to_c_mono(self, type);
         return str_cat_3(self->transient, S("sizeof("), ctype, S(")"));
+    } else if (node->named_application.n_arguments == 0) {
+        fatal("sizeof: could not resolve type argument");
     }
 
     // single argument may be an expression or a type constructor
@@ -2819,24 +2830,12 @@ static str tl_alignof(transpile *self, ast_node const *node, eval_ctx *ctx, void
     assert(ast_node_is_nfa(node));
 
     // nullary with type argument: alignof[T]()
-    if (node->named_application.n_arguments == 0 && node->named_application.n_type_arguments == 1) {
-        ast_node const *type_arg = node->named_application.type_arguments[0];
-        tl_monotype    *type     = null;
-
-        if (type_arg->type) {
-            type = type_arg->type->type;
-        } else if (ast_node_is_nfa(type_arg)) {
-            type = tl_type_registry_parse_type(self->registry, type_arg);
-        } else if (ast_node_is_symbol(type_arg)) {
-            tl_polytype *poly = tl_type_env_lookup(self->env, ast_node_str(type_arg));
-            if (poly) {
-                type = poly->type;
-            }
-        }
-        if (!type) fatal("alignof: could not resolve type argument");
-        update_type(self, &type);
+    tl_monotype *type = resolve_nullary_type_argument(self, node);
+    if (type) {
         str ctype = type_to_c_mono(self, type);
         return str_cat_3(self->transient, S("_Alignof("), ctype, S(")"));
+    } else if (node->named_application.n_arguments == 0) {
+        fatal("alignof: could not resolve type argument");
     }
 
     // single argument may be an expression or a type constructor
