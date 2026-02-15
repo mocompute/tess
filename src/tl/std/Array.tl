@@ -46,9 +46,8 @@ reserve[T](self: Ptr[Array[T]], alloc: Ptr[Allocator], count: Int) -> Void
 reserve[T](self: Ptr[Array[T]], count: Int)                        -> Void
 
 // Deallocate array buffer.
-// FIXME: is this valid syntax? Array with no explicit type argument
-free(self: Ptr[Array], alloc: Ptr[Allocator]) -> Void
-free(self: Ptr[Array])                        -> Void
+free(self: Ptr[Array[T]], alloc: Ptr[Allocator]) -> Void
+free(self: Ptr[Array[T]])                        -> Void
 
 // Element access (bounds-checked).
 get[T]  (arr: Array[T], index: Int) -> T
