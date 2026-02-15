@@ -1,7 +1,7 @@
 #module main
 #import <stdlib.tl>
 
-Arr(a): {v: Ptr[a], size: Int}
+Arr[a] : {v: Ptr[a], size: Int}
 
 main() {
     ints := Arr(v: Ptr[Int] = c_malloc(sizeof[Int]() * 4), size = 4)

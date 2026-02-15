@@ -38,19 +38,19 @@ Type annotations are needed when:
 
 1. **C function declarations** - The compiler cannot infer types across the FFI boundary:
    ```tl
-   c_malloc(size: CSize) -> Ptr(any)
+   c_malloc(size: CSize) -> Ptr[any]
    c_printf(fmt: CString, ...) -> CInt
    ```
 
-2. **Ambiguous pointer types** - When `c_malloc` or similar returns `Ptr(any)`:
+2. **Ambiguous pointer types** - When `c_malloc` or similar returns `Ptr[any]`:
    ```tl
-   p : Ptr(Int) := c_malloc(sizeof(Int) * 10)
+   p : Ptr[Int] := c_malloc(sizeof[Int]() * 10)
    ```
 
 3. **Functions only used through pointers** - Without a direct call site, the compiler cannot specialize:
    ```tl
    // Annotation required: malloc is only stored in a struct, never called directly
-   malloc(count: CSize) -> Ptr(Int) {
+   malloc(count: CSize) -> Ptr[Int] {
      c_malloc(count)
    }
    ```
@@ -64,11 +64,11 @@ Type annotations are needed when:
 
 ### Generic Types
 
-Types can have type parameters, written in parentheses:
+Types can have type parameters, written in square brackets:
 
 ```tl
-Point(a) : { x: a, y: a }           // One type parameter
-Map(K, V) : { keys: Ptr(K), values: Ptr(V), size: Int }  // Multiple parameters
+Point[a] : { x: a, y: a }           // One type parameter
+Map[K, V] : { keys: Ptr[K], values: Ptr[V], size: Int }  // Multiple parameters
 ```
 
 Type parameters are conventionally single lowercase letters (`a`, `b`, `T`, etc.).
@@ -83,35 +83,18 @@ swap(a, b) { (b, a) }               // Inferred: (a, b) -> (b, a)
 apply(f, x) { f(x) }                // Inferred: ((a) -> b, a) -> b
 ```
 
-### Explicit Type Signatures
+### Explicit Type Parameters
 
-Type signatures document and constrain generic functions:
-
-```tl
-// Signature as documentation (optional but helpful)
-map(f: (a) -> b, arr: Arr(a)) -> Arr(b)
-
-// Implementation (types inferred, but constrained by signature above)
-map(f, arr) {
-  // ...
-}
-```
-
-The signature reads: "`map` takes a function from `a` to `b` and an array of `a`, returning an array of `b`."
-
-### Type Parameters in Functions
-
-Functions can take type literals as arguments using `Type`:
+Generic functions declare type parameters using square brackets. Square brackets always denote type arguments; parentheses always denote value arguments:
 
 ```tl
-array_new(T: Type, count) {
-  p : Ptr(T) := c_malloc(count * sizeof(T))
-  Array(v = p, size = count)
-}
+empty[T]() -> Array[T] { ... }
+with_capacity[T](n: Int) -> Array[T] { ... }
+map[a, b](f: (a) -> b, arr: Array[a]) -> Array[b] { ... }
 
 // Usage
-a := array_new(Point(Int), 8)
-b := array_new(Rect(Float), 16)
+arr := empty[Int]()
+floats := with_capacity[Float](16)
 ```
 
 ## Monomorphization (Specialization)
@@ -126,7 +109,7 @@ id(x) { x }
 main() {
   a := id(42)       // Creates id_Int: (Int) -> Int
   b := id(3.14)     // Creates id_Float: (Float) -> Float
-  c := id("hello")  // Creates id_String: (CString) -> String
+  c := id("hello")  // Creates id_String: (CString) -> CString
 }
 ```
 
@@ -137,7 +120,7 @@ The compiler generates three specialized versions of `id`, each with concrete ty
 Generic structs are also specialized:
 
 ```tl
-Point(a) : { x: a, y: a }
+Point[a] : { x: a, y: a }
 
 main() {
   p1 := Point(x = 1, y = 2)       // Creates Point_Int
@@ -156,8 +139,8 @@ main() {
   p1 := Point(x = 1, y = 2)
   p2 := Point(x = 1.0, y = 2.0)
 
-  a := first(p1)    // Specializes first for Point(Int)
-  b := first(p2)    // Specializes first for Point(Float)
+  a := first(p1)    // Specializes first for Point[Int]
+  b := first(p2)    // Specializes first for Point[Float]
 }
 ```
 
@@ -185,11 +168,11 @@ Type annotations on functions are only required when there is no usage context t
 Type aliases create shorthand names for types:
 
 ```tl
-Pt = Point(Int)                                  // Simple alias
-StringIntMap = Collections.Map(CString, Int)  // Fully specialized alias
+Pt = Point[Int]                                  // Simple alias
+StringIntMap = Collections.Map[CString, Int]  // Fully specialized alias
 ```
 
-Aliases are expanded at compile time. `Pt` and `Point(Int)` are the same type.
+Aliases are expanded at compile time. `Pt` and `Point[Int]` are the same type.
 
 ### Partial Specialization (Not Supported)
 
@@ -197,7 +180,7 @@ Tess does not support partially specialized type aliases:
 
 ```tl
 // NOT SUPPORTED:
-StringMap(V) = Map(CString, V)   // Error: partial specialization
+StringMap[V] = Map[CString, V]   // Error: partial specialization
 ```
 
 Instead, use the full generic type or create a fully specialized alias.
@@ -208,20 +191,20 @@ User-defined types (structs, unions, enums) introduce **type constructors**.
 
 ### Built-in Type Constructors
 
-`Ptr(T)` and `Const(T)` are built-in unary type constructors. `Const(T)` is a type qualifier primarily used inside `Ptr` to express read-only pointer access: `Ptr(Const(T))`. The compiler enforces const correctness by rejecting mutation through const pointers and preventing implicit removal of const qualifiers.
+`Ptr[T]` and `Const[T]` are built-in unary type constructors. `Const[T]` is a type qualifier primarily used inside `Ptr` to express read-only pointer access: `Ptr[Const[T]]`. The compiler enforces const correctness by rejecting mutation through const pointers and preventing implicit removal of const qualifiers.
 
 ### Struct Type Constructors
 
 ```tl
-Point(a) : { x: a, y: a }
+Point[a] : { x: a, y: a }
 ```
 
-`Point` is a type constructor that takes one type argument. `Point(Int)` and `Point(Float)` are distinct concrete types.
+`Point` is a type constructor that takes one type argument. `Point[Int]` and `Point[Float]` are distinct concrete types.
 
 ### The Type Hierarchy
 
 - **Type Variables** - Placeholders during inference (`t0`, `t1`, etc.)
-- **Monotypes** - Concrete types without quantifiers (`Int`, `Point(Float)`)
+- **Monotypes** - Concrete types without quantifiers (`Int`, `Point[Float]`)
 - **Polytypes** - Type schemes with quantified variables (`forall a. a -> a`)
 
 ### Arrow Types (Function Types)
@@ -298,7 +281,7 @@ main() {
 
 ## Type Coercion
 
-TL performs limited implicit type coercion:
+Tess performs limited implicit type coercion:
 
 ### Integer Types
 
@@ -312,55 +295,55 @@ y : CLong := x      // Implicit widening
 
 Pointers can be implicitly cast:
 ```tl
-p : Ptr(Int) := c_malloc(...)
-q : Ptr(Byte) := p  // Implicit cast
+p : Ptr[Int] := c_malloc(...)
+q : Ptr[Byte] := p  // Implicit cast
 ```
 
 ### Const Pointer Coercion
 
-`Ptr(T)` implicitly coerces to `Ptr(Const(T))` (adding const is safe):
+`Ptr[T]` implicitly coerces to `Ptr[Const[T]]` (adding const is safe):
 
 ```tl
-read(p: Ptr(Const(Int))) { p.* }
+read(p: Ptr[Const[Int]]) { p.* }
 
 main() {
-  p : Ptr(Int) := c_malloc(8)
+  p : Ptr[Int] := c_malloc(8)
   p.* = 42
-  val := read(p)     // OK: Ptr(Int) -> Ptr(Const(Int))
+  val := read(p)     // OK: Ptr[Int] -> Ptr[Const[Int]]
 }
 ```
 
-The reverse is rejected — `Ptr(Const(T))` does not coerce to `Ptr(T)`:
+The reverse is rejected — `Ptr[Const[T]]` does not coerce to `Ptr[T]`:
 
 ```tl
-write(p: Ptr(Int)) { p.* = 10; 0 }
+write(p: Ptr[Int]) { p.* = 10  0 }
 
-pass(p: Ptr(Const(Int))) {
+pass(p: Ptr[Const[Int]]) {
   write(p)            // Error: cannot strip const
 }
 ```
 
 Const stripping is also rejected through nested pointer levels:
-`Ptr(Ptr(Const(T)))` cannot coerce to `Ptr(Ptr(T))`.
+`Ptr[Ptr[Const[T]]]` cannot coerce to `Ptr[Ptr[T]]`.
 
-In the generated C code, `Ptr(Const(T))` transpiles to `const T*`.
+In the generated C code, `Ptr[Const[T]]` transpiles to `const T*`.
 
 ### Const and Generic Type Parameters
 
-`Const(T)` cannot currently be used with generic type parameters. When a generic function uses the same type variable `T` in both a `Ptr(T)` and a `Ptr(Const(T))` position, unification fails because `T` would need to be both `X` and `Const(X)` simultaneously:
+`Const[T]` cannot currently be used with generic type parameters. When a generic function uses the same type variable `T` in both a `Ptr[T]` and a `Ptr[Const[T]]` position, unification fails because `T` would need to be both `X` and `Const[X]` simultaneously:
 
 ```tl
 // Does NOT work — T unifies to conflicting types:
-c_memcpy(dst: Ptr(T), src: Ptr(Const(T)), n: CSize) -> Ptr(T)
+c_memcpy(dst: Ptr[T], src: Ptr[Const[T]], n: CSize) -> Ptr[T]
 
-// Works — use Ptr(T) for both when T is generic:
-c_memcpy(dst: Ptr(T), src: Ptr(T), n: CSize) -> Ptr(T)
+// Works — use Ptr[T] for both when T is generic:
+c_memcpy(dst: Ptr[T], src: Ptr[T], n: CSize) -> Ptr[T]
 
 // Works — Const is fine with concrete types:
-c_strcmp(s1: Ptr(Const(CChar)), s2: Ptr(Const(CChar))) -> CInt
+c_strcmp(s1: Ptr[Const[CChar]], s2: Ptr[Const[CChar]]) -> CInt
 ```
 
-This is why the standard library `mem*` bindings (`c_memcpy`, `c_memmove`, `c_memcmp`, `c_memchr`) use `Ptr(T)` without `Const`, while string functions that use concrete `CChar` types include `Const` where the C headers specify `const`.
+This is why the standard library `mem*` bindings (`c_memcpy`, `c_memmove`, `c_memcmp`, `c_memchr`) use `Ptr[T]` without `Const`, while string functions that use concrete `CChar` types include `Const` where the C headers specify `const`.
 
 ### No Implicit Numeric Coercion
 
@@ -388,7 +371,7 @@ x : Float := 0.0    // OK: 0.0 is Float
 Types can reference themselves through pointers:
 
 ```tl
-Node(a) : { value: a, next: Ptr(Node(a)) }
+Node[a] : { value: a, next: Ptr[Node[a]] }
 
 // Usage
 n1 := Node(value = 1, next = null)
@@ -400,8 +383,8 @@ n2 := Node(value = 2, next = n1.&)
 Types can reference each other:
 
 ```tl
-Tree(a) : { value: a, children: Ptr(Forest(a)) }
-Forest(a) : { trees: Ptr(Tree(a)), count: Int }
+Tree[a] : { value: a, children: Ptr[Forest[a]] }
+Forest[a] : { trees: Ptr[Tree[a]], count: Int }
 ```
 
 ## Polymorphic Recursion
@@ -421,13 +404,13 @@ Both functions are specialized to `(Int) -> Bool`.
 The `any` type represents an unknown pointer type, used primarily for C interop:
 
 ```tl
-c_malloc(size: CSize) -> Ptr(any)
+c_malloc(size: CSize) -> Ptr[any]
 ```
 
-`Ptr(any)` can be assigned to any pointer type:
+`Ptr[any]` can be assigned to any pointer type:
 ```tl
-p : Ptr(Int) := c_malloc(...)     // Ptr(any) -> Ptr(Int)
-q : Ptr(Point(Float)) := c_malloc(...)
+p : Ptr[Int] := c_malloc(...)     // Ptr[any] -> Ptr[Int]
+q : Ptr[Point[Float]] := c_malloc(...)
 ```
 
 ## Type Predicates
@@ -439,7 +422,7 @@ x := 42
 x :: Int    // true if x has type Int
 
 y := get_value()
-y :: Point(Int)
+y :: Point[Int]
 y
 ```
 

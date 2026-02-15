@@ -17,12 +17,12 @@ This document provides a comprehensive analysis of the generic specialization fl
 Tess uses **monomorphization** for generics, similar to C++ templates or Rust generics. Every polymorphic function or type is specialized (instantiated) into a concrete, monomorphic version for each unique set of type arguments used at call sites.
 
 **Example:**
-```tess
-identity(x: a) -> a { x }
+```tl
+identity(x) { x }
 
 main() {
     identity(42)      // Specializes to: identity_0(x: Int) -> Int
-    identity("hello") // Specializes to: identity_1(x: CString) -> String
+    identity("hello") // Specializes to: identity_1(x: CString) -> CString
 }
 ```
 
@@ -139,7 +139,7 @@ static int post_specialize(tl_infer *self, traverse_ctx *traverse_ctx, ast_node 
 }
 ```
 
-This recursive step is crucial: when specializing `T.Some(v: Int)` (internally `T_Some`), the body contains calls like `_TUnion_(Some = ...)` that must also be specialized.
+This recursive step is crucial: when specializing a tagged union constructor like `Some(v: Int)`, the body contains nested calls like `__Option__Union_(Some = ...)` that must also be specialized.
 
 ---
 
@@ -147,32 +147,29 @@ This recursive step is crucial: when specializing `T.Some(v: Int)` (internally `
 
 ### Entry Point: `specialize_user_type()`
 
-When a type constructor is applied (e.g., `Array(Int)` or `Point(Float)`), this function handles specialization:
+When a type constructor is applied (e.g., `Array[Int]` or `Point[Float]`), this function handles specialization:
 
 ```c
 static int specialize_user_type(tl_infer *self, ast_node *node) {
-    // 1. Check for type literals
-    if (0 == type_literal_specialize(self, node)) return 0;
-
-    // 2. Must be an NFA (named function application)
+    // 1. Must be an NFA (named function application)
     if (!ast_node_is_nfa(node)) return 0;
 
     str name = node->named_application.name->symbol.name;
 
-    // 3. Check if it's a union (special handling required)
+    // 2. Check if it's a union (special handling required)
     if (is_union_struct(self, name)) {
         // Only skip non-generic unions; generic unions need specialization
         ...
     }
 
-    // 4. Collect argument types
+    // 3. Collect argument types
     tl_monotype_array arr = {.alloc = self->transient};
     // ... iterate arguments and collect concrete types ...
 
-    // 5. Specialize the type constructor
+    // 4. Specialize the type constructor
     str name_inst = specialize_type_constructor(self, name, arr_sized, &special_type);
 
-    // 6. Update the callsite to use the specialized name
+    // 5. Update the callsite to use the specialized name
     ast_node_name_replace(node->named_application.name, name_inst);
 }
 ```
@@ -236,7 +233,7 @@ static str specialize_type_constructor_(tl_infer *self, str name, tl_monotype_si
 
 The specialization system uses several data structures for caching and cycle detection:
 
-- **Instance cache**: Maps (name, type) → specialized name to avoid duplicate specializations
+- **Instance cache**: Maps (name, type) -> specialized name to avoid duplicate specializations
 - **Seen set**: Tracks types currently being specialized to prevent infinite recursion
 - **Toplevel map**: Stores all function and type definitions, including specialized ones
 

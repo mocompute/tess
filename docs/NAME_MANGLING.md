@@ -10,8 +10,7 @@ This document describes the name mangling system in the Tess compiler. Name mang
 4. [Generic Specialization Naming](#generic-specialization-naming)
 5. [Two-Pass Parsing](#two-pass-parsing)
 6. [Key Data Structures](#key-data-structures)
-7. [Function Reference](#function-reference)
-8. [Examples](#examples)
+7. [Examples](#examples)
 
 ---
 
@@ -22,8 +21,8 @@ The Tess compiler uses three distinct types of name mangling, applied in sequenc
 | Stage | Purpose | Format | Example |
 |-------|---------|--------|---------|
 | 1. Arity | Function overloading by parameter count | `name__N` | `add__2` |
-| 2. Module | Namespace separation | `Module_name` | `Math_add__2` |
-| 3. Specialization | Unique names for monomorphized generics | `name_N` | `Math_add__2_0` |
+| 2. Module | Namespace separation | `Module__name` | `Math__add__2` |
+| 3. Specialization | Unique names for monomorphized generics | `name_N` | `Math__add__2_0` |
 
 ### Order of Operations
 
@@ -36,10 +35,10 @@ Source: Math.add/2       (user syntax for function pointer)
 Arity:  Math.add__2      (internal arity format)
      |
      v
-Module: Math_add__2      (module prefix applied)
+Module: Math__add__2     (module prefix applied)
      |
      v
-Specialization: Math_add__2_0   (if generic, specialized instance)
+Specialization: Math__add__2_0   (if generic, specialized instance)
 ```
 
 ### What Gets Mangled
@@ -88,43 +87,6 @@ The compiler transforms `/N` syntax to the internal `__N` format:
 | `process/1` | `process__1` |
 | `init/0` | `init__0` |
 
-### Key Functions
-
-**`unmangle_arity()`** (`parser.c:1620`)
-Parses user `/N` syntax and returns the arity, or -1 if not arity-qualified.
-
-```c
-static int unmangle_arity(str name) {
-    // Returns -1 if name is not mangled with format `foo/X`
-    // Otherwise returns X (range 0-255)
-    char const *p = strrchr(s, '/');
-    // ... validation and parsing ...
-}
-```
-
-**`mangle_str_for_arity()`** (`parser.c:1709`)
-Converts a name to internal arity format.
-
-```c
-str mangle_str_for_arity(allocator *alloc, str name, u8 arity) {
-    return str_fmt(alloc, "%s__%i", str_cstr(&name), (int)arity);
-}
-```
-
-**`mangle_name_for_arity()`** (`parser.c:1741`)
-Applies arity mangling to an AST node, with special case handling.
-
-```c
-static void mangle_name_for_arity(parser *self, ast_node *name, u8 arity, int is_definition) {
-    if (!ast_node_is_symbol(name)) return;
-    if (str_eq(name_str, S("main"))) return;        // Never mangle main
-    if (is_c_symbol(name_str)) return;               // Never mangle c_* symbols
-    // For calls (not definitions), only mangle known module functions
-    if (!is_definition && !symbol_is_module_function(self, name, arity)) return;
-    ast_node_name_replace(name, mangle_str_for_arity(...));
-}
-```
-
 ### Special Cases
 
 The following are **never arity-mangled**:
@@ -150,58 +112,25 @@ Module mangling prevents name collisions between modules by prefixing names with
 ### Format
 
 ```
-Module_name
+Module__name
 ```
 
 Examples:
-- `Math.add` → `Math_add`
-- `Array.push` → `Array_push`
-- `Alloc.alloc` → `Alloc_alloc`
+- `Math.add` → `Math__add`
+- `Array.push` → `Array__push`
+- `Alloc.alloc` → `Alloc__alloc`
 
-### Key Functions
+Dotted module names have dots replaced with `__`:
+- `Array.Indexed.iter_init` → `Array__Indexed__iter_init`
 
-**`mangle_str_for_module()`** (`parser.c:1705`)
+### Key Function
+
+**`mangle_str_for_module()`** (parser.c)
 
 ```c
 static str mangle_str_for_module(parser *self, str name, str module) {
-    return str_cat_3(self->ast_arena, module, S("_"), name);
-}
-```
-
-**`mangle_name_for_module()`** (`parser.c:1729`)
-
-```c
-static void mangle_name_for_module(parser *self, ast_node *name, str module) {
-    if (ast_node_is_symbol(name) && !str_is_empty(module)) {
-        ast_node_name_replace(name, mangle_str_for_module(self, name->symbol.name, module));
-        name->symbol.is_mangled = 1;
-        name->symbol.module     = str_copy(self->ast_arena, module);
-    }
-}
-```
-
-**`mangle_name()`** (`parser.c:1763`)
-Main entry point for module mangling, with all special case checks.
-
-```c
-static void mangle_name(parser *self, ast_node *name) {
-    // Skip if no current module (we're in `main` module)
-    if (str_is_empty(self->current_module)) return;
-    // Skip if already mangled
-    if (name->symbol.is_mangled) return;
-    // Skip intrinsics (_tl_*)
-    if (is_intrinsic(name->symbol.name)) return;
-    // Skip known types
-    if (tl_type_registry_get(self->opts.registry, name_str)) return;
-    // Skip c_* symbols
-    if (is_c_symbol(name_str)) return;
-    // Skip builtin module symbols
-    if (str_eq(self->current_module, S("builtin"))) return;
-    if (str_hset_contains(self->builtin_module_symbols, name_str)) return;
-    // Skip symbols not defined in current module
-    if (!str_hset_contains(self->current_module_symbols, name_str)) return;
-
-    mangle_name_for_module(self, name, self->current_module);
+    str safe_module = str_replace_char_str(self->ast_arena, module, '.', S("__"));
+    return str_cat_3(self->ast_arena, safe_module, S("__"), name);
 }
 ```
 
@@ -224,14 +153,14 @@ When referencing a symbol from another module:
 #import <Math.tl>
 
 main() {
-    Math.add(1, 2)     // Becomes Math_add__2(1, 2)
+    Math.add(1, 2)     // Becomes Math__add__2(1, 2)
 }
 ```
 
 The parser resolves `Math.add` by:
 1. Looking up `Math` in `module_symbols`
 2. Finding the arity-mangled name `add__2` in that module's symbol table
-3. Applying module prefix: `Math_add__2`
+3. Applying module prefix: `Math__add__2`
 
 ### Nested Type Dot Syntax
 
@@ -239,21 +168,21 @@ The dot operator is also used to access nested types (nested structs and tagged 
 
 1. Checking if the left side is a known module (handled by module mangling above)
 2. If not, checking if the left side's original name is in `nested_type_parents`
-3. Verifying the candidate child name (`Type_Child`) exists in the appropriate module's symbol table
+3. Verifying the candidate child name (`Type__Child`) exists in the appropriate module's symbol table
 4. If verified, rewriting to the mangled form and applying module prefix if cross-module
 
 **Same-module example:**
 ```tl
 Shape : | Circle { radius: Float } | Square { length: Float }
-c := Shape.Circle(radius = 2.0)     // Resolves to Shape_Circle(...)
+c := Shape.Circle(radius = 2.0)     // Resolves to Shape__Circle(...)
 ```
 
 **Cross-module chained dots:**
 ```tl
 c := Mod.Shape.Circle(radius = 2.0)
-// Step 1: Mod.Shape → Mod_Shape (module mangling)
-// Step 2: Mod_Shape.Circle → checks "Shape" in nested_type_parents
-//         → builds Shape_Circle → applies module "Mod" → Mod_Shape_Circle
+// Step 1: Mod.Shape → Mod__Shape (module mangling)
+// Step 2: Mod__Shape.Circle → checks "Shape" in nested_type_parents
+//         → builds Shape__Circle → applies module "Mod" → Mod__Shape__Circle
 ```
 
 ---
@@ -270,19 +199,6 @@ name_N
 
 Where `N` is a monotonically increasing counter.
 
-### Key Function
-
-**`next_instantiation()`** (`infer.c:3092`)
-
-```c
-static str next_instantiation(tl_infer *self, str name) {
-    char buf[128];
-    snprintf(buf, sizeof buf, "%.*s_%u", str_ilen(name), str_buf(&name),
-             self->next_instantiation++);
-    return str_init(self->arena, buf);
-}
-```
-
 ### Instance Caching
 
 To avoid creating duplicate specializations, the compiler maintains an instance cache:
@@ -291,22 +207,12 @@ To avoid creating duplicate specializations, the compiler maintains an instance 
 hashmap *instances;      // (name_hash, type_hash) => specialized_name
 ```
 
-Before creating a new specialization, `instance_lookup_arrow()` checks if this combination of function name and concrete type already exists:
-
-```c
-static str *instance_lookup_arrow(tl_infer *self, str generic_name, tl_monotype *arrow) {
-    name_and_type key = {
-        .name_hash = str_hash64(generic_name),
-        .type_hash = tl_monotype_hash64(arrow),
-    };
-    return instance_lookup(self, &key);
-}
-```
+Before creating a new specialization, `instance_lookup_arrow()` checks if this combination of function name and concrete type already exists.
 
 ### Example
 
 ```tl
-identity(x: a) -> a { x }
+identity(x) { x }
 
 main() {
     identity(42)        // Creates identity_0 : Int -> Int
@@ -408,28 +314,6 @@ This ensures that after all mangling stages, the original source name is still a
 
 ---
 
-## Function Reference
-
-| Function | File | Line | Purpose |
-|----------|------|------|---------|
-| `unmangle_arity` | parser.c | 1620 | Parse user `/N` syntax |
-| `unmangle_arity_qualified_name` | parser.c | 1636 | Extract name from arity-qualified symbol |
-| `unmangle_name` | parser.c | 1646 | Restore original name from mangled |
-| `symbol_is_module_function` | parser.c | 1663 | Check if symbol is a module function |
-| `mangle_str_for_module` | parser.c | 1705 | Create module-prefixed string |
-| `mangle_str_for_arity` | parser.c | 1709 | Create arity-suffixed string |
-| `mangle_name_for_module` | parser.c | 1729 | Apply module mangling to AST node |
-| `mangle_name_for_arity` | parser.c | 1741 | Apply arity mangling to AST node |
-| `mangle_name` | parser.c | 1763 | Main module mangling entry point |
-| `ast_node_name_replace` | ast.c | 455 | Replace name, preserving original |
-| `next_instantiation` | infer.c | 3092 | Generate unique specialization name |
-| `instance_lookup_arrow` | infer.c | 2167 | Look up cached specialization |
-| `instance_add` | infer.c | 2181 | Cache a new specialization |
-| `is_c_symbol` | infer.c | 4101 | Check for `c_` prefix |
-| `is_intrinsic` | infer.c | 4097 | Check for `_tl_` prefix |
-
----
-
 ## Examples
 
 ### Arity Overloading
@@ -441,16 +325,16 @@ add(a, b) { a + b }
 add(a, b, c) { a + b + c }
 
 main() {
-    Math.add(1, 2)       // Calls Math_add__2
-    Math.add(1, 2, 3)    // Calls Math_add__3
+    Math.add(1, 2)       // Calls Math__add__2
+    Math.add(1, 2, 3)    // Calls Math__add__3
 
-    fp := Math.add/2     // Function pointer to Math_add__2
+    fp := Math.add/2     // Function pointer to Math__add__2
 }
 ```
 
 Generated C names:
-- `add(a, b)` → `Math_add__2`
-- `add(a, b, c)` → `Math_add__3`
+- `add(a, b)` → `Math__add__2`
+- `add(a, b, c)` → `Math__add__3`
 
 ### Cross-Module Calls
 
@@ -465,7 +349,7 @@ push(arr, val) { ... }
 
 main() {
     arr := Array.create()
-    Array.push(arr, 42)    // Calls Array_push__2
+    Array.push(arr, 42)    // Calls Array__push__2
 }
 ```
 
@@ -474,17 +358,17 @@ main() {
 ```tl
 #module Utils
 
-identity(x: a) -> a { x }
-swap(a: t, b: t) -> (t, t) { (b, a) }
+identity(x) { x }
+swap(a, b) { (b, a) }
 
 // main.tl
 #module main
 #import <Utils.tl>
 
 main() {
-    Utils.identity(42)       // Creates Utils_identity__1_0 : Int -> Int
-    Utils.identity("hi")     // Creates Utils_identity__1_1 : CString -> CString
-    Utils.swap(1, 2)         // Creates Utils_swap__2_0 : (Int, Int) -> (Int, Int)
+    Utils.identity(42)       // Creates Utils__identity__1_0 : Int -> Int
+    Utils.identity("hi")     // Creates Utils__identity__1_1 : CString -> CString
+    Utils.swap(1, 2)         // Creates Utils__swap__2_0 : (Int, Int) -> (Int, Int)
 }
 ```
 
@@ -518,19 +402,17 @@ Tagged unions generate internal helper types that also get mangled:
 ```tl
 #module Types
 
-Option(a) : | Some { v: a } | None
+Option[a] : | Some { v: a } | None
 
 // User syntax for constructors:
 //   Types.Option.Some(v = 42)
 //   Types.Option.None()
 //
 // Generated internal names:
-// Option_Some  → Types_Option_Some   (constructor function)
-// Option_None  → Types_Option_None   (constructor function)
-// _OptionTag_  → Types__OptionTag_   (tag enum)
-// _OptionUnion_ → Types__OptionUnion_ (internal union)
+// Option__Some     → Types__Option__Some   (variant struct, scoped)
+// Option__None     → Types__Option__None   (variant struct, scoped)
+// __Option__Tag_   → Types____Option__Tag_ (tag enum)
+// __Option__Union_ → Types____Option__Union_ (internal union)
 ```
 
-The dot syntax `Type.Variant` is desugared to the underscore form `Type_Variant` during parsing, before module mangling is applied.
-
-See [TAGGED_UNIONS.md](TAGGED_UNIONS.md) for details on tagged union implementation.
+The dot syntax `Type.Variant` is desugared to `Type__Variant` during parsing, before module mangling is applied.
