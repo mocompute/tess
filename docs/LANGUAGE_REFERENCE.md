@@ -990,6 +990,40 @@ when s.& {
 
 Use the `.&` suffix on the scrutinee to get pointers to each variant. This is the same syntax used to access mutable iterators with the `for` statement.
 
+### Unwrap-or-bail *(not yet implemented)*
+
+When you need a single variant's value for the rest of a scope, use the bail form to unwrap it or exit early:
+
+```tl
+s: MySome := val else { return 0 }
+// s is available for the rest of the scope
+s.v + 1
+```
+
+The `else` block must diverge (`return`, `break`, or `continue`). This avoids trapping the unwrapped value inside a `when` arm when subsequent code needs it:
+
+```tl
+// Without bail — value is trapped inside the arm
+when val {
+    s: MySome { use(s.v) }
+    n: MyNone { return 0 }
+}
+// can't use s here
+
+// With bail — value available in the rest of the scope
+s: MySome := val else { return 0 }
+use(s.v)
+```
+
+For the conditional case (doing different things per variant), use `when` with `else`:
+
+```tl
+when val {
+    s: MySome { s.v + 1 }
+    else { fallback }
+}
+```
+
 ## Pointers
 
 ### Address-of and Dereference
