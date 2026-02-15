@@ -35,7 +35,7 @@ static void init_small(str *out, char const *in, size_t len) {
 
     out->small.tag = STR_SMALL;
     out->small.len = len;
-    memcpy(out->small.buf, in, len);
+    if (len) memcpy(out->small.buf, in, len);
 }
 
 static int is_small(str self) {
