@@ -246,6 +246,7 @@ _BumpHeader_create(alloc, capacity) {
     out
 }
 
+// Intentionally duplicates bucket-walk logic from _bump_aligned_alloc to avoid padding overhead on the common path.
 _bump_malloc(a: Ptr[Allocator], sz: CSize) -> Ptr[any] {
     arena: Ptr[BumpAllocator] := a
 
@@ -279,6 +280,7 @@ _bump_malloc(a: Ptr[Allocator], sz: CSize) -> Ptr[any] {
     _bump_alloc_assume_capacity(bucket, sz)
 }
 
+// In-place resize logic intentionally duplicated from _bump_resize to avoid a double _find_bucket walk.
 _bump_realloc(a: Ptr[Allocator], p: Ptr[any], sz: CSize) -> Ptr[any] {
     if p == null { return _bump_malloc(a, sz) }
 
@@ -342,6 +344,8 @@ _bump_free(a: Ptr[Allocator], p: Ptr[any]) -> Void {
     }
 }
 
+// Intentionally duplicates bucket-walk logic from _bump_malloc to interleave alignment padding with bucket
+// selection.
 _bump_aligned_alloc(a: Ptr[Allocator], sz: CSize, alignment: CSize) -> Ptr[any] {
     if alignment <= _tl_sizeof_(c_max_align_t) {
         return _bump_malloc(a, sz)
@@ -390,6 +394,7 @@ _bump_aligned_alloc(a: Ptr[Allocator], sz: CSize, alignment: CSize) -> Ptr[any] 
     _bump_alloc_assume_capacity(bucket, sz)
 }
 
+// In-place resize logic intentionally duplicated from _bump_realloc to avoid a double _find_bucket walk.
 _bump_resize(a: Ptr[Allocator], p: Ptr[any], sz: CSize) -> Ptr[any] {
     if p == null { return null }
 
