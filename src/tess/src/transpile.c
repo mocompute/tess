@@ -848,6 +848,13 @@ static int should_assign_result(eval_ctx *ctx, tl_monotype *type) {
     return !ctx->is_effective_void && !is_nil_result(type);
 }
 
+// Returns 1 if the node represents a value that should be assigned.
+// ast_void means "declare without initialising", so it is the only
+// node kind that suppresses the assignment.
+static int should_assign_value(ast_node const *node) {
+    return !ast_node_is_void(node);
+}
+
 static str generate_funcall_result(transpile *self, tl_monotype *type) {
     assert(tl_monotype_is_list(type));
     tl_monotype *funcall_result_type = tl_monotype_sized_last(type->list.xs);
@@ -1132,7 +1139,7 @@ static str generate_let_in(transpile *self, tl_monotype *result_type, ast_node c
 
     if (type) {
 
-        if (ast_node_is_void(node->let_in.value)) {
+        if (!should_assign_value(node->let_in.value)) {
             // binding a symbol to void means to declare it without initialising it
             generate_decl(self, name, type);
         } else {
@@ -1157,7 +1164,7 @@ static str generate_let_in(transpile *self, tl_monotype *result_type, ast_node c
 
                     // Note: special case: if we are assigning to a pointer type, cast the rhs to that type.
                     // This allows C pointer casts without a warning.
-                    if (!ast_node_is_void(node->let_in.value)) {
+                    if (should_assign_value(node->let_in.value)) {
                         if (tl_monotype_is_ptr(type)) {
                             cat(self, name);
                             cat_assign(self);
@@ -1182,7 +1189,7 @@ static str generate_let_in(transpile *self, tl_monotype *result_type, ast_node c
                 if (is_c_symbol(value) || !tl_monotype_is_arrow(type)) {
 
                     generate_decl(self, name, type);
-                    if (!ast_node_is_void(node->let_in.value)) generate_assign(self, name, value);
+                    if (should_assign_value(node->let_in.value)) generate_assign(self, name, value);
                 }
             }
         }
@@ -1192,7 +1199,7 @@ static str generate_let_in(transpile *self, tl_monotype *result_type, ast_node c
     if (!str_is_empty(body) && should_assign_result(ctx, result_type)) {
         str res = next_res(self);
         generate_decl(self, res, result_type);
-        if (!ast_node_is_nil_or_void(node->let_in.body)) generate_assign(self, res, body);
+        if (should_assign_value(node->let_in.body)) generate_assign(self, res, body);
         return res;
     } else {
         return body;
