@@ -76,6 +76,12 @@ defslice(c_string_cslice, char const *);
         array_free_impl((array_t *)&(p), (p).v);                                                           \
     } while (0)
 
+#define array_reset(p)                                                                                     \
+    do {                                                                                                   \
+        static_assert(sizeof(p) >= sizeof(array_t), "not an array");                                       \
+        array_reset_impl((array_t *)&(p), (p).v);                                                          \
+    } while (0)
+
 #define array_copy(p, s)                                                                                   \
     do {                                                                                                   \
         static_assert(sizeof((s).v[0]) == sizeof((p).v[0]), "size mismatch");                              \
@@ -224,6 +230,7 @@ nodiscard void *array_shrink_impl(array_t *h, void *, u32, u16);
 void            array_erase_impl(array_t *h, void *ptr, u32 index, u32, u16);
 void            array_sized_erase_impl(array_sized_t *, void *, u32, u32, u16);
 void            array_free_impl(array_t *, void *);
+void            array_reset_impl(array_t *, void *);
 
 // -- array set operations --
 

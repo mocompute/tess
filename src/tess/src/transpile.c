@@ -12,6 +12,7 @@
 #include "type_registry.h"
 
 #include <stdarg.h>
+#include <stdint.h>
 #include <stdio.h>
 
 #define TRANSPILE_ARENA_SIZE     32 * 1024
@@ -40,7 +41,8 @@ struct transpile {
 
     str_build         build;
 
-    u32               next_res;
+    u64               next_block;
+    u64               next_res;
 
     int               no_line_directive;
     int               verbose;
@@ -529,7 +531,7 @@ static void generate_context_struct(transpile *self, str_sized fvs) {
 
 static str generate_ctx_var(transpile *self) {
     char buf[80];
-    snprintf(buf, sizeof buf, "tl_ctx_var_%u", self->next_res++);
+    snprintf(buf, sizeof buf, "tl_ctx_var_%" PRIu64, self->next_res++);
     str out = str_init(self->transient, buf);
     cat(self, out);
     return out;
@@ -1357,6 +1359,15 @@ static str generate_body(transpile *self, tl_monotype *type, ast_node const *nod
     forall(i, node->body.expressions) {
         out = generate_expr(self, null, node->body.expressions.v[i], ctx);
     }
+
+    // emit defers in reverse order
+    if (node->body.defers.size) {
+        if (node->body.defers.size > INT32_MAX) fatal("overflow");
+        for (i32 i = (i32)node->body.defers.size - 1; i >= 0; i--) {
+            (void)generate_expr(self, null, node->body.defers.v[i], ctx);
+        }
+    }
+
     return out;
 }
 
@@ -2297,6 +2308,7 @@ transpile *transpile_create(allocator *alloc, transpile_opts const *opts) {
     self->context_generated = hset_create(self->arena, 64);
 
     self->next_res          = 0;
+    self->next_block        = 0;
 
     self->no_line_directive = !!opts->no_line_directive;
     self->verbose           = !!opts->verbose;
@@ -2327,13 +2339,13 @@ void transpile_get_arena_stats(transpile *self, arena_stats *out) {
 
 static str next_res(transpile *self) {
     char buf[64];
-    int  len = snprintf(buf, sizeof buf, "tl_res%u", self->next_res++);
+    int  len = snprintf(buf, sizeof buf, "tl_res%" PRIu64, self->next_res++);
     return str_init_n(self->transient, buf, len);
 }
 
 static str next_label(transpile *self) {
     char buf[64];
-    int  len = snprintf(buf, sizeof buf, "tl_label%u", self->next_res++);
+    int  len = snprintf(buf, sizeof buf, "tl_label%" PRIu64, self->next_block++);
     return str_init_n(self->transient, buf, len);
 }
 

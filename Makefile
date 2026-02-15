@@ -374,6 +374,7 @@ TL_TESTS =					\
 	conditional_compile_import		\
 	conditional_compile_nested		\
 	const					\
+	defer					\
 	defun_inline_type			\
 	dynamic_array				\
 	embed_c					\

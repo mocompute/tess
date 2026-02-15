@@ -111,8 +111,8 @@
 (defconst tl-font-lock-keywords
   (let* (
          ;; Keywords
-         (keywords '("if" "else" "case" "when" "while" "for" "return"
-                     "void" "null" "true" "false" "Type" "Void" "any"))
+         (keywords '("if" "else" "case" "when" "defer" "while" "for" "return"
+                     "void" "null" "true" "false" "Void" "any"))
 
          ;; Built-in functions
          (builtins '("sizeof" "alignof"))

@@ -86,6 +86,7 @@ ast_node *ast_node_create_attribute_set(allocator *alloc, ast_node_sized nodes) 
 ast_node *ast_node_create_body(allocator *alloc, ast_node_sized body) {
     ast_node *self         = ast_node_create(alloc, ast_body);
     self->body.expressions = body;
+    self->body.defers      = (ast_node_sized){0};
     return self;
 }
 
@@ -463,6 +464,12 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
         clone->body.expressions.size = orig->body.expressions.size;
         forall(i, clone->body.expressions) {
             clone->body.expressions.v[i] = ast_node_clone(alloc, orig->body.expressions.v[i]);
+        }
+
+        clone->body.defers.v    = alloc_malloc(alloc, orig->body.defers.size * sizeof(ast_node *));
+        clone->body.defers.size = orig->body.defers.size;
+        forall(i, clone->body.defers) {
+            clone->body.defers.v[i] = ast_node_clone(alloc, orig->body.defers.v[i]);
         }
     } break;
 
@@ -1482,10 +1489,8 @@ u64 ast_node_hash(ast_node const *self) {
         break;
 
     case ast_body:
-        //
-        forall(i, self->body.expressions) {
-            combine_node(self->body.expressions.v[i]);
-        }
+        forall(i, self->body.expressions) combine_node(self->body.expressions.v[i]);
+        forall(i, self->body.defers) combine_node(self->body.defers.v[i]);
         break;
 
     case ast_case:

@@ -2481,6 +2481,10 @@ static int traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, trave
             ctx->node_pos = npos_operand;
             if (traverse_ast(self, ctx, node->body.expressions.v[i], cb)) return 1;
         }
+        forall(i, node->body.defers) {
+            ctx->node_pos = npos_operand;
+            if (traverse_ast(self, ctx, node->body.defers.v[i], cb)) return 1;
+        }
         if (cb(self, ctx, node)) return 1;
         break;
 
@@ -4785,9 +4789,12 @@ static void rename_variables(tl_infer *self, ast_node *node, rename_variables_ct
         break;
 
     case ast_body:
-        //
+
         forall(i, node->body.expressions) {
             rename_variables(self, node->body.expressions.v[i], ctx, level + 1);
+        }
+        forall(i, node->body.defers) {
+            rename_variables(self, node->body.defers.v[i], ctx, level + 1);
         }
         break;
 
@@ -5732,10 +5739,15 @@ static int check_unresolved_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_n
 
     if (ast_node_is_let_in(node) && !tl_monotype_is_arrow(node->let_in.value->type->type)) {
         if (!tl_polytype_is_concrete(node->let_in.name->type)) {
-            unresolved_type_error(self, node->let_in.name);
+            // try substitute again before error
+            tl_polytype_substitute(self->arena, node->let_in.name->type, self->subs);
+            if (!tl_polytype_is_concrete(node->let_in.name->type))
+                unresolved_type_error(self, node->let_in.name);
         }
     } else if (ast_node_is_reassignment(node) && !tl_polytype_is_concrete(node->type)) {
-        unresolved_type_error(self, node);
+        // try substitute again before error
+        tl_polytype_substitute(self->arena, node->type, self->subs);
+        if (!tl_polytype_is_concrete(node->type)) unresolved_type_error(self, node);
     }
 
     return 0;
