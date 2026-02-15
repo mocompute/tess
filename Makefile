@@ -418,6 +418,7 @@ TL_TESTS =					\
 	module_basic				\
 	module_init				\
 	module_nested				\
+	module_prelude				\
 	mutual_recursion			\
 	mutual_recursion_module			\
 	mutual_recursion_module_apply		\
