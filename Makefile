@@ -524,6 +524,14 @@ TL_TESTS =					\
 	union_basic				\
 	union_module_intermediate		\
 	union_module_second_variant		\
+	stress_closures				\
+	stress_control_flow			\
+	stress_deep_nesting			\
+	stress_expression_position		\
+	stress_generic_types			\
+	stress_scope_shadow			\
+	stress_type_features			\
+	stress_when_combinations		\
 	while_break				\
 	while_continue				\
 	while_statement				\
@@ -575,6 +583,9 @@ TL_KNOWN_FAIL_FAILURES =
 
 # Tests that should work but currently fail due to compiler bugs
 TL_KNOWN_FAILURES =				\
+	closure_in_named_function		\
+	deref_then_addr				\
+	forward_ref_tagged_union		\
 	lambda_immediate_type_argument		\
 	while_empty_body
 
