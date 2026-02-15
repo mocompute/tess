@@ -201,9 +201,10 @@ $(BUILD_DIR)/libdeflate/%.o: $(LIBDEFLATE_DIR)/%.c
 
 TESS_EXE_SRC = $(TESS_SRC_DIR)/src/tess_exe.c
 TESS_EXE_OBJ = $(BUILD_DIR)/tess_exe.o
-TESS_EXE     = tess
+TESS_EXE     = $(BUILD_DIR)/bin/tess
 
 $(TESS_EXE): $(TESS_EXE_OBJ) $(TESS_OBJECTS) $(TESS_EMBED_OBJ) $(MOS_OBJECTS) $(LIBDEFLATE_OBJECTS)
+	@mkdir -p $(dir $@)
 	$(MSG_LD) $@
 	$(Q)$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $^
 
@@ -217,14 +218,17 @@ $(TESS_EXE_OBJ): $(TESS_EXE_SRC) $(VERSION_HEADER)
 # Default Target
 # ------------------------------------------------------------------------------
 
-all: $(TESS_EXE)
+all: $(TESS_EXE) tess
+
+tess: $(TESS_EXE)
+	$(Q)cp $< $@
 
 # ------------------------------------------------------------------------------
 # Installation
 # ------------------------------------------------------------------------------
 
 install: $(TESS_EXE)
-	install -D -m 755 $(TESS_EXE) $(INSTALL_BIN)/$(TESS_EXE)
+	install -D -m 755 $(TESS_EXE) $(INSTALL_BIN)/tess
 	@mkdir -p $(INSTALL_LIB)/std
 	find src/tl/std -name '*.tl' -exec install -D -m 644 {} $(INSTALL_LIB)/std/ \;
 
@@ -233,10 +237,10 @@ install: $(TESS_EXE)
 # ------------------------------------------------------------------------------
 
 clean:
-	rm -rf $(BUILD_DIR) $(TESS_EXE)
+	rm -rf $(BUILD_DIR) tess
 
 cleanall:
-	rm -rf build-release build-debug build-asan $(TESS_EXE)
+	rm -rf build-release build-debug build-asan tess
 
 # ==============================================================================
 # Tests
