@@ -89,6 +89,7 @@ typedef struct {
     double update_types_ast_ms;     // AST traverse pass
     u32    update_types_env_count;   // env entries processed
     u32    update_types_type_cons_calls; // specialize_type_constructor_ calls during Phase 7
+    u32    update_types_type_cons_skipped; // skipped (already specialized, no args changed)
 } tl_infer_counters;
 
 void                       tl_infer_set_report_stats(tl_infer *, int);

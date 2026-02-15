@@ -1643,7 +1643,8 @@ done:
                 ic->update_types_env_ms, ic->update_types_env_count);
         fprintf(stderr, "AST traverse pass:         %.3f ms  (%u toplevels)\n",
                 ic->update_types_ast_ms, ic->traverse_update_types_calls);
-        fprintf(stderr, "Type constructor calls:     %u\n", ic->update_types_type_cons_calls);
+        fprintf(stderr, "Type constructor calls:     %u (skipped: %u)\n",
+                ic->update_types_type_cons_calls, ic->update_types_type_cons_skipped);
         fprintf(stderr, "\n");
     }
 

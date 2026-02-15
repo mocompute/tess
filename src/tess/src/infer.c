@@ -191,7 +191,7 @@ tl_infer        *tl_infer_create(allocator *alloc, tl_infer_opts const *opts) {
     self->indent_level       = 0;
     self->is_constrain_ignore_error = 0;
 
-    self->report_stats       = 0;
+    self->report_stats              = 0;
     alloc_zero(&self->phase_stats);
     alloc_zero(&self->counters);
 
@@ -1049,7 +1049,10 @@ static int constrain(tl_infer *self, tl_polytype *left, tl_polytype *right, ast_
     }
 
     hires_timer ct;
-    if (self->report_stats) { hires_timer_init(&ct); hires_timer_start(&ct); }
+    if (self->report_stats) {
+        hires_timer_init(&ct);
+        hires_timer_start(&ct);
+    }
 
     tl_monotype *lhs = null, *rhs = null;
 
@@ -3896,7 +3899,7 @@ static int post_specialize(tl_infer *self, traverse_ctx *traverse_ctx, ast_node 
     ast_node *infer_target = get_infer_target(special);
     if (infer_target) {
         hires_timer st;
-        int stats = self->report_stats;
+        int         stats = self->report_stats;
 
         // set result type into traverse_ctx
         if (callsite) {
@@ -3904,17 +3907,26 @@ static int post_specialize(tl_infer *self, traverse_ctx *traverse_ctx, ast_node 
             traverse_ctx->result_type = result_type;
         }
         if (stats) self->counters.traverse_infer_calls++;
-        if (stats) { hires_timer_init(&st); hires_timer_start(&st); }
+        if (stats) {
+            hires_timer_init(&st);
+            hires_timer_start(&st);
+        }
         if (traverse_ast(self, traverse_ctx, infer_target, infer_traverse_cb)) {
             dbg(self, "note: post_specialize failed infer");
             return 1;
         }
-        if (stats) { hires_timer_stop(&st); self->counters.specialize_infer_ms += hires_timer_elapsed_sec(&st) * 1000.0; }
+        if (stats) {
+            hires_timer_stop(&st);
+            self->counters.specialize_infer_ms += hires_timer_elapsed_sec(&st) * 1000.0;
+        }
 
         // Apply substitutions to AST before specialization, so types are concrete
         if (stats) hires_timer_start(&st);
         apply_subs_to_ast_node(self, infer_target);
-        if (stats) { hires_timer_stop(&st); self->counters.specialize_subs_ms += hires_timer_elapsed_sec(&st) * 1000.0; }
+        if (stats) {
+            hires_timer_stop(&st);
+            self->counters.specialize_subs_ms += hires_timer_elapsed_sec(&st) * 1000.0;
+        }
 
         if (stats) self->counters.traverse_specialize_calls++;
         if (stats) hires_timer_start(&st);
@@ -3922,7 +3934,10 @@ static int post_specialize(tl_infer *self, traverse_ctx *traverse_ctx, ast_node 
             dbg(self, "note: post_specialize failed specialize");
             return 1;
         }
-        if (stats) { hires_timer_stop(&st); self->counters.specialize_recurse_ms += hires_timer_elapsed_sec(&st) * 1000.0; }
+        if (stats) {
+            hires_timer_stop(&st);
+            self->counters.specialize_recurse_ms += hires_timer_elapsed_sec(&st) * 1000.0;
+        }
 
 #if DEBUG_INVARIANTS
         // Invariant: After specialization, all specialized NFA type arguments must be concrete
@@ -3977,7 +3992,10 @@ static str  specialize_arrow(tl_infer *self, traverse_ctx *traverse_ctx, str nam
 
     // 4. Clone generic function's AST
     hires_timer st;
-    if (self->report_stats) { hires_timer_init(&st); hires_timer_start(&st); }
+    if (self->report_stats) {
+        hires_timer_init(&st);
+        hires_timer_start(&st);
+    }
     ast_node *generic_node =
       clone_generic_for_arrow(self, toplevel, arrow, inst_name,
                               traverse_ctx ? traverse_ctx->type_arguments : null, callsite_type_arguments);
@@ -5483,6 +5501,10 @@ tl_monotype *tl_infer_update_specialized_type_(tl_infer *self, tl_monotype *mono
             }
         }
         str_hset_remove(*in_progress, generic_name);
+        if (!did_replace) {
+            if (self->report_stats) self->counters.update_types_type_cons_skipped++;
+            return null;
+        }
 
         tl_polytype *replace = null;
         if (self->report_stats) self->counters.update_types_type_cons_calls++;
@@ -5659,10 +5681,13 @@ static int update_types_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_node 
 
 static void update_specialized_types(tl_infer *self) {
     update_types_ctx ctx = {.in_progress = hset_create(self->transient, 64)};
-    hires_timer ut;
-    int stats = self->report_stats;
+    hires_timer      ut;
+    int              stats = self->report_stats;
 
-    if (stats) { hires_timer_init(&ut); hires_timer_start(&ut); }
+    if (stats) {
+        hires_timer_init(&ut);
+        hires_timer_start(&ut);
+    }
 
     // Snapshot the env keys before iterating. update_types_one_type may trigger
     // specialize_type_constructor_ which inserts new entries into the env. Robin Hood
@@ -5679,7 +5704,10 @@ static void update_specialized_types(tl_infer *self) {
     }
     array_free(env_keys);
 
-    if (stats) { hires_timer_stop(&ut); self->counters.update_types_env_ms = hires_timer_elapsed_sec(&ut) * 1000.0; }
+    if (stats) {
+        hires_timer_stop(&ut);
+        self->counters.update_types_env_ms = hires_timer_elapsed_sec(&ut) * 1000.0;
+    }
 
     // NOTE: this is an expensive traverse
     if (stats) hires_timer_start(&ut);
@@ -5693,7 +5721,10 @@ static void update_specialized_types(tl_infer *self) {
         traverse_ast(self, traverse, node, update_types_cb);
         // Note: traverse_ast does not traverse let nodes directly (just their sub-parts)
     }
-    if (stats) { hires_timer_stop(&ut); self->counters.update_types_ast_ms = hires_timer_elapsed_sec(&ut) * 1000.0; }
+    if (stats) {
+        hires_timer_stop(&ut);
+        self->counters.update_types_ast_ms = hires_timer_elapsed_sec(&ut) * 1000.0;
+    }
     arena_reset(self->transient);
 }
 
@@ -6100,11 +6131,17 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *out_resu
     hires_timer phase_timer;
     if (self->report_stats) hires_timer_init(&phase_timer);
 
-#define PHASE_START() do { if (self->report_stats) hires_timer_start(&phase_timer); } while (0)
-#define PHASE_STOP(field) do { if (self->report_stats) { \
-    hires_timer_stop(&phase_timer); \
-    self->phase_stats.field = hires_timer_elapsed_sec(&phase_timer) * 1000.0; \
-} } while (0)
+#define PHASE_START()                                                                                      \
+    do {                                                                                                   \
+        if (self->report_stats) hires_timer_start(&phase_timer);                                           \
+    } while (0)
+#define PHASE_STOP(field)                                                                                  \
+    do {                                                                                                   \
+        if (self->report_stats) {                                                                          \
+            hires_timer_stop(&phase_timer);                                                                \
+            self->phase_stats.field = hires_timer_elapsed_sec(&phase_timer) * 1000.0;                      \
+        }                                                                                                  \
+    } while (0)
 
     PHASE_START();
     if (run_alpha_conversion(self, nodes)) return 1;
