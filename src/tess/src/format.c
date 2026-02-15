@@ -1008,12 +1008,13 @@ static int starts_with_binary_op(char const *trimmed) {
 }
 
 // Return the width of the leading keyword + space for continuation indent.
-// "if " -> 3, "while " -> 6, "case " -> 5, "for " -> 4
+// "if " -> 3, "while " -> 6, "case " or "when " -> 5, "for " -> 4
 // Returns INDENT_WIDTH as fallback.
 static int keyword_cont_width(char const *trimmed) {
     if (starts_with(trimmed, "if ")) return 3;
     if (starts_with(trimmed, "while ")) return 6;
     if (starts_with(trimmed, "case ")) return 5;
+    if (starts_with(trimmed, "when ")) return 5;
     if (starts_with(trimmed, "for ")) return 4;
     return INDENT_WIDTH;
 }
