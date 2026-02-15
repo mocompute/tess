@@ -5,6 +5,64 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased] - 2026-02-10 to 2026-02-15 (1215d21..ef1d4283)
+
+### Highlights
+
+- Explicit type arguments with square bracket syntax: `Array[Int]`, `push[T](...)`, `sizeof[Int]()` (breaking change)
+- New `.[]` indexing syntax replaces `[]` for pointer/array indexing, freeing `[]` for type arguments
+- `when` keyword replaces `case` for tagged union pattern matching
+- Unwrap-or-bail syntax for early-exit patterns: `val: Variant := expr else { return }`
+- String literals reverted to plain C strings (`char const *`), removing the implicit `Str` wrapping
+- Type literals removed from the type system (~370 lines deleted), no longer needed with explicit type arguments
+
+### Added
+
+- **Explicit Type Arguments (`[T]` syntax)**: Type parameters are now declared and passed using square brackets instead of parenthesized `T: Type` convention. Affects function definitions (`push[T](...)`), type constructors (`Array[Int]`), type identifiers, and builtins (`sizeof[Int]()`, `alignof[T]()`). AST nodes gained dedicated `type_parameters`/`type_arguments` slots, separating type arguments from value arguments structurally. All standard library and test files migrated to the new syntax.
+- **`when` Keyword for Tagged Unions**: New `when` keyword for tagged union pattern matching, replacing `case`. All existing tests and documentation migrated.
+- **Unwrap-or-Bail Syntax**: New syntactic sugar `val: Variant := expr else { diverge }` that desugars into a `when` expression where the else block must contain a diverging statement (`return`, `break`, or `continue`). Includes compile-time divergence checking.
+- **`.[]` Indexing Syntax**: Pointer and CArray indexing changed from `[]` to `.[]`, fitting with the existing postfix dot family (`.field`, `.*`, `.&`, `->`).
+- **Inference Sub-Phase Timing (`--stats`)**: The `--stats` flag now reports detailed per-phase timing for all 7 inference sub-phases along with operation counters for traversal, unification, substitution, and specialization.
+- **Debug Instrumentation Framework**: Compile-time debug flags in `infer.c` and `type.c`: `DEBUG_INVARIANTS` (phase boundary assertions), `DEBUG_INSTANCE_CACHE` (specialization cache tracing), `DEBUG_RECURSIVE_TYPES` (recursive type parsing), `DEBUG_TYPE_ALIAS` (alias resolution tracing).
+- **20+ new tests**: Tagged union tests covering many variants, CArray fields, Result types, generic variants, pointer fields, nested `when`, bail syntax, recursive types, and type argument annotations.
+- **Documentation**: New `docs/ALPHA_CONVERSION.md` covering the variable renaming system. New `docs/plans/EXPLICIT_TYPE_ARGS.md` design record. Updated language reference for `[]` and `.[]` syntax.
+
+### Changed
+
+- **Square Bracket Syntax for Types (Breaking Change)**: All type constructors use `[T]` instead of `(T)`. Function signatures changed from `push(self: Ptr(Array(T)), x: T)` to `push[T](self: Ptr[Array[T]], x: T)`. Builtins `sizeof` and `alignof` now have nullary `sizeof[T]()` and unary `sizeof(x)` overloads.
+- **String Literals Reverted to C Strings (Breaking Change)**: String literals (`"hello"`) now produce plain C strings (`char const *`) instead of `Str` values. The `ast_c_string` AST tag was removed; both `"..."` and `c"..."` now produce `ast_string` nodes.
+- **`builtin.tl` Now Imports `fatal.tl`**: Import processing reordered to scan `builtin.tl`'s own `#import` directives before processing package and user files.
+- **Build System**: `tess` binary now built inside the build directory and copied to the project root. `CFLAGS` handling fixed so user-supplied flags no longer silently override build-configuration flags. Test lists sorted alphabetically.
+- **Emacs tl-mode**: Updated for `when` keyword highlighting, `[...]` type argument brackets in function/type definitions, font-lock rules for type parameters, and updated navigation/imenu.
+- **Major Refactoring of `infer.c` and `type.c`**: ~2000 lines touched. Extracted `tl_monotype_children()` helper, data-driven builtin type init, and numerous phase/traversal functions. Removed dead `DEBUG_SPECIALIZE` block.
+- **Transpiler: Dependency-Ordered Type Emission**: Synthesized (specialized) user types are now topologically sorted before emitting as C structs, fixing incomplete-type errors for recursive and nested generic types.
+- **Transpiler: `void*` Casts for Pointer Comparisons**: Inserts `(void*)` casts on both operands of pointer relational operators, eliminating `-Wcompare-distinct-pointer-types` warnings.
+
+### Removed
+
+- **Type Literals**: Removed `tl_monotype_type_literal` and all associated infrastructure (~370 lines). With explicit `[T]` syntax, the type literal mechanism for passing types as values is no longer needed.
+- **Annotation-Based Type Variable Discovery**: Removed `collect_annotation_type_vars()` and its heuristic uppercase-name scanning. Explicit type parameter declarations make this unnecessary.
+- **`Array-tutorial.tl`**: Removed out-of-date tutorial file (331 lines).
+- **Debug-Mode String Literal Tracking**: Removed `_STR_LITERAL_TAG`, `tl_str_literal_set_*` hash set, `_mark_literal()`, `_is_literal()`, and associated expected-failure tests.
+
+### Fixed
+
+- **Recursive Tagged Union Types**: Self-referential tagged unions (e.g., `IntList` with `Ptr[IntList]` field) now resolve correctly via deferred placeholder mechanism.
+- **Mutual Recursion in Type Placeholders**: Fixed orphaned type variables when mutually recursive types reference each other through `Ptr`, by unifying with correct quantifiers via union-find substitution.
+- **Type Alias Enum Member Access**: Type aliases now registered in the type environment (not just type registry), enabling `infer_struct_access` to resolve alias names.
+- **Nested `when` Inference**: Fixed two bugs: unresolved annotation symbols incorrectly registering parameter names as type variables, and bottom-up traversal leaving outer bindings unresolved. Added `prepare_tagged_union_bindings()` pre-pass.
+- **Generic Tagged Union Variants in Specialized Functions**: Phase 7 traversals no longer overwrite already-specialized annotation types.
+- **Specialization Cache with Explicit Type Args**: Cache keys now incorporate explicit type arguments, preventing incorrect reuse across different type argument sets.
+- **Null-Pointer in `infer_return` with `break`**: `break` statements (with `value=null`) inside `when` arms no longer crash during specialization.
+- **Forward Type Parameter Declarations**: Compiler now copies type parameters from forward declarations to definitions when the definition omits them.
+- **`_tl_fatal_` Output**: Added newline after fatal error messages.
+
+### Performance
+
+- **`tl_monotype_hash64`**: Replaced per-call hashmap allocation for cycle detection with fixed-size stack-allocated array with linear search, eliminating allocation overhead.
+- **`parse_type_ctx` Pre-Allocation**: Replaced per-call context allocation (7 `map_create` calls) with a single pre-allocated context using `map_reset`/`hset_reset` between uses.
+- **Skip Redundant Specialization**: In Phase 7 (update types), already-specialized type constructors with unchanged arguments skip `specialize_type_constructor` entirely.
+
 ## [Unreleased] - 2026-02-03 to 2026-02-10 (5c41c59..1215d21)
 
 ### Highlights
