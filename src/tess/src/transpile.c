@@ -1157,7 +1157,7 @@ static str generate_let_in(transpile *self, tl_monotype *result_type, ast_node c
 
                     // Note: special case: if we are assigning to a pointer type, cast the rhs to that type.
                     // This allows C pointer casts without a warning.
-                    if (!ast_node_is_nil_or_void(node->let_in.value)) {
+                    if (!ast_node_is_void(node->let_in.value)) {
                         if (tl_monotype_is_ptr(type)) {
                             cat(self, name);
                             cat_assign(self);
@@ -1182,7 +1182,7 @@ static str generate_let_in(transpile *self, tl_monotype *result_type, ast_node c
                 if (is_c_symbol(value) || !tl_monotype_is_arrow(type)) {
 
                     generate_decl(self, name, type);
-                    if (!ast_node_is_nil_or_void(node->let_in.value)) generate_assign(self, name, value);
+                    if (!ast_node_is_void(node->let_in.value)) generate_assign(self, name, value);
                 }
             }
         }
