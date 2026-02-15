@@ -2,6 +2,22 @@
 #include <stdlib.h>
 #include <assert.h>
 
+#ifc
+// MSVC does not provide C11 aligned_alloc; use _aligned_malloc/_aligned_free instead.
+#if defined(_MSC_VER)
+#include <malloc.h>
+static void* aligned_alloc(size_t alignment, size_t size) {
+    return _aligned_malloc(size, alignment);
+}
+static void aligned_free(void *p) {
+    _aligned_free(p);
+}
+#else
+static void aligned_free(void *p) {
+    free(p);
+}
+#endif
+#endc
 
 // assert.h
 c_assert (condition: Bool) -> Void
@@ -17,6 +33,7 @@ c_system       (str: Ptr[Const[CChar]])                        -> Int
 c_rand         ()                                    -> CInt
 c_srand        (seed: CUnsignedInt)                  -> Void
 c_aligned_alloc(alignment: CSize, size: CSize)       -> Ptr[any]
+c_aligned_free (ptr: Ptr[any])                       -> Void
 c_calloc       (num: CSize, size_each: CSize)        -> Ptr[any]
 c_free         (ptr: Ptr[T])                         -> Void
 c_malloc       (size: CSize)                         -> Ptr[any]
