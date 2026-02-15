@@ -351,6 +351,7 @@ TL_TESTS =					\
 	bitwise_operators			\
 	block_expression			\
 	builtin_option				\
+	builtin_result				\
 	c_keywords				\
 	carray_struct_field			\
 	c_div					\
@@ -500,6 +501,8 @@ TL_TESTS =					\
 	tagged_union_option			\
 	tagged_union_existing_type_generic	\
 	tagged_union_generic_function_pointer	\
+	tagged_union_many_variants		\
+	tagged_union_carray			\
 	type_literal_generic			\
 	type_arguments_annotations		\
 	type_argument_field_annotation		\
@@ -563,6 +566,9 @@ TL_KNOWN_FAIL_FAILURES =
 # Tests that should work but currently fail due to compiler bugs
 TL_KNOWN_FAILURES =			\
 	lambda_immediate_type_argument		\
+	tagged_union_nested_when		\
+	tagged_union_pointer_field		\
+	tagged_union_recursive_type		\
 	while_empty_body
 
 # Total test count across all suites
