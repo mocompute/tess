@@ -420,13 +420,13 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
     case ast_user_type_definition: {
         struct ast_user_type_def *vclone = ast_node_utd(clone), *vorig = ast_node_utd((ast_node *)orig);
 
-        vclone->name             = ast_node_clone(alloc, vorig->name);
-        vclone->n_fields         = vorig->n_fields;
-        vclone->n_type_arguments = vorig->n_type_arguments;
-        vclone->is_union            = vorig->is_union;
-        vclone->tagged_union_name   = str_copy(alloc, vorig->tagged_union_name);
+        vclone->name              = ast_node_clone(alloc, vorig->name);
+        vclone->n_fields          = vorig->n_fields;
+        vclone->n_type_arguments  = vorig->n_type_arguments;
+        vclone->is_union          = vorig->is_union;
+        vclone->tagged_union_name = str_copy(alloc, vorig->tagged_union_name);
 
-        vclone->field_names      = alloc_malloc(alloc, vclone->n_fields * sizeof(ast_node *));
+        vclone->field_names       = alloc_malloc(alloc, vclone->n_fields * sizeof(ast_node *));
 
         // enums have no field annotations
         if (vorig->field_annotations)

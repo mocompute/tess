@@ -2202,7 +2202,7 @@ static int a_field_assignment(parser *self) {
 
 static int ast_node_is_diverging(ast_node const *node) {
     if (!node) return 0;
-    if (ast_return == node->tag) return 1;   // return and break (is_break_statement)
+    if (ast_return == node->tag) return 1; // return and break (is_break_statement)
     if (ast_continue == node->tag) return 1;
     return 0;
 }
@@ -2254,9 +2254,9 @@ static int a_assignment(parser *self) {
         array_push(conditions, sentinel);
         array_push(arms, else_body);
 
-        ast_node *node = ast_node_create_case(self->ast_arena, val, (ast_node_sized)array_sized(conditions),
-                                              (ast_node_sized)array_sized(arms), null, null,
-                                              AST_TAGGED_UNION_VALUE);
+        ast_node *node =
+          ast_node_create_case(self->ast_arena, val, (ast_node_sized)array_sized(conditions),
+                               (ast_node_sized)array_sized(arms), null, null, AST_TAGGED_UNION_VALUE);
         set_node_file(self, node);
         return result_ast_node(self, node);
     }
@@ -3819,7 +3819,7 @@ static int toplevel_tagged_union(parser *self) {
         }
         array_shrink(tag_idents);
 
-        ast_node *tag_enum = create_enum_utd(self, tag_name, tag_idents);
+        ast_node *tag_enum                        = create_enum_utd(self, tag_name, tag_idents);
         tag_enum->user_type_def.tagged_union_name = tu_name_str;
         add_module_symbol(self, tag_name);
         mangle_name(self, tag_name);

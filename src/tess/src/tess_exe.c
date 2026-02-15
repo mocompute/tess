@@ -63,17 +63,17 @@ typedef struct {
 
     // Compilation statistics (populated when report_stats is set)
     struct {
-        double parse_time_ms;
-        size_t parse_peak_mem;
-        size_t parse_final_mem;
-        double infer_time_ms;
-        size_t infer_peak_mem;
-        size_t infer_final_mem;
-        double transpile_time_ms;
-        size_t transpile_peak_mem;
-        size_t transpile_final_mem;
-        double cc_time_ms;
-        size_t cc_input_size; // Size of C source passed to compiler
+        double               parse_time_ms;
+        size_t               parse_peak_mem;
+        size_t               parse_final_mem;
+        double               infer_time_ms;
+        size_t               infer_peak_mem;
+        size_t               infer_final_mem;
+        double               transpile_time_ms;
+        size_t               transpile_peak_mem;
+        size_t               transpile_final_mem;
+        double               cc_time_ms;
+        size_t               cc_input_size; // Size of C source passed to compiler
 
         tl_infer_phase_stats infer_phases;
         tl_infer_counters    infer_counters;
@@ -861,8 +861,8 @@ int compile(state *self) {
         self->stats.infer_peak_mem  = infer_arena_stats.peak_allocated;
         self->stats.infer_final_mem = infer_arena_stats.allocated;
 
-        self->stats.infer_phases   = *tl_infer_get_phase_stats(infer);
-        self->stats.infer_counters = *tl_infer_get_counters(infer);
+        self->stats.infer_phases    = *tl_infer_get_phase_stats(infer);
+        self->stats.infer_counters  = *tl_infer_get_counters(infer);
     }
 
     // === TRANSPILATION PHASE ===
@@ -1615,7 +1615,8 @@ done:
         fprintf(stderr, "Traversals (infer):        %u\n", ic->traverse_infer_calls);
         fprintf(stderr, "Traversals (specialize):   %u\n", ic->traverse_specialize_calls);
         fprintf(stderr, "Traversals (update types): %u\n", ic->traverse_update_types_calls);
-        fprintf(stderr, "Nodes visited (total):     %llu\n", (unsigned long long)ic->traverse_nodes_visited);
+        fprintf(stderr, "Nodes visited (total):     %llu\n",
+                (unsigned long long)ic->traverse_nodes_visited);
         fprintf(stderr, "Specializations created:   %u\n", ic->specialize_created);
         fprintf(stderr, "Specialization cache hits: %u\n", ic->specialize_cache_hits);
         fprintf(stderr, "Already specialized:       %u\n", ic->specialize_already);
@@ -1639,12 +1640,12 @@ done:
         fprintf(stderr, "\n");
 
         fprintf(stderr, "=== Type Updates Breakdown ===\n\n");
-        fprintf(stderr, "Env pass:                  %.3f ms  (%u entries)\n",
-                ic->update_types_env_ms, ic->update_types_env_count);
-        fprintf(stderr, "AST traverse pass:         %.3f ms  (%u toplevels)\n",
-                ic->update_types_ast_ms, ic->traverse_update_types_calls);
-        fprintf(stderr, "Type constructor calls:     %u (skipped: %u)\n",
-                ic->update_types_type_cons_calls, ic->update_types_type_cons_skipped);
+        fprintf(stderr, "Env pass:                  %.3f ms  (%u entries)\n", ic->update_types_env_ms,
+                ic->update_types_env_count);
+        fprintf(stderr, "AST traverse pass:         %.3f ms  (%u toplevels)\n", ic->update_types_ast_ms,
+                ic->traverse_update_types_calls);
+        fprintf(stderr, "Type constructor calls:     %u (skipped: %u)\n", ic->update_types_type_cons_calls,
+                ic->update_types_type_cons_skipped);
         fprintf(stderr, "\n");
     }
 

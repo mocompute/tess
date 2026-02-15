@@ -294,7 +294,7 @@ static void generate_ifc_blocks(transpile *self) {
 
 // Resolve a monotype's canonical C name via the type environment (mirrors type_to_c user type logic).
 static str resolve_canonical_name(transpile *self, tl_monotype *mono) {
-    str          name  = mono->cons_inst->special_name;
+    str name = mono->cons_inst->special_name;
     if (str_is_empty(name)) name = mono->cons_inst->def->name;
     tl_monotype *found = env_lookup(self, name);
     if (found && tl_monotype_is_inst(found)) {
@@ -442,8 +442,7 @@ static void generate_user_types(transpile *self) {
 
         for (u32 i = 0; i < n; i++) {
             ast_node *node = self->synthesized_nodes.v[i];
-            if (ast_node_is_utd(node))
-                str_hset_insert(&synth_names, toplevel_name(node));
+            if (ast_node_is_utd(node)) str_hset_insert(&synth_names, toplevel_name(node));
         }
 
         int progress = 1;
@@ -1772,10 +1771,8 @@ static str generate_binary_op(transpile *self, tl_monotype *type, ast_node const
             generate_assign_lhs(self, res);
         }
 
-        int is_index = is_index_operator(str_cstr(&op));
-        int is_ptr_cmp = !is_index &&
-                         is_relational_operator(str_cstr(&op)) &&
-                         node->binary_op.left->type &&
+        int is_index   = is_index_operator(str_cstr(&op));
+        int is_ptr_cmp = !is_index && is_relational_operator(str_cstr(&op)) && node->binary_op.left->type &&
                          node->binary_op.right->type &&
                          tl_monotype_is_ptr(node->binary_op.left->type->type) &&
                          tl_monotype_is_ptr(node->binary_op.right->type->type);
