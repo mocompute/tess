@@ -2174,6 +2174,60 @@ static int traverse_ast_node_params(tl_infer *self, traverse_ctx *ctx, ast_node 
 
 static int traverse_ast(tl_infer *, traverse_ctx *, ast_node *, traverse_cb);
 
+// Pre-set variant binding types on tagged union case conditions BEFORE traversing arm bodies.
+// This is essential for nested when: the inner when needs the outer binding's type to be resolved
+// so that field access (e.g., s.v) works and the inner scrutinee gets a concrete tagged union type.
+// Without this, the bottom-up callback order means the inner when's infer_tagged_union_case runs
+// before the outer when's, leaving binding types as unresolved type variables.
+static void prepare_tagged_union_bindings(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
+    tl_polytype *expr_type = node->case_.expression->type;
+    if (!expr_type) return;
+
+    tl_monotype *wrapper_type = expr_type->type;
+    tl_monotype_substitute(self->arena, wrapper_type, self->subs, null);
+
+    // Handle explicit type annotation (when x: Type { ... })
+    if (node->case_.union_annotation) {
+        annotation_parse_result result = parse_type_annotation(self, ctx, node->case_.union_annotation);
+        if (result.parsed && tl_monotype_is_inst(result.parsed)) {
+            wrapper_type = result.parsed;
+            int save                        = self->is_constrain_ignore_error;
+            self->is_constrain_ignore_error = 1;
+            constrain_pm(self, expr_type, wrapper_type, node->case_.expression);
+            self->is_constrain_ignore_error = save;
+            tl_monotype_substitute(self->arena, wrapper_type, self->subs, null);
+        }
+    }
+
+    if (!tl_monotype_is_inst(wrapper_type)) return; // type not yet resolved; defer to infer_tagged_union_case
+
+    i32 u_index = tl_monotype_type_constructor_field_index(wrapper_type, S("u"));
+    if (u_index < 0) return;
+
+    forall(i, node->case_.conditions) {
+        if (i + 1 == node->case_.conditions.size && ast_node_is_nil(node->case_.conditions.v[i])) break;
+
+        ast_node *cond = node->case_.conditions.v[i];
+        if (!ast_node_is_symbol(cond) || !cond->symbol.annotation) continue;
+
+        str          variant_name = ast_node_name_original(cond->symbol.annotation);
+        tl_monotype *variant_type = tagged_union_find_variant(wrapper_type, variant_name, null);
+        if (!variant_type) continue; // will be caught later by infer_tagged_union_case
+
+        tl_polytype *variant_poly = null;
+        if (node->case_.is_union == AST_TAGGED_UNION_MUTABLE) {
+            variant_poly =
+              tl_polytype_absorb_mono(self->arena, tl_type_registry_ptr(self->registry, variant_type));
+        } else {
+            variant_poly = tl_polytype_absorb_mono(self->arena, variant_type);
+        }
+
+        ast_node_type_set(cond, variant_poly);
+        cond->symbol.annotation_type = variant_poly;
+        env_insert_constrain(self, cond->symbol.name, variant_poly, cond);
+    }
+}
+
 static int traverse_ast_case(tl_infer *self, traverse_ctx *ctx, ast_node *node, traverse_cb cb) {
     ctx->node_pos = npos_operand;
     if (traverse_ast(self, ctx, node->case_.expression, cb)) return 1;
@@ -2182,6 +2236,10 @@ static int traverse_ast_case(tl_infer *self, traverse_ctx *ctx, ast_node *node, 
     if (traverse_ast(self, ctx, node->case_.binary_predicate, cb)) return 1;
 
     if (node->case_.is_union) {
+        // Pre-set variant binding types so that nested when expressions can resolve
+        // field accesses on outer bindings during their own bottom-up traversal.
+        prepare_tagged_union_bindings(self, ctx, node);
+
         // For union cases, conditions are handled by infer_case() directly.
         // We only need to add condition symbols to lexical scope before traversing arms.
         forall(i, node->case_.conditions) {

@@ -481,7 +481,6 @@ TL_TESTS =					\
 	type_predicate_field			\
 	type_predicate_branch			\
 	type_predicate_generic			\
-	type_predicate_generic_type		\
 	type_predicate_type_arg			\
 	tagged_union				\
 	tagged_union_generic_basic		\
@@ -502,6 +501,8 @@ TL_TESTS =					\
 	tagged_union_existing_type_generic	\
 	tagged_union_generic_function_pointer	\
 	tagged_union_many_variants		\
+	tagged_union_nested_when		\
+	tagged_union_pointer_field		\
 	tagged_union_carray			\
 	type_literal_generic			\
 	type_arguments_annotations		\
@@ -566,9 +567,8 @@ TL_KNOWN_FAIL_FAILURES =
 # Tests that should work but currently fail due to compiler bugs
 TL_KNOWN_FAILURES =			\
 	lambda_immediate_type_argument		\
-	tagged_union_nested_when		\
-	tagged_union_pointer_field		\
 	tagged_union_recursive_type		\
+	type_predicate_generic_type		\
 	while_empty_body
 
 # Total test count across all suites

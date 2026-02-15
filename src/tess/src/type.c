@@ -988,6 +988,14 @@ static tl_monotype *tl_type_registry_parse_type_(tl_type_registry               
             ctx->annotation_target = node;
             result                 = tl_type_registry_parse_type_(self, ctx, node->symbol.annotation);
             ctx->annotation_target = save;
+
+            // If the annotation is an unresolved symbol (e.g. a type variable like `a` in `v: a`),
+            // treat it as type variable sugar so the name `a` is registered in type_arguments.
+            // Without this, the arrow fallback would register the parameter name `v` instead,
+            // causing the parameter and return type to get disconnected type variables.
+            if (!result && ast_node_is_symbol(node->symbol.annotation)) {
+                result = type_variable_sugar(self, ctx, node->symbol.annotation);
+            }
         }
 
         goto top_success;
