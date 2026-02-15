@@ -1302,7 +1302,7 @@ static int infer_return(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
     if (!node->return_.is_break_statement && node->return_.value)
         if (constrain(self, node->type, node->return_.value->type, node)) return 1;
 
-    if (ctx->result_type)
+    if (ctx->result_type && node->return_.value)
         if (constrain_pm(self, node->return_.value->type, ctx->result_type, node)) return 1;
 
     return 0;

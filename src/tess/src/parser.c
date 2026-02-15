@@ -2200,6 +2200,20 @@ static int a_field_assignment(parser *self) {
     return result_ast_node(self, a);
 }
 
+static int ast_node_is_diverging(ast_node const *node) {
+    if (!node) return 0;
+    if (ast_return == node->tag) return 1;   // return and break (is_break_statement)
+    if (ast_continue == node->tag) return 1;
+    return 0;
+}
+
+static int ast_body_is_diverging(ast_node const *node) {
+    if (!node) return 0;
+    if (ast_body != node->tag) return ast_node_is_diverging(node);
+    if (0 == node->body.expressions.size) return 0;
+    return ast_node_is_diverging(node->body.expressions.v[node->body.expressions.size - 1]);
+}
+
 static int a_assignment(parser *self) {
     // Note: this is a let-in expression
     ast_node *lval = parse_lvalue(self);
@@ -2210,6 +2224,44 @@ static int a_assignment(parser *self) {
     ast_node *val = parse_expression(self, INT_MIN);
     if (!val) return 1;
 
+    // Bail form: s: MySome := val else { diverge }
+    // Desugars to: when val { s: MySome { <remaining body> } else { <diverge> } }
+    if (ast_node_is_symbol(lval) && lval->symbol.annotation && 0 == a_try_s(self, the_symbol, "else")) {
+        ast_node *else_body = parse_body(self);
+        if (!else_body) return 1;
+
+        if (!ast_body_is_diverging(else_body)) {
+            self->error.tag = tl_err_tagged_union_bail_else_must_diverge;
+            return 1;
+        }
+
+        // Parse remaining body expressions (the continuation after the bail)
+        ast_node_array exprs = {.alloc = self->ast_arena};
+        while (1) {
+            if (a_body_element(self)) break;
+            array_push(exprs, self->result);
+        }
+        ast_node *success_body = create_body_fallback(self, exprs, val);
+
+        // Build case node: condition is the annotated lval, else arm is the bail body
+        ast_node_array conditions = {.alloc = self->ast_arena};
+        ast_node_array arms       = {.alloc = self->ast_arena};
+        array_push(conditions, lval);
+        array_push(arms, success_body);
+
+        ast_node *sentinel = ast_node_create_nil(self->ast_arena);
+        set_node_file(self, sentinel);
+        array_push(conditions, sentinel);
+        array_push(arms, else_body);
+
+        ast_node *node = ast_node_create_case(self->ast_arena, val, (ast_node_sized)array_sized(conditions),
+                                              (ast_node_sized)array_sized(arms), null, null,
+                                              AST_TAGGED_UNION_VALUE);
+        set_node_file(self, node);
+        return result_ast_node(self, node);
+    }
+
+    // Normal let-in path
     ast_node_array exprs = {.alloc = self->ast_arena};
     while (1) {
         if (a_body_element(self)) break;
