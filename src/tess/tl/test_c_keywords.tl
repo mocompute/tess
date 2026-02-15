@@ -35,7 +35,7 @@ main() {
 
     // 4. Tagged union with keyword variant names
     v := Kw.auto(7)
-    result := case v: Kw.Value {
+    result := when v {
         a: auto    { a.x }
         d: default { d.x }
     }

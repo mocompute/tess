@@ -4,7 +4,7 @@
 (require 'tl-mode)
 (require 'imenu)
 
-(let ((array-file (expand-file-name "../src/tl/std/Array.tl"
+(let ((array-file (expand-file-name "../../src/tl/std/Array.tl"
                                      (file-name-directory load-file-name))))
   (message "\n=== Imenu Demo: Flat List ===\n")
   (message "Opening Array.tl and building imenu index...\n")

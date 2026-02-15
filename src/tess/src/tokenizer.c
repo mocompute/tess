@@ -31,6 +31,7 @@ struct tokenizer {
 
     token_array    backtrack;
     char_array     buf;
+    u32            square_depth; // nesting depth of [ ] (to avoid greedy ]] inside type args)
 };
 
 // -- statics --
@@ -65,6 +66,7 @@ tokenizer *tokenizer_create(allocator *alloc, tokenizer_opts const *opts) {
     self->backtrack = (token_array){.alloc = alloc};
     array_reserve(self->buf, 32);
     array_reserve(self->backtrack, 8);
+    self->square_depth = 0;
 
     // load defines set
     forall(i, self->opts.defines) {
@@ -438,29 +440,32 @@ start:; // loop point for skip_depth > 0
 
         case in_open_square:
             if (self->pos == end) {
+                self->square_depth++;
                 replace_token(self->strings, &res, tok_open_square);
                 state = stop;
                 goto finish;
             }
             char const c = next_char(self);
-            if ('[' == c) {
+            if ('[' == c && self->square_depth == 0) {
                 replace_token(self->strings, &res, tok_double_open_square);
                 state = stop;
             } else {
                 reverse_pos(self);
+                self->square_depth++;
                 replace_token(self->strings, &res, tok_open_square);
                 state = stop;
             }
             break;
 
         case in_close_square: {
+            if (self->square_depth > 0) self->square_depth--;
             if (self->pos == end) {
                 replace_token(self->strings, &res, tok_close_square);
                 state = stop;
                 goto finish;
             }
             char const c = next_char(self);
-            if (']' == c) {
+            if (']' == c && self->square_depth == 0) {
                 replace_token(self->strings, &res, tok_double_close_square);
                 state = stop;
             } else {

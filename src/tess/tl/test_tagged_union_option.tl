@@ -1,20 +1,20 @@
 #module MyOption
 
-T(a): | Has { v: a }
+T[a]: | Has { v: a }
       | Empty
 
 test1() {
     error := 0
 
     good   := MyOption.Has(123)
-    result := case good: T {
+    result := when good {
         x: Has { x.v }
         n: Empty { 456 }
     }
     error += if result - 123 == 0 {0} else {1}
 
     good   := MyOption.Has(0.5)
-    result := case good: T {
+    result := when good {
         x: Has { x.v }
         n: Empty { 45.6 }
     }

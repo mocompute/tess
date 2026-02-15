@@ -37,7 +37,6 @@ typedef struct tl_monotype {
     union {
         tl_type_variable          var;
         tl_type_constructor_inst *cons_inst;
-        struct tl_monotype       *literal;
         struct {
             tl_monotype_sized xs;
             str_sized         fvs;
@@ -55,7 +54,6 @@ typedef struct tl_monotype {
         tl_cons_inst,
         tl_arrow,
         tl_tuple,
-        tl_literal,
         tl_placeholder
     } tag;
     u32 visited_gen; // generation counter for cycle detection in traversals
@@ -114,9 +112,7 @@ nodiscard tl_monotype *tl_monotype_create_placeholder(allocator *, str) mallocfu
 nodiscard tl_monotype *tl_monotype_create_ellipsis(allocator *) mallocfun;
 nodiscard tl_monotype *tl_monotype_create_integer(allocator *, i32) mallocfun;
 nodiscard tl_monotype *tl_monotype_create_tv(allocator *, tl_type_variable) mallocfun;
-nodiscard tl_monotype *tl_monotype_create_literal(allocator *, tl_monotype *) mallocfun;
 nodiscard tl_monotype *tl_monotype_create_fresh_tv(tl_type_subs *) mallocfun;
-nodiscard tl_monotype *tl_monotype_create_fresh_literal(allocator *, tl_type_subs *) mallocfun;
 nodiscard tl_monotype *tl_monotype_create_weak(allocator *, tl_type_variable) mallocfun;
 nodiscard tl_monotype *tl_monotype_create_fresh_weak(tl_type_subs *) mallocfun;
 nodiscard tl_monotype *tl_monotype_create_list(allocator *, tl_monotype_sized);
@@ -160,7 +156,6 @@ int                    tl_monotype_arrow_has_arrow(tl_monotype *);
 int                    tl_monotype_has_ptr(tl_monotype *);
 int                    tl_monotype_is_union(tl_monotype *);
 int                    tl_monotype_is_tv(tl_monotype *);
-int                    tl_monotype_is_type_literal(tl_monotype *);
 int                    tl_monotype_is_integer_convertible(tl_monotype *);
 int                    tl_monotype_is_float_convertible(tl_monotype *);
 void                   tl_monotype_set_integer_convertible(tl_monotype *);
@@ -168,7 +163,6 @@ void                   tl_monotype_set_float_convertible(tl_monotype *);
 tl_monotype           *tl_monotype_unary_target(tl_monotype *);
 tl_monotype           *tl_monotype_ptr_target(tl_monotype *);
 void                   tl_monotype_ptr_set_target(tl_monotype *, tl_monotype *);
-tl_monotype           *tl_monotype_literal_target(tl_monotype *);
 tl_monotype           *tl_monotype_arrow_args(tl_monotype *);
 tl_monotype_sized      tl_monotype_arrow_get_args(tl_monotype *);
 i32                    tl_monotype_type_constructor_field_index(tl_monotype *, str);
@@ -191,8 +185,6 @@ nodiscard tl_polytype *tl_polytype_create_weak(allocator *, tl_type_variable) ma
 nodiscard tl_polytype *tl_polytype_create_fresh_qv(allocator *, tl_type_subs *) mallocfun;
 nodiscard tl_polytype *tl_polytype_create_fresh_tv(allocator *, tl_type_subs *) mallocfun;
 nodiscard tl_polytype *tl_polytype_create_fresh_weak(allocator *, tl_type_subs *) mallocfun;
-nodiscard tl_polytype *tl_polytype_create_fresh_literal(allocator *, tl_type_subs *) mallocfun;
-nodiscard tl_polytype *tl_polytype_create_literal_with(allocator *, tl_monotype *) mallocfun;
 nodiscard tl_polytype *tl_polytype_clone(allocator *, tl_polytype *) mallocfun;
 nodiscard tl_polytype *tl_polytype_clone_mono(allocator *, tl_monotype *) mallocfun;
 

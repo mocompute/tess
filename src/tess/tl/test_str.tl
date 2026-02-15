@@ -15,17 +15,19 @@ test_empty() {
 
 test_from_cstr_small() {
     error := 0
-    s     := "hello"
+    s     := Str.from_cstr(c"hello")
     if Str.len(s) != 5 { error += 1 }
     if Str.is_empty(s) { error += 1 }
+    Str.free(s.&)
     error
 }
 
 test_from_cstr_big() {
     error := 0
-    s     := "this is a longer string!!"
+    s     := Str.from_cstr(c"this is a longer string!!")
     if Str.len(s) != 25 { error += 1 }
     if Str.is_empty(s) { error += 1 }
+    Str.free(s.&)
     error
 }
 
@@ -46,11 +48,11 @@ test_from_bytes() {
 
 test_copy_small() {
     error := 0
-    s     := "hello"
+    s     := Str.from_cstr(c"hello")
     c     := Str.copy(s)
     if Str.len(c) != 5 { error += 1 }
     // Should be independent
-    s = Str.empty()                     // cannot free Str literal
+    Str.free(s.&)
     if Str.len(c) != 5 { error += 1 }
     Str.free(c.&)
     error
@@ -58,10 +60,10 @@ test_copy_small() {
 
 test_copy_big() {
     error := 0
-    s     := "this is a longer string!!"
+    s     := Str.from_cstr(c"this is a longer string!!")
     c     := Str.copy(s)
     if Str.len(c) != 25 { error += 1 }
-    s = Str.empty()                     // cannot free Str literal
+    Str.free(s.&)
     if Str.len(c) != 25 { error += 1 }
     Str.free(c.&)
     error
@@ -71,13 +73,15 @@ test_copy_big() {
 
 test_cstr() {
     error := 0
-    s     := "hello"
+    s     := Str.from_cstr(c"hello")
     cs    := Str.cstr(s.&)
     if c_strcmp(cs, c"hello") != 0 { error += 1 }
 
-    s2  := "this is a longer string!!"
+    s2  := Str.from_cstr(c"this is a longer string!!")
     cs2 := Str.cstr(s2.&)
     if c_strcmp(cs2, c"this is a longer string!!") != 0 { error += 1 }
+    Str.free(s.&)
+    Str.free(s2.&)
     error
 }
 
@@ -85,9 +89,9 @@ test_cstr() {
 
 test_eq() {
     error := 0
-    a     := "hello"
-    b     := "hello"
-    c     := "world"
+    a     := Str.from_cstr(c"hello")
+    b     := Str.from_cstr(c"hello")
+    c     := Str.from_cstr(c"world")
     if !Str.eq(a, b) { error += 1 }
     if Str.eq(a, c) { error += 1 }
 
@@ -96,61 +100,77 @@ test_eq() {
     e2 := Str.empty()
     if !Str.eq(e1, e2) { error += 1 }
 
+    Str.free(a.&)
+    Str.free(b.&)
+    Str.free(c.&)
     error
 }
 
 test_cmp() {
     error := 0
-    a     := "abc"
-    b     := "abd"
-    c     := "abc"
+    a     := Str.from_cstr(c"abc")
+    b     := Str.from_cstr(c"abd")
+    c     := Str.from_cstr(c"abc")
     if Str.cmp(a, b) >= 0 { error += 1 }
     if Str.cmp(b, a) <= 0 { error += 1 }
     if Str.cmp(a, c) != 0 { error += 1 }
+    Str.free(a.&)
+    Str.free(b.&)
+    Str.free(c.&)
     error
 }
 
 test_starts_with() {
     error := 0
-    s     := "hello world"
-    a     := "hello"
-    b     := "world"
+    s     := Str.from_cstr(c"hello world")
+    a     := Str.from_cstr(c"hello")
+    b     := Str.from_cstr(c"world")
     e     := Str.empty()
     if !Str.starts_with(s, a) { error += 1 }
     if Str.starts_with(s, b) { error += 1 }
     if !Str.starts_with(s, e) { error += 1 }
+    Str.free(s.&)
+    Str.free(a.&)
+    Str.free(b.&)
     error
 }
 
 test_ends_with() {
     error := 0
-    s     := "hello world"
-    a     := "world"
-    b     := "hello"
+    s     := Str.from_cstr(c"hello world")
+    a     := Str.from_cstr(c"world")
+    b     := Str.from_cstr(c"hello")
     e     := Str.empty()
     if !Str.ends_with(s, a) { error += 1 }
     if Str.ends_with(s, b) { error += 1 }
     if !Str.ends_with(s, e) { error += 1 }
+    Str.free(s.&)
+    Str.free(a.&)
+    Str.free(b.&)
     error
 }
 
 test_contains() {
     error := 0
-    s     := "hello world"
-    a     := "lo wo"
-    b     := "xyz"
+    s     := Str.from_cstr(c"hello world")
+    a     := Str.from_cstr(c"lo wo")
+    b     := Str.from_cstr(c"xyz")
     e     := Str.empty()
     if !Str.contains(s, a) { error += 1 }
     if Str.contains(s, b) { error += 1 }
     if !Str.contains(s, e) { error += 1 }
+    Str.free(s.&)
+    Str.free(a.&)
+    Str.free(b.&)
     error
 }
 
 test_contains_byte() {
     error := 0
-    s     := "hello"
+    s     := Str.from_cstr(c"hello")
     if !Str.contains_byte(s, 104) { error += 1 } // 'h'
     if Str.contains_byte(s, 122) { error += 1 }  // 'z'
+    Str.free(s.&)
     error
 }
 
@@ -158,48 +178,56 @@ test_contains_byte() {
 
 test_cat_small_small() {
     error := 0
-    a     := "hi"
-    b     := " there"
+    a     := Str.from_cstr(c"hi")
+    b     := Str.from_cstr(c" there")
     c     := Str.cat(a, b)
     if Str.len(c) != 8 { error += 1 }
     cs := Str.cstr(c.&)
     if c_strcmp(cs, c"hi there") != 0 { error += 1 }
+    Str.free(a.&)
+    Str.free(b.&)
     Str.free(c.&)
     error
 }
 
 test_cat_to_big() {
     error := 0
-    a     := "hello "
-    b     := "beautiful world!"
+    a     := Str.from_cstr(c"hello ")
+    b     := Str.from_cstr(c"beautiful world!")
     c     := Str.cat(a, b)
     if Str.len(c) != 22 { error += 1 }
     cs := Str.cstr(c.&)
     if c_strcmp(cs, c"hello beautiful world!") != 0 { error += 1 }
+    Str.free(a.&)
+    Str.free(b.&)
     Str.free(c.&)
     error
 }
 
 test_push() {
     error := 0
-    s     := Str.copy("hello")
-    b     := " world"
+    s     := Str.from_cstr(c"hello")
+    b     := Str.from_cstr(c" world")
     Str.push(s.&, b)
     if Str.len(s) != 11 { error += 1 }
     cs := Str.cstr(s.&)
     if c_strcmp(cs, c"hello world") != 0 { error += 1 }
     Str.free(s.&)
+    Str.free(b.&)
     error
 }
 
 test_cat_3() {
     error := 0
-    a     := "one"
-    b     := " two"
-    c     := " three"
+    a     := Str.from_cstr(c"one")
+    b     := Str.from_cstr(c" two")
+    c     := Str.from_cstr(c" three")
     r     := Str.cat_3(a, b, c)
     cs    := Str.cstr(r.&)
     if c_strcmp(cs, c"one two three") != 0 { error += 1 }
+    Str.free(a.&)
+    Str.free(b.&)
+    Str.free(c.&)
     Str.free(r.&)
     error
 }
@@ -208,16 +236,17 @@ test_cat_3() {
 
 test_byte_at() {
     error := 0
-    s     := "abc"
+    s     := Str.from_cstr(c"abc")
     if Str.byte_at(s, 0) != 97 { error += 1 } // 'a'
     if Str.byte_at(s, 1) != 98 { error += 1 } // 'b'
     if Str.byte_at(s, 2) != 99 { error += 1 } // 'c'
+    Str.free(s.&)
     error
 }
 
 test_slice() {
     error := 0
-    s     := "hello world"
+    s     := Str.from_cstr(c"hello world")
     sub   := Str.slice(s, 6, 11)
     if Str.len(sub) != 5 { error += 1 }
     cs := Str.cstr(sub.&)
@@ -227,6 +256,7 @@ test_slice() {
     e := Str.slice(s, 3, 3)
     if Str.len(e) != 0 { error += 1 }
 
+    Str.free(s.&)
     Str.free(sub.&)
     Str.free(e.&)
     error
@@ -236,10 +266,11 @@ test_slice() {
 
 test_index_of_byte() {
     error := 0
-    s     := "hello"
+    s     := Str.from_cstr(c"hello")
     if Str.index_of_byte(s, 108) != 2 { error += 1 }  // 'l'
     if Str.index_of_byte(s, 111) != 4 { error += 1 }  // 'o'
     if Str.index_of_byte(s, 122) != -1 { error += 1 } // 'z' not found
+    Str.free(s.&)
     error
 }
 
@@ -269,7 +300,7 @@ test_from_int() {
 test_sso_boundary() {
     error := 0
     // 14 bytes should be small
-    s14 := "12345678901234"
+    s14 := Str.from_cstr(c"12345678901234")
     if Str.len(s14) != 14 { error += 1 }
     if !Str._is_small(s14) { error += 1 }
     cs14 := Str.cstr(s14.&)
@@ -279,11 +310,13 @@ test_sso_boundary() {
     if !Str._is_small(s14) { error += 1 }
 
     // 15 bytes should be big
-    s15 := "123456789012345"
+    s15 := Str.from_cstr(c"123456789012345")
     if Str.len(s15) != 15 { error += 1 }
     if Str._is_small(s15) { error += 1 }
     cs15 := Str.cstr(s15.&)
     if c_strcmp(cs15, c"123456789012345") != 0 { error += 1 }
+    Str.free(s14.&)
+    Str.free(s15.&)
     error
 }
 
@@ -291,10 +324,11 @@ test_sso_boundary() {
 
 test_replace_byte() {
     error := 0
-    s     := "hello"
+    s     := Str.from_cstr(c"hello")
     r     := Str.replace_byte(s, 108, 114) // 'l' -> 'r'
     cs    := Str.cstr(r.&)
     if c_strcmp(cs, c"herro") != 0 { error += 1 }
+    Str.free(s.&)
     Str.free(r.&)
     error
 }

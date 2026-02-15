@@ -14,20 +14,13 @@
 // ---------------------------------------------------------------------------
 
 // Extract a string from a DSL argument node.
-// String literals are wrapped by the parser as:
-//   ast_named_function_application("Str__from_literal__1", [ast_c_string(value)])
 // Returns the string value, or an empty str on failure (with error printed).
 static str extract_string(allocator *alloc, ast_node *node, char const *func_name, int arg_index) {
-    if (node->tag != ast_named_function_application) goto fail;
 
-    struct ast_named_application *nfa = &node->named_application;
-    if (!str_eq(nfa->name->symbol.name, S("Str__from_literal__1"))) goto fail;
-    if (nfa->n_arguments != 1) goto fail;
-
-    ast_node *inner = nfa->arguments[0];
-    if (inner->tag != ast_c_string) goto fail;
-
-    return str_init(alloc, str_cstr(&inner->symbol.name));
+    if (!ast_node_is_string(node)) goto fail;
+    str out = ast_node_str(node);
+    if (str_is_empty(out)) goto fail;
+    return str_copy(alloc, out);
 
 fail:
     fprintf(stderr, "package.tl: error: %s() argument %d is not a string literal\n", func_name,

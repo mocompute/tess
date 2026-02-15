@@ -7,14 +7,14 @@ double(x: Int) -> Int { x * 2 }
 triple(x: Int) -> Int { x * 3 }
 
 // Generic struct with function pointer using generic type in signature
-Processor(T): { process: (T) -> T }
+Processor[T] : { process: (T) -> T }
 
 // Static initialization with Int specialization
 int_doubler := Processor(process = double/1)
 int_tripler := Processor(process = triple/1)
 
 // Helper to apply processor
-apply(p: Processor(a), x: a) -> a {
+apply(p: Processor[a], x: a) -> a {
     p.process(x)
 }
 

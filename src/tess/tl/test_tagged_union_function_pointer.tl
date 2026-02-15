@@ -29,7 +29,7 @@ main() {
     // Test 1: Create Handler variant with function pointer in struct
     ctx1     := FnCtx(fn = double/1)
     handler1 := Handler(ctx1)
-    result1  := case handler1: Callback {
+    result1  := when handler1 {
         h: Handler { apply_handler(h.ctx, 5) }
         v: Value { v.n }
         n: MyNone { 0 }
@@ -39,7 +39,7 @@ main() {
     // Test 2: Handler with different function
     ctx2     := FnCtx(fn = triple/1)
     handler2 := Handler(ctx2)
-    result2  := case handler2: Callback {
+    result2  := when handler2 {
         h: Handler { apply_handler(h.ctx, 5) }
         else { 0 }
     }
@@ -47,7 +47,7 @@ main() {
 
     // Test 3: Value variant
     val     := Value(42)
-    result3 := case val: Callback {
+    result3 := when val {
         h: Handler { 0 }
         v: Value { v.n }
         n: MyNone { 0 }
@@ -56,7 +56,7 @@ main() {
 
     // Test 4: MyNone variant
     none_cb := MyNone()
-    result4 := case none_cb: Callback {
+    result4 := when none_cb {
         h: Handler { 99 }
         v: Value { 99 }
         n: MyNone { 7 }
@@ -66,7 +66,7 @@ main() {
     // Test 5: Pattern match and invoke with negate function
     ctx3     := FnCtx(fn = negate/1)
     handler3 := Handler(ctx3)
-    result5  := case handler3: Callback {
+    result5  := when handler3 {
         h: Handler { apply_handler(h.ctx, 10) }
         else { 0 }
     }

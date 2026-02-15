@@ -22,6 +22,15 @@ typedef struct {
     // Nodes which are deferred in first pass of parse.
     hashmap *deferred_parse; // str => ast_node*
 
+    // Type args captured at defer site for deferred placeholders
+    hashmap *deferred_type_args; // str => tl_monotype_sized*
+
+    // Source UTD info for deferred placeholders
+    str                    current_utd_name;            // name of UTD currently being parsed
+    tl_type_variable_sized current_utd_quantifiers;     // parse-phase quantifiers of current UTD
+    hashmap               *deferred_source_names;       // str => str (deferred name => source UTD name)
+    hashmap               *deferred_source_quantifiers; // str => tl_type_variable_sized*
+
     // Type names which are in progress of being parsed
     hashmap *in_progress; // str hset
 
@@ -66,10 +75,15 @@ tl_monotype *tl_type_registry_parse_type_out_ctx(tl_type_registry *self, ast_nod
 
 void         tl_type_registry_parse_type_ctx_init(allocator *, tl_type_registry_parse_type_ctx *,
                                                   hashmap *type_arguments);
-void         tl_type_registry_parse_type_ctx_reset(tl_type_registry_parse_type_ctx *);
+void tl_type_registry_parse_type_ctx_reinit(tl_type_registry_parse_type_ctx *, hashmap *type_arguments);
+void tl_type_registry_parse_type_ctx_reset(tl_type_registry_parse_type_ctx *);
 
-void         tl_type_registry_insert(tl_type_registry *, str, tl_polytype *);
-void         tl_type_registry_insert_mono(tl_type_registry *, str, tl_monotype *);
+void tl_type_registry_insert(tl_type_registry *, str, tl_polytype *);
+void tl_type_registry_insert_mono(tl_type_registry *, str, tl_monotype *);
+
+void tl_type_registry_add_type_argument(tl_type_registry *, str, tl_monotype *, hashmap **type_arguments);
+tl_monotype *tl_type_registry_add_fresh_type_argument(tl_type_registry *self, str name,
+                                                      hashmap **type_arguments);
 
 tl_monotype *tl_type_registry_create_arrow(tl_type_registry *, tl_monotype *lhs, tl_monotype *rhs);
 

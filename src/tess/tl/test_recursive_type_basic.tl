@@ -1,6 +1,6 @@
 #module main
 
-Point(a): { x: a, y: a, next: Ptr(Point(a)) }
+Point[a]: { x: a, y: a, next: Ptr[Point[a]] }
 
 main() {
 

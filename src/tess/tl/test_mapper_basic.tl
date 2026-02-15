@@ -2,8 +2,8 @@
 #import <stdlib.tl>
 #import <Unsafe.tl>
 
-Arr(a): {
-    v:        Ptr(a),
+Arr[a]: {
+    v:        Ptr[a],
     size:     Int,
     capacity: Int,
 }
@@ -12,20 +12,20 @@ Arr(a): {
 // The first argument `f` is a generic unary function that maps a value of one type (`a`) to a value of another type (`b`).
 // The second argument `arr` is an `Arr` struct with elements of type `a`, passed by value.
 // The function returns an `Arr` struct with elements of type `b`.
-map(f: (a) -> b, arr: Arr(a)) -> Arr(b)
+map[a, b](f: (a) -> b, arr: Arr[a]) -> Arr[b]
 
 // Argument type annotations are not required.
 map(f, arr) {
 
     // Because of the `c_` prefix, `c_malloc` is compiled to a direct call to the C function `malloc`.
-    // Because `malloc` returns `void*`, the `: Ptr(b)` type annotation is required.
-    out := Arr(v: Ptr(b) = c_malloc(sizeof(b) * arr.size), size = arr.size, capacity = arr.size)
+    // Because `malloc` returns `void*`, the `: Ptr[b]` type annotation is required.
+    out := Arr(v: Ptr[b] = c_malloc(sizeof[b]() * arr.size), size = arr.size, capacity = arr.size)
 
     i := 0
     while i < arr.size {
-        mapped := f(arr.v[i])
-        out.v[i] = mapped
-        i        = i + 1
+        mapped := f(arr.v.[i])
+        out.v.[i] = mapped
+        i         = i + 1
     }
     out
 }
@@ -37,13 +37,13 @@ main() {
 
     error := 0
 
-    vals := Arr(v: Ptr(Int) = c_malloc(sizeof(Int) * 4), size = 0, capacity = 4)
+    vals := Arr(v: Ptr[Int] = c_malloc(sizeof[Int]() * 4), size = 0, capacity = 4)
 
-    vals.v[0] = 0
-    vals.v[1] = 1
-    vals.v[2] = 2
-    vals.v[3] = 3
-    vals.size = 4
+    vals.v.[0] = 0
+    vals.v.[1] = 1
+    vals.v.[2] = 2
+    vals.v.[3] = 3
+    vals.size  = 4
 
     res := map(add1/1, vals)
 
@@ -51,7 +51,7 @@ main() {
     sum := 0
     i   := 0
     while i < vals.size, i = i + 1 {
-        sum = sum + vals.v[i]
+        sum = sum + vals.v.[i]
     }
     c_assert(sum == 6)
     error += sum - 6
@@ -60,24 +60,24 @@ main() {
     sum := 0
     i   := 0
     while i < vals.size, i = i + 1 {
-        sum = sum + res.v[i]
+        sum = sum + res.v.[i]
     }
     c_assert(sum == 10)
     error += sum - 10
 
 
-    floats := Arr(v: Ptr(Float) = c_malloc(sizeof(Float) * 4), size = 0, capacity = 4)
-    floats.v[0] = 0.0
-    floats.v[1] = 1.0
-    floats.v[2] = 2.0
-    floats.v[3] = 3.0
-    floats.size = 4
+    floats := Arr(v: Ptr[Float] = c_malloc(sizeof[Float]() * 4), size = 0, capacity = 4)
+    floats.v.[0] = 0.0
+    floats.v.[1] = 1.0
+    floats.v.[2] = 2.0
+    floats.v.[3] = 3.0
+    floats.size  = 4
 
     floats_res := map(add1f/1, floats)
     sum        := 0.0
     i          := 0
     while i < floats.size, i = i + 1 {
-        sum = sum + floats_res.v[i]
+        sum = sum + floats_res.v.[i]
     }
 
     error += Unsafe.float_to_int(sum - 10.0)

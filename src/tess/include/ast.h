@@ -46,8 +46,10 @@ typedef struct ast_node {
         } f64;
 
         struct ast_arrow {
-            struct ast_node *left;
-            struct ast_node *right;
+            struct ast_node  *left;
+            struct ast_node  *right;
+            struct ast_node **type_parameters;
+            u8                n_type_parameters;
         } arrow;
 
         struct ast_assignment {
@@ -75,8 +77,10 @@ typedef struct ast_node {
         } lambda_function;
 
         struct ast_let {
-            struct ast_node **parameters;
+            struct ast_node **parameters; // formal params first
             u8                n_parameters;
+            struct ast_node **type_parameters;
+            u8                n_type_parameters;
             struct ast_node  *name;
             struct ast_node  *body;
             int               is_specialized;
@@ -90,8 +94,10 @@ typedef struct ast_node {
         } lambda_application;
 
         struct ast_named_application {
-            struct ast_node **arguments;
+            struct ast_node **arguments; // formal arguments first
             u8                n_arguments;
+            struct ast_node **type_arguments;
+            u8                n_type_arguments;
             struct ast_node  *name;
             int               is_specialized;
             int               is_type_constructor;
@@ -160,6 +166,7 @@ typedef struct ast_node {
             u8                n_fields;
             u8                n_type_arguments;
             u8                is_union;
+            str               tagged_union_name;
         } user_type_def;
 
         struct ast_hash_command {
@@ -223,7 +230,7 @@ nodiscard ast_node *ast_node_create(allocator *, ast_tag) mallocfun;
 nodiscard ast_node *ast_node_create_i64(allocator *, i64) mallocfun;
 nodiscard ast_node *ast_node_create_u64(allocator *, u64) mallocfun;
 nodiscard ast_node *ast_node_create_f64(allocator *, f64) mallocfun;
-nodiscard ast_node *ast_node_create_arrow(allocator *, ast_node *, ast_node *) mallocfun;
+nodiscard ast_node *ast_node_create_arrow(allocator *, ast_node *, ast_node *, ast_node_sized) mallocfun;
 nodiscard ast_node *ast_node_create_assignment(allocator *, ast_node *, ast_node *) mallocfun;
 nodiscard ast_node *ast_node_create_reassignment(allocator *, ast_node *, ast_node *) mallocfun;
 nodiscard ast_node *ast_node_create_reassignment_op(allocator *, ast_node *, ast_node *,
@@ -242,9 +249,11 @@ nodiscard ast_node *ast_node_create_unary_op(allocator *, ast_node *, ast_node *
 nodiscard ast_node *ast_node_create_return(allocator *, ast_node *, int) mallocfun;
 nodiscard ast_node *ast_node_create_while(allocator *, ast_node *, ast_node *, ast_node *) mallocfun;
 nodiscard ast_node *ast_node_create_let_in(allocator *, ast_node *, ast_node *, ast_node *) mallocfun;
-nodiscard ast_node *ast_node_create_let(allocator *, ast_node *, ast_node_sized, ast_node *) mallocfun;
-nodiscard ast_node *ast_node_create_nfa(allocator *, ast_node *, ast_node_sized) mallocfun;
-nodiscard ast_node *ast_node_create_nfa_tc(allocator *, ast_node *, ast_node_sized) mallocfun;
+nodiscard ast_node *ast_node_create_let(allocator *, ast_node *, ast_node_sized, ast_node_sized,
+                                        ast_node *) mallocfun;
+nodiscard ast_node *ast_node_create_nfa(allocator *, ast_node *, ast_node_sized, ast_node_sized) mallocfun;
+nodiscard ast_node *ast_node_create_nfa_tc(allocator *, ast_node *, ast_node_sized,
+                                           ast_node_sized) mallocfun;
 nodiscard ast_node *ast_node_create_lfa(allocator *, ast_node *, ast_node_sized) mallocfun;
 nodiscard ast_node *ast_node_create_tuple(allocator *, ast_node_sized) mallocfun;
 nodiscard ast_node *ast_node_create_type_alias(allocator *, ast_node *, ast_node *) mallocfun;
@@ -320,7 +329,6 @@ int            ast_node_is_void(ast_node const *);
 int            ast_node_is_nil_or_void(ast_node const *);
 int            ast_node_is_symbol(ast_node const *);
 int            ast_node_is_string(ast_node const *);
-int            ast_node_is_c_string(ast_node const *);
 int            ast_node_is_tuple(ast_node const *);
 int            ast_node_is_type_alias(ast_node const *);
 int            ast_node_is_type_predicate(ast_node const *);

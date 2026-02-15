@@ -126,7 +126,6 @@ static str   ptr_to_arrow_to_c(transpile *, tl_monotype *);
 static str   ptr_to_arrow_decl(transpile *, tl_monotype *, str);
 static void  generate_function_signature(transpile *, str, tl_polytype *, str_sized);
 static void  exit_error(char const *file, u32 line, char const *restrict fmt, ...);
-static str   type_literal_name(tl_monotype *type);
 static void  update_type(transpile *, tl_monotype **);
 
 // Escape Tess identifiers that clash with C reserved keywords by prefixing them with tl_kw_.
@@ -293,6 +292,18 @@ static void generate_ifc_blocks(transpile *self) {
     cat_nl(self);
 }
 
+// Resolve a monotype's canonical C name via the type environment (mirrors type_to_c user type logic).
+static str resolve_canonical_name(transpile *self, tl_monotype *mono) {
+    str name = mono->cons_inst->special_name;
+    if (str_is_empty(name)) name = mono->cons_inst->def->name;
+    tl_monotype *found = env_lookup(self, name);
+    if (found && tl_monotype_is_inst(found)) {
+        str sn = found->cons_inst->special_name;
+        return str_is_empty(sn) ? found->cons_inst->def->name : sn;
+    }
+    return name;
+}
+
 static int should_skip_user_type(transpile *self, str name) {
     tl_monotype *env_type = env_lookup(self, name);
     if (!env_type) return 1;
@@ -365,6 +376,7 @@ static void generate_one_user_type_forward(transpile *self, ast_node *node) {
     if (!ast_node_is_utd(node)) return;
     str          name = toplevel_name(node);
     tl_polytype *poly = node->type;
+    if (!poly) fatal("missing type");
     if (!tl_monotype_is_inst(poly->type)) fatal("not a type constructor instance");
     if (!tl_polytype_is_concrete(poly)) return;
 
@@ -420,10 +432,57 @@ static void generate_user_types(transpile *self) {
         generate_one_user_type(self, node);
     }
 
-    // Then emit specialized user types.
-    forall(i, self->synthesized_nodes) {
-        ast_node *node = self->synthesized_nodes.v[i];
-        generate_one_user_type(self, node);
+    // Emit specialized user types in dependency order: a type that contains another
+    // synthesized type by value (not through Ptr) must be emitted after it.
+    {
+        u32      n           = self->synthesized_nodes.size;
+        hashmap *synth_names = hset_create(self->transient, n * 2 + 1);
+        hashmap *emitted     = hset_create(self->transient, n * 2 + 1);
+        u8      *done        = alloc_calloc(self->transient, n, 1);
+
+        for (u32 i = 0; i < n; i++) {
+            ast_node *node = self->synthesized_nodes.v[i];
+            if (ast_node_is_utd(node)) str_hset_insert(&synth_names, toplevel_name(node));
+        }
+
+        int progress = 1;
+        while (progress) {
+            progress = 0;
+            for (u32 i = 0; i < n; i++) {
+                if (done[i]) continue;
+                ast_node *node = self->synthesized_nodes.v[i];
+
+                if (!ast_node_is_utd(node) || !node->type || !tl_monotype_is_inst(node->type->type) ||
+                    !tl_polytype_is_concrete(node->type)) {
+                    done[i]  = 1;
+                    progress = 1;
+                    continue;
+                }
+
+                int               blocked = 0;
+                tl_monotype_sized args    = node->type->type->cons_inst->args;
+                forall(j, args) {
+                    if (tl_monotype_is_inst(args.v[j])) {
+                        str dep = resolve_canonical_name(self, args.v[j]);
+                        if (str_hset_contains(synth_names, dep) && !str_hset_contains(emitted, dep)) {
+                            blocked = 1;
+                            break;
+                        }
+                    }
+                }
+
+                if (!blocked) {
+                    generate_one_user_type(self, node);
+                    str_hset_insert(&emitted, toplevel_name(node));
+                    done[i]  = 1;
+                    progress = 1;
+                }
+            }
+        }
+
+        for (u32 i = 0; i < n; i++) {
+            if (!done[i]) generate_one_user_type(self, self->synthesized_nodes.v[i]);
+        }
     }
 
     cat_nl(self);
@@ -488,10 +547,6 @@ static str generate_expr_symbol(transpile *self, tl_monotype *type, str symbol_n
     str name = symbol_name;
 
     if (tl_monotype_is_arrow(type)) name = mangle_fun(self, name);
-
-    if (tl_monotype_is_type_literal(type)) {
-        return str_init(self->transient, "0");
-    }
 
     // c_ prefixed symbols are always emitted literally
     if (is_c_symbol(name)) {
@@ -852,11 +907,6 @@ static str generate_type_constructor(transpile *self, ast_node const *node, eval
     // divert if named arguments
     if (node->named_application.n_arguments && ast_node_is_assignment(node->named_application.arguments[0]))
         return generate_type_constructor_named(self, node, ctx);
-
-    // detect if type literal
-    if (tl_monotype_is_type_literal(node->type->type)) {
-        return str_init(self->transient, "0");
-    }
 
     str          name = ast_node_str(node->named_application.name);
     tl_monotype *type = env_lookup(self, name);
@@ -1469,8 +1519,8 @@ static str generate_case(transpile *self, tl_monotype *type, ast_node const *nod
 
         } else {
             // predicate is an identifier, wrap it in a named function application
-            nfa =
-              ast_node_create_nfa(self->transient, bin_pred, (ast_node_sized){.size = 2, .v = lfa_args});
+            nfa = ast_node_create_nfa(self->transient, bin_pred, (ast_node_sized){0},
+                                      (ast_node_sized){.size = 2, .v = lfa_args});
         }
 
         // allocate room for conditional arm arguments
@@ -1720,12 +1770,29 @@ static str generate_binary_op(transpile *self, tl_monotype *type, ast_node const
             generate_decl(self, res, type);
             generate_assign_lhs(self, res);
         }
-        cat(self, left);
-        cat(self, op);
-        cat(self, right);
 
-        // Note: special case: if op is [ close square bracket
-        if (0 == str_cmp_c(op, "[")) cat_close_square(self);
+        int is_index   = is_index_operator(str_cstr(&op));
+        int is_ptr_cmp = !is_index && is_relational_operator(str_cstr(&op)) && node->binary_op.left->type &&
+                         node->binary_op.right->type &&
+                         tl_monotype_is_ptr(node->binary_op.left->type->type) &&
+                         tl_monotype_is_ptr(node->binary_op.right->type->type);
+
+        if (is_ptr_cmp) {
+            cat(self, S("(void*)"));
+        }
+        cat(self, left);
+
+        if (is_index) {
+            cat(self, S("["));
+            cat(self, right);
+            cat_close_square(self);
+        } else {
+            cat(self, op);
+            if (is_ptr_cmp) {
+                cat(self, S("(void*)"));
+            }
+            cat(self, right);
+        }
         cat_semicolonln(self);
         return res;
     }
@@ -1733,11 +1800,15 @@ static str generate_binary_op(transpile *self, tl_monotype *type, ast_node const
     else {
         str_build b = str_build_init(self->transient, 64);
         str_build_cat(&b, left);
-        str_build_cat(&b, op);
-        str_build_cat(&b, right);
-
-        // Note: special case: if op is [ close square bracket
-        if (0 == str_cmp_c(op, "[")) str_build_cat(&b, S("]"));
+        int is_index = is_index_operator(str_cstr(&op));
+        if (is_index) {
+            str_build_cat(&b, S("["));
+            str_build_cat(&b, right);
+            str_build_cat(&b, S("]"));
+        } else {
+            str_build_cat(&b, op);
+            str_build_cat(&b, right);
+        }
         return str_build_finish(&b);
     }
 }
@@ -1897,30 +1968,6 @@ static str generate_continue(transpile *self, tl_monotype *type, ast_node const 
     return str_empty();
 }
 
-static str type_literal_name(tl_monotype *type) {
-    if (tl_monotype_is_type_literal(type)) {
-        tl_monotype *target = tl_monotype_literal_target(type);
-        if (tl_monotype_is_inst(target)) {
-            if (!str_is_empty(target->cons_inst->special_name)) return target->cons_inst->special_name;
-            return target->cons_inst->def->name;
-        }
-        return S("[not a type constructor]");
-    }
-    return S("[not a type literal]");
-}
-
-static str generate_type_literal(transpile *self, eval_ctx *ctx, tl_monotype *type) {
-    (void)ctx;
-
-    str res = next_res(self);
-    cat(self, S("int "));
-    cat(self, res);
-    cat(self, S(" = 0; /*Type literal: "));
-    cat(self, type_literal_name(type));
-    cat(self, S("*/;\n"));
-    return res;
-}
-
 static str generate_expr(transpile *self, tl_monotype *type, ast_node const *node, eval_ctx *ctx) {
     // This function is used to generate output to evaluate an expression with a given type, for example
     // for function arguments. If type is null, then the type is taken from the expression. The str
@@ -1942,11 +1989,6 @@ static str generate_expr(transpile *self, tl_monotype *type, ast_node const *nod
         }
     }
 
-    // if type is a type literal, generate it
-    if (tl_monotype_is_type_literal(type)) {
-        return generate_type_literal(self, ctx, type);
-    }
-
     switch (node->tag) {
     case ast_named_function_application:  return generate_funcall(self, node, ctx);
     case ast_lambda_function_application: return generate_inline_lambda(self, type, node, ctx);
@@ -1957,7 +1999,7 @@ static str generate_expr(transpile *self, tl_monotype *type, ast_node const *nod
     case ast_bool:                        return generate_str(self, node->bool_.val ? S("1 /*true*/") : S("0 /*false*/"), type);
     case ast_char:
         return generate_str(self, str_cat_3(self->transient, S("'"), node->symbol.name, S("'")), type);
-    case ast_c_string:
+    case ast_string:
         return generate_str(self, str_cat_3(self->transient, S("\""), node->symbol.name, S("\"")), type);
 
     case ast_symbol: {
@@ -2001,7 +2043,6 @@ static str generate_expr(transpile *self, tl_monotype *type, ast_node const *nod
         return str_copy(self->transient, S("FIXME_generate_expr"));
         break;
 
-    case ast_string:
     case ast_hash_command:
     case ast_type_alias:   fatal("logic error");
 
@@ -2126,10 +2167,6 @@ static void generate_decl(transpile *self, str name, tl_monotype *type) {
         cat_sp(self);
         cat(self, name);
         cat_semicolonln(self);
-    }
-
-    else if (tl_monotype_is_type_literal(type)) {
-        generate_decl(self, name, tl_monotype_literal_target(type));
     }
 
     else if (tl_monotype_is_tv(type)) {
@@ -2558,8 +2595,6 @@ static str type_to_c(transpile *self, tl_polytype *type) {
     else if (tl_monotype_is_tuple(mono)) {
         str struct_name = make_struct_name(self->transient, mono, null);
         return struct_name;
-    } else if (tl_monotype_is_type_literal(mono)) {
-        return str_cat_3(self->transient, S("/*Type literal: "), type_literal_name(mono), S("*/int"));
     } else if (tl_monotype_is_any(mono)) {
         return S("/*any*/void");
     } else if (tl_monotype_is_tv(mono)) {
@@ -2722,29 +2757,37 @@ static str tl_sizeof(transpile *self, ast_node const *node, eval_ctx *ctx, void 
 
     assert(ast_node_is_nfa(node));
 
+    // nullary with type argument: sizeof[T]()
+    if (node->named_application.n_arguments == 0 && node->named_application.n_type_arguments == 1) {
+        ast_node const *type_arg = node->named_application.type_arguments[0];
+        tl_monotype    *type     = null;
+
+        // The type argument has been processed by inference
+        if (type_arg->type) {
+            type = type_arg->type->type;
+        } else if (ast_node_is_nfa(type_arg)) {
+            type = tl_type_registry_parse_type(self->registry, type_arg);
+        } else if (ast_node_is_symbol(type_arg)) {
+            tl_polytype *poly = tl_type_env_lookup(self->env, ast_node_str(type_arg));
+            if (poly) {
+                type = poly->type;
+            }
+        }
+        if (!type) fatal("sizeof: could not resolve type argument");
+        update_type(self, &type);
+        str ctype = type_to_c_mono(self, type);
+        return str_cat_3(self->transient, S("sizeof("), ctype, S(")"));
+    }
+
     // single argument may be an expression or a type constructor
     if (1 != node->named_application.n_arguments) fatal("wrong number of arguments");
     ast_node const *arg = node->named_application.arguments[0];
 
-    // Note: The environment contains the most current type for a symbol argument.
-    tl_polytype *poly = arg->type;
-    if (ast_node_is_symbol(arg)) poly = tl_type_env_lookup(self->env, ast_node_str(arg));
+    // // Note: The environment contains the most current type for a symbol argument.
+    // tl_polytype *poly = arg->type;
+    // if (ast_node_is_symbol(arg)) poly = tl_type_env_lookup(self->env, ast_node_str(arg));
 
-    if (tl_monotype_is_type_literal(poly->type)) {
-        // type literal
-
-        tl_monotype *type = tl_monotype_literal_target(poly->type);
-
-        // if type is undetermined, look up in environment
-        // if (!type || !tl_monotype_is_concrete(self->transient, type)) {
-        //     type = env_lookup(self, ast_node_str(arg));
-        // }
-
-        update_type(self, &type);
-        str ctype = type_to_c_mono(self, type);
-        return str_cat_3(self->transient, S("sizeof("), ctype, S(")"));
-
-    } else if (ast_node_is_nfa(arg)) {
+    if (ast_node_is_nfa(arg)) {
         // type constructor
         tl_monotype *type = tl_type_registry_parse_type(self->registry, arg);
         if (!type) fatal("missing type");
@@ -2768,6 +2811,27 @@ static str tl_alignof(transpile *self, ast_node const *node, eval_ctx *ctx, void
 
     assert(ast_node_is_nfa(node));
 
+    // nullary with type argument: alignof[T]()
+    if (node->named_application.n_arguments == 0 && node->named_application.n_type_arguments == 1) {
+        ast_node const *type_arg = node->named_application.type_arguments[0];
+        tl_monotype    *type     = null;
+
+        if (type_arg->type) {
+            type = type_arg->type->type;
+        } else if (ast_node_is_nfa(type_arg)) {
+            type = tl_type_registry_parse_type(self->registry, type_arg);
+        } else if (ast_node_is_symbol(type_arg)) {
+            tl_polytype *poly = tl_type_env_lookup(self->env, ast_node_str(type_arg));
+            if (poly) {
+                type = poly->type;
+            }
+        }
+        if (!type) fatal("alignof: could not resolve type argument");
+        update_type(self, &type);
+        str ctype = type_to_c_mono(self, type);
+        return str_cat_3(self->transient, S("_Alignof("), ctype, S(")"));
+    }
+
     // single argument may be an expression or a type constructor
     if (1 != node->named_application.n_arguments) fatal("wrong number of arguments");
     ast_node const *arg  = node->named_application.arguments[0];
@@ -2776,14 +2840,7 @@ static str tl_alignof(transpile *self, ast_node const *node, eval_ctx *ctx, void
     if (ast_node_is_symbol(arg) && !tl_polytype_is_concrete(poly))
         poly = tl_type_env_lookup(self->env, ast_node_str(arg));
 
-    if (tl_monotype_is_type_literal(poly->type)) {
-        // type literal
-        tl_monotype *type = tl_monotype_literal_target(poly->type);
-        update_type(self, &type);
-        str ctype = type_to_c_mono(self, type);
-        return str_cat_3(self->transient, S("_Alignof("), ctype, S(")"));
-
-    } else if (ast_node_is_nfa(arg)) {
+    if (ast_node_is_nfa(arg)) {
         // type constructor
         tl_monotype *type = tl_type_registry_parse_type(self->registry, arg);
         if (!type) fatal("missing type");
@@ -2804,7 +2861,7 @@ static str tl_fatal(transpile *self, ast_node const *node, eval_ctx *ctx, void *
 
     if (1 != node->named_application.n_arguments) fatal("wrong number of arguments");
     ast_node const *arg = node->named_application.arguments[0];
-    if (ast_c_string != arg->tag) {
+    if (ast_string != arg->tag) {
         // FIXME: report error
         fatal("expected string");
     }

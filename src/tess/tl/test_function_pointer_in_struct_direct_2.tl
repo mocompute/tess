@@ -3,11 +3,11 @@
 
 // Return type annotation is required because this function will not be specialized, because it is only
 // every referenced through a function pointer.
-malloc(count: CSize) -> Ptr(Int) {
+malloc(count: CSize) -> Ptr[Int] {
     c_malloc(count)
 }
 
-Ctx(t1): {
+Ctx[t1]: {
     malloc_fun: t1,
 }
 

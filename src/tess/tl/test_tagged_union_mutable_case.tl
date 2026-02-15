@@ -7,13 +7,13 @@ main() {
     shape := Circle(3)
 
     // Mutable pattern matching - modify the radius
-    case shape.&: Shape {
+    when shape.& {
         c: Circle { c->radius = 5 }
         else { }
     }
 
     // Verify the mutation worked
-    result := case shape: Shape {
+    result := when shape {
         c: Circle { c.radius }
         s: Square { s.length }
     }

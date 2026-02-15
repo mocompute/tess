@@ -1,11 +1,11 @@
 #module main
 
 // renamed due to new conflict with builtin Some/None
-T(a): | MySome { v: a }
+T[a]: | MySome { v: a }
       | MyNone
 
-my_unwrap(opt: T(a), default: a) -> a {
-    case opt: T {
+my_unwrap[a](opt: T[a], default: a) -> a {
+    when opt {
         s: MySome { s.v }
         n: MyNone { default }
     }

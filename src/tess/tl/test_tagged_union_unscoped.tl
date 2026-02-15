@@ -16,8 +16,8 @@ main() {
     square := Foo.Square(1.5)
     none   := Foo.MyNone()
 
-    // Test 1: Exhaustive case expression
-    area1 := case circle: Foo.Shape {
+    // Test 1: Exhaustive when expression
+    area1 := when circle {
         c:  Circle { c.radius * c.radius * 3.14159 }
         sq: Square { sq.length * sq.length }
         n:  MyNone { 0.0 }
@@ -25,15 +25,15 @@ main() {
     error += if area1 >= 12.0 {0} else {1}
 
     // Test 2: Partial coverage with else
-    area2 := case square: Foo.Shape {
+    area2 := when square {
         c:  Circle { c.radius * c.radius * 3.14159 }
         sq: Square { sq.length * sq.length }
         else { 0.0 }
     }
     error += if area2 >= 2.25 {0} else {1}
 
-    // Test 3: Mutable case
-    area3 := case square.&: Foo.Shape {
+    // Test 3: Mutable when
+    area3 := when square.& {
         sq: Square { sq->length = 3.0
             sq->length * sq->length }
         else { 0.0 }

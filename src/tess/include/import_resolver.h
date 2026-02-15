@@ -37,9 +37,7 @@ void import_resolver_add_standard_path(import_resolver *self, str path);
 // - importing_file: Path to file containing the #import (for relative resolution)
 // Returns: Result with canonical path or error
 // On error, prints message to stderr and returns empty path
-import_result import_resolver_resolve(import_resolver *self,
-                                      str              import_path,
-                                      str              importing_file);
+import_result import_resolver_resolve(import_resolver *self, str import_path, str importing_file);
 
 // Mark an import as being processed (for cycle detection)
 // Returns 1 if cycle detected (already in progress), 0 otherwise

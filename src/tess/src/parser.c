@@ -98,6 +98,7 @@ static int           a_statement(parser *);
 static int           a_value(parser *);
 static ast_node     *create_body(parser *self, ast_node_array exprs);
 static ast_node     *create_body_fallback(parser *self, ast_node_array exprs, ast_node *);
+static int           maybe_type_arguments(parser *self, ast_node_array *type_args);
 static int           operator_precedence(char const *op, int is_prefix);
 static ast_node     *parse_base_expression(parser *);
 static ast_node     *parse_expression(parser *, int min_preced);
@@ -127,6 +128,7 @@ static int           a_ampersand(parser *);
 static int           a_arrow(parser *);
 static int           a_bool(parser *);
 static int           a_close_round(parser *);
+static int           a_close_square(parser *);
 static int           a_colon(parser *);
 static int           a_double_open_square(parser *);
 static int           a_double_close_square(parser *);
@@ -141,9 +143,9 @@ static int           a_nil(parser *);
 static int           a_null(parser *);
 static int           a_number(parser *);
 static int           a_open_round(parser *);
+static int           a_open_square(parser *);
 static int           a_star(parser *);
 static int           a_string(parser *);
-static int           a_c_string(parser *);
 static int           the_symbol(parser *, char const *const);
 
 static int           string_to_number(parser *, char const *const);
@@ -343,8 +345,8 @@ static int result_ast_node(parser *p, ast_node *node) {
 
 static int is_reserved(char const *s) {
     static char const *strings[] = {
-      "break", "case",   "continue", "else", "false", "if",    "in",
-      "null",  "return", "then",     "true", "void",  "while", null,
+      "break",  "case", "continue", "else", "false", "if",    "in", "null",
+      "return", "then", "true",     "void", "when",  "while", null,
     };
     char const **it = strings;
     while (*it != null)
@@ -421,7 +423,7 @@ int is_bitwise_operator(char const *s) {
 }
 
 int is_index_operator(char const *s) {
-    return 0 == strcmp(s, "[");
+    return 0 == strcmp(s, ".[");
 }
 
 int is_dot_operator(char const *s) {
@@ -624,10 +626,24 @@ static int a_open_round(parser *p) {
     return 1;
 }
 
+static int a_open_square(parser *p) {
+    if (next_token(p)) return 1;
+    if (tok_open_square == p->token.tag) return result_ast_str(p, ast_symbol, "[");
+    p->error.tag = tl_err_expected_open_square;
+    return 1;
+}
+
 static int a_close_round(parser *p) {
     if (next_token(p)) return 1;
     if (tok_close_round == p->token.tag) return result_ast_str(p, ast_symbol, ")");
     p->error.tag = tl_err_expected_close_round;
+    return 1;
+}
+
+static int a_close_square(parser *p) {
+    if (next_token(p)) return 1;
+    if (tok_close_square == p->token.tag) return result_ast_str(p, ast_symbol, "]");
+    p->error.tag = tl_err_expected_close_square;
     return 1;
 }
 
@@ -642,13 +658,6 @@ static int a_close_curly(parser *p) {
     if (next_token(p)) return 1;
     if (tok_close_curly == p->token.tag) return result_ast_str(p, ast_symbol, "}");
     p->error.tag = tl_err_expected_close_curly;
-    return 1;
-}
-
-static int a_close_square(parser *p) {
-    if (next_token(p)) return 1;
-    if (tok_close_square == p->token.tag) return result_ast_str(p, ast_symbol, "]");
-    p->error.tag = tl_err_expected_close_square;
     return 1;
 }
 
@@ -883,6 +892,7 @@ static int a_identifier(parser *p) {
         str name = str_init(p->ast_arena, p->token.s);
 
         // check for arity-qualified name
+        // TODO: arity-qualified names are not legal in all places a_identifier is parsed.
         int arity = unmangle_arity(name);
         if (arity != -1) {
             str base = unmangle_arity_qualified_name(p->ast_arena, name);
@@ -930,30 +940,13 @@ static int the_symbol(parser *p, char const *const want) {
     return 1;
 }
 
-static int a_c_string(parser *p) {
+static int a_string(parser *p) {
     if (next_token(p)) return 1;
 
-    if (tok_c_string == p->token.tag) return result_ast_str(p, ast_c_string, p->token.s);
+    if (tok_string == p->token.tag || tok_c_string == p->token.tag)
+        return result_ast_str(p, ast_string, p->token.s);
 
     p->error.tag = tl_err_expected_string;
-    return 1;
-}
-
-static int a_string(parser *self) {
-    if (next_token(self)) return 1;
-
-    if (tok_string == self->token.tag) {
-        ast_node_sized args = {.size = 1, .v = alloc_malloc(self->ast_arena, sizeof(void *))};
-        args.v[0]           = ast_node_create_sym_c(self->ast_arena, self->token.s);
-        args.v[0]->tag      = ast_c_string;
-        set_node_file(self, args.v[0]);
-
-        ast_node *str_from_cstr = ast_node_create_sym_c(self->ast_arena, "Str__from_literal__1");
-        ast_node *r             = ast_node_create_nfa(self->ast_arena, str_from_cstr, args);
-        return result_ast_node(self, r);
-    }
-
-    self->error.tag = tl_err_expected_string;
     return 1;
 }
 
@@ -1116,8 +1109,8 @@ decl_done:
     ast_node *tup = ast_node_create_tuple(self->ast_arena, (ast_node_sized)array_sized(params));
     set_node_file(self, tup);
 
-    // make arrow
-    ast_node *arrow = ast_node_create_arrow(self->ast_arena, tup, rhs);
+    // make arrow: type arguments will be parsed separately
+    ast_node *arrow = ast_node_create_arrow(self->ast_arena, tup, rhs, (ast_node_sized){0});
     set_node_file(self, arrow);
 
     return result_ast_node(self, arrow);
@@ -1137,9 +1130,9 @@ static int a_type_identifier(parser *self) {
         return 0;
     }
     if (0 == a_try(self, a_attributed_identifier)) {
-        // Look for module-qualified identifier
         ast_node *ident = self->result;
 
+        // Look for module-qualified identifier
         if (0 == a_try(self, a_dot)) {
             ast_node *op = self->result;
 
@@ -1155,8 +1148,18 @@ static int a_type_identifier(parser *self) {
                 return 0;
             }
         } else {
-            mangle_name(self, self->result);
-            return 0;
+            ast_node_array type_args;
+            if (ERROR_STOP == maybe_type_arguments(self, &type_args)) return ERROR_STOP;
+
+            mangle_name(self, ident);
+
+            if (type_args.size) {
+                ast_node *r = ast_node_create_nfa(
+                  self->ast_arena, ident, (ast_node_sized)sized_all(type_args), (ast_node_sized){0});
+                return result_ast_node(self, r);
+            } else {
+                return result_ast_node(self, ident);
+            }
         }
     }
 
@@ -1204,9 +1207,39 @@ static ast_node *maybe_wrap_lambda_function_in_let_in(parser *self, ast_node *no
     return a;
 }
 
+static int maybe_type_argument_element(parser *self) {
+    if (0 == a_try(self, a_type_identifier)) return 0;
+    if (0 == a_try(self, a_number)) return 0;
+    return 1;
+}
+
+static int maybe_type_arguments(parser *self, ast_node_array *type_args) {
+    *type_args = (ast_node_array){.alloc = self->ast_arena};
+
+    if (0 == a_try(self, a_open_square)) {
+        if (0 == a_try(self, a_close_square)) goto type_args_done;
+        if (maybe_type_argument_element(self)) return ERROR_STOP;
+        array_push(*type_args, self->result);
+
+        while (1) {
+            if (0 == a_try(self, a_close_square)) goto type_args_done;
+            if (a_try(self, a_comma)) return ERROR_STOP;
+            if (maybe_type_argument_element(self)) return ERROR_STOP;
+            array_push(*type_args, self->result);
+        }
+    }
+
+type_args_done:
+    return 0;
+}
+
 static int a_funcall(parser *self) {
+
     if (a_try(self, a_attributed_identifier)) return 1;
-    ast_node *name = self->result;
+    ast_node      *name = self->result;
+
+    ast_node_array type_args;
+    if (ERROR_STOP == maybe_type_arguments(self, &type_args)) return ERROR_STOP;
 
     if (a_try(self, a_open_round)) return 1;
 
@@ -1236,14 +1269,17 @@ done:
     mangle_name_for_arity(self, name, args.size, 0); // 0 = function call, not definition
     mangle_name(self, name);
 
-    ast_node *node = ast_node_create_nfa(self->ast_arena, name, (ast_node_sized)sized_all(args));
+    ast_node *node = ast_node_create_nfa(self->ast_arena, name, (ast_node_sized)sized_all(type_args),
+                                         (ast_node_sized)sized_all(args));
     return result_ast_node(self, node);
 }
 
 static int a_type_constructor(parser *self) {
     if (a_try(self, a_attributed_identifier)) return 1;
-    ast_node *name = self->result;
+    ast_node      *name = self->result;
 
+    ast_node_array type_args;
+    if (ERROR_STOP == maybe_type_arguments(self, &type_args)) return ERROR_STOP;
     if (a_try(self, a_open_round)) return 1;
 
     ast_node_array args = {.alloc = self->ast_arena};
@@ -1260,7 +1296,8 @@ static int a_type_constructor(parser *self) {
 done:
     array_shrink(args);
     mangle_name(self, name);
-    ast_node *node = ast_node_create_nfa_tc(self->ast_arena, name, (ast_node_sized)sized_all(args));
+    ast_node *node = ast_node_create_nfa_tc(self->ast_arena, name, (ast_node_sized)sized_all(type_args),
+                                            (ast_node_sized)sized_all(args));
     return result_ast_node(self, node);
 }
 
@@ -1330,15 +1367,24 @@ static int a_value(parser *self) {
     if (0 == a_try(self, a_lambda_function)) return 0;
     if (0 == a_try(self, a_number)) return 0;
     if (0 == a_try(self, a_string)) return 0;
-    if (0 == a_try(self, a_c_string)) return 0;
     if (0 == a_try(self, a_char)) return 0;
     if (0 == a_try(self, a_bool)) return 0;
     if (0 == a_try(self, a_nil)) return 0;
     if (0 == a_try(self, a_null)) return 0;
     if (0 == a_try(self, a_attributed_identifier)) {
-        dbg(self, "a_value: '%s'", str_cstr(&self->result->symbol.name));
-        mangle_name(self, self->result);
-        return 0;
+
+        ast_node *ident = self->result;
+        mangle_name(self, ident);
+
+        ast_node_array type_args;
+        if (ERROR_STOP == maybe_type_arguments(self, &type_args)) return ERROR_STOP;
+        if (type_args.size) {
+            ast_node *r = ast_node_create_nfa(self->ast_arena, ident, (ast_node_sized)sized_all(type_args),
+                                              (ast_node_sized){0});
+            return result_ast_node(self, r);
+        } else {
+            return result_ast_node(self, ident);
+        }
     }
     if (0 == a_try(self, a_attribute_set)) return 0;
 
@@ -1608,6 +1654,84 @@ begin_body:
     return node;
 }
 
+static ast_node *parse_when_expr(parser *self) {
+    if (a_try_s(self, the_symbol, "when")) {
+        self->error.tag = tl_err_ok;
+        return null;
+    }
+
+    ast_node *expr = parse_expression(self, INT_MIN);
+    if (!expr) return null;
+
+    int is_pointer = 0;
+    if (ast_node_is_unary_op(expr)) {
+        if (is_ampersand(expr->unary_op.op)) is_pointer = 1;
+        else return null; // no other unary op is valid
+
+        // reset variable to the actual symbol
+        expr = expr->unary_op.operand;
+        if (!ast_node_is_symbol(expr)) return null;
+    }
+
+    if (a_try(self, a_open_curly)) return null;
+
+    ast_node_array conditions = {.alloc = self->ast_arena};
+    ast_node_array arms       = {.alloc = self->ast_arena};
+    ast_node      *else_arm   = null;
+    while (1) {
+        // check for else condition
+        if (0 == a_try_s(self, the_symbol, "else")) {
+            if (else_arm) {
+                self->error.tag = tl_err_unexpected_else;
+                return null;
+            }
+            else_arm = parse_body(self);
+            if (!else_arm) return null;
+            continue;
+        }
+        if (0 == a_try(self, a_close_curly)) break;
+
+        ast_node *cond = null;
+
+        // a union case expression: condition must be an annotated symbol: a symbol to be bound, and the
+        // desired variant type to be matched. The variant type must be mangled to the union_module.
+        // E.g. `c: Circle` is the symbol `c` with the annotation `Circle`, which must be mangled to
+        // `Foo.Circle`.
+        if (a_try(self, a_param)) return null;
+        cond = self->result;
+        if (!ast_node_is_symbol(cond) || !cond->symbol.annotation ||
+            !ast_node_is_symbol(cond->symbol.annotation))
+            return null;
+
+        // Note: Do not module-mangle annotation symbol: inference will use the unmangled name within the
+        // module scope of the tagged union.
+
+        if (!cond) return null;
+        ast_node *body = parse_body(self);
+        if (!body) return null;
+
+        array_push(conditions, cond);
+        array_push(arms, body);
+    }
+
+    if (else_arm) {
+        // else arm always goes at the end
+        ast_node *sentinel = ast_node_create_nil(self->ast_arena);
+        set_node_file(self, sentinel);
+        array_push(conditions, sentinel);
+        array_push(arms, else_arm);
+    }
+
+    int union_flag = 0;
+    if (is_pointer) union_flag = AST_TAGGED_UNION_MUTABLE;
+    else union_flag = AST_TAGGED_UNION_VALUE;
+
+    ast_node *node = ast_node_create_case(self->ast_arena, expr, (ast_node_sized)array_sized(conditions),
+                                          (ast_node_sized)array_sized(arms), null, null, union_flag);
+    set_node_file(self, node);
+    return node;
+}
+
 //
 
 static int maybe_mangle_binop(parser *self, ast_node *op, ast_node **inout, ast_node *right) {
@@ -1739,6 +1863,10 @@ static ast_node *parse_base_expression(parser *self) {
     if (node) return node;
     if (self->error.tag != tl_err_ok) return null;
 
+    node = parse_when_expr(self);
+    if (node) return node;
+    if (self->error.tag != tl_err_ok) return null;
+
     if (0 == a_try(self, a_value)) return self->result;
     return null;
 }
@@ -1755,8 +1883,19 @@ static ast_node *parse_expression(parser *self, int min_prec) {
             ast_node *op = self->result;
 
             // Note: special case: .* and .& are converted to unary_op for legacy reasons
+            // Note: special case: .[ index ] is pointer/CArray indexing
             if (0 == str_cmp_c(op->symbol.name, ".")) {
-                if (0 == a_try(self, a_star)) {
+                if (0 == a_try(self, a_open_square)) {
+                    ast_node *index_expr = parse_expression(self, INT_MIN);
+                    if (!index_expr) return null;
+                    if (a_try(self, a_close_square)) return null;
+                    ast_node *index_op = ast_node_create_sym_c(self->ast_arena, ".[");
+                    ast_node *binop =
+                      ast_node_create_binary_op(self->ast_arena, index_op, left, index_expr);
+                    set_node_file(self, binop);
+                    left = binop;
+                    continue;
+                } else if (0 == a_try(self, a_star)) {
                     op              = self->result;
                     ast_node *unary = ast_node_create_unary_op(self->ast_arena, op, left);
                     set_node_file(self, unary);
@@ -2061,6 +2200,20 @@ static int a_field_assignment(parser *self) {
     return result_ast_node(self, a);
 }
 
+static int ast_node_is_diverging(ast_node const *node) {
+    if (!node) return 0;
+    if (ast_return == node->tag) return 1; // return and break (is_break_statement)
+    if (ast_continue == node->tag) return 1;
+    return 0;
+}
+
+static int ast_body_is_diverging(ast_node const *node) {
+    if (!node) return 0;
+    if (ast_body != node->tag) return ast_node_is_diverging(node);
+    if (0 == node->body.expressions.size) return 0;
+    return ast_node_is_diverging(node->body.expressions.v[node->body.expressions.size - 1]);
+}
+
 static int a_assignment(parser *self) {
     // Note: this is a let-in expression
     ast_node *lval = parse_lvalue(self);
@@ -2071,6 +2224,44 @@ static int a_assignment(parser *self) {
     ast_node *val = parse_expression(self, INT_MIN);
     if (!val) return 1;
 
+    // Bail form: s: MySome := val else { diverge }
+    // Desugars to: when val { s: MySome { <remaining body> } else { <diverge> } }
+    if (ast_node_is_symbol(lval) && lval->symbol.annotation && 0 == a_try_s(self, the_symbol, "else")) {
+        ast_node *else_body = parse_body(self);
+        if (!else_body) return 1;
+
+        if (!ast_body_is_diverging(else_body)) {
+            self->error.tag = tl_err_tagged_union_bail_else_must_diverge;
+            return 1;
+        }
+
+        // Parse remaining body expressions (the continuation after the bail)
+        ast_node_array exprs = {.alloc = self->ast_arena};
+        while (1) {
+            if (a_body_element(self)) break;
+            array_push(exprs, self->result);
+        }
+        ast_node *success_body = create_body_fallback(self, exprs, val);
+
+        // Build case node: condition is the annotated lval, else arm is the bail body
+        ast_node_array conditions = {.alloc = self->ast_arena};
+        ast_node_array arms       = {.alloc = self->ast_arena};
+        array_push(conditions, lval);
+        array_push(arms, success_body);
+
+        ast_node *sentinel = ast_node_create_nil(self->ast_arena);
+        set_node_file(self, sentinel);
+        array_push(conditions, sentinel);
+        array_push(arms, else_body);
+
+        ast_node *node =
+          ast_node_create_case(self->ast_arena, val, (ast_node_sized)array_sized(conditions),
+                               (ast_node_sized)array_sized(arms), null, null, AST_TAGGED_UNION_VALUE);
+        set_node_file(self, node);
+        return result_ast_node(self, node);
+    }
+
+    // Normal let-in path
     ast_node_array exprs = {.alloc = self->ast_arena};
     while (1) {
         if (a_body_element(self)) break;
@@ -2261,7 +2452,7 @@ static int a_for_statement(parser *self) {
         iter_args.v[0]           = iterable_address;
         ast_node *iter_init      = ast_node_create_sym_c(self->ast_arena, "iter_init__1");
         mangle_name_for_module(self, iter_init, module_name);
-        call_iter_init = ast_node_create_nfa(self->ast_arena, iter_init, iter_args);
+        call_iter_init = ast_node_create_nfa(self->ast_arena, iter_init, (ast_node_sized){0}, iter_args);
     }
 
     // Create the nfa for iter_value
@@ -2271,7 +2462,7 @@ static int a_for_statement(parser *self) {
         iter_args.v[0]           = iterator_address;
         ast_node *iter_value     = ast_node_create_sym_c(self->ast_arena, "iter_value__1");
         mangle_name_for_module(self, iter_value, module_name);
-        call_iter_value = ast_node_create_nfa(self->ast_arena, iter_value, iter_args);
+        call_iter_value = ast_node_create_nfa(self->ast_arena, iter_value, (ast_node_sized){0}, iter_args);
     }
 
     // Create the nfa for iter_ptr
@@ -2281,7 +2472,7 @@ static int a_for_statement(parser *self) {
         iter_args.v[0]           = iterator_address;
         ast_node *iter_ptr       = ast_node_create_sym_c(self->ast_arena, "iter_ptr__1");
         mangle_name_for_module(self, iter_ptr, module_name);
-        call_iter_ptr = ast_node_create_nfa(self->ast_arena, iter_ptr, iter_args);
+        call_iter_ptr = ast_node_create_nfa(self->ast_arena, iter_ptr, (ast_node_sized){0}, iter_args);
     }
 
     // Create the nfa for iter_cond
@@ -2291,7 +2482,7 @@ static int a_for_statement(parser *self) {
         iter_args.v[0]           = iterator_address;
         ast_node *iter_cond      = ast_node_create_sym_c(self->ast_arena, "iter_cond__1");
         mangle_name_for_module(self, iter_cond, module_name);
-        call_iter_cond = ast_node_create_nfa(self->ast_arena, iter_cond, iter_args);
+        call_iter_cond = ast_node_create_nfa(self->ast_arena, iter_cond, (ast_node_sized){0}, iter_args);
     }
 
     // Create the nfa for iter_update
@@ -2301,7 +2492,8 @@ static int a_for_statement(parser *self) {
         iter_args.v[0]           = iterator_address;
         ast_node *iter_update    = ast_node_create_sym_c(self->ast_arena, "iter_update__1");
         mangle_name_for_module(self, iter_update, module_name);
-        call_iter_update = ast_node_create_nfa(self->ast_arena, iter_update, iter_args);
+        call_iter_update =
+          ast_node_create_nfa(self->ast_arena, iter_update, (ast_node_sized){0}, iter_args);
     }
 
     // Create the nfa for iter_deinit
@@ -2311,7 +2503,8 @@ static int a_for_statement(parser *self) {
         iter_args.v[0]           = iterator_address;
         ast_node *iter_deinit    = ast_node_create_sym_c(self->ast_arena, "iter_deinit__1");
         mangle_name_for_module(self, iter_deinit, module_name);
-        call_iter_deinit = ast_node_create_nfa(self->ast_arena, iter_deinit, iter_args);
+        call_iter_deinit =
+          ast_node_create_nfa(self->ast_arena, iter_deinit, (ast_node_sized){0}, iter_args);
     }
 
     ast_node *while_body = null;
@@ -2382,12 +2575,28 @@ static int toplevel_defun(parser *self) {
     // TODO: a portion is duplicated with a_type_arrow, but this function needs access to the params that
     // a_type_arrow embeds in an arrow.
     if (a_try(self, a_attributed_identifier)) return 1;
-    ast_node      *name   = self->result;
-    ast_node_array params = {.alloc = self->ast_arena};
+    ast_node      *name        = self->result;
+    ast_node_array type_params = {.alloc = self->ast_arena};
+    ast_node_array params      = {.alloc = self->ast_arena};
 
+    if (0 == a_try(self, a_open_square)) {
+        if (0 == a_try(self, a_close_square)) goto type_params_done;
+        if (a_try(self, a_identifier)) return 1;
+        array_push(type_params, self->result);
+
+        while (1) {
+            if (0 == a_try(self, a_close_square)) goto type_params_done;
+            if (a_try(self, a_comma)) return 1;
+            if (a_try(self, a_identifier)) return 1;
+            array_push(type_params, self->result);
+        }
+    }
+
+type_params_done:
     if (a_try(self, a_open_round)) return 1;
     if (0 == a_try(self, a_close_round)) goto decl_done;
-    if (0 == a_try(self, a_param)) array_push(params, self->result);
+    if (a_try(self, a_param)) return 1;
+    array_push(params, self->result);
 
     while (1) {
         if (0 == a_try(self, a_close_round)) goto decl_done;
@@ -2409,7 +2618,8 @@ decl_done:
         set_node_file(self, tup);
 
         // make arrow
-        ast_node *arrow = ast_node_create_arrow(self->ast_arena, tup, ann);
+        ast_node *arrow =
+          ast_node_create_arrow(self->ast_arena, tup, ann, (ast_node_sized)sized_all(type_params));
         set_node_file(self, arrow);
 
         // attach to name
@@ -2436,7 +2646,8 @@ decl_done:
     add_module_symbol(self, name);
     mangle_name(self, name);
 
-    ast_node *let = ast_node_create_let(self->ast_arena, name, (ast_node_sized)sized_all(params), body);
+    ast_node *let = ast_node_create_let(self->ast_arena, name, (ast_node_sized)sized_all(type_params),
+                                        (ast_node_sized)sized_all(params), body);
     set_node_parameters(self, let, &params);
     let->let.name = name;
     let->let.body = body;
@@ -2467,13 +2678,21 @@ static int toplevel_assign(parser *self) {
 
 static int toplevel_forward(parser *self) {
     if (a_try(self, a_attributed_identifier)) return 1;
-    ast_node *name = self->result;
+    ast_node      *name = self->result;
+
+    ast_node_array type_args;
+    if (ERROR_STOP == maybe_type_arguments(self, &type_args)) return ERROR_STOP;
 
     if (a_try(self, a_type_arrow)) return 1;
     ast_node *arrow = self->result;
 
     // Check for reserved type keywords to disallow
     if (is_reserved_type_name(name)) return ERROR_STOP;
+
+    // add type arguments
+    array_shrink(type_args);
+    arrow->arrow.n_type_parameters = type_args.size;
+    arrow->arrow.type_parameters   = type_args.v;
 
     // attach to name
     name->symbol.annotation = arrow;
@@ -2812,7 +3031,9 @@ static int parse_struct_fields(parser *self, str parent_prefix, u8 parent_n_type
                         }
                         ast_node *new_name = ast_node_create_sym(self->ast_arena, info->prefixed_name);
                         mangle_name(self, new_name);
-                        ast_node *new_ann = ast_node_create_nfa(self->ast_arena, new_name, args);
+
+                        ast_node *new_ann =
+                          ast_node_create_nfa(self->ast_arena, new_name, args, (ast_node_sized){0});
                         out_fields->v[fi]->symbol.annotation = new_ann;
                     } else {
                         // Replace with just Foo_Bar (no type params)
@@ -2840,7 +3061,9 @@ static int toplevel_struct(parser *self) {
     // Check for reserved type keywords to disallow
     if (is_reserved_type_name(type_ident)) return ERROR_STOP;
 
-    // Extract parent name and type args
+    // Extract parent name and type args.
+    // a_type_identifier -> a_funcall parses e.g. Point[a, b] as an NFA where the type params
+    // (a, b) are in .type_arguments (via maybe_type_arguments which parses [...]).
     ast_node  *parent_name = null;
     u8         n_type_args = 0;
     ast_node **type_args   = null;
@@ -2849,8 +3072,8 @@ static int toplevel_struct(parser *self) {
         parent_name = type_ident;
     } else if (ast_node_is_nfa(type_ident)) {
         parent_name = type_ident->named_application.name;
-        n_type_args = type_ident->named_application.n_arguments;
-        type_args   = type_ident->named_application.arguments;
+        n_type_args = type_ident->named_application.n_type_arguments;
+        type_args   = type_ident->named_application.type_arguments;
     } else fatal("logic error");
 
     str parent_prefix = parent_name->symbol.name;
@@ -2868,8 +3091,8 @@ static int toplevel_struct(parser *self) {
         r->user_type_def.type_arguments   = null;
         r->user_type_def.name             = type_ident;
     } else if (ast_node_is_nfa(type_ident)) {
-        r->user_type_def.n_type_arguments = type_ident->named_application.n_arguments;
-        r->user_type_def.type_arguments   = type_ident->named_application.arguments;
+        r->user_type_def.n_type_arguments = type_ident->named_application.n_type_arguments;
+        r->user_type_def.type_arguments   = type_ident->named_application.type_arguments;
         r->user_type_def.name             = type_ident->named_application.name;
     } else fatal("logic error");
 
@@ -2956,8 +3179,8 @@ static int toplevel_union(parser *self) {
         r->user_type_def.type_arguments   = null;
         r->user_type_def.name             = type_ident;
     } else if (ast_node_is_nfa(type_ident)) {
-        r->user_type_def.n_type_arguments = type_ident->named_application.n_arguments;
-        r->user_type_def.type_arguments   = type_ident->named_application.arguments;
+        r->user_type_def.n_type_arguments = type_ident->named_application.n_type_arguments;
+        r->user_type_def.type_arguments   = type_ident->named_application.type_arguments;
         r->user_type_def.name             = type_ident->named_application.name;
     } else fatal("logic error");
 
@@ -2990,9 +3213,14 @@ static int annotation_uses_type_param(ast_node *node, str param_name) {
     }
 
     if (ast_node_is_nfa(node)) {
-        // Check the nfa arguments recursively
+        // Check the nfa arguments recursively.
+        // Since it's possible type arguments are reference in both the explicit type arguments and the
+        // value arguments, iterate through both.
         for (u32 i = 0; i < node->named_application.n_arguments; i++) {
             if (annotation_uses_type_param(node->named_application.arguments[i], param_name)) return 1;
+        }
+        for (u32 i = 0; i < node->named_application.n_type_arguments; i++) {
+            if (annotation_uses_type_param(node->named_application.type_arguments[i], param_name)) return 1;
         }
     }
 
@@ -3143,7 +3371,7 @@ static ast_node *create_variant_constructor(parser *self,
 
     // 3. Build the return type annotation
     // For non-generic: Shape
-    // For generic: Shape(T)
+    // For generic: Shape[T]
     ast_node *return_type = null;
     if (n_type_args) {
         ast_node_sized args = {.size = n_type_args,
@@ -3153,7 +3381,8 @@ static ast_node *create_variant_constructor(parser *self,
         }
         ast_node *wrapper_name = ast_node_create_sym(arena, tu_name_str);
         mangle_name(self, wrapper_name);
-        return_type = ast_node_create_nfa(arena, wrapper_name, args);
+        // TYPE ANNOTATION NFA: Shape[T] — type params in type_args slot.
+        return_type = ast_node_create_nfa(arena, wrapper_name, args, (ast_node_sized){0});
     } else {
         return_type = ast_node_create_sym(arena, tu_name_str);
         mangle_name(self, return_type);
@@ -3162,7 +3391,7 @@ static ast_node *create_variant_constructor(parser *self,
     // 4. Build the arrow annotation for function type: (params) -> ReturnType
     ast_node *param_tuple = ast_node_create_tuple(arena, (ast_node_sized)array_sized(params));
     set_node_file(self, param_tuple);
-    ast_node *arrow = ast_node_create_arrow(arena, param_tuple, return_type);
+    ast_node *arrow = ast_node_create_arrow(arena, param_tuple, return_type, (ast_node_sized){0});
     set_node_file(self, arrow);
     func_name->symbol.annotation = arrow;
 
@@ -3184,8 +3413,9 @@ static ast_node *create_variant_constructor(parser *self,
     str       var_struct_str  = str_cat_3(arena, tu_name_str, S("__"), var_name_str);
     ast_node *inner_call_name = ast_node_create_sym(arena, var_struct_str);
     mangle_name(self, inner_call_name);
-    ast_node *inner_call =
-      ast_node_create_nfa(arena, inner_call_name, (ast_node_sized)array_sized(inner_args));
+    // VALUE CONSTRUCTION NFA: Shape__Circle(radius = radius) — field assignments are value args.
+    ast_node *inner_call = ast_node_create_nfa(arena, inner_call_name, (ast_node_sized){0},
+                                               (ast_node_sized)array_sized(inner_args));
     set_node_file(self, inner_call);
 
     // Union construction: __Shape__Union_(Circle = innerCall)
@@ -3198,11 +3428,11 @@ static ast_node *create_variant_constructor(parser *self,
     array_push(union_args, union_assign);
     array_shrink(union_args);
 
-    // Union call just passes the variant assignment - type parameters are inferred
+    // VALUE CONSTRUCTION NFA: __Shape__Union_(Circle = innerCall) — field assignment is a value arg.
     ast_node *union_call_name = ast_node_create_sym(arena, union_name_str);
     mangle_name(self, union_call_name);
-    ast_node *union_call =
-      ast_node_create_nfa(arena, union_call_name, (ast_node_sized)array_sized(union_args));
+    ast_node *union_call = ast_node_create_nfa(arena, union_call_name, (ast_node_sized){0},
+                                               (ast_node_sized)array_sized(union_args));
     set_node_file(self, union_call);
 
     // Tag access: __Shape__Tag_.Circle
@@ -3230,11 +3460,11 @@ static ast_node *create_variant_constructor(parser *self,
     array_push(wrapper_args, u_assign);
     array_shrink(wrapper_args);
 
-    // Wrapper call just passes tag and union fields - type parameters are inferred
+    // VALUE CONSTRUCTION NFA: Shape(tag = tagAccess, u = unionCall) — field assignments are value args.
     ast_node *wrapper_call_name = ast_node_create_sym(arena, tu_name_str);
     mangle_name(self, wrapper_call_name);
-    ast_node *wrapper_call =
-      ast_node_create_nfa(arena, wrapper_call_name, (ast_node_sized)array_sized(wrapper_args));
+    ast_node *wrapper_call = ast_node_create_nfa(arena, wrapper_call_name, (ast_node_sized){0},
+                                                 (ast_node_sized)array_sized(wrapper_args));
     set_node_file(self, wrapper_call);
 
     // Create body with just the wrapper call
@@ -3247,7 +3477,8 @@ static ast_node *create_variant_constructor(parser *self,
     // Create the function (let) node
     add_module_symbol(self, func_name);
     mangle_name(self, func_name);
-    ast_node *let = ast_node_create_let(arena, func_name, (ast_node_sized)array_sized(params), body);
+    ast_node *let =
+      ast_node_create_let(arena, func_name, (ast_node_sized){0}, (ast_node_sized)array_sized(params), body);
     set_node_parameters(self, let, &params);
     let->let.name = func_name;
     let->let.body = body;
@@ -3286,7 +3517,7 @@ create_variant_make_function(parser *self,
     }
     ast_node *param = ast_node_create_sym_c(arena, "v");
 
-    // Build type annotation for the parameter: Shape__Circle or Shape__Circle(a) for generics
+    // Build type annotation for the parameter: Shape__Circle or Shape__Circle[a] for generics
     // For existing types, use explicit type args; for new variants, scan fields
     ast_node **var_type_args   = null;
     u8         var_n_type_args = 0;
@@ -3307,7 +3538,8 @@ create_variant_make_function(parser *self,
         ast_node *param_type_name = ast_node_create_sym(arena, var_struct_str);
         // For existing types, name is already fully mangled; skip mangle_name
         if (!is_existing_type) mangle_name(self, param_type_name);
-        param->symbol.annotation = ast_node_create_nfa(arena, param_type_name, args);
+        // TYPE ANNOTATION NFA: e.g. Shape__Circle[a] — type params in type_args slot.
+        param->symbol.annotation = ast_node_create_nfa(arena, param_type_name, args, (ast_node_sized){0});
     } else {
         ast_node *param_type = ast_node_create_sym(arena, var_struct_str);
         // For existing types, name is already fully mangled; skip mangle_name
@@ -3319,7 +3551,7 @@ create_variant_make_function(parser *self,
     array_push(params, param);
     array_shrink(params);
 
-    // 3. Build the return type annotation: Shape or Shape(T)
+    // 3. Build the return type annotation: Shape or Shape[T]
     ast_node *return_type = null;
     if (n_type_args) {
         ast_node_sized args = {.size = n_type_args,
@@ -3329,7 +3561,8 @@ create_variant_make_function(parser *self,
         }
         ast_node *wrapper_name = ast_node_create_sym(arena, tu_name_str);
         mangle_name(self, wrapper_name);
-        return_type = ast_node_create_nfa(arena, wrapper_name, args);
+        // TYPE ANNOTATION NFA: Shape[T] — type params in type_args slot.
+        return_type = ast_node_create_nfa(arena, wrapper_name, args, (ast_node_sized){0});
     } else {
         return_type = ast_node_create_sym(arena, tu_name_str);
         mangle_name(self, return_type);
@@ -3338,7 +3571,7 @@ create_variant_make_function(parser *self,
     // 4. Build arrow annotation
     ast_node *param_tuple = ast_node_create_tuple(arena, (ast_node_sized)array_sized(params));
     set_node_file(self, param_tuple);
-    ast_node *arrow = ast_node_create_arrow(arena, param_tuple, return_type);
+    ast_node *arrow = ast_node_create_arrow(arena, param_tuple, return_type, (ast_node_sized){0});
     set_node_file(self, arrow);
     func_name->symbol.annotation = arrow;
 
@@ -3354,10 +3587,11 @@ create_variant_make_function(parser *self,
     array_push(union_args, union_assign);
     array_shrink(union_args);
 
+    // VALUE CONSTRUCTION NFA: __Shape__Union_(Circle = v) — field assignment is a value arg.
     ast_node *union_call_name = ast_node_create_sym(arena, union_name_str);
     mangle_name(self, union_call_name);
-    ast_node *union_call =
-      ast_node_create_nfa(arena, union_call_name, (ast_node_sized)array_sized(union_args));
+    ast_node *union_call = ast_node_create_nfa(arena, union_call_name, (ast_node_sized){0},
+                                               (ast_node_sized)array_sized(union_args));
     set_node_file(self, union_call);
 
     // Tag access: __Shape__Tag_.Circle
@@ -3385,10 +3619,11 @@ create_variant_make_function(parser *self,
     array_push(wrapper_args, u_assign);
     array_shrink(wrapper_args);
 
+    // VALUE CONSTRUCTION NFA: Shape(tag = tagAccess, u = unionCall) — field assignments are value args.
     ast_node *wrapper_call_name = ast_node_create_sym(arena, tu_name_str);
     mangle_name(self, wrapper_call_name);
-    ast_node *wrapper_call =
-      ast_node_create_nfa(arena, wrapper_call_name, (ast_node_sized)array_sized(wrapper_args));
+    ast_node *wrapper_call = ast_node_create_nfa(arena, wrapper_call_name, (ast_node_sized){0},
+                                                 (ast_node_sized)array_sized(wrapper_args));
     set_node_file(self, wrapper_call);
 
     // Create body
@@ -3401,7 +3636,8 @@ create_variant_make_function(parser *self,
     // Create the function (let) node
     add_module_symbol(self, func_name);
     mangle_name(self, func_name);
-    ast_node *let = ast_node_create_let(arena, func_name, (ast_node_sized)array_sized(params), body);
+    ast_node *let =
+      ast_node_create_let(arena, func_name, (ast_node_sized){0}, (ast_node_sized)array_sized(params), body);
     set_node_parameters(self, let, &params);
     let->let.name = func_name;
     let->let.body = body;
@@ -3416,7 +3652,7 @@ create_variant_make_function(parser *self,
 //           | Rectangle { length: Float, height: Float }
 //
 // Or with generics:
-//   Option(T) = | Some { value: T }
+//   Option[T] : | Some { value: T }
 //               | None
 //
 // Desugars to:
@@ -3444,7 +3680,8 @@ static int toplevel_tagged_union(parser *self) {
     // Parse first '|'
     if (a_try(self, a_vertical_bar)) return 1;
 
-    // Extract type name and type arguments
+    // Extract type name and type arguments.
+    // a_type_identifier -> a_funcall parses e.g. Option[T] with type params in .type_arguments.
     ast_node  *tu_name     = null;
     u8         n_type_args = 0;
     ast_node **type_args   = null;
@@ -3453,8 +3690,8 @@ static int toplevel_tagged_union(parser *self) {
         tu_name = type_ident;
     } else if (ast_node_is_nfa(type_ident)) {
         tu_name     = type_ident->named_application.name;
-        n_type_args = type_ident->named_application.n_arguments;
-        type_args   = type_ident->named_application.arguments;
+        n_type_args = type_ident->named_application.n_type_arguments;
+        type_args   = type_ident->named_application.type_arguments;
     } else {
         return 1;
     }
@@ -3472,7 +3709,7 @@ static int toplevel_tagged_union(parser *self) {
         int            is_existing_type; // 1 if variant references a pre-existing type
         str            existing_module;  // module name for existing type (e.g., "Foo" from | Foo.Special)
         ast_node *
-          *existing_type_args; // explicit type args for generic existing types (e.g., (a) in | Foo.Pair(a))
+          *existing_type_args; // explicit type args for generic existing types (e.g., [a] in | Foo.Pair[a])
         u8 n_existing_type_args;
     } variant;
 
@@ -3502,13 +3739,13 @@ static int toplevel_tagged_union(parser *self) {
             var_name    = self->result;
             is_existing = 1;
 
-            // Parse optional type args: Module.Type(a, b)
-            if (0 == a_try(self, a_open_round)) {
+            // Parse optional type args: Module.Type[a, b]
+            if (0 == a_try(self, a_open_square)) {
                 ast_node_array ta = {.alloc = self->ast_arena};
                 while (1) {
                     if (0 == a_try(self, a_comma)) { /* skip comma */
                     }
-                    if (0 == a_try(self, a_close_round)) break;
+                    if (0 == a_try(self, a_close_square)) break;
                     if (a_try(self, a_identifier)) return ERROR_STOP;
                     array_push(ta, self->result);
                 }
@@ -3582,7 +3819,8 @@ static int toplevel_tagged_union(parser *self) {
         }
         array_shrink(tag_idents);
 
-        ast_node *tag_enum = create_enum_utd(self, tag_name, tag_idents);
+        ast_node *tag_enum                        = create_enum_utd(self, tag_name, tag_idents);
+        tag_enum->user_type_def.tagged_union_name = tu_name_str;
         add_module_symbol(self, tag_name);
         mangle_name(self, tag_name);
         array_push(result_nodes, tag_enum);
@@ -3604,6 +3842,7 @@ static int toplevel_tagged_union(parser *self) {
           collect_used_type_params(self, n_type_args, type_args, v->fields, &var_type_args);
 
         ast_node *var_struct = create_struct_utd(self, var_name, var_n_type_args, var_type_args, v->fields);
+        var_struct->user_type_def.tagged_union_name = tu_name_str;
         add_module_symbol(self, var_name);
         mangle_name(self, var_name);
         array_push(result_nodes, var_struct);
@@ -3652,7 +3891,8 @@ static int toplevel_tagged_union(parser *self) {
                 ast_node_sized args          = {.size = n_used_type_args, .v = used_type_args};
                 ast_node      *var_type_name = ast_node_create_sym(self->ast_arena, var_struct_name);
                 if (!v->is_existing_type) mangle_name(self, var_type_name);
-                field_ann = ast_node_create_nfa(self->ast_arena, var_type_name, args);
+                // TYPE ANNOTATION NFA: e.g. Shape__Circle[a] — type params in type_args slot.
+                field_ann = ast_node_create_nfa(self->ast_arena, var_type_name, args, (ast_node_sized){0});
             } else {
                 // Non-generic variant (no fields or no type params used)
                 field_ann = ast_node_create_sym(self->ast_arena, var_struct_name);
@@ -3675,6 +3915,7 @@ static int toplevel_tagged_union(parser *self) {
 
         ast_node *union_utd =
           create_union_utd(self, union_name, n_type_args, union_type_args, union_fields);
+        union_utd->user_type_def.tagged_union_name = tu_name_str;
         add_module_symbol(self, union_name);
         mangle_name(self, union_name);
         array_push(result_nodes, union_utd);
@@ -3697,7 +3938,7 @@ static int toplevel_tagged_union(parser *self) {
             array_push(wrapper_fields, tag_field);
         }
 
-        // Field: u: __Shape__Union_ (or __Shape__Union_(T) for generics)
+        // Field: u: __Shape__Union_ (or __Shape__Union_[T] for generics)
         {
             ast_node *u_field        = ast_node_create_sym_c(self->ast_arena, "u");
             str       union_type_str = str_cat_3(self->ast_arena, S("__"), tu_name_str, S("__Union_"));
@@ -3712,7 +3953,8 @@ static int toplevel_tagged_union(parser *self) {
                 }
                 ast_node *union_type_name = ast_node_create_sym(self->ast_arena, union_type_str);
                 mangle_name(self, union_type_name);
-                u_ann = ast_node_create_nfa(self->ast_arena, union_type_name, args);
+                // TYPE ANNOTATION NFA: __Shape__Union_[T] — type params in type_args slot.
+                u_ann = ast_node_create_nfa(self->ast_arena, union_type_name, args, (ast_node_sized){0});
             } else {
                 u_ann = ast_node_create_sym(self->ast_arena, union_type_str);
                 mangle_name(self, u_ann);
@@ -3734,6 +3976,7 @@ static int toplevel_tagged_union(parser *self) {
 
         ast_node *wrapper_utd =
           create_struct_utd(self, wrapper_name, n_type_args, wrapper_type_args, wrapper_fields);
+        wrapper_utd->user_type_def.tagged_union_name = tu_name_str;
         add_module_symbol(self, wrapper_name);
         mangle_name(self, wrapper_name);
         array_push(result_nodes, wrapper_utd);

@@ -12,7 +12,7 @@ add_one(x: Int) -> Int { x + 1 }
 Handler: { fn: (Int) -> Int }
 
 // Recursive struct: linked list node with function pointer
-Node: { handler: Handler, value: Int, next: Ptr(Node) }
+Node: { handler: Handler, value: Int, next: Ptr[Node] }
 
 // Helper to apply handler
 apply_handler(h: Handler, x: Int) -> Int {
@@ -24,19 +24,19 @@ main() {
 
     // Create nodes manually (linked list of callbacks)
     // Node 3 (tail): add_one
-    node3_ptr: Ptr(Node) := c_malloc(sizeof(Node))
+    node3_ptr: Ptr[Node] := c_malloc(sizeof[Node]())
     node3_ptr->handler = Handler(fn = add_one/1)
     node3_ptr->value   = 3
     node3_ptr->next    = null
 
     // Node 2: triple
-    node2_ptr: Ptr(Node) := c_malloc(sizeof(Node))
+    node2_ptr: Ptr[Node] := c_malloc(sizeof[Node]())
     node2_ptr->handler = Handler(fn = triple/1)
     node2_ptr->value   = 2
     node2_ptr->next    = node3_ptr
 
     // Node 1 (head): double
-    node1_ptr: Ptr(Node) := c_malloc(sizeof(Node))
+    node1_ptr: Ptr[Node] := c_malloc(sizeof[Node]())
     node1_ptr->handler = Handler(fn = double/1)
     node1_ptr->value   = 1
     node1_ptr->next    = node2_ptr

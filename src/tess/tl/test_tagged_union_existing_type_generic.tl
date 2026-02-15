@@ -1,11 +1,11 @@
 #module Foo
 
 // A pre-existing generic struct
-Pair(a): { x: a, y: a }
+Pair[a]: { x: a, y: a }
 
 // Tagged union that references an existing generic type as a variant
-Shape(T): | Circle { radius: T }
-          | Foo.Pair(T)
+Shape[T]: | Circle { radius: T }
+          | Foo.Pair[T]
           | MyNone
 
 #module main
@@ -19,8 +19,8 @@ main() {
     // Wrap the existing type into the tagged union using make function
     shape := Foo.make_Shape_Pair(p)
 
-    // Verify case expression works
-    r1 := case shape: Foo.Shape {
+    // Verify when expression works
+    r1 := when shape {
         c: Circle { c.radius }
         p: Pair { p.x + p.y }
         n: MyNone { 0 }
@@ -29,7 +29,7 @@ main() {
 
     // Verify circle still works with the generic type param
     circle := Foo.Circle(3.14)
-    r2     := case circle: Foo.Shape {
+    r2     := when circle {
         c: Circle { c.radius }
         p: Pair { 0.0 }
         n: MyNone { 0.0 }

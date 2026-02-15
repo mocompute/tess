@@ -178,7 +178,7 @@ end
 
 
 let xs = [0, 1, 2] in
-xs.(0) := 1
+xs.[0] := 1
 xs.[0] := 1
 xs[1]  := 1
 
@@ -209,7 +209,7 @@ let Point_aget: (*Point, int) -> *Point
 
 
 let points = Point_array_create 10 in
-points.(3) := (Point 1 2)
+points.[3] := (Point 1 2)
 Point_array_set points 3 (Point 1 2)
 Point_array_get points 3
 Point_aset points 3 (Point 1 2)
@@ -466,7 +466,7 @@ context.transient->malloc(., sz)
 context.transient | > context.transient->malloc(sz)
 
 // because it's a field which contains a function pointer, it's a pain
-context.transient.(context.transient->malloc)(sz)
+context.transient.[context.transient->malloc](sz)
 
 foo.bar() == = bar(foo)
 // but currently, we read that as foo's field bar is a fun ptr, which we call with zero args

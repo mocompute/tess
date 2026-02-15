@@ -4,15 +4,15 @@
 
 _Big: {
     len: CSize,
-    buf: Ptr(CChar),
+    buf: Ptr[CChar],
 }
 
 _Small: {
-    buf:     CArray(CChar, 15),
+    buf:     CArray[CChar, 15],
     tag_len: CUnsignedChar,
 }
 
 Str: { | big: _Big
        | small: _Small }
 
-from_literal(s: Ptr(Const(CChar))) -> Str
+from_literal(s: Ptr[Const[CChar]]) -> Str

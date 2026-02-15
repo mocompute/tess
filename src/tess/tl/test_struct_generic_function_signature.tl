@@ -8,7 +8,7 @@ triple (x: Int) -> Int { x * 3 }
 add_one(x: Int) -> Int { x + 1 }
 
 // Generic struct where T can be any type including function pointers
-Wrapper(T): { callback: T, id: Int }
+Wrapper[T]: { callback: T, id: Int }
 
 main() {
     error := 0

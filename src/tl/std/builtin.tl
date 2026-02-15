@@ -4,34 +4,38 @@
 
 // Symbols in the builtin module are available without qualification.
 
-_tl_sizeof_  (x: T) -> CSize
-_tl_alignof_ (x: T) -> CSize
+_tl_sizeof_[T] ()     -> CSize
+_tl_sizeof_[T] (x: T) -> CSize
+_tl_alignof_[T]()     -> CSize
+_tl_alignof_[T](x: T) -> CSize
 
 Byte    = CUnsignedChar
-CString = Ptr(CChar)
+CString = Ptr[CChar]
 
-sizeof (T) { _tl_sizeof_(T)  }
-alignof(T) { _tl_alignof_(T) }
+sizeof[T] ()  -> CSize { _tl_sizeof_[T]()  }
+sizeof    (x) -> CSize { _tl_sizeof_(x)    }
+alignof[T]()  -> CSize { _tl_alignof_[T]() }
+alignof   (x) -> CSize { _tl_alignof_(x)   }
 
 // Option type
 
-Option(T): | Some { v: T }
+Option[T]: | Some { v: T }
            | None
 
 // Result type
 
-Result(T, U): | Ok { v: T }
+Result[T, U]: | Ok { v: T }
               | Err { v: U }
 
 // Unwrap: extract the value from an Option or Result, or return a default.
-unwrap(opt_or_res, default: T) -> T {
-    if opt_or_res :: Option(T) {
-        case opt_or_res: Option(T) {
+unwrap[T](opt_or_res, default: T) -> T {
+    if opt_or_res :: Option[T] {
+        case opt_or_res: Option[T] {
             s: Some { s.v }
             n: None { default }
         }
-    } else if opt_or_res :: Result(T, U) {
-        case opt_or_res: Result(T, U) {
+    } else if opt_or_res :: Result[T, U] {
+        case opt_or_res: Result[T, U] {
             o: Ok { o.v }
             e: Err { default }
         }

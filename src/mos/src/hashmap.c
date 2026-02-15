@@ -28,7 +28,7 @@ struct hashmap {
     u32        n_occupied;
 
     u16        value_size;
-    u16        entry_size;  // cached hashmap_entry_size result
+    u16        entry_size; // cached hashmap_entry_size result
 
     alignas(alignof(hashmap_entry)) byte entries[];
 };
@@ -72,7 +72,7 @@ static inline size_t hashmap_entry_size(hashmap const *map) {
 }
 
 static inline u32 hash_to_bucket(hashmap const *map, u32 hash) {
-    return hash & (map->n_cells - 1);  // n_cells is always power of 2
+    return hash & (map->n_cells - 1); // n_cells is always power of 2
 }
 
 static inline u32 key_to_bucket(hashmap const *map, byte const *key, u8 key_len) {
@@ -82,7 +82,7 @@ static inline u32 key_to_bucket(hashmap const *map, byte const *key, u8 key_len)
 }
 
 static inline u32 incr_index(hashmap const *map, u32 index) {
-    return (index + 1) & (map->n_cells - 1);  // n_cells is always power of 2
+    return (index + 1) & (map->n_cells - 1); // n_cells is always power of 2
 }
 
 // Returns: if key exists, pointer to header.
@@ -248,7 +248,7 @@ hashmap_entry *map_unchecked_at(hashmap *map, u32 index) {
 
 hashmap *map_create(allocator *alloc, u16 value_size, u32 n_buckets) {
     if (n_buckets < 8) n_buckets = 8;
-    n_buckets = (u32)alloc_next_power_of_two(n_buckets);  // ensure power of 2 for fast modulo
+    n_buckets = (u32)alloc_next_power_of_two(n_buckets); // ensure power of 2 for fast modulo
 
     size_t aligned_value_size = alloc_align_to_pointer_size(value_size);
     if (aligned_value_size > HASHMAP_MAX_ELEMENT_SIZE) fatal("map_create_n: element size too large\n");
@@ -263,7 +263,7 @@ hashmap *map_create(allocator *alloc, u16 value_size, u32 n_buckets) {
     map->n_cells         = n_buckets;
     map->n_occupied      = 0;
     map->value_size      = value_size;
-    map->entry_size      = (u16)bucket_size;  // cache entry size
+    map->entry_size      = (u16)bucket_size; // cache entry size
 
     memset(map->entries, 0, n_buckets * bucket_size);
 

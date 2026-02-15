@@ -1,12 +1,12 @@
 #module Foo
 #import <stdlib.tl>
 
-malloc(count: CSize) -> Ptr(any) {
+malloc(count: CSize) -> Ptr[any] {
     c_malloc(count)
 }
 
 Ctx: {
-    malloc_fun: (n: CSize) -> Ptr(any),
+    malloc_fun: (n: CSize) -> Ptr[any],
 }
 
 allocator := Ctx(malloc_fun = malloc/1)

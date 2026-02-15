@@ -3,7 +3,9 @@
 #include "array.h"
 #include "ast_tags.h"
 #include "error.h"
+#include "hash.h"
 #include "parser.h"
+#include "platform.h"
 #include "str.h"
 #include "type.h"
 
@@ -16,9 +18,44 @@
 #include <stdarg.h>
 #include <stdio.h>
 
-#define DEBUG_RESOLVE   0
-#define DEBUG_RENAME    0
-#define DEBUG_CONSTRAIN 0
+#define DEBUG_RESOLVE            0
+#define DEBUG_RENAME             0
+#define DEBUG_CONSTRAIN          0
+#define DEBUG_EXPLICIT_TYPE_ARGS 0
+#define DEBUG_INVARIANTS         0 // Enable invariant checking at phase boundaries
+#define DEBUG_INSTANCE_CACHE     0 // Log instance cache hits/misses and key components
+#define DEBUG_RECURSIVE_TYPES    0 // Trace mutually recursive type specialization
+#define DEBUG_TYPE_ALIAS         0 // Trace type alias registration and resolution
+
+#if DEBUG_INVARIANTS
+// Forward declarations for invariant checking
+struct check_types_null_ctx {
+    struct tl_infer *self;
+    char const      *phase;
+    int              failures;
+};
+static void check_types_null_cb(void *ctx_ptr, ast_node *node);
+static void report_invariant_failure(tl_infer *self, char const *phase, char const *invariant,
+                                     char const *detail, ast_node const *node);
+static int  check_specialized_nfa_type_args(tl_infer *self, ast_node *node, char const *phase);
+
+// Helper: check if a name is alpha-converted (contains "_v" followed by digits)
+static int is_alpha_converted_name(str name) {
+    char const *buf = str_buf(&name);
+    u32         len = str_len(name);
+    for (u32 i = 0; i + 2 < len; i++) {
+        if (buf[i] == '_' && buf[i + 1] == 'v' && buf[i + 2] >= '0' && buf[i + 2] <= '9') {
+            return 1;
+        }
+    }
+    return 0;
+}
+#endif
+
+// Helper: unwrap a type literal to get its target type, or return the type as-is
+static inline tl_monotype *unwrap_type_literal(tl_monotype *mono) {
+    return mono;
+}
 
 typedef struct {
     enum tl_error_tag tag;
@@ -50,6 +87,14 @@ struct tl_infer {
     // Context for single-pass parsing of user type definitions
     tl_type_registry_parse_type_ctx type_parse_ctx;
 
+    // Pre-allocated context for hot-path parse_type calls (reused via reinit).
+    // REENTRANCY: this is shared mutable state.  Every callsite must reinit immediately before
+    // use and capture the result into a local before calling anything that might re-enter
+    // (e.g. specialize_type_constructor -> make_instance_key).  See hot_parse_ctx_reinit().
+    tl_type_registry_parse_type_ctx hot_parse_ctx;
+    hashmap                        *hot_parse_ctx_own_ta; // saved own type_arguments ptr
+    int                             hot_parse_ctx_guard;  // reentrancy detector: 1 while in use
+
     u32                             next_var_name;
     u32                             next_instantiation;
 
@@ -58,11 +103,17 @@ struct tl_infer {
     int                             indent_level;
 
     int is_constrain_ignore_error; // non-zero if no error should be reported during unification
+
+    int report_stats;
+
+    tl_infer_phase_stats phase_stats;
+    tl_infer_counters    counters;
 };
 
 typedef struct {
     u64 name_hash;
     u64 type_hash;
+    u64 type_args_hash;
 } name_and_type;
 
 typedef enum {
@@ -78,7 +129,7 @@ typedef enum {
 
 typedef struct {
     hashmap      *lexical_names;  // exists only during traverse_ast: hset str
-    hashmap      *type_arguments; // map str -> tl_monotype*: arguments which are type literals
+    hashmap      *type_arguments; // map str -> tl_monotype*
     void         *user;
     tl_monotype  *result_type; // result type of current function being traversed
     node_position node_pos;    // set by traverse_ast based on parent node
@@ -96,7 +147,7 @@ typedef struct {
 static int resolve_node(tl_infer *, ast_node *sym, traverse_ctx *ctx, node_position pos);
 
 // ============================================================================
-// Public API
+// Public API: creation, destruction, accessors
 // ============================================================================
 
 static void      apply_subs_to_ast(tl_infer *);
@@ -113,7 +164,7 @@ static void      log_env(tl_infer const *);
 static void      log_subs(tl_infer *);
 
 tl_infer        *tl_infer_create(allocator *alloc, tl_infer_opts const *opts) {
-    tl_infer *self           = new (alloc, tl_infer);
+    tl_infer *self           = new(alloc, tl_infer);
 
     self->opts               = *opts;
 
@@ -140,9 +191,28 @@ tl_infer        *tl_infer_create(allocator *alloc, tl_infer_opts const *opts) {
     self->indent_level       = 0;
     self->is_constrain_ignore_error = 0;
 
+    self->report_stats              = 0;
+    alloc_zero(&self->phase_stats);
+    alloc_zero(&self->counters);
+
     tl_type_registry_parse_type_ctx_init(self->arena, &self->type_parse_ctx, null);
 
+    tl_type_registry_parse_type_ctx_init(self->arena, &self->hot_parse_ctx, null);
+    self->hot_parse_ctx_own_ta = self->hot_parse_ctx.type_arguments;
+    self->hot_parse_ctx_guard  = 0;
+
     return self;
+}
+
+// Reinit the shared hot_parse_ctx for reuse.  Callers must reinit immediately before each use
+// and capture the parse result into a local before calling anything that could re-enter
+// (any path through specialize_type_constructor_ or specialize_arrow may call this again).
+static void hot_parse_ctx_reinit(tl_infer *self, hashmap *outer_type_arguments) {
+    assert(!self->hot_parse_ctx_guard && "reentrancy: hot_parse_ctx reinit while still in use");
+    self->hot_parse_ctx_guard = 1;
+    map_reset(self->hot_parse_ctx_own_ta);
+    tl_type_registry_parse_type_ctx_reinit(
+      &self->hot_parse_ctx, outer_type_arguments ? outer_type_arguments : self->hot_parse_ctx_own_ta);
 }
 
 void tl_infer_destroy(allocator *alloc, tl_infer **p) {
@@ -182,6 +252,25 @@ void tl_infer_get_arena_stats(tl_infer *self, arena_stats *out) {
     arena_get_stats(self->arena, out);
 }
 
+void tl_infer_set_report_stats(tl_infer *self, int enable) {
+    self->report_stats = enable;
+}
+
+tl_infer_phase_stats const *tl_infer_get_phase_stats(tl_infer const *self) {
+    return &self->phase_stats;
+}
+
+tl_infer_counters const *tl_infer_get_counters(tl_infer const *self) {
+    return &self->counters;
+}
+
+// ============================================================================
+// Top-level loading and error helpers (Phase 2)
+// ============================================================================
+//
+// Populates the toplevel map from AST nodes (structs, enums, functions, let-in
+// bindings, type aliases, hash directives) and provides error-reporting helpers.
+
 static int constrain(tl_infer *self, tl_polytype *left, tl_polytype *right, ast_node const *node);
 
 static int env_insert_constrain(tl_infer *self, str name, tl_polytype *type, ast_node const *name_node) {
@@ -220,6 +309,12 @@ static void create_type_constructor_from_user_type(tl_infer *self, ast_node *nod
     assert(ast_node_is_utd(node));
 
     tl_type_registry_parse_type_ctx_reset(&self->type_parse_ctx);
+
+    str tu_name = node->user_type_def.tagged_union_name;
+    if (!str_is_empty(tu_name)) {
+        str_hset_insert(&self->type_parse_ctx.in_progress, tu_name);
+    }
+
     tl_monotype *mono = tl_type_registry_parse_type_with_ctx(self->registry, node, &self->type_parse_ctx);
     if (!mono) {
         expected_type(self, node);
@@ -265,6 +360,88 @@ static int toplevel_hash_command(tl_infer *self, ast_node *node) {
 }
 
 static void specialize_type_alias(tl_infer *, ast_node *);
+
+// Handle a let node during toplevel loading: merge forward declarations, copy annotations/attributes.
+static void load_toplevel_let(tl_infer *self, ast_node *node) {
+    str        name_str = ast_node_str(node->let.name);
+    ast_node **p        = str_map_get(self->toplevels, name_str);
+
+    if (p) {
+        // merge type if the existing node is a symbol; otherwise error
+        if (!ast_node_is_symbol(*p)) {
+            array_push(self->errors, ((tl_infer_error){.tag = tl_err_type_exists, .node = node}));
+            return;
+        }
+
+        // ignore prior type annotation if the current symbol is annotated: later
+        // declaration overrides
+
+        if (node->let.name->symbol.annotation) {
+            resolve_node(self, node->let.name, null, npos_toplevel);
+        } else {
+            // otherwise merge in the prior annotation
+            node->let.name->symbol.annotation      = (*p)->symbol.annotation;
+            node->let.name->symbol.annotation_type = (*p)->symbol.annotation_type;
+        }
+
+        // copy attributes over
+        if ((*p)->symbol.attributes) {
+            // reject attributes on current symbol if they exist
+            if (node->let.name->symbol.attributes) {
+                array_push(self->errors, ((tl_infer_error){.tag = tl_err_attributes_exist, .node = node}));
+                return;
+            }
+
+            node->let.name->symbol.attributes = (*p)->symbol.attributes;
+        }
+
+        // copy parameter annotations over
+        if ((*p)->symbol.annotation) {
+            // The annotation is an AST arrow, which includes param annotations, if any. These are
+            // important to copy over, because they may declare type arguments.
+            ast_node *ast_arrow = (*p)->symbol.annotation;
+            assert(ast_node_is_arrow(ast_arrow));
+            ast_node *ast_param_tuple = ast_arrow->arrow.left;
+            assert(ast_node_is_tuple(ast_param_tuple));
+
+            // copy explicit type arguments if the current node does not declare any
+            if (!node->let.n_type_parameters) {
+                node->let.n_type_parameters = ast_arrow->arrow.n_type_parameters;
+                node->let.type_parameters   = ast_arrow->arrow.type_parameters;
+            }
+
+            tl_polytype *arrow = (*p)->symbol.annotation_type;
+            assert(arrow && tl_monotype_is_arrow(arrow->type));
+            tl_monotype *param_tuple = arrow->type->list.xs.v[0];
+            assert(tl_tuple == param_tuple->tag);
+            ast_arguments_iter iter = ast_node_arguments_iter(node);
+            ast_node          *arg;
+            u32                j = 0;
+            while ((arg = ast_arguments_next(&iter))) {
+                if (j >= param_tuple->list.xs.size) fatal("runtime error");
+                if (j >= ast_param_tuple->tuple.n_elements) fatal("runtime error");
+
+                if (!ast_node_is_symbol(arg)) goto next;
+
+                // Do not overwrite let node's annotated parameters
+                if (arg->symbol.annotation) goto next;
+
+                arg->symbol.annotation = ast_param_tuple->tuple.elements[j];
+                arg->symbol.annotation_type =
+                  tl_polytype_absorb_mono(self->arena, param_tuple->list.xs.v[j]);
+
+            next:
+                j++;
+            }
+        }
+
+        // replace prior symbol entry with let node
+        *p = node;
+    } else {
+        str_map_set(&self->toplevels, name_str, &node);
+        resolve_node(self, node->let.name, null, npos_toplevel);
+    }
+}
 
 static void load_toplevel(tl_infer *self, ast_node_sized nodes) {
     // Types of toplevel nodes (see parser.c/toplevel())
@@ -322,83 +499,28 @@ static void load_toplevel(tl_infer *self, ast_node_sized nodes) {
                 dbg(self, "type_alias: %s = %s", str_cstr(&name), str_cstr(&poly_str));
             }
             tl_type_registry_type_alias_insert(self->registry, name, poly);
+#if DEBUG_TYPE_ALIAS
+            {
+                tl_polytype *env_type = tl_type_env_lookup(self->env, name);
+                str          poly_dbg = tl_polytype_to_string(self->transient, poly);
+                fprintf(stderr, "[DEBUG_TYPE_ALIAS] load_toplevel: alias '%s' = %s\n", str_cstr(&name),
+                        str_cstr(&poly_dbg));
+                fprintf(stderr, "[DEBUG_TYPE_ALIAS]   in registry=YES, in env=%s\n",
+                        env_type ? "YES" : "NO");
+            }
+#endif
             specialize_type_alias(self, node);
+
+            // Insert the (possibly specialized) alias type into the type environment so that
+            // symbol lookups (e.g. in infer_struct_access) can resolve alias names to their
+            // underlying type constructor — mirroring what create_type_constructor_from_user_type
+            // does for enums/structs.
+            tl_polytype *final_poly = tl_type_registry_get(self->registry, name);
+            if (final_poly) env_insert_constrain(self, name, final_poly, node->type_alias.name);
         }
 
         else if (ast_node_is_let(node)) {
-            str        name_str = ast_node_str(node->let.name);
-            ast_node **p        = str_map_get(self->toplevels, name_str);
-
-            if (p) {
-                // merge type if the existing node is a symbol; otherwise error
-                if (!ast_node_is_symbol(*p)) {
-                    array_push(self->errors, ((tl_infer_error){.tag = tl_err_type_exists, .node = node}));
-                    continue;
-                }
-
-                // ignore prior type annotation if the current symbol is annotated: later
-                // declaration overrides
-
-                if (node->let.name->symbol.annotation) {
-                    resolve_node(self, node->let.name, null, npos_toplevel);
-                } else {
-                    // otherwise merge in the prior annotation
-                    node->let.name->symbol.annotation      = (*p)->symbol.annotation;
-                    node->let.name->symbol.annotation_type = (*p)->symbol.annotation_type;
-                }
-
-                // copy attributes over
-                if ((*p)->symbol.attributes) {
-                    // reject attributes on current symbol if they exist
-                    if (node->let.name->symbol.attributes) {
-                        array_push(self->errors,
-                                   ((tl_infer_error){.tag = tl_err_attributes_exist, .node = node}));
-                        continue;
-                    }
-
-                    node->let.name->symbol.attributes = (*p)->symbol.attributes;
-                }
-
-                // copy parameter annotations over
-                if ((*p)->symbol.annotation) {
-                    // The annotation is an AST arrow, which includes param annotations, if any. These are
-                    // important to copy over, because they may declare type arguments.
-                    ast_node *ast_arrow = (*p)->symbol.annotation;
-                    assert(ast_node_is_arrow(ast_arrow));
-                    ast_node *ast_param_tuple = ast_arrow->arrow.left;
-                    assert(ast_node_is_tuple(ast_param_tuple));
-
-                    tl_polytype *arrow = (*p)->symbol.annotation_type;
-                    assert(arrow && tl_monotype_is_arrow(arrow->type));
-                    tl_monotype *param_tuple = arrow->type->list.xs.v[0];
-                    assert(tl_tuple == param_tuple->tag);
-                    ast_arguments_iter iter = ast_node_arguments_iter(node);
-                    ast_node          *arg;
-                    u32                i = 0;
-                    while ((arg = ast_arguments_next(&iter))) {
-                        if (i >= param_tuple->list.xs.size) fatal("runtime error");
-                        if (i >= ast_param_tuple->tuple.n_elements) fatal("runtime error");
-
-                        if (!ast_node_is_symbol(arg)) goto next;
-
-                        // Do not overwrite let node's annotated parameters
-                        if (arg->symbol.annotation) goto next;
-
-                        arg->symbol.annotation = ast_param_tuple->tuple.elements[i];
-                        arg->symbol.annotation_type =
-                          tl_polytype_absorb_mono(self->arena, param_tuple->list.xs.v[i]);
-
-                    next:
-                        i++;
-                    }
-                }
-
-                // replace prior symbol entry with let node
-                *p = node;
-            } else {
-                str_map_set(&self->toplevels, name_str, &node);
-                resolve_node(self, node->let.name, null, npos_toplevel);
-            }
+            load_toplevel_let(self, node);
         }
 
         else if (ast_node_is_utd(node)) {
@@ -410,6 +532,11 @@ static void load_toplevel(tl_infer *self, ast_node_sized nodes) {
             } else {
                 create_type_constructor_from_user_type(self, node);
                 str_map_set(&self->toplevels, name_str, &node);
+#if DEBUG_EXPLICIT_TYPE_ARGS
+                fprintf(stderr, "[DEBUG UTD] Added to toplevels (%p): '%s' (len=%zu, hash=%llu) -> %p\n",
+                        (void *)self->toplevels, str_cstr(&name_str), str_len(name_str),
+                        (unsigned long long)str_hash64(name_str), (void *)node);
+#endif
             }
         }
 
@@ -436,7 +563,14 @@ static void load_toplevel(tl_infer *self, ast_node_sized nodes) {
     arena_reset(self->transient);
 }
 
-// -- tree shake --
+// ============================================================================
+// Tree shaking (Phase 6)
+// ============================================================================
+//
+// Starting from main (or all exports in library mode), walks the call graph via
+// DFS and collects reachable names.  tree_shake_toplevels (in the validation
+// section below) uses this to remove unreachable definitions from the toplevels
+// map and the type environment.
 
 static ast_node *toplevel_get(tl_infer *, str);
 
@@ -558,11 +692,18 @@ hashmap *tree_shake(tl_infer *self, ast_node const *node) {
     return ctx.names;
 }
 
-// -- inference --
+// ============================================================================
+// Inference context and traversal
+// ============================================================================
+//
+// traverse_ctx tracks lexical scope, type arguments, and node position during
+// AST walks.  traverse_ast() is the recursive dispatcher used by both the
+// bottom-up inference pass (Phase 3, via infer_traverse_cb) and the top-down
+// specialization pass (Phase 5, via specialize_applications_cb).
 
 static traverse_ctx *traverse_ctx_create(allocator *transient) {
     // Use a transient allocator because the destroy function leaks the maps.
-    traverse_ctx *out   = new (transient, traverse_ctx);
+    traverse_ctx *out   = new(transient, traverse_ctx);
     out->lexical_names  = hset_create(transient, 64);
     out->type_arguments = map_create_ptr(transient, 64);
     out->user           = null;
@@ -572,6 +713,243 @@ static traverse_ctx *traverse_ctx_create(allocator *transient) {
     out->is_annotation  = 0;
 
     return out;
+}
+
+static void traverse_ctx_load_type_arguments(tl_infer *self, traverse_ctx *ctx, ast_node const *node) {
+    // read type arguments out of ast node
+    if (ast_node_is_let(node)) {
+        for (u32 i = 0; i < node->let.n_type_parameters; i++) {
+            ast_node *type_param = node->let.type_parameters[i];
+            assert(ast_node_is_symbol(type_param));
+
+#if DEBUG_INVARIANTS
+            // Invariant: Type parameter names must be alpha-converted
+            if (!is_alpha_converted_name(type_param->symbol.name)) {
+                char detail[256];
+                snprintf(detail, sizeof detail, "Type parameter '%.*s' is not alpha-converted",
+                         str_ilen(type_param->symbol.name), str_buf(&type_param->symbol.name));
+                report_invariant_failure(self, "traverse_ctx_load_type_arguments",
+                                         "Type parameter name must be alpha-converted", detail, type_param);
+            }
+
+            // Invariant: No duplicate type parameter names in ctx->type_arguments
+            if (str_map_contains(ctx->type_arguments, type_param->symbol.name)) {
+                char detail[256];
+                snprintf(detail, sizeof detail, "Duplicate type parameter name '%.*s'",
+                         str_ilen(type_param->symbol.name), str_buf(&type_param->symbol.name));
+                report_invariant_failure(self, "traverse_ctx_load_type_arguments",
+                                         "No duplicate type parameter names allowed", detail, type_param);
+            }
+#endif
+
+            // If the type parameter already has a type (set by concretize_params during
+            // specialization, or by a previous traversal), use that instead of creating a fresh
+            // type variable.
+            if (type_param->type) {
+                tl_monotype *mono = type_param->type->type;
+                if (!tl_monotype_is_concrete(mono))
+                    tl_monotype_substitute(self->arena, mono, self->subs, null);
+#if DEBUG_EXPLICIT_TYPE_ARGS
+                str mono_str = tl_monotype_to_string(self->transient, mono);
+                fprintf(stderr, "[DEBUG LOAD TYPE ARGS] '%s' type_param '%s' has existing type: %s\n",
+                        str_cstr(&node->let.name->symbol.name), str_cstr(&type_param->symbol.name),
+                        str_cstr(&mono_str));
+#endif
+
+                str param_name = type_param->symbol.name;
+
+                tl_type_registry_add_type_argument(self->registry, param_name, mono, &ctx->type_arguments);
+                assert(str_map_contains(ctx->type_arguments, param_name));
+
+                // param names are alpha converted, and we use the environment to ensure constraints are
+                // fully propagated
+                tl_polytype *poly = tl_polytype_absorb_mono(self->arena, mono);
+                env_insert_constrain(self, param_name, poly, type_param);
+
+            } else {
+
+#if DEBUG_EXPLICIT_TYPE_ARGS
+                fprintf(
+                  stderr,
+                  "[DEBUG LOAD TYPE ARGS] '%s' type_param '%s' has NO existing type, creating fresh\n",
+                  str_cstr(&node->let.name->symbol.name), str_cstr(&type_param->symbol.name));
+#endif
+                tl_monotype *mono = tl_type_registry_add_fresh_type_argument(
+                  self->registry, type_param->symbol.name, &ctx->type_arguments);
+
+                ast_node_type_set(type_param, tl_polytype_absorb_mono(self->arena, mono));
+
+                assert(str_map_contains(ctx->type_arguments, type_param->symbol.name));
+            }
+        }
+    }
+}
+
+// Forward declaration for explicit type argument specialization
+static str specialize_type_constructor(tl_infer *self, str name, tl_monotype_sized args,
+                                       tl_polytype **out_type);
+
+static int traverse_ctx_assign_type_arguments(tl_infer *self, traverse_ctx *ctx, ast_node const *node) {
+    if (ast_node_is_nfa(node)) {
+        if (!node->named_application.is_specialized) return 0;
+
+        u32 argc = node->named_application.n_type_arguments;
+        if (argc == 0) return 0;
+        ast_node **argv   = node->named_application.type_arguments;
+
+        ast_node  *let    = toplevel_get(self, ast_node_str(node->named_application.name));
+        u32        paramc = (let && ast_node_is_let(let)) ? let->let.n_type_parameters : 0;
+
+#if DEBUG_INVARIANTS
+        // Invariant: Type argument count must match type parameter count
+        if (argc > 0 && paramc > 0 && argc != paramc) {
+            str  callee_name = ast_node_str(node->named_application.name);
+            char detail[256];
+            snprintf(detail, sizeof detail,
+                     "Call site has %u type arguments but function '%.*s' has %u type parameters", argc,
+                     str_ilen(callee_name), str_buf(&callee_name), paramc);
+            report_invariant_failure(self, "traverse_ctx_assign_type_arguments",
+                                     "Type argument count must match type parameter count", detail,
+                                     (ast_node *)node);
+        }
+#endif
+
+#if DEBUG_EXPLICIT_TYPE_ARGS
+        str name = ast_node_str(node->named_application.name);
+        fprintf(stderr, "[DEBUG EXPLICIT TYPE ARGS] traverse_ctx_assign_type_arguments:\n");
+        fprintf(stderr, "  callee: %s\n", str_cstr(&name));
+        fprintf(stderr, "  n_type_arguments: %u, n_type_parameters: %u\n", argc, paramc);
+        fprintf(stderr, "  type_arguments contains: %i\n", str_map_contains(ctx->type_arguments, name));
+#endif
+
+        for (u32 i = 0; i < argc; i++) {
+            // Reinit per-iteration: specialize_type_constructor (below) can re-enter
+            // make_instance_key which clobbers hot_parse_ctx.
+            hot_parse_ctx_reinit(self, ctx->type_arguments);
+            ast_node *type_arg_node = argv[i];
+
+#if DEBUG_EXPLICIT_TYPE_ARGS
+            fprintf(stderr, "  type_arg[%u] AST tag=%d", i, type_arg_node->tag);
+            if (ast_node_is_symbol(type_arg_node)) {
+                str n = type_arg_node->symbol.name;
+                fprintf(stderr, " name='%s'", str_cstr(&n));
+                fprintf(stderr, " type_arguments contains: %i", str_map_contains(ctx->type_arguments, n));
+
+            } else if (ast_node_is_nfa(type_arg_node)) {
+                str n = ast_node_str(type_arg_node->named_application.name);
+                fprintf(stderr, " nfa='%s' n_type_args=%u", str_cstr(&n),
+                        type_arg_node->named_application.n_type_arguments);
+            }
+            if (type_arg_node->type) {
+                str t = tl_polytype_to_string(self->transient, type_arg_node->type);
+                fprintf(stderr, " type=%s", str_cstr(&t));
+            }
+            fprintf(stderr, "\n");
+#endif
+
+            tl_monotype *parsed = null;
+
+            // If the type argument node already has a type set (from a previous pass), reuse it.
+            // This happens when multiple calls within the same specialized function share type
+            // argument AST nodes (e.g., sizeof[T]() and alignof[T]() both reference the same T).
+            // We don't require the type to be concrete - type variables are valid and will be
+            // unified later.
+            if (type_arg_node->type) { // Re-enabled: use existing type on node
+                parsed = type_arg_node->type->type;
+
+#if DEBUG_EXPLICIT_TYPE_ARGS
+                str reused_str = tl_monotype_to_string(self->transient, parsed);
+                fprintf(stderr, "  type_arg[%u]: reused existing type = %s\n", i, str_cstr(&reused_str));
+#endif
+            } else {
+#if DEBUG_EXPLICIT_TYPE_ARGS
+                // Debug: show what's in the parse context
+                str_array keys = str_map_keys(self->transient, self->hot_parse_ctx.type_arguments);
+                fprintf(stderr, "  hot_parse_ctx.type_arguments has %u keys:", keys.size);
+                forall(j, keys) fprintf(stderr, " '%s'", str_cstr(&keys.v[j]));
+                fprintf(stderr, "\n");
+#endif
+                parsed =
+                  tl_type_registry_parse_type_with_ctx(self->registry, type_arg_node, &self->hot_parse_ctx);
+                if (!parsed) {
+                    str tmp = v2_ast_node_to_string(self->transient, type_arg_node);
+                    fprintf(stderr, "error: parse failed: %s\n", str_cstr(&tmp));
+                    fatal("could not parse type"); // FIXME better error
+                }
+            }
+            self->hot_parse_ctx_guard = 0;
+
+#if DEBUG_EXPLICIT_TYPE_ARGS
+            str parsed_str = tl_monotype_to_string(self->transient, parsed);
+            fprintf(stderr, "  type_arg[%u]: parsed = %s\n", i, str_cstr(&parsed_str));
+#endif
+
+            // If the type argument is a type constructor instance with arguments, specialize it.
+            // This is an exception to the normal design where specialization happens in
+            // specialize_applications_cb. We must do it here because intrinsics (like
+            // _tl_sizeof_) are skipped by specialize_applications_cb, so their explicit
+            // type arguments would never be specialized otherwise.
+            if (tl_monotype_is_inst(parsed) && parsed->cons_inst->args.size > 0) {
+                tl_polytype *specialized = null;
+                (void)specialize_type_constructor(self, parsed->cons_inst->def->generic_name,
+                                                  parsed->cons_inst->args, &specialized);
+                if (specialized && tl_monotype_is_inst_specialized(specialized->type)) {
+                    parsed = specialized->type;
+                }
+            }
+
+            // If the callee has a matching type parameter, add to the type argument context
+            if (i < paramc) {
+                assert(ast_node_is_symbol(let->let.type_parameters[i]));
+                // Always use the alpha-converted name, not the original, because the type
+                // environment relies on alpha conversion to prevent pollution between generic
+                // and specialized phases.
+                str param_name = let->let.type_parameters[i]->symbol.name;
+
+#if DEBUG_EXPLICIT_TYPE_ARGS
+                str parsed_str = tl_monotype_to_string(self->transient, parsed);
+                fprintf(stderr, "  mapping type param '%s' -> %s\n", str_cstr(&param_name),
+                        str_cstr(&parsed_str));
+#endif
+
+#if DEBUG_INVARIANTS
+                // Invariant: If type parameter already has a binding, it must be the same type
+                // Type pollution occurs when the same alpha-converted name gets different types
+                // in different specialization contexts
+                tl_monotype *existing_binding = str_map_get_ptr(ctx->type_arguments, param_name);
+                if (existing_binding &&
+                    tl_monotype_hash64(existing_binding) != tl_monotype_hash64(parsed)) {
+                    char detail[512];
+                    str  existing_str = tl_monotype_to_string(self->transient, existing_binding);
+                    str  new_str      = tl_monotype_to_string(self->transient, parsed);
+                    snprintf(detail, sizeof detail,
+                             "Type parameter '%.*s' already bound to '%s', cannot rebind to '%s'",
+                             str_ilen(param_name), str_buf(&param_name), str_cstr(&existing_str),
+                             str_cstr(&new_str));
+                    report_invariant_failure(self, "traverse_ctx_assign_type_arguments",
+                                             "Type parameter binding conflict (type pollution)", detail,
+                                             (ast_node *)node);
+                }
+#endif
+
+                tl_type_registry_add_type_argument(self->registry, param_name, parsed,
+                                                   &ctx->type_arguments);
+
+                // param names are alpha converted, and we use the environment to ensure constraints are
+                // fully propagated
+                tl_polytype *poly = tl_polytype_absorb_mono(self->arena, parsed);
+                env_insert_constrain(self, param_name, poly, argv[i]);
+
+                assert(str_map_contains(ctx->type_arguments, param_name));
+            }
+
+            // Set type on the type argument AST node for the transpiler.
+            ast_node_type_set((ast_node *)node->named_application.type_arguments[i],
+                              tl_polytype_absorb_mono(self->arena, parsed));
+        }
+    }
+
+    return 0;
 }
 
 static int traverse_ctx_is_param(traverse_ctx *self, str name) {
@@ -586,6 +964,14 @@ static int unresolved_type_error(tl_infer *self, ast_node const *node) {
     array_push(self->errors, ((tl_infer_error){.tag = tl_err_unresolved_type, .node = node}));
     return 1;
 }
+
+// ============================================================================
+// Constraint generation and unification
+// ============================================================================
+//
+// constrain() / constrain_mono() are the core constraint engine. They call into
+// the substitution-based unifier (tl_type_subs_unify_mono in type.c) and report
+// type errors on failure.
 
 static void log_constraint(tl_infer *, tl_polytype *, tl_polytype *, ast_node const *);
 static void log_constraint_mono(tl_infer *, tl_monotype *, tl_monotype *, ast_node const *);
@@ -610,19 +996,62 @@ static void type_error_cb(void *ctx_, tl_monotype *left, tl_monotype *right) {
 static int constrain_mono(tl_infer *self, tl_monotype *left, tl_monotype *right, ast_node const *node) {
     type_error_cb_ctx error_ctx = {.self = self, .node = node};
 
-    if (DEBUG_CONSTRAIN) {
-        log_constraint_mono(self, left, right, node);
+#if DEBUG_CONSTRAIN
+    {
+        str left_str  = tl_monotype_to_string(self->transient, left);
+        str right_str = tl_monotype_to_string(self->transient, right);
+        fprintf(stderr, "[DEBUG CONSTRAIN] constrain_mono: %s <=> %s  (at %s:%d)\n", str_cstr(&left_str),
+                str_cstr(&right_str), node->file, node->line);
     }
+#endif
+
+#if DEBUG_INVARIANTS
+    // Invariant: should never constrain two different concrete cons_inst types directly
+    // (excluding integer-compatible pairs). If this fires, a type variable was already
+    // bound to the wrong type upstream. Exception: for type predicates, a constrain failure is not an
+    // error.
+    if (tl_monotype_is_inst(left) && tl_monotype_is_concrete(left) && tl_monotype_is_inst(right) &&
+        tl_monotype_is_concrete(right) && !tl_monotype_is_integer_convertible(left) &&
+        !tl_monotype_is_integer_convertible(right)) {
+        if (!str_eq(left->cons_inst->def->name, right->cons_inst->def->name) &&
+            !str_eq(left->cons_inst->def->generic_name, right->cons_inst->def->generic_name)) {
+            char detail[512];
+            str  ls = tl_monotype_to_string(self->transient, left);
+            str  rs = tl_monotype_to_string(self->transient, right);
+            snprintf(detail, sizeof detail,
+                     "Constraining two different concrete type constructors: %s vs %s (left@%p right@%p)",
+                     str_cstr(&ls), str_cstr(&rs), (void *)left, (void *)right);
+            report_invariant_failure(
+              self, "constrain_mono",
+              "Should never constrain two different concrete type constructors (unless in type predicate)",
+              detail, node);
+        }
+    }
+#endif
 
     hashmap *seen = hset_create(self->transient, 64);
     int      res  = tl_type_subs_unify_mono(self->subs, left, right, type_error_cb, &error_ctx, &seen);
+
+#if DEBUG_CONSTRAIN
+    if (res) {
+        fprintf(stderr, "[DEBUG CONSTRAIN] constrain_mono: UNIFICATION FAILED\n");
+    }
+#endif
+
     return res;
 }
 
 static int constrain(tl_infer *self, tl_polytype *left, tl_polytype *right, ast_node const *node) {
+    if (self->report_stats) self->counters.unify_calls++;
     if (left == right) return 0;
     if (0) {
         log_constraint(self, left, right, node);
+    }
+
+    hires_timer ct;
+    if (self->report_stats) {
+        hires_timer_init(&ct);
+        hires_timer_start(&ct);
     }
 
     tl_monotype *lhs = null, *rhs = null;
@@ -632,7 +1061,13 @@ static int constrain(tl_infer *self, tl_polytype *left, tl_polytype *right, ast_
     if (right->quantifiers.size) rhs = tl_polytype_instantiate(self->arena, right, self->subs);
     else rhs = right->type;
 
-    return constrain_mono(self, lhs, rhs, node);
+    int res = constrain_mono(self, lhs, rhs, node);
+
+    if (self->report_stats) {
+        hires_timer_stop(&ct);
+        self->counters.unify_ms += hires_timer_elapsed_sec(&ct) * 1000.0;
+    }
+    return res;
 }
 
 static int constrain_pm(tl_infer *self, tl_polytype *left, tl_monotype *right, ast_node const *node) {
@@ -650,6 +1085,16 @@ static int infer_literal_type(tl_infer *self, ast_node *node,
                               tl_monotype *(*get_type)(tl_type_registry *)) {
     tl_monotype *ty = get_type(self->registry);
     ensure_tv(self, &node->type);
+#if DEBUG_EXPLICIT_TYPE_ARGS
+    {
+        str ty_str        = tl_monotype_to_string(self->transient, ty);
+        str node_type_str = node->type ? tl_polytype_to_string(self->transient, node->type) : str_empty();
+        fprintf(stderr, "[DEBUG LITERAL] infer_literal_type at %s:%d:\n", node->file, node->line);
+        fprintf(stderr, "  literal type: %s\n", str_cstr(&ty_str));
+        fprintf(stderr, "  node->type before constrain: %s\n",
+                str_is_empty(node_type_str) ? "(null)" : str_cstr(&node_type_str));
+    }
+#endif
     return constrain_pm(self, node->type, ty, node);
 }
 
@@ -677,7 +1122,6 @@ static annotation_parse_result parse_type_annotation(tl_infer *self, traverse_ct
 }
 
 typedef struct {
-    int wrap_in_literal;     // Wrap parsed type in tl_literal
     int add_to_lexicals;     // Add type args to ctx->lexical_names
     int check_type_arg_self; // Check if name is in type_arguments (for formal params)
 } annotation_opts;
@@ -702,13 +1146,17 @@ static int process_annotation(tl_infer *self, traverse_ctx *ctx, ast_node *node,
 
     // Merge type arguments into context
     if (ctx) {
-        map_merge(&ctx->type_arguments, result.type_arguments);
+        // FIXME: type arguments v2 may not be needed
+        // map_merge(&ctx->type_arguments, result.type_arguments);
 
+        // FIXME: with v2 type arguments, they should already be added to lexicals by the time any
+        // annotation is processed; so this entire block could be removed.
         if (opts.add_to_lexicals) {
             str_array arr = str_map_keys(self->transient, result.type_arguments);
             forall(i, arr) {
 #if DEBUG_RESOLVE
-                dbg(self, "resolve_node: adding type argument to lexicals: '%s'", str_cstr(&arr.v[i]));
+                fprintf(stderr, "resolve_node: adding type argument to lexicals: '%s'\n",
+                        str_cstr(&arr.v[i]));
 #endif
                 str_hset_insert(&ctx->lexical_names, arr.v[i]);
             }
@@ -721,13 +1169,17 @@ static int process_annotation(tl_infer *self, traverse_ctx *ctx, ast_node *node,
     if (opts.check_type_arg_self && ast_node_is_symbol(node)) {
         str          name  = ast_node_str(node);
         tl_monotype *found = str_map_get_ptr(result.type_arguments, name);
+        // FIXME explicit type args: do we need this secondary lookup? Doesn't seem to fix any of the
+        // failing tests, though.
+
+        if (!found && ctx) found = str_map_get_ptr(ctx->type_arguments, name);
         if (found) mono = found;
     }
 
-    // Wrap in literal if needed
-    if (opts.wrap_in_literal) {
-        mono = tl_monotype_create_literal(self->arena, mono);
-    }
+    // For value annotations (not type arguments), unwrap any literal wrapper.
+    // Type arguments stored in ctx->type_arguments are wrapped in literals,
+    // but when used to annotate a value parameter, we need the underlying type.
+    mono = unwrap_type_literal(mono);
 
     // Set annotation_type field of symbol nodes
     if (ast_node_is_symbol(node)) {
@@ -742,16 +1194,24 @@ static int process_annotation(tl_infer *self, traverse_ctx *ctx, ast_node *node,
 #if DEBUG_RESOLVE
     str node_str = v2_ast_node_to_string(self->transient, node);
     str mono_str = tl_monotype_to_string(self->transient, mono);
-    dbg(self, "process_annotation %s : %s", str_cstr(&node_str), str_cstr(&mono_str));
+    fprintf(stderr, "process_annotation %s : %s\n", str_cstr(&node_str), str_cstr(&mono_str));
 #endif
 
-    if (constrain_or_set(self, node, poly)) return -1;
+    if (constrain_or_set(self, node, poly)) {
+#if DEBUG_RESOLVE
+        str node_str = v2_ast_node_to_string(self->transient, node);
+        str poly_str = tl_polytype_to_string(self->transient, poly);
+        fprintf(stderr, "[DEBUG process_annotation] ERROR: constrain_or_set failed for %s : %s\n",
+                str_cstr(&node_str), str_cstr(&poly_str));
+#endif
+        return -1;
+    }
 
     return 1;
 }
 
 // ============================================================================
-// Special Case Handlers
+// Special case handlers
 // ============================================================================
 
 static int is_std_function(ast_node *node) {
@@ -764,8 +1224,13 @@ static int is_ptr_cast_annotation(ast_node *node) {
 }
 
 // ============================================================================
-// Type Inference Helpers
+// Per-node type inference
 // ============================================================================
+//
+// Each infer_*() function handles bottom-up type inference for a specific AST
+// node kind: literals, if/else, case/match, binary/unary ops, assignments,
+// lambdas, named function applications, struct access, etc.  They generate type
+// constraints via constrain() and attach polytypes to AST nodes.
 
 static int infer_nil(tl_infer *self, ast_node *node) {
     ensure_tv(self, &node->type);
@@ -837,7 +1302,7 @@ static int infer_return(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
     if (!node->return_.is_break_statement && node->return_.value)
         if (constrain(self, node->type, node->return_.value->type, node)) return 1;
 
-    if (ctx->result_type)
+    if (ctx->result_type && node->return_.value)
         if (constrain_pm(self, node->return_.value->type, ctx->result_type, node)) return 1;
 
     return 0;
@@ -1097,6 +1562,129 @@ static int infer_unary_op(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
     return 0;
 }
 
+// Find a variant type by name in a tagged union wrapper type.
+// Looks up the 'u' (union) field in the wrapper, then searches by variant name.
+// Returns the variant's monotype, or null if the wrapper has no 'u' field or variant not found.
+// If out_index is non-null, stores the variant's index within the union.
+static tl_monotype *tagged_union_find_variant(tl_monotype *wrapper_type, str variant_name, int *out_index) {
+    i32 u_index = tl_monotype_type_constructor_field_index(wrapper_type, S("u"));
+    if (u_index < 0) return null;
+    tl_monotype *union_type  = wrapper_type->cons_inst->args.v[u_index];
+    str_sized    field_names = union_type->cons_inst->def->field_names;
+    forall(j, field_names) {
+        if (str_eq(field_names.v[j], variant_name)) {
+            if (out_index) *out_index = (int)j;
+            return union_type->cons_inst->args.v[j];
+        }
+    }
+    return null;
+}
+
+static int infer_tagged_union_case(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
+    tl_polytype *expr_type = node->case_.expression->type;
+
+    // Get wrapper type and extract valid variants
+    tl_monotype *wrapper_type = expr_type->type;
+    tl_monotype_substitute(self->arena, wrapper_type, self->subs, null); // needed
+
+    // If there is an explicit type annotation (e.g., "case x: Option(T)"), always parse and
+    // use it as the wrapper type. This is essential for generic functions with type-predicate
+    // branching (e.g., `if x :: Option { case x: Option(T) { ... } } else if x :: Result ...`)
+    // where different branches constrain the same variable to different tagged union types.
+    // Without this, the first branch's constraint would permanently unify the variable's type,
+    // making subsequent branches fail. The constraint is non-fatal here because after
+    // specialization, only the matching branch will be valid.
+    if (node->case_.union_annotation) {
+        annotation_parse_result result = parse_type_annotation(self, ctx, node->case_.union_annotation);
+        if (result.parsed && tl_monotype_is_inst(result.parsed)) {
+            wrapper_type = result.parsed;
+            // Constrain expression type to match annotation (non-fatal: in generic functions,
+            // a prior branch may have already constrained to a different type)
+            int save                        = self->is_constrain_ignore_error;
+            self->is_constrain_ignore_error = 1;
+            constrain_pm(self, expr_type, wrapper_type, node->case_.expression);
+            self->is_constrain_ignore_error = save;
+            tl_monotype_substitute(self->arena, wrapper_type, self->subs, null);
+        }
+    }
+
+    if (!tl_monotype_is_inst(wrapper_type)) {
+        expected_tagged_union(self, node->case_.expression);
+        return 1;
+    }
+
+    // Find the 'u' (union) field in the wrapper type
+    i32 u_index = tl_monotype_type_constructor_field_index(wrapper_type, S("u"));
+    if (u_index < 0) {
+        // wrapper type missing 'u'
+        expected_tagged_union(self, node->case_.expression);
+        return 1;
+    }
+
+    tl_monotype *union_type     = wrapper_type->cons_inst->args.v[u_index];
+    str_sized    valid_variants = union_type->cons_inst->def->field_names;
+
+    // Track which variants are covered (for exhaustiveness checking)
+    int *variant_covered = alloc_malloc(self->transient, valid_variants.size * sizeof(int));
+    memset(variant_covered, 0, valid_variants.size * sizeof(int));
+    int has_else_arm = 0;
+
+    forall(i, node->case_.conditions) {
+        // Detect `else` condition on final arm
+        if (i + 1 == node->case_.conditions.size && ast_node_is_nil(node->case_.conditions.v[i])) {
+            has_else_arm = 1;
+            break;
+        }
+
+        ast_node *cond = node->case_.conditions.v[i];
+        if (!ast_node_is_symbol(cond) || !cond->symbol.annotation) {
+            // "tagged union case condition must be 'binding: VariantType'"
+            tagged_union_case_syntax_error(self, cond);
+        }
+
+        // Find the variant by name in the wrapper type
+        str          variant_name  = ast_node_name_original(cond->symbol.annotation);
+        int          variant_found = -1;
+        tl_monotype *variant_type  = tagged_union_find_variant(wrapper_type, variant_name, &variant_found);
+
+        if (!variant_type) {
+            array_push(self->errors,
+                       ((tl_infer_error){.tag = tl_err_tagged_union_unknown_variant, .node = cond}));
+            return 1;
+        }
+
+        // Mark this variant as covered
+        variant_covered[variant_found] = 1;
+
+        // Set the binding's type (not as a literal - this is a value, not a type expression).
+        // Note that we set both the condition node and the annotation_type.
+        // If the case variable is mutable (var.&), we have a pointer type.
+        tl_polytype *variant_poly = null;
+        if (node->case_.is_union == AST_TAGGED_UNION_MUTABLE) {
+            variant_poly =
+              tl_polytype_absorb_mono(self->arena, tl_type_registry_ptr(self->registry, variant_type));
+        } else {
+            variant_poly = tl_polytype_absorb_mono(self->arena, variant_type);
+        }
+
+        ast_node_type_set(cond, variant_poly);
+        cond->symbol.annotation_type = variant_poly;
+    }
+
+    // Exhaustiveness check: if no else arm, verify all variants are covered
+    if (!has_else_arm) {
+        forall(j, valid_variants) {
+            if (!variant_covered[j]) {
+                array_push(self->errors,
+                           ((tl_infer_error){.tag = tl_err_tagged_union_missing_case, .node = node}));
+                return 1;
+            }
+        }
+    }
+
+    return 0;
+}
+
 static int infer_case(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
     if (resolve_node(self, node->case_.expression, ctx, npos_operand)) return 1;
     if (resolve_node(self, node->case_.binary_predicate, ctx, npos_operand)) return 1;
@@ -1109,117 +1697,7 @@ static int infer_case(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
     if (node->case_.conditions.size != node->case_.arms.size) fatal("logic error");
 
     if (node->case_.is_union) {
-        // Tagged union case expression: conditions are binding patterns like "c: Circle"
-        // The condition symbol (c) is bound to the variant type (Circle) for use in the arm
-
-        // Get wrapper type and extract valid variants
-        tl_monotype *wrapper_type = expr_type->type;
-        tl_monotype_substitute(self->arena, wrapper_type, self->subs, null); // needed
-
-        // If there is an explicit type annotation (e.g., "case x: Option(T)"), always parse and
-        // use it as the wrapper type. This is essential for generic functions with type-predicate
-        // branching (e.g., `if x :: Option { case x: Option(T) { ... } } else if x :: Result ...`)
-        // where different branches constrain the same variable to different tagged union types.
-        // Without this, the first branch's constraint would permanently unify the variable's type,
-        // making subsequent branches fail. The constraint is non-fatal here because after
-        // specialization, only the matching branch will be valid.
-        if (node->case_.union_annotation) {
-            annotation_parse_result result = parse_type_annotation(self, ctx, node->case_.union_annotation);
-            if (result.parsed && tl_monotype_is_inst(result.parsed)) {
-                wrapper_type = result.parsed;
-                // Constrain expression type to match annotation (non-fatal: in generic functions,
-                // a prior branch may have already constrained to a different type)
-                int save                        = self->is_constrain_ignore_error;
-                self->is_constrain_ignore_error = 1;
-                constrain_pm(self, expr_type, wrapper_type, node->case_.expression);
-                self->is_constrain_ignore_error = save;
-            }
-        }
-
-        if (!tl_monotype_is_inst(wrapper_type)) {
-            expected_tagged_union(self, node->case_.expression);
-            return 1;
-        }
-
-        // Find the 'u' (union) field in the wrapper type
-        i32 u_index = tl_monotype_type_constructor_field_index(wrapper_type, S("u"));
-        if (u_index < 0) {
-            // wrapper type missing 'u'
-            expected_tagged_union(self, node->case_.expression);
-            return 1;
-        }
-
-        tl_monotype *union_type     = wrapper_type->cons_inst->args.v[u_index];
-        str_sized    valid_variants = union_type->cons_inst->def->field_names;
-
-        // Track which variants are covered (for exhaustiveness checking)
-        int *variant_covered = alloc_malloc(self->transient, valid_variants.size * sizeof(int));
-        memset(variant_covered, 0, valid_variants.size * sizeof(int));
-        int has_else_arm = 0;
-
-        forall(i, node->case_.conditions) {
-            // Detect `else` condition on final arm
-            if (i + 1 == node->case_.conditions.size && ast_node_is_nil(node->case_.conditions.v[i])) {
-                has_else_arm = 1;
-                break;
-            }
-
-            ast_node *cond = node->case_.conditions.v[i];
-            if (!ast_node_is_symbol(cond) || !cond->symbol.annotation) {
-                // "tagged union case condition must be 'binding: VariantType'"
-                tagged_union_case_syntax_error(self, cond);
-            }
-
-            // Find the variant by name in the union type
-            // Use the original (unmangled) name from the annotation, as union field names are unmangled
-            str variant_name  = ast_node_name_original(cond->symbol.annotation);
-            int variant_found = -1;
-            forall(j, valid_variants) {
-                if (str_eq(valid_variants.v[j], variant_name)) {
-                    variant_found = (int)j;
-                    break;
-                }
-            }
-
-            if (variant_found < 0) {
-                array_push(self->errors,
-                           ((tl_infer_error){.tag = tl_err_tagged_union_unknown_variant, .node = cond}));
-                return 1;
-            }
-
-            // Mark this variant as covered
-            variant_covered[variant_found] = 1;
-
-            // Get the variant type from the union type (which already has concrete types after
-            // substitution) This handles both generic and non-generic variants correctly
-            tl_monotype *variant_type = union_type->cons_inst->args.v[variant_found];
-
-            // Set the binding's type (not as a literal - this is a value, not a type expression).
-            // Note that we set both the condition node and the annotation_type.
-            // If the case variable is mutable (var.&), we have a pointer type.
-            tl_polytype *variant_poly = null;
-            if (node->case_.is_union == AST_TAGGED_UNION_MUTABLE) {
-                variant_poly =
-                  tl_polytype_absorb_mono(self->arena, tl_type_registry_ptr(self->registry, variant_type));
-            } else {
-                variant_poly = tl_polytype_absorb_mono(self->arena, variant_type);
-            }
-
-            ast_node_type_set(cond, variant_poly);
-            cond->symbol.annotation_type = variant_poly;
-        }
-
-        // Exhaustiveness check: if no else arm, verify all variants are covered
-        if (!has_else_arm) {
-            forall(j, valid_variants) {
-                if (!variant_covered[j]) {
-                    array_push(self->errors,
-                               ((tl_infer_error){.tag = tl_err_tagged_union_missing_case, .node = node}));
-                    return 1;
-                }
-            }
-        }
-
+        if (infer_tagged_union_case(self, ctx, node)) return 1;
     } else {
         // Standard case expression: conditions are expressions compared for equality
         forall(i, node->case_.conditions) {
@@ -1330,6 +1808,137 @@ static int infer_let_in(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
     return 0;
 }
 
+// Infer type constructor application: Foo(a=1, b=2), Foo(Int), etc.
+static int infer_type_constructor_nfa(tl_infer *self, traverse_ctx *ctx, ast_node *node, str name) {
+    ast_arguments_iter iter = ast_node_arguments_iter(node);
+    ast_node          *arg;
+    while ((arg = ast_arguments_next(&iter))) {
+        if (resolve_node(self, arg, ctx, npos_function_argument)) return 1;
+    }
+
+    tl_monotype *inst        = null;
+    u32          n_type_args = node->named_application.n_type_arguments;
+
+    if (n_type_args > 0) {
+        // Use explicit type arguments for instantiation
+        tl_monotype_sized args = {
+          .v    = alloc_malloc(self->transient, n_type_args * sizeof(tl_monotype *)),
+          .size = n_type_args,
+        };
+
+        for (u32 i = 0; i < n_type_args; i++) {
+            ast_node *type_arg_node = node->named_application.type_arguments[i];
+            if (type_arg_node && type_arg_node->type) {
+                args.v[i] = unwrap_type_literal(type_arg_node->type->type);
+#if DEBUG_EXPLICIT_TYPE_ARGS
+                str arg_str = tl_monotype_to_string(self->transient, args.v[i]);
+                fprintf(stderr,
+                        "[DEBUG EXPLICIT TYPE ARGS] type constructor: using explicit type for arg %u: %s\n",
+                        i, str_cstr(&arg_str));
+#endif
+            } else {
+                args.v[i] = null; // will create fresh type variable
+            }
+        }
+
+        inst = tl_type_registry_instantiate_with(self->registry, name, args);
+    } else {
+        inst = tl_type_registry_instantiate(self->registry, name);
+    }
+
+    if (!inst) {
+        wrong_number_of_arguments(self, node);
+        return 1;
+    }
+
+#if DEBUG_EXPLICIT_TYPE_ARGS
+    {
+        str inst_str = tl_monotype_to_string(self->transient, inst);
+        fprintf(stderr,
+                "[DEBUG EXPLICIT TYPE ARGS] infer_named_function_application (type constructor):\n");
+        fprintf(stderr, "  name: %s\n", str_cstr(&name));
+        fprintf(stderr, "  instantiated type: %s\n", str_cstr(&inst_str));
+        fprintf(stderr, "  inst->cons_inst->args.size: %u\n", (u32)inst->cons_inst->args.size);
+        for (u32 j = 0; j < inst->cons_inst->args.size; j++) {
+            str arg_str = tl_monotype_to_string(self->transient, inst->cons_inst->args.v[j]);
+            fprintf(stderr, "    field[%u] type: %s\n", j, str_cstr(&arg_str));
+        }
+    }
+#endif
+
+    {
+        str          inst_str = tl_monotype_to_string(self->transient, inst);
+        tl_polytype *app      = make_arrow(self, ctx, iter.nodes, null, 0);
+        if (!app) return 1;
+
+        if (self->verbose) {
+            str app_str = tl_polytype_to_string(self->transient, app);
+            dbg(self, "type constructor: callsite '%s' (%s) arrow: %s", str_cstr(&name),
+                str_cstr(&inst_str), str_cstr(&app_str));
+        }
+    }
+
+    if (!is_union_struct(self, name)) {
+        iter = ast_node_arguments_iter(node);
+        if (iter.nodes.size != inst->cons_inst->args.size) {
+            wrong_number_of_arguments(self, node);
+            return 1;
+        }
+    }
+
+    u32 i = 0;
+    iter  = ast_node_arguments_iter(node);
+    while ((arg = ast_arguments_next(&iter))) {
+        if (i >= inst->cons_inst->args.size) fatal("runtime error");
+
+        if (ast_node_is_assignment(arg)) {
+            // This is a type value constructor
+            i32 found =
+              tl_monotype_type_constructor_field_index(inst, ast_node_name_original(arg->assignment.name));
+
+            if (-1 == found) {
+                array_push(self->errors, ((tl_infer_error){.tag = tl_err_field_not_found, .node = arg}));
+                return 1;
+            }
+            assert(found < (i32)inst->cons_inst->args.size);
+
+            int is_cast = is_ptr_cast_annotation(arg->assignment.name);
+            if (is_cast) {
+                tl_polytype *annotation_type = arg->assignment.name->symbol.annotation_type;
+                // Constrain annotation type against struct field to propagate concrete type info
+                if (constrain_pm(self, annotation_type, inst->cons_inst->args.v[found], node)) return 1;
+                // Constrain value type against annotation permissively (cast)
+                self->is_constrain_ignore_error = 1;
+                constrain_pm(self, arg->type, inst->cons_inst->args.v[found], node);
+                self->is_constrain_ignore_error = 0;
+            } else {
+#if DEBUG_EXPLICIT_TYPE_ARGS
+                {
+                    str field_name = ast_node_name_original(arg->assignment.name);
+                    str field_type_str =
+                      tl_monotype_to_string(self->transient, inst->cons_inst->args.v[found]);
+                    fprintf(stderr, "[DEBUG EXPLICIT TYPE ARGS] constraining field '%s':\n",
+                            str_cstr(&field_name));
+                    if (arg->type) {
+                        str arg_type_str = tl_polytype_to_string(self->transient, arg->type);
+                        fprintf(stderr, "  arg->type (value): %s\n", str_cstr(&arg_type_str));
+                    } else {
+                        fprintf(stderr, "  arg->type (value): (null)\n");
+                    }
+                    fprintf(stderr, "  field type from inst: %s\n", str_cstr(&field_type_str));
+                }
+#endif
+                if (constrain_pm(self, arg->type, inst->cons_inst->args.v[found], node)) return 1;
+            }
+        } else {
+            // In this branch, node is a type literal.
+        }
+        ++i;
+    }
+
+    return constrain_pm(self, node->type, inst, node);
+}
+
 static int infer_named_function_application(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
     if (resolve_node(self, node, ctx, ctx->node_pos)) return 1;
 
@@ -1344,78 +1953,7 @@ static int infer_named_function_application(tl_infer *self, traverse_ctx *ctx, a
     if (is_type_literal(self, ctx, node)) return 0;
 
     if (tl_polytype_is_type_constructor(type)) {
-        // This nfa can be either a type literal, or a type value constructor. Value constructors are of the
-        // form `Foo(a=1, b=2)`. Type literals are of the form `Foo(Int)` for generics or plain `Foo` for
-        // concrete.
-        ast_arguments_iter iter = ast_node_arguments_iter(node);
-        ast_node          *arg;
-        while ((arg = ast_arguments_next(&iter))) {
-            if (resolve_node(self, arg, ctx, npos_function_argument)) return 1;
-        }
-
-        tl_monotype *inst = tl_type_registry_instantiate(self->registry, name);
-        if (!inst) {
-            wrong_number_of_arguments(self, node);
-            return 1;
-        }
-
-        {
-            str          inst_str = tl_monotype_to_string(self->transient, inst);
-            tl_polytype *app      = make_arrow(self, ctx, iter.nodes, null, 0);
-            if (!app) return 1;
-
-            if (self->verbose) {
-                str app_str = tl_polytype_to_string(self->transient, app);
-                dbg(self, "type constructor: callsite '%s' (%s) arrow: %s", str_cstr(&name),
-                    str_cstr(&inst_str), str_cstr(&app_str));
-            }
-        }
-
-        if (!is_union_struct(self, name)) {
-            iter = ast_node_arguments_iter(node);
-            if (iter.nodes.size != inst->cons_inst->args.size) {
-                wrong_number_of_arguments(self, node);
-                return 1;
-            }
-        }
-
-        u32 i = 0;
-        iter  = ast_node_arguments_iter(node);
-        while ((arg = ast_arguments_next(&iter))) {
-            if (i >= inst->cons_inst->args.size) fatal("runtime error");
-
-            if (ast_node_is_assignment(arg)) {
-                // This is a type value constructor
-                i32 found = tl_monotype_type_constructor_field_index(
-                  inst, ast_node_name_original(arg->assignment.name));
-
-                if (-1 == found) {
-                    array_push(self->errors,
-                               ((tl_infer_error){.tag = tl_err_field_not_found, .node = arg}));
-                    return 1;
-                }
-                assert(found < (i32)inst->cons_inst->args.size);
-
-                int is_cast = is_ptr_cast_annotation(arg->assignment.name);
-                if (is_cast) {
-                    tl_polytype *annotation_type = arg->assignment.name->symbol.annotation_type;
-                    // Constrain annotation type against struct field to propagate concrete type info
-                    if (constrain_pm(self, annotation_type, inst->cons_inst->args.v[found], node)) return 1;
-                    // Constrain value type against annotation permissively (cast)
-                    self->is_constrain_ignore_error = 1;
-                    constrain_pm(self, arg->type, inst->cons_inst->args.v[found], node);
-                    self->is_constrain_ignore_error = 0;
-                } else {
-                    if (constrain_pm(self, arg->type, inst->cons_inst->args.v[found], node)) return 1;
-                }
-            } else {
-                // In this branch, node is a type literal.
-            }
-            ++i;
-        }
-
-        if (constrain_pm(self, node->type, inst, node)) return 1;
-
+        return infer_type_constructor_nfa(self, ctx, node, name);
     } else {
         if (tl_polytype_is_concrete(type)) {
             if (!str_is_empty(original)) {
@@ -1424,11 +1962,76 @@ static int infer_named_function_application(tl_infer *self, traverse_ctx *ctx, a
             }
         }
 
-        ast_arguments_iter iter     = ast_node_arguments_iter(node);
-        tl_monotype       *inst     = tl_polytype_instantiate(self->arena, type, self->subs);
-        str                inst_str = tl_monotype_to_string(self->transient, inst);
-        tl_polytype       *app      = make_arrow(self, ctx, iter.nodes, node, 0);
+        ast_arguments_iter iter = ast_node_arguments_iter(node);
+        tl_monotype       *inst = null;
+
+        // Check for explicit type arguments
+        u32       n_type_args = node->named_application.n_type_arguments;
+        ast_node *let         = toplevel_get(self, name);
+        u32       n_quants    = type->quantifiers.size;
+
+        if (n_type_args > 0 && let && ast_node_is_let(let) && n_quants > 0) {
+            // Build args array from explicit type arguments
+            tl_monotype_sized args = {
+              .v    = alloc_malloc(self->transient, n_quants * sizeof(tl_monotype *)),
+              .size = n_quants,
+            };
+
+            for (u32 i = 0; i < n_quants; i++) {
+                args.v[i] = null; // default: create fresh type variable
+
+                if (i < let->let.n_type_parameters) {
+                    str param_name = let->let.type_parameters[i]->symbol.name;
+
+#if DEBUG_INVARIANTS
+                    // Invariant: Type argument lookup must use alpha-converted names
+                    if (!is_alpha_converted_name(param_name)) {
+                        char detail[256];
+                        snprintf(detail, sizeof detail,
+                                 "Looking up '%.*s' which is not alpha-converted in type_arguments",
+                                 str_ilen(param_name), str_buf(&param_name));
+                        report_invariant_failure(self, "infer_named_function_application",
+                                                 "Type argument lookup must use alpha-converted names",
+                                                 detail, node);
+                    }
+#endif
+
+                    tl_monotype *explicit_type = str_map_get_ptr(ctx->type_arguments, param_name);
+                    if (explicit_type) {
+                        args.v[i] = unwrap_type_literal(explicit_type);
+#if DEBUG_EXPLICIT_TYPE_ARGS
+                        str arg_str = tl_monotype_to_string(self->transient, args.v[i]);
+                        fprintf(stderr,
+                                "[DEBUG EXPLICIT TYPE ARGS] using explicit type for quantifier %u: %s\n", i,
+                                str_cstr(&arg_str));
+#endif
+                    }
+                }
+            }
+
+            inst = tl_polytype_instantiate_with(self->arena, type, args, self->subs);
+        } else {
+            inst = tl_polytype_instantiate(self->arena, type, self->subs);
+        }
+
+        str          inst_str = tl_monotype_to_string(self->transient, inst);
+        tl_polytype *app      = make_arrow(self, ctx, iter.nodes, node, 0);
         if (!app) return 1;
+
+#if DEBUG_EXPLICIT_TYPE_ARGS
+        {
+            str type_str = tl_polytype_to_string(self->transient, type);
+            str app_str  = tl_polytype_to_string(self->transient, app);
+            fprintf(stderr,
+                    "[DEBUG EXPLICIT TYPE ARGS] infer_named_function_application (function call):\n");
+            fprintf(stderr, "  name: %s\n", str_cstr(&name));
+            fprintf(stderr, "  callee type from env: %s\n", str_cstr(&type_str));
+            fprintf(stderr, "  instantiated: %s\n", str_cstr(&inst_str));
+            fprintf(stderr, "  callsite arrow: %s\n", str_cstr(&app_str));
+            fprintf(stderr, "  n_type_arguments: %u\n", node->named_application.n_type_arguments);
+        }
+#endif
+
         if (self->verbose) {
             str app_str = tl_polytype_to_string(self->transient, app);
             dbg(self, "application: callsite '%s' (%s) arrow: %s", str_cstr(&name), str_cstr(&inst_str),
@@ -1442,8 +2045,18 @@ static int infer_named_function_application(tl_infer *self, traverse_ctx *ctx, a
     return 0;
 }
 
+// ============================================================================
+// Generic cloning and arrow construction
+// ============================================================================
+//
+// Utilities shared between inference and specialization: clone_generic_for_arrow
+// deep-clones a generic AST node (erasing types so the copy can be re-inferred),
+// make_arrow constructs arrow (function) types from parameter/result nodes, and
+// concretize_params fills in concrete types for function parameters.
+
 static void         rename_variables(tl_infer *, ast_node *, rename_variables_ctx *, int);
-static void         concretize_params(tl_infer *self, ast_node *, tl_monotype *);
+static void         concretize_params(tl_infer *self, ast_node *, tl_monotype *, hashmap *type_arguments,
+                                      ast_node_sized callsite_type_arguments);
 static tl_polytype *make_arrow(tl_infer *, traverse_ctx *, ast_node_sized, ast_node *, int is_params);
 static tl_polytype *make_arrow_result_type(tl_infer *, traverse_ctx *, ast_node_sized, tl_polytype *,
                                            int is_params);
@@ -1451,29 +2064,133 @@ static tl_polytype *make_arrow_with(tl_infer *, traverse_ctx *, ast_node *, tl_p
 static tl_polytype *make_binary_predicate_arrow(tl_infer *, traverse_ctx *, ast_node *lhs, ast_node *rhs);
 static int          traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, traverse_cb cb);
 
-//
+static void         add_free_variables_to_arrow(tl_infer *self, ast_node *node, tl_polytype *arrow);
+static void         concretize_params(tl_infer *self, ast_node *node, tl_monotype *callsite,
+                                      hashmap *type_arguments, ast_node_sized callsite_type_arguments);
+static void         toplevel_name_replace(ast_node *node, str name_replace);
 
-static void      add_free_variables_to_arrow(tl_infer *self, ast_node *node, tl_polytype *arrow);
-static void      concretize_params(tl_infer *self, ast_node *node, tl_monotype *callsite);
-static void      toplevel_name_replace(ast_node *node, str name_replace);
-
-static ast_node *clone_generic_for_arrow(tl_infer *self, ast_node const *node, tl_monotype *arrow,
-                                         str inst_name) {
+static ast_node    *clone_generic_for_arrow(tl_infer *self, ast_node const *node, tl_monotype *arrow,
+                                            str inst_name, hashmap *type_arguments,
+                                            ast_node_sized callsite_type_arguments) {
     ast_node *clone = ast_node_clone(self->arena, node);
     ast_node *name  = toplevel_name_node(clone);
     assert(ast_node_is_symbol(name));
-    name->symbol.annotation_type = null;
-    name->symbol.annotation      = null;
 
     // rename variables: also erases type information
     rename_variables_ctx ctx = {.lex = map_new(self->transient, str, str, 16)};
+
+    // Snapshot annotation type variable keys before rename_variables adds value parameters.
+    // This gives us the exact set of type variables without needing casing heuristics.
+    u32       n_annotation_type_vars = map_size(ctx.lex);
+    str_array annotation_type_var_keys =
+      n_annotation_type_vars > 0 ? str_map_keys(self->transient, ctx.lex) : (str_array){0};
+
+    name->symbol.annotation_type = null;
+    name->symbol.annotation      = null;
+
     rename_variables(self, clone, &ctx, 0);
+
+#if DEBUG_INVARIANTS
+    // Invariant: After clone + rename_variables, all types must be erased (null)
+    {
+        struct check_types_null_ctx check_ctx = {
+          .self = self, .phase = "clone_generic_for_arrow", .failures = 0};
+        ast_node_dfs(&check_ctx, clone, check_types_null_cb);
+        if (check_ctx.failures) {
+            fprintf(stderr, "ERROR: Type pollution detected in cloned AST\n");
+        }
+    }
+
+    // Invariant: Alpha-converted type parameter names must not already exist in the environment
+    // This ensures each specialization gets truly fresh names
+    if (ast_node_is_let(clone)) {
+        for (u32 i = 0; i < clone->let.n_type_parameters; i++) {
+            ast_node    *tp       = clone->let.type_parameters[i];
+            str          tp_name  = tp->symbol.name;
+
+            tl_polytype *existing = tl_type_env_lookup(self->env, tp_name);
+            if (existing) {
+                char detail[256];
+                str  type_str = tl_polytype_to_string(self->transient, existing);
+                snprintf(detail, sizeof detail,
+                         "Type parameter '%.*s' already exists in environment with type: %s",
+                         str_ilen(tp_name), str_buf(&tp_name), str_cstr(&type_str));
+                report_invariant_failure(self, "clone_generic_for_arrow",
+                                         "New specialization type parameters must have fresh names", detail,
+                                         tp);
+            }
+        }
+    }
+#endif
+
+    // If we collected type variables from the annotation, add them as type parameters to the let node.
+    // This ensures traverse_ctx_load_type_arguments can find them later.
+    if (n_annotation_type_vars > 0 && ast_node_is_let(clone) && clone->let.n_type_parameters == 0) {
+        // Use the snapshotted keys — these are exactly the type variables from the annotation,
+        // without any value parameters that rename_variables added later.
+        ast_node **type_params =
+          alloc_malloc(self->arena, sizeof(ast_node *) * annotation_type_var_keys.size);
+        u32 n_type_params = 0;
+
+        forall(i, annotation_type_var_keys) {
+            str  original = annotation_type_var_keys.v[i];
+            str *renamed  = str_map_get(ctx.lex, original);
+            if (renamed) {
+                ast_node *type_param         = ast_node_create(self->arena, ast_symbol);
+                type_param->symbol.name      = *renamed;
+                type_param->symbol.original  = original;
+                type_params[n_type_params++] = type_param;
+#if DEBUG_RENAME
+                fprintf(stderr, "[DEBUG] Added type_parameter: %s (original: %s)\n", str_cstr(renamed),
+                        str_cstr(&original));
+#endif
+            }
+        }
+
+        if (n_type_params > 0) {
+            clone->let.type_parameters   = type_params;
+            clone->let.n_type_parameters = (u8)n_type_params;
+        }
+    }
 
     // recalculate free variables, because symbol names have been renamed
     tl_polytype wrap = tl_polytype_wrap(arrow);
     add_free_variables_to_arrow(self, clone, &wrap);
 
-    concretize_params(self, clone, arrow);
+    concretize_params(self, clone, arrow, type_arguments, callsite_type_arguments);
+
+#if DEBUG_INVARIANTS
+    // Invariant: Type parameters with explicit bindings in type_arguments must have concrete types
+    if (ast_node_is_let(clone) && type_arguments) {
+        for (u32 i = 0; i < clone->let.n_type_parameters; i++) {
+            ast_node *tp      = clone->let.type_parameters[i];
+            str       tp_name = tp->symbol.name;
+
+            // Only check type parameters that have an explicit binding in type_arguments
+            tl_monotype *bound_type = str_map_get_ptr(type_arguments, tp_name);
+            if (!bound_type) continue; // No explicit binding, skip this type parameter
+
+            if (!tp->type || !tl_polytype_is_concrete(tp->type)) {
+                char detail[256];
+                if (tp->type) {
+                    str type_str = tl_polytype_to_string(self->transient, tp->type);
+                    snprintf(detail, sizeof detail,
+                             "Type parameter '%.*s' with explicit binding has non-concrete type: %s",
+                             str_ilen(tp_name), str_buf(&tp_name), str_cstr(&type_str));
+                } else {
+                    snprintf(detail, sizeof detail,
+                             "Type parameter '%.*s' with explicit binding has null type", str_ilen(tp_name),
+                             str_buf(&tp_name));
+                }
+                report_invariant_failure(
+                  self, "clone_generic_for_arrow",
+                  "Type parameter with explicit binding must have concrete type after concretize_params",
+                  detail, tp);
+            }
+        }
+    }
+#endif
+
     toplevel_name_replace(clone, inst_name);
 
     return clone;
@@ -1496,8 +2213,126 @@ static int traverse_ast_node_params(tl_infer *self, traverse_ctx *ctx, ast_node 
     return 0;
 }
 
+static int traverse_ast(tl_infer *, traverse_ctx *, ast_node *, traverse_cb);
+
+// Pre-set variant binding types on tagged union case conditions BEFORE traversing arm bodies.
+// This is essential for nested when: the inner when needs the outer binding's type to be resolved
+// so that field access (e.g., s.v) works and the inner scrutinee gets a concrete tagged union type.
+// Without this, the bottom-up callback order means the inner when's infer_tagged_union_case runs
+// before the outer when's, leaving binding types as unresolved type variables.
+static void prepare_tagged_union_bindings(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
+    tl_polytype *expr_type = node->case_.expression->type;
+    if (!expr_type) return;
+
+    tl_monotype *wrapper_type = expr_type->type;
+    tl_monotype_substitute(self->arena, wrapper_type, self->subs, null);
+
+    // Handle explicit type annotation (when x: Type { ... })
+    if (node->case_.union_annotation) {
+        annotation_parse_result result = parse_type_annotation(self, ctx, node->case_.union_annotation);
+        if (result.parsed && tl_monotype_is_inst(result.parsed)) {
+            wrapper_type                    = result.parsed;
+            int save                        = self->is_constrain_ignore_error;
+            self->is_constrain_ignore_error = 1;
+            constrain_pm(self, expr_type, wrapper_type, node->case_.expression);
+            self->is_constrain_ignore_error = save;
+            tl_monotype_substitute(self->arena, wrapper_type, self->subs, null);
+        }
+    }
+
+    if (!tl_monotype_is_inst(wrapper_type))
+        return; // type not yet resolved; defer to infer_tagged_union_case
+
+    i32 u_index = tl_monotype_type_constructor_field_index(wrapper_type, S("u"));
+    if (u_index < 0) return;
+
+    forall(i, node->case_.conditions) {
+        if (i + 1 == node->case_.conditions.size && ast_node_is_nil(node->case_.conditions.v[i])) break;
+
+        ast_node *cond = node->case_.conditions.v[i];
+        if (!ast_node_is_symbol(cond) || !cond->symbol.annotation) continue;
+
+        // Don't overwrite an already-specialized annotation type (set by specialize_case).
+        // Later traversals (Phase 7) re-enter this function but must not clobber specialization.
+        if (cond->symbol.annotation_type &&
+            tl_monotype_is_inst_specialized(cond->symbol.annotation_type->type))
+            continue;
+
+        str          variant_name = ast_node_name_original(cond->symbol.annotation);
+        tl_monotype *variant_type = tagged_union_find_variant(wrapper_type, variant_name, null);
+        if (!variant_type) continue; // will be caught later by infer_tagged_union_case
+
+        tl_polytype *variant_poly = null;
+        if (node->case_.is_union == AST_TAGGED_UNION_MUTABLE) {
+            variant_poly =
+              tl_polytype_absorb_mono(self->arena, tl_type_registry_ptr(self->registry, variant_type));
+        } else {
+            variant_poly = tl_polytype_absorb_mono(self->arena, variant_type);
+        }
+
+        ast_node_type_set(cond, variant_poly);
+        cond->symbol.annotation_type = variant_poly;
+        env_insert_constrain(self, cond->symbol.name, variant_poly, cond);
+    }
+}
+
+static int traverse_ast_case(tl_infer *self, traverse_ctx *ctx, ast_node *node, traverse_cb cb) {
+    ctx->node_pos = npos_operand;
+    if (traverse_ast(self, ctx, node->case_.expression, cb)) return 1;
+
+    ctx->node_pos = npos_operand;
+    if (traverse_ast(self, ctx, node->case_.binary_predicate, cb)) return 1;
+
+    if (node->case_.is_union) {
+        // Pre-set variant binding types so that nested when expressions can resolve
+        // field accesses on outer bindings during their own bottom-up traversal.
+        prepare_tagged_union_bindings(self, ctx, node);
+
+        // For union cases, conditions are handled by infer_case() directly.
+        // We only need to add condition symbols to lexical scope before traversing arms.
+        forall(i, node->case_.conditions) {
+            hashmap  *save = map_copy(ctx->lexical_names);
+            ast_node *cond = node->case_.conditions.v[i];
+
+            // Skip nil condition (else arm)
+            if (ast_node_is_nil(cond)) {
+                if (i < node->case_.arms.size) {
+                    ctx->node_pos = npos_operand;
+                    if (traverse_ast(self, ctx, node->case_.arms.v[i], cb)) return 1;
+                }
+                ctx->lexical_names = save;
+                continue;
+            }
+
+            // Add condition symbol to lexical scope (don't traverse it - infer_case handles it)
+            if (ast_node_is_symbol(cond)) {
+                str_hset_insert(&ctx->lexical_names, cond->symbol.name);
+            }
+
+            // Process only the corresponding arm (not the condition)
+            if (i < node->case_.arms.size) {
+                ctx->node_pos = npos_operand;
+                if (traverse_ast(self, ctx, node->case_.arms.v[i], cb)) return 1;
+            }
+
+            ctx->lexical_names = save;
+        }
+    } else {
+        forall(i, node->case_.conditions) {
+            ctx->node_pos = npos_operand;
+            if (traverse_ast(self, ctx, node->case_.conditions.v[i], cb)) return 1;
+        }
+        forall(i, node->case_.arms) {
+            ctx->node_pos = npos_operand;
+            if (traverse_ast(self, ctx, node->case_.arms.v[i], cb)) return 1;
+        }
+    }
+    return cb(self, ctx, node);
+}
+
 static int traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, traverse_cb cb) {
     if (null == node) return 0;
+    if (self->report_stats) self->counters.traverse_nodes_visited++;
 
     switch (node->tag) {
     case ast_attribute_set:
@@ -1505,8 +2340,17 @@ static int traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, trave
         break;
 
     case ast_let: {
+        // Save outer context: when specializing nested functions (via post_specialize → specialize_arrow),
+        // the inner function's let case would otherwise clobber the outer type_arguments and lexical_names.
+        hashmap *save_type_arguments = map_copy(ctx->type_arguments);
+        hashmap *save_lexical_names  = map_copy(ctx->lexical_names);
+
+        // Note: this node is being processed as a toplevel function definition. It must clear all lexical
+        // contexts.
         map_reset(ctx->type_arguments);
         map_reset(ctx->lexical_names);
+
+        traverse_ctx_load_type_arguments(self, ctx, node);
 
         ctx->node_pos = npos_toplevel;
         // Note: traversing the name as a symbol currently causes invalid constraints to be applied when
@@ -1520,6 +2364,12 @@ static int traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, trave
         if (traverse_ast(self, ctx, node->let.body, cb)) return 1;
 
         // Note: let nodes are intentionally not processed with the callback.
+
+        // Restore outer context
+        map_destroy(&ctx->type_arguments);
+        map_destroy(&ctx->lexical_names);
+        ctx->type_arguments = save_type_arguments;
+        ctx->lexical_names  = save_lexical_names;
 
     } break;
 
@@ -1540,6 +2390,7 @@ static int traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, trave
         // traverse value first, then traverse name and body
         ctx->node_pos = npos_value_rhs;
         if (traverse_ast(self, ctx, node->let_in.value, cb)) return 1;
+
         ctx->node_pos = npos_formal_parameter;
         if (traverse_ast(self, ctx, node->let_in.name, cb)) return 1;
         ctx->node_pos = npos_operand;
@@ -1555,6 +2406,7 @@ static int traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, trave
     } break;
 
     case ast_named_function_application: {
+        if (traverse_ctx_assign_type_arguments(self, ctx, node)) return 1;
 
         // traverse arguments
 
@@ -1633,56 +2485,9 @@ static int traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, trave
         if (cb(self, ctx, node)) return 1;
         break;
 
-    case ast_case: {
-        ctx->node_pos = npos_operand;
-        if (traverse_ast(self, ctx, node->case_.expression, cb)) return 1;
-
-        ctx->node_pos = npos_operand;
-        if (traverse_ast(self, ctx, node->case_.binary_predicate, cb)) return 1;
-
-        if (node->case_.is_union) {
-            // For union cases, conditions are handled by infer_case() directly.
-            // We only need to add condition symbols to lexical scope before traversing arms.
-            forall(i, node->case_.conditions) {
-                hashmap  *save = map_copy(ctx->lexical_names);
-                ast_node *cond = node->case_.conditions.v[i];
-
-                // Skip nil condition (else arm)
-                if (ast_node_is_nil(cond)) {
-                    if (i < node->case_.arms.size) {
-                        ctx->node_pos = npos_operand;
-                        if (traverse_ast(self, ctx, node->case_.arms.v[i], cb)) return 1;
-                    }
-                    ctx->lexical_names = save;
-                    continue;
-                }
-
-                // Add condition symbol to lexical scope (don't traverse it - infer_case handles it)
-                if (ast_node_is_symbol(cond)) {
-                    str_hset_insert(&ctx->lexical_names, cond->symbol.name);
-                }
-
-                // Process only the corresponding arm (not the condition)
-                if (i < node->case_.arms.size) {
-                    ctx->node_pos = npos_operand;
-                    if (traverse_ast(self, ctx, node->case_.arms.v[i], cb)) return 1;
-                }
-
-                ctx->lexical_names = save;
-            }
-        } else {
-            // Original behavior for non-union cases
-            forall(i, node->case_.conditions) {
-                ctx->node_pos = npos_operand;
-                if (traverse_ast(self, ctx, node->case_.conditions.v[i], cb)) return 1;
-            }
-            forall(i, node->case_.arms) {
-                ctx->node_pos = npos_operand;
-                if (traverse_ast(self, ctx, node->case_.arms.v[i], cb)) return 1;
-            }
-        }
-        if (cb(self, ctx, node)) return 1;
-    } break;
+    case ast_case:
+        if (traverse_ast_case(self, ctx, node, cb)) return 1;
+        break;
 
     case ast_binary_op:
         // don't traverse op, it's just an operator
@@ -1786,7 +2591,6 @@ static int traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, trave
     case ast_f64:
     case ast_i64:
     case ast_string:
-    case ast_c_string:
     case ast_char:
     case ast_symbol:
     case ast_u64:
@@ -1822,14 +2626,31 @@ static int type_literal_specialize(tl_infer *self, ast_node *node) {
     if (parsed) {
         tl_monotype *target = parsed;
         if (!tl_monotype_is_inst(target)) return 1;
-        str               name = target->cons_inst->def->generic_name;
+        str name = target->cons_inst->def->generic_name;
+
+#if DEBUG_RECURSIVE_TYPES
+        {
+            str parsed_str = tl_monotype_to_string(self->transient, parsed);
+            fprintf(stderr, "[DEBUG_RECURSIVE_TYPES] type_literal_specialize: parsed=%s name='%s'\n",
+                    str_cstr(&parsed_str), str_cstr(&name));
+        }
+#endif
 
         tl_monotype_sized args = target->cons_inst->args;
         tl_monotype      *inst = tl_type_registry_get_cached_specialization(self->registry, name, args);
-        str               name_inst    = str_empty();
-        tl_polytype      *special_type = null;
+#if DEBUG_RECURSIVE_TYPES
+        fprintf(stderr, "[DEBUG_RECURSIVE_TYPES] type_literal_specialize: cache %s for '%s'\n",
+                inst ? "HIT" : "MISS", str_cstr(&name));
+#endif
+        str          name_inst    = str_empty();
+        tl_polytype *special_type = null;
         if (!inst) {
             name_inst = specialize_type_constructor(self, name, args, &special_type);
+#if DEBUG_RECURSIVE_TYPES
+            fprintf(stderr,
+                    "[DEBUG_RECURSIVE_TYPES] type_literal_specialize: specialize returned '%s' type=%p\n",
+                    str_is_empty(name_inst) ? "(empty)" : str_cstr(&name_inst), (void *)special_type);
+#endif
             // ok to fail: enums, nullary builtins, etc
             if (str_is_empty(name_inst)) return 0;
             if (!special_type) return 0;
@@ -1872,15 +2693,15 @@ static int constrain_or_set(tl_infer *self, ast_node *node, tl_polytype *type) {
     if (node->type) {
 #if DEBUG_RESOLVE
         str node_type_str = tl_polytype_to_string(self->transient, node->type);
-        dbg(self, "constrain_or_set: '%s' : %s :: %s", str_cstr(&name), str_cstr(&node_type_str),
-            str_cstr(&poly_str));
+        fprintf(stderr, "constrain_or_set: '%s' : %s :: %s\n", str_cstr(&name), str_cstr(&node_type_str),
+                str_cstr(&poly_str));
 #endif
         if (constrain(self, node->type, type, node)) return type_error(self, node);
     }
 
     else {
 #if DEBUG_RESOLVE
-        dbg(self, "constrain_or_set: '%s': %s", str_cstr(&name), str_cstr(&poly_str));
+        fprintf(stderr, "constrain_or_set: '%s': %s\n", str_cstr(&name), str_cstr(&poly_str));
 #endif
         ast_node_type_set(node, type);
     }
@@ -1911,20 +2732,19 @@ static void sync_with_env(tl_infer *self, traverse_ctx *ctx, ast_node *node, int
     } else {
         // No type: look up its type from the environment, if any
         tl_polytype *type = tl_type_env_lookup(self->env, name);
+#if DEBUG_TYPE_ALIAS
+        if (!type) {
+            int is_alias = tl_type_registry_is_type_alias(self->registry, name);
+            fprintf(stderr, "[DEBUG_TYPE_ALIAS] sync_with_env: '%s' not in type env\n", str_cstr(&name));
+            if (is_alias) fprintf(stderr, "[DEBUG_TYPE_ALIAS]   BUT exists in registry as type alias!\n");
+        }
+#endif
         if (type) ast_node_type_set(node, type);
     }
 
 finish:
     // regardless, node must have a type, even if it's a fresh tv
     if (!node->type) node->type = tl_polytype_create_fresh_tv(self->arena, self->subs);
-}
-
-static int reject_type_literal(tl_infer *self, ast_node const *node) {
-    if (node->type && tl_monotype_is_type_literal(node->type->type)) {
-        array_push(self->errors, ((tl_infer_error){.tag = tl_err_unexpected_type_literal, .node = node}));
-        return 1;
-    }
-    return 0;
 }
 
 static int check_is_pointer(tl_infer *self, tl_polytype *type, ast_node *node) {
@@ -1941,6 +2761,28 @@ static void ensure_symbol_type_from_env(tl_infer *self, ast_node *node) {
     if (!ast_node_is_symbol(node)) return;
 
     tl_polytype *poly = tl_type_env_lookup(self->env, ast_node_str(node));
+
+#if DEBUG_TYPE_ALIAS
+    {
+        str name_dbg = ast_node_str(node);
+        if (tl_type_registry_is_type_alias(self->registry, name_dbg)) {
+            char const *type_s = "(null)";
+            char const *node_s = "(null)";
+            str         type_dbg, node_dbg;
+            if (poly) {
+                type_dbg = tl_polytype_to_string(self->transient, poly);
+                type_s   = str_cstr(&type_dbg);
+            }
+            if (node->type) {
+                node_dbg = tl_polytype_to_string(self->transient, node->type);
+                node_s   = str_cstr(&node_dbg);
+            }
+            fprintf(stderr,
+                    "[DEBUG_TYPE_ALIAS] ensure_symbol_type_from_env: '%s' env_lookup=%s node_type=%s\n",
+                    str_cstr(&name_dbg), type_s, node_s);
+        }
+    }
+#endif
 
     // Note: do not override node->type if it is already concrete. There is some confusion with the handling
     // of type literals that makes the constrain fail unless it is guarded behind this if condition.
@@ -1983,20 +2825,34 @@ static int infer_struct_access(tl_infer *self, ast_node *node) {
     } else {
         ensure_symbol_type_from_env(self, left);
         struct_type = (tl_monotype *)left->type->type;
+#if DEBUG_TYPE_ALIAS
+        if (ast_node_is_symbol(left)) {
+            str left_name = ast_node_str(left);
+            if (tl_type_registry_is_type_alias(self->registry, left_name)) {
+                str st_str = tl_monotype_to_string(self->transient, struct_type);
+                fprintf(stderr,
+                        "[DEBUG_TYPE_ALIAS] infer_struct_access: left='%s' struct_type=%s is_inst=%d\n",
+                        str_cstr(&left_name), str_cstr(&st_str), tl_monotype_is_inst(struct_type));
+            }
+        }
+#endif
     }
 
     // Note: must substitute to resolve type of chained field access, eg: foo.bar.baz
     tl_monotype_substitute(self->arena, struct_type, self->subs, null); // needed
 
-    if (tl_monotype_is_type_literal(struct_type)) {
-        // enum access is through a type literal
-        struct_type = struct_type->literal;
-    }
-
     // Const(T) is transparent for field access: unwrap to access T's fields
     if (tl_monotype_is_const(struct_type)) {
         struct_type = tl_monotype_const_target(struct_type);
     }
+
+#if DEBUG_TYPE_ALIAS
+    if (ast_node_is_symbol(left) && tl_type_registry_is_type_alias(self->registry, ast_node_str(left))) {
+        str st_str2 = tl_monotype_to_string(self->transient, struct_type);
+        fprintf(stderr, "[DEBUG_TYPE_ALIAS] infer_struct_access: after subst, struct_type=%s is_inst=%d\n",
+                str_cstr(&st_str2), tl_monotype_is_inst(struct_type));
+    }
+#endif
 
     if (tl_monotype_is_inst(struct_type)) {
         // Note: this handling of nfas supports terms like: `obj.fun_ptr()` where a field called
@@ -2064,6 +2920,24 @@ static int infer_struct_access(tl_infer *self, ast_node *node) {
     else {
         // struct type is not a type constructor
         dbg(self, "warning: infer struct access without a struct type");
+#if DEBUG_TYPE_ALIAS
+        if (ast_node_is_symbol(left)) {
+            str left_name2 = ast_node_str(left);
+            int is_alias2  = tl_type_registry_is_type_alias(self->registry, left_name2);
+            str st_str3    = tl_monotype_to_string(self->transient, struct_type);
+            fprintf(
+              stderr,
+              "[DEBUG_TYPE_ALIAS] infer_struct_access: FALLTHROUGH left='%s' struct_type=%s is_alias=%d\n",
+              str_cstr(&left_name2), str_cstr(&st_str3), is_alias2);
+            if (is_alias2) {
+                tl_polytype *alias_poly = tl_type_registry_get(self->registry, left_name2);
+                if (alias_poly) {
+                    str alias_str = tl_polytype_to_string(self->transient, alias_poly);
+                    fprintf(stderr, "[DEBUG_TYPE_ALIAS]   alias points to: %s\n", str_cstr(&alias_str));
+                }
+            }
+        }
+#endif
     }
 
 end_struct_access_op:
@@ -2097,14 +2971,31 @@ static int resolve_node(tl_infer *self, ast_node *node, traverse_ctx *ctx, node_
 
     case npos_toplevel:
     case npos_formal_parameter:
-        if (!ast_node_is_symbol(node)) return expected_symbol(self, node);
+        if (!ast_node_is_symbol(node)) {
+#if DEBUG_RESOLVE
+            fprintf(stderr, "[DEBUG resolve_node] ERROR: npos_toplevel/formal_parameter expected symbol\n");
+#endif
+            return expected_symbol(self, node);
+        }
 
-        if (process_annotation(self, ctx, node,
-                               (annotation_opts){
-                                 .add_to_lexicals = 1, // Add type args (e.g., T in `x: T`) to lexical_names
-                                 .check_type_arg_self = 1, // Handle self-referential type args
-                               }) < 0)
-            return 1;
+        {
+            int res = process_annotation(
+              self, ctx, node,
+              (annotation_opts){
+                .add_to_lexicals     = 1, // Add type args (e.g., T in `x: T`) to lexical_names
+                .check_type_arg_self = 1, // Handle self-referential type args
+              });
+            if (res < 0) {
+#if DEBUG_RESOLVE
+                str name = ast_node_is_symbol(node) ? node->symbol.name : S("<non-symbol>");
+                fprintf(stderr,
+                        "[DEBUG resolve_node] ERROR: npos_toplevel/formal_parameter process_annotation "
+                        "failed for '%s'\n",
+                        str_cstr(&name));
+#endif
+                return 1;
+            }
+        }
 
         if (ctx) {
             // Add the symbol's own name to lexical_names (distinct from type args added above)
@@ -2124,20 +3015,32 @@ static int resolve_node(tl_infer *self, ast_node *node, traverse_ctx *ctx, node_
         if (ast_node_is_symbol(node) || ast_node_is_nfa(node)) {
             if (!ctx) fatal("logic error");
 
-            // Try to parse as type literal; if successful, wrap in tl_literal
-            int res = process_annotation(self, ctx, node, (annotation_opts){.wrap_in_literal = 1});
-            if (res < 0) return 1;
-            if (res == 0) {
-                // Not a type literal: ensure fresh type variable and update environment
-                sync_with_env(self, ctx, node, 1);
-            }
-            // If res > 0 (was type literal): do not sync_with_env
+            // Note: type literals as arguments are no longer supported. They must be supplied as explicit
+            // type arguments.
+            sync_with_env(self, ctx, node, 1);
+
+            //             // Try to parse as type literal; if successful, wrap in tl_literal
+            //             int res = process_annotation(self, ctx, node, (annotation_opts){.wrap_in_literal
+            //             = 1}); if (res < 0) {
+            // #if DEBUG_RESOLVE
+            //                 str name = ast_node_is_symbol(node) ? node->symbol.name : S("<nfa>");
+            //                 fprintf(
+            //                   stderr,
+            //                   "[DEBUG resolve_node] ERROR: npos_function_argument process_annotation
+            //                   failed for '%s'\n", str_cstr(&name));
+            // #endif
+            //                 return 1;
+            //             }
+            //             if (res == 0) {
+            //                 // Not a type literal: ensure fresh type variable and update environment
+            //                 sync_with_env(self, ctx, node, 1);
+            //             }
+            //             // If res > 0 (was type literal): do not sync_with_env
         }
 
         break;
 
     case npos_assign_lhs:
-        if (reject_type_literal(self, node)) return 1;
         if (ast_node_is_binary_op_struct_access(node)) return infer_struct_access(self, node);
 
         // Support annotations on lhs of field name assignments
@@ -2145,13 +3048,19 @@ static int resolve_node(tl_infer *self, ast_node *node, traverse_ctx *ctx, node_
             if (!ctx) fatal("logic error");
             // No special opts - just parse the annotation if present, which mutates the ctx
             int res = process_annotation(self, ctx, node, (annotation_opts){0});
-            if (res < 0) return 1;
+            if (res < 0) {
+#if DEBUG_RESOLVE
+                fprintf(stderr,
+                        "[DEBUG resolve_node] ERROR: npos_assign_lhs process_annotation failed for '%s'\n",
+                        str_cstr(&node->symbol.name));
+#endif
+                return 1;
+            }
             ensure_tv(self, &node->type);
         }
         break;
 
     case npos_reassign_lhs:
-        if (reject_type_literal(self, node)) return 1;
         if (ast_node_is_binary_op_struct_access(node)) return infer_struct_access(self, node);
 
         // Take symbol's existing type: this ensures let-in symbols retain their type info through
@@ -2161,7 +3070,6 @@ static int resolve_node(tl_infer *self, ast_node *node, traverse_ctx *ctx, node_
 
     case npos_field_name:
         if (ast_node_is_binary_op_struct_access(node)) return infer_struct_access(self, node);
-        if (reject_type_literal(self, node)) return 1;
 
         // assign a fresh type variable to field name, because we can't know its generic instantiated type
         ensure_tv(self, &node->type);
@@ -2174,16 +3082,23 @@ static int resolve_node(tl_infer *self, ast_node *node, traverse_ctx *ctx, node_
 
         maybe_handle_null(self, node);
 
-        // Try to parse as type literal; if successful, wrap in tl_literal
-        int res = process_annotation(self, ctx, node, (annotation_opts){.wrap_in_literal = 1});
-        if (res < 0) return 1;
+        //         // Try to parse as type literal; if successful, wrap in tl_literal
+        //         int res = process_annotation(self, ctx, node, (annotation_opts){.wrap_in_literal = 1});
+        //         if (res < 0) {
+        // #if DEBUG_RESOLVE
+        //             str name = ast_node_is_symbol(node) ? node->symbol.name : S("<non-symbol>");
+        //             fprintf(stderr, "[DEBUG resolve_node] ERROR: npos_operand process_annotation failed
+        //             for '%s'\n",
+        //                     str_cstr(&name));
+        // #endif
+        //             return 1;
+        //         }
 
         // always sync with environment
         sync_with_env(self, ctx, node, 0);
     } break;
 
     case npos_value_rhs:
-        if (reject_type_literal(self, node)) return 1;
 
         maybe_handle_null(self, node);
 
@@ -2197,7 +3112,7 @@ static int resolve_node(tl_infer *self, ast_node *node, traverse_ctx *ctx, node_
         str name = ast_node_str(node);
         str tmp  = tl_polytype_to_string(self->transient, node->type);
 
-        dbg(self, "resolve_node '%s' : %s", str_cstr(&name), str_cstr(&tmp));
+        fprintf(stderr, "resolve_node '%s' : %s\n", str_cstr(&name), str_cstr(&tmp));
     }
 
     str node_str = v2_ast_node_to_string(self->transient, node);
@@ -2209,9 +3124,29 @@ static int resolve_node(tl_infer *self, ast_node *node, traverse_ctx *ctx, node_
 }
 
 static int is_type_literal(tl_infer *self, traverse_ctx const *ctx, ast_node const *node) {
+    // If the node has any assignment arguments (e.g., Wrapper[Int](v = 1.0)),
+    // it's a value constructor call, not a type literal.
+    if (ast_node_is_nfa(node)) {
+        ast_arguments_iter iter = ast_node_arguments_iter((ast_node *)node);
+        ast_node          *arg;
+        while ((arg = ast_arguments_next(&iter))) {
+            if (ast_node_is_assignment(arg)) {
+                return 0; // has value arguments, not a type literal
+            }
+        }
+    }
+
     tl_type_registry_parse_type_ctx parse_ctx;
     tl_monotype *mono = tl_type_registry_parse_type_out_ctx(self->registry, node, self->transient,
                                                             ctx->type_arguments, &parse_ctx);
+#if DEBUG_EXPLICIT_TYPE_ARGS
+    if (mono && ast_node_is_nfa(node)) {
+        str name     = ast_node_str(node->named_application.name);
+        str mono_str = tl_monotype_to_string(self->transient, mono);
+        fprintf(stderr, "[DEBUG EXPLICIT TYPE ARGS] is_type_literal: %s parsed as type: %s\n",
+                str_cstr(&name), str_cstr(&mono_str));
+    }
+#endif
     return !!mono;
 }
 
@@ -2260,11 +3195,50 @@ static int check_type_predicate(tl_infer *self, traverse_ctx *traverse_ctx, ast_
         return 0;
     }
 
-    tl_type_registry_parse_type_ctx parse_ctx;
-    tl_type_registry_parse_type_ctx_init(self->transient, &parse_ctx, traverse_ctx->type_arguments);
+    // Check if LHS is a type argument (pattern: T :: ConcreteType)
+    if (ast_node_is_symbol(node->type_predicate.lhs)) {
+        str          lhs_name     = ast_node_str(node->type_predicate.lhs);
+        tl_monotype *lhs_type_arg = str_map_get_ptr(traverse_ctx->type_arguments, lhs_name);
 
+        if (lhs_type_arg) {
+            // LHS is a type argument - handle it specially
+            hot_parse_ctx_reinit(self, traverse_ctx->type_arguments);
+            tl_monotype *rhs_type = tl_type_registry_parse_type_with_ctx(
+              self->registry, node->type_predicate.rhs, &self->hot_parse_ctx);
+            self->hot_parse_ctx_guard = 0;
+
+            tl_monotype *lhs_mono     = lhs_type_arg;
+
+            if (!tl_monotype_is_concrete(lhs_mono)) {
+                tl_monotype_substitute(self->arena, lhs_mono, self->subs, null);
+                if (!tl_monotype_is_concrete(lhs_mono)) {
+                    log_subs(self);
+                    return unresolved_type_error(self, node->type_predicate.lhs);
+                }
+            }
+
+            // Compare types using constrain with error suppression
+            int save                        = self->is_constrain_ignore_error;
+            self->is_constrain_ignore_error = 1;
+
+            tl_polytype *lhs_poly           = tl_polytype_absorb_mono(self->arena, lhs_mono);
+            if (!rhs_type || constrain_pm(self, lhs_poly, rhs_type, node)) {
+                node->type_predicate.is_valid = 0;
+            } else {
+                node->type_predicate.is_valid = 1;
+            }
+
+            self->is_constrain_ignore_error = save;
+            ast_node_type_set(node, tl_polytype_bool(self->arena, self->registry));
+            return 0;
+        }
+    }
+    // Fall through to existing expression handling...
+
+    hot_parse_ctx_reinit(self, traverse_ctx->type_arguments);
     tl_monotype *type =
-      tl_type_registry_parse_type_with_ctx(self->registry, node->type_predicate.rhs, &parse_ctx);
+      tl_type_registry_parse_type_with_ctx(self->registry, node->type_predicate.rhs, &self->hot_parse_ctx);
+    self->hot_parse_ctx_guard = 0;
 
     if (resolve_node(self, node->type_predicate.lhs, traverse_ctx, npos_operand)) {
         dbg(self, "assert resolve node failed");
@@ -2301,15 +3275,18 @@ static int check_type_predicate(tl_infer *self, traverse_ctx *traverse_ctx, ast_
 int is_union_struct(tl_infer *self, str name);
 
 // ============================================================================
-// Type Constraint Generation
+// Inference dispatch (infer_traverse_cb)
 // ============================================================================
+//
+// Main callback for Phase 3: dispatches each AST node to the appropriate
+// infer_*() handler during bottom-up type inference.
 
 static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_node *node) {
     if (null == node) return 0;
 
 #if DEBUG_RESOLVE
     str node_str = v2_ast_node_to_string(self->transient, node);
-    dbg(self, "infer_traverse_cb: %s:  %s", ast_tag_to_string(node->tag), str_cstr(&node_str));
+    fprintf(stderr, "infer_traverse_cb: %s:  %s\n", ast_tag_to_string(node->tag), str_cstr(&node_str));
 #endif
 
     switch (node->tag) {
@@ -2328,11 +3305,10 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
         // else handled by maybe_handle_null()
         return infer_void(self, traverse_ctx, node);
 
-    case ast_c_string: return infer_literal_type(self, node, tl_type_registry_ptr_char);
-    case ast_string:   fatal("logic error"); // parser should not generate
-    case ast_char:     return infer_literal_type(self, node, tl_type_registry_char);
-    case ast_f64:      return infer_literal_type(self, node, tl_type_registry_float);
-    case ast_i64:      return infer_literal_type(self, node, tl_type_registry_int);
+    case ast_string: return infer_literal_type(self, node, tl_type_registry_ptr_char);
+    case ast_char:   return infer_literal_type(self, node, tl_type_registry_char);
+    case ast_f64:    return infer_literal_type(self, node, tl_type_registry_float);
+    case ast_i64:    return infer_literal_type(self, node, tl_type_registry_int);
     case ast_u64: // FIXME unsigned
         return infer_literal_type(self, node, tl_type_registry_int);
     case ast_bool:      return infer_literal_type(self, node, tl_type_registry_bool);
@@ -2383,21 +3359,98 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
     return 0;
 }
 
-static name_and_type make_instance_key(str generic_name, tl_monotype *arrow) {
-    return (name_and_type){.name_hash = str_hash64(generic_name), .type_hash = tl_monotype_hash64(arrow)};
+// ============================================================================
+// Instance cache
+// ============================================================================
+//
+// Tracks which generic-function + concrete-type combinations have already been
+// specialized, keyed by (name_hash, type_hash, type_args_hash).  Prevents
+// duplicate specializations of the same generic at the same type.
+
+static name_and_type make_instance_key(tl_infer *self, str generic_name, tl_monotype *arrow,
+                                       ast_node_sized type_arguments, hashmap *outer_type_arguments) {
+
+    hot_parse_ctx_reinit(self, outer_type_arguments);
+
+    tl_monotype_sized type_arg_types = {
+      .size = type_arguments.size,
+      .v    = alloc_malloc(self->transient, type_arguments.size * sizeof(tl_monotype *)),
+    };
+
+    forall(i, type_arguments) {
+        ast_node *type_arg = type_arguments.v[i];
+        type_arg_types.v[i] =
+          tl_type_registry_parse_type_with_ctx(self->registry, type_arg, &self->hot_parse_ctx);
+        if (!type_arg_types.v[i]) continue;
+
+        if (!tl_monotype_is_concrete(type_arg_types.v[i])) {
+            // attempt to substitute
+            tl_monotype_substitute(self->arena, type_arg_types.v[i], self->subs, null);
+        }
+
+        if (!tl_monotype_is_concrete(type_arg_types.v[i])) {
+            // Non-concrete type arguments are nulled out so they don't contribute to the
+            // instance key hash.  This is safe because concretize_params (called from
+            // clone_generic_for_arrow) now resolves type parameters positionally from the
+            // callsite's explicit type argument AST nodes.  Before that fix, two calls
+            // with different non-concrete type args (e.g. sizeof[Point_T]() vs
+            // sizeof[Rect_T]()) would produce identical keys and incorrectly share a
+            // single specialization.
+            type_arg_types.v[i] = null;
+        }
+    }
+    self->hot_parse_ctx_guard = 0;
+
+    name_and_type key         = {
+              .name_hash      = str_hash64(generic_name),
+              .type_hash      = tl_monotype_hash64(arrow),
+              .type_args_hash = tl_monotype_sized_hash64(hash64("args", 4), type_arg_types),
+    };
+
+#if DEBUG_INSTANCE_CACHE
+    {
+        str arrow_str = tl_monotype_to_string(self->transient, arrow);
+        fprintf(stderr, "[INSTANCE_KEY] name='%s' arrow='%s' n_type_args=%u\n", str_cstr(&generic_name),
+                str_cstr(&arrow_str), type_arguments.size);
+        fprintf(stderr, "  -> name_hash=%016llx type_hash=%016llx type_args_hash=%016llx\n",
+                (unsigned long long)key.name_hash, (unsigned long long)key.type_hash,
+                (unsigned long long)key.type_args_hash);
+        forall(i, type_arg_types) {
+            str ta_str = tl_monotype_to_string(self->transient, type_arg_types.v[i]);
+            fprintf(stderr, "  type_arg[%u] = '%s' (hash=%016llx)\n", i, str_cstr(&ta_str),
+                    (unsigned long long)tl_monotype_hash64(type_arg_types.v[i]));
+        }
+        if (outer_type_arguments) {
+            fprintf(stderr, "  outer_type_arguments present (size=%zu)\n", map_size(outer_type_arguments));
+        }
+    }
+#endif
+
+    return key;
 }
 
 static str *instance_lookup(tl_infer *self, name_and_type *key) {
     return map_get(self->instances, key, sizeof *key);
 }
 
-static str *instance_lookup_arrow(tl_infer *self, str generic_name, tl_monotype *arrow) {
+static str *instance_lookup_arrow(tl_infer *self, str generic_name, tl_monotype *arrow,
+                                  ast_node_sized type_arguments, hashmap *outer_type_arguments) {
     if (!tl_monotype_is_concrete(arrow)) return null;
 
     // de-duplicate instances: hashes give us structural equality (barring hash collisions), which we need
     // because types are frequently cloned.
-    name_and_type key = make_instance_key(generic_name, arrow);
-    return instance_lookup(self, &key);
+    name_and_type key = make_instance_key(self, generic_name, arrow, type_arguments, outer_type_arguments);
+    str          *result = instance_lookup(self, &key);
+
+#if DEBUG_INSTANCE_CACHE
+    if (result) {
+        fprintf(stderr, "[CACHE HIT] '%s' -> '%s'\n", str_cstr(&generic_name), str_cstr(result));
+    } else {
+        fprintf(stderr, "[CACHE MISS] '%s'\n", str_cstr(&generic_name));
+    }
+#endif
+
+    return result;
 }
 
 static int instance_name_exists(tl_infer *self, str instance_name) {
@@ -2406,6 +3459,14 @@ static int instance_name_exists(tl_infer *self, str instance_name) {
 }
 
 static void instance_add(tl_infer *self, name_and_type *key, str instance_name) {
+#if DEBUG_INSTANCE_CACHE
+    size_t count_before = map_size(self->instances);
+    fprintf(stderr, "[INSTANCE ADD] '%s' (cache size: %zu -> %zu)\n", str_cstr(&instance_name),
+            count_before, count_before + 1);
+    fprintf(stderr, "  key: name_hash=%016llx type_hash=%016llx type_args_hash=%016llx\n",
+            (unsigned long long)key->name_hash, (unsigned long long)key->type_hash,
+            (unsigned long long)key->type_args_hash);
+#endif
     map_set(&self->instances, key, sizeof *key, &instance_name);
     str_hset_insert(&self->instance_names, instance_name);
 }
@@ -2413,6 +3474,19 @@ static void instance_add(tl_infer *self, name_and_type *key, str instance_name) 
 static str specialize_type_constructor_(tl_infer *self, str name, tl_monotype_sized args,
                                         tl_polytype **out_type, hashmap **seen) {
     if (out_type) *out_type = null;
+
+#if DEBUG_RECURSIVE_TYPES
+    {
+        fprintf(stderr, "[DEBUG_RECURSIVE_TYPES] specialize_type_constructor_ ENTER: name='%s' n_args=%u\n",
+                str_cstr(&name), args.size);
+        forall(i, args) {
+            str arg_str = tl_monotype_to_string(self->transient, args.v[i]);
+            fprintf(stderr, "[DEBUG_RECURSIVE_TYPES]   arg[%u] = %s  (is_inst=%d, is_inst_spec=%d)\n", i,
+                    str_cstr(&arg_str), tl_monotype_is_inst(args.v[i]),
+                    tl_monotype_is_inst(args.v[i]) ? tl_monotype_is_inst_specialized(args.v[i]) : 0);
+        }
+    }
+#endif
 
     // do not specialize if it's an enum
     {
@@ -2422,8 +3496,19 @@ static str specialize_type_constructor_(tl_infer *self, str name, tl_monotype_si
 
     if (1) {
         name_and_type key = {.name_hash = str_hash64(name), .type_hash = tl_monotype_sized_hash64(0, args)};
-        if (hset_contains(*seen, &key, sizeof key)) return str_empty();
+        if (hset_contains(*seen, &key, sizeof key)) {
+#if DEBUG_RECURSIVE_TYPES
+            fprintf(stderr,
+                    "[DEBUG_RECURSIVE_TYPES]   CYCLE DETECTED in 'seen' for name='%s' "
+                    "(name_hash=%016llx, type_hash=%016llx)\n",
+                    str_cstr(&name), (unsigned long long)key.name_hash, (unsigned long long)key.type_hash);
+#endif
+            return str_empty();
+        }
         hset_insert(seen, &key, sizeof key);
+#if DEBUG_RECURSIVE_TYPES
+        fprintf(stderr, "[DEBUG_RECURSIVE_TYPES]   added to 'seen': name='%s'\n", str_cstr(&name));
+#endif
     }
 
     // To keep track of monotypes that are recursive references to the type being specialized.
@@ -2437,6 +3522,11 @@ static str specialize_type_constructor_(tl_infer *self, str name, tl_monotype_si
 
             // Do not recurse: fixup after
             if (str_eq(name, generic_name)) {
+#if DEBUG_RECURSIVE_TYPES
+                fprintf(stderr,
+                        "[DEBUG_RECURSIVE_TYPES]   DIRECT SELF-REF: arg[%u] '%s' matches name='%s'\n", i,
+                        str_cstr(&generic_name), str_cstr(&name));
+#endif
                 {
                     tl_monotype **_t = &args.v[i];
                     array_push(recur_refs, _t);
@@ -2448,6 +3538,12 @@ static str specialize_type_constructor_(tl_infer *self, str name, tl_monotype_si
             if (tl_monotype_is_ptr(args.v[i])) {
                 tl_monotype *target = tl_monotype_ptr_target(args.v[i]);
                 if (tl_monotype_is_inst(target) && str_eq(name, target->cons_inst->def->generic_name)) {
+#if DEBUG_RECURSIVE_TYPES
+                    fprintf(
+                      stderr,
+                      "[DEBUG_RECURSIVE_TYPES]   PTR SELF-REF: arg[%u] Ptr to '%s' matches name='%s'\n", i,
+                      str_cstr(&generic_name), str_cstr(&name));
+#endif
                     {
                         tl_monotype **_t = &args.v[i]->cons_inst->args.v[0];
                         array_push(recur_refs, _t);
@@ -2456,7 +3552,21 @@ static str specialize_type_constructor_(tl_infer *self, str name, tl_monotype_si
                 }
             }
 
+#if DEBUG_RECURSIVE_TYPES
+            fprintf(stderr,
+                    "[DEBUG_RECURSIVE_TYPES]   RECURSE for arg[%u]: generic_name='%s' (parent='%s')\n", i,
+                    str_cstr(&generic_name), str_cstr(&name));
+#endif
             (void)specialize_type_constructor_(self, generic_name, args.v[i]->cons_inst->args, &poly, seen);
+#if DEBUG_RECURSIVE_TYPES
+            {
+                str poly_str =
+                  poly ? tl_polytype_to_string(self->transient, poly) : str_init(self->transient, "(null)");
+                fprintf(
+                  stderr, "[DEBUG_RECURSIVE_TYPES]   RECURSE result arg[%u] '%s': poly=%s concrete=%d\n", i,
+                  str_cstr(&generic_name), str_cstr(&poly_str), poly ? tl_polytype_is_concrete(poly) : 0);
+            }
+#endif
             if (poly && tl_polytype_is_concrete(poly)) {
                 args.v[i] = tl_polytype_concrete(poly);
             }
@@ -2468,23 +3578,62 @@ static str specialize_type_constructor_(tl_infer *self, str name, tl_monotype_si
     tl_type_registry_specialize_ctx inst_ctx =
       tl_type_registry_specialize_begin(self->registry, name, name_inst, args);
 
-    if (!inst_ctx.specialized) goto cancel;
+#if DEBUG_RECURSIVE_TYPES
+    fprintf(stderr, "[DEBUG_RECURSIVE_TYPES]   registry_begin: name='%s' name_inst='%s' specialized=%p\n",
+            str_cstr(&name), str_cstr(&name_inst), (void *)inst_ctx.specialized);
+    if (inst_ctx.specialized) {
+        str spec_str = tl_monotype_to_string(self->transient, inst_ctx.specialized);
+        fprintf(stderr, "[DEBUG_RECURSIVE_TYPES]   specialized type = %s\n", str_cstr(&spec_str));
+    }
+#endif
+
+#if DEBUG_EXPLICIT_TYPE_ARGS
+    fprintf(stderr, "[DEBUG specialize_type_constructor_] name=%s\n", str_cstr(&name));
+    fprintf(stderr, "  inst_ctx.specialized = %p\n", (void *)inst_ctx.specialized);
+#endif
+
+    if (!inst_ctx.specialized) {
+#if DEBUG_EXPLICIT_TYPE_ARGS
+        fprintf(stderr, "  -> cancel: inst_ctx.specialized is null\n");
+#endif
+        goto cancel;
+    }
     if (!tl_monotype_is_inst(inst_ctx.specialized)) fatal("runtime error");
 
-    name_and_type key      = make_instance_key(name, inst_ctx.specialized);
+    name_and_type key      = make_instance_key(self, name, inst_ctx.specialized, (ast_node_sized){0}, null);
     str          *existing = instance_lookup(self, &key);
     if (existing) {
+#if DEBUG_RECURSIVE_TYPES
+        fprintf(stderr, "[DEBUG_RECURSIVE_TYPES]   EXISTING instance: '%s' -> '%s'\n", str_cstr(&name),
+                str_cstr(existing));
+#endif
         tl_polytype *poly = tl_type_env_lookup(self->env, *existing);
         if (out_type) *out_type = poly;
         out_str = *existing;
 
+#if DEBUG_EXPLICIT_TYPE_ARGS
+        fprintf(stderr, "  -> cancel: existing instance found: %s\n", str_cstr(existing));
+#endif
         goto cancel;
     }
 
     // Look up generic type using the generic_name field, not the name parameter, because the latter may be
     // a type alias.
     ast_node *utd = toplevel_get(self, inst_ctx.specialized->cons_inst->def->generic_name);
-    if (!utd) goto cancel;
+#if DEBUG_EXPLICIT_TYPE_ARGS
+    {
+        str gn = inst_ctx.specialized->cons_inst->def->generic_name;
+        fprintf(stderr, "  generic_name for toplevel_get: '%s' (len=%zu, hash=%llu)\n", str_cstr(&gn),
+                str_len(gn), (unsigned long long)str_hash64(gn));
+        fprintf(stderr, "  utd = %p, toplevels = %p\n", (void *)utd, (void *)self->toplevels);
+    }
+#endif
+    if (!utd) {
+#if DEBUG_EXPLICIT_TYPE_ARGS
+        fprintf(stderr, "  -> cancel: utd not found\n");
+#endif
+        goto cancel;
+    }
 
     instance_add(self, &key, name_inst);
 
@@ -2497,15 +3646,42 @@ static str specialize_type_constructor_(tl_infer *self, str name, tl_monotype_si
     array_push(self->synthesized_nodes, utd);
 
     assert(tl_monotype_is_inst_specialized(utd->type->type));
+    tl_polytype *save_type = utd->type;
     if (out_type) *out_type = utd->type; // Note: this helps the transpiler
 
+#if DEBUG_EXPLICIT_TYPE_ARGS
+    fprintf(stderr, "[DEBUG specialize] Added synthesized node: %s\n", str_cstr(&name_inst));
+#endif
+
     // fixup recur refs
+#if DEBUG_RECURSIVE_TYPES
+    fprintf(stderr, "[DEBUG_RECURSIVE_TYPES]   FIXUP: %u recur_refs for '%s'\n", recur_refs.size,
+            str_cstr(&name));
+    if (recur_refs.size) {
+        str fixup_str = tl_monotype_to_string(self->transient, utd->type->type);
+        fprintf(stderr, "[DEBUG_RECURSIVE_TYPES]   fixup target = %s\n", str_cstr(&fixup_str));
+    }
+#endif
     forall(i, recur_refs) {
         *recur_refs.v[i] = utd->type->type;
     }
     array_free(recur_refs);
 
     tl_type_registry_specialize_commit(self->registry, inst_ctx);
+#if DEBUG_RECURSIVE_TYPES
+    fprintf(stderr, "[DEBUG_RECURSIVE_TYPES]   COMMIT: '%s' -> '%s'\n", str_cstr(&name),
+            str_cstr(&name_inst));
+#endif
+
+    // rename variables: also erases type information
+    {
+        rename_variables_ctx ctx = {.lex = map_new(self->transient, str, str, 16)};
+        rename_variables(self, utd, &ctx, 0);
+
+        // restore type, for the transpiler
+        utd->type = save_type;
+    }
+
     return name_inst;
 
 cancel:
@@ -2516,8 +3692,20 @@ cancel:
 static str specialize_type_constructor(tl_infer *self, str name, tl_monotype_sized args,
                                        tl_polytype **out_type) {
 
+#if DEBUG_RECURSIVE_TYPES
+    fprintf(stderr, "[DEBUG_RECURSIVE_TYPES] specialize_type_constructor ENTRY: name='%s' n_args=%u\n",
+            str_cstr(&name), args.size);
+    forall(i, args) {
+        str arg_str = tl_monotype_to_string(self->transient, args.v[i]);
+        fprintf(stderr, "[DEBUG_RECURSIVE_TYPES]   arg[%u] = %s\n", i, str_cstr(&arg_str));
+    }
+#endif
     hashmap *seen = hset_create(self->transient, 64);
     str      out  = specialize_type_constructor_(self, name, args, out_type, &seen);
+#if DEBUG_RECURSIVE_TYPES
+    fprintf(stderr, "[DEBUG_RECURSIVE_TYPES] specialize_type_constructor RESULT: name='%s' => '%s'\n",
+            str_cstr(&name), str_is_empty(out) ? "(empty)" : str_cstr(&out));
+#endif
     return out;
 }
 
@@ -2536,7 +3724,10 @@ static int specialize_user_type(tl_infer *self, traverse_ctx *traverse_ctx, ast_
 
     if (!ast_node_is_nfa(node)) return 0;
 
-    str               name      = node->named_application.name->symbol.name;
+    str name = node->named_application.name->symbol.name;
+#if DEBUG_RECURSIVE_TYPES
+    fprintf(stderr, "[DEBUG_RECURSIVE_TYPES] specialize_user_type ENTRY: name='%s'\n", str_cstr(&name));
+#endif
 
     tl_monotype_array arr       = {.alloc = self->transient};
     tl_monotype_sized arr_sized = {0};
@@ -2548,6 +3739,11 @@ static int specialize_user_type(tl_infer *self, traverse_ctx *traverse_ctx, ast_
         assert(tl_monotype_is_inst(existing->type));
 
         arr_sized = existing->type->cons_inst->args;
+#if DEBUG_RECURSIVE_TYPES
+        fprintf(stderr,
+                "[DEBUG_RECURSIVE_TYPES] specialize_user_type: concrete existing for '%s' n_args=%u\n",
+                str_cstr(&name), arr_sized.size);
+#endif
 
         // If name is a type alias pointing to a concrete type, we want the transpiler to ignore the alias
         // name, and act as if the alias' target was referenced directly. This ensures the same type is used
@@ -2576,8 +3772,8 @@ static int specialize_user_type(tl_infer *self, traverse_ctx *traverse_ctx, ast_
             if ((type_id = tl_type_registry_parse_type(self->registry, arg))) {
                 // a literal type
                 {
-                    tl_monotype *_t = tl_monotype_create_literal(self->arena, type_id);
-                    array_push(arr, _t);
+                    fatal("oops: a type literal?");
+                    array_push(arr, type_id);
                 }
                 continue;
             }
@@ -2602,10 +3798,24 @@ static int specialize_user_type(tl_infer *self, traverse_ctx *traverse_ctx, ast_
 
         assert(arr.size == node->named_application.n_arguments);
         arr_sized = (tl_monotype_sized)array_sized(arr);
+#if DEBUG_RECURSIVE_TYPES
+        fprintf(stderr, "[DEBUG_RECURSIVE_TYPES] specialize_user_type: iterated args for '%s' n_args=%u\n",
+                str_cstr(&name), arr_sized.size);
+        forall(j, arr_sized) {
+            str arg_str = tl_monotype_to_string(self->transient, arr_sized.v[j]);
+            fprintf(stderr, "[DEBUG_RECURSIVE_TYPES]   arg[%u] = %s (concrete=%d)\n", j, str_cstr(&arg_str),
+                    tl_monotype_is_concrete(arr_sized.v[j]));
+        }
+#endif
     }
 
     tl_polytype *special_type = null;
     str          name_inst    = specialize_type_constructor(self, name, arr_sized, &special_type);
+#if DEBUG_RECURSIVE_TYPES
+    fprintf(stderr, "[DEBUG_RECURSIVE_TYPES] specialize_user_type: result for '%s' => '%s' type=%p\n",
+            str_cstr(&name), str_is_empty(name_inst) ? "(empty)" : str_cstr(&name_inst),
+            (void *)special_type);
+#endif
     if (str_is_empty(name_inst)) return 0;
 
     // update callsite
@@ -2679,6 +3889,7 @@ static void specialized_add_to_env(tl_infer *self, str inst_name, tl_monotype *m
 static void do_apply_subs(void *ctx, ast_node *node);
 
 static void apply_subs_to_ast_node(tl_infer *self, ast_node *node) {
+    if (self->report_stats) self->counters.subs_apply_calls++;
     ast_node_dfs(self, node, do_apply_subs);
 }
 
@@ -2687,47 +3898,111 @@ static int post_specialize(tl_infer *self, traverse_ctx *traverse_ctx, ast_node 
     // Do this after creating a specialised function
     ast_node *infer_target = get_infer_target(special);
     if (infer_target) {
+        hires_timer st;
+        int         stats = self->report_stats;
+
         // set result type into traverse_ctx
         if (callsite) {
             tl_monotype *result_type  = tl_monotype_arrow_result(callsite);
             traverse_ctx->result_type = result_type;
         }
+        if (stats) self->counters.traverse_infer_calls++;
+        if (stats) {
+            hires_timer_init(&st);
+            hires_timer_start(&st);
+        }
         if (traverse_ast(self, traverse_ctx, infer_target, infer_traverse_cb)) {
             dbg(self, "note: post_specialize failed infer");
             return 1;
         }
+        if (stats) {
+            hires_timer_stop(&st);
+            self->counters.specialize_infer_ms += hires_timer_elapsed_sec(&st) * 1000.0;
+        }
+
         // Apply substitutions to AST before specialization, so types are concrete
+        if (stats) hires_timer_start(&st);
         apply_subs_to_ast_node(self, infer_target);
+        if (stats) {
+            hires_timer_stop(&st);
+            self->counters.specialize_subs_ms += hires_timer_elapsed_sec(&st) * 1000.0;
+        }
+
+        if (stats) self->counters.traverse_specialize_calls++;
+        if (stats) hires_timer_start(&st);
         if (traverse_ast(self, traverse_ctx, infer_target, specialize_applications_cb)) {
             dbg(self, "note: post_specialize failed specialize");
             return 1;
         }
+        if (stats) {
+            hires_timer_stop(&st);
+            self->counters.specialize_recurse_ms += hires_timer_elapsed_sec(&st) * 1000.0;
+        }
+
+#if DEBUG_INVARIANTS
+        // Invariant: After specialization, all specialized NFA type arguments must be concrete
+        check_specialized_nfa_type_args(self, infer_target, "post_specialize");
+#endif
     }
     return 0;
 }
 
 static void add_free_variables_to_arrow(tl_infer *self, ast_node *node, tl_polytype *arrow);
 
-static str  specialize_arrow(tl_infer *self, traverse_ctx *traverse_ctx, str name, tl_monotype *arrow) {
+static str  specialize_arrow(tl_infer *self, traverse_ctx *traverse_ctx, str name, tl_monotype *arrow,
+                             ast_node_sized callsite_type_arguments) {
+
+    if (!tl_monotype_is_concrete(arrow)) tl_monotype_substitute(self->arena, arrow, self->subs, null);
+
+#if DEBUG_INVARIANTS
+    // Invariant: Callsite arrow type is expected to be concrete, but there may be edge cases where that is
+    // not the case, for example with unused parameters.
+    if (!tl_monotype_is_concrete(arrow)) {
+        char detail[512];
+        str  arrow_str = tl_monotype_to_string(self->transient, arrow);
+        snprintf(detail, sizeof detail, "Specializing '%.*s' with non-concrete callsite arrow: %s",
+                 str_ilen(name), str_buf(&name), str_cstr(&arrow_str));
+        report_invariant_failure(self, "specialize_arrow", "Callsite arrow must be concrete", detail, null);
+    }
+#endif
 
     // 1. Check if already specialized
-    if (instance_name_exists(self, name)) return name;
+    if (instance_name_exists(self, name)) {
+        if (self->report_stats) self->counters.specialize_already++;
+        return name;
+    }
 
     // 2. Check cache for this name+type combination
-    str *found = instance_lookup_arrow(self, name, arrow);
-    if (found) return *found;
+    hashmap *outer_type_args = traverse_ctx ? traverse_ctx->type_arguments : null;
+    str     *found = instance_lookup_arrow(self, name, arrow, callsite_type_arguments, outer_type_args);
+    if (found) {
+        if (self->report_stats) self->counters.specialize_cache_hits++;
+        return *found;
+    }
 
     // 2a. Check that name is valid
     ast_node *toplevel = toplevel_get(self, name);
     if (!toplevel) return str_empty();
 
     // 3. Create unique instance name(e.g., "identity_0")
-    name_and_type key       = make_instance_key(name, arrow);
+    name_and_type key = make_instance_key(self, name, arrow, callsite_type_arguments, outer_type_args);
     str           inst_name = next_instantiation(self, name);
     instance_add(self, &key, inst_name);
+    if (self->report_stats) self->counters.specialize_created++;
 
     // 4. Clone generic function's AST
-    ast_node *generic_node = clone_generic_for_arrow(self, toplevel, arrow, inst_name);
+    hires_timer st;
+    if (self->report_stats) {
+        hires_timer_init(&st);
+        hires_timer_start(&st);
+    }
+    ast_node *generic_node =
+      clone_generic_for_arrow(self, toplevel, arrow, inst_name,
+                              traverse_ctx ? traverse_ctx->type_arguments : null, callsite_type_arguments);
+    if (self->report_stats) {
+        hires_timer_stop(&st);
+        self->counters.specialize_clone_ms += hires_timer_elapsed_sec(&st) * 1000.0;
+    }
 
     // 5. Add to environment and toplevel
     specialized_add_to_env(self, inst_name, arrow);
@@ -2742,10 +4017,11 @@ static str  specialize_arrow(tl_infer *self, traverse_ctx *traverse_ctx, str nam
 }
 
 static int specialize_arrow_with_name(tl_infer *self, traverse_ctx *traverse_ctx, ast_node *fun_name_node,
-                                      tl_monotype *callsite) {
+                                      tl_monotype *callsite, ast_node_sized callsite_type_arguments) {
     if (!tl_monotype_is_arrow(callsite)) return 0;
 
-    str instance_name = specialize_arrow(self, traverse_ctx, ast_node_str(fun_name_node), callsite);
+    str instance_name =
+      specialize_arrow(self, traverse_ctx, ast_node_str(fun_name_node), callsite, callsite_type_arguments);
     if (str_is_empty(instance_name)) return 1;
     ast_node_name_replace(fun_name_node, instance_name);
     return 0;
@@ -2769,8 +4045,9 @@ static int specialize_operand(tl_infer *self, traverse_ctx *traverse_ctx, ast_no
     if (!ast_node_is_symbol(node)) return 0;
 
     str value_name = ast_node_str(node);
-    str inst_name  = specialize_arrow(self, traverse_ctx, value_name, value_type->type);
-    if (str_is_empty(inst_name)) return 0;
+    // TODO: function pointers with callsite type arguments
+    str inst_name = specialize_arrow(self, traverse_ctx, value_name, value_type->type, (ast_node_sized){0});
+    if (str_is_empty(inst_name)) return 0; // FIXME: ignores error
     ast_node_name_replace(node, inst_name);
     return 0;
 }
@@ -2816,8 +4093,28 @@ static int specialize_case(tl_infer *self, traverse_ctx *traverse_ctx, ast_node 
                 str               generic_name = inner_type->cons_inst->def->generic_name;
                 tl_monotype_sized args         = inner_type->cons_inst->args;
                 tl_polytype      *special_type = null;
+                str               inst_name    = str_empty();
 
-                str inst_name = specialize_type_constructor(self, generic_name, args, &special_type);
+                if (!tl_monotype_is_concrete(inner_type)) {
+                    // Variant type has unresolved type variables (e.g., from a case annotation
+                    // where the expression type wasn't concrete during inference). Re-derive
+                    // concrete variant types from the expression's now-concrete wrapper type.
+                    tl_monotype *expr_type =
+                      node->case_.expression->type ? node->case_.expression->type->type : null;
+                    if (expr_type) tl_monotype_substitute(self->arena, expr_type, self->subs, null);
+
+                    if (expr_type && tl_monotype_is_concrete(expr_type) && tl_monotype_is_inst(expr_type)) {
+                        str          variant_name = ast_node_name_original(cond->symbol.annotation);
+                        tl_monotype *concrete_variant =
+                          tagged_union_find_variant(expr_type, variant_name, null);
+                        if (concrete_variant && tl_monotype_is_inst(concrete_variant)) {
+                            generic_name = concrete_variant->cons_inst->def->generic_name;
+                            args         = concrete_variant->cons_inst->args;
+                        }
+                    }
+                }
+
+                inst_name = specialize_type_constructor(self, generic_name, args, &special_type);
                 if (!str_is_empty(inst_name) && special_type) {
                     // Update the annotation_type with the specialized type
                     if (tl_monotype_is_ptr(variant_type)) {
@@ -2850,8 +4147,10 @@ static int specialize_case(tl_infer *self, traverse_ctx *traverse_ctx, ast_node 
       make_binary_predicate_arrow(self, traverse_ctx, node->case_.expression, node->case_.conditions.v[0]);
 
     str predicate_name = ast_node_str(predicate);
-    str inst_name      = specialize_arrow(self, traverse_ctx, predicate_name, pred_arrow->type);
-    if (str_is_empty(inst_name)) return 0;
+    str inst_name =
+      specialize_arrow(self, traverse_ctx, predicate_name, pred_arrow->type, (ast_node_sized){0});
+
+    if (str_is_empty(inst_name)) return 0; // FIXME: ignores error
     ast_node_name_replace(predicate, inst_name);
 
     return 0;
@@ -2865,6 +4164,16 @@ static void specialize_type_alias(tl_infer *self, ast_node *node) {
 
     ast_node    *target = node->type_alias.target;
     tl_monotype *parsed = tl_type_registry_parse_type(self->registry, target);
+#if DEBUG_TYPE_ALIAS
+    {
+        str name_dbg = toplevel_name(node);
+        str type_dbg = tl_monotype_to_string(self->transient, parsed);
+        fprintf(stderr,
+                "[DEBUG_TYPE_ALIAS] specialize_type_alias: '%s' parsed=%s is_inst=%d is_concrete=%d\n",
+                str_cstr(&name_dbg), str_cstr(&type_dbg), tl_monotype_is_inst(parsed),
+                tl_monotype_is_concrete(parsed));
+    }
+#endif
     if (tl_monotype_is_inst(parsed) && tl_monotype_is_concrete(parsed)) {
         str name = toplevel_name(node);
         str tmp  = tl_monotype_to_string(self->transient, parsed);
@@ -2913,7 +4222,8 @@ static int specialize_value_arguments(tl_infer *self, traverse_ctx *traverse_ctx
             str old_name = name_node->symbol.name;
 
             // Specialize the lambda argument
-            if (specialize_arrow_with_name(self, traverse_ctx, name_node, expected)) return 1;
+            if (specialize_arrow_with_name(self, traverse_ctx, name_node, expected, (ast_node_sized){0}))
+                return 1;
 
             str new_name = name_node->symbol.name;
 
@@ -2937,7 +4247,8 @@ static int specialize_value_arguments(tl_infer *self, traverse_ctx *traverse_ctx
         if (!ast_node_is_symbol(arg)) goto next;
         if (!is_toplevel_function_name(self, arg)) goto next;
         if (i >= expected_types.size) fatal("runtime error");
-        if (specialize_arrow_with_name(self, traverse_ctx, arg, expected_types.v[i])) return 1;
+        if (specialize_arrow_with_name(self, traverse_ctx, arg, expected_types.v[i], (ast_node_sized){0}))
+            return 1;
 
     next:
         ++i;
@@ -2956,8 +4267,14 @@ static int specialize_arguments(tl_infer *self, traverse_ctx *traverse_ctx, ast_
 }
 
 // ============================================================================
-// Generic Function Specialization
+// Generic function specialization (Phase 5)
 // ============================================================================
+//
+// Top-down pass that monomorphizes generic functions. For each call site with
+// concrete argument types, clones the generic definition, re-infers the clone at
+// the concrete type, and registers it as a new top-level.  Handles type
+// constructor specialization, user-type specialization, and recursive descent
+// through let-in, case, and operand nodes.
 
 static int specialize_applications_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_node *node) {
     if (ast_node_is_nfa(node)) {
@@ -3054,14 +4371,60 @@ static int specialize_applications_cb(tl_infer *self, traverse_ctx *traverse_ctx
             }
         }
 
-        if (self->verbose) {
-            str app_str = tl_polytype_to_string(self->transient, callsite);
-            dbg(self, "specialize application: callsite '%.*s' arrow: %.*s", str_ilen(name), str_buf(&name),
-                str_ilen(app_str), str_buf(&app_str));
+#if DEBUG_RECURSIVE_TYPES
+        {
+            str call_str = tl_polytype_to_string(self->transient, callsite);
+            fprintf(
+              stderr,
+              "[DEBUG_RECURSIVE_TYPES] specialize_applications_cb: name='%s' callsite=%s concrete=%d\n",
+              str_cstr(&name), str_cstr(&call_str), tl_polytype_is_concrete(callsite));
+        }
+#endif
+
+        // Specialize type constructors appearing in explicit type arguments.
+        // E.g., sizeof[Point[Int]]() needs Point[Int] specialized to Point_8.
+#if DEBUG_RECURSIVE_TYPES
+        if (node->named_application.n_type_arguments > 0) {
+            fprintf(stderr,
+                    "[DEBUG_RECURSIVE_TYPES] specialize_applications_cb: '%s' has %u explicit type args\n",
+                    str_cstr(&name), node->named_application.n_type_arguments);
+        }
+#endif
+        for (u32 i = 0; i < node->named_application.n_type_arguments; i++) {
+            ast_node *type_arg = node->named_application.type_arguments[i];
+            if (ast_node_is_nfa(type_arg) && 0 == type_literal_specialize(self, type_arg)) {
+                // type_literal_specialize sets the type on the NFA's name node, but
+                // concretize_params and traverse_ctx_assign_type_arguments check the NFA
+                // node itself. Propagate the type up so both paths find it.
+                if (!type_arg->type && type_arg->named_application.name->type) {
+                    ast_node_type_set(type_arg, type_arg->named_application.name->type);
+                }
+
+#if DEBUG_RECURSIVE_TYPES
+                {
+                    str ta_str = type_arg->type ? tl_polytype_to_string(self->transient, type_arg->type)
+                                                : str_init(self->transient, "(null)");
+                    fprintf(stderr, "[DEBUG_RECURSIVE_TYPES]   type_arg[%u] after specialize: %s\n", i,
+                            str_cstr(&ta_str));
+                }
+#endif
+            }
         }
 
         // try to specialize
-        if (specialize_arrow_with_name(self, traverse_ctx, node->named_application.name, callsite->type)) {
+        ast_node_sized callsite_type_args = {.size = node->named_application.n_type_arguments,
+                                             .v    = node->named_application.type_arguments};
+#if DEBUG_RECURSIVE_TYPES
+        {
+            str arrow_str = tl_monotype_to_string(self->transient, callsite->type);
+            fprintf(stderr,
+                    "[DEBUG_RECURSIVE_TYPES] specialize_applications_cb: about to specialize_arrow '%s' "
+                    "concrete=%d arrow=%s\n",
+                    str_cstr(&name), tl_monotype_is_concrete(callsite->type), str_cstr(&arrow_str));
+        }
+#endif
+        if (specialize_arrow_with_name(self, traverse_ctx, node->named_application.name, callsite->type,
+                                       callsite_type_args)) {
             dbg(self, "note: failed to specialize '%s'", str_cstr(&name));
             return 1;
         }
@@ -3078,7 +4441,7 @@ static int specialize_applications_cb(tl_infer *self, traverse_ctx *traverse_ctx
         dbg(self, "specialize_applications_cb: anon");
         callsite = make_arrow(self, traverse_ctx, ast_node_sized_from_ast_array(node), node, 0);
 
-        concretize_params(self, node, callsite->type);
+        concretize_params(self, node, callsite->type, null, (ast_node_sized){0});
         if (post_specialize(self, traverse_ctx, node->lambda_application.lambda, callsite->type)) {
             return 1;
         }
@@ -3090,12 +4453,17 @@ static int specialize_applications_cb(tl_infer *self, traverse_ctx *traverse_ctx
     return 0;
 }
 
-// --
+// ============================================================================
+// Alpha conversion (Phase 1)
+// ============================================================================
+//
+// Gives every bound variable a globally unique name (e.g. x -> x_v3) to
+// eliminate shadowing before inference.  rename_let_in handles top-level let-in
+// symbols; rename_variables recurses through function params, let-in bindings,
+// case patterns, and lambda bodies.  rename_one_function_param respects lexical
+// scope to avoid renaming already-converted names.
 
-static str next_variable_name(tl_infer *, str);
-
-// Performs alpha-conversion on the AST to ensure all bound variables have globally unique names while
-// preserving lexical scope. This simplifies later passes by removing name collision concerns.
+static str  next_variable_name(tl_infer *, str);
 
 static void rename_let_in(tl_infer *self, ast_node *node, rename_variables_ctx *ctx) {
     // For toplevel definitions, rename them and keep them in lexical scope.
@@ -3116,27 +4484,107 @@ static void rename_let_in(tl_infer *self, ast_node *node, rename_variables_ctx *
     str_map_set(&ctx->lex, name, &newvar);
 }
 
+static void rename_one_function_param(tl_infer *self, ast_node *param, rename_variables_ctx *ctx,
+                                      int level) {
+    if (ast_node_is_nfa(param)) {
+        // T[a] vs T[Int] -- what to do?
+        rename_one_function_param(self, param->named_application.name, ctx, level + 1);
+
+        u32        argc = param->named_application.n_type_arguments;
+        ast_node **argv = param->named_application.type_arguments;
+        for (u32 i = 0; i < argc; i++) {
+            rename_one_function_param(self, argv[i], ctx, level + 1);
+        }
+
+    } else if (ast_node_is_symbol(param)) {
+
+        ast_node_type_set(param, null);
+
+        str *found;
+
+        if ((found = str_map_get(ctx->lex, param->symbol.name))) {
+            ast_node_name_replace(param, *found);
+#if DEBUG_RENAME
+            fprintf(stderr, "rename %.*s => %.*s\n", str_ilen(param->symbol.original),
+                    str_buf(&param->symbol.original), str_ilen(param->symbol.name),
+                    str_buf(&param->symbol.name));
+#endif
+        } else if (param->symbol.is_mangled && (found = str_map_get(ctx->lex, param->symbol.original))) {
+            // name was mangled because it conflicts with a toplevel name. But lexical rename is meant
+            // to take precedence over mangling to match toplevel names.
+            ast_node_name_replace(param, *found);
+#if DEBUG_RENAME
+            fprintf(stderr, "rename mangled %.*s => %.*s\n", str_ilen(param->symbol.original),
+                    str_buf(&param->symbol.original), str_ilen(param->symbol.name),
+                    str_buf(&param->symbol.name));
+#endif
+        } else {
+            // a param or type argument seen for the first time: add renamed var to lexical scope
+
+            str name   = param->symbol.name;
+            str newvar = next_variable_name(self, name);
+            ast_node_name_replace(param, newvar);
+            str_map_set(&ctx->lex, name, &newvar);
+            rename_variables(self, param, ctx, level + 1);
+
+#if DEBUG_RENAME
+            fprintf(stderr, "rename new %s => %s\n", str_cstr(&name), str_cstr(&newvar));
+#endif
+        }
+    }
+}
+
 static hashmap *rename_function_params(tl_infer *self, ast_node *node, rename_variables_ctx *ctx,
                                        int level) {
-    hashmap           *save = map_copy(ctx->lex);
+    hashmap *save = map_copy(ctx->lex);
+
+    // alpha conversion of type arguments
+    if (ast_node_is_let(node)) {
+        u32        argc = node->let.n_type_parameters;
+        ast_node **argv = node->let.type_parameters;
+        for (u32 i = 0; i < argc; i++) {
+            rename_one_function_param(self, argv[i], ctx, level);
+        }
+    }
 
     ast_arguments_iter iter = ast_node_arguments_iter(node);
     ast_node          *param;
     while ((param = ast_arguments_next(&iter))) {
-        assert(ast_node_is_symbol(param));
-        str name   = param->symbol.name;
-        str newvar = next_variable_name(self, name);
-        ast_node_name_replace(param, newvar);
-        str_map_set(&ctx->lex, name, &newvar);
-        rename_variables(self, param, ctx, level + 1);
+        rename_one_function_param(self, param, ctx, level);
     }
 
     return save;
 }
 
-// ============================================================================
-// Variable Renaming (Alpha Conversion)
-// ============================================================================
+// -- rename_variables (main recursive body) --
+
+static void rename_case_variables(tl_infer *self, ast_node *node, rename_variables_ctx *ctx, int level) {
+    int is_union = node->case_.is_union;
+
+    rename_variables(self, node->case_.expression, ctx, level + 1);
+    rename_variables(self, node->case_.binary_predicate, ctx, level + 1);
+    if (node->case_.conditions.size != node->case_.arms.size) fatal("runtime error");
+    forall(i, node->case_.conditions) {
+        hashmap *save = null;
+        if (is_union && ast_node_is_symbol(node->case_.conditions.v[i])) {
+            // node may be ast_nil for an else clause
+            str name   = ast_node_str(node->case_.conditions.v[i]);
+            str newvar = next_variable_name(self, name);
+
+            // establish lexical scope of the union case binding
+            save = map_copy(ctx->lex);
+            str_map_set(&ctx->lex, name, &newvar);
+        }
+
+        rename_variables(self, node->case_.conditions.v[i], ctx, level + 1);
+        rename_variables(self, node->case_.arms.v[i], ctx, level + 1);
+
+        if (save) {
+            map_destroy(&ctx->lex);
+            ctx->lex = save;
+        }
+    }
+}
 
 static void rename_variables(tl_infer *self, ast_node *node, rename_variables_ctx *ctx, int level) {
     // level should be 0 on entry. It is used to recognize toplevel let nodes which assign static values
@@ -3146,6 +4594,24 @@ static void rename_variables(tl_infer *self, ast_node *node, rename_variables_ct
 
     // ensure all types are removed: important for the post-clone rename of functions being specialized.
     ast_node_type_set(node, null);
+
+    // also clear types attached to any explicit type arguments
+    {
+        u32        argc = 0;
+        ast_node **argv = null;
+        if (ast_node_is_let(node)) {
+            argc = node->let.n_type_parameters;
+            argv = node->let.type_parameters;
+        } else if (ast_node_is_nfa(node)) {
+            argc = node->named_application.n_type_arguments;
+            argv = node->named_application.type_arguments;
+        } else if (ast_node_is_utd(node)) {
+            argc = node->user_type_def.n_type_arguments;
+            argv = node->user_type_def.type_arguments;
+        }
+
+        for (u32 i = 0; i < argc; i++) ast_node_type_set(argv[i], null);
+    }
 
     switch (node->tag) {
 
@@ -3249,10 +4715,30 @@ static void rename_variables(tl_infer *self, ast_node *node, rename_variables_ct
     case ast_named_function_application: {
         rename_variables(self, node->named_application.name, ctx, level + 1);
 
+        // type arguments
+        u32        argc = node->named_application.n_type_arguments;
+        ast_node **argv = node->named_application.type_arguments;
+        for (u32 i = 0; i < argc; i++) rename_variables(self, argv[i], ctx, level + 1);
+
         ast_arguments_iter iter = ast_node_arguments_iter(node);
         ast_node          *arg;
 
         while ((arg = ast_arguments_next(&iter))) rename_variables(self, arg, ctx, level + 1);
+
+    } break;
+
+    case ast_user_type_definition: {
+        // type arguments
+        u32        argc = node->user_type_def.n_type_arguments;
+        ast_node **argv = node->user_type_def.type_arguments;
+        for (u32 i = 0; i < argc; i++) rename_variables(self, argv[i], ctx, level + 1);
+
+        // traverse into field annotations
+        if (node->user_type_def.field_annotations) { // may be null for enums
+            argc = node->user_type_def.n_fields;
+            argv = node->user_type_def.field_annotations;
+            for (u32 i = 0; i < argc; i++) rename_variables(self, argv[i], ctx, level + 1);
+        }
 
     } break;
 
@@ -3306,44 +4792,19 @@ static void rename_variables(tl_infer *self, ast_node *node, rename_variables_ct
         }
         break;
 
-    case ast_case: {
-        int is_union = node->case_.is_union;
-
-        rename_variables(self, node->case_.expression, ctx, level + 1);
-        rename_variables(self, node->case_.binary_predicate, ctx, level + 1);
-        if (node->case_.conditions.size != node->case_.arms.size) fatal("runtime error");
-        forall(i, node->case_.conditions) {
-            hashmap *save = null;
-            if (is_union && ast_node_is_symbol(node->case_.conditions.v[i])) {
-                // node may be ast_nil for an else clause
-                str name   = ast_node_str(node->case_.conditions.v[i]);
-                str newvar = next_variable_name(self, name);
-
-                // establish lexical scope of the union case binding
-                save = map_copy(ctx->lex);
-                str_map_set(&ctx->lex, name, &newvar);
-            }
-
-            rename_variables(self, node->case_.conditions.v[i], ctx, level + 1);
-            rename_variables(self, node->case_.arms.v[i], ctx, level + 1);
-
-            if (save) {
-                map_destroy(&ctx->lex);
-                ctx->lex = save;
-            }
-        }
-    } break;
+    case ast_case: rename_case_variables(self, node, ctx, level); break;
 
     case ast_type_predicate:
         //
         rename_variables(self, node->type_predicate.lhs, ctx, level + 1);
+        // Also rename type argument references in RHS (e.g., T in "x :: T")
+        rename_variables(self, node->type_predicate.rhs, ctx, level + 1);
         break;
 
     case ast_attribute_set:
     case ast_hash_command:
     case ast_continue:
     case ast_string:
-    case ast_c_string:
     case ast_char:
     case ast_nil:
     case ast_void:
@@ -3354,14 +4815,14 @@ static void rename_variables(tl_infer *self, ast_node *node, rename_variables_ct
     case ast_f64:
     case ast_i64:
     case ast_u64:
-    case ast_type_alias:
-    case ast_user_type_definition: break;
+    case ast_type_alias:    break;
     }
 }
 
 static void add_free_variables_to_arrow(tl_infer *, ast_node *, tl_polytype *);
 
-static void concretize_params(tl_infer *self, ast_node *node, tl_monotype *callsite) {
+static void concretize_params(tl_infer *self, ast_node *node, tl_monotype *callsite,
+                              hashmap *type_arguments, ast_node_sized callsite_type_arguments) {
     if (ast_node_is_symbol(node)) return;
 
     ast_node      *body   = null;
@@ -3401,6 +4862,80 @@ static void concretize_params(tl_infer *self, ast_node *node, tl_monotype *calls
         // entry and loses metadata such as free-variable lists.  Overwriting ensures the env
         // carries the full callsite type including free variables.
         tl_type_env_insert(self->env, ast_node_str(param), callsite_type);
+    }
+
+    // assign concrete types to type parameters based on explicit type arguments from callsite
+    if (type_arguments && ast_node_is_let(node)) {
+#if DEBUG_EXPLICIT_TYPE_ARGS
+        fprintf(stderr, "[DEBUG CONCRETIZE TYPE PARAMS] node has %u type params, type_arguments=%p\n",
+                node->let.n_type_parameters, (void *)type_arguments);
+#endif
+        for (u32 i = 0; i < node->let.n_type_parameters; i++) {
+            ast_node *type_param = node->let.type_parameters[i];
+            assert(ast_node_is_symbol(type_param));
+
+            // Always use the alpha-converted name, not the original, because the type
+            // environment relies on alpha conversion to prevent pollution between generic
+            // and specialized phases.
+            str          param_name = type_param->symbol.name;
+            tl_monotype *bound_type = str_map_get_ptr(type_arguments, param_name);
+
+            // If direct lookup failed (because clone's alpha-converted name differs from caller's),
+            // resolve positionally through the callsite type arguments. The callsite NFA's i-th type
+            // argument corresponds to this clone's i-th type parameter.
+            if (!bound_type && i < callsite_type_arguments.size) {
+                ast_node *callsite_arg = callsite_type_arguments.v[i];
+
+                // Try 1: If the callsite type arg is a symbol, look up its name in type_arguments.
+                // This bridges from the caller's alpha-converted name to the concrete type.
+                if (ast_node_is_symbol(callsite_arg)) {
+                    bound_type = str_map_get_ptr(type_arguments, callsite_arg->symbol.name);
+                }
+
+                // Try 2: If the callsite type arg has a resolved type on it, use that.
+                if (!bound_type && callsite_arg->type) {
+                    tl_monotype *resolved = tl_monotype_clone(self->arena, callsite_arg->type->type);
+                    tl_monotype_substitute(self->arena, resolved, self->subs, null);
+                    if (tl_monotype_is_concrete(resolved)) {
+                        bound_type = resolved;
+                    }
+                }
+
+                // Try 3: Parse the callsite type arg node using the type_arguments context.
+                if (!bound_type) {
+                    hot_parse_ctx_reinit(self, type_arguments);
+                    tl_monotype *parsed = tl_type_registry_parse_type_with_ctx(self->registry, callsite_arg,
+                                                                               &self->hot_parse_ctx);
+                    self->hot_parse_ctx_guard = 0;
+                    if (parsed) {
+                        tl_monotype_substitute(self->arena, parsed, self->subs, null);
+                        if (tl_monotype_is_concrete(parsed)) {
+                            bound_type = parsed;
+                        }
+                    }
+                }
+            }
+
+#if DEBUG_EXPLICIT_TYPE_ARGS
+            fprintf(stderr, "[DEBUG CONCRETIZE TYPE PARAMS] type_param[%u]: name='%s', bound=%p\n", i,
+                    str_cstr(&param_name), (void *)bound_type);
+#endif
+
+            if (bound_type) {
+
+                tl_polytype *callsite_type = tl_polytype_absorb_mono(self->arena, bound_type);
+#if DEBUG_EXPLICIT_TYPE_ARGS
+                str type_str = tl_polytype_to_string(self->transient, callsite_type);
+                fprintf(stderr, "[DEBUG CONCRETIZE TYPE PARAMS] setting type on '%s' to: %s\n",
+                        str_cstr(&type_param->symbol.name), str_cstr(&type_str));
+#endif
+                ast_node_type_set(type_param, callsite_type);
+
+                // Mirror the handling of value parameters: insert into env
+                env_insert_constrain(self, param_name, callsite_type, type_param);
+                tl_type_env_insert(self->env, param_name, callsite_type);
+            }
+        }
     }
 
     tl_monotype *inst_result = tl_monotype_sized_last(callsite->list.xs);
@@ -3499,6 +5034,17 @@ static tl_polytype *make_arrow_with(tl_infer *self, traverse_ctx *ctx, ast_node 
     if (!out) return null;
     if (tl_monotype_is_list(out->type) && tl_monotype_is_list(type->type)) {
         (out->type)->list.fvs = type->type->list.fvs;
+#if DEBUG_RECURSIVE_TYPES
+        {
+            str out_str = tl_monotype_to_string(self->transient, out->type);
+            fprintf(stderr, "[DEBUG_RECURSIVE_TYPES] make_arrow_with: arrow=%s fvs_count=%u\n",
+                    str_cstr(&out_str), type->type->list.fvs.size);
+            forall(i, type->type->list.fvs) {
+                fprintf(stderr, "[DEBUG_RECURSIVE_TYPES]   fv[%u] = '%s'\n", i,
+                        str_cstr(&type->type->list.fvs.v[i]));
+            }
+        }
+#endif
     }
     return out;
 }
@@ -3613,6 +5159,15 @@ static void add_free_variables_to_arrow(tl_infer *self, ast_node *node, tl_polyt
     }
 }
 
+// ============================================================================
+// Generic function registration (Phase 3)
+// ============================================================================
+//
+// add_generic() is called for each top-level definition during Phase 3. It
+// builds a provisional arrow type (for recursive calls), traverses the function
+// body via infer_one() -> infer_traverse_cb to generate constraints bottom-up,
+// then generalizes the result into a polytype in the type environment.
+
 static int generic_declaration(tl_infer *self, str name, ast_node const *name_node, ast_node *node) {
     // no function body, so let's treat this as a type declaration
     if (!name_node->symbol.annotation_type) {
@@ -3635,6 +5190,7 @@ static int infer_one(tl_infer *self, ast_node *infer_target, tl_polytype *arrow)
         fatal("logic error");
 
     traverse_ctx *traverse = traverse_ctx_create(self->transient);
+    if (self->report_stats) self->counters.traverse_infer_calls++;
     if (traverse_ast(self, traverse, infer_target, infer_traverse_cb)) return 1;
 
     // constrain arrow result type and infer target's type
@@ -3765,6 +5321,16 @@ static int add_generic(tl_infer *self, ast_node *node) {
     return 0;
 }
 
+// ============================================================================
+// Post-inference validation and cleanup (Phases 4-6)
+// ============================================================================
+//
+// Utility functions called from tl_infer_run between the major passes:
+//   check_missing_free_variables (Phase 4): verifies no unresolved free variables
+//   remove_generic_toplevels (after Phase 5): strips still-generic definitions
+//   tree_shake_toplevels (Phase 6): prunes unreachable toplevels using tree_shake
+//   check_main_function (after Phase 5): validates main's type signature
+
 void missing_fv_error_cb(void *ctx, str fun, str var) {
     tl_infer *self = ctx;
     ast_node *node = toplevel_get(self, fun);
@@ -3789,7 +5355,6 @@ void remove_generic_toplevels(tl_infer *self) {
         tl_polytype *type = tl_type_env_lookup(self->env, name);
         if (!type) fatal("runtime error");
 
-        if (tl_monotype_is_arrow(type->type) && tl_monotype_arrow_is_concrete(type->type)) continue;
         if (!tl_polytype_is_concrete(type)) array_push(names, name);
     }
 
@@ -3894,6 +5459,14 @@ static int check_main_function(tl_infer *self, ast_node *main) {
     return error;
 }
 
+// ============================================================================
+// Type specialization updates (Phase 7)
+// ============================================================================
+//
+// After specialization and tree shaking, replaces generic type constructors in
+// the final AST with their specialized versions (e.g. Array(T) -> Array__Int).
+// Also checks for any remaining unresolved type variables.
+
 tl_monotype *tl_infer_update_specialized_type_(tl_infer *self, tl_monotype *mono, hashmap **in_progress) {
 
     // Note: this function pretty definitely breaks the isolation between tl_infer and the transpiler so
@@ -3907,13 +5480,7 @@ tl_monotype *tl_infer_update_specialized_type_(tl_infer *self, tl_monotype *mono
     case tl_var:
     case tl_weak:        break;
 
-    case tl_literal:     {
-        tl_monotype *target  = tl_monotype_literal_target(mono);
-        tl_monotype *replace = tl_infer_update_specialized_type_(self, target, in_progress);
-        if (replace) return tl_monotype_create_literal(self->arena, replace);
-    } break;
-
-    case tl_cons_inst: {
+    case tl_cons_inst:   {
 
         int did_replace  = !tl_monotype_is_inst_specialized(mono);
         str generic_name = mono->cons_inst->def->generic_name;
@@ -3934,10 +5501,29 @@ tl_monotype *tl_infer_update_specialized_type_(tl_infer *self, tl_monotype *mono
             }
         }
         str_hset_remove(*in_progress, generic_name);
+        if (!did_replace) {
+            if (self->report_stats) self->counters.update_types_type_cons_skipped++;
+            return null;
+        }
 
         tl_polytype *replace = null;
+        if (self->report_stats) self->counters.update_types_type_cons_calls++;
         (void)specialize_type_constructor(self, mono->cons_inst->def->generic_name, mono->cons_inst->args,
                                           &replace);
+
+#if DEBUG_EXPLICIT_TYPE_ARGS
+        {
+            str gn = mono->cons_inst->def->generic_name;
+            fprintf(stderr, "[DEBUG UPDATE_SPECIALIZED] specialize_type_constructor('%s'):\n",
+                    str_cstr(&gn));
+            fprintf(stderr, "  replace = %p\n", (void *)replace);
+            if (replace) {
+                str ts = tl_monotype_to_string(self->transient, replace->type);
+                fprintf(stderr, "  replace->type = %s\n", str_cstr(&ts));
+                fprintf(stderr, "  is_specialized = %d\n", tl_monotype_is_inst_specialized(replace->type));
+            }
+        }
+#endif
 
         if (replace && !tl_monotype_is_inst_specialized(replace->type)) fatal("unreachable");
 
@@ -3969,17 +5555,17 @@ tl_monotype *tl_infer_update_specialized_type_(tl_infer *self, tl_monotype *mono
 
 tl_monotype *tl_infer_update_specialized_type(tl_infer *self, tl_monotype *mono) {
     switch (mono->tag) {
+    case tl_var:         tl_monotype_substitute(self->arena, mono, self->subs, null); break;
+
     case tl_any:
     case tl_ellipsis:
     case tl_integer:
-    case tl_var:
     case tl_weak:
     case tl_placeholder: return null;
 
     case tl_cons_inst:
     case tl_arrow:
-    case tl_tuple:
-    case tl_literal:     {
+    case tl_tuple:       {
         hashmap     *in_progress = hset_create(self->transient, 64);
         tl_monotype *out         = tl_infer_update_specialized_type_(self, mono, &in_progress);
         return out;
@@ -4008,8 +5594,7 @@ static void update_types_one_type(tl_infer *self, update_types_ctx *ctx, tl_poly
 
     case tl_cons_inst:
     case tl_arrow:
-    case tl_tuple:
-    case tl_literal:     {
+    case tl_tuple:       {
         // For recursive types, bounce until no changes. update_specialized_type returns null if there is no
         // need to replace the type being tested.
         int tries = 3;
@@ -4034,9 +5619,10 @@ static void fixup_arrow_name(tl_infer *self, ast_node *ident) {
     if (ast_node_is_symbol(ident)) {
         tl_monotype *type = ident->type->type;
         if (!tl_monotype_is_arrow(type)) return;
-        str  name      = ast_node_str(ident);
+        str name = ast_node_str(ident);
 
-        str *inst_name = instance_lookup_arrow(self, name, type);
+        // TODO: function pointers with type arguments
+        str *inst_name = instance_lookup_arrow(self, name, type, (ast_node_sized){0}, null);
         if (inst_name) ast_node_name_replace(ident, *inst_name);
     }
 }
@@ -4075,10 +5661,7 @@ static int update_types_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_node 
         // Note: ensure name's type in the environment matches a specialized type constructor on the rhs
         {
             tl_monotype *value_type = node->let_in.value->type->type;
-            // Also check for type literals whose target is a specialized instance
-            if (tl_monotype_is_type_literal(value_type)) {
-                value_type = tl_monotype_literal_target(value_type);
-            }
+
             if (tl_monotype_is_inst_specialized(value_type)) {
                 tl_polytype *new_type = tl_polytype_absorb_mono(self->arena, value_type);
                 ast_node_type_set(node->let_in.name, new_type);
@@ -4098,12 +5681,20 @@ static int update_types_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_node 
 
 static void update_specialized_types(tl_infer *self) {
     update_types_ctx ctx = {.in_progress = hset_create(self->transient, 64)};
+    hires_timer      ut;
+    int              stats = self->report_stats;
+
+    if (stats) {
+        hires_timer_init(&ut);
+        hires_timer_start(&ut);
+    }
 
     // Snapshot the env keys before iterating. update_types_one_type may trigger
     // specialize_type_constructor_ which inserts new entries into the env. Robin Hood
     // hashing can relocate existing entries on insertion, invalidating any data pointers
     // obtained from a prior map_iter call.
     str_array env_keys = str_map_keys(self->transient, self->env->map);
+    if (stats) self->counters.update_types_env_count = env_keys.size;
     forall(ki, env_keys) {
         tl_polytype *poly = tl_type_env_lookup(self->env, env_keys.v[ki]);
         if (!poly) continue;
@@ -4113,15 +5704,26 @@ static void update_specialized_types(tl_infer *self) {
     }
     array_free(env_keys);
 
+    if (stats) {
+        hires_timer_stop(&ut);
+        self->counters.update_types_env_ms = hires_timer_elapsed_sec(&ut) * 1000.0;
+    }
+
     // NOTE: this is an expensive traverse
+    if (stats) hires_timer_start(&ut);
     traverse_ctx *traverse = traverse_ctx_create(self->transient);
     traverse->user         = &ctx;
     hashmap_iterator iter  = {0};
     ast_node        *node;
     while ((node = toplevel_iter(self, &iter))) {
         if (ast_node_is_utd(node)) continue;
+        if (stats) self->counters.traverse_update_types_calls++;
         traverse_ast(self, traverse, node, update_types_cb);
         // Note: traverse_ast does not traverse let nodes directly (just their sub-parts)
+    }
+    if (stats) {
+        hires_timer_stop(&ut);
+        self->counters.update_types_ast_ms = hires_timer_elapsed_sec(&ut) * 1000.0;
     }
     arena_reset(self->transient);
 }
@@ -4131,8 +5733,7 @@ static int check_unresolved_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_n
 
     if (ast_node_is_let_in(node) && !tl_monotype_is_arrow(node->let_in.value->type->type)) {
         if (!tl_polytype_is_concrete(node->let_in.name->type)) {
-            type_error(self, node->let_in.name);
-            type_error(self, node);
+            unresolved_type_error(self, node->let_in.name);
         }
     } else if (ast_node_is_reassignment(node) && !tl_polytype_is_concrete(node->type)) {
         unresolved_type_error(self, node);
@@ -4153,25 +5754,178 @@ static void check_unresolved_types(tl_infer *self) {
     arena_reset(self->transient);
 }
 
-int tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *out_result) {
-    dbg(self, "-- start inference --");
+// ============================================================================
+// Invariant checking (debug-only)
+// ============================================================================
+//
+// Enabled by DEBUG_INVARIANTS. Validates properties at phase boundaries:
+// all types null after alpha conversion, all functions in env after inference,
+// no generic toplevels after specialization, alpha-converted names in type args.
 
-    // Phase 1: Alpha-conversion - ensure unique variable names
-    // Performs alpha-conversion on the AST to ensure all bound variables have globally unique names
-    // while preserving lexical scope. This simplifies later passes by removing name collision concerns.
-    {
-        rename_variables_ctx ctx = {.lex = map_new(self->transient, str, str, 16)};
-        // rename toplevel let-in symbols and keep them in global lexical scope
-        forall(i, nodes) rename_let_in(self, nodes.v[i], &ctx);
+#if DEBUG_INVARIANTS
 
-        // rename the rest
-        ctx = (rename_variables_ctx){.lex = ctx.lex};
-        forall(i, nodes) rename_variables(self, nodes.v[i], &ctx, 0);
-        arena_reset(self->transient);
+static void report_invariant_failure(tl_infer *self, char const *phase, char const *invariant,
+                                     char const *detail, ast_node const *node) {
+    fprintf(stderr, "\nINVARIANT VIOLATION [%s]\n", phase);
+    fprintf(stderr, "  Invariant: %s\n", invariant);
+    fprintf(stderr, "  Detail:    %s\n", detail);
+    if (node) {
+        fprintf(stderr, "  Location:  %s:%u\n", node->file, node->line);
+        str s = ast_node_to_short_string(self->transient, node);
+        fprintf(stderr, "  Node:      %.*s\n", str_ilen(s), str_buf(&s));
+        str_deinit(self->transient, &s);
     }
+    fprintf(stderr, "\n");
+}
 
-    // Phase 2: Load top-level definitions
-    // Load all top level forms.
+static void check_types_null_cb(void *ctx_ptr, ast_node *node) {
+    struct check_types_null_ctx *ctx = ctx_ptr;
+    if (node->type != null) {
+        char detail[256];
+        snprintf(detail, sizeof detail, "Node has non-null type at %s:%u", node->file, node->line);
+        report_invariant_failure(ctx->self, ctx->phase, "All AST node types must be null", detail, node);
+        ctx->failures++;
+    }
+}
+
+static int check_all_types_null(tl_infer *self, ast_node_sized nodes, char const *phase) {
+    struct check_types_null_ctx ctx = {.self = self, .phase = phase, .failures = 0};
+    forall(i, nodes) {
+        ast_node_dfs(&ctx, nodes.v[i], check_types_null_cb);
+    }
+    return ctx.failures;
+}
+
+static void check_type_arg_types_null_one(struct check_types_null_ctx *ctx, ast_node *node) {
+    // Check type parameters on let nodes
+    if (ast_node_is_let(node)) {
+        struct ast_let *let = &node->let;
+        for (u8 i = 0; i < let->n_type_parameters; ++i) {
+            if (let->type_parameters[i] && let->type_parameters[i]->type != null) {
+                char detail[256];
+                snprintf(detail, sizeof detail, "Type parameter %u has non-null type", i);
+                report_invariant_failure(ctx->self, ctx->phase, "Type parameter types must be null", detail,
+                                         let->type_parameters[i]);
+                ctx->failures++;
+            }
+        }
+    }
+    // Check type arguments on named function applications
+    else if (ast_node_is_nfa(node)) {
+        struct ast_named_application *nfa = &node->named_application;
+        for (u8 i = 0; i < nfa->n_type_arguments; ++i) {
+            if (nfa->type_arguments[i] && nfa->type_arguments[i]->type != null) {
+                char detail[256];
+                snprintf(detail, sizeof detail, "Type argument %u has non-null type", i);
+                report_invariant_failure(ctx->self, ctx->phase, "Type argument types must be null", detail,
+                                         nfa->type_arguments[i]);
+                ctx->failures++;
+            }
+        }
+    }
+    // Check type arguments on user type definitions
+    else if (ast_node_is_utd(node)) {
+        struct ast_user_type_def *utd = &node->user_type_def;
+        for (u8 i = 0; i < utd->n_type_arguments; ++i) {
+            if (utd->type_arguments[i] && utd->type_arguments[i]->type != null) {
+                char detail[256];
+                snprintf(detail, sizeof detail, "UTD type argument %u has non-null type", i);
+                report_invariant_failure(ctx->self, ctx->phase, "Type argument types must be null", detail,
+                                         utd->type_arguments[i]);
+                ctx->failures++;
+            }
+        }
+    }
+}
+
+static void check_type_arg_types_null_cb(void *ctx_ptr, ast_node *node) {
+    check_type_arg_types_null_one(ctx_ptr, node);
+}
+
+static int check_type_arg_types_null(tl_infer *self, ast_node_sized nodes, char const *phase) {
+    struct check_types_null_ctx ctx = {.self = self, .phase = phase, .failures = 0};
+    forall(i, nodes) {
+        ast_node_dfs(&ctx, nodes.v[i], check_type_arg_types_null_cb);
+    }
+    return ctx.failures;
+}
+
+static int check_no_generic_toplevels(tl_infer *self, char const *phase) {
+    int              failures = 0;
+    hashmap_iterator iter     = {0};
+    ast_node        *node;
+    while ((node = toplevel_iter(self, &iter))) {
+        if (!ast_node_is_let(node)) continue;
+        if (ast_node_is_specialized(node)) continue; // specialized is OK
+
+        // Check if this function has type parameters (generic)
+        struct ast_let *let = &node->let;
+        if (let->n_type_parameters > 0) {
+            // Generic function - check that it has been fully specialized
+            str          name = ast_node_str(let->name);
+            tl_polytype *poly = tl_type_env_lookup(self->env, name);
+            if (poly && !tl_polytype_is_concrete(poly)) {
+                str  tmp = tl_polytype_to_string(self->transient, poly);
+                char detail[512];
+                snprintf(detail, sizeof detail, "Generic function '%s' still has type variables: %s",
+                         str_cstr(&name), str_cstr(&tmp));
+                report_invariant_failure(self, phase, "No generic functions should remain", detail, node);
+                failures++;
+            }
+        }
+    }
+    return failures;
+}
+
+// Check that specialized NFA type arguments have concrete types
+static void check_specialized_nfa_type_args_cb(void *ctx_ptr, ast_node *node) {
+    struct check_types_null_ctx *ctx = ctx_ptr;
+    if (!ast_node_is_nfa(node)) return;
+    if (!node->named_application.is_specialized) return;
+
+    for (u8 i = 0; i < node->named_application.n_type_arguments; i++) {
+        ast_node *ta = node->named_application.type_arguments[i];
+        if (ta && ta->type && !tl_polytype_is_concrete(ta->type)) {
+            char detail[256];
+            str  type_str = tl_polytype_to_string(ctx->self->transient, ta->type);
+            snprintf(detail, sizeof detail, "Type argument %u has non-concrete type: %s", i,
+                     str_cstr(&type_str));
+            report_invariant_failure(ctx->self, ctx->phase,
+                                     "Specialized NFA type arguments must be concrete", detail, ta);
+            ctx->failures++;
+        }
+    }
+}
+
+static int check_specialized_nfa_type_args(tl_infer *self, ast_node *node, char const *phase) {
+    struct check_types_null_ctx ctx = {.self = self, .phase = phase, .failures = 0};
+    ast_node_dfs(&ctx, node, check_specialized_nfa_type_args_cb);
+    return ctx.failures;
+}
+
+#endif // DEBUG_INVARIANTS
+
+// Phase 1: Alpha-conversion — ensure unique variable names.
+static int run_alpha_conversion(tl_infer *self, ast_node_sized nodes) {
+    rename_variables_ctx ctx = {.lex = map_new(self->transient, str, str, 16)};
+    // rename toplevel let-in symbols and keep them in global lexical scope
+    forall(i, nodes) rename_let_in(self, nodes.v[i], &ctx);
+
+    // rename the rest
+    ctx = (rename_variables_ctx){.lex = ctx.lex};
+    forall(i, nodes) rename_variables(self, nodes.v[i], &ctx, 0);
+    arena_reset(self->transient);
+
+#if DEBUG_INVARIANTS
+    if (check_all_types_null(self, nodes, "Phase 1: Alpha Conversion")) return 1;
+    if (check_type_arg_types_null(self, nodes, "Phase 1: Alpha Conversion")) return 1;
+    arena_reset(self->transient);
+#endif
+    return 0;
+}
+
+// Phase 2: Load top-level definitions.
+static int run_load_toplevels(tl_infer *self, ast_node_sized nodes) {
     self->toplevels = ast_node_str_map_create(self->arena, 1024);
     load_toplevel(self, nodes);
     arena_reset(self->transient);
@@ -4179,21 +5933,49 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *out_resu
 
     dbg(self, "-- toplevels");
     log_toplevels(self);
+    return 0;
+}
 
-    // Phase 3: Generic function type inference
-    // now go through the toplevel let nodes and create generic functions: don't call add_generic from
-    // inside the iteration because infer will add lambda functions to the toplevel.
+// Phase 3: Generic function type inference.
+static int run_generic_inference(tl_infer *self, ast_node_sized nodes) {
+    u32 count = 0;
     forall(i, nodes) {
         if (ast_node_is_hash_command(nodes.v[i])) continue;
         if (ast_node_is_type_alias(nodes.v[i])) continue;
         add_generic(self, nodes.v[i]);
+        count++;
     }
+    if (self->report_stats) self->counters.toplevels_inferred = count;
     arena_reset(self->transient);
 
     if (self->errors.size) return 1;
 
-    // Phase 4: Check free variables
-    // check if free variables are present
+#if DEBUG_INVARIANTS
+    {
+        int failures = 0;
+        forall(i, nodes) {
+            ast_node *node = nodes.v[i];
+            if (!ast_node_is_let(node)) continue;
+            str          name = ast_node_str(node->let.name);
+            tl_polytype *poly = tl_type_env_lookup(self->env, name);
+            if (!poly) {
+                char detail[256];
+                snprintf(detail, sizeof detail, "Function '%.*s' not found in type environment",
+                         str_ilen(name), str_buf(&name));
+                report_invariant_failure(self, "Phase 3: Generic Inference",
+                                         "All functions must have polytypes in env", detail, node);
+                failures++;
+            }
+        }
+        if (failures) return 1;
+        arena_reset(self->transient);
+    }
+#endif
+    return 0;
+}
+
+// Phase 4: Check free variables and apply substitutions.
+static int run_check_free_variables(tl_infer *self) {
     if (check_missing_free_variables(self)) return 1;
     if (self->errors.size) return 1;
     arena_reset(self->transient);
@@ -4213,26 +5995,17 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *out_resu
     dbg(self, "-- env");
     log_env(self);
     arena_reset(self->transient);
+    return 0;
+}
 
-    ast_node *main = null;
-    if (!self->opts.is_library) {
-        ast_node **found_main = str_map_get(self->toplevels, S("main"));
-        if (!found_main) {
-            array_push(self->errors, ((tl_infer_error){.tag = tl_err_no_main_function}));
-            return 1;
-        }
-        main = *found_main;
-    }
-
-    // Phase 5: Generic function specialization
-    // Final phase: communiate type information top-down by following applications. This contrasts with
-    // the bottom-up inference we just completed. At this point the program is well-typed and we are
-    // setting up for the transpiler.
+// Phase 5: Generic function specialization.
+static int run_specialize(tl_infer *self, ast_node_sized nodes, ast_node *main) {
     dbg(self, "-- specialize phase");
 
     traverse_ctx *traverse = traverse_ctx_create(self->transient);
 
     if (main) {
+        if (self->report_stats) self->counters.traverse_specialize_calls++;
         traverse_ast(self, traverse, main, specialize_applications_cb);
     } else {
         assert(self->opts.is_library);
@@ -4254,7 +6027,9 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *out_resu
                         continue;
                     }
 
-                    str inst_name = specialize_arrow(self, traverse_ctx, fun_name, callsite->type);
+                    str inst_name =
+                      specialize_arrow(self, traverse_ctx, fun_name, callsite->type, (ast_node_sized){0});
+                    // FIXME: ignores specialize_arrow error
                     dbg(self, "library: exporting '%s' => '%s'", str_cstr(&fun_name), str_cstr(&inst_name));
                 }
             }
@@ -4266,6 +6041,7 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *out_resu
         ast_node *node = nodes.v[i];
 
         if (ast_node_is_let_in(node)) {
+            if (self->report_stats) self->counters.traverse_specialize_calls++;
             traverse_ast(self, traverse, node, specialize_applications_cb);
         }
     }
@@ -4280,12 +6056,9 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *out_resu
             if (ast_node_is_let(node)) {
                 str name = ast_node_str(node->let.name);
                 if (is_module_init(name)) {
-                    // These two things must be done in order for the transpiler to emit the function: It
-                    // must be specialized and it must not have a generic type.
                     ast_node_set_is_specialized(node);
                     tl_type_env_insert(self->env, name, callsite);
                     tl_infer_set_attributes(self, node->let.name);
-                    // recurse through init body as if we had specialized it
                     post_specialize(self, traverse, node, callsite->type);
                 }
             }
@@ -4306,21 +6079,32 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *out_resu
     }
 
     remove_generic_toplevels(self);
+    if (self->report_stats) self->counters.toplevels_after_specialize = (u32)map_size(self->toplevels);
     arena_reset(self->transient);
 
-    // Phase 6: Tree shaking
-    // tree shake
-    if (main) {
-        tree_shake_toplevels(self, main);
-        arena_reset(self->transient);
+#if DEBUG_INVARIANTS
+    if (check_no_generic_toplevels(self, "Phase 5: Specialization")) return 1;
+    arena_reset(self->transient);
+#endif
+    return 0;
+}
 
-        // after tree shake, extraneous symbols will have been removed from environment
-        if (check_missing_free_variables(self)) return 1;
-        if (self->errors.size) return 1;
-    }
+// Phase 6: Tree shaking.
+static int run_tree_shake(tl_infer *self, ast_node *main) {
+    if (!main) return 0;
 
-    // Phase 7: Type specialization updates
-    // update type specialisations: replace generic constructors with specialised constructors.
+    tree_shake_toplevels(self, main);
+    if (self->report_stats) self->counters.toplevels_after_tree_shake = (u32)map_size(self->toplevels);
+    arena_reset(self->transient);
+
+    // after tree shake, extraneous symbols will have been removed from environment
+    if (check_missing_free_variables(self)) return 1;
+    if (self->errors.size) return 1;
+    return 0;
+}
+
+// Phase 7: Type specialization updates.
+static int run_update_types(tl_infer *self) {
     update_specialized_types(self);
     arena_reset(self->transient);
 
@@ -4338,9 +6122,67 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *out_resu
     log_toplevels(self);
     arena_reset(self->transient);
 
-    if (self->errors.size) {
-        return 1;
+    return self->errors.size ? 1 : 0;
+}
+
+int tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *out_result) {
+    dbg(self, "-- start inference --");
+
+    hires_timer phase_timer;
+    if (self->report_stats) hires_timer_init(&phase_timer);
+
+#define PHASE_START()                                                                                      \
+    do {                                                                                                   \
+        if (self->report_stats) hires_timer_start(&phase_timer);                                           \
+    } while (0)
+#define PHASE_STOP(field)                                                                                  \
+    do {                                                                                                   \
+        if (self->report_stats) {                                                                          \
+            hires_timer_stop(&phase_timer);                                                                \
+            self->phase_stats.field = hires_timer_elapsed_sec(&phase_timer) * 1000.0;                      \
+        }                                                                                                  \
+    } while (0)
+
+    PHASE_START();
+    if (run_alpha_conversion(self, nodes)) return 1;
+    PHASE_STOP(alpha_ms);
+
+    PHASE_START();
+    if (run_load_toplevels(self, nodes)) return 1;
+    PHASE_STOP(load_toplevels_ms);
+
+    PHASE_START();
+    if (run_generic_inference(self, nodes)) return 1;
+    PHASE_STOP(generic_inference_ms);
+
+    PHASE_START();
+    if (run_check_free_variables(self)) return 1;
+    PHASE_STOP(free_vars_ms);
+
+    ast_node *main = null;
+    if (!self->opts.is_library) {
+        ast_node **found_main = str_map_get(self->toplevels, S("main"));
+        if (!found_main) {
+            array_push(self->errors, ((tl_infer_error){.tag = tl_err_no_main_function}));
+            return 1;
+        }
+        main = *found_main;
     }
+
+    PHASE_START();
+    if (run_specialize(self, nodes, main)) return 1;
+    PHASE_STOP(specialize_ms);
+
+    PHASE_START();
+    if (run_tree_shake(self, main)) return 1;
+    PHASE_STOP(tree_shake_ms);
+
+    PHASE_START();
+    if (run_update_types(self)) return 1;
+    PHASE_STOP(update_types_ms);
+
+#undef PHASE_START
+#undef PHASE_STOP
 
     if (out_result) {
         out_result->infer     = self;
@@ -4355,9 +6197,20 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *out_resu
         out_result->synthesized_nodes = (ast_node_sized)sized_all(self->synthesized_nodes);
         out_result->hash_includes     = (str_sized)sized_all(self->hash_includes);
     }
+
+#if DEBUG_INSTANCE_CACHE
+    fprintf(stderr, "\n[INSTANCE CACHE SUMMARY]\n");
+    fprintf(stderr, "  Total specializations: %zu\n", map_size(self->instances));
+    fprintf(stderr, "  Unique instance names: %zu\n", hset_size(self->instance_names));
+#endif
+
     arena_reset(self->transient);
     return 0;
 }
+
+// ============================================================================
+// Error reporting and debug logging
+// ============================================================================
 
 void tl_infer_report_errors(tl_infer *self) {
     if (self->errors.size) {
@@ -4431,12 +6284,14 @@ static void log_env(tl_infer const *self) {
 
 static void do_apply_subs(void *ctx, ast_node *node) {
     tl_infer *self = ctx;
+    if (self->report_stats) self->counters.subs_nodes_visited++;
     if (node->type) {
         tl_polytype_substitute(self->arena, node->type, self->subs);
     }
 }
 
 static void apply_subs_to_ast(tl_infer *self) {
+    if (self->report_stats) self->counters.subs_apply_calls++;
     hashmap_iterator iter = {0};
     ast_node        *node;
     while ((node = ast_node_str_map_iter(self->toplevels, &iter))) {
@@ -4444,7 +6299,9 @@ static void apply_subs_to_ast(tl_infer *self) {
     }
 }
 
-//
+// ============================================================================
+// Name classification helpers and toplevel map accessors
+// ============================================================================
 
 int is_intrinsic(str name) {
     return (0 == str_cmp_nc(name, "_tl_", 4));
@@ -4506,8 +6363,8 @@ static void log_constraint(tl_infer *self, tl_polytype *left, tl_polytype *right
     dbg(self, "constrain: %s : %s from %s", str_cstr(&left_str), str_cstr(&right_str), str_cstr(&node_str));
 }
 
-static void log_constraint_mono(tl_infer *self, tl_monotype *left, tl_monotype *right,
-                                ast_node const *node) {
+__attribute__((unused)) static void log_constraint_mono(tl_infer *self, tl_monotype *left,
+                                                        tl_monotype *right, ast_node const *node) {
     if (!self->verbose) return;
     str left_str  = tl_monotype_to_string(self->transient, left);
     str right_str = tl_monotype_to_string(self->transient, right);

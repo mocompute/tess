@@ -1,7 +1,7 @@
 #module main
 #import <stdlib.tl>
 
-// Test: Pointer to function pointer (Ptr((Int) -> Int))
+// Test: Pointer to function pointer (Ptr[(Int] -> Int))
 
 negate (x) { 0 - x }
 add_one(x) { x + 1 }

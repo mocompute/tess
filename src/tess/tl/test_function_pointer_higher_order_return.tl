@@ -17,7 +17,7 @@ Op: | Double
     // Function that returns a function pointer based on tagged union variant
     // Uses type inference for return type
 get_operation(op: Op) {
-    case op: Op {
+    when op {
         d: Double { double/1 }
         t: Triple { triple/1 }
         n: Negate { negate/1 }

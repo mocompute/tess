@@ -111,7 +111,7 @@
 (defconst tl-font-lock-keywords
   (let* (
          ;; Keywords
-         (keywords '("if" "else" "case" "while" "for" "return"
+         (keywords '("if" "else" "case" "when" "while" "for" "return"
                      "void" "null" "true" "false" "Type" "Void" "any"))
 
          ;; Built-in functions
@@ -158,13 +158,22 @@
       ;; Types
       (,types-regexp . font-lock-type-face)
 
-      ;; Function definitions (function_name followed by paren at line start)
-      ("^[ \t]*\\([a-zA-Z_][a-zA-Z0-9_]*\\)[ \t]*("
+      ;; Function definitions (function_name followed by optional type args and paren at line start)
+      ("^[ \t]*\\([a-zA-Z_][a-zA-Z0-9_]*\\)\\(?:\\[.*?\\]\\)?[ \t]*("
        (1 font-lock-function-name-face))
 
-      ;; Type constructors (capitalized identifier followed by paren)
-      ("\\<\\([A-Z][a-zA-Z0-9_]*\\)[ \t]*("
+      ;; Type constructors (capitalized identifier followed by optional type args and paren)
+      ("\\<\\([A-Z][a-zA-Z0-9_]*\\)\\(?:\\[.*?\\]\\)?[ \t]*("
        (1 font-lock-type-face))
+
+      ;; Generic types with type arguments without parens (e.g., Array[Int])
+      ("\\<\\([A-Z][a-zA-Z0-9_]*\\)\\[" (1 font-lock-type-face))
+
+      ;; Type parameters inside square brackets (e.g., [T], [a], [Int, Bool])
+      ;; First type arg after opening bracket
+      ("\\[\\([a-zA-Z][a-zA-Z0-9_]*\\)" (1 font-lock-type-face))
+      ;; Subsequent type args: ", x]" or ", x," pattern (not ", x)")
+      (",[ \t]*\\([a-zA-Z][a-zA-Z0-9_]*\\)[ \t]*[],]" (1 font-lock-type-face))
 
       ;; Multi-character operators (use default punctuation face, no special highlighting)
       ;; Operators like ->, :=, ::, .&, .*, ==, !=, <=, >=, &&, || are left unhighlighted
@@ -391,7 +400,7 @@ Returns a list of (name . position) pairs for all functions, types, and modules.
 
       ;; Find all function definitions and type constructors
       (goto-char (point-min))
-      (while (re-search-forward "^[ \t]*\\([a-zA-Z_][a-zA-Z0-9_]*\\)[ \t]*(" nil t)
+      (while (re-search-forward "^[ \t]*\\([a-zA-Z_][a-zA-Z0-9_]*\\)[ \t]*\\(?:\\[\\|(\\)" nil t)
         (let ((name (match-string-no-properties 1)))
           (push (cons name (match-beginning 1))
                 index))))
@@ -458,29 +467,38 @@ With ARG, do it that many times."
     (if (< arg 0)
         (tl-end-of-defun (- arg))
       (dotimes (_ arg)
-        (re-search-backward "^[ \t]*[a-zA-Z_][a-zA-Z0-9_]*[ \t]*(" nil 'move)))))
+        (re-search-backward "^[ \t]*[a-zA-Z_][a-zA-Z0-9_]*[ \t]*\\(?:\\[\\|(\\)" nil 'move)))))
 
 (defun tl-end-of-defun (&optional arg)
   "Move forward to the end of a function definition.
 With ARG, do it that many times.
-Handles both regular functions and type constructors like `Point(a) : { ... }`."
+Handles both regular functions and type constructors like `Point[a] : { ... }`."
   (interactive "p")
   (let ((arg (or arg 1)))
     (if (< arg 0)
         (tl-beginning-of-defun (- arg))
       (dotimes (_ arg)
-        (when (re-search-forward "^[ \t]*[a-zA-Z_][a-zA-Z0-9_]*[ \t]*(" nil 'move)
+        (when (re-search-forward "^[ \t]*[a-zA-Z_][a-zA-Z0-9_]*[ \t]*\\(?:\\[\\|(\\)" nil 'move)
           (forward-char -1)
-          (forward-sexp)  ; Skip parameter list
+          ;; Skip type args [...] if present
+          (when (eq (char-after) ?\[)
+            (forward-sexp)
+            (skip-chars-forward " \t"))
+          ;; Skip parameter list (...) if present
+          (when (eq (char-after) ?\()
+            (forward-sexp))
           (skip-chars-forward " \t\n")
           ;; Handle return type annotation (-> Type)
           (when (looking-at "->")
             (forward-char 2)
             (skip-chars-forward " \t")
-            ;; Skip return type (may include parens for function types)
+            ;; Skip return type (may include parens/brackets for generics)
             (if (looking-at "(")
                 (forward-sexp)
-              (skip-chars-forward "a-zA-Z0-9_.(")))
+              (progn
+                (skip-chars-forward "a-zA-Z0-9_.")
+                (when (eq (char-after) ?\[)
+                  (forward-sexp)))))
           (skip-chars-forward " \t\n")
           ;; Handle type constructor colon
           (when (looking-at ":")

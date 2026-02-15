@@ -2,7 +2,7 @@
 #import <Array.tl>
 
 main() {
-    xs := Array.with_capacity_undefined(Int, 4)
+    xs := Array.with_capacity_undefined[Int](4)
 
     // Note: the for statement refers to the Array.Indexed module defined in <Array.tl>.
     // Iterator modules may define arbitrary fields on the iterator, such as `index` in this example.

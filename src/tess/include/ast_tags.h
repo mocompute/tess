@@ -34,7 +34,6 @@ typedef enum ast_tag {
     ast_reassignment_op,
     ast_return,
     ast_string,
-    ast_c_string,
     ast_symbol,
     ast_type_alias,
     ast_type_predicate,

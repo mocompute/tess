@@ -462,7 +462,7 @@ static int test_resize(void) {
 static int test_slice(void) {
     int error = 0;
 
-    str s = S("abcdef");
+    str s     = S("abcdef");
 
     // normal slice
     span sl = str_slice_len(&s, 1, 3);
@@ -516,13 +516,13 @@ static int test_cstr(void) {
     allocator *alloc = leak_detector_create();
 
     // small string
-    str s = str_init(alloc, "hi");
+    str         s  = str_init(alloc, "hi");
     char const *cs = str_cstr(&s);
     error += 0 == strcmp(cs, "hi") ? 0 : 1;
     str_deinit(alloc, &s);
 
     // big string
-    s = str_init(alloc, "this is a longer string for testing");
+    s  = str_init(alloc, "this is a longer string for testing");
     cs = str_cstr(&s);
     error += 0 == strcmp(cs, "this is a longer string for testing") ? 0 : 1;
     str_deinit(alloc, &s);
@@ -639,8 +639,8 @@ static int test_cat_array(void) {
     allocator *alloc = leak_detector_create();
 
     // normal case
-    str  parts[] = {S("hello"), S(" "), S("world")};
-    str  r       = str_cat_array(alloc, (str_sized){.v = parts, .size = 3});
+    str parts[] = {S("hello"), S(" "), S("world")};
+    str r       = str_cat_array(alloc, (str_sized){.v = parts, .size = 3});
     error += str_eq(r, S("hello world")) ? 0 : 1;
     str_deinit(alloc, &r);
 
@@ -696,7 +696,7 @@ static int test_str_fmt(void) {
     int        error = 0;
     allocator *alloc = leak_detector_create();
 
-    str s = str_fmt(alloc, "%s %d", "hello", 42);
+    str        s     = str_fmt(alloc, "%s %d", "hello", 42);
     error += str_eq(s, S("hello 42")) ? 0 : 1;
     str_deinit(alloc, &s);
 

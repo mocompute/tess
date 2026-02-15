@@ -20,6 +20,6 @@ void                 transpile_set_verbose(transpile *, int);
 
 // -- stats --
 
-void                 transpile_get_arena_stats(transpile *, arena_stats *out);
+void transpile_get_arena_stats(transpile *, arena_stats *out);
 
 #endif

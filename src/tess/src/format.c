@@ -381,6 +381,22 @@ static char *normalize_ops(allocator *alloc, char const *line) {
             continue;
         }
 
+        // Square brackets (type arguments) — attach to preceding identifier
+        if (c == '[') {
+            while (out.size > 0 && out.v[out.size - 1] == ' ') out.size--;
+            EMIT_CHAR(out, c);
+            continue;
+        }
+
+        // Open paren after type args — no space: foo[T]( not foo[T] (
+        if (c == '(') {
+            if (out.size > 0 && last_nonspace(&out) == ']') {
+                while (out.size > 0 && out.v[out.size - 1] == ' ') out.size--;
+            }
+            EMIT_CHAR(out, c);
+            continue;
+        }
+
         if (c == '{') {
             if (out.size > 0 && out.v[out.size - 1] != ' ') EMIT_CHAR(out, ' ');
             EMIT_CHAR(out, c);
@@ -992,12 +1008,13 @@ static int starts_with_binary_op(char const *trimmed) {
 }
 
 // Return the width of the leading keyword + space for continuation indent.
-// "if " -> 3, "while " -> 6, "case " -> 5, "for " -> 4
+// "if " -> 3, "while " -> 6, "case " or "when " -> 5, "for " -> 4
 // Returns INDENT_WIDTH as fallback.
 static int keyword_cont_width(char const *trimmed) {
     if (starts_with(trimmed, "if ")) return 3;
     if (starts_with(trimmed, "while ")) return 6;
     if (starts_with(trimmed, "case ")) return 5;
+    if (starts_with(trimmed, "when ")) return 5;
     if (starts_with(trimmed, "for ")) return 4;
     return INDENT_WIDTH;
 }

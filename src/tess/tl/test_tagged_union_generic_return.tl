@@ -1,6 +1,6 @@
 #module main
 
-T(a): | Has { v: a }
+T[a]: | Has { v: a }
       | Empty
 
 make_has(x) {

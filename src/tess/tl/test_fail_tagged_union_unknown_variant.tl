@@ -12,7 +12,7 @@ main() {
     s := Foo.Circle(2.0)
 
     // Error: Point is not a valid variant of Shape
-    case s: Foo.Shape {
+    when s {
         p: Point { 0.0 }
         else { 1.0 }
     }
