@@ -990,6 +990,7 @@ static char e2e_stdlib_dir[512];
 
 static void init_e2e_paths(void) {
 #if defined(TEST_TESS_EXE) && defined(TEST_STDLIB_DIR)
+    (void)e2e_project_root;
     snprintf(e2e_tess_exe, sizeof(e2e_tess_exe), "%s", TEST_TESS_EXE);
     snprintf(e2e_stdlib_dir, sizeof(e2e_stdlib_dir), "%s", TEST_STDLIB_DIR);
 #else
