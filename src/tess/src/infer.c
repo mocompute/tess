@@ -974,7 +974,6 @@ static int unresolved_type_error(tl_infer *self, ast_node const *node) {
 // type errors on failure.
 
 static void log_constraint(tl_infer *, tl_polytype *, tl_polytype *, ast_node const *);
-static void log_constraint_mono(tl_infer *, tl_monotype *, tl_monotype *, ast_node const *);
 static void log_type_error(tl_infer *, tl_polytype *, tl_polytype *, ast_node const *);
 static void log_type_error_mm(tl_infer *, tl_monotype *, tl_monotype *, ast_node const *);
 
@@ -6359,15 +6358,6 @@ static void log_constraint(tl_infer *self, tl_polytype *left, tl_polytype *right
     if (!self->verbose) return;
     str left_str  = tl_polytype_to_string(self->transient, left);
     str right_str = tl_polytype_to_string(self->transient, right);
-    str node_str  = v2_ast_node_to_string(self->transient, node);
-    dbg(self, "constrain: %s : %s from %s", str_cstr(&left_str), str_cstr(&right_str), str_cstr(&node_str));
-}
-
-__attribute__((unused)) static void log_constraint_mono(tl_infer *self, tl_monotype *left,
-                                                        tl_monotype *right, ast_node const *node) {
-    if (!self->verbose) return;
-    str left_str  = tl_monotype_to_string(self->transient, left);
-    str right_str = tl_monotype_to_string(self->transient, right);
     str node_str  = v2_ast_node_to_string(self->transient, node);
     dbg(self, "constrain: %s : %s from %s", str_cstr(&left_str), str_cstr(&right_str), str_cstr(&node_str));
 }
