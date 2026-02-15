@@ -329,6 +329,7 @@ test-vendor: build-vendor-tests
 # ------------------------------------------------------------------------------
 
 TL_TESTS =					\
+	_Exit					\
 	address_of				\
 	alignof					\
 	alloc_align				\
@@ -338,47 +339,43 @@ TL_TESTS =					\
 	apply_generic_through_pointer		\
 	apply_lambda				\
 	arithmetic_unary_op			\
+	arity_overload				\
 	array_api				\
 	array_comprehensive			\
 	array_index_binary_op			\
 	array_sort				\
-	arity_overload				\
 	assignment_by_op			\
 	atexit					\
-	_Exit					\
 	attributes				\
 	binop					\
 	bitwise_operators			\
 	block_expression			\
 	builtin_option				\
 	builtin_result				\
-	c_keywords				\
-	carray_struct_field			\
 	c_div					\
-	c_symbol_annotation			\
+	c_keywords				\
 	c_struct				\
+	c_symbol_annotation			\
 	c_timespec				\
 	carray					\
+	carray_struct_field			\
 	case_basic_else				\
 	case_pred_ident				\
 	case_pred_lambda			\
 	char_literal				\
 	closure_fun_ptr				\
+	compound_assignment			\
 	conditional_compile_auto_define		\
 	conditional_compile_define		\
 	conditional_compile_import		\
 	conditional_compile_nested		\
 	const					\
-	compound_assignment			\
 	defun_inline_type			\
 	dynamic_array				\
-	enum_no_module				\
-	enum_module				\
 	embed_c					\
+	enum_module				\
+	enum_no_module				\
 	escape_sequences			\
-	if_basic				\
-	if_expression				\
-	integer_literals			\
 	factorial				\
 	fatal_intrinsic				\
 	float_scientific			\
@@ -389,20 +386,25 @@ TL_TESTS =					\
 	forward_decl_not_needed			\
 	function_pointer_argument		\
 	function_pointer_array			\
-	function_pointer_mutable		\
-	function_pointer_value			\
 	function_pointer_in_struct		\
 	function_pointer_in_struct_direct	\
 	function_pointer_in_struct_direct_2	\
-	function_pointer_recursive_type		\
+	function_pointer_mutable		\
 	function_pointer_pointer		\
+	function_pointer_recursive_type		\
+	function_pointer_value			\
 	generic_lambda				\
 	global_variables			\
 	hello					\
-	lambda_arg_unused			\
-	lambda_basic				\
+	if_basic				\
+	if_expression				\
+	import_relative				\
+	import_relative_dotdot			\
+	integer_literals			\
 	lambda_apply				\
 	lambda_arg_annotated			\
+	lambda_arg_unused			\
+	lambda_basic				\
 	lambda_capture_mutate			\
 	lambda_immediate			\
 	let_in_basic				\
@@ -420,23 +422,23 @@ TL_TESTS =					\
 	module_nested				\
 	module_prelude				\
 	mutual_recursion			\
+	mutual_recursion_both_referenced	\
 	mutual_recursion_module			\
 	mutual_recursion_module_apply		\
-	mutual_recursion_both_referenced	\
+	nested_lambda_context			\
 	nested_struct				\
 	nested_struct_access			\
 	nested_type_cross_module_conflict	\
-	nested_lambda_context			\
 	number_formats				\
 	number_separators			\
 	pack					\
-	printf					\
 	pointer_array				\
 	pointer_cast				\
 	pointer_cast_struct			\
 	pointer_compare_null			\
 	pointer_deref				\
 	pointer_deref_double			\
+	printf					\
 	reassign_into_stack_lambda		\
 	reassign_result				\
 	recursive_type				\
@@ -455,16 +457,39 @@ TL_TESTS =					\
 	static_init				\
 	static_init_struct			\
 	static_init_struct_fun_ptr		\
-	strcmp					\
 	str					\
+	strcmp					\
 	struct_concrete				\
+	struct_construction			\
 	struct_empty				\
+	struct_field_ptr_cast			\
+	struct_field_ptr_cast_inline		\
+	struct_field_ptr_cast_multi		\
 	struct_generic				\
 	struct_generic_function_signature	\
-	struct_construction			\
-	struct_field_ptr_cast			\
-	struct_field_ptr_cast_multi		\
-	struct_field_ptr_cast_inline		\
+	tagged_union				\
+	tagged_union_carray			\
+	tagged_union_existing_type		\
+	tagged_union_existing_type_generic	\
+	tagged_union_existing_type_main		\
+	tagged_union_function_pointer		\
+	tagged_union_generic_basic		\
+	tagged_union_generic_case		\
+	tagged_union_generic_func		\
+	tagged_union_generic_function_pointer	\
+	tagged_union_generic_multi		\
+	tagged_union_generic_nested		\
+	tagged_union_generic_param		\
+	tagged_union_generic_return		\
+	tagged_union_make			\
+	tagged_union_many_variants		\
+	tagged_union_mutable_case		\
+	tagged_union_nested_when		\
+	tagged_union_option			\
+	tagged_union_pointer_field		\
+	tagged_union_recursive_type		\
+	tagged_union_scoped_variant		\
+	tagged_union_unscoped			\
 	tail_call				\
 	type_alias_generic			\
 	type_alias_local			\
@@ -478,65 +503,42 @@ TL_TESTS =					\
 	type_alias_module_multi_arg_direct_compatible	\
 	type_alias_module_simple		\
 	type_alias_module_simple_direct		\
+	type_argument_field_annotation		\
+	type_arguments_annotations		\
+	type_literal_generic			\
 	type_predicate				\
-	type_predicate_field			\
 	type_predicate_branch			\
+	type_predicate_field			\
 	type_predicate_generic			\
 	type_predicate_generic_type		\
 	type_predicate_type_arg			\
-	tagged_union				\
-	tagged_union_generic_basic		\
-	tagged_union_generic_case		\
-	tagged_union_generic_func		\
-	tagged_union_generic_multi		\
-	tagged_union_generic_nested		\
-	tagged_union_generic_param		\
-	tagged_union_generic_return		\
-	tagged_union_mutable_case		\
-	tagged_union_unscoped			\
-	tagged_union_scoped_variant		\
-	tagged_union_make			\
-	tagged_union_existing_type		\
-	tagged_union_existing_type_main		\
-	tagged_union_function_pointer		\
-	tagged_union_option			\
-	tagged_union_existing_type_generic	\
-	tagged_union_generic_function_pointer	\
-	tagged_union_many_variants		\
-	tagged_union_nested_when		\
-	tagged_union_pointer_field		\
-	tagged_union_recursive_type		\
-	tagged_union_carray			\
-	type_literal_generic			\
-	type_arguments_annotations		\
-	type_argument_field_annotation		\
 	types_float				\
 	types_integer				\
 	types_integer_cast			\
+	uninitialized_fields			\
 	union_basic				\
 	union_module_intermediate		\
 	union_module_second_variant		\
-	uninitialized_fields			\
 	while_break				\
 	while_continue				\
 	while_statement				\
-	while_update_statement			\
-	import_relative				\
-	import_relative_dotdot
+	while_update_statement
 
 TL_FAIL_TESTS =					\
 	fail_case_float				\
-	fail_const_mutation			\
+	fail_concrete_fun_mismatch		\
 	fail_const_field_mutation		\
 	fail_const_index_mutation		\
 	fail_const_lambda_mutation		\
+	fail_const_mutation			\
 	fail_const_strip			\
 	fail_const_strip_lambda			\
 	fail_const_strip_nested			\
-	fail_concrete_fun_mismatch		\
 	fail_double_underscore			\
 	fail_double_underscore_module		\
 	fail_generic_unused_type_param		\
+	fail_import_absolute			\
+	fail_import_missing_quotes		\
 	fail_lambda_implicit_return		\
 	fail_lambda_return			\
 	fail_monkey_patch			\
@@ -553,13 +555,11 @@ TL_FAIL_TESTS =					\
 	fail_reserved_type_tu			\
 	fail_reserved_type_union		\
 	fail_tagged_union_duplicate_variant	\
-	fail_tagged_union_missing_case		\
 	fail_tagged_union_existing_type_bad_type_arg \
+	fail_tagged_union_missing_case		\
 	fail_tagged_union_unknown_variant	\
 	fail_type_alias_partial_specialization	\
-	fail_unknown_free_variable		\
-	fail_import_absolute			\
-	fail_import_missing_quotes
+	fail_unknown_free_variable
 
 # Expected runtime failure tests (debug only: must compile, must fail at runtime)
 TL_FAIL_RUNTIME_TESTS =
@@ -568,7 +568,7 @@ TL_FAIL_RUNTIME_TESTS =
 TL_KNOWN_FAIL_FAILURES =
 
 # Tests that should work but currently fail due to compiler bugs
-TL_KNOWN_FAILURES =			\
+TL_KNOWN_FAILURES =				\
 	lambda_immediate_type_argument		\
 	while_empty_body
 
