@@ -292,6 +292,18 @@ static void generate_ifc_blocks(transpile *self) {
     cat_nl(self);
 }
 
+// Resolve a monotype's canonical C name via the type environment (mirrors type_to_c user type logic).
+static str resolve_canonical_name(transpile *self, tl_monotype *mono) {
+    str          name  = mono->cons_inst->special_name;
+    if (str_is_empty(name)) name = mono->cons_inst->def->name;
+    tl_monotype *found = env_lookup(self, name);
+    if (found && tl_monotype_is_inst(found)) {
+        str sn = found->cons_inst->special_name;
+        return str_is_empty(sn) ? found->cons_inst->def->name : sn;
+    }
+    return name;
+}
+
 static int should_skip_user_type(transpile *self, str name) {
     tl_monotype *env_type = env_lookup(self, name);
     if (!env_type) return 1;
@@ -420,10 +432,58 @@ static void generate_user_types(transpile *self) {
         generate_one_user_type(self, node);
     }
 
-    // Then emit specialized user types.
-    forall(i, self->synthesized_nodes) {
-        ast_node *node = self->synthesized_nodes.v[i];
-        generate_one_user_type(self, node);
+    // Emit specialized user types in dependency order: a type that contains another
+    // synthesized type by value (not through Ptr) must be emitted after it.
+    {
+        u32      n           = self->synthesized_nodes.size;
+        hashmap *synth_names = hset_create(self->transient, n * 2 + 1);
+        hashmap *emitted     = hset_create(self->transient, n * 2 + 1);
+        u8      *done        = alloc_calloc(self->transient, n, 1);
+
+        for (u32 i = 0; i < n; i++) {
+            ast_node *node = self->synthesized_nodes.v[i];
+            if (ast_node_is_utd(node))
+                str_hset_insert(&synth_names, toplevel_name(node));
+        }
+
+        int progress = 1;
+        while (progress) {
+            progress = 0;
+            for (u32 i = 0; i < n; i++) {
+                if (done[i]) continue;
+                ast_node *node = self->synthesized_nodes.v[i];
+
+                if (!ast_node_is_utd(node) || !node->type || !tl_monotype_is_inst(node->type->type) ||
+                    !tl_polytype_is_concrete(node->type)) {
+                    done[i]  = 1;
+                    progress = 1;
+                    continue;
+                }
+
+                int               blocked = 0;
+                tl_monotype_sized args    = node->type->type->cons_inst->args;
+                forall(j, args) {
+                    if (tl_monotype_is_inst(args.v[j])) {
+                        str dep = resolve_canonical_name(self, args.v[j]);
+                        if (str_hset_contains(synth_names, dep) && !str_hset_contains(emitted, dep)) {
+                            blocked = 1;
+                            break;
+                        }
+                    }
+                }
+
+                if (!blocked) {
+                    generate_one_user_type(self, node);
+                    str_hset_insert(&emitted, toplevel_name(node));
+                    done[i]  = 1;
+                    progress = 1;
+                }
+            }
+        }
+
+        for (u32 i = 0; i < n; i++) {
+            if (!done[i]) generate_one_user_type(self, self->synthesized_nodes.v[i]);
+        }
     }
 
     cat_nl(self);

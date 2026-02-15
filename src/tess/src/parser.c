@@ -3768,6 +3768,7 @@ static int toplevel_tagged_union(parser *self) {
         array_shrink(tag_idents);
 
         ast_node *tag_enum = create_enum_utd(self, tag_name, tag_idents);
+        tag_enum->user_type_def.tagged_union_name = tu_name_str;
         add_module_symbol(self, tag_name);
         mangle_name(self, tag_name);
         array_push(result_nodes, tag_enum);
@@ -3789,6 +3790,7 @@ static int toplevel_tagged_union(parser *self) {
           collect_used_type_params(self, n_type_args, type_args, v->fields, &var_type_args);
 
         ast_node *var_struct = create_struct_utd(self, var_name, var_n_type_args, var_type_args, v->fields);
+        var_struct->user_type_def.tagged_union_name = tu_name_str;
         add_module_symbol(self, var_name);
         mangle_name(self, var_name);
         array_push(result_nodes, var_struct);
@@ -3861,6 +3863,7 @@ static int toplevel_tagged_union(parser *self) {
 
         ast_node *union_utd =
           create_union_utd(self, union_name, n_type_args, union_type_args, union_fields);
+        union_utd->user_type_def.tagged_union_name = tu_name_str;
         add_module_symbol(self, union_name);
         mangle_name(self, union_name);
         array_push(result_nodes, union_utd);
@@ -3921,6 +3924,7 @@ static int toplevel_tagged_union(parser *self) {
 
         ast_node *wrapper_utd =
           create_struct_utd(self, wrapper_name, n_type_args, wrapper_type_args, wrapper_fields);
+        wrapper_utd->user_type_def.tagged_union_name = tu_name_str;
         add_module_symbol(self, wrapper_name);
         mangle_name(self, wrapper_name);
         array_push(result_nodes, wrapper_utd);

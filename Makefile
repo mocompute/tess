@@ -503,6 +503,7 @@ TL_TESTS =					\
 	tagged_union_many_variants		\
 	tagged_union_nested_when		\
 	tagged_union_pointer_field		\
+	tagged_union_recursive_type		\
 	tagged_union_carray			\
 	type_literal_generic			\
 	type_arguments_annotations		\
@@ -567,7 +568,6 @@ TL_KNOWN_FAIL_FAILURES =
 # Tests that should work but currently fail due to compiler bugs
 TL_KNOWN_FAILURES =			\
 	lambda_immediate_type_argument		\
-	tagged_union_recursive_type		\
 	type_predicate_generic_type		\
 	while_empty_body
 
