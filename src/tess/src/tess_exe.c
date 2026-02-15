@@ -74,6 +74,9 @@ typedef struct {
         size_t transpile_final_mem;
         double cc_time_ms;
         size_t cc_input_size; // Size of C source passed to compiler
+
+        tl_infer_phase_stats infer_phases;
+        tl_infer_counters    infer_counters;
     } stats;
 } state;
 
@@ -843,6 +846,7 @@ int compile(state *self) {
     tl_infer_result infer_result = {0};
     tl_infer_set_verbose(infer, self->verbose);
     tl_infer_set_verbose_ast(infer, self->verbose_ast);
+    if (self->report_stats) tl_infer_set_report_stats(infer, 1);
     if (tl_infer_run(infer, (ast_node_sized)sized_all(nodes), &infer_result)) {
         tl_infer_report_errors(infer);
         error++;
@@ -856,6 +860,9 @@ int compile(state *self) {
         tl_infer_get_arena_stats(infer, &infer_arena_stats);
         self->stats.infer_peak_mem  = infer_arena_stats.peak_allocated;
         self->stats.infer_final_mem = infer_arena_stats.allocated;
+
+        self->stats.infer_phases   = *tl_infer_get_phase_stats(infer);
+        self->stats.infer_counters = *tl_infer_get_counters(infer);
     }
 
     // === TRANSPILATION PHASE ===
@@ -1587,6 +1594,35 @@ done:
         }
 
         print_stats_footer(total_ms, total_peak);
+
+        // Inference sub-phase breakdown
+        tl_infer_phase_stats const *ip = &self.stats.infer_phases;
+        tl_infer_counters const    *ic = &self.stats.infer_counters;
+
+        fprintf(stderr, "=== Type Inference Phases ===\n\n");
+        fprintf(stderr, "%-24s %12s\n", "Sub-phase", "Time (ms)");
+        fprintf(stderr, "%-24s %12s\n", "------------------------", "------------");
+        fprintf(stderr, "%-24s %12.3f\n", "Alpha Conversion", ip->alpha_ms);
+        fprintf(stderr, "%-24s %12.3f\n", "Load Toplevels", ip->load_toplevels_ms);
+        fprintf(stderr, "%-24s %12.3f\n", "Generic Inference", ip->generic_inference_ms);
+        fprintf(stderr, "%-24s %12.3f\n", "Free Variables", ip->free_vars_ms);
+        fprintf(stderr, "%-24s %12.3f\n", "Specialization", ip->specialize_ms);
+        fprintf(stderr, "%-24s %12.3f\n", "Tree Shaking", ip->tree_shake_ms);
+        fprintf(stderr, "%-24s %12.3f\n", "Type Updates", ip->update_types_ms);
+        fprintf(stderr, "\n");
+
+        fprintf(stderr, "=== Inference Counters ===\n\n");
+        fprintf(stderr, "Traversals (infer):        %u\n", ic->traverse_infer_calls);
+        fprintf(stderr, "Traversals (specialize):   %u\n", ic->traverse_specialize_calls);
+        fprintf(stderr, "Traversals (update types): %u\n", ic->traverse_update_types_calls);
+        fprintf(stderr, "Nodes visited (total):     %llu\n", (unsigned long long)ic->traverse_nodes_visited);
+        fprintf(stderr, "Specializations created:   %u\n", ic->specialize_created);
+        fprintf(stderr, "Specialization cache hits: %u\n", ic->specialize_cache_hits);
+        fprintf(stderr, "Already specialized:       %u\n", ic->specialize_already);
+        fprintf(stderr, "Subs applications:         %u\n", ic->subs_apply_calls);
+        fprintf(stderr, "Subs nodes visited:        %llu\n", (unsigned long long)ic->subs_nodes_visited);
+        fprintf(stderr, "Unifications:              %u\n", ic->unify_calls);
+        fprintf(stderr, "\n");
     }
 
     if (self.report_time) {

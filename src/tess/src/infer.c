@@ -5,6 +5,7 @@
 #include "error.h"
 #include "hash.h"
 #include "parser.h"
+#include "platform.h"
 #include "str.h"
 #include "type.h"
 
@@ -102,6 +103,11 @@ struct tl_infer {
     int                             indent_level;
 
     int is_constrain_ignore_error; // non-zero if no error should be reported during unification
+
+    int report_stats;
+
+    tl_infer_phase_stats phase_stats;
+    tl_infer_counters    counters;
 };
 
 typedef struct {
@@ -185,6 +191,10 @@ tl_infer        *tl_infer_create(allocator *alloc, tl_infer_opts const *opts) {
     self->indent_level       = 0;
     self->is_constrain_ignore_error = 0;
 
+    self->report_stats       = 0;
+    alloc_zero(&self->phase_stats);
+    alloc_zero(&self->counters);
+
     tl_type_registry_parse_type_ctx_init(self->arena, &self->type_parse_ctx, null);
 
     tl_type_registry_parse_type_ctx_init(self->arena, &self->hot_parse_ctx, null);
@@ -240,6 +250,18 @@ tl_type_registry *tl_infer_get_registry(tl_infer *self) {
 
 void tl_infer_get_arena_stats(tl_infer *self, arena_stats *out) {
     arena_get_stats(self->arena, out);
+}
+
+void tl_infer_set_report_stats(tl_infer *self, int enable) {
+    self->report_stats = enable;
+}
+
+tl_infer_phase_stats const *tl_infer_get_phase_stats(tl_infer const *self) {
+    return &self->phase_stats;
+}
+
+tl_infer_counters const *tl_infer_get_counters(tl_infer const *self) {
+    return &self->counters;
 }
 
 // ============================================================================
@@ -1020,6 +1042,7 @@ static int constrain_mono(tl_infer *self, tl_monotype *left, tl_monotype *right,
 }
 
 static int constrain(tl_infer *self, tl_polytype *left, tl_polytype *right, ast_node const *node) {
+    if (self->report_stats) self->counters.unify_calls++;
     if (left == right) return 0;
     if (0) {
         log_constraint(self, left, right, node);
@@ -2297,6 +2320,7 @@ static int traverse_ast_case(tl_infer *self, traverse_ctx *ctx, ast_node *node, 
 
 static int traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, traverse_cb cb) {
     if (null == node) return 0;
+    if (self->report_stats) self->counters.traverse_nodes_visited++;
 
     switch (node->tag) {
     case ast_attribute_set:
@@ -3853,6 +3877,7 @@ static void specialized_add_to_env(tl_infer *self, str inst_name, tl_monotype *m
 static void do_apply_subs(void *ctx, ast_node *node);
 
 static void apply_subs_to_ast_node(tl_infer *self, ast_node *node) {
+    if (self->report_stats) self->counters.subs_apply_calls++;
     ast_node_dfs(self, node, do_apply_subs);
 }
 
@@ -3866,6 +3891,7 @@ static int post_specialize(tl_infer *self, traverse_ctx *traverse_ctx, ast_node 
             tl_monotype *result_type  = tl_monotype_arrow_result(callsite);
             traverse_ctx->result_type = result_type;
         }
+        if (self->report_stats) self->counters.traverse_infer_calls++;
         if (traverse_ast(self, traverse_ctx, infer_target, infer_traverse_cb)) {
             dbg(self, "note: post_specialize failed infer");
             return 1;
@@ -3873,6 +3899,7 @@ static int post_specialize(tl_infer *self, traverse_ctx *traverse_ctx, ast_node 
         // Apply substitutions to AST before specialization, so types are concrete
         apply_subs_to_ast_node(self, infer_target);
 
+        if (self->report_stats) self->counters.traverse_specialize_calls++;
         if (traverse_ast(self, traverse_ctx, infer_target, specialize_applications_cb)) {
             dbg(self, "note: post_specialize failed specialize");
             return 1;
@@ -3906,12 +3933,18 @@ static str  specialize_arrow(tl_infer *self, traverse_ctx *traverse_ctx, str nam
 #endif
 
     // 1. Check if already specialized
-    if (instance_name_exists(self, name)) return name;
+    if (instance_name_exists(self, name)) {
+        if (self->report_stats) self->counters.specialize_already++;
+        return name;
+    }
 
     // 2. Check cache for this name+type combination
     hashmap *outer_type_args = traverse_ctx ? traverse_ctx->type_arguments : null;
     str     *found = instance_lookup_arrow(self, name, arrow, callsite_type_arguments, outer_type_args);
-    if (found) return *found;
+    if (found) {
+        if (self->report_stats) self->counters.specialize_cache_hits++;
+        return *found;
+    }
 
     // 2a. Check that name is valid
     ast_node *toplevel = toplevel_get(self, name);
@@ -3921,6 +3954,7 @@ static str  specialize_arrow(tl_infer *self, traverse_ctx *traverse_ctx, str nam
     name_and_type key = make_instance_key(self, name, arrow, callsite_type_arguments, outer_type_args);
     str           inst_name = next_instantiation(self, name);
     instance_add(self, &key, inst_name);
+    if (self->report_stats) self->counters.specialize_created++;
 
     // 4. Clone generic function's AST
     ast_node *generic_node =
@@ -5113,6 +5147,7 @@ static int infer_one(tl_infer *self, ast_node *infer_target, tl_polytype *arrow)
         fatal("logic error");
 
     traverse_ctx *traverse = traverse_ctx_create(self->transient);
+    if (self->report_stats) self->counters.traverse_infer_calls++;
     if (traverse_ast(self, traverse, infer_target, infer_traverse_cb)) return 1;
 
     // constrain arrow result type and infer target's type
@@ -5620,6 +5655,7 @@ static void update_specialized_types(tl_infer *self) {
     ast_node        *node;
     while ((node = toplevel_iter(self, &iter))) {
         if (ast_node_is_utd(node)) continue;
+        if (self->report_stats) self->counters.traverse_update_types_calls++;
         traverse_ast(self, traverse, node, update_types_cb);
         // Note: traverse_ast does not traverse let nodes directly (just their sub-parts)
     }
@@ -5900,6 +5936,7 @@ static int run_specialize(tl_infer *self, ast_node_sized nodes, ast_node *main) 
     traverse_ctx *traverse = traverse_ctx_create(self->transient);
 
     if (main) {
+        if (self->report_stats) self->counters.traverse_specialize_calls++;
         traverse_ast(self, traverse, main, specialize_applications_cb);
     } else {
         assert(self->opts.is_library);
@@ -5935,6 +5972,7 @@ static int run_specialize(tl_infer *self, ast_node_sized nodes, ast_node *main) 
         ast_node *node = nodes.v[i];
 
         if (ast_node_is_let_in(node)) {
+            if (self->report_stats) self->counters.traverse_specialize_calls++;
             traverse_ast(self, traverse, node, specialize_applications_cb);
         }
     }
@@ -6019,10 +6057,30 @@ static int run_update_types(tl_infer *self) {
 int tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *out_result) {
     dbg(self, "-- start inference --");
 
+    hires_timer phase_timer;
+    if (self->report_stats) hires_timer_init(&phase_timer);
+
+#define PHASE_START() do { if (self->report_stats) hires_timer_start(&phase_timer); } while (0)
+#define PHASE_STOP(field) do { if (self->report_stats) { \
+    hires_timer_stop(&phase_timer); \
+    self->phase_stats.field = hires_timer_elapsed_sec(&phase_timer) * 1000.0; \
+} } while (0)
+
+    PHASE_START();
     if (run_alpha_conversion(self, nodes)) return 1;
+    PHASE_STOP(alpha_ms);
+
+    PHASE_START();
     if (run_load_toplevels(self, nodes)) return 1;
+    PHASE_STOP(load_toplevels_ms);
+
+    PHASE_START();
     if (run_generic_inference(self, nodes)) return 1;
+    PHASE_STOP(generic_inference_ms);
+
+    PHASE_START();
     if (run_check_free_variables(self)) return 1;
+    PHASE_STOP(free_vars_ms);
 
     ast_node *main = null;
     if (!self->opts.is_library) {
@@ -6034,9 +6092,20 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *out_resu
         main = *found_main;
     }
 
+    PHASE_START();
     if (run_specialize(self, nodes, main)) return 1;
+    PHASE_STOP(specialize_ms);
+
+    PHASE_START();
     if (run_tree_shake(self, main)) return 1;
+    PHASE_STOP(tree_shake_ms);
+
+    PHASE_START();
     if (run_update_types(self)) return 1;
+    PHASE_STOP(update_types_ms);
+
+#undef PHASE_START
+#undef PHASE_STOP
 
     if (out_result) {
         out_result->infer     = self;
@@ -6138,12 +6207,14 @@ static void log_env(tl_infer const *self) {
 
 static void do_apply_subs(void *ctx, ast_node *node) {
     tl_infer *self = ctx;
+    if (self->report_stats) self->counters.subs_nodes_visited++;
     if (node->type) {
         tl_polytype_substitute(self->arena, node->type, self->subs);
     }
 }
 
 static void apply_subs_to_ast(tl_infer *self) {
+    if (self->report_stats) self->counters.subs_apply_calls++;
     hashmap_iterator iter = {0};
     ast_node        *node;
     while ((node = ast_node_str_map_iter(self->toplevels, &iter))) {

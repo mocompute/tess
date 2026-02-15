@@ -47,4 +47,34 @@ int                 is_module_init(str);
 
 void                tl_infer_get_arena_stats(tl_infer *, arena_stats *out);
 
+typedef struct {
+    double alpha_ms;
+    double load_toplevels_ms;
+    double generic_inference_ms;
+    double free_vars_ms;
+    double specialize_ms;
+    double tree_shake_ms;
+    double update_types_ms;
+} tl_infer_phase_stats;
+
+typedef struct {
+    u32 traverse_infer_calls;
+    u32 traverse_specialize_calls;
+    u32 traverse_update_types_calls;
+    u64 traverse_nodes_visited;
+
+    u32 specialize_created;
+    u32 specialize_cache_hits;
+    u32 specialize_already;
+
+    u32 subs_apply_calls;
+    u64 subs_nodes_visited;
+
+    u32 unify_calls;
+} tl_infer_counters;
+
+void                       tl_infer_set_report_stats(tl_infer *, int);
+tl_infer_phase_stats const *tl_infer_get_phase_stats(tl_infer const *);
+tl_infer_counters const    *tl_infer_get_counters(tl_infer const *);
+
 #endif
