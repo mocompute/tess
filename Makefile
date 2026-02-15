@@ -481,6 +481,7 @@ TL_TESTS =					\
 	type_predicate_field			\
 	type_predicate_branch			\
 	type_predicate_generic			\
+	type_predicate_generic_type		\
 	type_predicate_type_arg			\
 	tagged_union				\
 	tagged_union_generic_basic		\
@@ -568,7 +569,6 @@ TL_KNOWN_FAIL_FAILURES =
 # Tests that should work but currently fail due to compiler bugs
 TL_KNOWN_FAILURES =			\
 	lambda_immediate_type_argument		\
-	type_predicate_generic_type		\
 	while_empty_body
 
 # Total test count across all suites

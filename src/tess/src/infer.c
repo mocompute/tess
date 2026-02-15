@@ -2217,6 +2217,12 @@ static void prepare_tagged_union_bindings(tl_infer *self, traverse_ctx *ctx, ast
         ast_node *cond = node->case_.conditions.v[i];
         if (!ast_node_is_symbol(cond) || !cond->symbol.annotation) continue;
 
+        // Don't overwrite an already-specialized annotation type (set by specialize_case).
+        // Later traversals (Phase 7) re-enter this function but must not clobber specialization.
+        if (cond->symbol.annotation_type &&
+            tl_monotype_is_inst_specialized(cond->symbol.annotation_type->type))
+            continue;
+
         str          variant_name = ast_node_name_original(cond->symbol.annotation);
         tl_monotype *variant_type = tagged_union_find_variant(wrapper_type, variant_name, null);
         if (!variant_type) continue; // will be caught later by infer_tagged_union_case

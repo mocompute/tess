@@ -430,6 +430,7 @@ tl_create_test(type_predicate)
 tl_create_test(type_predicate_field)
 tl_create_test(type_predicate_branch)
 tl_create_test(type_predicate_generic)
+tl_create_test(type_predicate_generic_type)
 tl_create_test(type_predicate_type_arg)
 tl_create_test(types_float)
 tl_create_test(types_integer)
@@ -512,5 +513,4 @@ tl_create_build_fail_test(fail_import_missing_quotes)
 
 # Known failures: these should work but a compiler bug makes them fail
 tl_create_known_failure(lambda_immediate_type_argument)
-tl_create_known_failure(type_predicate_generic_type)
 tl_create_known_failure(while_empty_body)
