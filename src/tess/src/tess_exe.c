@@ -1622,6 +1622,28 @@ done:
         fprintf(stderr, "Subs applications:         %u\n", ic->subs_apply_calls);
         fprintf(stderr, "Subs nodes visited:        %llu\n", (unsigned long long)ic->subs_nodes_visited);
         fprintf(stderr, "Unifications:              %u\n", ic->unify_calls);
+        fprintf(stderr, "Unification time:          %.3f ms\n", ic->unify_ms);
+        fprintf(stderr, "\n");
+
+        fprintf(stderr, "=== Toplevel Survival ===\n\n");
+        fprintf(stderr, "Inferred (Phase 3):        %u\n", ic->toplevels_inferred);
+        fprintf(stderr, "After specialize (Phase 5): %u\n", ic->toplevels_after_specialize);
+        fprintf(stderr, "After tree shake (Phase 6): %u\n", ic->toplevels_after_tree_shake);
+        fprintf(stderr, "\n");
+
+        fprintf(stderr, "=== Specialization Inner Loop ===\n\n");
+        fprintf(stderr, "Clone + alpha-rename:      %.3f ms\n", ic->specialize_clone_ms);
+        fprintf(stderr, "Re-inference:              %.3f ms\n", ic->specialize_infer_ms);
+        fprintf(stderr, "Subs application:          %.3f ms\n", ic->specialize_subs_ms);
+        fprintf(stderr, "Recursive specialize:      %.3f ms\n", ic->specialize_recurse_ms);
+        fprintf(stderr, "\n");
+
+        fprintf(stderr, "=== Type Updates Breakdown ===\n\n");
+        fprintf(stderr, "Env pass:                  %.3f ms  (%u entries)\n",
+                ic->update_types_env_ms, ic->update_types_env_count);
+        fprintf(stderr, "AST traverse pass:         %.3f ms  (%u toplevels)\n",
+                ic->update_types_ast_ms, ic->traverse_update_types_calls);
+        fprintf(stderr, "Type constructor calls:     %u\n", ic->update_types_type_cons_calls);
         fprintf(stderr, "\n");
     }
 

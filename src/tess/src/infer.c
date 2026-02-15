@@ -1048,6 +1048,9 @@ static int constrain(tl_infer *self, tl_polytype *left, tl_polytype *right, ast_
         log_constraint(self, left, right, node);
     }
 
+    hires_timer ct;
+    if (self->report_stats) { hires_timer_init(&ct); hires_timer_start(&ct); }
+
     tl_monotype *lhs = null, *rhs = null;
 
     if (left->quantifiers.size) lhs = tl_polytype_instantiate(self->arena, left, self->subs);
@@ -1055,7 +1058,13 @@ static int constrain(tl_infer *self, tl_polytype *left, tl_polytype *right, ast_
     if (right->quantifiers.size) rhs = tl_polytype_instantiate(self->arena, right, self->subs);
     else rhs = right->type;
 
-    return constrain_mono(self, lhs, rhs, node);
+    int res = constrain_mono(self, lhs, rhs, node);
+
+    if (self->report_stats) {
+        hires_timer_stop(&ct);
+        self->counters.unify_ms += hires_timer_elapsed_sec(&ct) * 1000.0;
+    }
+    return res;
 }
 
 static int constrain_pm(tl_infer *self, tl_polytype *left, tl_monotype *right, ast_node const *node) {
@@ -3886,24 +3895,34 @@ static int post_specialize(tl_infer *self, traverse_ctx *traverse_ctx, ast_node 
     // Do this after creating a specialised function
     ast_node *infer_target = get_infer_target(special);
     if (infer_target) {
+        hires_timer st;
+        int stats = self->report_stats;
+
         // set result type into traverse_ctx
         if (callsite) {
             tl_monotype *result_type  = tl_monotype_arrow_result(callsite);
             traverse_ctx->result_type = result_type;
         }
-        if (self->report_stats) self->counters.traverse_infer_calls++;
+        if (stats) self->counters.traverse_infer_calls++;
+        if (stats) { hires_timer_init(&st); hires_timer_start(&st); }
         if (traverse_ast(self, traverse_ctx, infer_target, infer_traverse_cb)) {
             dbg(self, "note: post_specialize failed infer");
             return 1;
         }
-        // Apply substitutions to AST before specialization, so types are concrete
-        apply_subs_to_ast_node(self, infer_target);
+        if (stats) { hires_timer_stop(&st); self->counters.specialize_infer_ms += hires_timer_elapsed_sec(&st) * 1000.0; }
 
-        if (self->report_stats) self->counters.traverse_specialize_calls++;
+        // Apply substitutions to AST before specialization, so types are concrete
+        if (stats) hires_timer_start(&st);
+        apply_subs_to_ast_node(self, infer_target);
+        if (stats) { hires_timer_stop(&st); self->counters.specialize_subs_ms += hires_timer_elapsed_sec(&st) * 1000.0; }
+
+        if (stats) self->counters.traverse_specialize_calls++;
+        if (stats) hires_timer_start(&st);
         if (traverse_ast(self, traverse_ctx, infer_target, specialize_applications_cb)) {
             dbg(self, "note: post_specialize failed specialize");
             return 1;
         }
+        if (stats) { hires_timer_stop(&st); self->counters.specialize_recurse_ms += hires_timer_elapsed_sec(&st) * 1000.0; }
 
 #if DEBUG_INVARIANTS
         // Invariant: After specialization, all specialized NFA type arguments must be concrete
@@ -3957,9 +3976,15 @@ static str  specialize_arrow(tl_infer *self, traverse_ctx *traverse_ctx, str nam
     if (self->report_stats) self->counters.specialize_created++;
 
     // 4. Clone generic function's AST
+    hires_timer st;
+    if (self->report_stats) { hires_timer_init(&st); hires_timer_start(&st); }
     ast_node *generic_node =
       clone_generic_for_arrow(self, toplevel, arrow, inst_name,
                               traverse_ctx ? traverse_ctx->type_arguments : null, callsite_type_arguments);
+    if (self->report_stats) {
+        hires_timer_stop(&st);
+        self->counters.specialize_clone_ms += hires_timer_elapsed_sec(&st) * 1000.0;
+    }
 
     // 5. Add to environment and toplevel
     specialized_add_to_env(self, inst_name, arrow);
@@ -5460,6 +5485,7 @@ tl_monotype *tl_infer_update_specialized_type_(tl_infer *self, tl_monotype *mono
         str_hset_remove(*in_progress, generic_name);
 
         tl_polytype *replace = null;
+        if (self->report_stats) self->counters.update_types_type_cons_calls++;
         (void)specialize_type_constructor(self, mono->cons_inst->def->generic_name, mono->cons_inst->args,
                                           &replace);
 
@@ -5633,12 +5659,17 @@ static int update_types_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_node 
 
 static void update_specialized_types(tl_infer *self) {
     update_types_ctx ctx = {.in_progress = hset_create(self->transient, 64)};
+    hires_timer ut;
+    int stats = self->report_stats;
+
+    if (stats) { hires_timer_init(&ut); hires_timer_start(&ut); }
 
     // Snapshot the env keys before iterating. update_types_one_type may trigger
     // specialize_type_constructor_ which inserts new entries into the env. Robin Hood
     // hashing can relocate existing entries on insertion, invalidating any data pointers
     // obtained from a prior map_iter call.
     str_array env_keys = str_map_keys(self->transient, self->env->map);
+    if (stats) self->counters.update_types_env_count = env_keys.size;
     forall(ki, env_keys) {
         tl_polytype *poly = tl_type_env_lookup(self->env, env_keys.v[ki]);
         if (!poly) continue;
@@ -5648,17 +5679,21 @@ static void update_specialized_types(tl_infer *self) {
     }
     array_free(env_keys);
 
+    if (stats) { hires_timer_stop(&ut); self->counters.update_types_env_ms = hires_timer_elapsed_sec(&ut) * 1000.0; }
+
     // NOTE: this is an expensive traverse
+    if (stats) hires_timer_start(&ut);
     traverse_ctx *traverse = traverse_ctx_create(self->transient);
     traverse->user         = &ctx;
     hashmap_iterator iter  = {0};
     ast_node        *node;
     while ((node = toplevel_iter(self, &iter))) {
         if (ast_node_is_utd(node)) continue;
-        if (self->report_stats) self->counters.traverse_update_types_calls++;
+        if (stats) self->counters.traverse_update_types_calls++;
         traverse_ast(self, traverse, node, update_types_cb);
         // Note: traverse_ast does not traverse let nodes directly (just their sub-parts)
     }
+    if (stats) { hires_timer_stop(&ut); self->counters.update_types_ast_ms = hires_timer_elapsed_sec(&ut) * 1000.0; }
     arena_reset(self->transient);
 }
 
@@ -5872,11 +5907,14 @@ static int run_load_toplevels(tl_infer *self, ast_node_sized nodes) {
 
 // Phase 3: Generic function type inference.
 static int run_generic_inference(tl_infer *self, ast_node_sized nodes) {
+    u32 count = 0;
     forall(i, nodes) {
         if (ast_node_is_hash_command(nodes.v[i])) continue;
         if (ast_node_is_type_alias(nodes.v[i])) continue;
         add_generic(self, nodes.v[i]);
+        count++;
     }
+    if (self->report_stats) self->counters.toplevels_inferred = count;
     arena_reset(self->transient);
 
     if (self->errors.size) return 1;
@@ -6010,6 +6048,7 @@ static int run_specialize(tl_infer *self, ast_node_sized nodes, ast_node *main) 
     }
 
     remove_generic_toplevels(self);
+    if (self->report_stats) self->counters.toplevels_after_specialize = (u32)map_size(self->toplevels);
     arena_reset(self->transient);
 
 #if DEBUG_INVARIANTS
@@ -6024,6 +6063,7 @@ static int run_tree_shake(tl_infer *self, ast_node *main) {
     if (!main) return 0;
 
     tree_shake_toplevels(self, main);
+    if (self->report_stats) self->counters.toplevels_after_tree_shake = (u32)map_size(self->toplevels);
     arena_reset(self->transient);
 
     // after tree shake, extraneous symbols will have been removed from environment

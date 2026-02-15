@@ -71,6 +71,24 @@ typedef struct {
     u64 subs_nodes_visited;
 
     u32 unify_calls;
+    double unify_ms; // accumulated time in constrain()
+
+    // #1: Generic inference vs tree-shake survival
+    u32 toplevels_inferred;      // toplevels entering Phase 3
+    u32 toplevels_after_specialize; // toplevels after Phase 5 (remove_generic)
+    u32 toplevels_after_tree_shake; // toplevels surviving Phase 6
+
+    // #2: Specialization inner loop breakdown (accumulated ms)
+    double specialize_clone_ms;  // clone_generic_for_arrow
+    double specialize_infer_ms;  // re-inference in post_specialize
+    double specialize_subs_ms;   // apply_subs_to_ast_node in post_specialize
+    double specialize_recurse_ms; // recursive specialize_applications_cb in post_specialize
+
+    // #3: Type Updates breakdown
+    double update_types_env_ms;     // env iteration pass
+    double update_types_ast_ms;     // AST traverse pass
+    u32    update_types_env_count;   // env entries processed
+    u32    update_types_type_cons_calls; // specialize_type_constructor_ calls during Phase 7
 } tl_infer_counters;
 
 void                       tl_infer_set_report_stats(tl_infer *, int);
