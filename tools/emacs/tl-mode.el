@@ -112,7 +112,7 @@
   (let* (
          ;; Keywords
          (keywords '("if" "else" "case" "when" "defer" "while" "for" "return"
-                     "void" "null" "true" "false" "Void" "any"))
+                     "void" "null" "true" "false" "Void" "any" "try"))
 
          ;; Built-in functions
          (builtins '("sizeof" "alignof"))
