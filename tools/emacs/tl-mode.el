@@ -134,9 +134,9 @@
                   "Ptr" "CArray" "Array" "Iter"))
 
          ;; Create regexp patterns
-         (keywords-regexp (regexp-opt keywords 'words))
-         (builtins-regexp (regexp-opt builtins 'words))
-         (types-regexp (regexp-opt types 'words)))
+         (keywords-regexp (regexp-opt keywords 'symbols))
+         (builtins-regexp (regexp-opt builtins 'symbols))
+         (types-regexp (regexp-opt types 'symbols)))
 
     `(
       ;; Directives (must be at line start)
