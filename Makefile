@@ -520,6 +520,7 @@ TL_TESTS =					\
 	type_predicate_generic			\
 	type_predicate_generic_type		\
 	type_predicate_type_arg			\
+	try					\
 	types_float				\
 	types_integer				\
 	types_integer_cast			\
@@ -576,6 +577,8 @@ TL_FAIL_TESTS =					\
 	fail_tagged_union_missing_case		\
 	fail_tagged_union_unknown_variant	\
 	fail_type_alias_partial_specialization	\
+	fail_try_non_union			\
+	fail_try_three_variants			\
 	fail_unknown_free_variable
 
 # Expected runtime failure tests (debug only: must compile, must fail at runtime)

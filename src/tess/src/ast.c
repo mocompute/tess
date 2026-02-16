@@ -201,6 +201,12 @@ ast_node *ast_node_create_tuple(allocator *alloc, ast_node_sized xs) {
     return self;
 }
 
+ast_node *ast_node_create_try(allocator *alloc, ast_node *operand) {
+    ast_node *self     = ast_node_create(alloc, ast_try);
+    self->try_.operand = operand;
+    return self;
+}
+
 ast_node *ast_node_create_type_alias(allocator *alloc, ast_node *name, ast_node *target) {
     ast_node *self          = ast_node_create(alloc, ast_type_alias);
     self->type_alias.name   = name;
@@ -394,6 +400,10 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
         vclone->is_specialized      = vorig->is_specialized;
         vclone->is_type_constructor = vorig->is_type_constructor;
     } break;
+
+    case ast_try:
+        clone->try_.operand = ast_node_clone(alloc, orig->try_.operand);
+        break;
 
     case ast_type_alias: {
         clone->type_alias.name   = ast_node_clone(alloc, orig->type_alias.name);
@@ -660,6 +670,11 @@ void ast_node_each_node(void *ctx, ast_node_each_node_fun fun, ast_node *node) {
         fun(ctx, node->return_.value);
         break;
 
+    case ast_try:
+        //
+        fun(ctx, node->try_.operand);
+        break;
+
     case ast_while:
         //
         fun(ctx, node->while_.condition);
@@ -841,6 +856,7 @@ char const *ast_tag_to_string(ast_tag tag) {
       "ast_return",
       "ast_string",
       "ast_symbol",
+      "ast_try",
       "ast_type_alias",
       "ast_type_predicate",
       "ast_u64",
@@ -963,6 +979,9 @@ str v2_ast_node_to_string(allocator *alloc, ast_node const *node) {
         if (!node->return_.is_break_statement)
             return str_cat(alloc, S("return "), v2_ast_node_to_string(alloc, node->return_.value));
         else return str_cat(alloc, S("break "), v2_ast_node_to_string(alloc, node->return_.value));
+
+    case ast_try:
+        return str_cat(alloc, S("try "), v2_ast_node_to_string(alloc, node->try_.operand));
 
     case ast_while:
         //
@@ -1184,6 +1203,7 @@ str ast_node_to_short_string(allocator *alloc, ast_node const *node) {
     case ast_void:
     case ast_continue:
     case ast_return:
+    case ast_try:
     case ast_while:
     case ast_ellipsis:
     case ast_if_then_else:
@@ -1518,6 +1538,11 @@ u64 ast_node_hash(ast_node const *self) {
         combine_node(self->return_.value);
         break;
 
+    case ast_try:
+        //
+        combine_node(self->try_.operand);
+        break;
+
     case ast_while:
         combine_node(self->while_.condition);
         combine_node(self->while_.update);
@@ -1558,6 +1583,9 @@ int ast_node_is_symbol(ast_node const *self) {
 }
 int ast_node_is_string(ast_node const *self) {
     return self && ast_string == self->tag;
+}
+int ast_node_is_try(ast_node const *self) {
+    return ast_try == self->tag;
 }
 int ast_node_is_tuple(ast_node const *self) {
     return ast_tuple == self->tag;

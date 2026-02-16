@@ -437,6 +437,7 @@ tl_create_test(type_predicate_field)
 tl_create_test(type_predicate_generic)
 tl_create_test(type_predicate_generic_type)
 tl_create_test(type_predicate_type_arg)
+tl_create_test(try)
 tl_create_test(types_float)
 tl_create_test(types_integer)
 tl_create_test(types_integer_cast)
@@ -522,6 +523,9 @@ tl_create_build_fail_test(fail_import_absolute)
 tl_create_build_fail_test(fail_import_missing_quotes)
 
 # Expected runtime failures (debug mode: compile succeeds, run must fail)
+
+tl_create_build_fail_test(fail_try_non_union)
+tl_create_build_fail_test(fail_try_three_variants)
 
 # Known fail-failures: expected-failure tests that the compiler doesn't reject yet
 

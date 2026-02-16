@@ -1307,6 +1307,59 @@ static int infer_return(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
     return 0;
 }
 
+static int infer_try(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
+    // try expr: expr must be a two-variant tagged union.
+    // Unwraps first variant (success), or early-returns second variant (error).
+
+    tl_monotype *operand_type = node->try_.operand->type->type;
+    tl_monotype_substitute(self->arena, operand_type, self->subs, null);
+
+    // Must be a type constructor instance (the tagged union wrapper struct)
+    if (!tl_monotype_is_inst(operand_type)) {
+        array_push(self->errors,
+                   ((tl_infer_error){.tag = tl_err_try_requires_two_variant_union, .node = node}));
+        return 1;
+    }
+
+    // Find the 'u' (union) field in the wrapper type
+    i32 u_index = tl_monotype_type_constructor_field_index(operand_type, S("u"));
+    if (u_index < 0) {
+        array_push(self->errors,
+                   ((tl_infer_error){.tag = tl_err_try_requires_two_variant_union, .node = node}));
+        return 1;
+    }
+
+    tl_monotype *union_type = operand_type->cons_inst->args.v[u_index];
+
+    // Must have exactly 2 variants
+    if (!tl_monotype_is_inst(union_type) || union_type->cons_inst->def->field_names.size != 2) {
+        array_push(self->errors,
+                   ((tl_infer_error){.tag = tl_err_try_requires_two_variant_union, .node = node}));
+        return 1;
+    }
+
+    // First variant is the success type, second is the error type
+    tl_monotype *success_type = union_type->cons_inst->args.v[0];
+
+    // Require success variant to have exactly one field so we can unwrap unambiguously
+    if (!tl_monotype_is_inst(success_type) || success_type->cons_inst->def->field_names.size != 1) {
+        array_push(self->errors,
+                   ((tl_infer_error){.tag = tl_err_try_requires_single_field_variant, .node = node}));
+        return 1;
+    }
+    tl_monotype *inner_type = success_type->cons_inst->args.v[0];
+
+    // Constrain the try expression's type to the inner field type (full unwrap)
+    ensure_tv(self, &node->type);
+    if (constrain_pm(self, node->type, inner_type, node)) return 1;
+
+    // Constrain the enclosing function's return type to be compatible with the wrapper type
+    if (ctx->result_type)
+        if (constrain_pm(self, node->try_.operand->type, ctx->result_type, node)) return 1;
+
+    return 0;
+}
+
 static int check_const_strip_in_call(tl_infer *, tl_monotype *, tl_polytype *, ast_node *);
 
 static int infer_lambda_function_application(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
@@ -2567,6 +2620,13 @@ static int traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, trave
         if (cb(self, ctx, node)) return 1;
         break;
 
+    case ast_try:
+        ctx->node_pos = npos_operand;
+        if (traverse_ast(self, ctx, node->try_.operand, cb)) return 1;
+        ctx->node_pos = npos_operand;
+        if (cb(self, ctx, node)) return 1;
+        break;
+
     case ast_while:
         ctx->node_pos = npos_operand;
         if (traverse_ast(self, ctx, node->while_.condition, cb)) return 1;
@@ -3318,6 +3378,7 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
     case ast_body:      return infer_body(self, node);
     case ast_case:      return infer_case(self, traverse_ctx, node);
     case ast_return:    return infer_return(self, traverse_ctx, node);
+    case ast_try:       return infer_try(self, traverse_ctx, node);
 
     case ast_binary_op: return infer_binary_op(self, traverse_ctx, node);
     case ast_unary_op:  return infer_unary_op(self, traverse_ctx, node);
@@ -4781,6 +4842,8 @@ static void rename_variables(tl_infer *self, ast_node *node, rename_variables_ct
     case ast_unary_op: rename_variables(self, node->unary_op.operand, ctx, level + 1); break;
 
     case ast_return:   rename_variables(self, node->return_.value, ctx, level + 1); break;
+
+    case ast_try:      rename_variables(self, node->try_.operand, ctx, level + 1); break;
 
     case ast_while:
         rename_variables(self, node->while_.condition, ctx, level + 1);

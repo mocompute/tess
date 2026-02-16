@@ -117,7 +117,9 @@
     X(tl_err_nested_module_parent_not_found, "nested_module_parent_not_found")                             \
     X(tl_err_invalid_existing_type_arg, "invalid_existing_type_arg")                                       \
     X(tl_err_const_violation, "const_violation")                                                           \
-    X(tl_err_tagged_union_bail_else_must_diverge, "tagged_union_bail_else_must_diverge")
+    X(tl_err_tagged_union_bail_else_must_diverge, "tagged_union_bail_else_must_diverge")               \
+    X(tl_err_try_requires_two_variant_union, "try_requires_two_variant_union")                     \
+    X(tl_err_try_requires_single_field_variant, "try_requires_single_field_variant")
 
 typedef enum tl_error_tag { TESS_ERROR_TAG_LIST(MOS_TAG_NAME) } tl_error_tag;
 

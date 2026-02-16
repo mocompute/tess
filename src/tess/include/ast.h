@@ -176,6 +176,10 @@ typedef struct ast_node {
             int       is_c_block;
         } hash_command;
 
+        struct ast_try {
+            struct ast_node *operand;
+        } try_;
+
         struct ast_type_alias {
             struct ast_node *name;   // symbol or nfa
             struct ast_node *target; // symbol or nfa
@@ -257,6 +261,7 @@ nodiscard ast_node *ast_node_create_nfa_tc(allocator *, ast_node *, ast_node_siz
                                            ast_node_sized) mallocfun;
 nodiscard ast_node *ast_node_create_lfa(allocator *, ast_node *, ast_node_sized) mallocfun;
 nodiscard ast_node *ast_node_create_tuple(allocator *, ast_node_sized) mallocfun;
+nodiscard ast_node *ast_node_create_try(allocator *, ast_node *) mallocfun;
 nodiscard ast_node *ast_node_create_type_alias(allocator *, ast_node *, ast_node *) mallocfun;
 nodiscard ast_node *ast_node_create_type_predicate(allocator *, ast_node *, ast_node *) mallocfun;
 nodiscard ast_node *ast_node_create_sym(allocator *alloc, str str); // copies str
@@ -330,6 +335,7 @@ int            ast_node_is_void(ast_node const *);
 int            ast_node_is_nil_or_void(ast_node const *);
 int            ast_node_is_symbol(ast_node const *);
 int            ast_node_is_string(ast_node const *);
+int            ast_node_is_try(ast_node const *);
 int            ast_node_is_tuple(ast_node const *);
 int            ast_node_is_type_alias(ast_node const *);
 int            ast_node_is_type_predicate(ast_node const *);

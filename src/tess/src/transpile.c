@@ -49,8 +49,8 @@ struct transpile {
 };
 
 typedef struct defer_scope {
-    ast_node_sized      defers;   // this body's ast_body.defers
-    struct defer_scope *parent;   // enclosing scope
+    ast_node_sized      defers; // this body's ast_body.defers
+    struct defer_scope *parent; // enclosing scope
 } defer_scope;
 
 typedef struct {
@@ -68,7 +68,7 @@ typedef struct {
 
     // the type of the expression just evaluated is effectively void, regardless of its declared type. For
     // example, _tl_fatal_ is -> any, but when it appears it should never be assigned to a result variable.
-    int is_effective_void;
+    int          is_effective_void;
 
     defer_scope *defers;              // innermost defer scope (linked list head)
     defer_scope *loop_defer_boundary; // snapshot at loop entry; break/continue stop here
@@ -1379,7 +1379,7 @@ static str generate_body(transpile *self, tl_monotype *type, ast_node const *nod
     // Push defer scope if this body has defers
     defer_scope scope;
     if (has_defers) {
-        scope = (defer_scope){.defers = node->body.defers, .parent = ctx->defers};
+        scope       = (defer_scope){.defers = node->body.defers, .parent = ctx->defers};
         ctx->defers = &scope;
     }
 
@@ -1977,6 +1977,73 @@ static void generate_reassignment(transpile *self, tl_monotype *type, ast_node c
     if (!is_nil_result(type)) generate_assign_op(self, lhs, value, op);
 }
 
+static str generate_try(transpile *self, tl_monotype *type, ast_node const *node, eval_ctx *ctx) {
+    (void)type;
+
+    // Generate the operand expression (the tagged union value)
+    str operand_val = generate_expr(self, null, node->try_.operand, ctx);
+
+    // Get the wrapper type (the tagged union struct)
+    tl_monotype *wrapper_type = node->try_.operand->type->type;
+
+    // Find tag and union fields
+    str_sized    field_names = wrapper_type->cons_inst->def->field_names;
+    tl_monotype *tag_type    = null;
+    tl_monotype *union_type  = null;
+    forall(f, field_names) {
+        if (str_eq(field_names.v[f], S("tag"))) tag_type = wrapper_type->cons_inst->args.v[f];
+        if (str_eq(field_names.v[f], S("u"))) union_type = wrapper_type->cons_inst->args.v[f];
+    }
+    if (!tag_type || !union_type) fatal("runtime error");
+
+    // Get variant names: first = success, second = error
+    str_sized variant_names = union_type->cons_inst->def->field_names;
+    if (variant_names.size < 2) fatal("runtime error");
+    str success_name = variant_names.v[0];
+    str error_name   = variant_names.v[1];
+
+    // Build tag value for the error variant
+    str tag_enum_name  = tag_type->cons_inst->def->name;
+    str tag_error_name = str_cat_3(self->transient, tag_enum_name, S("__"), error_name);
+
+    // Save operand to a temp variable to avoid re-evaluation
+    str tmp = next_res(self);
+    generate_decl(self, tmp, wrapper_type);
+    generate_assign(self, tmp, operand_val);
+
+    // Emit: if (tmp.tag == error_tag) { [defers]; return tmp; }
+    cat(self, S("if ("));
+    cat(self, tmp);
+    cat(self, S(".tag == "));
+    cat(self, tag_error_name);
+    cat(self, S(") {\n"));
+
+    // Emit defers before early return (same as generate_return)
+    emit_defers_until(self, ctx, null);
+
+    cat(self, S("return "));
+    cat(self, tmp);
+    cat_semicolonln(self);
+    cat(self, S("}\n"));
+
+    // Unwrap: result = tmp.u.success_name.field_name (full unwrap to inner value)
+    tl_monotype *success_variant_type = union_type->cons_inst->args.v[0];
+    str          field_name           = success_variant_type->cons_inst->def->field_names.v[0];
+
+    str          res          = next_res(self);
+    tl_monotype *success_type = node->type->type;
+    generate_decl(self, res, success_type);
+    generate_assign_lhs(self, res);
+    cat(self, tmp);
+    cat(self, S(".u."));
+    cat(self, escape_c_keyword(self->transient, success_name));
+    cat(self, S("."));
+    cat(self, escape_c_keyword(self->transient, field_name));
+    cat_semicolonln(self);
+
+    return res;
+}
+
 static str generate_return(transpile *self, tl_monotype *type, ast_node const *node, eval_ctx *ctx) {
     // Note: handles return [expr] and break
 
@@ -1998,10 +2065,8 @@ static str generate_return(transpile *self, tl_monotype *type, ast_node const *n
     }
 
     // Emit defers for scopes being exited
-    if (is_break)
-        emit_defers_until(self, ctx, ctx->loop_defer_boundary);
-    else
-        emit_defers_until(self, ctx, null);
+    if (is_break) emit_defers_until(self, ctx, ctx->loop_defer_boundary);
+    else emit_defers_until(self, ctx, null);
 
     if (is_break) cat(self, S("break"));
     else cat(self, S("return"));
@@ -2034,8 +2099,8 @@ static str generate_while(transpile *self, tl_monotype *type, ast_node const *no
     cat_close_round(self);
     cat(self, S("break;\n"));
 
-    str save_update_label = ctx->update_label;
-    ctx->update_label     = next_label(self);
+    str save_update_label                 = ctx->update_label;
+    ctx->update_label                     = next_label(self);
 
     defer_scope *save_loop_defer_boundary = ctx->loop_defer_boundary;
     ctx->loop_defer_boundary              = ctx->defers;
@@ -2116,6 +2181,7 @@ static str generate_expr(transpile *self, tl_monotype *type, ast_node const *nod
     case ast_if_then_else:    return generate_if_then_else(self, node, ctx);
 
     case ast_return:          return generate_return(self, type, node, ctx);
+    case ast_try:             return generate_try(self, type, node, ctx);
     case ast_while:           return generate_while(self, type, node, ctx);
     case ast_continue:        return generate_continue(self, type, node, ctx);
 

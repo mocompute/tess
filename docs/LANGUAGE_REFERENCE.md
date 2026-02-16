@@ -877,12 +877,15 @@ data := try parse(try read_file(path))
 
 The enclosing function's return type must be compatible — it must be the same two-variant tagged union (or a type whose second variant matches the error being propagated).
 
-`try` is equivalent to a let-else that returns the second variant:
+`try` fully unwraps to the inner value of the success variant:
 
 ```tl
 // These are equivalent:
 data := try parse(input)
-data: Ok := parse(input) else { return Err(err) }
+
+__tmp := parse(input)
+__ok: Ok := __tmp else { return __tmp }
+data := __ok.v
 ```
 
 ## Structs

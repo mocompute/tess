@@ -348,7 +348,7 @@ static int result_ast_node(parser *p, ast_node *node) {
 static int is_reserved(char const *s) {
     static char const *strings[] = {
       "break", "case",   "continue", "defer", "else", "false", "if",    "in",
-      "null",  "return", "then",     "true",  "void", "when",  "while", null,
+      "null",  "return", "then",     "true",  "try",  "void",  "when",  "while", null,
     };
     char const **it = strings;
     while (*it != null)
@@ -1828,6 +1828,14 @@ static int maybe_mangle_binop(parser *self, ast_node *op, ast_node **inout, ast_
 }
 
 static ast_node *parse_base_expression(parser *self) {
+
+    if (0 == a_try_s(self, the_symbol, "try")) {
+        ast_node *operand = parse_expression(self, INT_MIN);
+        if (!operand) return null;
+        ast_node *n = ast_node_create_try(self->ast_arena, operand);
+        set_node_file(self, n);
+        return n;
+    }
 
     if (0 == a_try_int(self, a_unary_operator, INT_MIN)) {
         ast_node *op   = self->result;
