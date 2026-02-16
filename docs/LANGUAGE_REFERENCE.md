@@ -761,6 +761,78 @@ for x in collection {
 
 Both `break` and `continue` work in `while` and `for` loops.
 
+### Defer
+
+`defer` schedules a statement or block to execute when the enclosing scope is exited, whether by `break`, `continue`, `return`, or falling through to the end:
+
+```tl
+defer x = 5                // Single statement
+
+defer {                    // Block form
+    a := 1
+    x = 10
+}
+```
+
+**Execution order:** Multiple defers in the same scope execute in LIFO (last-in, first-out) order:
+
+```tl
+x := 0
+while true {
+    defer x = x * 10 + 1   // Executes third
+    defer x = x * 10 + 2   // Executes second
+    defer x = x * 10 + 3   // Executes first
+    break
+}
+// x is 321
+```
+
+**Works with all exit paths:** Defers run before `break`, `continue`, and `return`:
+
+```tl
+// With break
+while true {
+    defer x = 5
+    break          // defer runs, then loop exits
+}
+
+// With continue
+while i < 3, i = i + 1 {
+    defer sum = sum + 1
+    continue       // defer runs each iteration
+}
+
+// With return
+while true {
+    defer x = 0
+    return x       // x's value is captured, then defer runs
+}
+```
+
+**Capture-first returns:** When `return` is used with a defer, the return value is captured *before* defers execute. This also applies to implicit returns at the end of a function body:
+
+```tl
+f() {
+    x := 42
+    defer x = 0
+    x              // Returns 42, not 0
+}
+```
+
+**Nested scopes:** Each scope has its own defers. Inner defers run when the inner scope exits, outer defers run when the outer scope exits:
+
+```tl
+while true {
+    defer x = x + 1       // Runs when outer loop exits
+    while true {
+        defer x = x + 10  // Runs when inner loop exits
+        break
+    }
+    break
+}
+// Both defers have run
+```
+
 ### Return Statement
 
 ```tl

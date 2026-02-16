@@ -47,6 +47,14 @@ A statically-typed programming language that transpiles to C11.
           | Square { length: Float }
   ```
 
+- **Defer** - Schedule cleanup to run when leaving a scope, regardless of exit path (`break`, `continue`, `return`). Multiple defers execute in reverse order:
+  ```tl
+  while true {
+      defer x = x + 1
+      break              // defer runs before loop exits
+  }
+  ```
+
 - **Tail call optimization** - Guaranteed by the language.
 
 - **Packages** - Distribute reusable libraries as `.tlib` source archives. Declare dependencies in `package.tl`, and the compiler handles version verification, transitive resolution, and whole-program compilation.
