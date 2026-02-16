@@ -71,7 +71,14 @@ An ML-flavoured systems language that transpiles to C.
 
 - **Packages** - Distribute reusable libraries as `.tlib` source archives. Declare dependencies in `package.tl`, and the compiler handles version verification, transitive resolution, and whole-program compilation.
 
-- **C interoperability** - Seamless integration with C libraries. Directly `#include` headers and call C functions with the `c_` prefix.
+- **C interoperability** - Seamless integration with C libraries. Directly `#include` headers and call C functions with the `c_` prefix. Export Tess functions to C with `[[c_export]]`—the compiler generates a `.h` header automatically:
+  ```tl
+  #module MyLib
+  [[c_export]] add(x: CInt, y: CInt) -> CInt { x + y }
+  ```
+  ```bash
+  tess lib mylib.tl -o libmylib.so   # produces libmylib.so + libmylib.h
+  ```
 
 ## Example
 
