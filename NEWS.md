@@ -5,6 +5,37 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased] - 2026-02-16 to 2026-02-16 (51575693..ac4f2b5d)
+
+### Highlights
+
+- New `[[c_export]]` attribute for giving Tess functions stable C-compatible symbol names in shared libraries
+- Automatic C header generation when compiling shared libraries with `tess lib`
+- Namespaced `tl_init` per library to avoid symbol collisions when linking multiple Tess libraries
+- Compile-time validation rejects `c_export` on functions with non-C-compatible types
+
+### Added
+
+- **`[[c_export]]` Attribute**: Tess functions can now be annotated with `[[c_export]]` or `[[c_export("custom_name")]]` to produce stable, unmangled C symbol names when compiled as shared libraries. The default export name follows `Module_func` for non-main modules and bare `func` for `#module main`; a custom string argument overrides this. The transpiler generates thin wrapper functions that delegate to the internal mangled implementations.
+- **Automatic C Header Generation**: Running `tess lib foo.tl -o libfoo.so` now automatically writes a companion `libfoo.h` header alongside the shared library, containing include guards, standard includes, the init function prototype, and prototypes for every exported function.
+- **`TL_EXPORT` Visibility Macro**: New macro in the standard preamble that expands to `__declspec(dllexport)` on MSVC and `__attribute__((visibility("default")))` on GCC/Clang. Exported wrappers and `tl_init` use `TL_EXPORT`; all internal functions remain `static`.
+- **Namespaced Library Initialization**: When compiling `tess lib foo.tl -o libfoo.so`, the initialization function is now emitted as `tl_init_foo()` (derived from the output path), preventing symbol collisions when multiple Tess libraries are linked into the same program.
+- **Compile-Time Export Validation**: The compiler rejects `c_export` functions whose parameter or return types are not C-compatible. Allowed types include `CInt`, `CSize`, `CFloat`, and other C numeric types, `Int`, `Float`, `Bool`, `Void`, `Ptr[T]`, and `c_symbol`-annotated types.
+- **`c_export` Tests**: Comprehensive unit and integration tests covering wrapper generation, header file output, type validation, and end-to-end shared library compilation and linking from C.
+
+### Changed
+
+- **Internal Functions Static in Library Mode**: All internal `tl_fun_*` functions are now emitted as `static` in library mode. Only `TL_EXPORT` wrappers and the init function are externally visible, producing a cleaner shared library symbol table.
+- **`sizeof`/`alignof` on Void and Unresolved Types**: `sizeof` on `void`, unresolved type variables, or `any` now emits `(size_t)0` instead of `sizeof(void)` (a GCC extension), and `alignof` emits `(size_t)1` instead of `_Alignof(void)` (which MSVC rejects).
+- **Documentation**: Language reference updated with type definition ordering rules, lambda type parameter limitations, and `[[c_export]]` usage with examples. README updated with a `c_export` workflow example.
+- **Windows Compatibility**: Library name and header guard derivation now uses `file_basename()` for cross-platform correctness. Test harness updated with platform-specific library suffixes and working directory handling for `cmd.exe`.
+
+### Removed
+
+- **`test_forward_ref_tagged_union.tl`**: Removed from known failures and deleted. The requirement that types used by value must be defined before the referencing type was reclassified as by-design and documented in the language reference.
+- **`test_lambda_immediate_type_argument.tl`**: Removed from known failures and deleted. Explicit type arguments on lambdas were ruled out as a language design decision (lambdas remain generic through inference).
+
+
 ## [Unreleased] - 2026-02-15 to 2026-02-16 (ef1d4283..51575693)
 
 ### Highlights

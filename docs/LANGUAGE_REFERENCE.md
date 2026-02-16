@@ -1344,13 +1344,15 @@ Compiling with `tess lib mylib.tl -o libmylib.so` produces both `libmylib.so` an
 #include <stddef.h>
 #include <stdint.h>
 
-void tl_init(void);
+void tl_init_mylib(void);
 
 int MyLib_add(int, int);
 int multiply(int, int);
 
 #endif
 ```
+
+The init function name is derived from the output path: `tess lib mylib.tl -o libmylib.so` produces `tl_init_mylib`. This namespacing prevents symbol collisions when multiple Tess libraries are linked into the same program. The consumer must call this function before calling any exported functions.
 
 **Type restrictions:** Only C-compatible types are allowed in `c_export` function signatures. The compiler rejects Tess-specific types like `Str`, user structs, tagged unions, and enums. Allowed types include all `C*` types (`CInt`, `CChar`, `CSize`, etc.), `Int`, `Float`, `Bool`, `Void`, `Ptr[T]`, and `c_struct_*` types.
 
