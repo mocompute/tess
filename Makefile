@@ -589,7 +589,6 @@ TL_KNOWN_FAIL_FAILURES =
 
 # Tests that should work but currently fail due to compiler bugs
 TL_KNOWN_FAILURES =				\
-	lambda_immediate_type_argument		\
 	while_empty_body
 
 # Total test count across all suites

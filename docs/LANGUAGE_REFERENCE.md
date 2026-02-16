@@ -404,6 +404,8 @@ increment()        // counter is now 1
 increment()        // counter is now 2
 ```
 
+**Lambdas do not support explicit type parameters:** Lambdas can be generic through type inference (un-annotated parameters are inferred from usage), but cannot declare explicit type parameters with `[T]` syntax. If you need explicit type parameters, use a named function instead.
+
 **Lambdas cannot be returned from functions:** Because lambdas capture variables by reference, returning a lambda from a function would create dangling pointers to stack variables that no longer exist. The compiler prohibits this:
 
 ```tl
@@ -437,6 +439,8 @@ Ctx[T] : { callback: T }
 ctx := Ctx(callback = f1/0)
 ctx.callback()       // Call through struct field
 ```
+
+**Note:** Explicit type parameters are not supported on lambda functions. Lambdas can still be generic through type inference (un-annotated parameters), but cannot declare type parameters with `[T]`. See [Lambdas](#lambdas).
 
 ### Generic Function Signatures
 
