@@ -1168,8 +1168,8 @@ int compile_c_obj(state *self) {
         char const *msvc_extra[] = {"/LD"};
         argv                     = build_msvc_argv(self, msvc_extra, 1, c_file.path, obj_file.path);
     } else {
-        char const *extra[] = {"-fPIC", "-shared"};
-        argv                = build_gcc_argv(self, extra, 2, c_file.path);
+        char const *extra[] = {"-shared"};
+        argv                = build_gcc_argv(self, extra, 1, c_file.path);
     }
 
     platform_exec_opts opts = {
