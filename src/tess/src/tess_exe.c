@@ -872,14 +872,7 @@ int compile(state *self) {
     // Derive library name from output path for namespaced tl_init
     str lib_name = str_empty();
     if (self->is_library && self->out_path) {
-        char const *base = strrchr(self->out_path, '/');
-#ifdef MOS_WINDOWS
-        {
-            char const *bslash = strrchr(self->out_path, '\\');
-            if (bslash && (!base || bslash > base)) base = bslash;
-        }
-#endif
-        base = base ? base + 1 : self->out_path;
+        char const *base = file_basename(self->out_path);
         // Strip "lib" prefix if present (libfoo.so -> foo)
         if (0 == strncmp(base, "lib", 3)) base += 3;
         char const *dot = strrchr(base, '.');
@@ -914,8 +907,7 @@ int compile(state *self) {
         // Generate c_export header if there are any exported functions
         str_build header_build = {0};
         // Derive guard name from header filename (output path with .h extension)
-        char const *basename = strrchr(self->out_path, '/');
-        basename             = basename ? basename + 1 : self->out_path;
+        char const *basename = file_basename(self->out_path);
         char guard[256];
         {
             u32         gi  = 0;

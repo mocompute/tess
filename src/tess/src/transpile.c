@@ -2969,6 +2969,10 @@ static str tl_sizeof(transpile *self, ast_node const *node, eval_ctx *ctx, void 
     // nullary with type argument: sizeof[T]()
     tl_monotype *type = resolve_nullary_type_argument(self, node);
     if (type) {
+        // sizeof(void) is a GCC extension; MSVC rejects _Alignof(void) and warns on sizeof(void).
+        // Unresolved type variables and 'any' also render as void in C.
+        if (tl_monotype_is_void(type) || tl_monotype_is_tv(type) || tl_monotype_is_any(type))
+            return S("(size_t)0");
         str ctype = type_to_c_mono(self, type);
         return str_cat_3(self->transient, S("sizeof("), ctype, S(")"));
     } else if (node->named_application.n_arguments == 0) {
@@ -2989,6 +2993,8 @@ static str tl_sizeof(transpile *self, ast_node const *node, eval_ctx *ctx, void 
         if (!type) fatal("missing type");
         update_type(self, &type);
 
+        if (tl_monotype_is_void(type) || tl_monotype_is_tv(type) || tl_monotype_is_any(type))
+            return S("(size_t)0");
         str ctype = type_to_c_mono(self, type);
         return str_cat_3(self->transient, S("sizeof("), ctype, S(")"));
     } else {
@@ -3010,6 +3016,9 @@ static str tl_alignof(transpile *self, ast_node const *node, eval_ctx *ctx, void
     // nullary with type argument: alignof[T]()
     tl_monotype *type = resolve_nullary_type_argument(self, node);
     if (type) {
+        // _Alignof(void) is a GCC extension; MSVC rejects it.
+        if (tl_monotype_is_void(type) || tl_monotype_is_tv(type) || tl_monotype_is_any(type))
+            return S("(size_t)1");
         str ctype = type_to_c_mono(self, type);
         return str_cat_3(self->transient, S("_Alignof("), ctype, S(")"));
     } else if (node->named_application.n_arguments == 0) {
@@ -3030,6 +3039,8 @@ static str tl_alignof(transpile *self, ast_node const *node, eval_ctx *ctx, void
         if (!type) fatal("missing type");
         update_type(self, &type);
 
+        if (tl_monotype_is_void(type) || tl_monotype_is_tv(type) || tl_monotype_is_any(type))
+            return S("(size_t)1");
         str ctype = type_to_c_mono(self, type);
         return str_cat_3(self->transient, S("_Alignof("), ctype, S(")"));
     } else {

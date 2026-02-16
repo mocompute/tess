@@ -2154,8 +2154,9 @@ static int test_e2e_c_export_emit_c(void) {
 
     char cmd[2048];
     snprintf(cmd, sizeof(cmd),
-             "\"%s\" lib-emit-c --no-standard-includes -S \"%s\" --no-line-directive \"%s\" >\"%s\" 2>&1",
-             e2e_tess_exe, e2e_stdlib_dir, src, output_log);
+             CD_CMD " \"%s\" && \"%s\" lib-emit-c --no-standard-includes -S \"%s\""
+             " --no-line-directive \"%s\" >\"%s\" 2>&1",
+             dir, e2e_tess_exe, e2e_stdlib_dir, src, output_log);
     if (run_cmd(cmd) != 0) {
         fprintf(stderr, "  tess lib-emit-c failed\n");
         return 1;
@@ -2221,8 +2222,9 @@ static int test_e2e_c_export_header(void) {
 
     char cmd[2048];
     snprintf(cmd, sizeof(cmd),
-             "\"%s\" lib --no-standard-includes -S \"%s\" \"%s\" -o \"%s\" 2>&1",
-             e2e_tess_exe, e2e_stdlib_dir, src, so_path);
+             CD_CMD " \"%s\" && \"%s\" lib --no-standard-includes -S \"%s\""
+             " \"%s\" -o \"%s\" 2>&1",
+             dir, e2e_tess_exe, e2e_stdlib_dir, src, so_path);
     if (run_cmd(cmd) != 0) {
         fprintf(stderr, "  tess lib failed\n");
         return 1;
@@ -2291,8 +2293,9 @@ static int test_e2e_c_export_no_header_when_none(void) {
 
     char cmd[2048];
     snprintf(cmd, sizeof(cmd),
-             "\"%s\" lib --no-standard-includes -S \"%s\" \"%s\" -o \"%s\" 2>&1",
-             e2e_tess_exe, e2e_stdlib_dir, src, so_path);
+             CD_CMD " \"%s\" && \"%s\" lib --no-standard-includes -S \"%s\""
+             " \"%s\" -o \"%s\" 2>&1",
+             dir, e2e_tess_exe, e2e_stdlib_dir, src, so_path);
     if (run_cmd(cmd) != 0) {
         fprintf(stderr, "  tess lib failed\n");
         return 1;
@@ -2334,8 +2337,9 @@ static int test_e2e_c_export_void_noop(void) {
 
     char cmd[2048];
     snprintf(cmd, sizeof(cmd),
-             "\"%s\" lib-emit-c --no-standard-includes -S \"%s\" --no-line-directive \"%s\" >\"%s\" 2>&1",
-             e2e_tess_exe, e2e_stdlib_dir, src, output_log);
+             CD_CMD " \"%s\" && \"%s\" lib-emit-c --no-standard-includes -S \"%s\""
+             " --no-line-directive \"%s\" >\"%s\" 2>&1",
+             dir, e2e_tess_exe, e2e_stdlib_dir, src, output_log);
     if (run_cmd(cmd) != 0) {
         fprintf(stderr, "  tess lib-emit-c failed\n");
         return 1;
