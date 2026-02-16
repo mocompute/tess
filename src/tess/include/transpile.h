@@ -11,6 +11,7 @@ typedef struct {
     int             verbose;
     int             no_line_directive;
     int             is_library;
+    str             lib_name; // library name for namespaced init (e.g., "foo" -> tl_init_foo)
 } transpile_opts;
 
 nodiscard transpile *transpile_create(allocator *, transpile_opts const *) mallocfun;

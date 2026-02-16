@@ -650,9 +650,16 @@ static void generate_toplevel_values(transpile *self) {
 
     cat_nl(self);
 
-    // tl_init function
-    if (self->opts.is_library) cat(self, S("void tl_init(void) {\n"));
-    else cat(self, S("static void tl_init(void) {\n"));
+    // tl_init function (namespaced in library mode to avoid collisions)
+    if (self->opts.is_library && !str_is_empty(self->opts.lib_name)) {
+        cat(self, S("void tl_init_"));
+        cat(self, self->opts.lib_name);
+        cat(self, S("(void) {\n"));
+    } else if (self->opts.is_library) {
+        cat(self, S("void tl_init(void) {\n"));
+    } else {
+        cat(self, S("static void tl_init(void) {\n"));
+    }
 
     forall(i, self->toplevels_sorted) {
         ast_node *node = str_map_get_ptr(self->toplevels, self->toplevels_sorted.v[i]);
@@ -3334,7 +3341,13 @@ int transpile_generate_header(transpile *self, str_build *out_header, str guard_
     str_build_cat(&hdr, S("#include <stddef.h>\n"));
     str_build_cat(&hdr, S("#include <stdint.h>\n\n"));
     str_build_cat(&hdr, S("/* Initialize the Tess runtime. Call before any exported function. */\n"));
-    str_build_cat(&hdr, S("void tl_init(void);\n\n"));
+    if (!str_is_empty(self->opts.lib_name)) {
+        str_build_cat(&hdr, S("void tl_init_"));
+        str_build_cat(&hdr, self->opts.lib_name);
+        str_build_cat(&hdr, S("(void);\n\n"));
+    } else {
+        str_build_cat(&hdr, S("void tl_init(void);\n\n"));
+    }
 
     forall(i, self->toplevels_sorted) {
         ast_node *node = str_map_get_ptr(self->toplevels, self->toplevels_sorted.v[i]);

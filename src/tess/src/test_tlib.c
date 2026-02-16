@@ -2241,9 +2241,9 @@ static int test_e2e_c_export_header(void) {
         return 1;
     }
 
-    // Verify tl_init declaration
-    if (!strstr(header, "void tl_init(void)")) {
-        fprintf(stderr, "  header missing tl_init declaration\n");
+    // Verify namespaced tl_init declaration (libtest.so -> tl_init_test)
+    if (!strstr(header, "void tl_init_test(void)")) {
+        fprintf(stderr, "  header missing tl_init_test declaration\n");
         return 1;
     }
 

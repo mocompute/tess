@@ -869,11 +869,30 @@ int compile(state *self) {
     // === TRANSPILATION PHASE ===
     hires_timer_start(&phase_timer);
 
+    // Derive library name from output path for namespaced tl_init
+    str lib_name = str_empty();
+    if (self->is_library && self->out_path) {
+        char const *base = strrchr(self->out_path, '/');
+#ifdef MOS_WINDOWS
+        {
+            char const *bslash = strrchr(self->out_path, '\\');
+            if (bslash && (!base || bslash > base)) base = bslash;
+        }
+#endif
+        base = base ? base + 1 : self->out_path;
+        // Strip "lib" prefix if present (libfoo.so -> foo)
+        if (0 == strncmp(base, "lib", 3)) base += 3;
+        char const *dot = strrchr(base, '.');
+        u32         len = dot ? (u32)(dot - base) : (u32)strlen(base);
+        if (len > 0) lib_name = str_init_n(self->arena, base, len);
+    }
+
     transpile_opts transpile_opts = {
       .infer_result      = infer_result,
       .is_library        = self->is_library,
       .no_line_directive = self->no_line_directive,
       .verbose           = self->verbose,
+      .lib_name          = lib_name,
     };
     transpile *transpile = transpile_create(self->arena, &transpile_opts);
 
