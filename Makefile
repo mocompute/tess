@@ -368,6 +368,7 @@ TL_TESTS =					\
 	case_pred_lambda			\
 	char_literal				\
 	closure_fun_ptr				\
+	closure_in_named_function		\
 	compound_assignment			\
 	conditional_compile_auto_define		\
 	conditional_compile_define		\
@@ -583,7 +584,6 @@ TL_KNOWN_FAIL_FAILURES =
 
 # Tests that should work but currently fail due to compiler bugs
 TL_KNOWN_FAILURES =				\
-	closure_in_named_function		\
 	deref_then_addr				\
 	forward_ref_tagged_union		\
 	lambda_immediate_type_argument		\

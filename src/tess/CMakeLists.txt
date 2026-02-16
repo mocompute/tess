@@ -287,6 +287,7 @@ tl_create_test(case_pred_ident)
 tl_create_test(case_pred_lambda)
 tl_create_test(char_literal)
 tl_create_test(closure_fun_ptr)
+tl_create_test(closure_in_named_function)
 tl_create_test(compound_assignment)
 tl_create_test(conditional_compile_auto_define)
 tl_create_test(conditional_compile_define)
@@ -523,7 +524,6 @@ tl_create_build_fail_test(fail_import_missing_quotes)
 # Known fail-failures: expected-failure tests that the compiler doesn't reject yet
 
 # Known failures: these should work but a compiler bug makes them fail
-tl_create_known_failure(closure_in_named_function)
 tl_create_known_failure(deref_then_addr)
 tl_create_known_failure(forward_ref_tagged_union)
 tl_create_known_failure(lambda_immediate_type_argument)

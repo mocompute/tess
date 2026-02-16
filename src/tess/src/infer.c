@@ -5374,7 +5374,7 @@ void tree_shake_toplevels(tl_infer *self, ast_node const *start) {
     hashmap_iterator iter = {0};
     ast_node        *node;
     while ((node = toplevel_iter(self, &iter))) {
-        if (ast_node_is_let_in(node)) {
+        if (ast_node_is_let_in(node) && !ast_node_is_let_in_lambda(node)) {
             str name = ast_node_str(node->let_in.name);
             str_hset_insert(&used, name);
 
