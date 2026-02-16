@@ -7,10 +7,11 @@ This document describes the name mangling system in the Tess compiler. Name mang
 1. [Overview](#overview)
 2. [Arity Mangling](#arity-mangling)
 3. [Module Mangling](#module-mangling)
-4. [Generic Specialization Naming](#generic-specialization-naming)
-5. [Two-Pass Parsing](#two-pass-parsing)
-6. [Key Data Structures](#key-data-structures)
-7. [Examples](#examples)
+4. [Module Aliases](#module-aliases)
+5. [Generic Specialization Naming](#generic-specialization-naming)
+6. [Two-Pass Parsing](#two-pass-parsing)
+7. [Key Data Structures](#key-data-structures)
+8. [Examples](#examples)
 
 ---
 
@@ -183,6 +184,80 @@ c := Mod.Shape.Circle(radius = 2.0)
 // Step 1: Mod.Shape → Mod__Shape (module mangling)
 // Step 2: Mod__Shape.Circle → checks "Shape" in nested_type_parents
 //         → builds Shape__Circle → applies module "Mod" → Mod__Shape__Circle
+```
+
+---
+
+## Module Aliases
+
+Module aliases provide shorthand names for modules using the `#alias` directive. Aliases are resolved during parsing **before** any name mangling occurs.
+
+### Directive Syntax
+
+```tl
+#alias Original NewName       // NewName becomes shorthand for Original
+#alias Outer.Inner Short      // Dotted paths supported as source
+#unalias NewName              // Remove alias for current file
+```
+
+### Resolution
+
+When the parser encounters `NewName.foo(...)`, the alias replaces the leftmost segment before module mangling proceeds:
+
+```
+Source: Short.add(1, 2)    (with #alias Outer.Inner Short)
+     |
+     v
+Alias:  Outer.Inner.add(1, 2)   (leftmost segment replaced)
+     |
+     v
+Arity:  Outer.Inner.add__2      (arity mangling)
+     |
+     v
+Module: Outer__Inner__add__2    (module mangling)
+```
+
+### Scope
+
+- Aliases are file-scoped: effective from the `#alias` directive through the end of the current file
+- `#unalias` removes an alias before end-of-file
+- Aliases only apply to the **leftmost** segment of a dotted reference
+
+### Restrictions
+
+| Condition | Result |
+|-----------|--------|
+| Alias name conflicts with an imported module | Error |
+| Alias name already in use as an alias | Error |
+| Source module not yet imported | Error |
+| Self-alias (`#alias Foo Foo`) | Error |
+| `#unalias` of non-existent alias | Error |
+| Alias name uses `c_*` or `_tl_*` prefix | Error |
+| Alias name contains `__` | Error (standard identifier rules) |
+| Aliasing `main` module | Error |
+| Alias name used as source of another alias | Error |
+
+### Examples
+
+```tl
+#import <Outer/Inner.tl>
+#alias Outer.Inner OI
+
+OI.process(data)          // Resolved as Outer.Inner.process(data)
+                          // Mangled to Outer__Inner__process__1
+
+OI.Shape.Circle(r = 2.0) // Resolved as Outer.Inner.Shape.Circle(...)
+                          // Nested type resolution proceeds normally
+
+fp := OI.add/2            // Function pointer: Outer__Inner__add__2
+
+#unalias OI               // OI no longer recognized
+```
+
+Non-leftmost segments are never aliased:
+
+```tl
+Root.OI.foo()             // OI is NOT replaced — not leftmost segment
 ```
 
 ---

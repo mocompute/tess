@@ -76,6 +76,37 @@ Module initialization functions are called in dependency order before `main()` e
 
 **Note:** `__init()` only works in named modules (those with a `#module` declaration other than `main`).
 
+### Module Aliases
+
+The `#alias` directive creates a shorthand name for an imported module:
+
+```tl
+#alias Outer.Inner OI        // OI is now shorthand for Outer.Inner
+#unalias OI                  // Remove the alias
+```
+
+Aliases substitute the leftmost segment of a dotted reference. All references to `OI.foo` are parsed as if written `Outer.Inner.foo`:
+
+```tl
+#import <Collections/HashMap.tl>
+#alias Collections.HashMap HM
+
+HM.create()                  // Same as Collections.HashMap.create()
+HM.insert(map, key, value)   // Same as Collections.HashMap.insert(...)
+```
+
+**Scope:** Aliases are effective from the `#alias` directive through the end of the current file, or until `#unalias` is used.
+
+**Leftmost only:** Aliases only apply when the alias name is the first segment in a dotted reference. `Root.OI.foo` does not trigger the alias.
+
+**Restrictions:**
+
+- The source module must already be imported
+- The alias name must not conflict with an existing module or alias
+- Self-aliases (`#alias Foo Foo`) are not allowed
+- The alias name cannot use reserved prefixes (`c_*`, `_tl_*`) or contain `__`
+- The `main` module cannot be aliased
+
 ## Types
 
 ### Primitive Types
