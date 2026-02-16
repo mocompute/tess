@@ -652,11 +652,11 @@ static void generate_toplevel_values(transpile *self) {
 
     // tl_init function (namespaced in library mode to avoid collisions)
     if (self->opts.is_library && !str_is_empty(self->opts.lib_name)) {
-        cat(self, S("void tl_init_"));
+        cat(self, S("TL_EXPORT void tl_init_"));
         cat(self, self->opts.lib_name);
         cat(self, S("(void) {\n"));
     } else if (self->opts.is_library) {
-        cat(self, S("void tl_init(void) {\n"));
+        cat(self, S("TL_EXPORT void tl_init(void) {\n"));
     } else {
         cat(self, S("static void tl_init(void) {\n"));
     }
@@ -2416,7 +2416,7 @@ int transpile_compile(transpile *self, str_build *out_build) {
     generate_toplevel_contexts(self);
 
     generate_ifc_blocks(self);
-    generate_prototypes(self, !self->opts.is_library);
+    generate_prototypes(self, 1);
     cat_nl(self);
 
     generate_toplevel_values(self);
@@ -3279,10 +3279,11 @@ static void generate_c_exports(transpile *self) {
         tl_monotype_sized params = tl_monotype_arrow_get_args(arrow);
         tl_monotype      *ret    = tl_monotype_sized_last(arrow->list.xs);
 
-        // Generate wrapper: ret_type export_name(params) { return mangled_name(args); }
+        // Generate wrapper: TL_EXPORT ret_type export_name(params) { return mangled_name(args); }
         str ret_c       = type_to_c_mono(self, ret);
         int res_is_void = str_eq(ret_c, S("void"));
 
+        cat(self, S("TL_EXPORT "));
         cat(self, ret_c);
         cat_sp(self);
         cat(self, export_name);
