@@ -335,6 +335,13 @@ test-vendor: build-vendor-tests
 TL_TESTS =					\
 	_Exit					\
 	address_of				\
+	alias_basic				\
+	alias_deep_dotted			\
+	alias_dotted				\
+	alias_file_boundary			\
+	alias_funcptr				\
+	alias_nested_type			\
+	alias_unalias				\
 	alignof					\
 	alloc_align				\
 	alloc_allocators			\
@@ -543,6 +550,15 @@ TL_TESTS =					\
 	while_update_statement
 
 TL_FAIL_TESTS =					\
+	fail_alias_chain			\
+	fail_alias_double_underscore		\
+	fail_alias_duplicate			\
+	fail_alias_main				\
+	fail_alias_reserved_c			\
+	fail_alias_reserved_tl			\
+	fail_alias_self				\
+	fail_alias_shadows_module		\
+	fail_alias_source_not_found		\
 	fail_case_float				\
 	fail_c_export_tess_type			\
 	fail_concrete_fun_mismatch		\
@@ -581,6 +597,7 @@ TL_FAIL_TESTS =					\
 	fail_type_alias_partial_specialization	\
 	fail_try_non_union			\
 	fail_try_three_variants			\
+	fail_unalias_not_found			\
 	fail_unknown_free_variable
 
 # Expected runtime failure tests (debug only: must compile, must fail at runtime)

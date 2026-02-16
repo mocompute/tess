@@ -140,7 +140,7 @@
 
     `(
       ;; Directives (must be at line start)
-      ("^[ \t]*\\(#\\(?:module\\|import\\|include\\|ifc\\|endc\\)\\)\\>"
+      ("^[ \t]*\\(#\\(?:module\\|import\\|include\\|alias\\|unalias\\|ifc\\|endc\\)\\)\\>"
        (1 font-lock-preprocessor-face))
 
       ("^[ \t]*\\(#\\(?:define\\|undef\\|ifdef\\|ifndef\\|endif\\)\\)\\>"

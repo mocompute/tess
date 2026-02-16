@@ -52,6 +52,7 @@ struct parser {
     hashmap               *modules_seen;         // str hset
     hashmap               *module_preludes_seen; // str hset: modules declared with #module_prelude
     hashmap               *nested_type_parents;  // str hset: types that have nested types
+    hashmap               *module_aliases;        // map str -> str: alias name -> original module name
 
     ast_node              *result;
     token_array            tokens;
@@ -190,6 +191,7 @@ parser *parser_create(allocator *alloc, parser_opts const *opts) {
     self->modules_seen            = hset_create(self->parent_alloc, 32);
     self->module_preludes_seen    = hset_create(self->parent_alloc, 32);
     self->nested_type_parents     = hset_create(self->parent_alloc, 1024);
+    self->module_aliases          = map_new(self->parent_alloc, str, str, 32);
     self->result                  = null;
     self->tokens                  = (token_array){0};
     self->error                   = (struct parser_error){0};
@@ -1741,6 +1743,13 @@ static ast_node *parse_when_expr(parser *self) {
 //
 
 static int maybe_mangle_binop(parser *self, ast_node *op, ast_node **inout, ast_node *right) {
+    // Module alias resolution: replace leftmost alias with original module name
+    if ((0 == str_cmp_c(op->symbol.name, ".")) && ast_node_is_symbol(*inout) &&
+        str_map_contains(self->module_aliases, (*inout)->symbol.name)) {
+        str *original          = str_map_get(self->module_aliases, (*inout)->symbol.name);
+        (*inout)->symbol.name = *original;
+    }
+
     // Nested module resolution: if left is a module and "left.right" is also a module,
     // synthesize a combined module reference (e.g., Foo.Bar) for the next dot iteration.
     if ((0 == str_cmp_c(op->symbol.name, ".")) && ast_node_is_symbol(*inout) &&
@@ -2825,6 +2834,142 @@ static void load_module_symbols(parser *self) {
     }
 }
 
+static void toplevel_hash_unity_file(parser *self, str argument) {
+    self->skip_module   = 0;
+    self->expect_module = 1;
+    tokenizer_set_file(self->tokenizer, argument);
+    map_reset(self->module_aliases);
+}
+
+static int toplevel_hash_module(parser *self, str cmd, str module) {
+    // Modules: the name's sole use is to prevent multiple evaluations of the same terms. If a
+    // duplicate name is seen, parsing will stop returning terms it sees until a new #module or new
+    // #unity_file directive is seen.
+    int is_prelude      = str_eq(cmd, S("module_prelude"));
+    self->skip_module   = 0;
+    self->expect_module = 0;
+
+    // reject module names containing __ to avoid collisions with mangled names
+    if (str_contains(module, S("__"))) {
+        self->error.tag = tl_err_double_underscore_in_identifier;
+        return ERROR_STOP;
+    }
+
+    // Validate immediate parent module exists for nested modules (e.g., Foo.Bar must exist for
+    // Foo.Bar.Baz)
+    str parent = str_empty();
+    if (str_rprefix_char(self->transient, module, '.', &parent)) {
+        int parent_known =
+          str_hset_contains(self->modules_seen, parent) ||
+          (self->opts.known_modules && str_map_contains(self->opts.known_modules, parent));
+        if (!parent_known) {
+            self->error.tag = tl_err_nested_module_parent_not_found;
+            return ERROR_STOP;
+        }
+    }
+    str_deinit(self->transient, &parent);
+
+    if (str_hset_contains(self->modules_seen, module)) self->skip_module = 1;
+    else {
+        // save current module symbols, if any
+        save_current_module_symbols(self);
+
+        // Prelude: don't add to modules_seen
+        if (!is_prelude) str_hset_insert(&self->modules_seen, module);
+        if (str_eq(module, S("main"))) self->current_module = str_empty();
+        else {
+            // Note: do not use ast_arena, as it could be speculative and discarded
+            self->current_module = str_copy(self->parent_alloc, module);
+        }
+
+        // Only reset during first pass. During second pass, current_module_symbols may point
+        // to a hashmap in module_symbols (set by load_module_symbols), and resetting it would
+        // corrupt module_symbols.
+
+        if (self->mode == mode_symbols) {
+            hset_reset(self->current_module_symbols);
+        }
+
+        // load module symbols, if any (for re-opened modules, this pre-populates with prelude
+        // symbols)
+        load_module_symbols(self);
+    }
+
+    if (is_prelude) {
+        str_hset_insert(&self->module_preludes_seen, module);
+    }
+    return 0;
+}
+
+static int toplevel_hash_alias(parser *self, str_array words) {
+    if (words.size != 3) {
+        self->error.tag = tl_err_expected_hash_command;
+        return ERROR_STOP;
+    }
+    str source = words.v[1];
+    str alias  = words.v[2];
+
+    // self-alias
+    if (str_eq(source, alias)) {
+        self->error.tag = tl_err_alias_self_alias;
+        return ERROR_STOP;
+    }
+    // __ in alias name
+    if (str_contains(alias, S("__"))) {
+        self->error.tag = tl_err_double_underscore_in_identifier;
+        return ERROR_STOP;
+    }
+    // reserved prefix on alias
+    if (is_c_symbol(alias) || is_intrinsic(alias)) {
+        self->error.tag = tl_err_alias_invalid_name;
+        return ERROR_STOP;
+    }
+    // source is main
+    if (str_eq(source, S("main"))) {
+        self->error.tag = tl_err_alias_source_is_main;
+        return ERROR_STOP;
+    }
+    // source is an existing alias name
+    if (str_map_contains(self->module_aliases, source)) {
+        self->error.tag = tl_err_alias_source_is_alias;
+        return ERROR_STOP;
+    }
+    // source module must exist
+    int source_known =
+      str_hset_contains(self->modules_seen, source) ||
+      (self->opts.known_modules && str_map_contains(self->opts.known_modules, source));
+    if (!source_known) {
+        self->error.tag = tl_err_alias_source_not_found;
+        return ERROR_STOP;
+    }
+    // alias name conflicts with real module
+    int alias_is_module =
+      str_hset_contains(self->modules_seen, alias) ||
+      (self->opts.known_modules && str_map_contains(self->opts.known_modules, alias));
+    if (alias_is_module) {
+        self->error.tag = tl_err_alias_conflicts_with_module;
+        return ERROR_STOP;
+    }
+    // alias name already defined
+    if (str_map_contains(self->module_aliases, alias)) {
+        self->error.tag = tl_err_alias_already_defined;
+        return ERROR_STOP;
+    }
+
+    str source_copy = str_copy(self->parent_alloc, source);
+    str_map_set(&self->module_aliases, alias, &source_copy);
+    return 0;
+}
+
+static int toplevel_hash_unalias(parser *self, str alias) {
+    if (!str_map_contains(self->module_aliases, alias)) {
+        self->error.tag = tl_err_unalias_not_found;
+        return ERROR_STOP;
+    }
+    str_map_erase(self->module_aliases, alias);
+    return 0;
+}
+
 static int toplevel_hash(parser *self) {
     if (a_try(self, a_hash_command)) return 1;
     ast_node *command = self->result;
@@ -2833,74 +2978,21 @@ static int toplevel_hash(parser *self) {
     str_parse_words(command->hash_command.full, &words);
 
     if (words.size >= 2) {
-        str command  = words.v[0];
+        str cmd      = words.v[0];
         str argument = words.v[1];
-        dbg(self, "hash: %s %s", str_cstr(&command), str_cstr(&argument));
-        if (str_eq(command, S("unity_file"))) {
-            self->skip_module   = 0;
-            self->expect_module = 1;
-            tokenizer_set_file(self->tokenizer, argument);
-        }
+        int res      = 0;
+        dbg(self, "hash: %s %s", str_cstr(&cmd), str_cstr(&argument));
 
-        else if (str_eq(command, S("module_prelude")) || str_eq(command, S("module"))) {
-            // Modules: the name's sole use is to prevent multiple evaluations of the same terms. If a
-            // duplicate name is seen, parsing will stop returning terms it sees until a new #module or new
-            // #unity_file directive is seen.
-            int is_prelude      = str_eq(command, S("module_prelude"));
-            str module          = argument;
-            self->skip_module   = 0;
-            self->expect_module = 0;
+        if (str_eq(cmd, S("unity_file")))
+            toplevel_hash_unity_file(self, argument);
+        else if (str_eq(cmd, S("module_prelude")) || str_eq(cmd, S("module")))
+            res = toplevel_hash_module(self, cmd, argument);
+        else if (str_eq(cmd, S("alias")))
+            res = toplevel_hash_alias(self, words);
+        else if (str_eq(cmd, S("unalias")))
+            res = toplevel_hash_unalias(self, argument);
 
-            // reject module names containing __ to avoid collisions with mangled names
-            if (str_contains(module, S("__"))) {
-                self->error.tag = tl_err_double_underscore_in_identifier;
-                return ERROR_STOP;
-            }
-
-            // Validate immediate parent module exists for nested modules (e.g., Foo.Bar must exist for
-            // Foo.Bar.Baz)
-            str parent = str_empty();
-            if (str_rprefix_char(self->transient, module, '.', &parent)) {
-                int parent_known =
-                  str_hset_contains(self->modules_seen, parent) ||
-                  (self->opts.known_modules && str_map_contains(self->opts.known_modules, parent));
-                if (!parent_known) {
-                    self->error.tag = tl_err_nested_module_parent_not_found;
-                    return ERROR_STOP;
-                }
-            }
-            str_deinit(self->transient, &parent);
-
-            if (str_hset_contains(self->modules_seen, module)) self->skip_module = 1;
-            else {
-                // save current module symbols, if any
-                save_current_module_symbols(self);
-
-                // Prelude: don't add to modules_seen
-                if (!is_prelude) str_hset_insert(&self->modules_seen, module);
-                if (str_eq(module, S("main"))) self->current_module = str_empty();
-                else {
-                    // Note: do not use ast_arena, as it could be speculative and discarded
-                    self->current_module = str_copy(self->parent_alloc, module);
-                }
-
-                // Only reset during first pass. During second pass, current_module_symbols may point
-                // to a hashmap in module_symbols (set by load_module_symbols), and resetting it would
-                // corrupt module_symbols.
-
-                if (self->mode == mode_symbols) {
-                    hset_reset(self->current_module_symbols);
-                }
-
-                // load module symbols, if any (for re-opened modules, this pre-populates with prelude
-                // symbols)
-                load_module_symbols(self);
-            }
-
-            if (is_prelude) {
-                str_hset_insert(&self->module_preludes_seen, module);
-            }
-        }
+        if (res) return res;
     }
 
     array_shrink(words);
@@ -4263,6 +4355,7 @@ int parser_next(parser *self) {
             if (self->tokenizer) tokenizer_destroy(&self->tokenizer);
             self->tokenizer   = null;
             self->tokens.size = 0;
+            map_reset(self->module_aliases);
 
             // keep going with next file if possible
         } else {
