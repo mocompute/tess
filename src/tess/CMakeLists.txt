@@ -295,6 +295,7 @@ tl_create_test(conditional_compile_import)
 tl_create_test(conditional_compile_nested)
 tl_create_test(const)
 tl_create_test(defun_inline_type)
+tl_create_test(deref_then_addr)
 tl_create_test(dynamic_array)
 tl_create_test(embed_c)
 tl_create_test(enum_module)
@@ -524,7 +525,6 @@ tl_create_build_fail_test(fail_import_missing_quotes)
 # Known fail-failures: expected-failure tests that the compiler doesn't reject yet
 
 # Known failures: these should work but a compiler bug makes them fail
-tl_create_known_failure(deref_then_addr)
 tl_create_known_failure(forward_ref_tagged_union)
 tl_create_known_failure(lambda_immediate_type_argument)
 tl_create_known_failure(while_empty_body)

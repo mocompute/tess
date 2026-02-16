@@ -1369,8 +1369,23 @@ static str generate_tagged_union_case(transpile *self, ast_node const *node, eva
     assert(node->case_.is_union);
     int is_pointer = node->case_.is_union == AST_TAGGED_UNION_MUTABLE;
 
-    // Generate the expression being matched
+    // Generate the expression being matched.
+    // For mutable (.&) mode, generate as l-value to avoid copying into a temporary,
+    // so that &expr.u.Variant points to the original data, not a copy.
+    int save_lvalue = 0;
+    if (is_pointer && ctx) {
+        save_lvalue      = ctx->want_lvalue;
+        ctx->want_lvalue = 1;
+    }
     str expr_str = generate_expr(self, null, node->case_.expression, ctx);
+    if (is_pointer && ctx) {
+        ctx->want_lvalue = save_lvalue;
+    }
+    // Wrap non-symbol l-value expressions in parentheses for correct precedence
+    // e.g., (*p).tag instead of *p.tag
+    if (is_pointer && !ast_node_is_symbol(node->case_.expression)) {
+        expr_str = str_cat_3(self->transient, S("("), expr_str, S(")"));
+    }
 
     // Get the wrapper type (Shape)
     tl_monotype *wrapper_type = node->case_.expression->type->type;

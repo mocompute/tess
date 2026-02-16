@@ -1553,9 +1553,8 @@ static ast_node *parse_case_expr(parser *self) {
         if (is_ampersand(expr->unary_op.op)) is_pointer = 1;
         else return null; // no other unary op is valid
 
-        // reset variable to the actual symbol
+        // reset variable to the actual expression
         expr = expr->unary_op.operand;
-        if (!ast_node_is_symbol(expr)) return null;
     }
 
     // look for optional predicate
@@ -1668,9 +1667,8 @@ static ast_node *parse_when_expr(parser *self) {
         if (is_ampersand(expr->unary_op.op)) is_pointer = 1;
         else return null; // no other unary op is valid
 
-        // reset variable to the actual symbol
+        // reset variable to the actual expression
         expr = expr->unary_op.operand;
-        if (!ast_node_is_symbol(expr)) return null;
     }
 
     if (a_try(self, a_open_curly)) return null;

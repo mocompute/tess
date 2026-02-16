@@ -376,6 +376,7 @@ TL_TESTS =					\
 	conditional_compile_nested		\
 	const					\
 	defun_inline_type			\
+	deref_then_addr				\
 	dynamic_array				\
 	embed_c					\
 	enum_module				\
@@ -584,7 +585,6 @@ TL_KNOWN_FAIL_FAILURES =
 
 # Tests that should work but currently fail due to compiler bugs
 TL_KNOWN_FAILURES =				\
-	deref_then_addr				\
 	forward_ref_tagged_union		\
 	lambda_immediate_type_argument		\
 	while_empty_body
