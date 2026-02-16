@@ -841,6 +841,50 @@ return value    // Early return from function
 
 Use `return` for early exit from a function. Since Tess is expression-based, implicit returns (the last expression in a function body) are preferred for normal control flow.
 
+### Try
+
+`try` is a prefix operator for error propagation. It works on any two-variant tagged union: it unwraps the first variant (success) or returns early from the enclosing function with the second variant (error).
+
+```tl
+Result[T, E] : | Ok { v: T } | Err { e: E }
+
+parse(input) -> Result[Data, Error] { ... }
+
+process(input) -> Result[Data, Error] {
+    data := try parse(input)    // unwraps Ok, or returns Err
+    transform(data)
+}
+```
+
+This is purely structural — no special type names are required. Any two-variant tagged union works:
+
+```tl
+Option[T] : | Some { v: T } | None
+
+lookup(key) -> Option[Value] { ... }
+
+fetch(key) -> Option[Value] {
+    val := try lookup(key)    // unwraps Some, or returns None
+    validate(val)
+}
+```
+
+`try` composes inline:
+
+```tl
+data := try parse(try read_file(path))
+```
+
+The enclosing function's return type must be compatible — it must be the same two-variant tagged union (or a type whose second variant matches the error being propagated).
+
+`try` is equivalent to a let-else that returns the second variant:
+
+```tl
+// These are equivalent:
+data := try parse(input)
+data: Ok := parse(input) else { return Err(err) }
+```
+
 ## Structs
 
 ### Definition
@@ -1062,9 +1106,9 @@ when s.& {
 
 Use the `.&` suffix on the scrutinee to get pointers to each variant. This is the same syntax used to access mutable iterators with the `for` statement.
 
-### Unwrap-or-bail *(not yet implemented)*
+### Let-else
 
-When you need a single variant's value for the rest of a scope, use the bail form to unwrap it or exit early:
+When you need a single variant's value for the rest of a scope, use let-else to unwrap it or exit early:
 
 ```tl
 s: MySome := val else { return 0 }
@@ -1075,14 +1119,14 @@ s.v + 1
 The `else` block must diverge (`return`, `break`, or `continue`). This avoids trapping the unwrapped value inside a `when` arm when subsequent code needs it:
 
 ```tl
-// Without bail — value is trapped inside the arm
+// Without let-else — value is trapped inside the arm
 when val {
     s: MySome { use(s.v) }
     n: MyNone { return 0 }
 }
 // can't use s here
 
-// With bail — value available in the rest of the scope
+// With let-else — value available in the rest of the scope
 s: MySome := val else { return 0 }
 use(s.v)
 ```

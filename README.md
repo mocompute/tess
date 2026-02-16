@@ -1,6 +1,6 @@
 # The Tess Language (TL)
 
-A statically-typed programming language that transpiles to C11.
+An ML-flavoured systems language that transpiles to C.
 
 ## Features
 
@@ -8,19 +8,12 @@ A statically-typed programming language that transpiles to C11.
 
 - **Type inference** - Hindley-Milner style inference means most type annotations are optional.
 
-- **Pattern matching** - `case` expressions for clean conditional logic, with exhaustiveness checking for tagged unions and support for custom predicates:
+- **Case expressions** - `case` for value matching with support for custom predicates:
   ```tl
   result := case n {
     0    { "zero" }
     1    { "one" }
     else { "other" }
-  }
-
-  // Custom predicate for string comparison, using C's strcmp with c_ prefix
-  streq(a, b) { 0 == c_strcmp(a, b) }
-  msg := case name, streq {
-    "Alice" { "hello friend" }
-    else    { "hello stranger" }
   }
   ```
 
@@ -41,10 +34,29 @@ A statically-typed programming language that transpiles to C11.
   add(x, y, z) { x + y + z }
   ```
 
-- **Tagged unions** - Algebraic data types with exhaustive case matching:
+- **Tagged unions** - Algebraic data types with exhaustive destructuring via `when`:
   ```tl
   Shape : | Circle { radius: Float }
           | Square { length: Float }
+
+  area(s) {
+    when s {
+      c: Circle { c.radius * c.radius * 3.14 }
+      s: Square { s.length * s.length }
+    }
+  }
+  ```
+
+- **Let-else** - Destructure a single tagged union variant into the current scope, with a mandatory `else` that diverges:
+  ```tl
+  s: MySome := val else { return 0 }
+  // s is available for the rest of the scope
+  s.v + 1
+  ```
+
+- **Try** - Error propagation for any two-variant tagged union. Unwraps the first variant or returns early with the second:
+  ```tl
+  data := try parse(try read_file(path))
   ```
 
 - **Defer** - Schedule cleanup to run when leaving a scope, regardless of exit path (`break`, `continue`, `return`). Multiple defers execute in reverse order:
