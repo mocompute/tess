@@ -16,6 +16,12 @@ void array_free_impl(array_t *h, void *ptr) {
     alloc_free(h->alloc, ptr);
 }
 
+void array_reset_impl(array_t *h, void *ptr) {
+    if (!h || !ptr) return;
+    assert(h->alloc);
+    h->size = 0;
+}
+
 void *array_realloc(array_t *h, void *ptr, u32 num, u32 width, u16 align) {
     assert(h->alloc);
     width = (u32)alloc_align(width, align);

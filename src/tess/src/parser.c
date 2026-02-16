@@ -87,6 +87,7 @@ static int           toplevel(parser *);
 
 static int           a_param(parser *);
 static int           a_assignment(parser *);
+static int           a_defer_statement(parser *);
 static int           a_field_assignment(parser *);
 static int           a_body_element(parser *);
 static int           a_expression(parser *);
@@ -96,8 +97,9 @@ static int           a_lambda_function(parser *);
 static int           a_reassignment(parser *);
 static int           a_statement(parser *);
 static int           a_value(parser *);
-static ast_node     *create_body(parser *self, ast_node_array exprs);
-static ast_node     *create_body_fallback(parser *self, ast_node_array exprs, ast_node *);
+static ast_node     *create_body(parser *self, ast_node_array exprs, ast_node_array defers);
+static ast_node     *create_body_fallback(parser *self, ast_node_array exprs, ast_node_array defers,
+                                          ast_node *);
 static int           maybe_type_arguments(parser *self, ast_node_array *type_args);
 static int           operator_precedence(char const *op, int is_prefix);
 static ast_node     *parse_base_expression(parser *);
@@ -345,8 +347,8 @@ static int result_ast_node(parser *p, ast_node *node) {
 
 static int is_reserved(char const *s) {
     static char const *strings[] = {
-      "break",  "case", "continue", "else", "false", "if",    "in", "null",
-      "return", "then", "true",     "void", "when",  "while", null,
+      "break", "case",   "continue", "defer", "else", "false", "if",    "in",
+      "null",  "return", "then",     "true",  "void", "when",  "while", null,
     };
     char const **it = strings;
     while (*it != null)
@@ -1201,7 +1203,7 @@ static ast_node *maybe_wrap_lambda_function_in_let_in(parser *self, ast_node *no
     // body of let: just the symbol referring to the lambda's name
     ast_node_array exprs = {.alloc = self->ast_arena};
     array_push(exprs, lval);
-    ast_node *body = create_body(self, exprs);
+    ast_node *body = create_body(self, exprs, (ast_node_array){0});
 
     ast_node *a    = ast_node_create_let_in(self->ast_arena, lval, val, body);
     return a;
@@ -1474,15 +1476,18 @@ static ast_node *parse_if_continue(parser *self) {
         return null;
     }
 
-    ast_node_array exprs = {.alloc = self->ast_arena};
+    ast_node_array exprs  = {.alloc = self->ast_arena};
+    ast_node_array defers = {.alloc = self->ast_arena};
     while (1) {
-        if (a_try(self, a_body_element)) return null;
-        array_push(exprs, self->result);
+        if (0 == a_try(self, a_defer_statement)) array_push(defers, self->result);
+        else if (a_try(self, a_body_element)) return null;
+        else array_push(exprs, self->result);
         if (0 == a_try(self, a_close_curly)) break;
     }
 
-    ast_node *yes = create_body(self, exprs);
+    ast_node *yes = create_body(self, exprs, defers);
     exprs         = (ast_node_array){.alloc = self->ast_arena};
+    defers        = (ast_node_array){.alloc = self->ast_arena};
 
     ast_node *no  = null;
 
@@ -1492,11 +1497,12 @@ static ast_node *parse_if_continue(parser *self) {
         } else {
             if (a_try(self, a_open_curly)) return null;
             while (1) {
-                if (a_try(self, a_body_element)) return null;
-                array_push(exprs, self->result);
+                if (0 == a_try(self, a_defer_statement)) array_push(defers, self->result);
+                else if (a_try(self, a_body_element)) return null;
+                else array_push(exprs, self->result);
                 if (0 == a_try(self, a_close_curly)) break;
             }
-            no = create_body(self, exprs);
+            no = create_body(self, exprs, defers);
         }
     }
     if (!no) no = null; // ok to have no case null
@@ -1519,22 +1525,24 @@ static ast_node *parse_if_expr(parser *self) {
 static ast_node *parse_body(parser *self) {
     if (a_try(self, a_open_curly)) return null;
 
-    ast_node_array exprs = {.alloc = self->ast_arena};
+    ast_node_array exprs  = {.alloc = self->ast_arena};
+    ast_node_array defers = {.alloc = self->ast_arena};
 
     // Check for empty body `{ }` as sugar for `{ void }`
     if (0 == a_try(self, a_close_curly)) {
         (void)result_ast(self, ast_void);
         array_push(exprs, self->result);
-        return create_body(self, exprs);
+        return create_body(self, exprs, defers);
     }
 
     while (1) {
-        if (a_try(self, a_body_element)) return null;
-        array_push(exprs, self->result);
+        if (0 == a_try(self, a_defer_statement)) array_push(defers, self->result);
+        else if (a_try(self, a_body_element)) return null;
+        else array_push(exprs, self->result);
         if (0 == a_try(self, a_close_curly)) break;
     }
 
-    return create_body(self, exprs);
+    return create_body(self, exprs, defers);
 }
 
 //
@@ -2234,12 +2242,14 @@ static int a_assignment(parser *self) {
         }
 
         // Parse remaining body expressions (the continuation after the bail)
-        ast_node_array exprs = {.alloc = self->ast_arena};
+        ast_node_array exprs  = {.alloc = self->ast_arena};
+        ast_node_array defers = {.alloc = self->ast_arena};
         while (1) {
-            if (a_body_element(self)) break;
-            array_push(exprs, self->result);
+            if (0 == a_try(self, a_defer_statement)) array_push(defers, self->result);
+            else if (a_try(self, a_body_element)) break;
+            else array_push(exprs, self->result);
         }
-        ast_node *success_body = create_body_fallback(self, exprs, val);
+        ast_node *success_body = create_body_fallback(self, exprs, defers, val);
 
         // Build case node: condition is the annotated lval, else arm is the bail body
         ast_node_array conditions = {.alloc = self->ast_arena};
@@ -2260,13 +2270,15 @@ static int a_assignment(parser *self) {
     }
 
     // Normal let-in path
-    ast_node_array exprs = {.alloc = self->ast_arena};
+    ast_node_array exprs  = {.alloc = self->ast_arena};
+    ast_node_array defers = {.alloc = self->ast_arena};
     while (1) {
-        if (a_body_element(self)) break;
-        array_push(exprs, self->result);
+        if (0 == a_try(self, a_defer_statement)) array_push(defers, self->result);
+        else if (a_try(self, a_body_element)) break;
+        else array_push(exprs, self->result);
     }
 
-    ast_node *body = create_body_fallback(self, exprs, val);
+    ast_node *body = create_body_fallback(self, exprs, defers, val);
 
     ast_node *a    = ast_node_create_let_in(self->ast_arena, lval, val, body);
     return result_ast_node(self, a);
@@ -2300,6 +2312,52 @@ static int a_continue_statement(parser *self) {
     return result_ast_node(self, r);
 }
 
+static int a_while_statement(parser *);
+static int a_for_statement(parser *);
+static int a_defer_eligible_statement(parser *self) {
+    if (0 == a_try(self, a_assignment)) return 0;
+    if (0 == a_try(self, a_reassignment)) return 0;
+    if (0 == a_try(self, a_while_statement)) return 0;
+    if (0 == a_try(self, a_for_statement)) return 0;
+
+    return 1;
+}
+
+static int a_defer_eligible_expression(parser *self) {
+    ast_node *res = parse_expression(self, INT_MIN);
+    if (!res) return 1;
+    return result_ast_node(self, res);
+}
+
+static int a_defer_eligible_body_element(parser *self) {
+    // Note: statement before expression, because assignment and ident are ambiguous. Commas can be ignored,
+    // so they can be used between body elements for readability.
+    int ignore = a_try(self, a_comma);
+    (void)ignore; // for GCC
+    if (0 == a_try(self, a_defer_eligible_statement) || 0 == a_try(self, a_defer_eligible_expression))
+        return 0;
+    else return 1;
+}
+
+static int a_defer_statement(parser *self) {
+    if (a_try_s(self, the_symbol, "defer")) return 1;
+
+    // single element
+    if (0 == a_try(self, a_defer_eligible_body_element)) return 0;
+
+    // block element
+    if (a_try(self, a_open_curly)) return 1;
+    ast_node_array exprs = {.alloc = self->ast_arena};
+    while (1) {
+        if (0 == a_try(self, a_close_curly)) break;
+        if (a_try(self, a_defer_eligible_body_element)) return ERROR_STOP; // stop parsing
+        array_push(exprs, self->result);
+    }
+    // cannot nest defer inside defer
+    ast_node *body = create_body(self, exprs, (ast_node_array){0});
+    return result_ast_node(self, body);
+}
+
 static int a_while_statement(parser *self) {
     if (a_try_s(self, the_symbol, "while")) return 1;
 
@@ -2315,14 +2373,16 @@ static int a_while_statement(parser *self) {
 
     if (a_try(self, a_open_curly)) return 1;
 
-    ast_node_array exprs = {.alloc = self->ast_arena};
+    ast_node_array exprs  = {.alloc = self->ast_arena};
+    ast_node_array defers = {.alloc = self->ast_arena};
     while (1) {
-        if (a_try(self, a_body_element)) return 1;
-        array_push(exprs, self->result);
+        if (0 == a_try(self, a_defer_statement)) array_push(defers, self->result);
+        else if (a_try(self, a_body_element)) return 1;
+        else array_push(exprs, self->result);
         if (0 == a_try(self, a_close_curly)) break;
     }
 
-    ast_node *body = create_body(self, exprs);
+    ast_node *body = create_body(self, exprs, defers);
 
     ast_node *r    = ast_node_create_while(self->ast_arena, condition, update, body);
     return result_ast_node(self, r);
@@ -2418,13 +2478,15 @@ static int a_for_statement(parser *self) {
     }
 
     // Read body of for loop
-    ast_node_array exprs = {.alloc = self->ast_arena};
+    ast_node_array exprs  = {.alloc = self->ast_arena};
+    ast_node_array defers = {.alloc = self->ast_arena};
     while (1) {
-        if (a_try(self, a_body_element)) return 1;
-        array_push(exprs, self->result);
+        if (0 == a_try(self, a_defer_statement)) array_push(defers, self->result);
+        else if (a_try(self, a_body_element)) return 1;
+        else array_push(exprs, self->result);
         if (0 == a_try(self, a_close_curly)) break;
     }
-    ast_node *user_body = create_body(self, exprs);
+    ast_node *user_body = create_body(self, exprs, defers);
 
     // Construct enclosing let-in(s) for the body of the loop. For value iteration, we need two let-ins:
     // first to grab the iterator pointer, and second to set the value variable. For pointer iteration, we
@@ -2526,7 +2588,7 @@ static int a_for_statement(parser *self) {
     // The body of the let-in: the while statement followed by the iter_deinit
     array_push(while_statement_exprs, while_statement);
     array_push(while_statement_exprs, call_iter_deinit);
-    ast_node *while_statement_exprs_body = create_body(self, while_statement_exprs);
+    ast_node *while_statement_exprs_body = create_body(self, while_statement_exprs, (ast_node_array){0});
 
     ast_node *lhs                        = iterator;
     ast_node *rhs                        = call_iter_init;
@@ -2557,16 +2619,18 @@ static int a_body_element(parser *self) {
     else return 1;
 }
 
-static ast_node *create_body(parser *self, ast_node_array exprs) {
+static ast_node *create_body(parser *self, ast_node_array exprs, ast_node_array defers) {
     array_shrink(exprs);
-    ast_node *body = ast_node_create_body(self->ast_arena, (ast_node_sized)sized_all(exprs));
+    ast_node *body    = ast_node_create_body(self->ast_arena, (ast_node_sized)sized_all(exprs));
+    body->body.defers = (ast_node_sized)sized_all(defers);
     set_node_file(self, body);
     return body;
 }
 
-static ast_node *create_body_fallback(parser *self, ast_node_array exprs, ast_node *fallback) {
+static ast_node *create_body_fallback(parser *self, ast_node_array exprs, ast_node_array defers,
+                                      ast_node *fallback) {
     if (0 == exprs.size && fallback) array_push(exprs, fallback);
-    return create_body(self, exprs);
+    return create_body(self, exprs, defers);
 }
 
 static int toplevel_defun(parser *self) {
@@ -2629,15 +2693,17 @@ decl_done:
     // Check for reserved type keywords to disallow
     if (is_reserved_type_name(name)) return ERROR_STOP;
 
-    ast_node_array exprs = {.alloc = self->ast_arena};
+    ast_node_array exprs  = {.alloc = self->ast_arena};
+    ast_node_array defers = {.alloc = self->ast_arena};
 
     while (1) {
         if (0 == a_try(self, a_close_curly)) break;
-        if (a_try(self, a_body_element)) return ERROR_STOP; // stop parsing
-        array_push(exprs, self->result);
+        if (0 == a_try(self, a_defer_statement)) array_push(defers, self->result);
+        else if (a_try(self, a_body_element)) return ERROR_STOP; // stop parsing
+        else array_push(exprs, self->result);
     }
 
-    ast_node *body = create_body(self, exprs);
+    ast_node *body = create_body(self, exprs, defers);
 
     // arity-mangle the name before recording it in module symbols
     mangle_name_for_arity(self, name, params.size, 1); // 1 = function definition

@@ -112,6 +112,7 @@ typedef struct ast_node {
 
         struct ast_body {
             ast_node_sized expressions;
+            ast_node_sized defers;
         } body;
 
         struct ast_case {

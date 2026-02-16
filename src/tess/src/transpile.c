@@ -12,6 +12,7 @@
 #include "type_registry.h"
 
 #include <stdarg.h>
+#include <stdint.h>
 #include <stdio.h>
 
 #define TRANSPILE_ARENA_SIZE     32 * 1024
@@ -40,11 +41,17 @@ struct transpile {
 
     str_build         build;
 
-    u32               next_res;
+    u64               next_block;
+    u64               next_res;
 
     int               no_line_directive;
     int               verbose;
 };
+
+typedef struct defer_scope {
+    ast_node_sized      defers;   // this body's ast_body.defers
+    struct defer_scope *parent;   // enclosing scope
+} defer_scope;
 
 typedef struct {
     str_sized free_variables;
@@ -62,6 +69,9 @@ typedef struct {
     // the type of the expression just evaluated is effectively void, regardless of its declared type. For
     // example, _tl_fatal_ is -> any, but when it appears it should never be assigned to a result variable.
     int is_effective_void;
+
+    defer_scope *defers;              // innermost defer scope (linked list head)
+    defer_scope *loop_defer_boundary; // snapshot at loop entry; break/continue stop here
 
 } eval_ctx;
 
@@ -529,7 +539,7 @@ static void generate_context_struct(transpile *self, str_sized fvs) {
 
 static str generate_ctx_var(transpile *self) {
     char buf[80];
-    snprintf(buf, sizeof buf, "tl_ctx_var_%u", self->next_res++);
+    snprintf(buf, sizeof buf, "tl_ctx_var_%" PRIu64, self->next_res++);
     str out = str_init(self->transient, buf);
     cat(self, out);
     return out;
@@ -1350,13 +1360,59 @@ static str generate_str(transpile *self, str expr, tl_monotype *type) {
     return res;
 }
 
+static void emit_defers_until(transpile *self, eval_ctx *ctx, defer_scope *boundary) {
+    int save_is_effective_void = ctx->is_effective_void;
+    for (defer_scope *s = ctx->defers; s && s != boundary; s = s->parent) {
+        if (s->defers.size > INT32_MAX) fatal("overflow");
+        for (i32 i = (i32)s->defers.size - 1; i >= 0; i--) {
+            cat_open_curlyln(self);
+            (void)generate_expr(self, null, s->defers.v[i], ctx);
+            cat_close_curlyln(self);
+        }
+    }
+    ctx->is_effective_void = save_is_effective_void;
+}
+
 static str generate_body(transpile *self, tl_monotype *type, ast_node const *node, eval_ctx *ctx) {
-    (void)type;
+    int has_defers = node->body.defers.size > 0;
+
+    // Push defer scope if this body has defers
+    defer_scope scope;
+    if (has_defers) {
+        scope = (defer_scope){.defers = node->body.defers, .parent = ctx->defers};
+        ctx->defers = &scope;
+    }
 
     str out = str_empty();
     forall(i, node->body.expressions) {
         out = generate_expr(self, null, node->body.expressions.v[i], ctx);
     }
+
+    // Capture result before running defers (defers could modify the variable that out refers to)
+    if (has_defers && !str_is_empty(out) && type && should_assign_result(ctx, type)) {
+        str tmp = next_res(self);
+        generate_decl(self, tmp, type);
+        generate_assign(self, tmp, out);
+        out = tmp;
+    }
+
+    // Emit defers in reverse order (normal exit path)
+    if (has_defers) {
+        int save_is_effective_void = ctx->is_effective_void;
+        if (node->body.defers.size > INT32_MAX) fatal("overflow");
+        for (i32 i = (i32)node->body.defers.size - 1; i >= 0; i--) {
+            cat_open_curlyln(self);
+            (void)generate_expr(self, null, node->body.defers.v[i], ctx);
+            cat_close_curlyln(self);
+        }
+        ctx->is_effective_void = save_is_effective_void;
+    }
+
+    // Pop defer scope
+    if (has_defers) {
+        ctx->defers = scope.parent;
+    }
+
     return out;
 }
 
@@ -1930,6 +1986,23 @@ static str generate_return(transpile *self, tl_monotype *type, ast_node const *n
     str value     = str_empty();
     if (has_value) value = generate_expr(self, type, node->return_.value, ctx);
 
+    // Capture return value to a temp before running defers
+    if (!is_break && has_value && ctx->defers) {
+        tl_monotype *val_type = node->return_.value->type->type;
+        if (!is_nil_result(val_type)) {
+            str tmp = next_res(self);
+            generate_decl(self, tmp, val_type);
+            generate_assign(self, tmp, value);
+            value = tmp;
+        }
+    }
+
+    // Emit defers for scopes being exited
+    if (is_break)
+        emit_defers_until(self, ctx, ctx->loop_defer_boundary);
+    else
+        emit_defers_until(self, ctx, null);
+
     if (is_break) cat(self, S("break"));
     else cat(self, S("return"));
 
@@ -1964,7 +2037,12 @@ static str generate_while(transpile *self, tl_monotype *type, ast_node const *no
     str save_update_label = ctx->update_label;
     ctx->update_label     = next_label(self);
 
+    defer_scope *save_loop_defer_boundary = ctx->loop_defer_boundary;
+    ctx->loop_defer_boundary              = ctx->defers;
+
     (void)generate_expr(self, null, node->while_.body, ctx);
+
+    ctx->loop_defer_boundary = save_loop_defer_boundary;
 
     // include semicolon after label for c99 reasons: label followed by a declaration is a c23 thing
     cat(self, ctx->update_label);
@@ -1983,6 +2061,8 @@ static str generate_continue(transpile *self, tl_monotype *type, ast_node const 
     (void)node;
 
     if (str_is_empty(ctx->update_label)) fatal("logic error");
+
+    emit_defers_until(self, ctx, ctx->loop_defer_boundary);
 
     cat(self, S("goto "));
     cat(self, ctx->update_label);
@@ -2312,6 +2392,7 @@ transpile *transpile_create(allocator *alloc, transpile_opts const *opts) {
     self->context_generated = hset_create(self->arena, 64);
 
     self->next_res          = 0;
+    self->next_block        = 0;
 
     self->no_line_directive = !!opts->no_line_directive;
     self->verbose           = !!opts->verbose;
@@ -2342,13 +2423,13 @@ void transpile_get_arena_stats(transpile *self, arena_stats *out) {
 
 static str next_res(transpile *self) {
     char buf[64];
-    int  len = snprintf(buf, sizeof buf, "tl_res%u", self->next_res++);
+    int  len = snprintf(buf, sizeof buf, "tl_res%" PRIu64, self->next_res++);
     return str_init_n(self->transient, buf, len);
 }
 
 static str next_label(transpile *self) {
     char buf[64];
-    int  len = snprintf(buf, sizeof buf, "tl_label%u", self->next_res++);
+    int  len = snprintf(buf, sizeof buf, "tl_label%" PRIu64, self->next_block++);
     return str_init_n(self->transient, buf, len);
 }
 
