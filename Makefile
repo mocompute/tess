@@ -357,6 +357,7 @@ TL_TESTS =					\
 	builtin_option				\
 	builtin_result				\
 	c_div					\
+	c_export				\
 	c_keywords				\
 	c_struct				\
 	c_symbol_annotation			\
@@ -543,6 +544,7 @@ TL_TESTS =					\
 
 TL_FAIL_TESTS =					\
 	fail_case_float				\
+	fail_c_export_tess_type			\
 	fail_concrete_fun_mismatch		\
 	fail_const_field_mutation		\
 	fail_const_index_mutation		\

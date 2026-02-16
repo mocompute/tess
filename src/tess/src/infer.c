@@ -6095,14 +6095,14 @@ static int run_specialize(tl_infer *self, ast_node_sized nodes, ast_node *main) 
                 tl_polytype *type = tl_type_env_lookup(self->env, fun_name);
                 if (tl_polytype_is_concrete(type)) {
                     dbg(self, "library: exporting '%s'", str_cstr(&fun_name));
-                    tl_polytype *callsite = make_arrow_with(self, traverse_ctx, node, type);
-                    if (!callsite) {
-                        dbg(self, "library: exporting '%s' failed: arrow", str_cstr(&fun_name));
-                        continue;
-                    }
 
+                    // The type is already concrete, so use it directly for
+                    // specialization. Calling make_arrow_with would create fresh
+                    // type variables via ensure_tv; for zero-arg functions those
+                    // never get unified back, but the reconstruction is
+                    // unnecessary at any arity since the type is already known.
                     str inst_name =
-                      specialize_arrow(self, traverse_ctx, fun_name, callsite->type, (ast_node_sized){0});
+                      specialize_arrow(self, traverse_ctx, fun_name, type->type, (ast_node_sized){0});
                     // FIXME: ignores specialize_arrow error
                     dbg(self, "library: exporting '%s' => '%s'", str_cstr(&fun_name), str_cstr(&inst_name));
                 }

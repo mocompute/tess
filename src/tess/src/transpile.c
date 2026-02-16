@@ -137,6 +137,11 @@ static str   ptr_to_arrow_decl(transpile *, tl_monotype *, str);
 static void  generate_function_signature(transpile *, str, tl_polytype *, str_sized);
 static void  exit_error(char const *file, u32 line, char const *restrict fmt, ...);
 static void  update_type(transpile *, tl_monotype **);
+static int   get_c_export_name(allocator *, ast_node *, str *out_export_name);
+static int   is_c_exportable_type(tl_monotype *);
+static void  validate_c_exports(transpile *);
+static void  generate_c_exports(transpile *);
+static int   has_c_exports(transpile *);
 
 // Escape Tess identifiers that clash with C reserved keywords by prefixing them with tl_kw_.
 // Returns the original name unchanged if it is not a C keyword.
@@ -2413,6 +2418,10 @@ int transpile_compile(transpile *self, str_build *out_build) {
     generate_toplevels(self);
     cat_nl(self);
 
+    validate_c_exports(self);
+
+    if (self->opts.is_library) generate_c_exports(self);
+
     if (!self->opts.is_library) generate_main(self);
 
     if (out_build) {
@@ -3083,4 +3092,291 @@ static void exit_error(char const *file, u32 line, char const *restrict fmt, ...
     va_end(args);
 
     exit(1);
+}
+
+//
+// c_export support
+//
+
+// Check if a toplevel node has [[c_export]] or [[c_export("name")]].
+// Returns 1 if found. Sets *out_export_name to the export name.
+// Build the default export name: Module_func for non-main modules, func for main.
+static str default_export_name(allocator *alloc, ast_node *name_node) {
+    str orig   = ast_node_name_original(name_node);
+    str module = name_node->symbol.module;
+    if (str_is_empty(module)) return orig;
+    return str_cat_3(alloc, module, S("_"), orig);
+}
+
+static int get_c_export_name(allocator *alloc, ast_node *toplevel_node, str *out_export_name) {
+    ast_node *name_node = toplevel_name_node(toplevel_node);
+    if (!ast_node_is_symbol(name_node)) return 0;
+
+    ast_node *attrs = name_node->symbol.attributes;
+    if (!attrs || ast_attribute_set != attrs->tag) return 0;
+
+    for (u8 i = 0; i < attrs->attribute_set.n; i++) {
+        ast_node *attr = attrs->attribute_set.nodes[i];
+
+        // [[c_export]] — bare symbol: use Module_func
+        if (ast_node_is_symbol(attr) && str_eq(attr->symbol.name, S("c_export"))) {
+            *out_export_name = default_export_name(alloc, name_node);
+            return 1;
+        }
+
+        // [[c_export("custom_name")]] — NFA with one string argument
+        if (ast_node_is_nfa(attr)) {
+            ast_node *nfa_name = attr->named_application.name;
+            if (ast_node_is_symbol(nfa_name) && str_eq(nfa_name->symbol.name, S("c_export"))) {
+                if (attr->named_application.n_arguments == 1) {
+                    ast_node *arg = attr->named_application.arguments[0];
+                    if (ast_string == arg->tag) {
+                        *out_export_name = arg->symbol.name;
+                        return 1;
+                    }
+                }
+                // c_export with non-string argument: use default
+                *out_export_name = default_export_name(alloc, name_node);
+                return 1;
+            }
+        }
+    }
+    return 0;
+}
+
+// Check whether a monotype is suitable for C export.
+static int is_c_exportable_type(tl_monotype *type) {
+    if (!type) return 0;
+
+    if (tl_monotype_is_any(type) || tl_monotype_is_tv(type)) return 0;
+    if (tl_monotype_is_arrow(type)) return 0;
+    if (tl_monotype_is_tuple(type)) return 0;
+
+    if (tl_monotype_is_ptr(type)) {
+        tl_monotype *target = tl_monotype_ptr_target(type);
+        if (tl_monotype_is_const(target)) target = tl_monotype_const_target(target);
+        if (tl_monotype_is_any(target)) return 1; // Ptr[any] is opaque, ok
+        return is_c_exportable_type(target);
+    }
+
+    if (tl_monotype_is_const(type)) {
+        return is_c_exportable_type(tl_monotype_const_target(type));
+    }
+
+    if (!tl_monotype_is_concrete_no_arrow(type)) return 0;
+
+    str name = type->cons_inst->def->name;
+
+    // Allowed C-compatible types
+    if (str_eq(name, S("Void"))) return 1;
+    if (str_eq(name, S("CChar"))) return 1;
+    if (str_eq(name, S("CUnsignedChar"))) return 1;
+    if (str_eq(name, S("CSignedChar"))) return 1;
+    if (str_eq(name, S("CShort"))) return 1;
+    if (str_eq(name, S("CUnsignedShort"))) return 1;
+    if (str_eq(name, S("CInt"))) return 1;
+    if (str_eq(name, S("CUnsignedInt"))) return 1;
+    if (str_eq(name, S("CLong"))) return 1;
+    if (str_eq(name, S("CUnsignedLong"))) return 1;
+    if (str_eq(name, S("CLongLong"))) return 1;
+    if (str_eq(name, S("CUnsignedLongLong"))) return 1;
+    if (str_eq(name, S("CSize"))) return 1;
+    if (str_eq(name, S("CPtrDiff"))) return 1;
+    if (str_eq(name, S("CInt8"))) return 1;
+    if (str_eq(name, S("CUInt8"))) return 1;
+    if (str_eq(name, S("CInt16"))) return 1;
+    if (str_eq(name, S("CUInt16"))) return 1;
+    if (str_eq(name, S("CInt32"))) return 1;
+    if (str_eq(name, S("CUInt32"))) return 1;
+    if (str_eq(name, S("CInt64"))) return 1;
+    if (str_eq(name, S("CUInt64"))) return 1;
+    if (str_eq(name, S("CFloat"))) return 1;
+    if (str_eq(name, S("CDouble"))) return 1;
+    if (str_eq(name, S("CLongDouble"))) return 1;
+    if (str_eq(name, S("Int"))) return 1;
+    if (str_eq(name, S("Float"))) return 1;
+    if (str_eq(name, S("Bool"))) return 1;
+    if (is_c_symbol(name)) return 1;
+
+    // Disallowed: Str, user structs, tagged unions, enums, etc.
+    return 0;
+}
+
+// Check if any toplevel has c_export attribute.
+static int has_c_exports(transpile *self) {
+    str dummy;
+    forall(i, self->toplevels_sorted) {
+        ast_node *node = str_map_get_ptr(self->toplevels, self->toplevels_sorted.v[i]);
+        if (ast_node_is_utd(node)) continue;
+        if (get_c_export_name(self->transient, node, &dummy)) return 1;
+    }
+    return 0;
+}
+
+// Validate that all c_export functions have C-compatible types.
+static void validate_c_exports(transpile *self) {
+    forall(i, self->toplevels_sorted) {
+        ast_node *node = str_map_get_ptr(self->toplevels, self->toplevels_sorted.v[i]);
+        if (ast_node_is_utd(node)) continue;
+
+        str export_name;
+        if (!get_c_export_name(self->transient, node, &export_name)) continue;
+
+        str          name = toplevel_name(node);
+        tl_polytype *poly = tl_type_env_lookup(self->env, name);
+        if (!poly) continue;
+        if (!should_generate(self, name, poly)) continue;
+
+        ast_node    *name_node = toplevel_name_node(node);
+        tl_monotype *arrow     = poly->type;
+        if (!tl_monotype_is_arrow(arrow)) continue;
+
+        tl_monotype_sized params = tl_monotype_arrow_get_args(arrow);
+        for (u32 j = 0; j < params.size; j++) {
+            if (!is_c_exportable_type(params.v[j])) {
+                str tname = tl_monotype_to_string(self->transient, params.v[j]);
+                exit_error(name_node->file, name_node->line,
+                           "c_export function '%s' has non-C-exportable parameter type: %s",
+                           str_cstr(&export_name), str_cstr(&tname));
+            }
+        }
+
+        tl_monotype *ret = tl_monotype_sized_last(arrow->list.xs);
+        if (!is_c_exportable_type(ret)) {
+            str tname = tl_monotype_to_string(self->transient, ret);
+            exit_error(name_node->file, name_node->line,
+                       "c_export function '%s' has non-C-exportable return type: %s",
+                       str_cstr(&export_name), str_cstr(&tname));
+        }
+    }
+}
+
+// Generate non-static wrapper functions for c_export functions.
+static void generate_c_exports(transpile *self) {
+    forall(i, self->toplevels_sorted) {
+        ast_node *node = str_map_get_ptr(self->toplevels, self->toplevels_sorted.v[i]);
+        if (ast_node_is_utd(node)) continue;
+        if (ast_node_is_let(node) && !ast_node_is_specialized(node)) continue;
+
+        str export_name;
+        if (!get_c_export_name(self->transient, node, &export_name)) continue;
+
+        str          name = toplevel_name(node);
+        tl_polytype *poly = tl_type_env_lookup(self->env, name);
+        if (!poly) continue;
+        if (!should_generate(self, name, poly)) continue;
+
+        tl_monotype *arrow = poly->type;
+        if (!tl_monotype_is_arrow(arrow)) continue;
+
+        tl_monotype_sized params = tl_monotype_arrow_get_args(arrow);
+        tl_monotype      *ret    = tl_monotype_sized_last(arrow->list.xs);
+
+        // Generate wrapper: ret_type export_name(params) { return mangled_name(args); }
+        str ret_c       = type_to_c_mono(self, ret);
+        int res_is_void = str_eq(ret_c, S("void"));
+
+        cat(self, ret_c);
+        cat_sp(self);
+        cat(self, export_name);
+        cat_open_round(self);
+
+        // Build parameter list with names
+        if (!params.size) {
+            cat(self, S("void"));
+        } else {
+            for (u32 j = 0; j < params.size; j++) {
+                str ptype = type_to_c_mono(self, params.v[j]);
+                cat(self, ptype);
+                cat_sp(self);
+                // Generate parameter names: tl_p0, tl_p1, ...
+                char pbuf[32];
+                snprintf(pbuf, sizeof pbuf, "tl_p%u", j);
+                cat(self, str_init_small(pbuf));
+                if (j + 1 < params.size) cat_commasp(self);
+            }
+        }
+
+        cat_close_round(self);
+        cat_sp(self);
+        cat_open_curlyln(self);
+
+        // Body: return mangled_name(tl_p0, tl_p1, ...);
+        if (!res_is_void) cat(self, S("return "));
+        cat(self, mangle_fun(self, name));
+        cat_open_round(self);
+        for (u32 j = 0; j < params.size; j++) {
+            char pbuf[32];
+            snprintf(pbuf, sizeof pbuf, "tl_p%u", j);
+            cat(self, str_init_small(pbuf));
+            if (j + 1 < params.size) cat_commasp(self);
+        }
+        cat_close_round(self);
+        cat_semicolonln(self);
+
+        cat_close_curly(self);
+        cat_nl(self);
+        cat_nl(self);
+    }
+}
+
+// Generate a C header file with prototypes for all c_export functions.
+int transpile_generate_header(transpile *self, str_build *out_header, str guard_name) {
+    if (!has_c_exports(self)) return 0;
+
+    str_build hdr = str_build_init(self->transient, 512);
+
+    str_build_cat(&hdr, S("#ifndef "));
+    str_build_cat(&hdr, guard_name);
+    str_build_cat(&hdr, S("\n#define "));
+    str_build_cat(&hdr, guard_name);
+    str_build_cat(&hdr, S("\n\n"));
+    str_build_cat(&hdr, S("#include <stddef.h>\n"));
+    str_build_cat(&hdr, S("#include <stdint.h>\n\n"));
+    str_build_cat(&hdr, S("/* Initialize the Tess runtime. Call before any exported function. */\n"));
+    str_build_cat(&hdr, S("void tl_init(void);\n\n"));
+
+    forall(i, self->toplevels_sorted) {
+        ast_node *node = str_map_get_ptr(self->toplevels, self->toplevels_sorted.v[i]);
+        if (ast_node_is_utd(node)) continue;
+        if (ast_node_is_let(node) && !ast_node_is_specialized(node)) continue;
+
+        str export_name;
+        if (!get_c_export_name(self->transient, node, &export_name)) continue;
+
+        str          name = toplevel_name(node);
+        tl_polytype *poly = tl_type_env_lookup(self->env, name);
+        if (!poly) continue;
+        if (!should_generate(self, name, poly)) continue;
+
+        tl_monotype *arrow = poly->type;
+        if (!tl_monotype_is_arrow(arrow)) continue;
+
+        tl_monotype_sized params = tl_monotype_arrow_get_args(arrow);
+        tl_monotype      *ret    = tl_monotype_sized_last(arrow->list.xs);
+
+        // return type
+        str ret_c = type_to_c_mono(self, ret);
+        str_build_cat(&hdr, ret_c);
+        str_build_cat(&hdr, S(" "));
+        str_build_cat(&hdr, export_name);
+        str_build_cat(&hdr, S("("));
+
+        if (!params.size) {
+            str_build_cat(&hdr, S("void"));
+        } else {
+            for (u32 j = 0; j < params.size; j++) {
+                str ptype = type_to_c_mono(self, params.v[j]);
+                str_build_cat(&hdr, ptype);
+                if (j + 1 < params.size) str_build_cat(&hdr, S(", "));
+            }
+        }
+
+        str_build_cat(&hdr, S(");\n"));
+    }
+
+    str_build_cat(&hdr, S("\n#endif\n"));
+
+    *out_header = hdr;
+    return 1;
 }

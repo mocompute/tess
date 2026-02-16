@@ -22,12 +22,14 @@
 #define CD_CMD              "cd /d"
 #define SEP_STR             "\\"
 #define EXE_SUFFIX          ".exe"
+#define LIB_SUFFIX          ".dll"
 #else
 #include <sys/wait.h>
 #include <unistd.h>
 #define CD_CMD     "cd"
 #define SEP_STR    "/"
 #define EXE_SUFFIX ""
+#define LIB_SUFFIX ".so"
 #endif
 
 #define T(name)                                                                                            \
@@ -2125,6 +2127,242 @@ static int test_e2e_module_conflict(void) {
     return 0;
 }
 
+// ---------------------------------------------------------------------------
+// c_export end-to-end tests
+// ---------------------------------------------------------------------------
+
+// Test: tess lib-emit-c produces wrapper functions with correct export names.
+static int test_e2e_c_export_emit_c(void) {
+    char dir[512];
+    make_temp_path(dir, sizeof(dir), "e2e_cexport_emit/");
+    test_mkdir_p(dir);
+
+    char src[512];
+    snprintf(src, sizeof(src), "%smylib.tl", dir);
+    if (write_file(src,
+                   "#module mylib\n"
+                   "[[c_export]] add(x: CInt, y: CInt) -> CInt { x + y }\n"
+                   "[[c_export(\"my_mul\")]] mul(a: CInt, b: CInt) -> CInt { a * b }\n"
+                   "helper(x: CInt) -> CInt { x + 1 }\n")) {
+        fprintf(stderr, "  failed to write mylib.tl\n");
+        return 1;
+    }
+
+    // Run lib-emit-c, capture output
+    char output_log[512];
+    snprintf(output_log, sizeof(output_log), "%semit.c", dir);
+
+    char cmd[2048];
+    snprintf(cmd, sizeof(cmd),
+             "\"%s\" lib-emit-c --no-standard-includes -S \"%s\" --no-line-directive \"%s\" >\"%s\" 2>&1",
+             e2e_tess_exe, e2e_stdlib_dir, src, output_log);
+    if (run_cmd(cmd) != 0) {
+        fprintf(stderr, "  tess lib-emit-c failed\n");
+        return 1;
+    }
+
+    char *output = read_file_contents(output_log, null);
+    if (!output) {
+        fprintf(stderr, "  failed to read emit output\n");
+        return 1;
+    }
+
+    // Verify wrapper function for [[c_export]] add -> "mylib_add"
+    if (!strstr(output, "int mylib_add(")) {
+        fprintf(stderr, "  expected 'int mylib_add(' in output\n");
+        return 1;
+    }
+
+    // Verify wrapper function for [[c_export("my_mul")]] mul -> "my_mul"
+    if (!strstr(output, "int my_mul(")) {
+        fprintf(stderr, "  expected 'int my_mul(' in output\n");
+        return 1;
+    }
+
+    // Verify wrappers call the mangled internal names
+    if (!strstr(output, "tl_fun_mylib__add__2")) {
+        fprintf(stderr, "  expected wrapper to call tl_fun_mylib__add__2\n");
+        return 1;
+    }
+    if (!strstr(output, "tl_fun_mylib__mul__2")) {
+        fprintf(stderr, "  expected wrapper to call tl_fun_mylib__mul__2\n");
+        return 1;
+    }
+
+    // Verify non-exported helper does NOT produce a wrapper
+    if (strstr(output, "mylib_helper(") || strstr(output, "int helper(")) {
+        fprintf(stderr, "  non-exported 'helper' should not have a wrapper\n");
+        return 1;
+    }
+
+    return 0;
+}
+
+// Test: tess lib generates a .h header file alongside the .so.
+static int test_e2e_c_export_header(void) {
+    char dir[512];
+    make_temp_path(dir, sizeof(dir), "e2e_cexport_hdr/");
+    test_mkdir_p(dir);
+
+    char src[512];
+    snprintf(src, sizeof(src), "%stest.tl", dir);
+    if (write_file(src,
+                   "#module testmod\n"
+                   "[[c_export(\"add\")]] add(x: CInt, y: CInt) -> CInt { x + y }\n"
+                   "[[c_export]] inc(x: CInt) -> CInt { x + 1 }\n"
+                   "[[c_export]] noop() -> Void { }\n")) {
+        fprintf(stderr, "  failed to write test.tl\n");
+        return 1;
+    }
+
+    char so_path[512], hdr_path[512];
+    snprintf(so_path, sizeof(so_path), "%slibtest" LIB_SUFFIX, dir);
+    snprintf(hdr_path, sizeof(hdr_path), "%slibtest.h", dir);
+
+    char cmd[2048];
+    snprintf(cmd, sizeof(cmd),
+             "\"%s\" lib --no-standard-includes -S \"%s\" \"%s\" -o \"%s\" 2>&1",
+             e2e_tess_exe, e2e_stdlib_dir, src, so_path);
+    if (run_cmd(cmd) != 0) {
+        fprintf(stderr, "  tess lib failed\n");
+        return 1;
+    }
+
+    // Verify header file was generated
+    char *header = read_file_contents(hdr_path, null);
+    if (!header) {
+        fprintf(stderr, "  header file not generated at %s\n", hdr_path);
+        return 1;
+    }
+
+    // Verify include guard
+    if (!strstr(header, "#ifndef LIBTEST_H") || !strstr(header, "#define LIBTEST_H")) {
+        fprintf(stderr, "  header missing include guard\n");
+        return 1;
+    }
+
+    // Verify tl_init declaration
+    if (!strstr(header, "void tl_init(void)")) {
+        fprintf(stderr, "  header missing tl_init declaration\n");
+        return 1;
+    }
+
+    // Verify exported function prototypes
+    if (!strstr(header, "int add(")) {
+        fprintf(stderr, "  header missing 'int add(' prototype\n");
+        return 1;
+    }
+    if (!strstr(header, "int testmod_inc(")) {
+        fprintf(stderr, "  header missing 'int testmod_inc(' prototype\n");
+        return 1;
+    }
+    if (!strstr(header, "void testmod_noop(")) {
+        fprintf(stderr, "  header missing 'void testmod_noop(' prototype\n");
+        return 1;
+    }
+
+    // Verify the header ends with #endif (well-formed guard)
+    if (!strstr(header, "#endif")) {
+        fprintf(stderr, "  header missing #endif\n");
+        return 1;
+    }
+
+    return 0;
+}
+
+// Test: tess lib with no c_export functions does NOT produce a header file.
+static int test_e2e_c_export_no_header_when_none(void) {
+    char dir[512];
+    make_temp_path(dir, sizeof(dir), "e2e_cexport_nohdr/");
+    test_mkdir_p(dir);
+
+    char src[512];
+    snprintf(src, sizeof(src), "%snoexport.tl", dir);
+    if (write_file(src,
+                   "#module noex\n"
+                   "add(x: CInt, y: CInt) -> CInt { x + y }\n")) {
+        fprintf(stderr, "  failed to write noexport.tl\n");
+        return 1;
+    }
+
+    char so_path[512], hdr_path[512];
+    snprintf(so_path, sizeof(so_path), "%slibnoex" LIB_SUFFIX, dir);
+    snprintf(hdr_path, sizeof(hdr_path), "%slibnoex.h", dir);
+
+    char cmd[2048];
+    snprintf(cmd, sizeof(cmd),
+             "\"%s\" lib --no-standard-includes -S \"%s\" \"%s\" -o \"%s\" 2>&1",
+             e2e_tess_exe, e2e_stdlib_dir, src, so_path);
+    if (run_cmd(cmd) != 0) {
+        fprintf(stderr, "  tess lib failed\n");
+        return 1;
+    }
+
+    // Verify no header file was generated
+    FILE *hf = fopen(hdr_path, "r");
+    if (hf) {
+        fclose(hf);
+        fprintf(stderr, "  header file should not exist when no c_export functions\n");
+        return 1;
+    }
+
+    return 0;
+}
+
+// Test: zero-arg void functions with [[c_export]] are emitted in library mode.
+// Regression: the library specializer produced a non-concrete arrow (() -> tN)
+// for zero-arg void functions, causing them to be stripped by
+// remove_generic_toplevels.
+static int test_e2e_c_export_void_noop(void) {
+    char dir[512];
+    make_temp_path(dir, sizeof(dir), "e2e_cexport_noop/");
+    test_mkdir_p(dir);
+
+    char src[512];
+    snprintf(src, sizeof(src), "%snoop.tl", dir);
+    if (write_file(src,
+                   "#module mylib\n"
+                   "[[c_export]] noop() -> Void { }\n"
+                   "[[c_export]] get_zero() -> CInt { 0 }\n")) {
+        fprintf(stderr, "  failed to write noop.tl\n");
+        return 1;
+    }
+
+    // Run lib-emit-c, capture output
+    char output_log[512];
+    snprintf(output_log, sizeof(output_log), "%semit.c", dir);
+
+    char cmd[2048];
+    snprintf(cmd, sizeof(cmd),
+             "\"%s\" lib-emit-c --no-standard-includes -S \"%s\" --no-line-directive \"%s\" >\"%s\" 2>&1",
+             e2e_tess_exe, e2e_stdlib_dir, src, output_log);
+    if (run_cmd(cmd) != 0) {
+        fprintf(stderr, "  tess lib-emit-c failed\n");
+        return 1;
+    }
+
+    char *output = read_file_contents(output_log, null);
+    if (!output) {
+        fprintf(stderr, "  failed to read emit output\n");
+        return 1;
+    }
+
+    // Zero-arg CInt return should work
+    if (!strstr(output, "mylib_get_zero(")) {
+        fprintf(stderr, "  expected 'mylib_get_zero(' wrapper in output\n");
+        return 1;
+    }
+
+    // Zero-arg void return must also produce a wrapper
+    if (!strstr(output, "mylib_noop(")) {
+        fprintf(stderr, "  expected 'mylib_noop(' wrapper in output\n");
+        fprintf(stderr, "  (zero-arg void function missing from library output)\n");
+        return 1;
+    }
+
+    return 0;
+}
+
 int main(void) {
     init_temp_dir();
     init_e2e_paths();
@@ -2160,5 +2398,9 @@ int main(void) {
     T(test_e2e_internal_module_accessible)
     T(test_e2e_generic_package)
     T(test_e2e_module_conflict)
+    T(test_e2e_c_export_emit_c)
+    T(test_e2e_c_export_header)
+    T(test_e2e_c_export_no_header_when_none)
+    T(test_e2e_c_export_void_noop)
     return error;
 }

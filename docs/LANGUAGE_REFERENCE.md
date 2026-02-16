@@ -1319,6 +1319,41 @@ allocate[a]() -> Ptr[a] {
 }
 ```
 
+### Exporting Functions to C (`c_export`)
+
+The `[[c_export]]` attribute gives Tess functions stable C symbol names, making them callable from C code. When compiling with `tess lib`, a `.h` header file is automatically generated alongside the shared library.
+
+The default export name is `Module_func` (module-qualified with `_` separator). For `#module main`, the module prefix is omitted. Use `[[c_export("name")]]` to specify a custom C symbol name.
+
+```tl
+#module MyLib
+
+// Exports as MyLib_add
+[[c_export]] add(x: CInt, y: CInt) -> CInt { x + y }
+
+// Exports as "multiply" (custom name overrides module prefix)
+[[c_export("multiply")]] mul(a: CInt, b: CInt) -> CInt { a * b }
+```
+
+Compiling with `tess lib mylib.tl -o libmylib.so` produces both `libmylib.so` and `libmylib.h`:
+
+```c
+#ifndef LIBMYLIB_H
+#define LIBMYLIB_H
+
+#include <stddef.h>
+#include <stdint.h>
+
+void tl_init(void);
+
+int MyLib_add(int, int);
+int multiply(int, int);
+
+#endif
+```
+
+**Type restrictions:** Only C-compatible types are allowed in `c_export` function signatures. The compiler rejects Tess-specific types like `Str`, user structs, tagged unions, and enums. Allowed types include all `C*` types (`CInt`, `CChar`, `CSize`, etc.), `Int`, `Float`, `Bool`, `Void`, `Ptr[T]`, and `c_struct_*` types.
+
 ## Global Variables
 
 Variables declared at module scope are global variables:
