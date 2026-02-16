@@ -5,6 +5,44 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased] - 2026-02-15 to 2026-02-16 (ef1d4283..51575693)
+
+### Highlights
+
+- New `try` prefix keyword for structural error propagation on any two-variant tagged union (no special Result type required)
+- New `defer` statement for scope-exit cleanup with correct interaction across `return`, `break`, `continue`, and `try`
+- Extended allocator with aligned allocation, resize, arena checkpoints, and allocation statistics
+- Compiler stress tests and fixes for closures in named functions and chained `.*.&` syntax
+
+### Added
+
+- **`try` Keyword**: New prefix operator that structurally unwraps the first variant of any two-variant tagged union, returning the inner value on success or early-returning the full union on error. Works purely on structure -- no special type names like `Result` required. Validates at compile time that the operand is a two-variant union with a single-field first variant, and constrains the enclosing function's return type to match. Correctly runs pending `defer` expressions on the early-return path.
+- **`defer` Statement**: Schedules expressions to run at scope exit in reverse declaration order. Supports single-expression (`defer x = 0`) and block (`defer { ... }`) forms. Defers execute before `return`, `break`, and `continue`, with return values captured to a temporary first to prevent deferred side effects from corrupting the return value. Nested `defer` inside `defer` is disallowed.
+- **Allocator Extensions**: The `Allocator` vtable gained `aligned_alloc`, `aligned_free`, and `resize` operations. Bump allocator implements in-place resize when the target is the most recent allocation. New APIs: `bump_reset`, `bump_save`/`bump_restore` for arena-style checkpoints, `bump_get_stats` for allocation statistics (allocated, capacity, peak, bucket count). Convenience wrappers added for the transient allocator.
+- **Compiler Stress Tests**: Eight new stress tests covering deep nesting, when/case combinations, scope shadowing, generic types, closures, control flow, expression positions, and type features. Three known-failure tests added to document current compiler limitations.
+- **`array_reset` Macro**: New `array_reset` in the MOS array library that resets size to 0 without freeing memory, allowing buffer reuse.
+
+### Changed
+
+- **Chained `.*.&` Syntax in When/Case**: Removed the restriction requiring `.&` operands to be bare symbols, enabling expressions like `p.*.&` (dereference then take mutable reference). Mutations now propagate through the original pointer rather than a temporary copy.
+- **Closures in Named Helper Functions**: Fixed tree shaking to only add value let-ins unconditionally; let-in-lambdas are now discovered through normal reachability, preventing orphaned generic copies from causing `free_variable_not_found` errors.
+- **Bump Allocator `calloc` Semantics**: `_bump_calloc` now correctly zero-fills memory, matching standard `calloc` behavior (previously used a debug sentinel).
+- **Transpiler Counter Types**: Widened `next_res` and `next_block` counters from `u32` to `u64` and separated label generation onto its own counter.
+- **Extra Substitution Pass Before Unresolved Type Errors**: The type checker now performs an additional substitution attempt on let-in names and reassignment types before reporting unresolved type errors, preventing false positives.
+- **Codegen Refactoring**: Extracted `resolve_nullary_type_argument` and `should_assign_value` helpers to deduplicate type resolution and assignment emission logic.
+- **Emacs `tl-mode.el`**: Keyword highlighting uses symbol boundaries instead of word boundaries, preventing false matches inside identifiers. Added `defer` and `try` keywords.
+- **Documentation**: Language reference updated with full sections for `defer` and `try`. "Unwrap-or-bail" renamed to "let-else" throughout. README tagline and feature list updated.
+
+### Removed
+
+- **`log_constraint_mono` Function**: Removed unused debug function from `infer.c` that used a GCC extension incompatible with MSVC.
+
+### Fixed
+
+- **Null Pointer Assignment**: Fixed `generate_let_in` incorrectly treating `null` the same as `void`, which caused `var: Ptr[T] := null` to generate an uninitialized declaration instead of assigning `NULL`.
+- **AST Traversal of Defers**: Added missing DFS traversal of `body.defers` in `ast_node_each_node`, fixing type variable resolution inside non-trivial defer expressions.
+- **ASAN Warning from Empty String Init**: Added guard to skip zero-length `memcpy` in `init_small` when initializing an empty string.
+
 ## [Unreleased] - 2026-02-10 to 2026-02-15 (1215d21..ef1d4283)
 
 ### Highlights
