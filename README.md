@@ -8,35 +8,9 @@ An ML-flavoured systems language that transpiles to C.
 
 - **Type inference** - Hindley-Milner style inference means most type annotations are optional.
 
-- **Case expressions** - `case` for value matching with support for custom predicates:
-  ```tl
-  result := case n {
-    0    { "zero" }
-    1    { "one" }
-    else { "other" }
-  }
-  ```
-
-- **Minimal syntax** - No semicolons. Colons always introduce types. Braces delimit blocks uniformly. Postfix pointer operators (`.&`, `.*`, `->`) read left-to-right like field access.
-
-- **Generics** - Polymorphic functions and types with automatic specialization.
-  ```tl
-  Vec2(T) : { x: T, y: T }   // Define a generic type
-
-  vi := Vec2(x = 1, y = 2)           // Vec2(Int)
-  vf := Vec2(x = 1.0, y = 2.0)       // Vec2(Float)
-  ```
-
-- **Function overloading** - Define multiple functions with the same name but different arities. The compiler resolves calls by argument count:
-  ```tl
-  add(x) { x }
-  add(x, y) { x + y }
-  add(x, y, z) { x + y + z }
-  ```
-
 - **Tagged unions** - Algebraic data types with exhaustive destructuring via `when`:
   ```tl
-  Shape : | Circle { radius: Float }
+  Shape: | Circle { radius: Float }
           | Square { length: Float }
 
   area(s) {
@@ -54,6 +28,12 @@ An ML-flavoured systems language that transpiles to C.
   s.v + 1
   ```
 
+- **Option and Result** - Built-in tagged unions for nullable values and error handling:
+  ```tl
+  Option[T]:    | Some { v: T } | None
+  Result[T, U]: | Ok   { v: T } | Err { v: U }
+  ```
+
 - **Try** - Error propagation for any two-variant tagged union. Unwraps the first variant or returns early with the second:
   ```tl
   data := try parse(try read_file(path))
@@ -67,18 +47,51 @@ An ML-flavoured systems language that transpiles to C.
   }
   ```
 
-- **Tail call optimization** - Guaranteed by the language.
+- **Generics** - Polymorphic functions and types with automatic specialization.
+  ```tl
+  Vec2[T]: { x: T, y: T }   // Define a generic type
+
+  vi := Vec2(x = 1, y = 2)           // Vec2[Int]
+  vf := Vec2(x = 1.0, y = 2.0)       // Vec2[Float]
+  ```
+
+- **Minimal syntax** - No semicolons. Colons always introduce types. Braces delimit blocks uniformly. Postfix pointer operators (`.&`, `.*`, `->`) read left-to-right like field access.
+
+- **Case expressions** - `case` for value matching with support for custom predicates:
+  ```tl
+  result := case n {
+    0    { "zero" }
+    1    { "one" }
+    else { "other" }
+  }
+  ```
+
+- **Function overloading** - Define multiple functions with the same name but different arities. The compiler resolves calls by argument count:
+  ```tl
+  add(x) { x }
+  add(x, y) { x + y }
+  add(x, y, z) { x + y + z }
+  ```
 
 - **Packages** - Distribute reusable libraries as `.tlib` source archives. Declare dependencies in `package.tl`, and the compiler handles version verification, transitive resolution, and whole-program compilation.
 
-- **C interoperability** - Seamless integration with C libraries. Directly `#include` headers and call C functions with the `c_` prefix. Export Tess functions to C with `[[c_export]]`—the compiler generates a `.h` header automatically:
+- **Call C from Tess** - `#include` headers and call C functions directly with the `c_` prefix:
+  ```tl
+  #include <math.h>
+  c_sqrt(x: CDouble) -> CDouble
+  result := c_sqrt(2.0)
+  ```
+
+- **Call Tess from C** - Export functions with `[[c_export]]`—the compiler generates a `.h` header automatically:
   ```tl
   #module MyLib
-  [[c_export]] add(x: CInt, y: CInt) -> CInt { x + y }
+  [[c_export]] add(x: CInt, y: CInt) { x + y }
   ```
   ```bash
   tess lib mylib.tl -o libmylib.so   # produces libmylib.so + libmylib.h
   ```
+
+- **250+ tests** - Unit tests for the compiler internals and integration tests for every language feature, including expected-failure tests that verify the compiler rejects invalid programs.
 
 ## Example
 
@@ -86,7 +99,7 @@ An ML-flavoured systems language that transpiles to C.
 #module main
 #import <stdio.tl>
 
-Point(a) : { x: a, y: a }
+Point[a]: { x: a, y: a }
 
 add(p1, p2) {
   Point(x = p1.x + p2.x, y = p1.y + p2.y)
@@ -113,7 +126,7 @@ make -j              # Build the compiler
 make -j test         # Run tests
 
 # build an executable
-./tess exe -o program
+./tess exe main.tl -o program
 ```
 
 ### Windows
@@ -121,7 +134,7 @@ make -j test         # Run tests
 Build from a Developer Command Prompt or Developer PowerShell using CMake:
 
 ```powershell
-cmake -B out/build -S .
+cmake -GNinja -B out/build -S .
 cmake --build out/build --config Release -j
 ctest -C Release --test-dir out/build -j   # Run tests
 ```
