@@ -530,6 +530,5 @@ tl_create_build_fail_test(fail_try_three_variants)
 # Known fail-failures: expected-failure tests that the compiler doesn't reject yet
 
 # Known failures: these should work but a compiler bug makes them fail
-tl_create_known_failure(forward_ref_tagged_union)
 tl_create_known_failure(lambda_immediate_type_argument)
 tl_create_known_failure(while_empty_body)

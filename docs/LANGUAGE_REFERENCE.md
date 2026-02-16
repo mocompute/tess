@@ -1361,6 +1361,30 @@ forest := Forest(trees = Array.with_capacity[Tree[Int]](16))
 t1.children = forest.&
 ```
 
+**Definition order matters.** A type used by value (as a struct field or tagged union variant field) must be defined before the type that references it. Forward references—using a type before it is defined—require `Ptr` indirection:
+
+```tl
+// ERROR: Inner is not yet defined when Outer is parsed
+Outer : | OA { inner: Inner }
+        | OB
+Inner : | IA { value: Int }
+        | IB
+
+// OK: reorder so Inner is defined first
+Inner : | IA { value: Int }
+        | IB
+Outer : | OA { inner: Inner }
+        | OB
+
+// OK: use Ptr for forward references
+Outer : | OA { inner: Ptr[Inner] }
+        | OB
+Inner : | IA { value: Int }
+        | IB
+```
+
+Note that functions do not have this restriction—they can call each other regardless of definition order (see [Mutual Recursion](#mutual-recursion)).
+
 ## Comments
 
 ```tl
