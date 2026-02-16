@@ -693,6 +693,7 @@ void ast_node_each_node(void *ctx, ast_node_each_node_fun fun, ast_node *node) {
     case ast_body:
         //
         forall(i, node->body.expressions) fun(ctx, node->body.expressions.v[i]);
+        forall(i, node->body.defers) fun(ctx, node->body.defers.v[i]);
         break;
 
     case ast_case:
