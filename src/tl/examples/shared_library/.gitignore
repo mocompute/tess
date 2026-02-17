@@ -1,0 +1,5 @@
+*.so
+*.tlib
+*.h
+mylib
+main
