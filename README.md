@@ -11,7 +11,7 @@ An ML-flavoured systems language that transpiles to C.
 - **Tagged unions** - Algebraic data types with exhaustive destructuring via `when`:
   ```tl
   Shape: | Circle { radius: Float }
-          | Square { length: Float }
+         | Square { length: Float }
 
   area(s) {
     when s {
@@ -88,7 +88,7 @@ An ML-flavoured systems language that transpiles to C.
   [[c_export]] add(x: CInt, y: CInt) { x + y }
   ```
   ```bash
-  tess lib mylib.tl -o libmylib.so   # produces libmylib.so + libmylib.h
+  tess lib mylib.tl  # produces libmylib.so + libmylib.h
   ```
 
 - **250+ tests** - Unit tests for the compiler internals and integration tests for every language feature, including expected-failure tests that verify the compiler rejects invalid programs.
