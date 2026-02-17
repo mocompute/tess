@@ -2363,6 +2363,538 @@ static int test_e2e_c_export_void_noop(void) {
     return 0;
 }
 
+// ---------------------------------------------------------------------------
+// source() E2E tests
+// ---------------------------------------------------------------------------
+
+// Test: source("src/") in package.tl — compile with no CLI file args.
+static int test_e2e_source_directory(void) {
+    char dir[512], src_dir[512];
+    make_temp_path(dir, sizeof(dir), "e2e_source_dir/");
+    snprintf(src_dir, sizeof(src_dir), "%ssrc" SEP_STR, dir);
+    test_mkdir_p(dir);
+    test_mkdir_p(src_dir);
+
+    char path[512];
+    snprintf(path, sizeof(path), "%spackage.tl", dir);
+    if (write_file(path, "format(1)\npackage(\"App\")\nversion(\"0.1.0\")\nsource(\"src/\")\n")) {
+        fprintf(stderr, "  failed to write package.tl\n");
+        return 1;
+    }
+
+    snprintf(path, sizeof(path), "%ssrc" SEP_STR "main.tl", dir);
+    if (write_file(path, "#module main\n\nmain() { 42 }\n")) {
+        fprintf(stderr, "  failed to write main.tl\n");
+        return 1;
+    }
+
+    char out_exe[512];
+    snprintf(out_exe, sizeof(out_exe), "%sapp" EXE_SUFFIX, dir);
+
+    char cmd[2048];
+    snprintf(cmd, sizeof(cmd),
+             CD_CMD " \"%s\" && \"%s\" exe --no-standard-includes -S \"%s\" -o \"%s\" 2>&1",
+             dir, e2e_tess_exe, e2e_stdlib_dir, out_exe);
+    if (run_cmd(cmd) != 0) {
+        fprintf(stderr, "  tess exe with source() failed\n");
+        return 1;
+    }
+
+    int exit_code = run_exe(out_exe);
+    if (exit_code != 42) {
+        fprintf(stderr, "  expected exit code 42, got %d\n", exit_code);
+        return 1;
+    }
+
+    return 0;
+}
+
+// Test: source("main.tl") with a single file.
+static int test_e2e_source_file(void) {
+    char dir[512];
+    make_temp_path(dir, sizeof(dir), "e2e_source_file/");
+    test_mkdir_p(dir);
+
+    char path[512];
+    snprintf(path, sizeof(path), "%spackage.tl", dir);
+    if (write_file(path, "format(1)\npackage(\"App\")\nversion(\"0.1.0\")\nsource(\"main.tl\")\n")) {
+        fprintf(stderr, "  failed to write package.tl\n");
+        return 1;
+    }
+
+    snprintf(path, sizeof(path), "%smain.tl", dir);
+    if (write_file(path, "#module main\n\nmain() { 7 }\n")) {
+        fprintf(stderr, "  failed to write main.tl\n");
+        return 1;
+    }
+
+    char out_exe[512];
+    snprintf(out_exe, sizeof(out_exe), "%sapp" EXE_SUFFIX, dir);
+
+    char cmd[2048];
+    snprintf(cmd, sizeof(cmd),
+             CD_CMD " \"%s\" && \"%s\" exe --no-standard-includes -S \"%s\" -o \"%s\" 2>&1",
+             dir, e2e_tess_exe, e2e_stdlib_dir, out_exe);
+    if (run_cmd(cmd) != 0) {
+        fprintf(stderr, "  tess exe with source(file) failed\n");
+        return 1;
+    }
+
+    int exit_code = run_exe(out_exe);
+    if (exit_code != 7) {
+        fprintf(stderr, "  expected exit code 7, got %d\n", exit_code);
+        return 1;
+    }
+
+    return 0;
+}
+
+// Test: CLI files override source() with warning.
+static int test_e2e_source_cli_override(void) {
+    char dir[512], src_dir[512];
+    make_temp_path(dir, sizeof(dir), "e2e_source_cli/");
+    snprintf(src_dir, sizeof(src_dir), "%ssrc" SEP_STR, dir);
+    test_mkdir_p(dir);
+    test_mkdir_p(src_dir);
+
+    char path[512];
+    snprintf(path, sizeof(path), "%spackage.tl", dir);
+    if (write_file(path,
+                   "format(1)\npackage(\"App\")\nversion(\"0.1.0\")\nsource(\"src/\")\n")) {
+        fprintf(stderr, "  failed to write package.tl\n");
+        return 1;
+    }
+
+    // source() would find this file returning 99
+    snprintf(path, sizeof(path), "%ssrc" SEP_STR "main.tl", dir);
+    if (write_file(path, "#module main\n\nmain() { 99 }\n")) {
+        fprintf(stderr, "  failed to write src/main.tl\n");
+        return 1;
+    }
+
+    // CLI file returns 11
+    snprintf(path, sizeof(path), "%sother.tl", dir);
+    if (write_file(path, "#module main\n\nmain() { 11 }\n")) {
+        fprintf(stderr, "  failed to write other.tl\n");
+        return 1;
+    }
+
+    char out_exe[512];
+    snprintf(out_exe, sizeof(out_exe), "%sapp" EXE_SUFFIX, dir);
+
+    // Pass other.tl on CLI — should override source()
+    char cmd[2048];
+    snprintf(cmd, sizeof(cmd),
+             CD_CMD " \"%s\" && \"%s\" exe --no-standard-includes -S \"%s\" -o \"%s\" other.tl 2>&1",
+             dir, e2e_tess_exe, e2e_stdlib_dir, out_exe);
+    if (run_cmd(cmd) != 0) {
+        fprintf(stderr, "  tess exe with CLI override failed\n");
+        return 1;
+    }
+
+    int exit_code = run_exe(out_exe);
+    if (exit_code != 11) {
+        fprintf(stderr, "  expected exit code 11 (CLI file), got %d\n", exit_code);
+        return 1;
+    }
+
+    return 0;
+}
+
+// Test: recursive directory scanning — nested subdirectories.
+static int test_e2e_source_recursive(void) {
+    char dir[512], src_dir[512], sub_dir[512];
+    make_temp_path(dir, sizeof(dir), "e2e_source_recur/");
+    snprintf(src_dir, sizeof(src_dir), "%ssrc" SEP_STR, dir);
+    snprintf(sub_dir, sizeof(sub_dir), "%ssrc" SEP_STR "sub" SEP_STR, dir);
+    test_mkdir_p(dir);
+    test_mkdir_p(src_dir);
+    test_mkdir_p(sub_dir);
+
+    char path[512];
+    snprintf(path, sizeof(path), "%spackage.tl", dir);
+    if (write_file(path, "format(1)\npackage(\"App\")\nversion(\"0.1.0\")\nsource(\"src/\")\n")) {
+        fprintf(stderr, "  failed to write package.tl\n");
+        return 1;
+    }
+
+    snprintf(path, sizeof(path), "%ssrc" SEP_STR "main.tl", dir);
+    if (write_file(path, "#module main\n#import \"sub/helper.tl\"\n\nmain() { Helper.value() }\n")) {
+        fprintf(stderr, "  failed to write main.tl\n");
+        return 1;
+    }
+
+    snprintf(path, sizeof(path), "%ssrc" SEP_STR "sub" SEP_STR "helper.tl", dir);
+    if (write_file(path, "#module Helper\n\nvalue() { 33 }\n")) {
+        fprintf(stderr, "  failed to write helper.tl\n");
+        return 1;
+    }
+
+    char out_exe[512];
+    snprintf(out_exe, sizeof(out_exe), "%sapp" EXE_SUFFIX, dir);
+
+    char cmd[2048];
+    snprintf(cmd, sizeof(cmd),
+             CD_CMD " \"%s\" && \"%s\" exe --no-standard-includes -S \"%s\" -o \"%s\" 2>&1",
+             dir, e2e_tess_exe, e2e_stdlib_dir, out_exe);
+    if (run_cmd(cmd) != 0) {
+        fprintf(stderr, "  tess exe with recursive source() failed\n");
+        return 1;
+    }
+
+    int exit_code = run_exe(out_exe);
+    if (exit_code != 33) {
+        fprintf(stderr, "  expected exit code 33, got %d\n", exit_code);
+        return 1;
+    }
+
+    return 0;
+}
+
+// Test: source() with pack command.
+static int test_e2e_source_pack(void) {
+    char lib_dir[512], src_dir[512];
+    make_temp_path(lib_dir, sizeof(lib_dir), "e2e_source_pack/");
+    snprintf(src_dir, sizeof(src_dir), "%ssrc" SEP_STR, lib_dir);
+    test_mkdir_p(lib_dir);
+    test_mkdir_p(src_dir);
+
+    char path[512];
+    snprintf(path, sizeof(path), "%spackage.tl", lib_dir);
+    if (write_file(path, "format(1)\npackage(\"MyLib\")\nversion(\"1.0.0\")\n"
+                         "export(\"MyLib\")\nsource(\"src/\")\n")) {
+        fprintf(stderr, "  failed to write package.tl\n");
+        return 1;
+    }
+
+    snprintf(path, sizeof(path), "%ssrc" SEP_STR "mylib.tl", lib_dir);
+    if (write_file(path, "#module MyLib\n\nget_value() { 55 }\n")) {
+        fprintf(stderr, "  failed to write mylib.tl\n");
+        return 1;
+    }
+
+    // Pack with no CLI files — should use source()
+    char tlib_path[512];
+    snprintf(tlib_path, sizeof(tlib_path), "%sMyLib.tlib", lib_dir);
+
+    char cmd[2048];
+    snprintf(cmd, sizeof(cmd),
+             CD_CMD " \"%s\" && \"%s\" pack --no-standard-includes -S \"%s\" -o MyLib.tlib 2>&1",
+             lib_dir, e2e_tess_exe, e2e_stdlib_dir);
+    if (run_cmd(cmd) != 0) {
+        fprintf(stderr, "  tess pack with source() failed\n");
+        return 1;
+    }
+
+    // Verify .tlib was created by consuming it
+    char app_dir[512], libs_dir[512];
+    make_temp_path(app_dir, sizeof(app_dir), "e2e_source_pack_app/");
+    snprintf(libs_dir, sizeof(libs_dir), "%slibs" SEP_STR, app_dir);
+    test_mkdir_p(app_dir);
+    test_mkdir_p(libs_dir);
+
+    snprintf(path, sizeof(path), "%spackage.tl", app_dir);
+    if (write_file(path, "format(1)\npackage(\"App\")\nversion(\"0.1.0\")\n"
+                         "depend(\"MyLib\", \"1.0.0\")\ndepend_path(\"./libs\")\n")) {
+        fprintf(stderr, "  failed to write app package.tl\n");
+        return 1;
+    }
+
+    snprintf(path, sizeof(path), "%smain.tl", app_dir);
+    if (write_file(path, "#module main\n\nmain() { MyLib.get_value() }\n")) {
+        fprintf(stderr, "  failed to write app main.tl\n");
+        return 1;
+    }
+
+    char dst_tlib[512];
+    snprintf(dst_tlib, sizeof(dst_tlib), "%sMyLib.tlib", libs_dir);
+    if (copy_file(tlib_path, dst_tlib)) {
+        fprintf(stderr, "  failed to copy MyLib.tlib\n");
+        return 1;
+    }
+
+    char out_exe[512];
+    snprintf(out_exe, sizeof(out_exe), "%sapp" EXE_SUFFIX, app_dir);
+    snprintf(cmd, sizeof(cmd),
+             CD_CMD " \"%s\" && \"%s\" exe --no-standard-includes -S \"%s\" -o \"%s\" main.tl 2>&1",
+             app_dir, e2e_tess_exe, e2e_stdlib_dir, out_exe);
+    if (run_cmd(cmd) != 0) {
+        fprintf(stderr, "  tess exe consuming packed lib failed\n");
+        return 1;
+    }
+
+    int exit_code = run_exe(out_exe);
+    if (exit_code != 55) {
+        fprintf(stderr, "  expected exit code 55, got %d\n", exit_code);
+        return 1;
+    }
+
+    return 0;
+}
+
+// Test: tess validate with source() — no CLI file args.
+static int test_e2e_source_validate(void) {
+    char dir[512], src_dir[512];
+    make_temp_path(dir, sizeof(dir), "e2e_source_val/");
+    snprintf(src_dir, sizeof(src_dir), "%ssrc" SEP_STR, dir);
+    test_mkdir_p(dir);
+    test_mkdir_p(src_dir);
+
+    char path[512];
+    snprintf(path, sizeof(path), "%spackage.tl", dir);
+    if (write_file(path, "format(1)\npackage(\"App\")\nversion(\"0.1.0\")\n"
+                         "export(\"App\")\nsource(\"src/\")\n")) {
+        fprintf(stderr, "  failed to write package.tl\n");
+        return 1;
+    }
+
+    snprintf(path, sizeof(path), "%ssrc" SEP_STR "app.tl", dir);
+    if (write_file(path, "#module App\n\ngreet() { 1 }\n")) {
+        fprintf(stderr, "  failed to write app.tl\n");
+        return 1;
+    }
+
+    char cmd[2048];
+    snprintf(cmd, sizeof(cmd),
+             CD_CMD " \"%s\" && \"%s\" validate --no-standard-includes -S \"%s\" 2>&1",
+             dir, e2e_tess_exe, e2e_stdlib_dir);
+    if (run_cmd(cmd) != 0) {
+        fprintf(stderr, "  tess validate with source() failed\n");
+        return 1;
+    }
+
+    return 0;
+}
+
+// Test: tess c with source() — transpile with no CLI file args.
+static int test_e2e_source_transpile(void) {
+    char dir[512];
+    make_temp_path(dir, sizeof(dir), "e2e_source_tc/");
+    test_mkdir_p(dir);
+
+    char path[512];
+    snprintf(path, sizeof(path), "%spackage.tl", dir);
+    if (write_file(path, "format(1)\npackage(\"App\")\nversion(\"0.1.0\")\nsource(\"main.tl\")\n")) {
+        fprintf(stderr, "  failed to write package.tl\n");
+        return 1;
+    }
+
+    snprintf(path, sizeof(path), "%smain.tl", dir);
+    if (write_file(path, "#module main\n\nmain() { 0 }\n")) {
+        fprintf(stderr, "  failed to write main.tl\n");
+        return 1;
+    }
+
+    char output_log[512];
+    snprintf(output_log, sizeof(output_log), "%sout.c", dir);
+
+    char cmd[2048];
+    snprintf(cmd, sizeof(cmd),
+             CD_CMD " \"%s\" && \"%s\" c --no-standard-includes -S \"%s\" >\"%s\" 2>&1",
+             dir, e2e_tess_exe, e2e_stdlib_dir, output_log);
+    if (run_cmd(cmd) != 0) {
+        fprintf(stderr, "  tess c with source() failed\n");
+        return 1;
+    }
+
+    // Verify C output was generated
+    char *output = read_file_contents(output_log, null);
+    if (!output || strlen(output) == 0) {
+        fprintf(stderr, "  expected non-empty C output\n");
+        return 1;
+    }
+
+    return 0;
+}
+
+// Test: source() pointing to a nonexistent path — should error.
+static int test_e2e_source_not_found(void) {
+    char dir[512];
+    make_temp_path(dir, sizeof(dir), "e2e_source_nf/");
+    test_mkdir_p(dir);
+
+    char path[512];
+    snprintf(path, sizeof(path), "%spackage.tl", dir);
+    if (write_file(path,
+                   "format(1)\npackage(\"App\")\nversion(\"0.1.0\")\nsource(\"nonexistent/\")\n")) {
+        fprintf(stderr, "  failed to write package.tl\n");
+        return 1;
+    }
+
+    char out_exe[512];
+    snprintf(out_exe, sizeof(out_exe), "%sapp" EXE_SUFFIX, dir);
+
+    char cmd[2048];
+    snprintf(cmd, sizeof(cmd),
+             CD_CMD " \"%s\" && \"%s\" exe --no-standard-includes -S \"%s\" -o \"%s\" 2>&1",
+             dir, e2e_tess_exe, e2e_stdlib_dir, out_exe);
+    // Should fail: source path doesn't exist
+    if (run_cmd(cmd) == 0) {
+        fprintf(stderr, "  expected failure for nonexistent source path\n");
+        return 1;
+    }
+
+    return 0;
+}
+
+// Test: source() pointing to a directory with no .tl files — should error.
+static int test_e2e_source_empty_dir(void) {
+    char dir[512], empty_dir[512];
+    make_temp_path(dir, sizeof(dir), "e2e_source_empt/");
+    snprintf(empty_dir, sizeof(empty_dir), "%sempty" SEP_STR, dir);
+    test_mkdir_p(dir);
+    test_mkdir_p(empty_dir);
+
+    // Put a non-.tl file in the directory to make sure it's ignored
+    char path[512];
+    snprintf(path, sizeof(path), "%sempty" SEP_STR "readme.txt", dir);
+    if (write_file(path, "not a tl file")) {
+        fprintf(stderr, "  failed to write readme.txt\n");
+        return 1;
+    }
+
+    snprintf(path, sizeof(path), "%spackage.tl", dir);
+    if (write_file(path,
+                   "format(1)\npackage(\"App\")\nversion(\"0.1.0\")\nsource(\"empty/\")\n")) {
+        fprintf(stderr, "  failed to write package.tl\n");
+        return 1;
+    }
+
+    char out_exe[512];
+    snprintf(out_exe, sizeof(out_exe), "%sapp" EXE_SUFFIX, dir);
+
+    char cmd[2048];
+    snprintf(cmd, sizeof(cmd),
+             CD_CMD " \"%s\" && \"%s\" exe --no-standard-includes -S \"%s\" -o \"%s\" 2>&1",
+             dir, e2e_tess_exe, e2e_stdlib_dir, out_exe);
+    // Should fail: no .tl files found
+    if (run_cmd(cmd) == 0) {
+        fprintf(stderr, "  expected failure for empty source directory\n");
+        return 1;
+    }
+
+    return 0;
+}
+
+// Test: no CLI files, no source(), no package.tl — should error.
+static int test_e2e_source_no_files_anywhere(void) {
+    char dir[512];
+    make_temp_path(dir, sizeof(dir), "e2e_source_none/");
+    test_mkdir_p(dir);
+
+    // No package.tl, no CLI files
+    char out_exe[512];
+    snprintf(out_exe, sizeof(out_exe), "%sapp" EXE_SUFFIX, dir);
+
+    char cmd[2048];
+    snprintf(cmd, sizeof(cmd),
+             CD_CMD " \"%s\" && \"%s\" exe --no-standard-includes -S \"%s\" -o \"%s\" 2>&1",
+             dir, e2e_tess_exe, e2e_stdlib_dir, out_exe);
+    // Should fail: no files to compile
+    if (run_cmd(cmd) == 0) {
+        fprintf(stderr, "  expected failure with no files anywhere\n");
+        return 1;
+    }
+
+    return 0;
+}
+
+// Test: directory with mixed file types — only .tl files should be picked up.
+static int test_e2e_source_ignores_non_tl(void) {
+    char dir[512], src_dir[512];
+    make_temp_path(dir, sizeof(dir), "e2e_source_mix/");
+    snprintf(src_dir, sizeof(src_dir), "%ssrc" SEP_STR, dir);
+    test_mkdir_p(dir);
+    test_mkdir_p(src_dir);
+
+    char path[512];
+    snprintf(path, sizeof(path), "%spackage.tl", dir);
+    if (write_file(path, "format(1)\npackage(\"App\")\nversion(\"0.1.0\")\nsource(\"src/\")\n")) {
+        fprintf(stderr, "  failed to write package.tl\n");
+        return 1;
+    }
+
+    snprintf(path, sizeof(path), "%ssrc" SEP_STR "main.tl", dir);
+    if (write_file(path, "#module main\n\nmain() { 5 }\n")) {
+        fprintf(stderr, "  failed to write main.tl\n");
+        return 1;
+    }
+
+    // Non-.tl files that should be ignored
+    snprintf(path, sizeof(path), "%ssrc" SEP_STR "notes.txt", dir);
+    write_file(path, "some notes");
+    snprintf(path, sizeof(path), "%ssrc" SEP_STR "data.json", dir);
+    write_file(path, "{}");
+    snprintf(path, sizeof(path), "%ssrc" SEP_STR "helper.c", dir);
+    write_file(path, "int x = 0;");
+
+    char out_exe[512];
+    snprintf(out_exe, sizeof(out_exe), "%sapp" EXE_SUFFIX, dir);
+
+    char cmd[2048];
+    snprintf(cmd, sizeof(cmd),
+             CD_CMD " \"%s\" && \"%s\" exe --no-standard-includes -S \"%s\" -o \"%s\" 2>&1",
+             dir, e2e_tess_exe, e2e_stdlib_dir, out_exe);
+    if (run_cmd(cmd) != 0) {
+        fprintf(stderr, "  tess exe with mixed files failed\n");
+        return 1;
+    }
+
+    int exit_code = run_exe(out_exe);
+    if (exit_code != 5) {
+        fprintf(stderr, "  expected exit code 5, got %d\n", exit_code);
+        return 1;
+    }
+
+    return 0;
+}
+
+// Test: CLI override prints warning to stderr.
+static int test_e2e_source_cli_override_warning(void) {
+    char dir[512];
+    make_temp_path(dir, sizeof(dir), "e2e_source_warn/");
+    test_mkdir_p(dir);
+
+    char path[512];
+    snprintf(path, sizeof(path), "%spackage.tl", dir);
+    if (write_file(path,
+                   "format(1)\npackage(\"App\")\nversion(\"0.1.0\")\nsource(\"main.tl\")\n")) {
+        fprintf(stderr, "  failed to write package.tl\n");
+        return 1;
+    }
+
+    snprintf(path, sizeof(path), "%smain.tl", dir);
+    if (write_file(path, "#module main\n\nmain() { 0 }\n")) {
+        fprintf(stderr, "  failed to write main.tl\n");
+        return 1;
+    }
+
+    // Capture stderr by redirecting it to a file
+    char stderr_log[512];
+    snprintf(stderr_log, sizeof(stderr_log), "%sstderr.log", dir);
+
+    char out_exe[512];
+    snprintf(out_exe, sizeof(out_exe), "%sapp" EXE_SUFFIX, dir);
+
+    char cmd[2048];
+    snprintf(cmd, sizeof(cmd),
+             CD_CMD " \"%s\" && \"%s\" exe --no-standard-includes -S \"%s\" -o \"%s\" main.tl 2>\"%s\"",
+             dir, e2e_tess_exe, e2e_stdlib_dir, out_exe, stderr_log);
+    if (run_cmd(cmd) != 0) {
+        fprintf(stderr, "  tess exe with CLI override failed\n");
+        return 1;
+    }
+
+    char *output = read_file_contents(stderr_log, null);
+    if (!output || !strstr(output, "warning: CLI file arguments override source()")) {
+        fprintf(stderr, "  expected CLI override warning in stderr\n");
+        if (output) fprintf(stderr, "  got: %s\n", output);
+        return 1;
+    }
+
+    return 0;
+}
+
 int main(void) {
     init_temp_dir();
     init_e2e_paths();
@@ -2402,5 +2934,17 @@ int main(void) {
     T(test_e2e_c_export_header)
     T(test_e2e_c_export_no_header_when_none)
     T(test_e2e_c_export_void_noop)
+    T(test_e2e_source_directory)
+    T(test_e2e_source_file)
+    T(test_e2e_source_cli_override)
+    T(test_e2e_source_recursive)
+    T(test_e2e_source_pack)
+    T(test_e2e_source_validate)
+    T(test_e2e_source_transpile)
+    T(test_e2e_source_not_found)
+    T(test_e2e_source_empty_dir)
+    T(test_e2e_source_no_files_anywhere)
+    T(test_e2e_source_ignores_non_tl)
+    T(test_e2e_source_cli_override_warning)
     return error;
 }

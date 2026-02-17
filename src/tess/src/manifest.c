@@ -120,6 +120,7 @@ int tl_package_parse_file(allocator *alloc, char const *path, tl_package *out) {
     // Dynamic arrays for building results
     str_array exports      = {.alloc = alloc};
     str_array depend_paths = {.alloc = alloc};
+    str_array sources      = {.alloc = alloc};
     dep_array deps         = {.alloc = alloc};
     dep_array opt_deps     = {.alloc = alloc};
 
@@ -305,6 +306,22 @@ int tl_package_parse_file(allocator *alloc, char const *path, tl_package *out) {
                 continue;
             }
             array_push(depend_paths, val);
+
+        } else if (str_eq(func_name, S("source"))) {
+            if (argc < 1) {
+                fprintf(stderr,
+                        "package.tl: error: source() expects at least 1 string argument(s), got 0\n");
+                error = 1;
+                continue;
+            }
+            for (u8 j = 0; j < argc; j++) {
+                str val = extract_string(alloc, nfa->arguments[j], "source", j);
+                if (str_is_empty(val)) {
+                    error = 1;
+                    continue;
+                }
+                array_push(sources, val);
+            }
         }
     }
 
@@ -330,6 +347,10 @@ int tl_package_parse_file(allocator *alloc, char const *path, tl_package *out) {
     if (depend_paths.size > 0) {
         out->info.depend_paths      = depend_paths.v;
         out->info.depend_path_count = depend_paths.size;
+    }
+    if (sources.size > 0) {
+        out->info.sources      = sources.v;
+        out->info.source_count = sources.size;
     }
     if (deps.size > 0) {
         out->deps      = deps.v;

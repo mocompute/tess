@@ -11,6 +11,7 @@
 #include <direct.h>
 #include <windows.h>
 #else
+#include <sys/stat.h>
 #include <unistd.h>
 #endif
 
@@ -25,6 +26,18 @@ int file_exists(str filename) {
     }
     fclose(f);
     return 1;
+}
+
+int file_is_directory(str path) {
+#ifdef MOS_WINDOWS
+    DWORD attrs = GetFileAttributesA(str_cstr(&path));
+    if (attrs == INVALID_FILE_ATTRIBUTES) return 0;
+    return (attrs & FILE_ATTRIBUTE_DIRECTORY) ? 1 : 0;
+#else
+    struct stat st;
+    if (stat(str_cstr(&path), &st) != 0) return 0;
+    return S_ISDIR(st.st_mode) ? 1 : 0;
+#endif
 }
 
 void file_read(allocator *alloc, char const *filename, char **out, u32 *out_size) {

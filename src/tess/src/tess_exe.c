@@ -20,6 +20,11 @@
 #include <stdnoreturn.h>
 #include <string.h>
 
+#ifndef MOS_WINDOWS
+#include <dirent.h>
+#include <sys/stat.h>
+#endif
+
 // -- embed externs --
 extern char const *embed_prelude_tl;
 
@@ -681,6 +686,104 @@ static str_sized files_in_order(state *self, c_string_csized files, str_sized pk
     return (str_sized)array_sized(result);
 }
 
+// ---------------------------------------------------------------------------
+// source() resolution: scan directories for .tl files
+// ---------------------------------------------------------------------------
+
+static int has_tl_extension(char const *name) {
+    size_t len = strlen(name);
+    return len > 3 && name[len - 3] == '.' && name[len - 2] == 't' && name[len - 1] == 'l';
+}
+
+#ifdef MOS_WINDOWS
+static void scan_directory_recursive(allocator *alloc, char const *dir, c_string_carray *out) {
+    char pattern[PLATFORM_PATH_MAX];
+    snprintf(pattern, sizeof(pattern), "%s\\*", dir);
+
+    WIN32_FIND_DATAA fd;
+    HANDLE           h = FindFirstFileA(pattern, &fd);
+    if (h == INVALID_HANDLE_VALUE) return;
+
+    do {
+        if (fd.cFileName[0] == '.' &&
+            (fd.cFileName[1] == '\0' || (fd.cFileName[1] == '.' && fd.cFileName[2] == '\0')))
+            continue;
+
+        char child[PLATFORM_PATH_MAX];
+        snprintf(child, sizeof(child), "%s\\%s", dir, fd.cFileName);
+
+        if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
+            scan_directory_recursive(alloc, child, out);
+        } else if (has_tl_extension(fd.cFileName)) {
+            size_t len  = strlen(child);
+            char  *copy = alloc_malloc(alloc, len + 1);
+            memcpy(copy, child, len + 1);
+            char const *path = copy;
+            array_push(*out, path);
+        }
+    } while (FindNextFileA(h, &fd));
+
+    FindClose(h);
+}
+#else
+static void scan_directory_recursive(allocator *alloc, char const *dir, c_string_carray *out) {
+    DIR *d = opendir(dir);
+    if (!d) return;
+
+    struct dirent *ent;
+    while ((ent = readdir(d)) != null) {
+        if (ent->d_name[0] == '.' &&
+            (ent->d_name[1] == '\0' || (ent->d_name[1] == '.' && ent->d_name[2] == '\0')))
+            continue;
+
+        char child[PLATFORM_PATH_MAX];
+        snprintf(child, sizeof(child), "%s/%s", dir, ent->d_name);
+
+        struct stat st;
+        if (stat(child, &st) != 0) continue;
+        if (S_ISDIR(st.st_mode)) {
+            scan_directory_recursive(alloc, child, out);
+        } else if (has_tl_extension(ent->d_name)) {
+            size_t len  = strlen(child);
+            char  *copy = alloc_malloc(alloc, len + 1);
+            memcpy(copy, child, len + 1);
+            char const *path = copy;
+            array_push(*out, path);
+        }
+    }
+
+    closedir(d);
+}
+#endif
+
+// Resolve source() entries from package.tl into file paths.
+// For each entry: if it's a directory, recursively scan for *.tl files.
+// If it's a file, add it directly.
+// Returns 0 on success, 1 on error.
+static int resolve_source_entries(state *self, tl_package_info *info, c_string_carray *out) {
+    for (u32 i = 0; i < info->source_count; i++) {
+        str entry = info->sources[i];
+        if (file_is_directory(entry)) {
+            scan_directory_recursive(self->arena, str_cstr(&entry), out);
+        } else if (file_exists(entry)) {
+            char const *cstr = str_cstr(&entry);
+            size_t      len  = strlen(cstr);
+            char       *copy = alloc_malloc(self->arena, len + 1);
+            memcpy(copy, cstr, len + 1);
+            char const *path = copy;
+            array_push(*out, path);
+        } else {
+            fprintf(stderr, "error: source() path not found: '%s'\n", str_cstr(&entry));
+            return 1;
+        }
+    }
+    if (out->size == 0) {
+        fprintf(stderr, "error: source() entries resolved to zero files\n");
+        return 1;
+    }
+    return 0;
+}
+
 //
 
 static void output_program(state *self) {
@@ -764,15 +867,47 @@ static void print_stats_footer(double total_ms, size_t total_peak) {
 }
 
 int compile(state *self) {
-    if (self->words.size < 2) usage(1, self->argv0);
-
     int error = 0;
 
     // Stats collection
     hires_timer phase_timer;
     hires_timer_init(&phase_timer);
 
-    c_string_csized paths = {.v = &self->words.v[1], .size = self->words.size - 1};
+    // Determine source files: CLI args take priority, then source() from package.tl
+    c_string_carray source_files = {.alloc = self->arena};
+    c_string_csized paths;
+    int             used_source_entries = 0;
+
+    if (self->words.size >= 2) {
+        // CLI files provided
+        paths = (c_string_csized){.v = &self->words.v[1], .size = self->words.size - 1};
+    } else {
+        // No CLI files — try source() from package.tl
+        str pkg_path = str_init_static("package.tl");
+        if (file_exists(pkg_path)) {
+            tl_package pkg = {0};
+            if (tl_package_parse_file(self->arena, "package.tl", &pkg)) return 1;
+            if (pkg.info.source_count > 0) {
+                if (resolve_source_entries(self, &pkg.info, &source_files)) return 1;
+                paths               = (c_string_csized){.v = source_files.v, .size = source_files.size};
+                used_source_entries = 1;
+            }
+        }
+        if (!used_source_entries) {
+            usage(1, self->argv0);
+        }
+    }
+
+    // Warn if CLI files override source() entries
+    if (!used_source_entries && self->words.size >= 2) {
+        str pkg_path = str_init_static("package.tl");
+        if (file_exists(pkg_path)) {
+            tl_package pkg = {0};
+            if (!tl_package_parse_file(self->arena, "package.tl", &pkg) && pkg.info.source_count > 0) {
+                fprintf(stderr, "warning: CLI file arguments override source() in package.tl\n");
+            }
+        }
+    }
 
     // Load package dependencies (if package.tl exists with depend() declarations)
     str_array pkg_files = {.alloc = self->arena};
@@ -1280,14 +1415,29 @@ static int pack_files(state *self) {
         return 1;
     }
 
-    if (self->words.size < 2) {
+    // Parse package.tl from CWD (needed early for source() resolution)
+    tl_package pkg = {0};
+    if (tl_package_parse_file(self->arena, "package.tl", &pkg)) {
+        return 1;
+    }
+
+    // Determine source files: CLI args take priority, then source() from package.tl
+    c_string_carray source_files = {.alloc = self->arena};
+    c_string_csized input_files;
+
+    if (self->words.size >= 2) {
+        input_files = (c_string_csized){.v = self->words.v + 1, .size = self->words.size - 1};
+        if (pkg.info.source_count > 0) {
+            fprintf(stderr, "warning: CLI file arguments override source() in package.tl\n");
+        }
+    } else if (pkg.info.source_count > 0) {
+        if (resolve_source_entries(self, &pkg.info, &source_files)) return 1;
+        input_files = (c_string_csized){.v = source_files.v, .size = source_files.size};
+    } else {
         fprintf(stderr, "error: pack command requires input file(s)\n");
         usage(1, self->argv0);
         return 1;
     }
-
-    // Get input files (skip command name)
-    c_string_csized input_files = {.v = self->words.v + 1, .size = self->words.size - 1};
 
     // Compute base directory from first user input file (before dependency resolution)
     str first_input = str_init(self->arena, input_files.v[0]);
@@ -1306,12 +1456,6 @@ static int pack_files(state *self) {
 
         fprintf(stderr, "\nPacking modules:\n");
         // FIXME: print sorted module list
-    }
-
-    // Parse package.tl from CWD
-    tl_package pkg = {0};
-    if (tl_package_parse_file(self->arena, "package.tl", &pkg)) {
-        return 1;
     }
 
     if (pkg.info.export_count == 0) {
@@ -1409,23 +1553,32 @@ static int pack_files(state *self) {
 }
 
 static int validate_files(state *self) {
-    if (self->words.size < 2) {
+    // Parse package.tl (needed early for source() resolution)
+    tl_package pkg = {0};
+    if (tl_package_parse_file(self->arena, "package.tl", &pkg)) {
+        return 1;
+    }
+
+    // Determine source files: CLI args take priority, then source() from package.tl
+    c_string_carray source_files = {.alloc = self->arena};
+    c_string_csized input_files;
+
+    if (self->words.size >= 2) {
+        input_files = (c_string_csized){.v = self->words.v + 1, .size = self->words.size - 1};
+        if (pkg.info.source_count > 0) {
+            fprintf(stderr, "warning: CLI file arguments override source() in package.tl\n");
+        }
+    } else if (pkg.info.source_count > 0) {
+        if (resolve_source_entries(self, &pkg.info, &source_files)) return 1;
+        input_files = (c_string_csized){.v = source_files.v, .size = source_files.size};
+    } else {
         fprintf(stderr, "error: validate command requires input file(s)\n");
         usage(1, self->argv0);
         return 1;
     }
 
-    // Get input files (skip command name)
-    c_string_csized input_files = {.v = self->words.v + 1, .size = self->words.size - 1};
-
     // Scan all files in dependency order (populates scanner.modules_seen)
     files_in_order(self, input_files, (str_sized){0});
-
-    // Parse package.tl
-    tl_package pkg = {0};
-    if (tl_package_parse_file(self->arena, "package.tl", &pkg)) {
-        return 1;
-    }
 
     // Cross-check scanner results against exported modules
     tl_source_scanner_validate_result result =

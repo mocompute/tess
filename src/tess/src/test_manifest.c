@@ -508,6 +508,159 @@ static int test_missing_file(void) {
 }
 
 // ---------------------------------------------------------------------------
+// source() tests
+// ---------------------------------------------------------------------------
+
+static int test_source_single(void) {
+    int        error = 0;
+    allocator *alloc = arena_create(default_allocator(), 1024);
+    tl_package pkg;
+
+    int        rc = parse_pkg(alloc,
+                              "format(1)\n"
+                                     "package(\"App\")\n"
+                                     "version(\"0.1\")\n"
+                                     "source(\"src/\")\n",
+                              &pkg);
+
+    error += rc != 0;
+    if (rc) goto error;
+
+    error += pkg.info.source_count != 1;
+    if (pkg.info.source_count == 1) {
+        error += !str_eq(pkg.info.sources[0], S("src/"));
+    }
+
+    if (error) fprintf(stderr, "  %d check(s) failed in test_source_single\n", error);
+
+error:
+    arena_destroy(&alloc);
+    return error;
+}
+
+static int test_source_multiple_args(void) {
+    int        error = 0;
+    allocator *alloc = arena_create(default_allocator(), 1024);
+    tl_package pkg;
+
+    int        rc = parse_pkg(alloc,
+                              "format(1)\n"
+                                     "package(\"App\")\n"
+                                     "version(\"0.1\")\n"
+                                     "source(\"src/\", \"extra.tl\")\n",
+                              &pkg);
+
+    error += rc != 0;
+    if (rc) goto error;
+
+    error += pkg.info.source_count != 2;
+    if (pkg.info.source_count == 2) {
+        error += !str_eq(pkg.info.sources[0], S("src/"));
+        error += !str_eq(pkg.info.sources[1], S("extra.tl"));
+    }
+
+    if (error) fprintf(stderr, "  %d check(s) failed in test_source_multiple_args\n", error);
+
+error:
+    arena_destroy(&alloc);
+    return error;
+}
+
+static int test_source_multiple_calls(void) {
+    int        error = 0;
+    allocator *alloc = arena_create(default_allocator(), 1024);
+    tl_package pkg;
+
+    int        rc = parse_pkg(alloc,
+                              "format(1)\n"
+                                     "package(\"App\")\n"
+                                     "version(\"0.1\")\n"
+                                     "source(\"src/\")\n"
+                                     "source(\"extra.tl\")\n",
+                              &pkg);
+
+    error += rc != 0;
+    if (rc) goto error;
+
+    error += pkg.info.source_count != 2;
+    if (pkg.info.source_count == 2) {
+        error += !str_eq(pkg.info.sources[0], S("src/"));
+        error += !str_eq(pkg.info.sources[1], S("extra.tl"));
+    }
+
+    if (error) fprintf(stderr, "  %d check(s) failed in test_source_multiple_calls\n", error);
+
+error:
+    arena_destroy(&alloc);
+    return error;
+}
+
+static int test_source_empty(void) {
+    int        error = 0;
+    allocator *alloc = arena_create(default_allocator(), 1024);
+    tl_package pkg;
+
+    int        rc = parse_pkg(alloc,
+                              "format(1)\n"
+                                     "package(\"App\")\n"
+                                     "version(\"0.1\")\n"
+                                     "source()\n",
+                              &pkg);
+
+    // Should fail: source() with no args
+    error += rc != 1;
+
+    if (error) fprintf(stderr, "  %d check(s) failed in test_source_empty\n", error);
+
+    arena_destroy(&alloc);
+    return error;
+}
+
+static int test_source_no_source(void) {
+    int        error = 0;
+    allocator *alloc = arena_create(default_allocator(), 1024);
+    tl_package pkg;
+
+    int        rc = parse_pkg(alloc,
+                              "format(1)\n"
+                                     "package(\"App\")\n"
+                                     "version(\"0.1\")\n",
+                              &pkg);
+
+    error += rc != 0;
+    if (rc) goto error;
+
+    error += pkg.info.source_count != 0;
+
+    if (error) fprintf(stderr, "  %d check(s) failed in test_source_no_source\n", error);
+
+error:
+    arena_destroy(&alloc);
+    return error;
+}
+
+static int test_source_non_string_arg(void) {
+    int        error = 0;
+    allocator *alloc = arena_create(default_allocator(), 1024);
+    tl_package pkg;
+
+    int        rc = parse_pkg(alloc,
+                              "format(1)\n"
+                                     "package(\"App\")\n"
+                                     "version(\"0.1\")\n"
+                                     "source(42)\n",
+                              &pkg);
+
+    // Should fail: integer where string expected
+    error += rc != 1;
+
+    if (error) fprintf(stderr, "  %d check(s) failed in test_source_non_string_arg\n", error);
+
+    arena_destroy(&alloc);
+    return error;
+}
+
+// ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
 
@@ -534,6 +687,12 @@ int main(void) {
     T(test_duplicate_package)
     T(test_duplicate_version)
     T(test_missing_file)
+    T(test_source_single)
+    T(test_source_multiple_args)
+    T(test_source_multiple_calls)
+    T(test_source_empty)
+    T(test_source_no_source)
+    T(test_source_non_string_arg)
 
     if (error) fprintf(stderr, "manifest tests: %d FAILED\n", error);
     return error;

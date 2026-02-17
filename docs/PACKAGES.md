@@ -40,16 +40,17 @@ package("mylib")
 version("1.0.0")
 author("Alice")
 export("MathUtils")
+source("src/")
 ```
 
 Note that the package name (`"mylib"`) and the module name (`MathUtils`) are independent. The package name appears in `package.tl` and dependency declarations; the module name appears in source code.
 
 **Build the package:**
 ```bash
-tess pack src/math.tl -o mylib.tlib
+tess pack -o mylib.tlib
 ```
 
-Note that `package.tl` is found automatically in the current working directory.
+Note that `package.tl` is found automatically in the current working directory. The `source("src/")` declaration tells the compiler where to find source files, so no file arguments are needed on the command line. You can still list files explicitly (`tess pack src/math.tl -o mylib.tlib`), which overrides `source()`.
 
 ### Consuming a package
 
@@ -80,16 +81,17 @@ main() {
 format(1)
 package("MyApp")
 version("0.1.0")
+source("src/")
 depend("mylib", "1.0.0")
 depend_path("./libs")
 ```
 
 **Build:**
 ```bash
-tess exe src/main.tl -o myapp
+tess exe -o myapp
 ```
 
-The compiler auto-discovers `package.tl` in the current working directory, loads `mylib.tlib` from the `libs/` directory, verifies the version matches, and compiles everything together. Consumer code uses the *module* name (`MathUtils.clamp`), not the package name.
+The compiler auto-discovers `package.tl` in the current working directory, resolves `source("src/")` to find source files, loads `mylib.tlib` from the `libs/` directory, verifies the version matches, and compiles everything together. Consumer code uses the *module* name (`MathUtils.clamp`), not the package name.
 
 ---
 
@@ -108,6 +110,7 @@ Builds that do not use packages work without `package.tl` -- the compiler simply
 | `version(ver)` | 1 string | Yes | Version string (literal string comparison, not semver) |
 | `author(name)` | 1 string | No | Author name or email |
 | `export(mod, ...)` | 1+ strings | For `tess pack` | Modules that are part of the public API |
+| `source(path, ...)` | 1+ strings | No | Source files or directories (directories scanned recursively for `*.tl`) |
 | `depend(name, ver)` | 2 strings | No | Required dependency with version |
 | `depend_optional(name, ver)` | 2 strings | No | Optional dependency with version |
 | `depend_path(dir)` | 1 string | No | Directory to search for `.tlib` files (accumulates) |
@@ -120,6 +123,7 @@ package("mylib")
 version("1.0.0")
 author("Alice")
 export("MathUtils")
+source("src/")
 
 depend("logging-lib", "2.0.0")
 depend_path("./libs")
@@ -129,10 +133,39 @@ depend_path("./libs")
 
 - `format(1)` must appear first.
 - `package()` and `version()` cannot be declared more than once.
-- Multiple `export()`, `depend()`, `depend_optional()`, and `depend_path()` calls accumulate.
+- Multiple `export()`, `source()`, `depend()`, `depend_optional()`, and `depend_path()` calls accumulate.
 - `export()` accepts multiple arguments: `export("Mod1", "Mod2")`.
+- `source()` accepts multiple arguments: `source("src/", "extra/util.tl")`. Directory arguments are scanned recursively for `*.tl` files.
 - Version strings are compared as literal strings, not as semantic versions. `"1.0.0"` and `"1.0"` are different versions.
 - Unknown function calls are silently ignored. This allows `package.tl` to contain fields that older compiler versions do not recognize.
+
+### Source Files
+
+The `source()` function declares where the compiler should find source files. It accepts file paths and directory paths:
+
+```tl
+source("src/")              // scan src/ recursively for *.tl files
+source("main.tl")           // add a single file
+source("src/", "extra.tl")  // multiple args, mix of dirs and files
+```
+
+Multiple `source()` calls accumulate. Directories are scanned recursively for files ending in `.tl`.
+
+When `source()` is declared, commands like `tess exe`, `tess pack`, and `tess validate` can be run without listing files on the command line:
+
+```bash
+tess exe -o myapp           # uses source() from package.tl
+tess pack -o mylib.tlib     # uses source() from package.tl
+tess validate               # uses source() from package.tl
+```
+
+**CLI override**: If files are given on the command line, they take priority and `source()` entries are ignored. A warning is printed to stderr:
+
+```bash
+tess exe -o myapp src/main.tl   # ignores source(), warns on stderr
+```
+
+Projects without `package.tl` or without `source()` work as before — files must be listed on the command line.
 
 ---
 

@@ -14,6 +14,8 @@ typedef struct {
     u32  export_count;
     str *depend_paths; // from depend_path() calls
     u32  depend_path_count;
+    str *sources; // from source() calls — raw strings (files or dirs)
+    u32  source_count;
 } tl_package_info;
 
 typedef struct {

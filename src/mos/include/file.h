@@ -6,6 +6,7 @@
 #include "types.h"
 
 int         file_exists(str);
+int         file_is_directory(str path);
 void        file_read(allocator *, char const *, char **, u32 *);
 char const *file_basename(char const *);
 
