@@ -174,20 +174,24 @@ Projects without `package.tl` or without `source()` work as before — files mus
 ### The `tess pack` command
 
 ```bash
+tess pack -o output.tlib [-v]
 tess pack <file1.tl> [file2.tl ...] -o output.tlib [-v]
 ```
 
+When no files are listed on the command line, `tess pack` uses `source()` entries from `package.tl` to find source files automatically. If files are given explicitly, they override `source()` (a warning is printed).
+
 The command:
 1. Reads `package.tl` from the current working directory
-2. Resolves all `#import` directives from the listed source files (recursively)
-3. Excludes standard library files
-4. Validates that all `export()` modules exist in the source
-5. Checks self-containment: every `#import "file.tl"` resolves to another file in the archive
-6. Compresses and writes the `.tlib` archive
+2. Discovers source files from `source()` entries (or uses CLI arguments)
+3. Resolves all `#import` directives from the source files (recursively)
+4. Excludes standard library files
+5. Validates that all `export()` modules exist in the source
+6. Checks self-containment: every `#import "file.tl"` resolves to another file in the archive
+7. Compresses and writes the `.tlib` archive
 
 ### Multi-file packages
 
-A package can contain multiple modules across multiple files. List the entry-point files; imported files are included automatically:
+A package can contain multiple modules across multiple files. With `source()` in `package.tl`, all files are discovered automatically. Imported files are also included automatically via `#import` resolution:
 
 ```
 mylib/
@@ -198,10 +202,10 @@ mylib/
 ```
 
 ```bash
-tess pack src/math.tl -o MathUtils.tlib
+tess pack -o MathUtils.tlib
 ```
 
-Both `math.tl` and `internal.tl` are included because `math.tl` imports `internal.tl`.
+Both `math.tl` and `internal.tl` are included -- `math.tl` is found via `source("src/")` and `internal.tl` is found because `math.tl` imports it.
 
 ### Validating a package
 
@@ -209,7 +213,7 @@ Both `math.tl` and `internal.tl` are included because `math.tl` imports `interna
 tess validate
 ```
 
-Runs the same checks as `tess pack` without producing an archive. Reads `package.tl` from the current working directory.
+Runs the same checks as `tess pack` without producing an archive. Reads `package.tl` from the current working directory and uses `source()` entries to discover files. Like `tess pack`, files can be listed explicitly on the command line to override `source()`.
 
 ### Inspecting an archive
 
@@ -227,13 +231,14 @@ tess unpack archive.tlib [-o outdir]  # Extract files
 When you run `tess exe` (or `tess c`, `tess lib`), the compiler:
 
 1. Looks for `package.tl` in the current working directory
-2. For each `depend()` declaration, searches `depend_path()` directories for `<PackageName>.tlib`
-3. Reads the archive and verifies the version matches exactly
-4. Extracts source files to a temporary directory
-5. Recursively loads transitive dependencies from the archive's metadata
-6. Scans all source for `#module` directives and checks for conflicts
-7. Compiles everything together (local source + all package source)
-8. Tree shaking removes unreferenced code
+2. Discovers local source files from `source()` entries (if no files given on the command line)
+3. For each `depend()` declaration, searches `depend_path()` directories for `<PackageName>.tlib`
+4. Reads the archive and verifies the version matches exactly
+5. Extracts source files to a temporary directory
+6. Recursively loads transitive dependencies from the archive's metadata
+7. Scans all source for `#module` directives and checks for conflicts
+8. Compiles everything together (local source + all package source)
+9. Tree shaking removes unreferenced code
 
 ### No explicit import needed
 
@@ -372,10 +377,11 @@ package("logging-lib")
 version("2.0.0")
 author("Bob")
 export("Logger")
+source("logger.tl")
 ```
 
 ```bash
-tess pack logger.tl -o logging-lib.tlib
+tess pack -o logging-lib.tlib
 ```
 
 ### 2. mylib package (depends on logging-lib)
@@ -419,13 +425,14 @@ package("mylib")
 version("1.0.0")
 author("Alice")
 export("MathUtils")
+source("src/")
 
 depend("logging-lib", "2.0.0")
 depend_path("./libs")
 ```
 
 ```bash
-tess pack src/math.tl -o mylib.tlib
+tess pack -o mylib.tlib
 ```
 
 The archive contains `math.tl` and `internal.tl` but not logging-lib's source. The metadata records the dependency: `logging-lib=2.0.0`.
@@ -451,6 +458,7 @@ main() {
 format(1)
 package("myapp")
 version("0.1.0")
+source("src/")
 
 depend("mylib", "1.0.0")
 depend_path("./libs")
@@ -458,10 +466,10 @@ depend_path("./libs")
 ```
 
 ```bash
-tess exe src/main.tl -o myapp
+tess exe -o myapp
 ```
 
-The compiler loads `mylib.tlib`, sees it requires `logging-lib=2.0.0`, finds `logging-lib.tlib` in `./libs`, verifies the version, and compiles everything together.
+The compiler auto-discovers `src/main.tl` via `source("src/")`, loads `mylib.tlib`, sees it requires `logging-lib=2.0.0`, finds `logging-lib.tlib` in `./libs`, verifies the version, and compiles everything together.
 
 ---
 
