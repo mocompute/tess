@@ -20,11 +20,6 @@
 #include <stdnoreturn.h>
 #include <string.h>
 
-#ifndef MOS_WINDOWS
-#include <dirent.h>
-#include <sys/stat.h>
-#endif
-
 // -- embed externs --
 extern char const *embed_prelude_tl;
 
@@ -690,72 +685,6 @@ static str_sized files_in_order(state *self, c_string_csized files, str_sized pk
 // source() resolution: scan directories for .tl files
 // ---------------------------------------------------------------------------
 
-static int has_tl_extension(char const *name) {
-    size_t len = strlen(name);
-    return len > 3 && name[len - 3] == '.' && name[len - 2] == 't' && name[len - 1] == 'l';
-}
-
-#ifdef MOS_WINDOWS
-static void scan_directory_recursive(allocator *alloc, char const *dir, c_string_carray *out) {
-    char pattern[PLATFORM_PATH_MAX];
-    snprintf(pattern, sizeof(pattern), "%s\\*", dir);
-
-    WIN32_FIND_DATAA fd;
-    HANDLE           h = FindFirstFileA(pattern, &fd);
-    if (h == INVALID_HANDLE_VALUE) return;
-
-    do {
-        if (fd.cFileName[0] == '.' &&
-            (fd.cFileName[1] == '\0' || (fd.cFileName[1] == '.' && fd.cFileName[2] == '\0')))
-            continue;
-
-        char child[PLATFORM_PATH_MAX];
-        snprintf(child, sizeof(child), "%s\\%s", dir, fd.cFileName);
-
-        if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
-            scan_directory_recursive(alloc, child, out);
-        } else if (has_tl_extension(fd.cFileName)) {
-            size_t len  = strlen(child);
-            char  *copy = alloc_malloc(alloc, len + 1);
-            memcpy(copy, child, len + 1);
-            char const *path = copy;
-            array_push(*out, path);
-        }
-    } while (FindNextFileA(h, &fd));
-
-    FindClose(h);
-}
-#else
-static void scan_directory_recursive(allocator *alloc, char const *dir, c_string_carray *out) {
-    DIR *d = opendir(dir);
-    if (!d) return;
-
-    struct dirent *ent;
-    while ((ent = readdir(d)) != null) {
-        if (ent->d_name[0] == '.' &&
-            (ent->d_name[1] == '\0' || (ent->d_name[1] == '.' && ent->d_name[2] == '\0')))
-            continue;
-
-        char child[PLATFORM_PATH_MAX];
-        snprintf(child, sizeof(child), "%s/%s", dir, ent->d_name);
-
-        struct stat st;
-        if (stat(child, &st) != 0) continue;
-        if (S_ISDIR(st.st_mode)) {
-            scan_directory_recursive(alloc, child, out);
-        } else if (has_tl_extension(ent->d_name)) {
-            size_t len  = strlen(child);
-            char  *copy = alloc_malloc(alloc, len + 1);
-            memcpy(copy, child, len + 1);
-            char const *path = copy;
-            array_push(*out, path);
-        }
-    }
-
-    closedir(d);
-}
-#endif
-
 // Resolve source() entries from package.tl into file paths.
 // For each entry: if it's a directory, recursively scan for *.tl files.
 // If it's a file, add it directly.
@@ -764,7 +693,7 @@ static int resolve_source_entries(state *self, tl_package_info *info, c_string_c
     for (u32 i = 0; i < info->source_count; i++) {
         str entry = info->sources[i];
         if (file_is_directory(entry)) {
-            scan_directory_recursive(self->arena, str_cstr(&entry), out);
+            file_scan_dir_recursive(self->arena, str_cstr(&entry), ".tl", out);
         } else if (file_exists(entry)) {
             char const *cstr = str_cstr(&entry);
             size_t      len  = strlen(cstr);
@@ -1623,7 +1552,14 @@ static int init_package(state *self) {
     }
     fprintf(f, "format(1)\n");
     fprintf(f, "package(\"%s\")\n", name);
+    fprintf(f, "author(\"anonymous\")\n");
     fprintf(f, "version(\"0.0.1\")\n");
+    fprintf(f, "\n");
+    fprintf(f, "source(\"src/\")\n");
+    fprintf(f, "depend_path(\"libs/\")\n");
+    fprintf(f, "\n");
+    fprintf(f, "// For a library, list of modules to export: \n");
+    fprintf(f, "// export(\"ModuleOne\", \"ModuleTwo\", ...)");
     fclose(f);
 
     fprintf(stderr, "Created package.tl for package \"%s\"\n", name);

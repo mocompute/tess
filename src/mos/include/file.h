@@ -2,6 +2,7 @@
 #define MOS_FILE_H
 
 #include "alloc.h"
+#include "array.h"
 #include "str.h"
 #include "types.h"
 
@@ -32,5 +33,11 @@ str file_path_normalize(allocator *, str path);
 // Compute relative path from a directory to a target path.
 // Returns empty string on error (empty inputs, different Windows drives).
 str file_path_relative(allocator *, str from_dir, str to_path);
+
+// Recursively scan directory, collecting file paths.
+// If ext is non-NULL, only files ending with ext (e.g. ".tl") are collected.
+// If ext is NULL, all files are collected.
+void file_scan_dir_recursive(allocator *alloc, char const *dir,
+                             char const *ext, c_string_carray *out);
 
 #endif

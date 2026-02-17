@@ -223,8 +223,8 @@ tl_source_scanner_validate_result tl_source_scanner_validate(tl_source_scanner *
         str m = export_modules[i];
         if (!str_map_contains(self->modules_seen, m)) {
             fprintf(stderr,
-                    "error: export() declares module '%s' but no #module directive found in source\n",
-                    str_cstr(&m));
+                    "error: export() declares module '%s' but no '#module %s' directive found in source\n",
+                    str_cstr(&m), str_cstr(&m));
             result.error_count++;
         }
     }
