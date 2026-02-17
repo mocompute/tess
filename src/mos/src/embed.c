@@ -1,12 +1,12 @@
+#include "platform.h"
+
 #include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
 
-#ifdef MOS_WINDOWS
-#include <windows.h>
-#else
+#ifndef MOS_WINDOWS
 #include <dirent.h>
 #endif
 
@@ -104,8 +104,12 @@ int process_file(FILE *out, char const *path, char const *filename) {
 
 // Windows implementation using FindFirstFile/FindNextFile
 void process_directory(char const *progname, char const *dir_path, char const *output_file) {
-    char search_path[1024];
-    snprintf(search_path, sizeof(search_path), "%s\\*", dir_path);
+    char search_path[PLATFORM_PATH_MAX];
+    int  n = snprintf(search_path, sizeof(search_path), "%s\\*", dir_path);
+    if (n < 0 || (size_t)n >= sizeof(search_path)) {
+        fprintf(stderr, "%s: Error: Path too long: %s\n", progname, dir_path);
+        exit(1);
+    }
 
     WIN32_FIND_DATAA find_data;
     HANDLE           find_handle = FindFirstFileA(search_path, &find_data);
@@ -132,8 +136,9 @@ void process_directory(char const *progname, char const *dir_path, char const *o
         if (find_data.cFileName[0] == '.') continue;
         if (find_data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) continue;
 
-        char filepath[1024];
-        snprintf(filepath, sizeof(filepath), "%s\\%s", dir_path, find_data.cFileName);
+        char filepath[PLATFORM_PATH_MAX];
+        int  cn = snprintf(filepath, sizeof(filepath), "%s\\%s", dir_path, find_data.cFileName);
+        if (cn < 0 || (size_t)cn >= sizeof(filepath)) continue;
 
         printf("%s: Processing: %s\n", progname, find_data.cFileName);
 
@@ -176,8 +181,9 @@ void process_directory(char const *progname, char const *dir_path, char const *o
         // Skip directories and hidden files
         if (entry->d_name[0] == '.') continue;
 
-        char filepath[1024];
-        snprintf(filepath, sizeof(filepath), "%s/%s", dir_path, entry->d_name);
+        char filepath[PLATFORM_PATH_MAX];
+        int  cn = snprintf(filepath, sizeof(filepath), "%s/%s", dir_path, entry->d_name);
+        if (cn < 0 || (size_t)cn >= sizeof(filepath)) continue;
 
         struct stat st;
         if (stat(filepath, &st) == 0 && S_ISREG(st.st_mode)) {

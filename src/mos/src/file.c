@@ -11,6 +11,7 @@
 #include <direct.h>
 #include <windows.h>
 #else
+#include <dirent.h>
 #include <sys/stat.h>
 #include <unistd.h>
 #endif
@@ -349,6 +350,8 @@ str file_path_relative(allocator *alloc, str from_dir, str to_path) {
     if (!from_abs || !to_abs) {
         char cwd_buf[4096];
         if (!file_current_working_directory((span){.buf = cwd_buf, .len = sizeof(cwd_buf)})) {
+            str_deinit(alloc, &from_norm);
+            str_deinit(alloc, &to_norm);
             return str_empty();
         }
         str cwd = str_init_static(cwd_buf);
@@ -504,4 +507,91 @@ str file_path_relative(allocator *alloc, str from_dir, str to_path) {
     str_deinit(alloc, &to_norm);
 
     return str_build_finish(&build);
+}
+
+// -- directory scanning --
+
+#define FILE_SCAN_MAX_DEPTH 64
+
+static int has_extension(char const *name, char const *ext) {
+    if (!ext) return 1;
+    size_t nlen = strlen(name);
+    size_t elen = strlen(ext);
+    if (nlen < elen) return 0;
+    return memcmp(name + nlen - elen, ext, elen) == 0;
+}
+
+#ifdef MOS_WINDOWS
+static void scan_recursive(allocator *alloc, char const *dir,
+                           char const *ext, c_string_carray *out, int depth) {
+    if (depth >= FILE_SCAN_MAX_DEPTH) return;
+
+    char pattern[PLATFORM_PATH_MAX];
+    int  n = snprintf(pattern, sizeof(pattern), "%s\\*", dir);
+    if (n < 0 || (size_t)n >= sizeof(pattern)) return;
+
+    WIN32_FIND_DATAA fd;
+    HANDLE           h = FindFirstFileA(pattern, &fd);
+    if (h == INVALID_HANDLE_VALUE) return;
+
+    do {
+        if (fd.cFileName[0] == '.' &&
+            (fd.cFileName[1] == '\0' || (fd.cFileName[1] == '.' && fd.cFileName[2] == '\0')))
+            continue;
+
+        char child[PLATFORM_PATH_MAX];
+        int  cn = snprintf(child, sizeof(child), "%s\\%s", dir, fd.cFileName);
+        if (cn < 0 || (size_t)cn >= sizeof(child)) continue;
+
+        if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
+            scan_recursive(alloc, child, ext, out, depth + 1);
+        } else if (has_extension(fd.cFileName, ext)) {
+            size_t len  = strlen(child);
+            char  *copy = alloc_malloc(alloc, len + 1);
+            memcpy(copy, child, len + 1);
+            char const *path = copy;
+            array_push(*out, path);
+        }
+    } while (FindNextFileA(h, &fd));
+
+    FindClose(h);
+}
+#else
+static void scan_recursive(allocator *alloc, char const *dir,
+                           char const *ext, c_string_carray *out, int depth) {
+    if (depth >= FILE_SCAN_MAX_DEPTH) return;
+
+    DIR *d = opendir(dir);
+    if (!d) return;
+
+    struct dirent *ent;
+    while ((ent = readdir(d)) != null) {
+        if (ent->d_name[0] == '.' &&
+            (ent->d_name[1] == '\0' || (ent->d_name[1] == '.' && ent->d_name[2] == '\0')))
+            continue;
+
+        char child[PLATFORM_PATH_MAX];
+        int  cn = snprintf(child, sizeof(child), "%s/%s", dir, ent->d_name);
+        if (cn < 0 || (size_t)cn >= sizeof(child)) continue;
+
+        struct stat st;
+        if (lstat(child, &st) != 0) continue;
+        if (S_ISDIR(st.st_mode)) {
+            scan_recursive(alloc, child, ext, out, depth + 1);
+        } else if (S_ISREG(st.st_mode) && has_extension(ent->d_name, ext)) {
+            size_t len  = strlen(child);
+            char  *copy = alloc_malloc(alloc, len + 1);
+            memcpy(copy, child, len + 1);
+            char const *path = copy;
+            array_push(*out, path);
+        }
+    }
+
+    closedir(d);
+}
+#endif
+
+void file_scan_dir_recursive(allocator *alloc, char const *dir,
+                             char const *ext, c_string_carray *out) {
+    scan_recursive(alloc, dir, ext, out, 0);
 }

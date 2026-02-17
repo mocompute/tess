@@ -56,20 +56,46 @@ double hires_timer_elapsed_sec(hires_timer *t) {
 #endif
 
 // -- Command existence check --
+
+// Reject strings containing path separators or shell metacharacters
+static int is_safe_command_name(char const *cmd) {
+    for (char const *p = cmd; *p; p++) {
+        if (*p == '/' || *p == '\\' || *p == ' ' || *p == ';' ||
+            *p == '|' || *p == '&' || *p == '\'' || *p == '"' ||
+            *p == '`' || *p == '$' || *p == '(' || *p == ')') return 0;
+    }
+    return 1;
+}
+
 #ifdef MOS_WINDOWS
 
 int platform_command_exists(char const *cmd) {
+    if (!cmd || !*cmd || !is_safe_command_name(cmd)) return 0;
     char buf[PLATFORM_PATH_MAX];
-    snprintf(buf, sizeof(buf), "where %s >nul 2>&1", cmd);
-    return system(buf) == 0;
+    return SearchPathA(NULL, cmd, ".exe", sizeof(buf), buf, NULL) > 0;
 }
 
 #else
 
 int platform_command_exists(char const *cmd) {
-    char buf[PLATFORM_PATH_MAX];
-    snprintf(buf, sizeof(buf), "command -v %s >/dev/null 2>&1", cmd);
-    return system(buf) == 0;
+    if (!cmd || !*cmd || !is_safe_command_name(cmd)) return 0;
+    char const *path_env = getenv("PATH");
+    if (!path_env) return 0;
+    char const *p = path_env;
+    while (*p) {
+        char const *end = strchr(p, ':');
+        if (!end) end = p + strlen(p);
+        size_t dir_len = (size_t)(end - p);
+        if (dir_len > 0) {
+            char candidate[PLATFORM_PATH_MAX];
+            int cn = snprintf(candidate, sizeof(candidate), "%.*s/%s", (int)dir_len, p, cmd);
+            if (cn >= 0 && (size_t)cn < sizeof(candidate)) {
+                if (access(candidate, X_OK) == 0) return 1;
+            }
+        }
+        p = *end ? end + 1 : end;
+    }
+    return 0;
 }
 
 #endif
@@ -127,9 +153,14 @@ void platform_temp_path_delete(char const *path) {
     RemoveDirectoryA(path);
 }
 
-static void remove_dir_recursive_win(char const *path) {
+#define PLATFORM_RECURSIVE_MAX_DEPTH 64
+
+static void remove_dir_recursive_win(char const *path, int depth) {
+    if (depth >= PLATFORM_RECURSIVE_MAX_DEPTH) return;
+
     char pattern[PLATFORM_PATH_MAX];
-    snprintf(pattern, sizeof(pattern), "%s\\*", path);
+    int  n = snprintf(pattern, sizeof(pattern), "%s\\*", path);
+    if (n < 0 || (size_t)n >= sizeof(pattern)) return;
 
     WIN32_FIND_DATAA fd;
     HANDLE           h = FindFirstFileA(pattern, &fd);
@@ -141,10 +172,11 @@ static void remove_dir_recursive_win(char const *path) {
             continue;
 
         char child[PLATFORM_PATH_MAX];
-        snprintf(child, sizeof(child), "%s\\%s", path, fd.cFileName);
+        int  cn = snprintf(child, sizeof(child), "%s\\%s", path, fd.cFileName);
+        if (cn < 0 || (size_t)cn >= sizeof(child)) continue;
 
         if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
-            remove_dir_recursive_win(child);
+            remove_dir_recursive_win(child, depth + 1);
         } else {
             DeleteFileA(child);
         }
@@ -156,7 +188,7 @@ static void remove_dir_recursive_win(char const *path) {
 
 void platform_temp_path_delete_recursive(char const *path) {
     if (!path) return;
-    remove_dir_recursive_win(path);
+    remove_dir_recursive_win(path, 0);
 }
 
 int platform_mkdir(char const *path) {
@@ -180,7 +212,11 @@ void platform_temp_path_delete(char const *path) {
     rmdir(path);
 }
 
-static void remove_dir_recursive(char const *path) {
+#define PLATFORM_RECURSIVE_MAX_DEPTH 64
+
+static void remove_dir_recursive(char const *path, int depth) {
+    if (depth >= PLATFORM_RECURSIVE_MAX_DEPTH) return;
+
     DIR *d = opendir(path);
     if (!d) return;
 
@@ -191,11 +227,12 @@ static void remove_dir_recursive(char const *path) {
             continue;
 
         char child[PLATFORM_PATH_MAX];
-        snprintf(child, sizeof(child), "%s/%s", path, ent->d_name);
+        int  cn = snprintf(child, sizeof(child), "%s/%s", path, ent->d_name);
+        if (cn < 0 || (size_t)cn >= sizeof(child)) continue;
 
         struct stat st;
         if (lstat(child, &st) == 0 && S_ISDIR(st.st_mode)) {
-            remove_dir_recursive(child);
+            remove_dir_recursive(child, depth + 1);
         } else {
             unlink(child);
         }
@@ -207,7 +244,7 @@ static void remove_dir_recursive(char const *path) {
 
 void platform_temp_path_delete_recursive(char const *path) {
     if (!path) return;
-    remove_dir_recursive(path);
+    remove_dir_recursive(path, 0);
 }
 
 int platform_mkdir(char const *path) {
@@ -219,24 +256,71 @@ int platform_mkdir(char const *path) {
 // -- Process execution --
 #ifdef MOS_WINDOWS
 
+// Append a quoted argument to buf using CommandLineToArgvW-compatible rules:
+// - Always wrap in double quotes
+// - N backslashes before a " or end-of-arg become 2N (+ \" if before quote)
+// - N backslashes elsewhere stay literal
+// - Bare " becomes \"
+// Returns new position, or -1 on overflow.
+static int append_quoted_arg(char *buf, size_t bufsize, size_t pos, char const *arg) {
+    if (pos >= bufsize) return -1;
+    buf[pos++] = '"';
+
+    for (char const *p = arg; *p; ) {
+        size_t num_backslashes = 0;
+        while (p[num_backslashes] == '\\') num_backslashes++;
+
+        if (p[num_backslashes] == '\0') {
+            // End of arg: double the backslashes
+            size_t need = num_backslashes * 2;
+            if (pos + need >= bufsize) return -1;
+            for (size_t i = 0; i < need; i++) buf[pos++] = '\\';
+            p += num_backslashes;
+        } else if (p[num_backslashes] == '"') {
+            // Quote: double the backslashes + escape the quote
+            size_t need = num_backslashes * 2 + 2; // 2N backslashes + \"
+            if (pos + need >= bufsize) return -1;
+            for (size_t i = 0; i < num_backslashes * 2; i++) buf[pos++] = '\\';
+            buf[pos++] = '\\';
+            buf[pos++] = '"';
+            p += num_backslashes + 1;
+        } else {
+            // Not followed by quote: backslashes are literal
+            size_t need = num_backslashes + 1;
+            if (pos + need >= bufsize) return -1;
+            for (size_t i = 0; i < num_backslashes; i++) buf[pos++] = '\\';
+            buf[pos++] = p[num_backslashes];
+            p += num_backslashes + 1;
+        }
+    }
+
+    if (pos + 1 >= bufsize) return -1;
+    buf[pos++] = '"';
+    return (int)pos;
+}
+
 int platform_exec(platform_exec_opts const *opts) {
-    // Build command line from argv
+    // Build command line from argv using proper quoting
     char   cmdline[8192];
     size_t pos = 0;
     for (int i = 0; opts->argv[i] != NULL; i++) {
-        if (i > 0) cmdline[pos++] = ' ';
-        // Simple quoting for arguments with spaces
-        int    needs_quotes = strchr(opts->argv[i], ' ') != NULL;
-        size_t len          = strlen(opts->argv[i]);
-        size_t needed       = len + (needs_quotes ? 2 : 0) + 1; // +1 for NUL
-        if (pos + needed >= sizeof(cmdline)) {
-            fprintf(stderr, "Command line too long (%zu bytes)\n", pos + needed);
+        if (i > 0) {
+            if (pos >= sizeof(cmdline)) {
+                fprintf(stderr, "Command line too long\n");
+                return -1;
+            }
+            cmdline[pos++] = ' ';
+        }
+        int result = append_quoted_arg(cmdline, sizeof(cmdline), pos, opts->argv[i]);
+        if (result < 0) {
+            fprintf(stderr, "Command line too long\n");
             return -1;
         }
-        if (needs_quotes) cmdline[pos++] = '"';
-        memcpy(cmdline + pos, opts->argv[i], len);
-        pos += len;
-        if (needs_quotes) cmdline[pos++] = '"';
+        pos = (size_t)result;
+    }
+    if (pos >= sizeof(cmdline)) {
+        fprintf(stderr, "Command line too long\n");
+        return -1;
     }
     cmdline[pos] = '\0';
 
