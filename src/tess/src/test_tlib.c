@@ -2447,8 +2447,10 @@ static int test_e2e_c_export_static_lib(void) {
         }
 #endif
         if (!test_cc) {
-            fprintf(stderr, "  warning: no C compiler found, skipping consumer link test\n");
-        } else {
+            fprintf(stderr, "  no C compiler found\n");
+            return 1;
+        }
+        {
             char consumer_src[512], consumer_exe[512];
             snprintf(consumer_src, sizeof(consumer_src), "%smain.c", dir);
             snprintf(consumer_exe, sizeof(consumer_exe), "%smain" EXE_SUFFIX, dir);
