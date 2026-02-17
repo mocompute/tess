@@ -2431,36 +2431,62 @@ static int test_e2e_c_export_static_lib(void) {
         return 1;
     }
 
-    // Compile a consumer that links against the static library
-    char consumer_src[512], consumer_exe[512];
-    snprintf(consumer_src, sizeof(consumer_src), "%smain.c", dir);
-    snprintf(consumer_exe, sizeof(consumer_exe), "%smain" EXE_SUFFIX, dir);
+    // Compile a C consumer that links against the static library.
+    // Discover compiler the same way tess does (CC env, then probe).
+    {
+        char const *test_cc = getenv("CC");
+#ifdef MOS_WINDOWS
+        if (!test_cc) {
+            if (platform_command_exists("cl")) test_cc = "cl";
+            else if (platform_command_exists("gcc")) test_cc = "gcc";
+        }
+#else
+        if (!test_cc) {
+            if (platform_command_exists("cc")) test_cc = "cc";
+            else if (platform_command_exists("gcc")) test_cc = "gcc";
+        }
+#endif
+        if (!test_cc) {
+            fprintf(stderr, "  warning: no C compiler found, skipping consumer link test\n");
+        } else {
+            char consumer_src[512], consumer_exe[512];
+            snprintf(consumer_src, sizeof(consumer_src), "%smain.c", dir);
+            snprintf(consumer_exe, sizeof(consumer_exe), "%smain" EXE_SUFFIX, dir);
 
-    if (write_file(consumer_src,
-                   "#include \"libtest.h\"\n"
-                   "#include <stdio.h>\n"
-                   "int main(void) {\n"
-                   "    tl_init_test();\n"
-                   "    if (add(2, 3) != 5) return 1;\n"
-                   "    if (testmod_inc(10) != 11) return 2;\n"
-                   "    return 0;\n"
-                   "}\n")) {
-        fprintf(stderr, "  failed to write main.c\n");
-        return 1;
-    }
+            if (write_file(consumer_src,
+                           "#include \"libtest.h\"\n"
+                           "#include <stdio.h>\n"
+                           "int main(void) {\n"
+                           "    tl_init_test();\n"
+                           "    if (add(2, 3) != 5) return 1;\n"
+                           "    if (testmod_inc(10) != 11) return 2;\n"
+                           "    return 0;\n"
+                           "}\n")) {
+                fprintf(stderr, "  failed to write main.c\n");
+                return 1;
+            }
 
-    snprintf(cmd, sizeof(cmd),
-             CD_CMD " \"%s\" && cc -o \"%s\" \"%s\" \"%s\" 2>&1",
-             dir, consumer_exe, consumer_src, a_path);
-    if (run_cmd(cmd) != 0) {
-        fprintf(stderr, "  failed to compile consumer against static library\n");
-        return 1;
-    }
+            int is_msvc = (0 == strcmp(test_cc, "cl") || 0 == strcmp(test_cc, "cl.exe"));
+            if (is_msvc) {
+                snprintf(cmd, sizeof(cmd),
+                         CD_CMD " \"%s\" && \"%s\" /nologo /Fe:\"%s\" \"%s\" \"%s\" 2>&1",
+                         dir, test_cc, consumer_exe, consumer_src, a_path);
+            } else {
+                snprintf(cmd, sizeof(cmd),
+                         CD_CMD " \"%s\" && \"%s\" -o \"%s\" \"%s\" \"%s\" 2>&1",
+                         dir, test_cc, consumer_exe, consumer_src, a_path);
+            }
+            if (run_cmd(cmd) != 0) {
+                fprintf(stderr, "  failed to compile consumer against static library\n");
+                return 1;
+            }
 
-    snprintf(cmd, sizeof(cmd), "\"%s\"", consumer_exe);
-    if (run_cmd(cmd) != 0) {
-        fprintf(stderr, "  consumer linked against static library returned non-zero\n");
-        return 1;
+            snprintf(cmd, sizeof(cmd), "\"%s\"", consumer_exe);
+            if (run_cmd(cmd) != 0) {
+                fprintf(stderr, "  consumer linked against static library returned non-zero\n");
+                return 1;
+            }
+        }
     }
 
     return 0;

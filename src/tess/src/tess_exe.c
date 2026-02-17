@@ -1322,7 +1322,12 @@ int compile_c_static_lib(state *self) {
     // Static library: compile to .o, then archive with ar (or lib on MSVC)
     platform_temp_file c_file, obj_file;
     if (platform_temp_file_create(&c_file, ".c")) return 1;
-    if (platform_temp_file_create(&obj_file, ".o")) {
+#ifdef MOS_WINDOWS
+    char const *obj_suffix = is_msvc_compiler(self) ? ".obj" : ".o";
+#else
+    char const *obj_suffix = ".o";
+#endif
+    if (platform_temp_file_create(&obj_file, obj_suffix)) {
         platform_temp_file_delete(&c_file);
         return 1;
     }
@@ -1422,15 +1427,11 @@ int compile_c_static_lib(state *self) {
             result = platform_exec(&lib_opts);
         }
     } else {
-        // Windows GCC: gcc -fPIC -c -o <obj> <c_file>
+        // Windows GCC: gcc -c -o <obj> <c_file>
         char const     *cc   = str_cstr(&self->cc);
         c_string_array  argv = {.alloc = self->arena};
         array_reserve(argv, 16);
         array_push(argv, cc);
-        {
-            char const *_t = "-fPIC";
-            array_push(argv, _t);
-        }
         {
             char const *_t = "-c";
             array_push(argv, _t);
