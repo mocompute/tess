@@ -28,6 +28,21 @@ fail:
     return str_empty();
 }
 
+// Extract an identifier (bare symbol) from a DSL argument node.
+// Returns the symbol name, or an empty str on failure (with error printed).
+static str extract_identifier(allocator *alloc, ast_node *node, char const *func_name, int arg_index) {
+
+    if (!node || node->tag != ast_symbol) goto fail;
+    str out = node->symbol.name;
+    if (str_is_empty(out)) goto fail;
+    return str_copy(alloc, out);
+
+fail:
+    fprintf(stderr, "package.tl: error: %s() argument %d is not an identifier\n", func_name,
+            arg_index + 1);
+    return str_empty();
+}
+
 // Extract an integer from a DSL argument node (ast_i64).
 // Returns the value, or -1 on failure (with error printed).
 static i64 extract_int(ast_node *node, char const *func_name, int arg_index) {
@@ -176,12 +191,12 @@ int tl_package_parse_file(allocator *alloc, char const *path, tl_package *out) {
                 continue;
             }
             if (argc != 1) {
-                fprintf(stderr, "package.tl: error: package() expects 1 string argument(s), got %d\n",
+                fprintf(stderr, "package.tl: error: package() expects 1 identifier argument, got %d\n",
                         (int)argc);
                 error = 1;
                 continue;
             }
-            out->info.name = extract_string(alloc, nfa->arguments[0], "package", 0);
+            out->info.name = extract_identifier(alloc, nfa->arguments[0], "package", 0);
             if (str_is_empty(out->info.name)) {
                 error = 1;
                 continue;
@@ -223,12 +238,12 @@ int tl_package_parse_file(allocator *alloc, char const *path, tl_package *out) {
         } else if (str_eq(func_name, S("export"))) {
             if (argc < 1) {
                 fprintf(stderr,
-                        "package.tl: error: export() expects at least 1 string argument(s), got 0\n");
+                        "package.tl: error: export() expects at least 1 identifier argument, got 0\n");
                 error = 1;
                 continue;
             }
             for (u8 j = 0; j < argc; j++) {
-                str val = extract_string(alloc, nfa->arguments[j], "export", j);
+                str val = extract_identifier(alloc, nfa->arguments[j], "export", j);
                 if (str_is_empty(val)) {
                     error = 1;
                     continue;
@@ -238,13 +253,13 @@ int tl_package_parse_file(allocator *alloc, char const *path, tl_package *out) {
 
         } else if (str_eq(func_name, S("depend"))) {
             if (argc < 2 || argc > 3) {
-                fprintf(stderr, "package.tl: error: depend() expects 2-3 string argument(s), got %d\n",
+                fprintf(stderr, "package.tl: error: depend() expects 2-3 arguments, got %d\n",
                         (int)argc);
                 error = 1;
                 continue;
             }
             tl_package_dep dep = {0};
-            dep.name           = extract_string(alloc, nfa->arguments[0], "depend", 0);
+            dep.name           = extract_identifier(alloc, nfa->arguments[0], "depend", 0);
             if (str_is_empty(dep.name)) {
                 error = 1;
                 continue;
@@ -267,13 +282,13 @@ int tl_package_parse_file(allocator *alloc, char const *path, tl_package *out) {
         } else if (str_eq(func_name, S("depend_optional"))) {
             if (argc < 2 || argc > 3) {
                 fprintf(stderr,
-                        "package.tl: error: depend_optional() expects 2-3 string argument(s), got %d\n",
+                        "package.tl: error: depend_optional() expects 2-3 arguments, got %d\n",
                         (int)argc);
                 error = 1;
                 continue;
             }
             tl_package_dep dep = {0};
-            dep.name           = extract_string(alloc, nfa->arguments[0], "depend_optional", 0);
+            dep.name           = extract_identifier(alloc, nfa->arguments[0], "depend_optional", 0);
             if (str_is_empty(dep.name)) {
                 error = 1;
                 continue;

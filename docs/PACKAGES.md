@@ -36,14 +36,14 @@ clamp(x, lo, hi) {
 **package.tl:**
 ```tl
 format(1)
-package("mylib")
+package(mylib)
 version("1.0.0")
 author("Alice")
-export("MathUtils")
+export(MathUtils)
 source("src/")
 ```
 
-Note that the package name (`"mylib"`) and the module name (`MathUtils`) are independent. The package name appears in `package.tl` and dependency declarations; the module name appears in source code.
+Note that the package name (`mylib`) and the module name (`MathUtils`) are independent. The package name appears in `package.tl` and dependency declarations; the module name appears in source code.
 
 **Build the package:**
 ```bash
@@ -79,10 +79,10 @@ main() {
 **package.tl:**
 ```tl
 format(1)
-package("MyApp")
+package(MyApp)
 version("0.1.0")
 source("src/")
-depend("mylib", "1.0.0")
+depend(mylib, "1.0.0")
 depend_path("./libs")
 ```
 
@@ -106,26 +106,26 @@ Builds that do not use packages work without `package.tl` -- the compiler simply
 | Function | Arguments | Required | Description |
 |----------|-----------|----------|-------------|
 | `format(n)` | 1 integer | Yes | DSL format version (currently `1`). Must be the first declaration. |
-| `package(name)` | 1 string | Yes | Package name (must be unique; duplicates rejected) |
+| `package(name)` | 1 identifier | Yes | Package name (must be unique; duplicates rejected) |
 | `version(ver)` | 1 string | Yes | Version string (literal string comparison, not semver) |
 | `author(name)` | 1 string | No | Author name or email |
-| `export(mod, ...)` | 1+ strings | For `tess pack` | Modules that are part of the public API |
+| `export(mod, ...)` | 1+ identifiers | For `tess pack` | Modules that are part of the public API |
 | `source(path, ...)` | 1+ strings | No | Source files or directories (directories scanned recursively for `*.tl`) |
-| `depend(name, ver)` | 2 strings | No | Required dependency with version |
-| `depend_optional(name, ver)` | 2 strings | No | Optional dependency with version |
+| `depend(name, ver)` | identifier + string | No | Required dependency with version |
+| `depend_optional(name, ver)` | identifier + string | No | Optional dependency with version |
 | `depend_path(dir)` | 1 string | No | Directory to search for `.tlib` files (accumulates) |
 
 ### Example
 
 ```tl
 format(1)
-package("mylib")
+package(mylib)
 version("1.0.0")
 author("Alice")
-export("MathUtils")
+export(MathUtils)
 source("src/")
 
-depend("logging-lib", "2.0.0")
+depend(logging_lib, "2.0.0")
 depend_path("./libs")
 ```
 
@@ -134,7 +134,7 @@ depend_path("./libs")
 - `format(1)` must appear first.
 - `package()` and `version()` cannot be declared more than once.
 - Multiple `export()`, `source()`, `depend()`, `depend_optional()`, and `depend_path()` calls accumulate.
-- `export()` accepts multiple arguments: `export("Mod1", "Mod2")`.
+- `export()` accepts multiple arguments: `export(Mod1, Mod2)`.
 - `source()` accepts multiple arguments: `source("src/", "extra/util.tl")`. Directory arguments are scanned recursively for `*.tl` files.
 - Version strings are compared as literal strings, not as semantic versions. `"1.0.0"` and `"1.0"` are different versions.
 - Unknown function calls are silently ignored. This allows `package.tl` to contain fields that older compiler versions do not recognize.
@@ -269,18 +269,18 @@ All dependency information comes from `package.tl`. There are no CLI flags for s
 Consumers only declare their **direct** dependencies in `package.tl`:
 
 ```tl
-depend("mylib", "1.0.0")
+depend(mylib, "1.0.0")
 depend_path("./libs")
 ```
 
 ### Transitive dependencies
 
-The compiler automatically resolves transitive dependencies. If `mylib` depends on `logging-lib`, the compiler reads that from the `mylib.tlib` metadata and searches the consumer's `depend_path()` directories for `logging-lib.tlib`.
+The compiler automatically resolves transitive dependencies. If `mylib` depends on `logging_lib`, the compiler reads that from the `mylib.tlib` metadata and searches the consumer's `depend_path()` directories for `logging_lib.tlib`.
 
 ```
 MyApp
   depends on mylib (declared in package.tl)
-    depends on logging-lib (resolved automatically from mylib.tlib metadata)
+    depends on logging_lib (resolved automatically from mylib.tlib metadata)
 ```
 
 The consumer must have all transitive dependencies available in their `depend_path()` directories. If a transitive dependency cannot be found, the compiler emits an error naming the missing package and which package requires it.
@@ -289,7 +289,7 @@ The consumer must have all transitive dependencies available in their `depend_pa
 
 All modules share a single global namespace. Two versions of the same package cannot coexist because they would define the same module names. This means dependency versions use strict equality -- `"1.0.0"` must match exactly.
 
-If package A requires `logging-lib=1.0.0` and package B requires `logging-lib=2.0.0`, the compiler emits an error. There is no way to satisfy both.
+If package A requires `logging_lib=1.0.0` and package B requires `logging_lib=2.0.0`, the compiler emits an error. There is no way to satisfy both.
 
 ### Diamond dependencies
 
@@ -309,7 +309,7 @@ It is the producer's responsibility to name internal modules clearly:
 
 ```tl
 // package.tl
-export("MathUtils")    // public API
+export(MathUtils)    // public API
 
 // src/math.tl
 #module MathUtils              // public
@@ -339,10 +339,10 @@ Package names (in `package.tl`) and module names (in source code) are independen
 
 | | Package name | Module name(s) |
 |---|---|---|
-| **In `package.tl`** | `package("logging-lib")` | `export("Logger")` |
+| **In `package.tl`** | `package(logging_lib)` | `export(Logger)` |
 | **In source code** | not visible | `Logger.warn(...)` |
-| **In `depend()`** | `depend("logging-lib", "2.0.0")` | -- |
-| **In `.tlib` filename** | `logging-lib.tlib` | -- |
+| **In `depend()`** | `depend(logging_lib, "2.0.0")` | -- |
+| **In `.tlib` filename** | `logging_lib.tlib` | -- |
 
 Package names appear in `package.tl`, dependency declarations, and archive filenames. Module names appear in source code.
 
@@ -352,7 +352,7 @@ Package names appear in `package.tl`, dependency declarations, and archive filen
 
 This walks through a library with a dependency and a consumer using both.
 
-### 1. logging-lib package
+### 1. logging_lib package
 
 **logger.tl:**
 ```tl
@@ -373,18 +373,18 @@ error(msg) {
 **package.tl:**
 ```tl
 format(1)
-package("logging-lib")
+package(logging_lib)
 version("2.0.0")
 author("Bob")
-export("Logger")
+export(Logger)
 source("logger.tl")
 ```
 
 ```bash
-tess pack -o logging-lib.tlib
+tess pack -o logging_lib.tlib
 ```
 
-### 2. mylib package (depends on logging-lib)
+### 2. mylib package (depends on logging_lib)
 
 **src/math.tl:**
 ```tl
@@ -421,13 +421,13 @@ fatal(msg) {
 **package.tl:**
 ```tl
 format(1)
-package("mylib")
+package(mylib)
 version("1.0.0")
 author("Alice")
-export("MathUtils")
+export(MathUtils)
 source("src/")
 
-depend("logging-lib", "2.0.0")
+depend(logging_lib, "2.0.0")
 depend_path("./libs")
 ```
 
@@ -435,7 +435,7 @@ depend_path("./libs")
 tess pack -o mylib.tlib
 ```
 
-The archive contains `math.tl` and `internal.tl` but not logging-lib's source. The metadata records the dependency: `logging-lib=2.0.0`.
+The archive contains `math.tl` and `internal.tl` but not logging_lib's source. The metadata records the dependency: `logging_lib=2.0.0`.
 
 ### 3. Consumer application
 
@@ -456,20 +456,20 @@ main() {
 **package.tl:**
 ```tl
 format(1)
-package("myapp")
+package(myapp)
 version("0.1.0")
 source("src/")
 
-depend("mylib", "1.0.0")
+depend(mylib, "1.0.0")
 depend_path("./libs")
-// logging-lib is NOT listed -- resolved automatically as a transitive dependency
+// logging_lib is NOT listed -- resolved automatically as a transitive dependency
 ```
 
 ```bash
 tess exe -o myapp
 ```
 
-The compiler auto-discovers `src/main.tl` via `source("src/")`, loads `mylib.tlib`, sees it requires `logging-lib=2.0.0`, finds `logging-lib.tlib` in `./libs`, verifies the version, and compiles everything together.
+The compiler auto-discovers `src/main.tl` via `source("src/")`, loads `mylib.tlib`, sees it requires `logging_lib=2.0.0`, finds `logging_lib.tlib` in `./libs`, verifies the version, and compiles everything together.
 
 ---
 
@@ -497,7 +497,7 @@ Metadata is uncompressed so tools can inspect package metadata without decompres
 
 ### Dependency encoding
 
-Dependencies are stored as `"PackageName=Version"` strings (e.g., `"LoggingLib=2.0.0"`).
+Dependencies are stored as `"PackageName=Version"` strings (e.g., `"logging_lib=2.0.0"`).
 
 ### Integrity
 

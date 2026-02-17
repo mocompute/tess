@@ -622,12 +622,12 @@ static int test_pack_with_manifest(void) {
     char pkg_path[512];
     make_temp_path(pkg_path, sizeof(pkg_path), "test_manifest_pack_package.tl");
     char const *pkg_content = "format(1)\n"
-                              "package(\"TestPkg\")\n"
+                              "package(TestPkg)\n"
                               "version(\"1.0.0\")\n"
                               "author(\"Tester\")\n"
-                              "export(\"Foo\")\n"
-                              "depend(\"Logger\", \"2.0.0\")\n"
-                              "depend_optional(\"Debug\", \"0.1.0\")\n";
+                              "export(Foo)\n"
+                              "depend(Logger, \"2.0.0\")\n"
+                              "depend_optional(Debug, \"0.1.0\")\n";
     if (write_file(pkg_path, pkg_content)) {
         fprintf(stderr, "  failed to write package.tl file\n");
         error = 1;
@@ -895,7 +895,7 @@ static int test_extract(void) {
     char       path[512];
     make_temp_path(path, sizeof(path), "test_tlib_extract.tlib");
 
-    char const      *pkg_content = "format(1)\npackage(\"TestLib\")\nversion(\"1.0.0\")\n";
+    char const      *pkg_content = "format(1)\npackage(TestLib)\nversion(\"1.0.0\")\n";
 
     tl_tlib_metadata meta        = make_test_metadata(alloc);
     tl_tlib_entry    entries[3]  = {
@@ -1058,7 +1058,7 @@ static int test_e2e_basic_package(void) {
 
     char path[512];
     snprintf(path, sizeof(path), "%spackage.tl", lib_dir);
-    if (write_file(path, "format(1)\npackage(\"Greeter\")\nversion(\"1.0.0\")\nexport(\"Greeter\")\n")) {
+    if (write_file(path, "format(1)\npackage(Greeter)\nversion(\"1.0.0\")\nexport(Greeter)\n")) {
         fprintf(stderr, "  failed to write lib package.tl\n");
         return 1;
     }
@@ -1092,9 +1092,9 @@ static int test_e2e_basic_package(void) {
 
     snprintf(path, sizeof(path), "%spackage.tl", app_dir);
     if (write_file(path, "format(1)\n"
-                         "package(\"App\")\n"
+                         "package(App)\n"
                          "version(\"0.1.0\")\n"
-                         "depend(\"Greeter\", \"1.0.0\")\n"
+                         "depend(Greeter, \"1.0.0\")\n"
                          "depend_path(\"./libs\")\n")) {
         fprintf(stderr, "  failed to write app package.tl\n");
         return 1;
@@ -1145,7 +1145,7 @@ static int test_e2e_version_mismatch(void) {
 
     char path[512];
     snprintf(path, sizeof(path), "%spackage.tl", lib_dir);
-    write_file(path, "format(1)\npackage(\"Greeter\")\nversion(\"1.0.0\")\nexport(\"Greeter\")\n");
+    write_file(path, "format(1)\npackage(Greeter)\nversion(\"1.0.0\")\nexport(Greeter)\n");
 
     snprintf(path, sizeof(path), "%sgreeter.tl", lib_dir);
     write_file(path, "#module Greeter\n\ngreet() { 42 }\n");
@@ -1172,9 +1172,9 @@ static int test_e2e_version_mismatch(void) {
 
     snprintf(path, sizeof(path), "%spackage.tl", app_dir);
     write_file(path, "format(1)\n"
-                     "package(\"App\")\n"
+                     "package(App)\n"
                      "version(\"0.1.0\")\n"
-                     "depend(\"Greeter\", \"2.0.0\")\n"
+                     "depend(Greeter, \"2.0.0\")\n"
                      "depend_path(\"./libs\")\n");
 
     snprintf(path, sizeof(path), "%smain.tl", app_dir);
@@ -1210,9 +1210,9 @@ static int test_e2e_dep_not_found(void) {
     char path[512];
     snprintf(path, sizeof(path), "%spackage.tl", app_dir);
     write_file(path, "format(1)\n"
-                     "package(\"App\")\n"
+                     "package(App)\n"
                      "version(\"0.1.0\")\n"
-                     "depend(\"NonExistent\", \"1.0.0\")\n"
+                     "depend(NonExistent, \"1.0.0\")\n"
                      "depend_path(\"./libs\")\n");
 
     snprintf(path, sizeof(path), "%smain.tl", app_dir);
@@ -1243,9 +1243,9 @@ static int test_e2e_multi_file_library(void) {
     char path[512];
     snprintf(path, sizeof(path), "%spackage.tl", lib_dir);
     write_file(path, "format(1)\n"
-                     "package(\"MathLib\")\n"
+                     "package(MathLib)\n"
                      "version(\"1.0.0\")\n"
-                     "export(\"MathLib\")\n");
+                     "export(MathLib)\n");
 
     snprintf(path, sizeof(path), "%smath.tl", lib_dir);
     write_file(path, "#module MathLib\n"
@@ -1288,9 +1288,9 @@ static int test_e2e_multi_file_library(void) {
 
     snprintf(path, sizeof(path), "%spackage.tl", app_dir);
     write_file(path, "format(1)\n"
-                     "package(\"App\")\n"
+                     "package(App)\n"
                      "version(\"0.1.0\")\n"
-                     "depend(\"MathLib\", \"1.0.0\")\n"
+                     "depend(MathLib, \"1.0.0\")\n"
                      "depend_path(\"./libs\")\n");
 
     snprintf(path, sizeof(path), "%smain.tl", app_dir);
@@ -1334,7 +1334,7 @@ static int test_e2e_transitive_deps(void) {
 
     char path[512];
     snprintf(path, sizeof(path), "%spackage.tl", loglib_dir);
-    write_file(path, "format(1)\npackage(\"LogLib\")\nversion(\"1.0.0\")\nexport(\"Logger\")\n");
+    write_file(path, "format(1)\npackage(LogLib)\nversion(\"1.0.0\")\nexport(Logger)\n");
 
     snprintf(path, sizeof(path), "%slogger.tl", loglib_dir);
     write_file(path, "#module Logger\n\nlog_value() { 10 }\n");
@@ -1357,10 +1357,10 @@ static int test_e2e_transitive_deps(void) {
 
     snprintf(path, sizeof(path), "%spackage.tl", mathlib_dir);
     write_file(path, "format(1)\n"
-                     "package(\"MathLib\")\n"
+                     "package(MathLib)\n"
                      "version(\"2.0.0\")\n"
-                     "export(\"MathLib\")\n"
-                     "depend(\"LogLib\", \"1.0.0\")\n"
+                     "export(MathLib)\n"
+                     "depend(LogLib, \"1.0.0\")\n"
                      "depend_path(\"./libs\")\n");
 
     snprintf(path, sizeof(path), "%smath.tl", mathlib_dir);
@@ -1392,9 +1392,9 @@ static int test_e2e_transitive_deps(void) {
 
     snprintf(path, sizeof(path), "%spackage.tl", app_dir);
     write_file(path, "format(1)\n"
-                     "package(\"App\")\n"
+                     "package(App)\n"
                      "version(\"0.1.0\")\n"
-                     "depend(\"MathLib\", \"2.0.0\")\n"
+                     "depend(MathLib, \"2.0.0\")\n"
                      "depend_path(\"./libs\")\n");
 
     snprintf(path, sizeof(path), "%smain.tl", app_dir);
@@ -1438,7 +1438,7 @@ static int test_e2e_diamond_deps(void) {
 
     char path[512];
     snprintf(path, sizeof(path), "%spackage.tl", base_dir);
-    write_file(path, "format(1)\npackage(\"BaseLib\")\nversion(\"1.0.0\")\nexport(\"Base\")\n");
+    write_file(path, "format(1)\npackage(BaseLib)\nversion(\"1.0.0\")\nexport(Base)\n");
 
     snprintf(path, sizeof(path), "%sbase.tl", base_dir);
     write_file(path, "#module Base\n\nval() { 20 }\n");
@@ -1461,10 +1461,10 @@ static int test_e2e_diamond_deps(void) {
 
     snprintf(path, sizeof(path), "%spackage.tl", liba_dir);
     write_file(path, "format(1)\n"
-                     "package(\"LibA\")\n"
+                     "package(LibA)\n"
                      "version(\"1.0.0\")\n"
-                     "export(\"ModA\")\n"
-                     "depend(\"BaseLib\", \"1.0.0\")\n"
+                     "export(ModA)\n"
+                     "depend(BaseLib, \"1.0.0\")\n"
                      "depend_path(\"./libs\")\n");
 
     snprintf(path, sizeof(path), "%smoda.tl", liba_dir);
@@ -1492,10 +1492,10 @@ static int test_e2e_diamond_deps(void) {
 
     snprintf(path, sizeof(path), "%spackage.tl", libb_dir);
     write_file(path, "format(1)\n"
-                     "package(\"LibB\")\n"
+                     "package(LibB)\n"
                      "version(\"1.0.0\")\n"
-                     "export(\"ModB\")\n"
-                     "depend(\"BaseLib\", \"1.0.0\")\n"
+                     "export(ModB)\n"
+                     "depend(BaseLib, \"1.0.0\")\n"
                      "depend_path(\"./libs\")\n");
 
     snprintf(path, sizeof(path), "%smodb.tl", libb_dir);
@@ -1521,10 +1521,10 @@ static int test_e2e_diamond_deps(void) {
 
     snprintf(path, sizeof(path), "%spackage.tl", app_dir);
     write_file(path, "format(1)\n"
-                     "package(\"App\")\n"
+                     "package(App)\n"
                      "version(\"0.1.0\")\n"
-                     "depend(\"LibA\", \"1.0.0\")\n"
-                     "depend(\"LibB\", \"1.0.0\")\n"
+                     "depend(LibA, \"1.0.0\")\n"
+                     "depend(LibB, \"1.0.0\")\n"
                      "depend_path(\"./libs\")\n");
 
     snprintf(path, sizeof(path), "%smain.tl", app_dir);
@@ -1644,9 +1644,9 @@ static int test_e2e_circular_deps(void) {
     char path[512];
     snprintf(path, sizeof(path), "%spackage.tl", app_dir);
     write_file(path, "format(1)\n"
-                     "package(\"App\")\n"
+                     "package(App)\n"
                      "version(\"0.1.0\")\n"
-                     "depend(\"PkgA\", \"1.0.0\")\n"
+                     "depend(PkgA, \"1.0.0\")\n"
                      "depend_path(\"./libs\")\n");
 
     snprintf(path, sizeof(path), "%smain.tl", app_dir);
@@ -1762,10 +1762,10 @@ static int test_e2e_version_conflict(void) {
     char path[512];
     snprintf(path, sizeof(path), "%spackage.tl", app_dir);
     write_file(path, "format(1)\n"
-                     "package(\"App\")\n"
+                     "package(App)\n"
                      "version(\"0.1.0\")\n"
-                     "depend(\"LibA\", \"1.0.0\")\n"
-                     "depend(\"LibB\", \"1.0.0\")\n"
+                     "depend(LibA, \"1.0.0\")\n"
+                     "depend(LibB, \"1.0.0\")\n"
                      "depend_path(\"./libs\")\n");
 
     snprintf(path, sizeof(path), "%smain.tl", app_dir);
@@ -1840,9 +1840,9 @@ static int test_e2e_missing_transitive_dep(void) {
     char path[512];
     snprintf(path, sizeof(path), "%spackage.tl", app_dir);
     write_file(path, "format(1)\n"
-                     "package(\"App\")\n"
+                     "package(App)\n"
                      "version(\"0.1.0\")\n"
-                     "depend(\"MathLib\", \"1.0.0\")\n"
+                     "depend(MathLib, \"1.0.0\")\n"
                      "depend_path(\"./libs\")\n");
 
     snprintf(path, sizeof(path), "%smain.tl", app_dir);
@@ -1879,9 +1879,9 @@ static int test_e2e_internal_module_accessible(void) {
     snprintf(path, sizeof(path), "%spackage.tl", lib_dir);
     write_file(path,
                "format(1)\n"
-               "package(\"MathPkg\")\n"
+               "package(MathPkg)\n"
                "version(\"1.0.0\")\n"
-               "export(\"MathPub\")\n"); // only MathPub is exported
+               "export(MathPub)\n"); // only MathPub is exported
 
     snprintf(path, sizeof(path), "%smathpub.tl", lib_dir);
     write_file(path, "#module MathPub\n"
@@ -1917,9 +1917,9 @@ static int test_e2e_internal_module_accessible(void) {
 
     snprintf(path, sizeof(path), "%spackage.tl", app_dir);
     write_file(path, "format(1)\n"
-                     "package(\"App\")\n"
+                     "package(App)\n"
                      "version(\"0.1.0\")\n"
-                     "depend(\"MathPkg\", \"1.0.0\")\n"
+                     "depend(MathPkg, \"1.0.0\")\n"
                      "depend_path(\"./libs\")\n");
 
     snprintf(path, sizeof(path), "%smain.tl", app_dir);
@@ -1962,9 +1962,9 @@ static int test_e2e_generic_package(void) {
     char path[512];
     snprintf(path, sizeof(path), "%spackage.tl", lib_dir);
     write_file(path, "format(1)\n"
-                     "package(\"GenLib\")\n"
+                     "package(GenLib)\n"
                      "version(\"1.0.0\")\n"
-                     "export(\"GenLib\")\n");
+                     "export(GenLib)\n");
 
     snprintf(path, sizeof(path), "%sgenlib.tl", lib_dir);
     write_file(path, "#module GenLib\n"
@@ -1993,9 +1993,9 @@ static int test_e2e_generic_package(void) {
 
     snprintf(path, sizeof(path), "%spackage.tl", app_dir);
     write_file(path, "format(1)\n"
-                     "package(\"App\")\n"
+                     "package(App)\n"
                      "version(\"0.1.0\")\n"
-                     "depend(\"GenLib\", \"1.0.0\")\n"
+                     "depend(GenLib, \"1.0.0\")\n"
                      "depend_path(\"./libs\")\n");
 
     snprintf(path, sizeof(path), "%smain.tl", app_dir);
@@ -2087,10 +2087,10 @@ static int test_e2e_module_conflict(void) {
     char path[512];
     snprintf(path, sizeof(path), "%spackage.tl", app_dir);
     write_file(path, "format(1)\n"
-                     "package(\"App\")\n"
+                     "package(App)\n"
                      "version(\"0.1.0\")\n"
-                     "depend(\"LibA\", \"1.0.0\")\n"
-                     "depend(\"LibB\", \"1.0.0\")\n"
+                     "depend(LibA, \"1.0.0\")\n"
+                     "depend(LibB, \"1.0.0\")\n"
                      "depend_path(\"./libs\")\n");
 
     snprintf(path, sizeof(path), "%smain.tl", app_dir);
@@ -2377,7 +2377,7 @@ static int test_e2e_source_directory(void) {
 
     char path[512];
     snprintf(path, sizeof(path), "%spackage.tl", dir);
-    if (write_file(path, "format(1)\npackage(\"App\")\nversion(\"0.1.0\")\nsource(\"src/\")\n")) {
+    if (write_file(path, "format(1)\npackage(App)\nversion(\"0.1.0\")\nsource(\"src/\")\n")) {
         fprintf(stderr, "  failed to write package.tl\n");
         return 1;
     }
@@ -2417,7 +2417,7 @@ static int test_e2e_source_file(void) {
 
     char path[512];
     snprintf(path, sizeof(path), "%spackage.tl", dir);
-    if (write_file(path, "format(1)\npackage(\"App\")\nversion(\"0.1.0\")\nsource(\"main.tl\")\n")) {
+    if (write_file(path, "format(1)\npackage(App)\nversion(\"0.1.0\")\nsource(\"main.tl\")\n")) {
         fprintf(stderr, "  failed to write package.tl\n");
         return 1;
     }
@@ -2460,7 +2460,7 @@ static int test_e2e_source_cli_override(void) {
     char path[512];
     snprintf(path, sizeof(path), "%spackage.tl", dir);
     if (write_file(path,
-                   "format(1)\npackage(\"App\")\nversion(\"0.1.0\")\nsource(\"src/\")\n")) {
+                   "format(1)\npackage(App)\nversion(\"0.1.0\")\nsource(\"src/\")\n")) {
         fprintf(stderr, "  failed to write package.tl\n");
         return 1;
     }
@@ -2513,7 +2513,7 @@ static int test_e2e_source_recursive(void) {
 
     char path[512];
     snprintf(path, sizeof(path), "%spackage.tl", dir);
-    if (write_file(path, "format(1)\npackage(\"App\")\nversion(\"0.1.0\")\nsource(\"src/\")\n")) {
+    if (write_file(path, "format(1)\npackage(App)\nversion(\"0.1.0\")\nsource(\"src/\")\n")) {
         fprintf(stderr, "  failed to write package.tl\n");
         return 1;
     }
@@ -2561,8 +2561,8 @@ static int test_e2e_source_pack(void) {
 
     char path[512];
     snprintf(path, sizeof(path), "%spackage.tl", lib_dir);
-    if (write_file(path, "format(1)\npackage(\"MyLib\")\nversion(\"1.0.0\")\n"
-                         "export(\"MyLib\")\nsource(\"src/\")\n")) {
+    if (write_file(path, "format(1)\npackage(MyLib)\nversion(\"1.0.0\")\n"
+                         "export(MyLib)\nsource(\"src/\")\n")) {
         fprintf(stderr, "  failed to write package.tl\n");
         return 1;
     }
@@ -2594,8 +2594,8 @@ static int test_e2e_source_pack(void) {
     test_mkdir_p(libs_dir);
 
     snprintf(path, sizeof(path), "%spackage.tl", app_dir);
-    if (write_file(path, "format(1)\npackage(\"App\")\nversion(\"0.1.0\")\n"
-                         "depend(\"MyLib\", \"1.0.0\")\ndepend_path(\"./libs\")\n")) {
+    if (write_file(path, "format(1)\npackage(App)\nversion(\"0.1.0\")\n"
+                         "depend(MyLib, \"1.0.0\")\ndepend_path(\"./libs\")\n")) {
         fprintf(stderr, "  failed to write app package.tl\n");
         return 1;
     }
@@ -2642,8 +2642,8 @@ static int test_e2e_source_validate(void) {
 
     char path[512];
     snprintf(path, sizeof(path), "%spackage.tl", dir);
-    if (write_file(path, "format(1)\npackage(\"App\")\nversion(\"0.1.0\")\n"
-                         "export(\"App\")\nsource(\"src/\")\n")) {
+    if (write_file(path, "format(1)\npackage(App)\nversion(\"0.1.0\")\n"
+                         "export(App)\nsource(\"src/\")\n")) {
         fprintf(stderr, "  failed to write package.tl\n");
         return 1;
     }
@@ -2674,7 +2674,7 @@ static int test_e2e_source_transpile(void) {
 
     char path[512];
     snprintf(path, sizeof(path), "%spackage.tl", dir);
-    if (write_file(path, "format(1)\npackage(\"App\")\nversion(\"0.1.0\")\nsource(\"main.tl\")\n")) {
+    if (write_file(path, "format(1)\npackage(App)\nversion(\"0.1.0\")\nsource(\"main.tl\")\n")) {
         fprintf(stderr, "  failed to write package.tl\n");
         return 1;
     }
@@ -2716,7 +2716,7 @@ static int test_e2e_source_not_found(void) {
     char path[512];
     snprintf(path, sizeof(path), "%spackage.tl", dir);
     if (write_file(path,
-                   "format(1)\npackage(\"App\")\nversion(\"0.1.0\")\nsource(\"nonexistent/\")\n")) {
+                   "format(1)\npackage(App)\nversion(\"0.1.0\")\nsource(\"nonexistent/\")\n")) {
         fprintf(stderr, "  failed to write package.tl\n");
         return 1;
     }
@@ -2755,7 +2755,7 @@ static int test_e2e_source_empty_dir(void) {
 
     snprintf(path, sizeof(path), "%spackage.tl", dir);
     if (write_file(path,
-                   "format(1)\npackage(\"App\")\nversion(\"0.1.0\")\nsource(\"empty/\")\n")) {
+                   "format(1)\npackage(App)\nversion(\"0.1.0\")\nsource(\"empty/\")\n")) {
         fprintf(stderr, "  failed to write package.tl\n");
         return 1;
     }
@@ -2809,7 +2809,7 @@ static int test_e2e_source_ignores_non_tl(void) {
 
     char path[512];
     snprintf(path, sizeof(path), "%spackage.tl", dir);
-    if (write_file(path, "format(1)\npackage(\"App\")\nversion(\"0.1.0\")\nsource(\"src/\")\n")) {
+    if (write_file(path, "format(1)\npackage(App)\nversion(\"0.1.0\")\nsource(\"src/\")\n")) {
         fprintf(stderr, "  failed to write package.tl\n");
         return 1;
     }
@@ -2858,7 +2858,7 @@ static int test_e2e_source_cli_override_warning(void) {
     char path[512];
     snprintf(path, sizeof(path), "%spackage.tl", dir);
     if (write_file(path,
-                   "format(1)\npackage(\"App\")\nversion(\"0.1.0\")\nsource(\"main.tl\")\n")) {
+                   "format(1)\npackage(App)\nversion(\"0.1.0\")\nsource(\"main.tl\")\n")) {
         fprintf(stderr, "  failed to write package.tl\n");
         return 1;
     }

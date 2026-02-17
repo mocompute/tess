@@ -1586,7 +1586,7 @@ static int init_package(state *self) {
         return 1;
     }
     fprintf(f, "format(1)\n");
-    fprintf(f, "package(\"%s\")\n", name);
+    fprintf(f, "package(%s)\n", name);
     fprintf(f, "author(\"anonymous\")\n");
     fprintf(f, "version(\"0.0.1\")\n");
     fprintf(f, "\n");
@@ -1594,10 +1594,10 @@ static int init_package(state *self) {
     fprintf(f, "depend_path(\"libs/\")\n");
     fprintf(f, "\n");
     fprintf(f, "// For a library, list of modules to export: \n");
-    fprintf(f, "// export(\"ModuleOne\", \"ModuleTwo\", ...)");
+    fprintf(f, "// export(ModuleOne, ModuleTwo, ...)");
     fclose(f);
 
-    fprintf(stderr, "Created package.tl for package \"%s\"\n", name);
+    fprintf(stderr, "Created package.tl for package '%s'\n", name);
 
     return 0;
 }
