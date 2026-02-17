@@ -4,7 +4,7 @@
 
 Add a `tess pack` command that bundles Tess source files into a `.tlib` **package** for distribution as a reusable library. A package contains one or more **modules** (declared with `#module`) plus metadata. Every package (including consumer applications) has a `package.tl` file at its root that declares metadata, exported modules, and dependencies using a function-call DSL that is valid TL syntax. The compiler auto-discovers `package.tl` in the current working directory. The compiler performs whole-program compilation as usual. The `export()` declarations in `package.tl` document which modules are part of the package's public API, though access control is not enforced--all package modules enter the global namespace. Package modules become available to consumer code automatically when declared via `depend()` in `package.tl`--no explicit import is needed. Tree shaking removes unused code.
 
-This is distinct from C-compatible shared libraries (`tess lib` producing `.so`/`.dll`), which remain unchanged.
+This is distinct from C-compatible libraries (`tess lib` producing `.so`/`.dll`, or `tess lib --static` producing `.a`/`.lib`), which remain unchanged.
 
 ---
 

@@ -1352,7 +1352,7 @@ allocate[a]() -> Ptr[a] {
 
 ### Exporting Functions to C (`c_export`)
 
-The `[[c_export]]` attribute gives Tess functions stable C symbol names, making them callable from C code. When compiling with `tess lib`, a `.h` header file is automatically generated alongside the shared library.
+The `[[c_export]]` attribute gives Tess functions stable C symbol names, making them callable from C code. When compiling with `tess lib`, a `.h` header file is automatically generated alongside the library. Use `tess lib --static` to produce a static archive (`.a`/`.lib`) instead of a shared library (`.so`/`.dll`).
 
 The default export name is `Module_func` (module-qualified with `_` separator). For `#module main`, the module prefix is omitted. Use `[[c_export("name")]]` to specify a custom C symbol name.
 
@@ -1366,7 +1366,7 @@ The default export name is `Module_func` (module-qualified with `_` separator). 
 [[c_export("multiply")]] mul(a: CInt, b: CInt) -> CInt { a * b }
 ```
 
-Compiling with `tess lib mylib.tl -o libmylib.so` produces both `libmylib.so` and `libmylib.h`:
+Compiling with `tess lib mylib.tl -o libmylib.so` (or `tess lib --static mylib.tl -o libmylib.a`) produces both the library and `libmylib.h`:
 
 ```c
 #ifndef LIBMYLIB_H
@@ -1383,7 +1383,7 @@ int multiply(int, int);
 #endif
 ```
 
-The init function name is derived from the output path: `tess lib mylib.tl -o libmylib.so` produces `tl_init_mylib`. This namespacing prevents symbol collisions when multiple Tess libraries are linked into the same program. The consumer must call this function before calling any exported functions.
+The init function name is derived from the output path: `tess lib mylib.tl -o libmylib.so` produces `tl_init_mylib`. This works identically for static libraries (`-o libmylib.a`). The namespacing prevents symbol collisions when multiple Tess libraries are linked into the same program. The consumer must call this function before calling any exported functions.
 
 **Type restrictions:** Only C-compatible types are allowed in `c_export` function signatures. The compiler rejects Tess-specific types like `Str`, user structs, tagged unions, and enums. Allowed types include all `C*` types (`CInt`, `CChar`, `CSize`, etc.), `Int`, `Float`, `Bool`, `Void`, `Ptr[T]`, and `c_struct_*` types.
 

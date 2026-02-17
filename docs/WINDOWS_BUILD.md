@@ -80,6 +80,9 @@ To run a single Tess language test on Windows:
 # Compile to shared library
 .\out\build\tess.exe lib <file.tl> -o output.dll
 
+# Compile to static library
+.\out\build\tess.exe lib --static <file.tl> -o output.lib
+
 # Verbose compilation
 .\out\build\tess.exe exe -v <file.tl> -o output.exe
 ```

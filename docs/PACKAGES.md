@@ -2,7 +2,7 @@
 
 Tess supports distributing reusable libraries as `.tlib` **packages**. A package bundles one or more modules as a compressed source archive. Consumers declare dependencies in a `package.tl` file, and the compiler loads, version-checks, and compiles everything together via whole-program compilation.
 
-This is distinct from C-compatible shared libraries (`tess lib` producing `.so`/`.dll`), which remain unchanged.
+This is distinct from C-compatible libraries (`tess lib` producing `.so`/`.dll`, or `tess lib --static` producing `.a`/`.lib`), which remain unchanged.
 
 ## Concepts
 
