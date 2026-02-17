@@ -58,6 +58,7 @@ typedef struct {
     int               unpack_list; // --list option for unpack command
 
     int               is_library;
+    int               is_static_library;
     int               is_executable;
 
     // Temp directories created during package extraction (cleaned up in state_deinit)
@@ -91,7 +92,7 @@ noreturn void usage(int status, char const *argv0) {
     printf("    exe                    compile and create executable (-o or package.tl required)\n");
     printf("    fmt                    format source file (reads stdin if no file given)\n");
     printf("    init                   create a package.tl in the current directory\n");
-    printf("    lib                    compile and create shared library (-o or package.tl required)\n");
+    printf("    lib                    compile and create library (-o or package.tl required)\n");
     printf("    lib-emit-c             transpile input files to C as library source code\n");
     printf("    pack                   create .tlib archive from source files (reads package.tl)\n");
     printf("    validate               validate source files against package.tl\n");
@@ -110,6 +111,7 @@ noreturn void usage(int status, char const *argv0) {
     printf("    -v                     verbose logging\n");
     printf("    --no-line-directive    suppress output of #line directives in C file\n");
     printf("    --no-standard-includes do not add default standard library paths\n");
+    printf("    --static               create static library instead of shared (lib command only)\n");
     printf("    --stats                report memory and time statistics per phase\n");
     printf("    --time                 report elapsed time of compilation process\n");
     printf("    --verbose-ast          produce full recursive ast output when -v is set\n");
@@ -146,6 +148,7 @@ void state_init(state *self) {
     self->optimize             = 0;
     self->in_place             = 0;
     self->is_library           = 0;
+    self->is_static_library    = 0;
     self->is_executable        = 0;
     self->temp_dirs            = (c_string_carray){.alloc = self->arena};
 }
@@ -190,6 +193,7 @@ void state_gather_long_option(state *self, char *str) {
     else if (0 == strcmp("--list", str)) self->unpack_list = 1;
     else if (0 == strcmp("--time", str)) self->report_time = 1;
     else if (0 == strcmp("--stats", str)) self->report_stats = 1;
+    else if (0 == strcmp("--static", str)) self->is_static_library = 1;
     else if (0 == strcmp("--", str)) /* ignore */
         ;
     else usage(1, self->argv0);
@@ -232,7 +236,7 @@ void state_gather_options(state *self, int argc, char *argv[]) {
 
 // Try to derive a default output path from package.tl.
 // Returns empty string if package.tl doesn't exist or can't be parsed.
-// mode: 0=exe, 1=lib, 2=pack
+// mode: 0=exe, 1=lib (shared), 2=pack, 3=lib (static)
 // If pkg_name is non-NULL, writes the bare package name (without prefix/suffix).
 static str default_out_path(allocator *alloc, int mode, str *pkg_name) {
     str pkg_path = str_init_static("package.tl");
@@ -250,10 +254,14 @@ static str default_out_path(allocator *alloc, int mode, str *pkg_name) {
 #ifdef MOS_WINDOWS
     if (mode == 0) suffix = str_init_static(".exe");
     else if (mode == 1) suffix = str_init_static(".dll");
+    else if (mode == 3) suffix = str_init_static(".lib");
 #else
     if (mode == 1) {
         prefix = str_init_static("lib");
         suffix = str_init_static(".so");
+    } else if (mode == 3) {
+        prefix = str_init_static("lib");
+        suffix = str_init_static(".a");
     }
 #endif
     if (mode == 2) suffix = str_init_static(".tlib");
@@ -1301,6 +1309,306 @@ int compile_c_obj(state *self) {
     return result;
 }
 
+int compile_c_static_lib(state *self) {
+    if (str_is_empty(self->program)) return 1;
+
+    hires_timer cc_timer;
+    hires_timer_init(&cc_timer);
+    hires_timer_start(&cc_timer);
+
+    size_t input_size = str_len(self->program);
+    int    result     = 0;
+
+    // Static library: compile to .o, then archive with ar (or lib on MSVC)
+    platform_temp_file c_file, obj_file;
+    if (platform_temp_file_create(&c_file, ".c")) return 1;
+    if (platform_temp_file_create(&obj_file, ".o")) {
+        platform_temp_file_delete(&c_file);
+        return 1;
+    }
+
+    // Write C source to temp file
+    FILE *f = fopen(c_file.path, "wb");
+    if (!f) {
+        fprintf(stderr, "failed to open temp file for writing\n");
+        result = 1;
+        goto cleanup;
+    }
+    fwrite(str_buf(&self->program), 1, str_len(self->program), f);
+    fclose(f);
+    str_deinit(self->arena, &self->program);
+
+#ifdef MOS_WINDOWS
+    if (is_msvc_compiler(self)) {
+        // MSVC: cl /nologo /c /Fo<obj> <c_file>
+        char const     *cc   = str_cstr(&self->cc);
+        c_string_array  argv = {.alloc = self->arena};
+        array_reserve(argv, 8);
+        array_push(argv, cc);
+        {
+            char const *_t = "/nologo";
+            array_push(argv, _t);
+        }
+        {
+            char const *_t = "/c";
+            array_push(argv, _t);
+        }
+        if (self->optimize) {
+            char const *_t = "/O2";
+            array_push(argv, _t);
+        }
+        forall(i, self->cflags) {
+            char const *cstr = str_cstr(&self->cflags.v[i]);
+            array_push(argv, cstr);
+        }
+        str fo = str_cat(self->arena, S("/Fo"), str_init_static(obj_file.path));
+        {
+            char const *_t = str_cstr(&fo);
+            array_push(argv, _t);
+        }
+        {
+            char const *_t = "/TC";
+            array_push(argv, _t);
+        }
+        {
+            char const *_t = c_file.path;
+            array_push(argv, _t);
+        }
+        {
+            char const *_t = null;
+            array_push(argv, _t);
+        }
+
+        platform_exec_opts opts = {
+          .argv       = (char const *const *)argv.v,
+          .stdin_data = null,
+          .stdin_len  = 0,
+          .verbose    = self->verbose,
+        };
+        result = platform_exec(&opts);
+
+        if (!result) {
+            // lib /nologo /OUT:<out_path> <obj_file>
+            c_string_array lib_argv = {.alloc = self->arena};
+            array_reserve(lib_argv, 8);
+            {
+                char const *_t = "lib";
+                array_push(lib_argv, _t);
+            }
+            {
+                char const *_t = "/nologo";
+                array_push(lib_argv, _t);
+            }
+            str out_flag = str_cat(self->arena, S("/OUT:"), str_init_static(self->out_path));
+            {
+                char const *_t = str_cstr(&out_flag);
+                array_push(lib_argv, _t);
+            }
+            {
+                char const *_t = obj_file.path;
+                array_push(lib_argv, _t);
+            }
+            {
+                char const *_t = null;
+                array_push(lib_argv, _t);
+            }
+
+            platform_exec_opts lib_opts = {
+              .argv       = (char const *const *)lib_argv.v,
+              .stdin_data = null,
+              .stdin_len  = 0,
+              .verbose    = self->verbose,
+            };
+            result = platform_exec(&lib_opts);
+        }
+    } else {
+        // Windows GCC: gcc -fPIC -c -o <obj> <c_file>
+        char const     *cc   = str_cstr(&self->cc);
+        c_string_array  argv = {.alloc = self->arena};
+        array_reserve(argv, 16);
+        array_push(argv, cc);
+        {
+            char const *_t = "-fPIC";
+            array_push(argv, _t);
+        }
+        {
+            char const *_t = "-c";
+            array_push(argv, _t);
+        }
+        {
+            char const *_t = "-o";
+            array_push(argv, _t);
+        }
+        {
+            char const *_t = obj_file.path;
+            array_push(argv, _t);
+        }
+        if (self->optimize) {
+            char const *_t = "-O2";
+            array_push(argv, _t);
+        }
+        forall(i, self->cflags) {
+            char const *cstr = str_cstr(&self->cflags.v[i]);
+            array_push(argv, cstr);
+        }
+        {
+            char const *_t = "-std=c11";
+            array_push(argv, _t);
+        }
+        {
+            char const *_t = "-Wno-format-security";
+            array_push(argv, _t);
+        }
+        {
+            char const *_t = c_file.path;
+            array_push(argv, _t);
+        }
+        {
+            char const *_t = null;
+            array_push(argv, _t);
+        }
+
+        platform_exec_opts opts = {
+          .argv       = (char const *const *)argv.v,
+          .stdin_data = null,
+          .stdin_len  = 0,
+          .verbose    = self->verbose,
+        };
+        result = platform_exec(&opts);
+
+        if (!result) {
+            // ar rcs <out_path> <obj_file>
+            c_string_array ar_argv = {.alloc = self->arena};
+            array_reserve(ar_argv, 8);
+            {
+                char const *_t = "ar";
+                array_push(ar_argv, _t);
+            }
+            {
+                char const *_t = "rcs";
+                array_push(ar_argv, _t);
+            }
+            array_push(ar_argv, self->out_path);
+            {
+                char const *_t = obj_file.path;
+                array_push(ar_argv, _t);
+            }
+            {
+                char const *_t = null;
+                array_push(ar_argv, _t);
+            }
+
+            platform_exec_opts ar_opts = {
+              .argv       = (char const *const *)ar_argv.v,
+              .stdin_data = null,
+              .stdin_len  = 0,
+              .verbose    = self->verbose,
+            };
+            result = platform_exec(&ar_opts);
+        }
+    }
+#else
+    // Unix: cc -fPIC -c -o <obj> <c_file>
+    {
+        char const     *cc   = str_cstr(&self->cc);
+        c_string_array  argv = {.alloc = self->arena};
+        array_reserve(argv, 16);
+        array_push(argv, cc);
+        {
+            char const *_t = "-fPIC";
+            array_push(argv, _t);
+        }
+        {
+            char const *_t = "-c";
+            array_push(argv, _t);
+        }
+        {
+            char const *_t = "-o";
+            array_push(argv, _t);
+        }
+        {
+            char const *_t = obj_file.path;
+            array_push(argv, _t);
+        }
+        if (self->optimize) {
+            char const *_t = "-O2";
+            array_push(argv, _t);
+        }
+        forall(i, self->cflags) {
+            char const *cstr = str_cstr(&self->cflags.v[i]);
+            array_push(argv, cstr);
+        }
+        {
+            char const *_t = "-std=c11";
+            array_push(argv, _t);
+        }
+        {
+            char const *_t = "-Wno-format-security";
+            array_push(argv, _t);
+        }
+        {
+            char const *_t = c_file.path;
+            array_push(argv, _t);
+        }
+        {
+            char const *_t = null;
+            array_push(argv, _t);
+        }
+
+        platform_exec_opts opts = {
+          .argv       = (char const *const *)argv.v,
+          .stdin_data = null,
+          .stdin_len  = 0,
+          .verbose    = self->verbose,
+        };
+        result = platform_exec(&opts);
+    }
+
+    if (!result) {
+        // ar rcs <out_path> <obj_file>
+        c_string_array ar_argv = {.alloc = self->arena};
+        array_reserve(ar_argv, 8);
+        {
+            char const *_t = "ar";
+            array_push(ar_argv, _t);
+        }
+        {
+            char const *_t = "rcs";
+            array_push(ar_argv, _t);
+        }
+        array_push(ar_argv, self->out_path);
+        {
+            char const *_t = obj_file.path;
+            array_push(ar_argv, _t);
+        }
+        {
+            char const *_t = null;
+            array_push(ar_argv, _t);
+        }
+
+        platform_exec_opts ar_opts = {
+          .argv       = (char const *const *)ar_argv.v,
+          .stdin_data = null,
+          .stdin_len  = 0,
+          .verbose    = self->verbose,
+        };
+        result = platform_exec(&ar_opts);
+    }
+#endif
+
+cleanup:
+    platform_temp_file_delete(&c_file);
+    platform_temp_file_delete(&obj_file);
+
+    hires_timer_stop(&cc_timer);
+    if (self->report_stats) {
+        self->stats.cc_time_ms    = hires_timer_elapsed_sec(&cc_timer) * 1000.0;
+        self->stats.cc_input_size = input_size;
+    }
+
+    return result;
+}
+
 static int format_file(state *self) {
     char       *data;
     u32         size;
@@ -1711,9 +2019,10 @@ int main(int argc, char *argv[]) {
 
     else if (0 == strcmp("lib", self.words.v[0])) {
         hires_timer_start(&timer);
+        int lib_mode = self.is_static_library ? 3 : 1;
         if (!self.out_path) {
             str name = str_empty();
-            str path = default_out_path(self.arena, 1, &name);
+            str path = default_out_path(self.arena, lib_mode, &name);
             if (str_is_empty(path)) {
                 fprintf(stderr, "error: -o option is required (no package.tl found)\n");
                 exit(1);
@@ -1721,10 +2030,13 @@ int main(int argc, char *argv[]) {
             self.out_path = str_cstr(&path);
             self.lib_name = str_cstr(&name);
         }
+        if (self.verbose && self.is_static_library) {
+            fprintf(stderr, "Static library mode\n");
+        }
         self.is_library = 1;
         result          = compile(&self);
         if (result) goto done;
-        result = compile_c_obj(&self);
+        result = self.is_static_library ? compile_c_static_lib(&self) : compile_c_obj(&self);
 
         // Write c_export header file if any exports were found
         if (!result && !str_is_empty(self.header)) {

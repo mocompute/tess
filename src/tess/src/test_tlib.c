@@ -23,13 +23,15 @@
 #define SEP_STR             "\\"
 #define EXE_SUFFIX          ".exe"
 #define LIB_SUFFIX          ".dll"
+#define STATICLIB_SUFFIX    ".lib"
 #else
 #include <sys/wait.h>
 #include <unistd.h>
-#define CD_CMD     "cd"
-#define SEP_STR    "/"
-#define EXE_SUFFIX ""
-#define LIB_SUFFIX ".so"
+#define CD_CMD         "cd"
+#define SEP_STR        "/"
+#define EXE_SUFFIX     ""
+#define LIB_SUFFIX     ".so"
+#define STATICLIB_SUFFIX ".a"
 #endif
 
 #define T(name)                                                                                            \
@@ -2363,6 +2365,107 @@ static int test_e2e_c_export_void_noop(void) {
     return 0;
 }
 
+// Test: tess lib --static produces a .a (or .lib) and a .h header file.
+static int test_e2e_c_export_static_lib(void) {
+    char dir[512];
+    make_temp_path(dir, sizeof(dir), "e2e_cexport_static/");
+    test_mkdir_p(dir);
+
+    char src[512];
+    snprintf(src, sizeof(src), "%stest.tl", dir);
+    if (write_file(src, "#module testmod\n"
+                        "[[c_export(\"add\")]] add(x: CInt, y: CInt) -> CInt { x + y }\n"
+                        "[[c_export]] inc(x: CInt) -> CInt { x + 1 }\n")) {
+        fprintf(stderr, "  failed to write test.tl\n");
+        return 1;
+    }
+
+    char a_path[512], hdr_path[512];
+    snprintf(a_path, sizeof(a_path), "%slibtest" STATICLIB_SUFFIX, dir);
+    snprintf(hdr_path, sizeof(hdr_path), "%slibtest.h", dir);
+
+    char cmd[2048];
+    snprintf(cmd, sizeof(cmd),
+             CD_CMD " \"%s\" && \"%s\" lib --static --no-standard-includes -S \"%s\""
+                    " \"%s\" -o \"%s\" 2>&1",
+             dir, e2e_tess_exe, e2e_stdlib_dir, src, a_path);
+    if (run_cmd(cmd) != 0) {
+        fprintf(stderr, "  tess lib --static failed\n");
+        return 1;
+    }
+
+    // Verify static library file was created
+    FILE *af = fopen(a_path, "rb");
+    if (!af) {
+        fprintf(stderr, "  static library not generated at %s\n", a_path);
+        return 1;
+    }
+    fclose(af);
+
+    // Verify header file was generated
+    char *header = read_file_contents(hdr_path, null);
+    if (!header) {
+        fprintf(stderr, "  header file not generated at %s\n", hdr_path);
+        return 1;
+    }
+
+    // Verify include guard
+    if (!strstr(header, "#ifndef LIBTEST_H") || !strstr(header, "#define LIBTEST_H")) {
+        fprintf(stderr, "  header missing include guard\n");
+        return 1;
+    }
+
+    // Verify exported function prototypes
+    if (!strstr(header, "int add(")) {
+        fprintf(stderr, "  header missing 'int add(' prototype\n");
+        return 1;
+    }
+    if (!strstr(header, "int testmod_inc(")) {
+        fprintf(stderr, "  header missing 'int testmod_inc(' prototype\n");
+        return 1;
+    }
+
+    // Verify the header ends with #endif
+    if (!strstr(header, "#endif")) {
+        fprintf(stderr, "  header missing #endif\n");
+        return 1;
+    }
+
+    // Compile a consumer that links against the static library
+    char consumer_src[512], consumer_exe[512];
+    snprintf(consumer_src, sizeof(consumer_src), "%smain.c", dir);
+    snprintf(consumer_exe, sizeof(consumer_exe), "%smain" EXE_SUFFIX, dir);
+
+    if (write_file(consumer_src,
+                   "#include \"libtest.h\"\n"
+                   "#include <stdio.h>\n"
+                   "int main(void) {\n"
+                   "    tl_init_test();\n"
+                   "    if (add(2, 3) != 5) return 1;\n"
+                   "    if (testmod_inc(10) != 11) return 2;\n"
+                   "    return 0;\n"
+                   "}\n")) {
+        fprintf(stderr, "  failed to write main.c\n");
+        return 1;
+    }
+
+    snprintf(cmd, sizeof(cmd),
+             CD_CMD " \"%s\" && cc -o \"%s\" \"%s\" \"%s\" 2>&1",
+             dir, consumer_exe, consumer_src, a_path);
+    if (run_cmd(cmd) != 0) {
+        fprintf(stderr, "  failed to compile consumer against static library\n");
+        return 1;
+    }
+
+    snprintf(cmd, sizeof(cmd), "\"%s\"", consumer_exe);
+    if (run_cmd(cmd) != 0) {
+        fprintf(stderr, "  consumer linked against static library returned non-zero\n");
+        return 1;
+    }
+
+    return 0;
+}
+
 // ---------------------------------------------------------------------------
 // source() E2E tests
 // ---------------------------------------------------------------------------
@@ -2934,6 +3037,7 @@ int main(void) {
     T(test_e2e_c_export_header)
     T(test_e2e_c_export_no_header_when_none)
     T(test_e2e_c_export_void_noop)
+    T(test_e2e_c_export_static_lib)
     T(test_e2e_source_directory)
     T(test_e2e_source_file)
     T(test_e2e_source_cli_override)
