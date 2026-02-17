@@ -30,6 +30,7 @@ typedef struct {
 
     char const       *argv0;
     char const       *out_path;
+    char const       *lib_name; // package name for header derivation (lib mode only)
 
     c_string_carray   words;
 
@@ -87,13 +88,12 @@ noreturn void usage(int status, char const *argv0) {
     printf("Usage: %s [-hv] <command> [-o outpath] [path1 path2 ... pathn] \n", progname);
     puts("Commands:\n");
     printf("    c                      transpile input files to C\n");
-    printf("    exe                    compile and create executable (-o required)\n");
+    printf("    exe                    compile and create executable (-o or package.tl required)\n");
     printf("    fmt                    format source file (reads stdin if no file given)\n");
     printf("    init                   create a package.tl in the current directory\n");
-    printf("    lib                    compile and create shared library (-o required)\n");
+    printf("    lib                    compile and create shared library (-o or package.tl required)\n");
     printf("    lib-emit-c             transpile input files to C as library source code\n");
-    printf("    pack                   create .tlib archive from source files (-o required, reads "
-           "package.tl)\n");
+    printf("    pack                   create .tlib archive from source files (reads package.tl)\n");
     printf("    validate               validate source files against package.tl\n");
     printf(
       "    unpack                 extract .tlib archive (-o for output dir (default .), --list to list)\n");
@@ -228,6 +228,37 @@ void state_gather_options(state *self, int argc, char *argv[]) {
             array_push(self->words, argv[i]);
         }
     }
+}
+
+// Try to derive a default output path from package.tl.
+// Returns empty string if package.tl doesn't exist or can't be parsed.
+// mode: 0=exe, 1=lib, 2=pack
+// If pkg_name is non-NULL, writes the bare package name (without prefix/suffix).
+static str default_out_path(allocator *alloc, int mode, str *pkg_name) {
+    str pkg_path = str_init_static("package.tl");
+    if (!file_exists(pkg_path)) return str_empty();
+
+    tl_package pkg = {0};
+    if (tl_package_parse_file(alloc, "package.tl", &pkg)) return str_empty();
+    if (str_is_empty(pkg.info.name)) return str_empty();
+
+    if (pkg_name) *pkg_name = pkg.info.name;
+
+    str prefix = str_empty();
+    str suffix = str_empty();
+
+#ifdef MOS_WINDOWS
+    if (mode == 0) suffix = str_init_static(".exe");
+    else if (mode == 1) suffix = str_init_static(".dll");
+#else
+    if (mode == 1) {
+        prefix = str_init_static("lib");
+        suffix = str_init_static(".so");
+    }
+#endif
+    if (mode == 2) suffix = str_init_static(".tlib");
+
+    return str_cat_3(alloc, prefix, pkg.info.name, suffix);
 }
 
 void eval_print(char *in) {
@@ -970,9 +1001,9 @@ int compile(state *self) {
     if (self->is_library && self->out_path) {
         // Generate c_export header if there are any exported functions
         str_build header_build = {0};
-        // Derive guard name from header filename (output path with .h extension)
-        char const *basename = file_basename(self->out_path);
-        char guard[256];
+        // Derive guard name from package name (if available) or output path
+        char const *basename = self->lib_name ? self->lib_name : file_basename(self->out_path);
+        char        guard[256];
         {
             u32         gi  = 0;
             char const *dot = strrchr(basename, '.');
@@ -1338,10 +1369,14 @@ static int format_file(state *self) {
 }
 
 static int pack_files(state *self) {
-    // Validate arguments
+    // Derive output path from package.tl if -o not given
     if (!self->out_path) {
-        fprintf(stderr, "error: -o option is required for pack command\n");
-        return 1;
+        str path = default_out_path(self->arena, 2, NULL);
+        if (str_is_empty(path)) {
+            fprintf(stderr, "error: -o option is required (no package.tl found)\n");
+            return 1;
+        }
+        self->out_path = str_cstr(&path);
     }
 
     // Parse package.tl from CWD (needed early for source() resolution)
@@ -1649,8 +1684,12 @@ int main(int argc, char *argv[]) {
     else if (0 == strcmp("exe", self.words.v[0])) {
         hires_timer_start(&timer);
         if (!self.out_path) {
-            fprintf(stderr, "error: -o option is missing\n");
-            exit(1);
+            str path = default_out_path(self.arena, 0, NULL);
+            if (str_is_empty(path)) {
+                fprintf(stderr, "error: -o option is required (no package.tl found)\n");
+                exit(1);
+            }
+            self.out_path = str_cstr(&path);
         }
         self.is_executable = 1;
         result             = compile(&self);
@@ -1673,8 +1712,14 @@ int main(int argc, char *argv[]) {
     else if (0 == strcmp("lib", self.words.v[0])) {
         hires_timer_start(&timer);
         if (!self.out_path) {
-            fprintf(stderr, "error: -o option is missing\n");
-            exit(1);
+            str name = str_empty();
+            str path = default_out_path(self.arena, 1, &name);
+            if (str_is_empty(path)) {
+                fprintf(stderr, "error: -o option is required (no package.tl found)\n");
+                exit(1);
+            }
+            self.out_path = str_cstr(&path);
+            self.lib_name = str_cstr(&name);
         }
         self.is_library = 1;
         result          = compile(&self);
@@ -1683,29 +1728,39 @@ int main(int argc, char *argv[]) {
 
         // Write c_export header file if any exports were found
         if (!result && !str_is_empty(self.header)) {
-            // Derive header path: strip extension, add .h
-            size_t out_len = strlen(self.out_path);
-            if (out_len + 3 > 4096) {
-                fprintf(stderr, "error: output path too long for header generation\n");
-                result = 1;
+            // Derive header path: use package name if available, otherwise strip extension from out_path
+            char header_path[4096];
+            if (self.lib_name) {
+                size_t name_len = strlen(self.lib_name);
+                if (name_len + 3 > sizeof header_path) {
+                    fprintf(stderr, "error: package name too long for header generation\n");
+                    result = 1;
+                    goto done;
+                }
+                snprintf(header_path, sizeof header_path, "%s.h", self.lib_name);
             } else {
-                char  header_path[4096];
+                size_t out_len = strlen(self.out_path);
+                if (out_len + 3 > 4096) {
+                    fprintf(stderr, "error: output path too long for header generation\n");
+                    result = 1;
+                    goto done;
+                }
                 snprintf(header_path, sizeof header_path, "%s", self.out_path);
                 char *dot = strrchr(header_path, '.');
                 if (dot) *dot = '\0';
                 strncat(header_path, ".h", sizeof header_path - strlen(header_path) - 1);
+            }
 
-                FILE *hf = fopen(header_path, "w");
-                if (!hf) {
-                    fprintf(stderr, "error: could not open header file for writing: %s\n", header_path);
+            FILE *hf = fopen(header_path, "w");
+            if (!hf) {
+                fprintf(stderr, "error: could not open header file for writing: %s\n", header_path);
+                result = 1;
+            } else {
+                size_t len     = str_len(self.header);
+                size_t written = fwrite(str_buf(&self.header), 1, len, hf);
+                if (written != len || fclose(hf)) {
+                    fprintf(stderr, "error: failed to write header file: %s\n", header_path);
                     result = 1;
-                } else {
-                    size_t len     = str_len(self.header);
-                    size_t written = fwrite(str_buf(&self.header), 1, len, hf);
-                    if (written != len || fclose(hf)) {
-                        fprintf(stderr, "error: failed to write header file: %s\n", header_path);
-                        result = 1;
-                    }
                 }
             }
         }
