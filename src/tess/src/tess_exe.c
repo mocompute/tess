@@ -52,7 +52,7 @@ typedef struct {
     int               report_time;  // --time option
     int               report_stats; // --stats option
     int               help;
-    int               optimize;
+    int               no_optimize;
 
     int               in_place;
     int               unpack_list; // --list option for unpack command
@@ -86,8 +86,8 @@ typedef struct {
 noreturn void usage(int status, char const *argv0) {
     char const *progname = file_basename(argv0);
 
-    printf("Usage: %s [-hv] <command> [-o outpath] [path1 path2 ... pathn] \n", progname);
-    puts("Commands:\n");
+    printf("Usage: %s [-hvVi] <command> [-o outpath] [path1 path2 ... pathn] \n", progname);
+    printf("\nCommands:\n");
     printf("    c                      transpile input files to C\n");
     printf("    exe                    compile and create executable (-o or package.tl required)\n");
     printf("    fmt                    format source file (reads stdin if no file given)\n");
@@ -107,15 +107,20 @@ noreturn void usage(int status, char const *argv0) {
     printf("    -o <path>              write output to path instead of stdout\n");
     printf("    -i, --in-place         overwrite file in place (fmt command only)\n");
     printf("    --list                 list archive contents without extracting (unpack only)\n");
-    printf("    -O                     optimize C build (with -O2). Use CFLAGS for other flags.\n");
     printf("    -v                     verbose logging\n");
     printf("    --no-line-directive    suppress output of #line directives in C file\n");
+    printf("    --no-optimize          compile C build with -O0 (default is -O2. See also CFLAGS.)\n");
     printf("    --no-standard-includes do not add default standard library paths\n");
     printf("    --static               create static library instead of shared (lib command only)\n");
     printf("    --stats                report memory and time statistics per phase\n");
     printf("    --time                 report elapsed time of compilation process\n");
     printf("    --verbose-ast          produce full recursive ast output when -v is set\n");
     printf("    --verbose-parse        produce large amount of parse progress output\n");
+    printf("\nEnvironment variables:\n");
+    printf("    CC                     command to invoke C compiler (default cc)\n");
+    printf("    CFLAGS                 flags provided to the C compiler: If CFLAGS is set,\n");
+    printf("                           it overrides optimization level (include -O2 if you want it).\n");
+
     exit(status);
 }
 
@@ -145,7 +150,7 @@ void state_init(state *self) {
     self->no_line_directive    = 0;
     self->no_standard_includes = 0;
     self->help                 = 0;
-    self->optimize             = 0;
+    self->no_optimize          = 0;
     self->in_place             = 0;
     self->is_library           = 0;
     self->is_static_library    = 0;
@@ -177,7 +182,6 @@ void state_gather_single_options(state *self, char *str) {
         case 'v': self->verbose = 1; break;
         case 'V': version(); break;
         case 'i': self->in_place = 1; break;
-        case 'O': self->optimize = 1; break;
         default:  usage(1, self->argv0); break;
         }
     }
@@ -188,6 +192,7 @@ void state_gather_long_option(state *self, char *str) {
     else if (0 == strcmp("--verbose-ast", str)) self->verbose_ast = 1;
     else if (0 == strcmp("--verbose-parse", str)) self->verbose_parse = 1;
     else if (0 == strcmp("--no-line-directive", str)) self->no_line_directive = 1;
+    else if (0 == strcmp("--no-optimize", str)) self->no_optimize = 1;
     else if (0 == strcmp("--no-standard-includes", str)) self->no_standard_includes = 1;
     else if (0 == strcmp("--in-place", str)) self->in_place = 1;
     else if (0 == strcmp("--list", str)) self->unpack_list = 1;
@@ -1066,6 +1071,45 @@ static int is_msvc_compiler(state *self) {
 }
 #endif
 
+static void add_c_flags(state *self, c_string_array *argv) {
+    // If CFLAGS is present, do not add optimize flags
+    if (!self->cflags.size) {
+        if (self->no_optimize) {
+            char const *_t = "-O0";
+            array_push(*argv, _t);
+        } else {
+            char const *_t = "-O2";
+            array_push(*argv, _t);
+        }
+    }
+
+    forall(i, self->cflags) {
+        char const *cstr = str_cstr(&self->cflags.v[i]);
+        array_push(*argv, cstr);
+    }
+}
+
+#ifdef MOS_WINDOWS
+static void add_c_flags_msvc(state *self, c_string_array *argv) {
+    // If CFLAGS is present, do not add optimize flags
+    if (!self->cflags.size) {
+        if (self->no_optimize) {
+            // msvc: /Od disables optimization
+            char const *_t = "/Od";
+            array_push(*argv, _t);
+        } else {
+            char const *_t = "/O2";
+            array_push(*argv, _t);
+        }
+    }
+
+    forall(i, self->cflags) {
+        char const *cstr = str_cstr(&self->cflags.v[i]);
+        array_push(*argv, cstr);
+    }
+}
+#endif
+
 // Build argv array for gcc/clang compiler invocation
 // extra_flags: array of additional flags (e.g., "-shared", "-fPIC")
 // extra_flags_count: number of additional flags
@@ -1083,15 +1127,7 @@ static c_string_array build_gcc_argv(state *self, char const **extra_flags, int 
     array_push(argv, self->out_path);
     // clang-format on
 
-    if (self->optimize) {
-        char const *_t = "-O2";
-        array_push(argv, _t);
-    }
-
-    forall(i, self->cflags) {
-        char const *cstr = str_cstr(&self->cflags.v[i]);
-        array_push(argv, cstr);
-    }
+    add_c_flags(self, &argv);
 
     // clang-format off
     { char const *_t = "-std=c11"; array_push(argv, _t); }
@@ -1145,15 +1181,7 @@ static c_string_array build_msvc_argv(state *self, char const **msvc_extra_flags
         array_push(argv, msvc_extra_flags[i]);
     }
 
-    if (self->optimize) {
-        char const *_t = "/O2";
-        array_push(argv, _t);
-    }
-
-    forall(i, self->cflags) {
-        char const *cstr = str_cstr(&self->cflags.v[i]);
-        array_push(argv, cstr);
-    }
+    add_c_flags_msvc(self, &argv);
 
     // Build /Fo and /Fe with paths
     str fo = str_cat(self->arena, S("/Fo"), str_init_static(obj_file));
@@ -1346,8 +1374,8 @@ int compile_c_static_lib(state *self) {
 #ifdef MOS_WINDOWS
     if (is_msvc_compiler(self)) {
         // MSVC: cl /nologo /c /Fo<obj> <c_file>
-        char const     *cc   = str_cstr(&self->cc);
-        c_string_array  argv = {.alloc = self->arena};
+        char const    *cc   = str_cstr(&self->cc);
+        c_string_array argv = {.alloc = self->arena};
         array_reserve(argv, 8);
         array_push(argv, cc);
         {
@@ -1358,14 +1386,9 @@ int compile_c_static_lib(state *self) {
             char const *_t = "/c";
             array_push(argv, _t);
         }
-        if (self->optimize) {
-            char const *_t = "/O2";
-            array_push(argv, _t);
-        }
-        forall(i, self->cflags) {
-            char const *cstr = str_cstr(&self->cflags.v[i]);
-            array_push(argv, cstr);
-        }
+
+        add_c_flags_msvc(self, &argv);
+
         str fo = str_cat(self->arena, S("/Fo"), str_init_static(obj_file.path));
         {
             char const *_t = str_cstr(&fo);
@@ -1428,8 +1451,8 @@ int compile_c_static_lib(state *self) {
         }
     } else {
         // Windows GCC: gcc -c -o <obj> <c_file>
-        char const     *cc   = str_cstr(&self->cc);
-        c_string_array  argv = {.alloc = self->arena};
+        char const    *cc   = str_cstr(&self->cc);
+        c_string_array argv = {.alloc = self->arena};
         array_reserve(argv, 16);
         array_push(argv, cc);
         {
@@ -1444,14 +1467,9 @@ int compile_c_static_lib(state *self) {
             char const *_t = obj_file.path;
             array_push(argv, _t);
         }
-        if (self->optimize) {
-            char const *_t = "-O2";
-            array_push(argv, _t);
-        }
-        forall(i, self->cflags) {
-            char const *cstr = str_cstr(&self->cflags.v[i]);
-            array_push(argv, cstr);
-        }
+
+        add_c_flags(self, &argv);
+
         {
             char const *_t = "-std=c11";
             array_push(argv, _t);
@@ -1511,8 +1529,8 @@ int compile_c_static_lib(state *self) {
 #else
     // Unix: cc -fPIC -c -o <obj> <c_file>
     {
-        char const     *cc   = str_cstr(&self->cc);
-        c_string_array  argv = {.alloc = self->arena};
+        char const    *cc   = str_cstr(&self->cc);
+        c_string_array argv = {.alloc = self->arena};
         array_reserve(argv, 16);
         array_push(argv, cc);
         {
@@ -1531,14 +1549,9 @@ int compile_c_static_lib(state *self) {
             char const *_t = obj_file.path;
             array_push(argv, _t);
         }
-        if (self->optimize) {
-            char const *_t = "-O2";
-            array_push(argv, _t);
-        }
-        forall(i, self->cflags) {
-            char const *cstr = str_cstr(&self->cflags.v[i]);
-            array_push(argv, cstr);
-        }
+
+        add_c_flags(self, &argv);
+
         {
             char const *_t = "-std=c11";
             array_push(argv, _t);
@@ -1953,7 +1966,7 @@ int main(int argc, char *argv[]) {
     state_gather_options(&self, argc, argv);
 
     // Auto-define DEBUG or NDEBUG based on optimization mode
-    str auto_def = str_init(self.arena, self.optimize ? "NDEBUG" : "DEBUG");
+    str auto_def = str_init(self.arena, self.no_optimize ? "NDEBUG" : "DEBUG");
     array_push(self.defines, auto_def);
 
     // Populate scanner defines from -D flags
