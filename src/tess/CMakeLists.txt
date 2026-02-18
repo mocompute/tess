@@ -304,6 +304,7 @@ tl_create_test(const)
 tl_create_test(defer)
 tl_create_test(defun_inline_type)
 tl_create_test(deref_then_addr)
+tl_create_test(div_comment_bug)
 tl_create_test(dynamic_array)
 tl_create_test(embed_c)
 tl_create_test(enum_module)
@@ -548,4 +549,5 @@ tl_create_build_fail_test(fail_try_three_variants)
 # Known fail-failures: expected-failure tests that the compiler doesn't reject yet
 
 # Known failures: these should work but a compiler bug makes them fail
+tl_create_known_failure(map_option_cross_type)
 tl_create_known_failure(while_empty_body)

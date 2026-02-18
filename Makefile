@@ -386,6 +386,7 @@ TL_TESTS =					\
 	defer					\
 	defun_inline_type			\
 	deref_then_addr				\
+	div_comment_bug				\
 	dynamic_array				\
 	embed_c					\
 	enum_module				\
@@ -608,6 +609,7 @@ TL_KNOWN_FAIL_FAILURES =
 
 # Tests that should work but currently fail due to compiler bugs
 TL_KNOWN_FAILURES =				\
+	map_option_cross_type			\
 	while_empty_body
 
 # Total test count across all suites

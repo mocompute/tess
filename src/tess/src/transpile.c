@@ -578,7 +578,7 @@ static str generate_expr_symbol(transpile *self, tl_monotype *type, str symbol_n
     } else {
         if (useful_name(original_name, name)) {
             // TODO: put this behind an option
-            return str_cat_4(self->transient, S("/*"), original_name, S("*/ "), name);
+            return str_cat_4(self->transient, S(" /*"), original_name, S("*/ "), name);
         } else {
             return name;
         }
