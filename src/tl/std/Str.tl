@@ -226,8 +226,7 @@ from_int(alloc, n: Int) -> Str {
     ptr: Ptr[CChar]        := buf
     written                := c_tl_string_snprintf_int(ptr, 32, n)
     if written < 0 { _tl_fatal_(c"from_int: underflow") }
-    n: CSize := written
-    from_bytes(alloc, ptr, n)
+    from_bytes(alloc, ptr, written)
 }
 
 from_int(n: Int) -> Str {
@@ -239,8 +238,7 @@ from_float(alloc, f: Float) -> Str {
     ptr: Ptr[CChar]        := buf
     written                := c_tl_string_snprintf_float(ptr, 32, f)
     if written < 0 { _tl_fatal_(c"from_int: underflow") }
-    n: CSize := written
-    from_bytes(alloc, ptr, n)
+    from_bytes(alloc, ptr, written)
 
 }
 
