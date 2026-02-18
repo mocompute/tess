@@ -46,6 +46,7 @@ from_int  (n: Int)                                                -> Str
 from_float(alloc: Ptr[Allocator], f: Float)                       -> Str
 from_float(f: Float)                                              -> Str
 from_byte (b: Byte)                                               -> Str
+from_bool (b: Bool)                                               -> Str
 
 // Queries.
 len       (s: Str)               -> CSize
@@ -83,26 +84,32 @@ index_of_byte_from(s: Str, b: Byte, start: CSize) -> Int
 last_index_of_byte(s: Str, b: Byte)               -> Int
 index_of          (s: Str, needle: Str)           -> Int
 last_index_of     (s: Str, needle: Str)           -> Int
+count_byte        (s: Str, b: Byte)               -> Int
+count             (s: Str, needle: Str)           -> Int
 
 // Mutation.
 replace_byte(alloc: Ptr[Allocator], s: Str, find: Byte, replace: Byte) -> Str
 replace_byte(s: Str, find: Byte, replace: Byte)                        -> Str
 
 // Transformation.
-to_upper  (alloc: Ptr[Allocator], s: Str)                       -> Str
-to_upper  (s: Str)                                              -> Str
-to_lower  (alloc: Ptr[Allocator], s: Str)                       -> Str
-to_lower  (s: Str)                                              -> Str
-trim_left (alloc: Ptr[Allocator], s: Str)                       -> Str
-trim_left (s: Str)                                              -> Str
-trim_right(alloc: Ptr[Allocator], s: Str)                       -> Str
-trim_right(s: Str)                                              -> Str
-trim      (alloc: Ptr[Allocator], s: Str)                       -> Str
-trim      (s: Str)                                              -> Str
-repeat    (alloc: Ptr[Allocator], s: Str, count: Int)           -> Str
-repeat    (s: Str, count: Int)                                  -> Str
-replace   (alloc: Ptr[Allocator], s: Str, old: Str, new_s: Str) -> Str
-replace   (s: Str, old: Str, new_s: Str)                        -> Str
+to_upper    (alloc: Ptr[Allocator], s: Str)                       -> Str
+to_upper    (s: Str)                                              -> Str
+to_lower    (alloc: Ptr[Allocator], s: Str)                       -> Str
+to_lower    (s: Str)                                              -> Str
+trim_left   (alloc: Ptr[Allocator], s: Str)                       -> Str
+trim_left   (s: Str)                                              -> Str
+trim_right  (alloc: Ptr[Allocator], s: Str)                       -> Str
+trim_right  (s: Str)                                              -> Str
+trim        (alloc: Ptr[Allocator], s: Str)                       -> Str
+trim        (s: Str)                                              -> Str
+repeat      (alloc: Ptr[Allocator], s: Str, count: Int)           -> Str
+repeat      (s: Str, count: Int)                                  -> Str
+replace     (alloc: Ptr[Allocator], s: Str, old: Str, new_s: Str) -> Str
+replace     (s: Str, old: Str, new_s: Str)                        -> Str
+strip_prefix(alloc: Ptr[Allocator], s: Str, prefix: Str)          -> Str
+strip_prefix(s: Str, prefix: Str)                                 -> Str
+strip_suffix(alloc: Ptr[Allocator], s: Str, suffix: Str)          -> Str
+strip_suffix(s: Str, suffix: Str)                                 -> Str
 
 // Split and join.
 split(alloc: Ptr[Allocator], s: Str, delimiter: Str)          -> Array.Array[Str]
@@ -244,6 +251,11 @@ from_float(f: Float) -> Str {
 from_byte(b: Byte) -> Str {
     c: CChar := b
     _init_small(c.&, 1)
+}
+
+from_bool(b: Bool) -> Str {
+    if b { return from_literal(c"true") }
+    from_literal(c"false")
 }
 
 
@@ -525,6 +537,38 @@ last_index_of(s: Str, needle: Str) -> Int {
     -1
 }
 
+count_byte(s: Str, b: Byte) -> Int {
+    n        := len(s)
+    sp       := _buf(s.&)
+    c: Int   := 0
+    i: CSize := 0
+    while i < n, i += 1 {
+        if sp.[i] == b { c = c + 1 }
+    }
+    c
+}
+
+count(s: Str, needle: Str) -> Int {
+    sn := len(s)
+    nn := len(needle)
+    if nn == 0 { _tl_fatal_(c"Str.count: empty needle") }
+    if nn > sn { return 0 }
+    sp       := _buf(s.&)
+    np       := _buf(needle.&)
+    c: Int   := 0
+    i: CSize := 0
+    while i <= sn - nn {
+        candidate: Ptr[CChar] := Unsafe.pointer_add(sp, i)
+        if c_memcmp(candidate, np, nn) == 0 {
+            c = c + 1
+            i = i + nn
+        } else {
+            i = i + 1
+        }
+    }
+    c
+}
+
 
 // -- Mutation --
 
@@ -694,7 +738,7 @@ replace(alloc, s: Str, old: Str, new_s: Str) -> Str {
 
     total: CSize := sn - (count * on) + (count * nn)
     if total == 0 { return empty() }
-    np           := _buf (new_s.&)
+    np := _buf (new_s.&)
 
     // Build result into heap buffer, then decide SSO
     buf: Ptr[CChar] := alloc->malloc(alloc, total + 1)
@@ -733,6 +777,35 @@ replace(alloc, s: Str, old: Str, new_s: Str) -> Str {
 
 replace(s: Str, old: Str, new_s: Str) -> Str {
     replace(Alloc.context.default, s, old, new_s)
+}
+
+strip_prefix(alloc, s: Str, prefix: Str) -> Str {
+    if !starts_with(s, prefix) { return copy(alloc, s) }
+    pn        := len(prefix)
+    sn        := len(s)
+    remaining := sn - pn
+    if remaining == 0 { return empty() }
+    sp              := _buf(s.&)
+    src: Ptr[CChar] := Unsafe.pointer_add(sp, pn)
+    from_bytes(alloc, src, remaining)
+}
+
+strip_prefix(s: Str, prefix: Str) -> Str {
+    strip_prefix(Alloc.context.default, s, prefix)
+}
+
+strip_suffix(alloc, s: Str, suffix: Str) -> Str {
+    if !ends_with(s, suffix) { return copy(alloc, s) }
+    xn        := len(suffix)
+    sn        := len(s)
+    remaining := sn - xn
+    if remaining == 0 { return empty() }
+    sp := _buf(s.&)
+    from_bytes(alloc, sp, remaining)
+}
+
+strip_suffix(s: Str, suffix: Str) -> Str {
+    strip_suffix(Alloc.context.default, s, suffix)
 }
 
 

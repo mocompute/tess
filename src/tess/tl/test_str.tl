@@ -44,6 +44,13 @@ test_from_bytes() {
     s2          := Str.from_bytes(p2, 5)
     if Str.len(s2) != 5 { error += 1 }
     Str.free(s2.&)
+
+    // n=0 -> empty
+    s3 := Str.from_bytes(p, 0)
+    if Str.len(s3) != 0 { error += 1 }
+    if !Str.is_empty(s3) { error += 1 }
+    Str.free(s3.&)
+
     error
 }
 
@@ -66,6 +73,16 @@ test_copy_big() {
     if Str.len(c) != 25 { error += 1 }
     Str.free(s.&)
     if Str.len(c) != 25 { error += 1 }
+    Str.free(c.&)
+    error
+}
+
+test_copy_empty() {
+    error := 0
+    e     := Str.empty()
+    c     := Str.copy(e)
+    if Str.len(c) != 0 { error += 1 }
+    if !Str.is_empty(c) { error += 1 }
     Str.free(c.&)
     error
 }
@@ -115,6 +132,22 @@ test_cmp() {
     if Str.cmp(a, b) >= 0 { error += 1 }
     if Str.cmp(b, a) <= 0 { error += 1 }
     if Str.cmp(a, c) != 0 { error += 1 }
+
+    // Prefix relationship: shorter < longer when prefix matches
+    d := Str.from_cstr(c"abcd")
+    if Str.cmp(a, d) >= 0 { error += 1 } // "abc" < "abcd"
+    if Str.cmp(d, a) <= 0 { error += 1 } // "abcd" > "abc"
+    Str.free(d.&)
+
+    // Empty vs non-empty
+    e := Str.empty()
+    if Str.cmp(e, a) >= 0 { error += 1 } // "" < "abc"
+    if Str.cmp(a, e) <= 0 { error += 1 } // "abc" > ""
+
+    // Empty vs empty
+    e2 := Str.empty()
+    if Str.cmp(e, e2) != 0 { error += 1 }
+
     Str.free(a.&)
     Str.free(b.&)
     Str.free(c.&)
@@ -130,6 +163,15 @@ test_starts_with() {
     if !Str.starts_with(s, a) { error += 1 }
     if Str.starts_with(s, b) { error += 1 }
     if !Str.starts_with(s, e) { error += 1 }
+
+    // Prefix longer than string
+    long_p := Str.from_cstr(c"hello world and more")
+    if Str.starts_with(s, long_p) { error += 1 }
+    Str.free(long_p.&)
+
+    // Exact match: prefix == string
+    if !Str.starts_with(s, s) { error += 1 }
+
     Str.free(s.&)
     Str.free(a.&)
     Str.free(b.&)
@@ -145,6 +187,15 @@ test_ends_with() {
     if !Str.ends_with(s, a) { error += 1 }
     if Str.ends_with(s, b) { error += 1 }
     if !Str.ends_with(s, e) { error += 1 }
+
+    // Suffix longer than string
+    long_s := Str.from_cstr(c"say hello world")
+    if Str.ends_with(s, long_s) { error += 1 }
+    Str.free(long_s.&)
+
+    // Exact match: suffix == string
+    if !Str.ends_with(s, s) { error += 1 }
+
     Str.free(s.&)
     Str.free(a.&)
     Str.free(b.&)
@@ -160,6 +211,20 @@ test_contains() {
     if !Str.contains(s, a) { error += 1 }
     if Str.contains(s, b) { error += 1 }
     if !Str.contains(s, e) { error += 1 }
+
+    // Needle at very start
+    h := Str.from_cstr(c"hello")
+    if !Str.contains(s, h) { error += 1 }
+    Str.free(h.&)
+
+    // Needle at very end
+    w := Str.from_cstr(c"world")
+    if !Str.contains(s, w) { error += 1 }
+    Str.free(w.&)
+
+    // Haystack == needle
+    if !Str.contains(s, s) { error += 1 }
+
     Str.free(s.&)
     Str.free(a.&)
     Str.free(b.&)
@@ -172,6 +237,11 @@ test_contains_byte() {
     if !Str.contains_byte(s, 104) { error += 1 } // 'h'
     if Str.contains_byte(s, 122) { error += 1 }  // 'z'
     Str.free(s.&)
+
+    // Empty string
+    e := Str.empty()
+    if Str.contains_byte(e, 'a') { error += 1 }
+
     error
 }
 
@@ -185,9 +255,29 @@ test_cat_small_small() {
     if Str.len(c) != 8 { error += 1 }
     cs := Str.cstr(c.&)
     if c_strcmp(cs, c"hi there") != 0 { error += 1 }
+    Str.free(c.&)
+
+    // empty + x
+    e  := Str.empty()
+    r1 := Str.cat(e, a)
+    if Str.len(r1) != 2 { error += 1 }
+    cs1 := Str.cstr(r1.&)
+    if c_strcmp(cs1, c"hi") != 0 { error += 1 }
+    Str.free(r1.&)
+
+    // x + empty
+    r2  := Str.cat(a, e)
+    cs2 := Str.cstr(r2.&)
+    if c_strcmp(cs2, c"hi") != 0 { error += 1 }
+    Str.free(r2.&)
+
+    // empty + empty
+    r3 := Str.cat(e, e)
+    if Str.len(r3) != 0 { error += 1 }
+    Str.free(r3.&)
+
     Str.free(a.&)
     Str.free(b.&)
-    Str.free(c.&)
     error
 }
 
@@ -233,6 +323,24 @@ test_cat_3() {
     error
 }
 
+test_cat_4() {
+    error := 0
+    a     := Str.from_cstr(c"one")
+    b     := Str.from_cstr(c" two")
+    c     := Str.from_cstr(c" three")
+    d     := Str.from_cstr(c" four")
+    r     := Str.cat_4(a, b, c, d)
+    cs    := Str.cstr(r.&)
+    if c_strcmp(cs, c"one two three four") != 0 { error += 1 }
+    if Str.len(r) != 18 { error += 1 }
+    Str.free(a.&)
+    Str.free(b.&)
+    Str.free(c.&)
+    Str.free(d.&)
+    Str.free(r.&)
+    error
+}
+
 // -- Access and slicing --
 
 test_byte_at() {
@@ -257,6 +365,18 @@ test_slice() {
     e := Str.slice(s, 3, 3)
     if Str.len(e) != 0 { error += 1 }
 
+    // Full string slice
+    full := Str.slice(s, 0, 11)
+    csf  := Str.cstr(full.&)
+    if c_strcmp(csf, c"hello world") != 0 { error += 1 }
+    Str.free(full.&)
+
+    // Slice from start
+    head := Str.slice(s, 0, 5)
+    csh  := Str.cstr(head.&)
+    if c_strcmp(csh, c"hello") != 0 { error += 1 }
+    Str.free(head.&)
+
     Str.free(s.&)
     Str.free(sub.&)
     Str.free(e.&)
@@ -271,7 +391,19 @@ test_index_of_byte() {
     if Str.index_of_byte(s, 108) != 2 { error += 1 }  // 'l'
     if Str.index_of_byte(s, 111) != 4 { error += 1 }  // 'o'
     if Str.index_of_byte(s, 122) != -1 { error += 1 } // 'z' not found
+
+    // First byte
+    if Str.index_of_byte(s, 'h') != 0 { error += 1 }
+
+    // Last byte
+    if Str.index_of_byte(s, 'o') != 4 { error += 1 }
+
     Str.free(s.&)
+
+    // Empty string
+    e := Str.empty()
+    if Str.index_of_byte(e, 'a') != -1 { error += 1 }
+
     error
 }
 
@@ -293,6 +425,42 @@ test_from_int() {
     cs3 := Str.cstr(s3.&)
     if c_strcmp(cs3, c"0") != 0 { error += 1 }
     Str.free(s3.&)
+    error
+}
+
+test_from_float() {
+    error := 0
+
+    // Positive
+    s  := Str.from_float(3.14)
+    cs := Str.cstr(s.&)
+    if c_strcmp(cs, c"3.14") != 0 { error += 1 }
+    Str.free(s.&)
+
+    // Negative
+    s2  := Str.from_float(-2.5)
+    cs2 := Str.cstr(s2.&)
+    if c_strcmp(cs2, c"-2.5") != 0 { error += 1 }
+    Str.free(s2.&)
+
+    // Zero
+    s3  := Str.from_float(0.0)
+    cs3 := Str.cstr(s3.&)
+    if c_strcmp(cs3, c"0") != 0 { error += 1 }
+    Str.free(s3.&)
+
+    // Integer-valued float
+    s4  := Str.from_float(42.0)
+    cs4 := Str.cstr(s4.&)
+    if c_strcmp(cs4, c"42") != 0 { error += 1 }
+    Str.free(s4.&)
+
+    // Small fractional
+    s5  := Str.from_float(0.1)
+    cs5 := Str.cstr(s5.&)
+    if c_strcmp(cs5, c"0.1") != 0 { error += 1 }
+    Str.free(s5.&)
+
     error
 }
 
@@ -329,8 +497,30 @@ test_replace_byte() {
     r     := Str.replace_byte(s, 108, 114) // 'l' -> 'r'
     cs    := Str.cstr(r.&)
     if c_strcmp(cs, c"herro") != 0 { error += 1 }
-    Str.free(s.&)
     Str.free(r.&)
+
+    // No matches: byte not present
+    r2  := Str.replace_byte(s, 'z', 'x')
+    cs2 := Str.cstr(r2.&)
+    if c_strcmp(cs2, c"hello") != 0 { error += 1 }
+    Str.free(r2.&)
+
+    Str.free(s.&)
+
+    // Empty string input
+    e  := Str.empty()
+    re := Str.replace_byte(e, 'a', 'b')
+    if Str.len(re) != 0 { error += 1 }
+    Str.free(re.&)
+
+    // All bytes matching
+    s2  := Str.from_cstr(c"aaa")
+    r3  := Str.replace_byte(s2, 'a', 'b')
+    cs3 := Str.cstr(r3.&)
+    if c_strcmp(cs3, c"bbb") != 0 { error += 1 }
+    Str.free(r3.&)
+    Str.free(s2.&)
+
     error
 }
 
@@ -453,6 +643,20 @@ test_last_index_of() {
     xyz := Str.from_cstr(c"xyz")
     if Str.last_index_of(s, xyz) != -1 { error += 1 }
 
+    // Needle longer than haystack
+    short := Str.from_cstr(c"ab")
+    long  := Str.from_cstr(c"abcdef")
+    if Str.last_index_of(short, long) != -1 { error += 1 }
+    Str.free(short.&)
+    Str.free(long.&)
+
+    // Single occurrence
+    hw := Str.from_cstr(c"hello world")
+    w  := Str.from_cstr(c"world")
+    if Str.last_index_of(hw, w) != 6 { error += 1 }
+    Str.free(hw.&)
+    Str.free(w.&)
+
     Str.free(s.&)
     Str.free(abc.&)
     Str.free(xyz.&)
@@ -523,6 +727,14 @@ test_to_lower() {
     if c_strcmp(cs3, c"abc") != 0 { error += 1 }
     Str.free(r3.&)
 
+    // Non-alpha preserved
+    s4  := Str.from_cstr(c"A1B2!")
+    r4  := Str.to_lower(s4)
+    cs4 := Str.cstr(r4.&)
+    if c_strcmp(cs4, c"a1b2!") != 0 { error += 1 }
+    Str.free(r4.&)
+    Str.free(s4.&)
+
     // Empty
     e  := Str.empty()
     re := Str.to_lower(e)
@@ -561,6 +773,12 @@ test_trim_left() {
     Str.free(r3.&)
     Str.free(s3.&)
 
+    // Empty string
+    e  := Str.empty()
+    re := Str.trim_left(e)
+    if Str.len(re) != 0 { error += 1 }
+    Str.free(re.&)
+
     error
 }
 
@@ -589,6 +807,12 @@ test_trim_right() {
     if Str.len(r3) != 0 { error += 1 }
     Str.free(r3.&)
     Str.free(s3.&)
+
+    // Empty string
+    e  := Str.empty()
+    re := Str.trim_right(e)
+    if Str.len(re) != 0 { error += 1 }
+    Str.free(re.&)
 
     error
 }
@@ -677,6 +901,13 @@ test_repeat() {
     Str.free(r4.&)
     Str.free(s4.&)
 
+    // Negative count -> empty
+    s5 := Str.from_cstr(c"hello")
+    r5 := Str.repeat(s5, -1)
+    if Str.len(r5) != 0 { error += 1 }
+    Str.free(r5.&)
+    Str.free(s5.&)
+
     error
 }
 
@@ -741,6 +972,31 @@ test_replace() {
     Str.free(new5.&)
     Str.free(old5.&)
     Str.free(s5.&)
+
+    // Replace crossing SSO boundary: "ab-cd-ef" (8) -> "ab___cd___ef" (12+) wait...
+    // "ab-cd-ef" replacing "-" with "-----" = "ab-----cd-----ef" = 16 bytes
+    s6   := Str.from_cstr(c"ab-cd-ef")
+    old6 := Str.from_cstr(c"-")
+    new6 := Str.from_cstr(c"-----")
+    r6   := Str.replace(s6, old6, new6)
+    if Str.len(r6) != 16 { error += 1 }
+    if Str._is_small(r6) { error += 1 }
+    cs6 := Str.cstr(r6.&)
+    if c_strcmp(cs6, c"ab-----cd-----ef") != 0 { error += 1 }
+    Str.free(r6.&)
+    Str.free(new6.&)
+    Str.free(old6.&)
+    Str.free(s6.&)
+
+    // Replace on empty string (old longer than s -> copy)
+    s7   := Str.empty()
+    old7 := Str.from_cstr(c"x")
+    new7 := Str.from_cstr(c"y")
+    r7   := Str.replace(s7, old7, new7)
+    if Str.len(r7) != 0 { error += 1 }
+    Str.free(r7.&)
+    Str.free(new7.&)
+    Str.free(old7.&)
 
     error
 }
@@ -823,6 +1079,34 @@ test_split() {
     Str.free(d5.&)
     Str.free(s5.&)
 
+    // Delimiter not found -> single element
+    s6   := Str.from_cstr(c"hello")
+    d6   := Str.from_cstr(c",")
+    arr6 := Str.split(s6, d6)
+    if arr6.size != 1 { error += 1 }
+    j0 := Array.get(arr6, 0)
+    if !Str.eq_cstr(j0, c"hello") { error += 1 }
+    Str.free(j0.&)
+    Array.free(arr6.&)
+    Str.free(d6.&)
+    Str.free(s6.&)
+
+    // Leading delimiter
+    s7   := Str.from_cstr(c",a,b")
+    d7   := Str.from_cstr(c",")
+    arr7 := Str.split(s7, d7)
+    if arr7.size != 3 { error += 1 }
+    k0 := Array.get(arr7, 0)
+    k1 := Array.get(arr7, 1)
+    k2 := Array.get(arr7, 2)
+    if !Str.is_empty(k0) { error += 1 }
+    if !Str.eq_cstr(k1, c"a") { error += 1 }
+    if !Str.eq_cstr(k2, c"b") { error += 1 }
+    Str.free(k0.&) Str.free(k1.&) Str.free(k2.&)
+    Array.free(arr7.&)
+    Str.free(d7.&)
+    Str.free(s7.&)
+
     error
 }
 
@@ -898,6 +1182,40 @@ test_join() {
     Str.free(sep5.&)
     Array.free(arr5.&)
 
+    // Multi-char separator
+    arr6 := Array.empty[Str.Str]()
+    a6   := Str.from_cstr(c"a")
+    b6   := Str.from_cstr(c"b")
+    c6   := Str.from_cstr(c"c")
+    Array.push(arr6.&, a6)
+    Array.push(arr6.&, b6)
+    Array.push(arr6.&, c6)
+    sep6 := Str.from_cstr(c" :: ")
+    r6   := Str.join(sep6, arr6)
+    cs6  := Str.cstr(r6.&)
+    if c_strcmp(cs6, c"a :: b :: c") != 0 { error += 1 }
+    Str.free(r6.&)
+    Str.free(sep6.&)
+    Str.free(a6.&) Str.free(b6.&) Str.free(c6.&)
+    Array.free(arr6.&)
+
+    // Join crossing SSO boundary (result > 14 bytes)
+    arr7 := Array.empty[Str.Str]()
+    a7   := Str.from_cstr(c"hello")
+    b7   := Str.from_cstr(c"world")
+    Array.push(arr7.&, a7)
+    Array.push(arr7.&, b7)
+    sep7 := Str.from_cstr(c"-----")
+    r7   := Str.join(sep7, arr7)        // "hello-----world" = 15 bytes
+    if Str.len(r7) != 15 { error += 1 }
+    if Str._is_small(r7) { error += 1 }
+    cs7 := Str.cstr(r7.&)
+    if c_strcmp(cs7, c"hello-----world") != 0 { error += 1 }
+    Str.free(r7.&)
+    Str.free(sep7.&)
+    Str.free(a7.&) Str.free(b7.&)
+    Array.free(arr7.&)
+
     error
 }
 
@@ -957,6 +1275,174 @@ test_iter() {
     error
 }
 
+test_count_byte() {
+    error := 0
+    s     := Str.from_cstr(c"hello")
+
+    // Multiple occurrences: 'l' appears twice
+    if Str.count_byte(s, 'l') != 2 { error += 1 }
+
+    // Single occurrence
+    if Str.count_byte(s, 'h') != 1 { error += 1 }
+
+    // Zero occurrences
+    if Str.count_byte(s, 'z') != 0 { error += 1 }
+
+    Str.free(s.&)
+
+    // Empty string
+    e := Str.empty()
+    if Str.count_byte(e, 'a') != 0 { error += 1 }
+
+    error
+}
+
+test_count() {
+    error := 0
+
+    // Non-overlapping matches: "ab" in "abababab" -> 4
+    s  := Str.from_cstr(c"abababab")
+    ab := Str.from_cstr(c"ab")
+    if Str.count(s, ab) != 4 { error += 1 }
+    Str.free(ab.&)
+
+    // Non-overlapping: "abab" in "abababab" -> 2
+    abab := Str.from_cstr(c"abab")
+    if Str.count(s, abab) != 2 { error += 1 }
+    Str.free(abab.&)
+    Str.free(s.&)
+
+    // Single match
+    s2 := Str.from_cstr(c"hello world")
+    w  := Str.from_cstr(c"world")
+    if Str.count(s2, w) != 1 { error += 1 }
+    Str.free(w.&)
+
+    // No match
+    xyz := Str.from_cstr(c"xyz")
+    if Str.count(s2, xyz) != 0 { error += 1 }
+    Str.free(xyz.&)
+    Str.free(s2.&)
+
+    // Needle longer than haystack
+    short  := Str.from_cstr(c"ab")
+    long_n := Str.from_cstr(c"abcdef")
+    if Str.count(short, long_n) != 0 { error += 1 }
+    Str.free(short.&)
+    Str.free(long_n.&)
+
+    // Needle == haystack
+    s3 := Str.from_cstr(c"hello")
+    if Str.count(s3, s3) != 1 { error += 1 }
+    Str.free(s3.&)
+
+    // Single-char needle matching all bytes
+    s4 := Str.from_cstr(c"aaa")
+    a2 := Str.from_cstr(c"a")
+    if Str.count(s4, a2) != 3 { error += 1 }
+    Str.free(s4.&)
+    Str.free(a2.&)
+
+    error
+}
+
+test_strip_prefix() {
+    error := 0
+
+    // Prefix present
+    s  := Str.from_cstr(c"hello world")
+    p  := Str.from_cstr(c"hello ")
+    r  := Str.strip_prefix(s, p)
+    cs := Str.cstr(r.&)
+    if c_strcmp(cs, c"world") != 0 { error += 1 }
+    Str.free(r.&)
+    Str.free(p.&)
+
+    // Prefix absent -> copy
+    p2  := Str.from_cstr(c"xyz")
+    r2  := Str.strip_prefix(s, p2)
+    cs2 := Str.cstr(r2.&)
+    if c_strcmp(cs2, c"hello world") != 0 { error += 1 }
+    Str.free(r2.&)
+    Str.free(p2.&)
+
+    // Prefix == entire string -> empty
+    r3 := Str.strip_prefix(s, s)
+    if Str.len(r3) != 0 { error += 1 }
+    Str.free(r3.&)
+
+    Str.free(s.&)
+
+    // Empty prefix -> copy
+    s2  := Str.from_cstr(c"hello")
+    e   := Str.empty()
+    r4  := Str.strip_prefix(s2, e)
+    cs4 := Str.cstr(r4.&)
+    if c_strcmp(cs4, c"hello") != 0 { error += 1 }
+    Str.free(r4.&)
+    Str.free(s2.&)
+
+    error
+}
+
+test_strip_suffix() {
+    error := 0
+
+    // Suffix present
+    s  := Str.from_cstr(c"hello world")
+    x  := Str.from_cstr(c" world")
+    r  := Str.strip_suffix(s, x)
+    cs := Str.cstr(r.&)
+    if c_strcmp(cs, c"hello") != 0 { error += 1 }
+    Str.free(r.&)
+    Str.free(x.&)
+
+    // Suffix absent -> copy
+    x2  := Str.from_cstr(c"xyz")
+    r2  := Str.strip_suffix(s, x2)
+    cs2 := Str.cstr(r2.&)
+    if c_strcmp(cs2, c"hello world") != 0 { error += 1 }
+    Str.free(r2.&)
+    Str.free(x2.&)
+
+    // Suffix == entire string -> empty
+    r3 := Str.strip_suffix(s, s)
+    if Str.len(r3) != 0 { error += 1 }
+    Str.free(r3.&)
+
+    Str.free(s.&)
+
+    // Empty suffix -> copy
+    s2  := Str.from_cstr(c"hello")
+    e   := Str.empty()
+    r4  := Str.strip_suffix(s2, e)
+    cs4 := Str.cstr(r4.&)
+    if c_strcmp(cs4, c"hello") != 0 { error += 1 }
+    Str.free(r4.&)
+    Str.free(s2.&)
+
+    error
+}
+
+test_from_bool() {
+    error := 0
+    t     := Str.from_bool(1)
+    cs    := Str.cstr(t.&)
+    if c_strcmp(cs, c"true") != 0 { error += 1 }
+    if Str.len(t) != 4 { error += 1 }
+    if !Str._is_small(t) { error += 1 }
+    Str.free(t.&)
+
+    f   := Str.from_bool(0)
+    cs2 := Str.cstr(f.&)
+    if c_strcmp(cs2, c"false") != 0 { error += 1 }
+    if Str.len(f) != 5 { error += 1 }
+    if !Str._is_small(f) { error += 1 }
+    Str.free(f.&)
+
+    error
+}
+
 _check(name: CString, r: Int) -> Int {
     if r != 0 { c_printf(c"FAIL %s (%d)\n", name, r) }
     r
@@ -970,6 +1456,7 @@ main() {
     error += _check(c"from_bytes", test_from_bytes())
     error += _check(c"copy_small", test_copy_small())
     error += _check(c"copy_big", test_copy_big())
+    error += _check(c"copy_empty", test_copy_empty())
     error += _check(c"cstr", test_cstr())
     error += _check(c"eq", test_eq())
     error += _check(c"cmp", test_cmp())
@@ -981,10 +1468,12 @@ main() {
     error += _check(c"cat_to_big", test_cat_to_big())
     error += _check(c"push", test_push())
     error += _check(c"cat_3", test_cat_3())
+    error += _check(c"cat_4", test_cat_4())
     error += _check(c"byte_at", test_byte_at())
     error += _check(c"slice", test_slice())
     error += _check(c"index_of_byte", test_index_of_byte())
     error += _check(c"from_int", test_from_int())
+    error += _check(c"from_float", test_from_float())
     error += _check(c"sso_boundary", test_sso_boundary())
     error += _check(c"replace_byte", test_replace_byte())
     error += _check(c"from_byte", test_from_byte())
@@ -1003,5 +1492,10 @@ main() {
     error += _check(c"split", test_split())
     error += _check(c"join", test_join())
     error += _check(c"iter", test_iter())
+    error += _check(c"count_byte", test_count_byte())
+    error += _check(c"count", test_count())
+    error += _check(c"strip_prefix", test_strip_prefix())
+    error += _check(c"strip_suffix", test_strip_suffix())
+    error += _check(c"from_bool", test_from_bool())
     error
 }
