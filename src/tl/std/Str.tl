@@ -52,7 +52,7 @@ from_bool (b: Bool)                                               -> Str
 len       (s: Str)               -> CSize
 is_empty  (s: Str)               -> Bool
 _is_small (s: Str)               -> Bool
-byte_at   (s: Str, index: CSize) -> Byte
+byte_at   (s: Str, index: CSize) -> Option[Byte]
 cstr      (s: Ptr[Str])          -> CString
 
 // Comparison.
@@ -171,7 +171,6 @@ empty() -> Str {
 }
 
 from_bytes(alloc, s: Ptr[Const[CChar]], n: CSize) -> Str {
-    return
     if n <= _STR_MAX_SMALL {
         _init_small(s, n)
     }
@@ -267,11 +266,12 @@ is_empty(s: Str) -> Bool {
     len(s) == 0
 }
 
-byte_at(s: Str, index: CSize) -> Byte {
+byte_at(s: Str, index: CSize) -> Option[Byte] {
     n := len(s)
-    if index >= n { _tl_fatal_(c"Str.byte_at: index out of bounds") }
-    p := _buf(s.&)
-    p.[index]
+    if index >= n { return None[Byte] }
+    p       := _buf(s.&)
+    b: Byte := p.[index]                // cast CChar -> Byte
+    Some(b)
 }
 
 cstr(s: Ptr[Str]) -> CString {

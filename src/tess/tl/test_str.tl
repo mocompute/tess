@@ -346,9 +346,9 @@ test_cat_4() {
 test_byte_at() {
     error := 0
     s     := Str.from_cstr(c"abc")
-    if Str.byte_at(s, 0) != 97 { error += 1 } // 'a'
-    if Str.byte_at(s, 1) != 98 { error += 1 } // 'b'
-    if Str.byte_at(s, 2) != 99 { error += 1 } // 'c'
+    if unwrap(Str.byte_at(s, 0), 0) != 97 { error += 1 } // 'a'
+    if unwrap(Str.byte_at(s, 1), 0) != 98 { error += 1 } // 'b'
+    if unwrap(Str.byte_at(s, 2), 0) != 99 { error += 1 } // 'c'
     Str.free(s.&)
     error
 }
@@ -530,12 +530,12 @@ test_from_byte() {
     error := 0
     s     := Str.from_byte(65)          // 'A'
     if Str.len(s) != 1 { error += 1 }
-    if Str.byte_at(s, 0) != 65 { error += 1 }
+    if unwrap(Str.byte_at(s, 0), 0) != 65 { error += 1 }
     Str.free(s.&)
 
     s2 := Str.from_byte(122)            // 'z'
     if Str.len(s2) != 1 { error += 1 }
-    if Str.byte_at(s2, 0) != 122 { error += 1 }
+    if unwrap(Str.byte_at(s2, 0), 0) != 122 { error += 1 }
     Str.free(s2.&)
     error
 }
