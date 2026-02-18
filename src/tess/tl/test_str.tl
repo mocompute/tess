@@ -919,6 +919,31 @@ test_iter() {
         count = count + 1
     }
     if count != 3 { error += 1 }
+
+    // Verify actual byte values
+    i := 0
+    for b in Str s {
+        if i == 0 { if b != 'a' { error += 1 } }
+        if i == 1 { if b != 'b' { error += 1 } }
+        if i == 2 { if b != 'c' { error += 1 } }
+        i = i + 1
+    }
+
+    // Verify with a longer string containing varied bytes
+    s2 := Str.from_cstr(c"Hello!")
+    i2 := 0
+    for b in Str s2 {
+        if i2 == 0 { if b != 'H' { error += 1 } }
+        if i2 == 1 { if b != 'e' { error += 1 } }
+        if i2 == 2 { if b != 'l' { error += 1 } }
+        if i2 == 3 { if b != 'l' { error += 1 } }
+        if i2 == 4 { if b != 'o' { error += 1 } }
+        if i2 == 5 { if b != '!' { error += 1 } }
+        i2 = i2 + 1
+    }
+    if i2 != 6 { error += 1 }
+    Str.free(s2.&)
+
     Str.free(s.&)
 
     // Empty string -> 0 iterations
