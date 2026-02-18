@@ -166,7 +166,6 @@ function(tl_create_test_optimized NAME)
     COMMAND
     tess_exe
     exe
-    -O
     --no-standard-includes
     -I ${CMAKE_CURRENT_SOURCE_DIR}
     -S ${PROJECT_SOURCE_DIR}/src/tl/std
