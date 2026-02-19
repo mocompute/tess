@@ -268,7 +268,7 @@ is_empty(s: Str) -> Bool {
 
 byte_at(s: Str, index: CSize) -> Option[Byte] {
     n := len(s)
-    if index >= n { return None() }
+    if index >= n { return None }
     p       := _buf(s.&)
     b: Byte := p.[index]                // cast CChar -> Byte
     Some(b)

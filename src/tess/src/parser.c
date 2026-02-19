@@ -52,7 +52,7 @@ struct parser {
     hashmap               *modules_seen;         // str hset
     hashmap               *module_preludes_seen; // str hset: modules declared with #module_prelude
     hashmap               *nested_type_parents;  // str hset: types that have nested types
-    hashmap               *module_aliases;        // map str -> str: alias name -> original module name
+    hashmap               *module_aliases;       // map str -> str: alias name -> original module name
 
     ast_node              *result;
     token_array            tokens;
@@ -349,8 +349,8 @@ static int result_ast_node(parser *p, ast_node *node) {
 
 static int is_reserved(char const *s) {
     static char const *strings[] = {
-      "break", "case",   "continue", "defer", "else", "false", "if",    "in",
-      "null",  "return", "then",     "true",  "try",  "void",  "when",  "while", null,
+      "break",  "case", "continue", "defer", "else", "false", "if",    "in", "null",
+      "return", "then", "true",     "try",   "void", "when",  "while", null,
     };
     char const **it = strings;
     while (*it != null)
@@ -1378,8 +1378,12 @@ static int a_value(parser *self) {
     if (0 == a_try(self, a_attributed_identifier)) {
 
         ast_node *ident = self->result;
+        assert(ast_node_is_symbol(ident));
+        int is_none = str_eq(ident->symbol.name, S("None"));
         mangle_name(self, ident);
 
+        // an identifier with type arguments in a value position can be used as
+        // an operand of type predicates (e.g. opt :: Option[Int])
         ast_node_array type_args;
         if (ERROR_STOP == maybe_type_arguments(self, &type_args)) return ERROR_STOP;
         if (type_args.size) {
@@ -1387,9 +1391,18 @@ static int a_value(parser *self) {
                                               (ast_node_sized){0});
             return result_ast_node(self, r);
         } else {
-            return result_ast_node(self, ident);
+            // Special case: syntax sugar: promote naked None symbol to funcall None(), a type constructor
+            if (is_none) {
+                ast_node *r =
+                  ast_node_create_nfa(self->ast_arena, ident, (ast_node_sized){0}, (ast_node_sized){0});
+                return result_ast_node(self, r);
+
+            } else {
+                return result_ast_node(self, ident);
+            }
         }
     }
+    // standalone attribute set is used as an operand of a type predicates
     if (0 == a_try(self, a_attribute_set)) return 0;
 
     self->error.tag = tl_err_expected_value;
@@ -1746,7 +1759,7 @@ static int maybe_mangle_binop(parser *self, ast_node *op, ast_node **inout, ast_
     // Module alias resolution: replace leftmost alias with original module name
     if ((0 == str_cmp_c(op->symbol.name, ".")) && ast_node_is_symbol(*inout) &&
         str_map_contains(self->module_aliases, (*inout)->symbol.name)) {
-        str *original          = str_map_get(self->module_aliases, (*inout)->symbol.name);
+        str *original         = str_map_get(self->module_aliases, (*inout)->symbol.name);
         (*inout)->symbol.name = *original;
     }
 
@@ -2859,9 +2872,8 @@ static int toplevel_hash_module(parser *self, str cmd, str module) {
     // Foo.Bar.Baz)
     str parent = str_empty();
     if (str_rprefix_char(self->transient, module, '.', &parent)) {
-        int parent_known =
-          str_hset_contains(self->modules_seen, parent) ||
-          (self->opts.known_modules && str_map_contains(self->opts.known_modules, parent));
+        int parent_known = str_hset_contains(self->modules_seen, parent) ||
+                           (self->opts.known_modules && str_map_contains(self->opts.known_modules, parent));
         if (!parent_known) {
             self->error.tag = tl_err_nested_module_parent_not_found;
             return ERROR_STOP;
@@ -2935,17 +2947,15 @@ static int toplevel_hash_alias(parser *self, str_array words) {
         return ERROR_STOP;
     }
     // source module must exist
-    int source_known =
-      str_hset_contains(self->modules_seen, source) ||
-      (self->opts.known_modules && str_map_contains(self->opts.known_modules, source));
+    int source_known = str_hset_contains(self->modules_seen, source) ||
+                       (self->opts.known_modules && str_map_contains(self->opts.known_modules, source));
     if (!source_known) {
         self->error.tag = tl_err_alias_source_not_found;
         return ERROR_STOP;
     }
     // alias name conflicts with real module
-    int alias_is_module =
-      str_hset_contains(self->modules_seen, alias) ||
-      (self->opts.known_modules && str_map_contains(self->opts.known_modules, alias));
+    int alias_is_module = str_hset_contains(self->modules_seen, alias) ||
+                          (self->opts.known_modules && str_map_contains(self->opts.known_modules, alias));
     if (alias_is_module) {
         self->error.tag = tl_err_alias_conflicts_with_module;
         return ERROR_STOP;
@@ -2983,14 +2993,11 @@ static int toplevel_hash(parser *self) {
         int res      = 0;
         dbg(self, "hash: %s %s", str_cstr(&cmd), str_cstr(&argument));
 
-        if (str_eq(cmd, S("unity_file")))
-            toplevel_hash_unity_file(self, argument);
+        if (str_eq(cmd, S("unity_file"))) toplevel_hash_unity_file(self, argument);
         else if (str_eq(cmd, S("module_prelude")) || str_eq(cmd, S("module")))
             res = toplevel_hash_module(self, cmd, argument);
-        else if (str_eq(cmd, S("alias")))
-            res = toplevel_hash_alias(self, words);
-        else if (str_eq(cmd, S("unalias")))
-            res = toplevel_hash_unalias(self, argument);
+        else if (str_eq(cmd, S("alias"))) res = toplevel_hash_alias(self, words);
+        else if (str_eq(cmd, S("unalias"))) res = toplevel_hash_unalias(self, argument);
 
         if (res) return res;
     }
