@@ -7,6 +7,11 @@ Outcome = Foo.Status
 #module main
 
 main() {
-    r: Bar.Outcome := Foo.Status.Ok
+    // Via type annotation: access enum through original type, annotate with alias
+    r1: Bar.Outcome := Foo.Status.Ok
+
+    // Direct usage: access enum values through the alias
+    r2 := Bar.Outcome.Ok
+
     0
 }

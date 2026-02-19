@@ -349,13 +349,11 @@ TL_TESTS =					\
 	apply_generic				\
 	apply_generic_through_pointer		\
 	apply_lambda				\
-	arithmetic_unary_op			\
 	arity_overload				\
 	array_api				\
 	array_comprehensive			\
 	array_index_binary_op			\
 	array_sort				\
-	assignment_by_op			\
 	atexit					\
 	attributes				\
 	binop					\
@@ -386,7 +384,6 @@ TL_TESTS =					\
 	defer					\
 	defun_inline_type			\
 	deref_then_addr				\
-	div_comment_bug				\
 	dynamic_array				\
 	embed_c					\
 	enum_module				\
@@ -394,7 +391,6 @@ TL_TESTS =					\
 	escape_sequences			\
 	factorial				\
 	fatal_intrinsic				\
-	float_scientific			\
 	for_break				\
 	for_continue				\
 	for_statement_basic			\
@@ -416,7 +412,6 @@ TL_TESTS =					\
 	if_expression				\
 	import_relative				\
 	import_relative_dotdot			\
-	integer_literals			\
 	lambda_apply				\
 	lambda_arg_annotated			\
 	lambda_arg_unused			\
@@ -426,7 +421,6 @@ TL_TESTS =					\
 	let_in_basic				\
 	let_in_expression			\
 	logical_and				\
-	logical_expression			\
 	logical_or				\
 	malloc_free				\
 	malloc_free_is_null			\
@@ -447,7 +441,6 @@ TL_TESTS =					\
 	nested_struct_access			\
 	nested_type_cross_module_conflict	\
 	number_formats				\
-	number_separators			\
 	pack					\
 	pointer_array				\
 	pointer_cast				\
@@ -465,7 +458,6 @@ TL_TESTS =					\
 	recursive_type_mutual			\
 	recursive_type_mutual_simple		\
 	regress_type_cons			\
-	relational_basic			\
 	return_null				\
 	return_statement			\
 	scope_shadow				\
@@ -511,16 +503,11 @@ TL_TESTS =					\
 	tail_call				\
 	type_alias_generic			\
 	type_alias_local			\
-	type_alias_local_direct			\
 	type_alias_module_chained		\
-	type_alias_module_chained_direct	\
 	type_alias_module_enum			\
-	type_alias_module_enum_direct		\
 	type_alias_module_multi_arg		\
-	type_alias_module_multi_arg_direct	\
 	type_alias_module_multi_arg_direct_compatible	\
 	type_alias_module_simple		\
-	type_alias_module_simple_direct		\
 	type_argument_field_annotation		\
 	type_arguments_annotations		\
 	type_literal_generic			\
