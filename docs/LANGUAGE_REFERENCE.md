@@ -270,7 +270,7 @@ When a constructor doesn't constrain all type parameters:
 T[a] : | Some { v: a }
        | None
 
-good: T[Int] := None()                // Required - None has no field with type `a`
+good: T[Int] := None                  // Required - None has no field with type `a`
 opt := Some(42)                       // Not required - argument constrains `a = Int`
 ```
 
@@ -1038,6 +1038,13 @@ There are three ways to construct tagged union values:
 ```tl
 s := Circle(2.0)              // returns Shape
 n := None()                   // returns Shape
+```
+
+**Bare None sugar:** Variants with no fields (like `None`) can omit the parentheses. Bare `None` is promoted to `None()` automatically. Since `None` carries no data, the type must be inferrable from context (type annotation, function return type, if/else branch, etc.):
+
+```tl
+empty: Option[Int] := None    // type annotation provides context
+opt := if x > 0 { Some(x) } else { None }  // Some branch provides context
 ```
 
 From another module, prefix with the module name:

@@ -95,14 +95,14 @@ test_when_matching() {
 
     // Match None, produce default
     empty: Option[Int] := None()
-    val := when empty {
+    val                := when empty {
         s: Some { s.v }
         n: None { -1 }
     }
     error += if val == -1 {0} else {1}
 
     // When result fed into conditional
-    opt := Some(50)
+    opt     := Some(50)
     doubled := when opt {
         s: Some { s.v * 2 }
         n: None { 0 }
@@ -134,7 +134,7 @@ test_when_else() {
 
     // else instead of explicit None arm — None path
     empty: Option[Int] := None()
-    val := when empty {
+    val                := when empty {
         s: Some { s.v }
         else { -1 }
     }
@@ -207,29 +207,29 @@ test_let_else() {
     error := 0
 
     // Basic bail: extract Some or return error
-    opt := Some(42)
+    opt     := Some(42)
     s: Some := opt else { return 1 }
     error += if s.v == 42 {0} else {1}
 
     // Bail takes the else path
     empty: Option[Int] := None()
-    result := 0
+    result             := 0
     while 1 {
         s: Some := empty else { break }
-        result = 1  // should not reach
+        result = 1                      // should not reach
         break
     }
     error += result
 
     // Multiple sequential bails
-    a := Some(10)
-    b := Some(20)
+    a       := Some(10)
+    b       := Some(20)
     x: Some := a else { return 1 }
     y: Some := b else { return 1 }
     error += if x.v + y.v == 30 {0} else {1}
 
     // Bail inside a loop with break
-    opt := narrowing(99)
+    opt   := narrowing(99)
     found := 0
     while 1 {
         s: Some := opt else { break }
@@ -318,7 +318,7 @@ test_nested_option() {
         outer: Some {
             when outer.v {
                 inner: Some { if inner.v == 42 {0} else {1} }
-                n: None { 1 }
+                n:     None { 1 }
             }
         }
         n: None { 1 }
@@ -326,12 +326,12 @@ test_nested_option() {
 
     // Some(None()) — outer present, inner absent
     inner_none: Option[Int] := None()
-    nested := Some(inner_none)
+    nested                  := Some(inner_none)
     error += when nested {
         outer: Some {
             when outer.v {
                 inner: Some { 1 }
-                n: None { 0 }
+                n:     None { 0 }
             }
         }
         n: None { 1 }
@@ -341,7 +341,7 @@ test_nested_option() {
     flat_none: Option[Option[Int]] := None()
     error += when flat_none {
         outer: Some { 1 }
-        n: None { 0 }
+        n:     None { 0 }
     }
 
     error
@@ -353,12 +353,12 @@ test_conditional_option() {
     error := 0
 
     // if/else producing Option — type inference across branches
-    x := 10
+    x   := 10
     opt := if x > 5 { Some(x) } else { None() }
     error += if unwrap(opt, 0) == 10 {0} else {1}
 
     // None branch taken
-    x := 3
+    x   := 3
     opt := if x > 5 { Some(x) } else { None() }
     error += when opt {
         s: Some { 1 }
@@ -366,7 +366,7 @@ test_conditional_option() {
     }
 
     // Conditional inside a function returning Option
-    r := checked_sub(10, 3)
+    r   := checked_sub(10, 3)
     val := if unwrap(r, -1) > 0 { Some(unwrap(r, 0) * 2) } else { None() }
     error += if unwrap(val, 0) == 14 {0} else {1}
 
@@ -397,7 +397,7 @@ test_option_in_struct() {
     }
 
     // Access value field alongside Option field
-    c := Config(value = 42, limit = Some(99))
+    c     := Config(value = 42, limit = Some(99))
     total := c.value + unwrap(c.limit, 0)
     error += if total == 141 {0} else {1}
 
@@ -417,20 +417,20 @@ test_map_option() {
     error := 0
 
     // Map Some: transform inner value
-    opt := Some(3)
+    opt    := Some(3)
     mapped := map_option(opt, (x) { x * 2 })
     error += if unwrap(mapped, 0) == 6 {0} else {1}
 
     // Map None: stays None
     empty: Option[Int] := None()
-    mapped := map_option(empty, (x) { x * 2 })
+    mapped             := map_option(empty, (x) { x * 2 })
     error += when mapped {
         s: Some { 1 }
         n: None { 0 }
     }
 
     // Map with Float type
-    fopt := Some(2.5)
+    fopt     := Some(2.5)
     mapped_f := map_option(fopt, (x) { x * 2.0 })
     error += when mapped_f {
         s: Some { if s.v == 5.0 {0} else {1} }
@@ -459,7 +459,7 @@ test_first_some() {
 
     // First is None — returns second
     none_val: Option[Int] := None()
-    b := Some(7)
+    b                     := Some(7)
     error += if unwrap(first_some(none_val, b), 0) == 7 {0} else {1}
 
     // Both None
@@ -489,7 +489,7 @@ test_option_with_struct() {
     }
 
     // Extract struct via let-else, then use fields
-    opt := Some(Point(x = 3, y = 4))
+    opt     := Some(Point(x = 3, y = 4))
     s: Some := opt else { return 1 }
     error += if s.v.x + s.v.y == 7 {0} else {1}
 
@@ -529,6 +529,65 @@ test_option_as_parameter() {
     error
 }
 
+// --- 17. Bare None sugar: None without parens ---
+
+bare_none_return() -> Option[Int] {
+    return None
+}
+
+bare_none_conditional(x: Int) -> Option[Int] {
+    if x > 0 { Some(x) } else { None }
+}
+
+test_bare_none() {
+    error := 0
+
+    // Bare None with type annotation
+    n1: Option[Int] := None
+    error += when n1 {
+        s: Some { 1 }
+        n: None { 0 }
+    }
+
+    // Bare None in function return
+    r1 := bare_none_return()
+    error += when r1 {
+        s: Some { 1 }
+        n: None { 0 }
+    }
+
+    // Bare None in if/else branch
+    r2 := bare_none_conditional(-1)
+    error += when r2 {
+        s: Some { 1 }
+        n: None { 0 }
+    }
+
+    // Verify Some branch still works alongside bare None
+    r3 := bare_none_conditional(42)
+    error += when r3 {
+        s: Some { if s.v == 42 {0} else {1} }
+        n: None { 1 }
+    }
+
+    // Bare None as function argument
+    error += if add_if_present(10, None) == 10 {0} else {1}
+
+    // Bare None in assignment
+    opt: Option[Int] := Some(5)
+    opt = None
+    error += when opt {
+        s: Some { 1 }
+        n: None { 0 }
+    }
+
+    // unwrap with bare None
+    n2: Option[Int] := None
+    error += if unwrap(n2, 99) == 99 {0} else {1}
+
+    error
+}
+
 // --- Main ---
 
 main() {
@@ -550,6 +609,7 @@ main() {
     error += test_first_some()
     error += test_option_with_struct()
     error += test_option_as_parameter()
+    error += test_bare_none()
 
     error
 }

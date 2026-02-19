@@ -3194,6 +3194,7 @@ static int is_type_literal(tl_infer *self, traverse_ctx const *ctx, ast_node con
     // If the node has any assignment arguments (e.g., Wrapper[Int](v = 1.0)),
     // it's a value constructor call, not a type literal.
     if (ast_node_is_nfa(node)) {
+        if (node->named_application.is_type_constructor) return 0;
         ast_arguments_iter iter = ast_node_arguments_iter((ast_node *)node);
         ast_node          *arg;
         while ((arg = ast_arguments_next(&iter))) {
@@ -4030,7 +4031,8 @@ static str  specialize_arrow(tl_infer *self, traverse_ctx *traverse_ctx, str nam
         str  arrow_str = tl_monotype_to_string(self->transient, arrow);
         snprintf(detail, sizeof detail, "Specializing '%.*s' with non-concrete callsite arrow: %s",
                  str_ilen(name), str_buf(&name), str_cstr(&arrow_str));
-        report_invariant_failure(self, "specialize_arrow", "Callsite arrow must (usually) be concrete", detail, null);
+        report_invariant_failure(self, "specialize_arrow", "Callsite arrow must (usually) be concrete",
+                                 detail, null);
     }
 #endif
 

@@ -1394,7 +1394,7 @@ static int a_value(parser *self) {
             // Special case: syntax sugar: promote naked None symbol to funcall None(), a type constructor
             if (is_none) {
                 ast_node *r =
-                  ast_node_create_nfa(self->ast_arena, ident, (ast_node_sized){0}, (ast_node_sized){0});
+                  ast_node_create_nfa_tc(self->ast_arena, ident, (ast_node_sized){0}, (ast_node_sized){0});
                 return result_ast_node(self, r);
 
             } else {
