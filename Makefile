@@ -431,6 +431,7 @@ TL_TESTS =					\
 	malloc_free				\
 	malloc_free_is_null			\
 	malloc_struct_basic			\
+	map_option_cross_type			\
 	mapper_basic				\
 	mapper_lambda				\
 	module_basic				\
@@ -609,7 +610,6 @@ TL_KNOWN_FAIL_FAILURES =
 
 # Tests that should work but currently fail due to compiler bugs
 TL_KNOWN_FAILURES =				\
-	map_option_cross_type			\
 	while_empty_body
 
 # Total test count across all suites

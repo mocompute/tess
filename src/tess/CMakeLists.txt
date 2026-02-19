@@ -348,6 +348,7 @@ tl_create_test(logical_or)
 tl_create_test(malloc_free)
 tl_create_test(malloc_free_is_null)
 tl_create_test(malloc_struct_basic)
+tl_create_test(map_option_cross_type)
 tl_create_test(mapper_basic)
 tl_create_test(mapper_lambda)
 tl_create_test(module_basic)
@@ -549,5 +550,4 @@ tl_create_build_fail_test(fail_try_three_variants)
 # Known fail-failures: expected-failure tests that the compiler doesn't reject yet
 
 # Known failures: these should work but a compiler bug makes them fail
-tl_create_known_failure(map_option_cross_type)
 tl_create_known_failure(while_empty_body)
