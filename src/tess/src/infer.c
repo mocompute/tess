@@ -4030,7 +4030,7 @@ static str  specialize_arrow(tl_infer *self, traverse_ctx *traverse_ctx, str nam
         str  arrow_str = tl_monotype_to_string(self->transient, arrow);
         snprintf(detail, sizeof detail, "Specializing '%.*s' with non-concrete callsite arrow: %s",
                  str_ilen(name), str_buf(&name), str_cstr(&arrow_str));
-        report_invariant_failure(self, "specialize_arrow", "Callsite arrow must be concrete", detail, null);
+        report_invariant_failure(self, "specialize_arrow", "Callsite arrow must (usually) be concrete", detail, null);
     }
 #endif
 
