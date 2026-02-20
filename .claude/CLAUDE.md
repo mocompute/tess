@@ -31,13 +31,14 @@ Full debug test run:
 
 Single test:
 ```bash
-./tess exe src/tess/tl/test_<name>.tl -o /tmp/test_output && /tmp/test_output
+./tess run src/tess/tl/test_<name>.tl
 ```
 
 Compiler usage:
 ```bash
 ./tess c <file.tl>                   # Transpile to C (stdout)
 ./tess exe <file.tl> -o <output>     # Compile to executable
+./tess run <file.tl>                 # Compile and execute in one step
 ./tess lib <file.tl> -o <output.so>  # Compile to shared library
 ./tess lib --static <file.tl> -o <output.a>  # Compile to static library
 ./tess c --stats <file.tl>           # Per-phase memory and time statistics

@@ -126,7 +126,10 @@ main() {
 make -j              # Build the compiler
 make -j test         # Run tests
 
-# build an executable
+# compile and run
+./tess run main.tl
+
+# compile to an output file
 ./tess exe main.tl -o program
 ```
 
