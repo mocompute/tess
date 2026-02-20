@@ -39,6 +39,7 @@ Compiler usage:
 ./tess c <file.tl>                   # Transpile to C (stdout)
 ./tess exe <file.tl> -o <output>     # Compile to executable
 ./tess run <file.tl>                 # Compile and execute in one step
+# exe and run work without <file.tl> if package.tl declares source()
 ./tess lib <file.tl> -o <output.so>  # Compile to shared library
 ./tess lib --static <file.tl> -o <output.a>  # Compile to static library
 ./tess c --stats <file.tl>           # Per-phase memory and time statistics

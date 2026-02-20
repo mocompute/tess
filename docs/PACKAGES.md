@@ -151,9 +151,10 @@ source("src/", "extra.tl")  // multiple args, mix of dirs and files
 
 Multiple `source()` calls accumulate. Directories are scanned recursively for files ending in `.tl`.
 
-When `source()` is declared, commands like `tess exe`, `tess pack`, and `tess validate` can be run without listing files on the command line:
+When `source()` is declared, commands like `tess run`, `tess exe`, `tess pack`, and `tess validate` can be run without listing files on the command line:
 
 ```bash
+tess run                    # uses source() from package.tl
 tess exe -o myapp           # uses source() from package.tl
 tess pack -o mylib.tlib     # uses source() from package.tl
 tess validate               # uses source() from package.tl
@@ -228,7 +229,7 @@ tess unpack archive.tlib [-o outdir]  # Extract files
 
 ### How dependency loading works
 
-When you run `tess exe` (or `tess c`, `tess lib`), the compiler:
+When you run `tess exe` (or `tess run`, `tess c`, `tess lib`), the compiler:
 
 1. Looks for `package.tl` in the current working directory
 2. Discovers local source files from `source()` entries (if no files given on the command line)
