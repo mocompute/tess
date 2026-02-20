@@ -277,9 +277,8 @@ byte_at(s: Str, index: CSize) -> Option[Byte] {
 cstr(s: Ptr[Str]) -> CString {
     n := len(s.*)
     p := _buf(s)
-    p.[n] = 0
-    cs: CString := p
-    cs
+    if p.[n] != '\0' { p.[n] = '\0' }
+    p
 }
 
 
