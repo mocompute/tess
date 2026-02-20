@@ -1955,6 +1955,24 @@ static int unpack_files(state *self) {
     return tl_tlib_unpack(self->arena, archive_path, self->out_path, opts);
 }
 
+static char const *validate_command_flags(state const *self, char const *cmd) {
+    int is_compile = (0 == strcmp(cmd, "c") || 0 == strcmp(cmd, "exe") ||
+                      0 == strcmp(cmd, "run") || 0 == strcmp(cmd, "lib") ||
+                      0 == strcmp(cmd, "lib-emit-c"));
+    int has_stats  = is_compile && 0 != strcmp(cmd, "run");
+
+    if (self->no_line_directive && !is_compile) return "--no-line-directive";
+    if (self->no_optimize && !is_compile) return "--no-optimize";
+    if (self->in_place && 0 != strcmp(cmd, "fmt")) return "--in-place";
+    if (self->unpack_list && 0 != strcmp(cmd, "unpack")) return "--list";
+    if (self->is_static_library && 0 != strcmp(cmd, "lib")) return "--static";
+    if (self->report_stats && !has_stats) return "--stats";
+    if (self->report_time && !has_stats) return "--time";
+    if (self->verbose_ast && !is_compile) return "--verbose-ast";
+    if (self->verbose_parse && !is_compile) return "--verbose-parse";
+    return NULL;
+}
+
 int main(int argc, char *argv[]) {
 
     int         result = 0;
@@ -2006,6 +2024,15 @@ int main(int argc, char *argv[]) {
     if (self.help) usage(0, argv[0]);
     if (self.words.size == 0) usage(0, argv[0]);
 
+    {
+        char const *bad_flag = validate_command_flags(&self, self.words.v[0]);
+        if (bad_flag) {
+            fprintf(stderr, "error: %s is not supported with %s\n", bad_flag, self.words.v[0]);
+            state_deinit(&self);
+            return 1;
+        }
+    }
+
     if (0 == strcmp("c", self.words.v[0])) {
         hires_timer_start(&timer);
         result = compile(&self);
@@ -2028,19 +2055,6 @@ int main(int argc, char *argv[]) {
     }
 
     else if (0 == strcmp("run", self.words.v[0])) {
-        {
-            char const *bad = NULL;
-            if (self.report_stats) bad = "--stats";
-            else if (self.report_time) bad = "--time";
-            else if (self.in_place) bad = "--in-place";
-            else if (self.unpack_list) bad = "--list";
-            else if (self.is_static_library) bad = "--static";
-            if (bad) {
-                fprintf(stderr, "error: %s is not supported with run\n", bad);
-                state_deinit(&self);
-                return 1;
-            }
-        }
         hires_timer_start(&timer);
 
         // Determine output path: use -o if provided, else temp file
