@@ -298,7 +298,7 @@ cmp(a: Str, b: Str) -> Int {
         r := c_memcmp(pa, pb, min_len)
         if r != 0 { return r }
     }
-    return if la < lb { - 1 } else if la > lb { 1 } else { 0 }
+    if la < lb { - 1 } else if la > lb { 1 } else { 0 }
 }
 
 starts_with(s: Str, prefix: Str) -> Bool {
