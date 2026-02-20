@@ -1927,7 +1927,27 @@ static int init_package(state *self) {
     fprintf(f, "// export(ModuleOne, ModuleTwo, ...)");
     fclose(f);
 
-    fprintf(stderr, "Created package.tl for package '%s'\n", name);
+    // Scaffold src/ directory and starter main program
+    platform_mkdir("src");
+    str main_path = str_init_static("src/main.tl");
+    if (!file_exists(main_path)) {
+        f = fopen("src/main.tl", "wb");
+        if (f) {
+            fprintf(f, "#module main\n");
+            fprintf(f, "#import <stdio.tl>\n");
+            fprintf(f, "\n");
+            fprintf(f, "main() {\n");
+            fprintf(f, "  c_printf(\"hello world\\n\")\n");
+            fprintf(f, "  0\n");
+            fprintf(f, "}\n");
+            fclose(f);
+            fprintf(stderr, "Created package.tl and src/main.tl for package '%s'\n", name);
+        } else {
+            fprintf(stderr, "Created package.tl for package '%s'\n", name);
+        }
+    } else {
+        fprintf(stderr, "Created package.tl for package '%s'\n", name);
+    }
 
     return 0;
 }

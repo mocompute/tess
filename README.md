@@ -125,12 +125,20 @@ main() {
 ```bash
 make -j              # Build the compiler
 make -j test         # Run tests
+```
 
-# compile and run
-./tess run main.tl
+### Quick Start
 
-# compile to an output file
-./tess exe main.tl -o program
+```bash
+mkdir myproject && cd myproject
+tess init                        # creates package.tl, src/main.tl
+tess run                         # compile and execute
+```
+
+To produce a standalone binary instead:
+
+```bash
+tess exe -o myproject            # compile to an output file
 ```
 
 ### Windows
