@@ -61,6 +61,8 @@ typedef struct {
     int               is_static_library;
     int               is_executable;
 
+    int               dashdash_at; // index in words where '--' args begin; -1 if not set
+
     // Temp directories created during package extraction (cleaned up in state_deinit)
     c_string_carray temp_dirs;
 
@@ -90,6 +92,7 @@ noreturn void usage(int status, char const *argv0) {
     printf("\nCommands:\n");
     printf("    c                      transpile input files to C\n");
     printf("    exe                    compile and create executable (-o or package.tl required)\n");
+    printf("    run                    compile and run (replaces process; use -- to pass args)\n");
     printf("    fmt                    format source file (reads stdin if no file given)\n");
     printf("    init                   create a package.tl in the current directory\n");
     printf("    lib                    compile and create library (-o or package.tl required)\n");
@@ -155,6 +158,7 @@ void state_init(state *self) {
     self->is_library           = 0;
     self->is_static_library    = 0;
     self->is_executable        = 0;
+    self->dashdash_at          = -1;
     self->temp_dirs            = (c_string_carray){.alloc = self->arena};
 }
 
@@ -199,8 +203,6 @@ void state_gather_long_option(state *self, char *str) {
     else if (0 == strcmp("--time", str)) self->report_time = 1;
     else if (0 == strcmp("--stats", str)) self->report_stats = 1;
     else if (0 == strcmp("--static", str)) self->is_static_library = 1;
-    else if (0 == strcmp("--", str)) /* ignore */
-        ;
     else usage(1, self->argv0);
 }
 
@@ -227,6 +229,12 @@ void state_gather_options(state *self, int argc, char *argv[]) {
                 char const *sym    = argv[i][2] ? argv[i] + 2 : argv[++i];
                 str         define = str_init(self->arena, sym);
                 array_push(self->defines, define);
+            } else if (0 == strcmp("--", argv[i])) {
+                self->dashdash_at = (int)self->words.size;
+                for (++i; i < argc; ++i) {
+                    array_push(self->words, argv[i]);
+                }
+                break;
             } else if (0 == strncmp("--", argv[i], 2)) {
                 state_gather_long_option(self, argv[i]);
             } else {
@@ -2017,6 +2025,82 @@ int main(int argc, char *argv[]) {
         result             = compile(&self);
         if (result) goto done;
         result = compile_c(&self);
+    }
+
+    else if (0 == strcmp("run", self.words.v[0])) {
+        {
+            char const *bad = NULL;
+            if (self.report_stats) bad = "--stats";
+            else if (self.report_time) bad = "--time";
+            else if (self.in_place) bad = "--in-place";
+            else if (self.unpack_list) bad = "--list";
+            else if (self.is_static_library) bad = "--static";
+            if (bad) {
+                fprintf(stderr, "error: %s is not supported with run\n", bad);
+                state_deinit(&self);
+                return 1;
+            }
+        }
+        hires_timer_start(&timer);
+
+        // Determine output path: use -o if provided, else temp file
+        platform_temp_file tmp_exe = {0};
+        int using_temp = 0;
+        if (!self.out_path) {
+#ifdef MOS_WINDOWS
+            int tmp_err = platform_temp_file_create(&tmp_exe, ".exe");
+#else
+            int tmp_err = platform_temp_file_create(&tmp_exe, "");
+#endif
+            if (tmp_err) {
+                fprintf(stderr, "error: failed to create temporary file\n");
+                result = 1;
+                goto done;
+            }
+            self.out_path = tmp_exe.path;
+            using_temp = 1;
+        }
+
+        self.is_executable = 1;
+
+        // Temporarily hide program args from compile()
+        size_t saved_words_size = self.words.size;
+        if (self.dashdash_at >= 0)
+            self.words.size = (size_t)self.dashdash_at;
+
+        result = compile(&self);
+        if (result == 0)
+            result = compile_c(&self);
+
+        self.words.size = saved_words_size;
+
+        if (result) {
+            if (using_temp) platform_temp_file_delete(&tmp_exe);
+            goto done;
+        }
+
+        // Build argv: [exe_path, program_args..., NULL]
+        int prog_argc = (self.dashdash_at >= 0)
+            ? (int)self.words.size - self.dashdash_at : 0;
+        char const **exec_argv = malloc((size_t)(prog_argc + 2) * sizeof(char const *));
+        if (!exec_argv) {
+            fprintf(stderr, "error: out of memory\n");
+            if (using_temp) platform_temp_file_delete(&tmp_exe);
+            result = 1;
+            goto done;
+        }
+        exec_argv[0] = self.out_path;
+        for (int k = 0; k < prog_argc; k++)
+            exec_argv[k + 1] = self.words.v[self.dashdash_at + k];
+        exec_argv[prog_argc + 1] = NULL;
+
+        // Replace process
+        state_deinit(&self);
+        platform_exec_replace(exec_argv[0], exec_argv);
+
+        // Only reached on exec failure
+        fprintf(stderr, "error: failed to execute compiled program\n");
+        return 1;
     }
 
     else if (0 == strcmp("fmt", self.words.v[0])) {

@@ -102,4 +102,9 @@ typedef struct {
 // Returns process exit code, or -1 on failure to launch
 int platform_exec(platform_exec_opts const *opts);
 
+// Replace current process with the given program.
+// On success, does not return. On failure, returns -1.
+// argv must be NULL-terminated; argv[0] should be the program path.
+int platform_exec_replace(char const *path, char const *const *argv);
+
 #endif

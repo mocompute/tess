@@ -407,6 +407,11 @@ int platform_exec(platform_exec_opts const *opts) {
     return (int)exit_code;
 }
 
+int platform_exec_replace(char const *path, char const *const *argv) {
+    _execv(path, argv);
+    return -1;
+}
+
 #else
 
 int platform_exec(platform_exec_opts const *opts) {
@@ -507,6 +512,11 @@ int platform_exec(platform_exec_opts const *opts) {
     free(captured);
 
     return exit_code;
+}
+
+int platform_exec_replace(char const *path, char const *const *argv) {
+    execv(path, (char *const *)argv);
+    return -1;
 }
 
 #endif
