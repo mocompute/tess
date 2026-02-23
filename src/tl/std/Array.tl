@@ -573,7 +573,7 @@ iter_deinit(iter) {                                                   }
 
 _grow[T]              (self: Ptr[Array[T]], alloc: Ptr[Allocator], at_least: UInt) -> Void
 _is_full[T]           (self: Ptr[Array[T]])                                        -> Bool
-_type_width_aligned[T]()                                                           -> CSize
+_type_width_aligned[T]()                                                           -> UInt
 
 // --
 

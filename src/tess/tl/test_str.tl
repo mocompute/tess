@@ -391,8 +391,8 @@ test_slice() {
 test_index_of_byte() {
     error := 0
     s     := Str.from_cstr(c"hello")
-    if unwrap(Str.index_of_byte(s, 108u), _NONE) != 2u { error += 1 }  // 'l'
-    if unwrap(Str.index_of_byte(s, 111u), _NONE) != 4u { error += 1 }  // 'o'
+    if unwrap(Str.index_of_byte(s, 108u), _NONE) != 2u { error += 1 }    // 'l'
+    if unwrap(Str.index_of_byte(s, 111u), _NONE) != 4u { error += 1 }    // 'o'
     if unwrap(Str.index_of_byte(s, 122u), _NONE) != _NONE { error += 1 } // 'z' not found
 
     // First byte
@@ -531,12 +531,12 @@ test_replace_byte() {
 
 test_from_byte() {
     error := 0
-    s     := Str.from_byte(65u)          // 'A'
+    s     := Str.from_byte(65u)         // 'A'
     if Str.len(s) != 1u { error += 1 }
     if unwrap(Str.byte_at(s, 0u), 0u) != 65u { error += 1 }
     Str.free(s.&)
 
-    s2 := Str.from_byte(122u)            // 'z'
+    s2 := Str.from_byte(122u)           // 'z'
     if Str.len(s2) != 1u { error += 1 }
     if unwrap(Str.byte_at(s2, 0u), 0u) != 122u { error += 1 }
     Str.free(s2.&)
@@ -566,11 +566,11 @@ test_index_of() {
     xyz   := Str.from_cstr(c"xyz")
     e     := Str.empty()
 
-    if unwrap(Str.index_of(s, h), _NONE) != 0u { error += 1 }       // beginning
-    if unwrap(Str.index_of(s, w), _NONE) != 6u { error += 1 }       // end
-    if unwrap(Str.index_of(s, lo), _NONE) != 3u { error += 1 }      // middle
-    if unwrap(Str.index_of(s, xyz), _NONE) != _NONE { error += 1 }  // not found
-    if unwrap(Str.index_of(s, e), _NONE) != 0u { error += 1 }       // empty needle -> 0
+    if unwrap(Str.index_of(s, h), _NONE) != 0u { error += 1 }      // beginning
+    if unwrap(Str.index_of(s, w), _NONE) != 6u { error += 1 }      // end
+    if unwrap(Str.index_of(s, lo), _NONE) != 3u { error += 1 }     // middle
+    if unwrap(Str.index_of(s, xyz), _NONE) != _NONE { error += 1 } // not found
+    if unwrap(Str.index_of(s, e), _NONE) != 0u { error += 1 }      // empty needle -> 0
 
     // Needle longer than haystack
     big := Str.from_cstr(c"this is way too long")
@@ -1219,7 +1219,7 @@ test_iter() {
     error := 0
 
     // Sum bytes via for loop
-    s      := Str.from_cstr(c"abc")
+    s         := Str.from_cstr(c"abc")
     sum: UInt := 0u
     for b in Str s {
         sum = sum + b
@@ -1422,14 +1422,14 @@ test_strip_suffix() {
 
 test_from_bool() {
     error := 0
-    t     := Str.from_bool(1)
+    t     := Str.from_bool(true)
     cs    := Str.cstr(t.&)
     if c_strcmp(cs, c"true") != 0 { error += 1 }
     if Str.len(t) != 4u { error += 1 }
     if !Str._is_small(t) { error += 1 }
     Str.free(t.&)
 
-    f   := Str.from_bool(0)
+    f   := Str.from_bool(false)
     cs2 := Str.cstr(f.&)
     if c_strcmp(cs2, c"false") != 0 { error += 1 }
     if Str.len(f) != 5u { error += 1 }

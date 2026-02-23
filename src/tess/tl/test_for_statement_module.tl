@@ -16,5 +16,6 @@ main() {
     for it in Array.Indexed xs {
         sum = sum + it.value
     }
-    sum - 10u
+    // sum is UInt; main returns Int. Convert via comparison.
+    if sum == 10u {0} else {1}
 }

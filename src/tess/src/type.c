@@ -74,11 +74,13 @@ static inline tl_monotype_sized tl_monotype_children(tl_monotype *self) {
 // integer/float convertibility.  Factory functions create nullary, unary, and
 // variable-arity constructors.
 
-static THREAD_LOCAL allocator              *transient_allocator;   // initialized by tl_type_registry_create
-static THREAD_LOCAL u32                     substitute_gen = 1;   // generation counter for substitute cycle detection
-static THREAD_LOCAL u32                     hash_gen       = 1;   // generation counter for hash memoization
-static THREAD_LOCAL tl_type_constructor_inst *canonical_signed;    // canonical signed integer cons_inst (CLongLong)
-static THREAD_LOCAL tl_type_constructor_inst *canonical_unsigned;  // canonical unsigned integer cons_inst (CUnsignedLongLong)
+static THREAD_LOCAL allocator *transient_allocator; // initialized by tl_type_registry_create
+static THREAD_LOCAL u32        substitute_gen = 1;  // generation counter for substitute cycle detection
+static THREAD_LOCAL u32        hash_gen       = 1;  // generation counter for hash memoization
+static THREAD_LOCAL tl_type_constructor_inst
+  *canonical_signed; // canonical signed integer cons_inst (CLongLong)
+static THREAD_LOCAL tl_type_constructor_inst
+  *canonical_unsigned; // canonical unsigned integer cons_inst (CUnsignedLongLong)
 
 #define HASH_CYCLE_STACK_CAP 32
 
@@ -127,6 +129,7 @@ tl_type_registry *tl_type_registry_create(allocator *alloc, allocator *transient
         int   narrow;
         int   floating;
     } builtin_nullary[] = {
+    // clang-format off
 #define BUILTIN(n, s, u, w, f) {n, sizeof(n) - 1, s, u, w, f}
       //                     name                  signed unsigned narrow float
       BUILTIN("Void",                                0,    0,      0,    0),
@@ -157,6 +160,7 @@ tl_type_registry *tl_type_registry_create(allocator *alloc, allocator *transient
       BUILTIN("CLongDouble",                         0,    0,      0,    1),
 #undef BUILTIN
     };
+    // clang-format on
     for (u32 i = 0; i < sizeof builtin_nullary / sizeof builtin_nullary[0]; i++) {
         str name = (str){.big = {.buf = builtin_nullary[i].name, .len = builtin_nullary[i].len}};
         make_nullary_inst(self, name);
@@ -173,7 +177,7 @@ tl_type_registry *tl_type_registry_create(allocator *alloc, allocator *transient
         assert(p && tl_monotype_is_inst(p->type));
         canonical_signed = p->type->cons_inst;
 
-        p = tl_type_registry_get(self, S("CUnsignedLongLong"));
+        p                = tl_type_registry_get(self, S("CUnsignedLongLong"));
         assert(p && tl_monotype_is_inst(p->type));
         canonical_unsigned = p->type->cons_inst;
     }

@@ -1,6 +1,7 @@
 #module main
 #import <stdio.tl>
 #import <stdint.tl>
+#import <Unsafe.tl>
 
 main() {
     error := 0
@@ -12,18 +13,17 @@ main() {
     error += if 1u == sizeof(ui8) {0} else {1}
     error += if 0377u == ui8 {0} else {1} // 0 prefix: octal, like C
 
-    i8: CInt8 := sz
+    i8: CInt8 := Unsafe.unsigned_to_signed(sz)
     error += if 1u == sizeof(i8) {0} else {1}
-    error += if - 1 == i8 {0} else {1}
+    error += if i8 == -1 {0} else {1}
 
     ui16: CUInt16 := sz
     error += if 2u == sizeof(ui16) {0} else {1}
     error += if 0xffffu == ui16 {0} else {1} // 0x prefix: hex, like C
 
-    i16: CInt16 := sz
+    i16: CInt16 := Unsafe.unsigned_to_signed(sz)
     error += if 2u == sizeof(i16) {0} else {1}
     error += if - 1 == i16 {0} else {1}
 
-    // return error
     error
 }
