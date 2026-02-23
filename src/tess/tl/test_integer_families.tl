@@ -87,24 +87,15 @@ test_option_unsigned_family() {
     error
 }
 
-// --- 5. Same-family Option canonicalization ---
+// --- 5. Same-family type assignment ---
 
-// Option[CInt] should produce the same monomorphization as Option[Int]
-// because CInt canonicalizes to Int (CLongLong) during unification.
-accept_option_int(o: Option[Int]) -> Int {
-    when o {
-        s: Some { s.v }
-        n: None { -1 }
-    }
-}
-
-test_option_canonicalization() {
+// CInt value can be assigned to Int variable (same signed family).
+test_signed_family_assignment() {
     error := 0
 
-    // Pass Option[CInt] where Option[Int] is expected — same signed family
     x: CInt := 77
-    opt     := Some(x)
-    error += if accept_option_int(opt) == 77 {0} else {1}
+    y: Int  := x
+    error += if y == 77 {0} else {1}
 
     error
 }
@@ -131,7 +122,7 @@ main() {
     error += test_unsigned_unification()
     error += test_option_signed_family()
     error += test_option_unsigned_family()
-    error += test_option_canonicalization()
+    error += test_signed_family_assignment()
     error += test_sizeof_unsigned()
 
     error

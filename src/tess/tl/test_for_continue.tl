@@ -4,7 +4,7 @@
 // Test continue statement in for loop
 // Sum only values less than 5
 main() {
-    xs := Array.init(0, 10)
+    xs := Array.init(0, 10u)
 
     // Initialize array with values 0..9
     i := 0

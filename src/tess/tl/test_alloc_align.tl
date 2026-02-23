@@ -11,10 +11,10 @@ main() {
     error += if sizeof[Ptr[Void]]() >= sizeof[CSize]() {0} else {1}
 
     if sizeof[Ptr[Void]]() < max_align {
-        error += if Alloc.align_max(sizeof[Ptr[Void]]() + 1) == max_align {0} else {1}
+        error += if Alloc.align_max(sizeof[Ptr[Void]]() + 1u) == max_align {0} else {1}
     }
     else {
-        error += if Alloc.align_max(max_align + 1) == 2 * max_align {0} else {1}
+        error += if Alloc.align_max(max_align + 1u) == 2u * max_align {0} else {1}
     }
     error
 }

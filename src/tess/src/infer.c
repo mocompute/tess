@@ -1548,17 +1548,14 @@ static int infer_binary_op(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
         if (constrain(self, node->type, left->type, node)) return 1;
         if (constrain(self, left->type, right->type, node)) return 1;
     } else if (is_bitwise_operator(op)) {
-        tl_monotype *int_type = tl_type_registry_int(self->registry);
-        if (constrain_pm(self, left->type, int_type, node)) return 1;
-        if (constrain_pm(self, right->type, int_type, node)) return 1;
-        if (constrain_pm(self, node->type, int_type, node)) return 1;
+        // Bitwise operators: operands must match each other (same integer family).
+        if (constrain(self, node->type, left->type, node)) return 1;
+        if (constrain(self, left->type, right->type, node)) return 1;
     } else if (is_logical_operator(op) || is_relational_operator(op)) {
         tl_monotype *bool_type = tl_type_registry_bool(self->registry);
         if (constrain_pm(self, node->type, bool_type, node)) return 1;
         if (constrain(self, left->type, right->type, node)) return 1;
     } else if (is_index_operator(op)) {
-        tl_monotype *int_type = tl_type_registry_int(self->registry);
-        if (constrain_pm(self, right->type, int_type, node)) return 1;
 
         // needed
         tl_monotype_substitute(self->arena, left->type->type, self->subs, null);

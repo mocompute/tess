@@ -2,7 +2,7 @@
 #import <stdlib.tl>
 
 main() {
-    p: Ptr[Int] := c_malloc(16)
+    p: Ptr[Int] := c_malloc(16u)
     p.[0] = 123
     pp := p.&
 

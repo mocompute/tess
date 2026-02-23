@@ -24,6 +24,7 @@ typedef struct {
     int       is_variable_args; // non-zero if type allows a variable number of arguments, e.g. Union(...)
     int       is_signed_integer;      // unifies with other signed integers, canonical: Int
     int       is_unsigned_integer;    // unifies with other unsigned integers, canonical: UInt
+    int       is_narrow_integer;     // same-family unification OK, but do NOT canonicalize (char/byte/fixed-width)
     int       is_float_convertible;   // the type is implicitly convertible to any other float type
 } tl_type_constructor_def;
 

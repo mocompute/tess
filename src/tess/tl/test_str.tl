@@ -4,12 +4,15 @@
 #import <stdio.tl>
 #import <string.tl>
 
+// Sentinel for unwrapping Option[UInt] — any value impossible as a valid index.
+_NONE: UInt := 9999u
+
 // -- Construction and basic queries --
 
 test_empty() {
     error := 0
     s     := Str.empty()
-    if Str.len(s) != 0 { error += 1 }
+    if Str.len(s) != 0u { error += 1 }
     if !Str.is_empty(s) { error += 1 }
     error
 }
@@ -17,7 +20,7 @@ test_empty() {
 test_from_cstr_small() {
     error := 0
     s     := Str.from_cstr(c"hello")
-    if Str.len(s) != 5 { error += 1 }
+    if Str.len(s) != 5u { error += 1 }
     if Str.is_empty(s) { error += 1 }
     Str.free(s.&)
     error
@@ -26,7 +29,7 @@ test_from_cstr_small() {
 test_from_cstr_big() {
     error := 0
     s     := Str.from_cstr(c"this is a longer string!!")
-    if Str.len(s) != 25 { error += 1 }
+    if Str.len(s) != 25u { error += 1 }
     if Str.is_empty(s) { error += 1 }
     Str.free(s.&)
     error
@@ -35,19 +38,19 @@ test_from_cstr_big() {
 test_from_bytes() {
     error      := 0
     p: CString := c"hello"
-    s          := Str.from_bytes(p, 5)
-    if Str.len(s) != 5 { error += 1 }
+    s          := Str.from_bytes(p, 5u)
+    if Str.len(s) != 5u { error += 1 }
     Str.free(s.&)
 
     // With embedded null
     p2: CString := c"ab\0cd"
-    s2          := Str.from_bytes(p2, 5)
-    if Str.len(s2) != 5 { error += 1 }
+    s2          := Str.from_bytes(p2, 5u)
+    if Str.len(s2) != 5u { error += 1 }
     Str.free(s2.&)
 
     // n=0 -> empty
-    s3 := Str.from_bytes(p, 0)
-    if Str.len(s3) != 0 { error += 1 }
+    s3 := Str.from_bytes(p, 0u)
+    if Str.len(s3) != 0u { error += 1 }
     if !Str.is_empty(s3) { error += 1 }
     Str.free(s3.&)
 
@@ -58,10 +61,10 @@ test_copy_small() {
     error := 0
     s     := Str.from_cstr(c"hello")
     c     := Str.copy(s)
-    if Str.len(c) != 5 { error += 1 }
+    if Str.len(c) != 5u { error += 1 }
     // Should be independent
     Str.free(s.&)
-    if Str.len(c) != 5 { error += 1 }
+    if Str.len(c) != 5u { error += 1 }
     Str.free(c.&)
     error
 }
@@ -70,9 +73,9 @@ test_copy_big() {
     error := 0
     s     := Str.from_cstr(c"this is a longer string!!")
     c     := Str.copy(s)
-    if Str.len(c) != 25 { error += 1 }
+    if Str.len(c) != 25u { error += 1 }
     Str.free(s.&)
-    if Str.len(c) != 25 { error += 1 }
+    if Str.len(c) != 25u { error += 1 }
     Str.free(c.&)
     error
 }
@@ -81,7 +84,7 @@ test_copy_empty() {
     error := 0
     e     := Str.empty()
     c     := Str.copy(e)
-    if Str.len(c) != 0 { error += 1 }
+    if Str.len(c) != 0u { error += 1 }
     if !Str.is_empty(c) { error += 1 }
     Str.free(c.&)
     error
@@ -234,8 +237,8 @@ test_contains() {
 test_contains_byte() {
     error := 0
     s     := Str.from_cstr(c"hello")
-    if !Str.contains_byte(s, 104) { error += 1 } // 'h'
-    if Str.contains_byte(s, 122) { error += 1 }  // 'z'
+    if !Str.contains_byte(s, 104u) { error += 1 } // 'h'
+    if Str.contains_byte(s, 122u) { error += 1 }  // 'z'
     Str.free(s.&)
 
     // Empty string
@@ -252,7 +255,7 @@ test_cat_small_small() {
     a     := Str.from_cstr(c"hi")
     b     := Str.from_cstr(c" there")
     c     := Str.cat(a, b)
-    if Str.len(c) != 8 { error += 1 }
+    if Str.len(c) != 8u { error += 1 }
     cs := Str.cstr(c.&)
     if c_strcmp(cs, c"hi there") != 0 { error += 1 }
     Str.free(c.&)
@@ -260,7 +263,7 @@ test_cat_small_small() {
     // empty + x
     e  := Str.empty()
     r1 := Str.cat(e, a)
-    if Str.len(r1) != 2 { error += 1 }
+    if Str.len(r1) != 2u { error += 1 }
     cs1 := Str.cstr(r1.&)
     if c_strcmp(cs1, c"hi") != 0 { error += 1 }
     Str.free(r1.&)
@@ -273,7 +276,7 @@ test_cat_small_small() {
 
     // empty + empty
     r3 := Str.cat(e, e)
-    if Str.len(r3) != 0 { error += 1 }
+    if Str.len(r3) != 0u { error += 1 }
     Str.free(r3.&)
 
     Str.free(a.&)
@@ -286,7 +289,7 @@ test_cat_to_big() {
     a     := Str.from_cstr(c"hello ")
     b     := Str.from_cstr(c"beautiful world!")
     c     := Str.cat(a, b)
-    if Str.len(c) != 22 { error += 1 }
+    if Str.len(c) != 22u { error += 1 }
     cs := Str.cstr(c.&)
     if c_strcmp(cs, c"hello beautiful world!") != 0 { error += 1 }
     Str.free(a.&)
@@ -300,7 +303,7 @@ test_push() {
     s     := Str.from_cstr(c"hello")
     b     := Str.from_cstr(c" world")
     Str.push(s.&, b)
-    if Str.len(s) != 11 { error += 1 }
+    if Str.len(s) != 11u { error += 1 }
     cs := Str.cstr(s.&)
     if c_strcmp(cs, c"hello world") != 0 { error += 1 }
     Str.free(s.&)
@@ -332,7 +335,7 @@ test_cat_4() {
     r     := Str.cat_4(a, b, c, d)
     cs    := Str.cstr(r.&)
     if c_strcmp(cs, c"one two three four") != 0 { error += 1 }
-    if Str.len(r) != 18 { error += 1 }
+    if Str.len(r) != 18u { error += 1 }
     Str.free(a.&)
     Str.free(b.&)
     Str.free(c.&)
@@ -346,9 +349,9 @@ test_cat_4() {
 test_byte_at() {
     error := 0
     s     := Str.from_cstr(c"abc")
-    if unwrap(Str.byte_at(s, 0), 0) != 97 { error += 1 } // 'a'
-    if unwrap(Str.byte_at(s, 1), 0) != 98 { error += 1 } // 'b'
-    if unwrap(Str.byte_at(s, 2), 0) != 99 { error += 1 } // 'c'
+    if unwrap(Str.byte_at(s, 0u), 0u) != 97u { error += 1 } // 'a'
+    if unwrap(Str.byte_at(s, 1u), 0u) != 98u { error += 1 } // 'b'
+    if unwrap(Str.byte_at(s, 2u), 0u) != 99u { error += 1 } // 'c'
     Str.free(s.&)
     error
 }
@@ -356,23 +359,23 @@ test_byte_at() {
 test_slice() {
     error := 0
     s     := Str.from_cstr(c"hello world")
-    sub   := Str.slice(s, 6, 11)
-    if Str.len(sub) != 5 { error += 1 }
+    sub   := Str.slice(s, 6u, 11u)
+    if Str.len(sub) != 5u { error += 1 }
     cs := Str.cstr(sub.&)
     if c_strcmp(cs, c"world") != 0 { error += 1 }
 
     // Empty slice
-    e := Str.slice(s, 3, 3)
-    if Str.len(e) != 0 { error += 1 }
+    e := Str.slice(s, 3u, 3u)
+    if Str.len(e) != 0u { error += 1 }
 
     // Full string slice
-    full := Str.slice(s, 0, 11)
+    full := Str.slice(s, 0u, 11u)
     csf  := Str.cstr(full.&)
     if c_strcmp(csf, c"hello world") != 0 { error += 1 }
     Str.free(full.&)
 
     // Slice from start
-    head := Str.slice(s, 0, 5)
+    head := Str.slice(s, 0u, 5u)
     csh  := Str.cstr(head.&)
     if c_strcmp(csh, c"hello") != 0 { error += 1 }
     Str.free(head.&)
@@ -388,21 +391,21 @@ test_slice() {
 test_index_of_byte() {
     error := 0
     s     := Str.from_cstr(c"hello")
-    if Str.index_of_byte(s, 108) != 2 { error += 1 }  // 'l'
-    if Str.index_of_byte(s, 111) != 4 { error += 1 }  // 'o'
-    if Str.index_of_byte(s, 122) != -1 { error += 1 } // 'z' not found
+    if unwrap(Str.index_of_byte(s, 108u), _NONE) != 2u { error += 1 }  // 'l'
+    if unwrap(Str.index_of_byte(s, 111u), _NONE) != 4u { error += 1 }  // 'o'
+    if unwrap(Str.index_of_byte(s, 122u), _NONE) != _NONE { error += 1 } // 'z' not found
 
     // First byte
-    if Str.index_of_byte(s, 'h') != 0 { error += 1 }
+    if unwrap(Str.index_of_byte(s, 'h'), _NONE) != 0u { error += 1 }
 
     // Last byte
-    if Str.index_of_byte(s, 'o') != 4 { error += 1 }
+    if unwrap(Str.index_of_byte(s, 'o'), _NONE) != 4u { error += 1 }
 
     Str.free(s.&)
 
     // Empty string
     e := Str.empty()
-    if Str.index_of_byte(e, 'a') != -1 { error += 1 }
+    if unwrap(Str.index_of_byte(e, 'a'), _NONE) != _NONE { error += 1 }
 
     error
 }
@@ -470,17 +473,17 @@ test_sso_boundary() {
     error := 0
     // 14 bytes should be small
     s14 := Str.from_cstr(c"12345678901234")
-    if Str.len(s14) != 14 { error += 1 }
+    if Str.len(s14) != 14u { error += 1 }
     if !Str._is_small(s14) { error += 1 }
     cs14 := Str.cstr(s14.&)
     if c_strcmp(cs14, c"12345678901234") != 0 { error += 1 }
     // Verify cstr() didn't corrupt the string
-    if Str.len(s14) != 14 { error += 1 }
+    if Str.len(s14) != 14u { error += 1 }
     if !Str._is_small(s14) { error += 1 }
 
     // 15 bytes should be big
     s15 := Str.from_cstr(c"123456789012345")
-    if Str.len(s15) != 15 { error += 1 }
+    if Str.len(s15) != 15u { error += 1 }
     if Str._is_small(s15) { error += 1 }
     cs15 := Str.cstr(s15.&)
     if c_strcmp(cs15, c"123456789012345") != 0 { error += 1 }
@@ -494,7 +497,7 @@ test_sso_boundary() {
 test_replace_byte() {
     error := 0
     s     := Str.from_cstr(c"hello")
-    r     := Str.replace_byte(s, 108, 114) // 'l' -> 'r'
+    r     := Str.replace_byte(s, 108u, 114u) // 'l' -> 'r'
     cs    := Str.cstr(r.&)
     if c_strcmp(cs, c"herro") != 0 { error += 1 }
     Str.free(r.&)
@@ -510,7 +513,7 @@ test_replace_byte() {
     // Empty string input
     e  := Str.empty()
     re := Str.replace_byte(e, 'a', 'b')
-    if Str.len(re) != 0 { error += 1 }
+    if Str.len(re) != 0u { error += 1 }
     Str.free(re.&)
 
     // All bytes matching
@@ -528,14 +531,14 @@ test_replace_byte() {
 
 test_from_byte() {
     error := 0
-    s     := Str.from_byte(65)          // 'A'
-    if Str.len(s) != 1 { error += 1 }
-    if unwrap(Str.byte_at(s, 0), 0) != 65 { error += 1 }
+    s     := Str.from_byte(65u)          // 'A'
+    if Str.len(s) != 1u { error += 1 }
+    if unwrap(Str.byte_at(s, 0u), 0u) != 65u { error += 1 }
     Str.free(s.&)
 
-    s2 := Str.from_byte(122)            // 'z'
-    if Str.len(s2) != 1 { error += 1 }
-    if unwrap(Str.byte_at(s2, 0), 0) != 122 { error += 1 }
+    s2 := Str.from_byte(122u)            // 'z'
+    if Str.len(s2) != 1u { error += 1 }
+    if unwrap(Str.byte_at(s2, 0u), 0u) != 122u { error += 1 }
     Str.free(s2.&)
     error
 }
@@ -563,15 +566,15 @@ test_index_of() {
     xyz   := Str.from_cstr(c"xyz")
     e     := Str.empty()
 
-    if Str.index_of(s, h) != 0 { error += 1 }    // beginning
-    if Str.index_of(s, w) != 6 { error += 1 }    // end
-    if Str.index_of(s, lo) != 3 { error += 1 }   // middle
-    if Str.index_of(s, xyz) != -1 { error += 1 } // not found
-    if Str.index_of(s, e) != 0 { error += 1 }    // empty needle -> 0
+    if unwrap(Str.index_of(s, h), _NONE) != 0u { error += 1 }       // beginning
+    if unwrap(Str.index_of(s, w), _NONE) != 6u { error += 1 }       // end
+    if unwrap(Str.index_of(s, lo), _NONE) != 3u { error += 1 }      // middle
+    if unwrap(Str.index_of(s, xyz), _NONE) != _NONE { error += 1 }  // not found
+    if unwrap(Str.index_of(s, e), _NONE) != 0u { error += 1 }       // empty needle -> 0
 
     // Needle longer than haystack
     big := Str.from_cstr(c"this is way too long")
-    if Str.index_of(h, big) != -1 { error += 1 }
+    if unwrap(Str.index_of(h, big), _NONE) != _NONE { error += 1 }
 
     Str.free(s.&)
     Str.free(h.&)
@@ -587,17 +590,17 @@ test_index_of_byte_from() {
     s     := Str.from_cstr(c"hello")
 
     // Skip first 'l' at index 2, find second 'l' at index 3
-    if Str.index_of_byte_from(s, 108, 3) != 3 { error += 1 }
+    if unwrap(Str.index_of_byte_from(s, 108u, 3u), _NONE) != 3u { error += 1 }
 
     // Start at match position
-    if Str.index_of_byte_from(s, 108, 2) != 2 { error += 1 }
+    if unwrap(Str.index_of_byte_from(s, 108u, 2u), _NONE) != 2u { error += 1 }
 
     // Start past all occurrences
-    if Str.index_of_byte_from(s, 108, 4) != -1 { error += 1 }
+    if unwrap(Str.index_of_byte_from(s, 108u, 4u), _NONE) != _NONE { error += 1 }
 
     // Start >= len
-    if Str.index_of_byte_from(s, 108, 5) != -1 { error += 1 }
-    if Str.index_of_byte_from(s, 108, 100) != -1 { error += 1 }
+    if unwrap(Str.index_of_byte_from(s, 108u, 5u), _NONE) != _NONE { error += 1 }
+    if unwrap(Str.index_of_byte_from(s, 108u, 100u), _NONE) != _NONE { error += 1 }
 
     Str.free(s.&)
     error
@@ -608,20 +611,20 @@ test_last_index_of_byte() {
     s     := Str.from_cstr(c"hello")
 
     // Multiple 'l' - finds last at index 3
-    if Str.last_index_of_byte(s, 108) != 3 { error += 1 }
+    if unwrap(Str.last_index_of_byte(s, 108u), _NONE) != 3u { error += 1 }
 
     // Single 'h' at index 0
-    if Str.last_index_of_byte(s, 104) != 0 { error += 1 }
+    if unwrap(Str.last_index_of_byte(s, 104u), _NONE) != 0u { error += 1 }
 
     // Single 'o' at end
-    if Str.last_index_of_byte(s, 111) != 4 { error += 1 }
+    if unwrap(Str.last_index_of_byte(s, 111u), _NONE) != 4u { error += 1 }
 
     // Not found
-    if Str.last_index_of_byte(s, 122) != -1 { error += 1 }
+    if unwrap(Str.last_index_of_byte(s, 122u), _NONE) != _NONE { error += 1 }
 
     // Empty string
     e := Str.empty()
-    if Str.last_index_of_byte(e, 97) != -1 { error += 1 }
+    if unwrap(Str.last_index_of_byte(e, 97u), _NONE) != _NONE { error += 1 }
 
     Str.free(s.&)
     error
@@ -634,26 +637,26 @@ test_last_index_of() {
     e     := Str.empty()
 
     // Repeated pattern - finds last
-    if Str.last_index_of(s, abc) != 6 { error += 1 }
+    if unwrap(Str.last_index_of(s, abc), _NONE) != 6u { error += 1 }
 
     // Empty needle -> len(s)
-    if Str.last_index_of(s, e) != 9 { error += 1 }
+    if unwrap(Str.last_index_of(s, e), _NONE) != 9u { error += 1 }
 
     // Not found
     xyz := Str.from_cstr(c"xyz")
-    if Str.last_index_of(s, xyz) != -1 { error += 1 }
+    if unwrap(Str.last_index_of(s, xyz), _NONE) != _NONE { error += 1 }
 
     // Needle longer than haystack
     short := Str.from_cstr(c"ab")
     long  := Str.from_cstr(c"abcdef")
-    if Str.last_index_of(short, long) != -1 { error += 1 }
+    if unwrap(Str.last_index_of(short, long), _NONE) != _NONE { error += 1 }
     Str.free(short.&)
     Str.free(long.&)
 
     // Single occurrence
     hw := Str.from_cstr(c"hello world")
     w  := Str.from_cstr(c"world")
-    if Str.last_index_of(hw, w) != 6 { error += 1 }
+    if unwrap(Str.last_index_of(hw, w), _NONE) != 6u { error += 1 }
     Str.free(hw.&)
     Str.free(w.&)
 
@@ -695,7 +698,7 @@ test_to_upper() {
     // Empty
     e  := Str.empty()
     re := Str.to_upper(e)
-    if Str.len(re) != 0 { error += 1 }
+    if Str.len(re) != 0u { error += 1 }
     Str.free(re.&)
 
     Str.free(s.&)
@@ -738,7 +741,7 @@ test_to_lower() {
     // Empty
     e  := Str.empty()
     re := Str.to_lower(e)
-    if Str.len(re) != 0 { error += 1 }
+    if Str.len(re) != 0u { error += 1 }
     Str.free(re.&)
 
     Str.free(s.&)
@@ -769,14 +772,14 @@ test_trim_left() {
     // All whitespace
     s3 := Str.from_cstr(c"   ")
     r3 := Str.trim_left(s3)
-    if Str.len(r3) != 0 { error += 1 }
+    if Str.len(r3) != 0u { error += 1 }
     Str.free(r3.&)
     Str.free(s3.&)
 
     // Empty string
     e  := Str.empty()
     re := Str.trim_left(e)
-    if Str.len(re) != 0 { error += 1 }
+    if Str.len(re) != 0u { error += 1 }
     Str.free(re.&)
 
     error
@@ -804,14 +807,14 @@ test_trim_right() {
     // All whitespace
     s3 := Str.from_cstr(c"   ")
     r3 := Str.trim_right(s3)
-    if Str.len(r3) != 0 { error += 1 }
+    if Str.len(r3) != 0u { error += 1 }
     Str.free(r3.&)
     Str.free(s3.&)
 
     // Empty string
     e  := Str.empty()
     re := Str.trim_right(e)
-    if Str.len(re) != 0 { error += 1 }
+    if Str.len(re) != 0u { error += 1 }
     Str.free(re.&)
 
     error
@@ -839,14 +842,14 @@ test_trim() {
     // All whitespace
     s3 := Str.from_cstr(c"   ")
     r3 := Str.trim(s3)
-    if Str.len(r3) != 0 { error += 1 }
+    if Str.len(r3) != 0u { error += 1 }
     Str.free(r3.&)
     Str.free(s3.&)
 
     // Empty
     e  := Str.empty()
     re := Str.trim(e)
-    if Str.len(re) != 0 { error += 1 }
+    if Str.len(re) != 0u { error += 1 }
     Str.free(re.&)
 
     // Tabs and newlines
@@ -865,21 +868,21 @@ test_repeat() {
 
     // Basic repeat
     s  := Str.from_cstr(c"ab")
-    r  := Str.repeat(s, 3)
+    r  := Str.repeat(s, 3u)
     cs := Str.cstr(r.&)
     if c_strcmp(cs, c"ababab") != 0 { error += 1 }
-    if Str.len(r) != 6 { error += 1 }
+    if Str.len(r) != 6u { error += 1 }
     Str.free(r.&)
     Str.free(s.&)
 
     // count=0 -> empty
     s2 := Str.from_cstr(c"hello")
-    r2 := Str.repeat(s2, 0)
-    if Str.len(r2) != 0 { error += 1 }
+    r2 := Str.repeat(s2, 0u)
+    if Str.len(r2) != 0u { error += 1 }
     Str.free(r2.&)
 
     // count=1 -> copy
-    r3  := Str.repeat(s2, 1)
+    r3  := Str.repeat(s2, 1u)
     cs3 := Str.cstr(r3.&)
     if c_strcmp(cs3, c"hello") != 0 { error += 1 }
     Str.free(r3.&)
@@ -887,26 +890,19 @@ test_repeat() {
 
     // Empty string
     e  := Str.empty()
-    re := Str.repeat(e, 5)
-    if Str.len(re) != 0 { error += 1 }
+    re := Str.repeat(e, 5u)
+    if Str.len(re) != 0u { error += 1 }
     Str.free(re.&)
 
     // SSO boundary crossing: 5 bytes * 3 = 15 > 14 (SSO max)
     s4 := Str.from_cstr(c"12345")
-    r4 := Str.repeat(s4, 3)
-    if Str.len(r4) != 15 { error += 1 }
+    r4 := Str.repeat(s4, 3u)
+    if Str.len(r4) != 15u { error += 1 }
     if Str._is_small(r4) { error += 1 } // should be big
     cs4 := Str.cstr(r4.&)
     if c_strcmp(cs4, c"123451234512345") != 0 { error += 1 }
     Str.free(r4.&)
     Str.free(s4.&)
-
-    // Negative count -> empty
-    s5 := Str.from_cstr(c"hello")
-    r5 := Str.repeat(s5, -1)
-    if Str.len(r5) != 0 { error += 1 }
-    Str.free(r5.&)
-    Str.free(s5.&)
 
     error
 }
@@ -979,7 +975,7 @@ test_replace() {
     old6 := Str.from_cstr(c"-")
     new6 := Str.from_cstr(c"-----")
     r6   := Str.replace(s6, old6, new6)
-    if Str.len(r6) != 16 { error += 1 }
+    if Str.len(r6) != 16u { error += 1 }
     if Str._is_small(r6) { error += 1 }
     cs6 := Str.cstr(r6.&)
     if c_strcmp(cs6, c"ab-----cd-----ef") != 0 { error += 1 }
@@ -993,7 +989,7 @@ test_replace() {
     old7 := Str.from_cstr(c"x")
     new7 := Str.from_cstr(c"y")
     r7   := Str.replace(s7, old7, new7)
-    if Str.len(r7) != 0 { error += 1 }
+    if Str.len(r7) != 0u { error += 1 }
     Str.free(r7.&)
     Str.free(new7.&)
     Str.free(old7.&)
@@ -1008,10 +1004,10 @@ test_split() {
     s   := Str.from_cstr(c"a,b,c")
     d   := Str.from_cstr(c",")
     arr := Str.split(s, d)
-    if arr.size != 3 { error += 1 }
-    e0 := Array.get(arr, 0)
-    e1 := Array.get(arr, 1)
-    e2 := Array.get(arr, 2)
+    if arr.size != 3u { error += 1 }
+    e0 := Array.get(arr, 0u)
+    e1 := Array.get(arr, 1u)
+    e2 := Array.get(arr, 2u)
     if !Str.eq_cstr(e0, c"a") { error += 1 }
     if !Str.eq_cstr(e1, c"b") { error += 1 }
     if !Str.eq_cstr(e2, c"c") { error += 1 }
@@ -1024,10 +1020,10 @@ test_split() {
     s2   := Str.from_cstr(c"a,,b")
     d2   := Str.from_cstr(c",")
     arr2 := Str.split(s2, d2)
-    if arr2.size != 3 { error += 1 }
-    f0 := Array.get(arr2, 0)
-    f1 := Array.get(arr2, 1)
-    f2 := Array.get(arr2, 2)
+    if arr2.size != 3u { error += 1 }
+    f0 := Array.get(arr2, 0u)
+    f1 := Array.get(arr2, 1u)
+    f2 := Array.get(arr2, 2u)
     if !Str.eq_cstr(f0, c"a") { error += 1 }
     if !Str.is_empty(f1) { error += 1 }
     if !Str.eq_cstr(f2, c"b") { error += 1 }
@@ -1040,10 +1036,10 @@ test_split() {
     s3   := Str.from_cstr(c"a,b,")
     d3   := Str.from_cstr(c",")
     arr3 := Str.split(s3, d3)
-    if arr3.size != 3 { error += 1 }
-    g0 := Array.get(arr3, 0)
-    g1 := Array.get(arr3, 1)
-    g2 := Array.get(arr3, 2)
+    if arr3.size != 3u { error += 1 }
+    g0 := Array.get(arr3, 0u)
+    g1 := Array.get(arr3, 1u)
+    g2 := Array.get(arr3, 2u)
     if !Str.eq_cstr(g0, c"a") { error += 1 }
     if !Str.eq_cstr(g1, c"b") { error += 1 }
     if !Str.is_empty(g2) { error += 1 }
@@ -1056,8 +1052,8 @@ test_split() {
     e    := Str.empty()
     d4   := Str.from_cstr(c",")
     arr4 := Str.split(e, d4)
-    if arr4.size != 1 { error += 1 }
-    h0 := Array.get(arr4, 0)
+    if arr4.size != 1u { error += 1 }
+    h0 := Array.get(arr4, 0u)
     if !Str.is_empty(h0) { error += 1 }
     Str.free(h0.&)
     Array.free(arr4.&)
@@ -1067,10 +1063,10 @@ test_split() {
     s5   := Str.from_cstr(c"one::two::three")
     d5   := Str.from_cstr(c"::")
     arr5 := Str.split(s5, d5)
-    if arr5.size != 3 { error += 1 }
-    i0 := Array.get(arr5, 0)
-    i1 := Array.get(arr5, 1)
-    i2 := Array.get(arr5, 2)
+    if arr5.size != 3u { error += 1 }
+    i0 := Array.get(arr5, 0u)
+    i1 := Array.get(arr5, 1u)
+    i2 := Array.get(arr5, 2u)
     if !Str.eq_cstr(i0, c"one") { error += 1 }
     if !Str.eq_cstr(i1, c"two") { error += 1 }
     if !Str.eq_cstr(i2, c"three") { error += 1 }
@@ -1083,8 +1079,8 @@ test_split() {
     s6   := Str.from_cstr(c"hello")
     d6   := Str.from_cstr(c",")
     arr6 := Str.split(s6, d6)
-    if arr6.size != 1 { error += 1 }
-    j0 := Array.get(arr6, 0)
+    if arr6.size != 1u { error += 1 }
+    j0 := Array.get(arr6, 0u)
     if !Str.eq_cstr(j0, c"hello") { error += 1 }
     Str.free(j0.&)
     Array.free(arr6.&)
@@ -1095,10 +1091,10 @@ test_split() {
     s7   := Str.from_cstr(c",a,b")
     d7   := Str.from_cstr(c",")
     arr7 := Str.split(s7, d7)
-    if arr7.size != 3 { error += 1 }
-    k0 := Array.get(arr7, 0)
-    k1 := Array.get(arr7, 1)
-    k2 := Array.get(arr7, 2)
+    if arr7.size != 3u { error += 1 }
+    k0 := Array.get(arr7, 0u)
+    k1 := Array.get(arr7, 1u)
+    k2 := Array.get(arr7, 2u)
     if !Str.is_empty(k0) { error += 1 }
     if !Str.eq_cstr(k1, c"a") { error += 1 }
     if !Str.eq_cstr(k2, c"b") { error += 1 }
@@ -1161,7 +1157,7 @@ test_join() {
     arr4 := Array.empty[Str.Str]()
     sep4 := Str.from_cstr(c",")
     r4   := Str.join(sep4, arr4)
-    if Str.len(r4) != 0 { error += 1 }
+    if Str.len(r4) != 0u { error += 1 }
     Str.free(r4.&)
     Str.free(sep4.&)
     Array.free(arr4.&)
@@ -1207,7 +1203,7 @@ test_join() {
     Array.push(arr7.&, b7)
     sep7 := Str.from_cstr(c"-----")
     r7   := Str.join(sep7, arr7)        // "hello-----world" = 15 bytes
-    if Str.len(r7) != 15 { error += 1 }
+    if Str.len(r7) != 15u { error += 1 }
     if Str._is_small(r7) { error += 1 }
     cs7 := Str.cstr(r7.&)
     if c_strcmp(cs7, c"hello-----world") != 0 { error += 1 }
@@ -1223,13 +1219,13 @@ test_iter() {
     error := 0
 
     // Sum bytes via for loop
-    s   := Str.from_cstr(c"abc")
-    sum := 0
+    s      := Str.from_cstr(c"abc")
+    sum: UInt := 0u
     for b in Str s {
         sum = sum + b
     }
     // 'a'=97 + 'b'=98 + 'c'=99 = 294
-    if sum != 294 { error += 1 }
+    if sum != 294u { error += 1 }
 
     // Count iterations
     count := 0
@@ -1280,19 +1276,19 @@ test_count_byte() {
     s     := Str.from_cstr(c"hello")
 
     // Multiple occurrences: 'l' appears twice
-    if Str.count_byte(s, 'l') != 2 { error += 1 }
+    if Str.count_byte(s, 'l') != 2u { error += 1 }
 
     // Single occurrence
-    if Str.count_byte(s, 'h') != 1 { error += 1 }
+    if Str.count_byte(s, 'h') != 1u { error += 1 }
 
     // Zero occurrences
-    if Str.count_byte(s, 'z') != 0 { error += 1 }
+    if Str.count_byte(s, 'z') != 0u { error += 1 }
 
     Str.free(s.&)
 
     // Empty string
     e := Str.empty()
-    if Str.count_byte(e, 'a') != 0 { error += 1 }
+    if Str.count_byte(e, 'a') != 0u { error += 1 }
 
     error
 }
@@ -1303,43 +1299,43 @@ test_count() {
     // Non-overlapping matches: "ab" in "abababab" -> 4
     s  := Str.from_cstr(c"abababab")
     ab := Str.from_cstr(c"ab")
-    if Str.count(s, ab) != 4 { error += 1 }
+    if Str.count(s, ab) != 4u { error += 1 }
     Str.free(ab.&)
 
     // Non-overlapping: "abab" in "abababab" -> 2
     abab := Str.from_cstr(c"abab")
-    if Str.count(s, abab) != 2 { error += 1 }
+    if Str.count(s, abab) != 2u { error += 1 }
     Str.free(abab.&)
     Str.free(s.&)
 
     // Single match
     s2 := Str.from_cstr(c"hello world")
     w  := Str.from_cstr(c"world")
-    if Str.count(s2, w) != 1 { error += 1 }
+    if Str.count(s2, w) != 1u { error += 1 }
     Str.free(w.&)
 
     // No match
     xyz := Str.from_cstr(c"xyz")
-    if Str.count(s2, xyz) != 0 { error += 1 }
+    if Str.count(s2, xyz) != 0u { error += 1 }
     Str.free(xyz.&)
     Str.free(s2.&)
 
     // Needle longer than haystack
     short  := Str.from_cstr(c"ab")
     long_n := Str.from_cstr(c"abcdef")
-    if Str.count(short, long_n) != 0 { error += 1 }
+    if Str.count(short, long_n) != 0u { error += 1 }
     Str.free(short.&)
     Str.free(long_n.&)
 
     // Needle == haystack
     s3 := Str.from_cstr(c"hello")
-    if Str.count(s3, s3) != 1 { error += 1 }
+    if Str.count(s3, s3) != 1u { error += 1 }
     Str.free(s3.&)
 
     // Single-char needle matching all bytes
     s4 := Str.from_cstr(c"aaa")
     a2 := Str.from_cstr(c"a")
-    if Str.count(s4, a2) != 3 { error += 1 }
+    if Str.count(s4, a2) != 3u { error += 1 }
     Str.free(s4.&)
     Str.free(a2.&)
 
@@ -1368,7 +1364,7 @@ test_strip_prefix() {
 
     // Prefix == entire string -> empty
     r3 := Str.strip_prefix(s, s)
-    if Str.len(r3) != 0 { error += 1 }
+    if Str.len(r3) != 0u { error += 1 }
     Str.free(r3.&)
 
     Str.free(s.&)
@@ -1407,7 +1403,7 @@ test_strip_suffix() {
 
     // Suffix == entire string -> empty
     r3 := Str.strip_suffix(s, s)
-    if Str.len(r3) != 0 { error += 1 }
+    if Str.len(r3) != 0u { error += 1 }
     Str.free(r3.&)
 
     Str.free(s.&)
@@ -1429,14 +1425,14 @@ test_from_bool() {
     t     := Str.from_bool(1)
     cs    := Str.cstr(t.&)
     if c_strcmp(cs, c"true") != 0 { error += 1 }
-    if Str.len(t) != 4 { error += 1 }
+    if Str.len(t) != 4u { error += 1 }
     if !Str._is_small(t) { error += 1 }
     Str.free(t.&)
 
     f   := Str.from_bool(0)
     cs2 := Str.cstr(f.&)
     if c_strcmp(cs2, c"false") != 0 { error += 1 }
-    if Str.len(f) != 5 { error += 1 }
+    if Str.len(f) != 5u { error += 1 }
     if !Str._is_small(f) { error += 1 }
     Str.free(f.&)
 

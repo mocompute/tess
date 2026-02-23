@@ -144,8 +144,8 @@ main() {
 
     // ── Bitwise: ~ (unary, but included for completeness) ──
 
-    u: CUInt8 := 0
-    error += if ~u == 0xFF {0} else {1}
+    u: CUInt8 := 0u
+    error += if ~u == 0xFFu {0} else {1}
 
     // ── Bitwise: with variables ──
 

@@ -5,8 +5,8 @@
 // A generic type definition
 Arr[T]: {
     v:        Ptr[T],
-    size:     Int,
-    capacity: Int,
+    size:     UInt,
+    capacity: UInt,
 }
 
 // Annotation not required, but can be good for documentation: f is a function pointer (noted by the
@@ -23,8 +23,8 @@ map[U](f, arr) {
     // Iteration is with `while`, with an optional `, expr` update expression (note the comma) which activates
     // at the end of the loop. `continue` is supported with the same semantics as C. Collections can also
     // provide custom iteration functions which can be access with a `for` statement.
-    i := 0
-    while i < arr.size, i = i + 1 {
+    i := 0u
+    while i < arr.size, i = i + 1u {
         out.v.[i] = f(arr.v.[i])
     }
 
@@ -37,11 +37,11 @@ main() {
 
     // When constructing an object, all fields must be provided. But they may be assigned `void`, which leaves
     // them uninitialised, shown here for the purpose of an example.
-    vals := Arr(v: Ptr[Int] = c_malloc(sizeof[Int]() * 4), size = void, capacity = 4)
+    vals := Arr(v: Ptr[Int] = c_malloc(sizeof[Int]() * 4u), size = void, capacity = 4u)
 
     // Note that `:=` always defines a new variable. A plain `=` is used to assign to an existing variable (or
     // a field or indexed location).
-    vals.size  = 4
+    vals.size  = 4u
     vals.v.[0] = 0
     vals.v.[1] = 1
     vals.v.[2] = 2
@@ -52,15 +52,15 @@ main() {
 
     // Verify that map does not mutate its argument. Note that statements need not be separated by a newline,
     // any whitespace will do, or optional commas may be used.
-    sum := 0, i := 0
-    while i < vals.size, i = i + 1 {
+    sum := 0, i := 0u
+    while i < vals.size, i = i + 1u {
         sum = sum + vals.v.[i]
     }
     c_assert(sum == 6)
 
     // verify that map returns an array with mapped values
-    sum := 0, i := 0
-    while i < vals.size, i = i + 1 {
+    sum := 0, i := 0u
+    while i < vals.size, i = i + 1u {
         sum = sum + res.v.[i]
     }
     c_assert(sum == 10)

@@ -4,10 +4,10 @@
 
 Point[a]: { x: a, y: a, next: Ptr[Point[a]] }
 
-make_points(count) { Array.with_capacity[Point[Int]](count) }
+make_points(count: UInt) { Array.with_capacity[Point[Int]](count) }
 
 main() {
-    points := make_points(8)
+    points := make_points(8u)
 
     Array.push(points.&, Point(x = 0, y = 1, next = null))
     Array.push(points.&, Point(x = 2, y = 3, next = points.v.[0].&))

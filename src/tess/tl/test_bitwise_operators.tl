@@ -20,9 +20,9 @@ main() {
     error += if (0xFF ^ 0xFF) == 0 {0} else {1}
 
     // Test bitwise NOT (~) - note: inverts all bits including sign
-    x: CUInt8 := 0
+    x: CUInt8 := 0u
     y         := ~x
-    error += if y == 0xFF {0} else {1}
+    error += if y == 0xFFu {0} else {1}
 
     // Test left shift (<<)
     error += if (1 << 4) == 16 {0} else {1}

@@ -19,7 +19,7 @@ read_point(p: Ptr[Const[Point]]) {
 
 main() {
     // Basic: const pointer to Int
-    p: Ptr[Int] := c_malloc(8)
+    p: Ptr[Int] := c_malloc(8u)
     p.* = 42
 
     // Implicit coercion: Ptr[Int] -> Ptr[Const[Int]]

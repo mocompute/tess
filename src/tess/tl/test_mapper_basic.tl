@@ -4,8 +4,8 @@
 
 Arr[a]: {
     v:        Ptr[a],
-    size:     Int,
-    capacity: Int,
+    size:     UInt,
+    capacity: UInt,
 }
 
 // This annotation is not required, but it is helpful for documentation: it reads: "`map` is a function of two arguments.
@@ -21,11 +21,11 @@ map(f, arr) {
     // Because `malloc` returns `void*`, the `: Ptr[b]` type annotation is required.
     out := Arr(v: Ptr[b] = c_malloc(sizeof[b]() * arr.size), size = arr.size, capacity = arr.size)
 
-    i := 0
+    i := 0u
     while i < arr.size {
         mapped := f(arr.v.[i])
         out.v.[i] = mapped
-        i         = i + 1
+        i         = i + 1u
     }
     out
 }
@@ -37,20 +37,20 @@ main() {
 
     error := 0
 
-    vals := Arr(v: Ptr[Int] = c_malloc(sizeof[Int]() * 4), size = 0, capacity = 4)
+    vals := Arr(v: Ptr[Int] = c_malloc(sizeof[Int]() * 4u), size = 0u, capacity = 4u)
 
     vals.v.[0] = 0
     vals.v.[1] = 1
     vals.v.[2] = 2
     vals.v.[3] = 3
-    vals.size  = 4
+    vals.size  = 4u
 
     res := map(add1/1, vals)
 
     // verify that map does not mutate its argument
     sum := 0
-    i   := 0
-    while i < vals.size, i = i + 1 {
+    i   := 0u
+    while i < vals.size, i = i + 1u {
         sum = sum + vals.v.[i]
     }
     c_assert(sum == 6)
@@ -58,25 +58,25 @@ main() {
 
     // verify that map returns an array with mapped values
     sum := 0
-    i   := 0
-    while i < vals.size, i = i + 1 {
+    i   := 0u
+    while i < vals.size, i = i + 1u {
         sum = sum + res.v.[i]
     }
     c_assert(sum == 10)
     error += sum - 10
 
 
-    floats := Arr(v: Ptr[Float] = c_malloc(sizeof[Float]() * 4), size = 0, capacity = 4)
+    floats := Arr(v: Ptr[Float] = c_malloc(sizeof[Float]() * 4u), size = 0u, capacity = 4u)
     floats.v.[0] = 0.0
     floats.v.[1] = 1.0
     floats.v.[2] = 2.0
     floats.v.[3] = 3.0
-    floats.size  = 4
+    floats.size  = 4u
 
     floats_res := map(add1f/1, floats)
     sum        := 0.0
-    i          := 0
-    while i < floats.size, i = i + 1 {
+    i          := 0u
+    while i < floats.size, i = i + 1u {
         sum = sum + floats_res.v.[i]
     }
 

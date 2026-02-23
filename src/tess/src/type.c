@@ -46,6 +46,7 @@ static void                      make_carray(tl_type_registry *);
 
 static void                      mark_signed_integer_type(tl_type_registry *, str);
 static void                      mark_unsigned_integer_type(tl_type_registry *, str);
+static void                      mark_narrow_integer_type(tl_type_registry *, str);
 static void                      mark_float_type(tl_type_registry *, str);
 
 // Forward declarations for post-resolution fixup
@@ -117,42 +118,43 @@ tl_type_registry *tl_type_registry_create(allocator *alloc, allocator *transient
     self->specialized      = map_create(self->alloc, sizeof(tl_monotype *), 1024); // key: registry_key
     self->type_aliases     = map_new(self->alloc, str, tl_polytype *, 1024);
 
-    // Nullary built-in types: {name, signed_int, unsigned_int, floating}
+    // Nullary built-in types: {name, signed_int, unsigned_int, narrow, floating}
     static const struct {
         char *name;
         u32   len;
         int   signed_int;
         int   unsigned_int;
+        int   narrow;
         int   floating;
     } builtin_nullary[] = {
-#define BUILTIN(n, s, u, f) {n, sizeof(n) - 1, s, u, f}
-      //                     name                  signed unsigned float
-      BUILTIN("Void",                                0,    0,      0),
-      BUILTIN("Bool",                                1,    0,      0),
-      BUILTIN("CChar",                               0,    1,      0),
-      BUILTIN("CUnsignedChar",                       0,    1,      0),
-      BUILTIN("CSignedChar",                         1,    0,      0),
-      BUILTIN("CShort",                              1,    0,      0),
-      BUILTIN("CUnsignedShort",                      0,    1,      0),
-      BUILTIN("CInt",                                1,    0,      0),
-      BUILTIN("CUnsignedInt",                        0,    1,      0),
-      BUILTIN("CLong",                               1,    0,      0),
-      BUILTIN("CUnsignedLong",                       0,    1,      0),
-      BUILTIN("CLongLong",                           1,    0,      0),
-      BUILTIN("CUnsignedLongLong",                   0,    1,      0),
-      BUILTIN("CSize",                               0,    1,      0),
-      BUILTIN("CPtrDiff",                            1,    0,      0),
-      BUILTIN("CInt8",                               1,    0,      0),
-      BUILTIN("CUInt8",                              0,    1,      0),
-      BUILTIN("CInt16",                              1,    0,      0),
-      BUILTIN("CUInt16",                             0,    1,      0),
-      BUILTIN("CInt32",                              1,    0,      0),
-      BUILTIN("CUInt32",                             0,    1,      0),
-      BUILTIN("CInt64",                              1,    0,      0),
-      BUILTIN("CUInt64",                             0,    1,      0),
-      BUILTIN("CFloat",                              0,    0,      1),
-      BUILTIN("CDouble",                             0,    0,      1),
-      BUILTIN("CLongDouble",                         0,    0,      1),
+#define BUILTIN(n, s, u, w, f) {n, sizeof(n) - 1, s, u, w, f}
+      //                     name                  signed unsigned narrow float
+      BUILTIN("Void",                                0,    0,      0,    0),
+      BUILTIN("Bool",                                0,    0,      0,    0),
+      BUILTIN("CChar",                               0,    1,      1,    0),
+      BUILTIN("CUnsignedChar",                       0,    1,      1,    0),
+      BUILTIN("CSignedChar",                         1,    0,      1,    0),
+      BUILTIN("CShort",                              1,    0,      0,    0),
+      BUILTIN("CUnsignedShort",                      0,    1,      0,    0),
+      BUILTIN("CInt",                                1,    0,      0,    0),
+      BUILTIN("CUnsignedInt",                        0,    1,      0,    0),
+      BUILTIN("CLong",                               1,    0,      0,    0),
+      BUILTIN("CUnsignedLong",                       0,    1,      0,    0),
+      BUILTIN("CLongLong",                           1,    0,      0,    0),
+      BUILTIN("CUnsignedLongLong",                   0,    1,      0,    0),
+      BUILTIN("CSize",                               0,    1,      0,    0),
+      BUILTIN("CPtrDiff",                            1,    0,      0,    0),
+      BUILTIN("CInt8",                               1,    0,      1,    0),
+      BUILTIN("CUInt8",                              0,    1,      1,    0),
+      BUILTIN("CInt16",                              1,    0,      1,    0),
+      BUILTIN("CUInt16",                             0,    1,      1,    0),
+      BUILTIN("CInt32",                              1,    0,      1,    0),
+      BUILTIN("CUInt32",                             0,    1,      1,    0),
+      BUILTIN("CInt64",                              1,    0,      1,    0),
+      BUILTIN("CUInt64",                             0,    1,      1,    0),
+      BUILTIN("CFloat",                              0,    0,      0,    1),
+      BUILTIN("CDouble",                             0,    0,      0,    1),
+      BUILTIN("CLongDouble",                         0,    0,      0,    1),
 #undef BUILTIN
     };
     for (u32 i = 0; i < sizeof builtin_nullary / sizeof builtin_nullary[0]; i++) {
@@ -160,6 +162,7 @@ tl_type_registry *tl_type_registry_create(allocator *alloc, allocator *transient
         make_nullary_inst(self, name);
         if (builtin_nullary[i].signed_int) mark_signed_integer_type(self, name);
         if (builtin_nullary[i].unsigned_int) mark_unsigned_integer_type(self, name);
+        if (builtin_nullary[i].narrow) mark_narrow_integer_type(self, name);
         if (builtin_nullary[i].floating) mark_float_type(self, name);
     }
 
@@ -316,6 +319,12 @@ static void mark_unsigned_integer_type(tl_type_registry *self, str name) {
     tl_polytype *poly = tl_type_registry_get(self, name);
     if (!poly || !tl_monotype_is_inst(poly->type)) fatal("logic error");
     tl_monotype_set_unsigned_integer(poly->type);
+}
+
+static void mark_narrow_integer_type(tl_type_registry *self, str name) {
+    tl_polytype *poly = tl_type_registry_get(self, name);
+    if (!poly || !tl_monotype_is_inst(poly->type)) fatal("logic error");
+    poly->type->cons_inst->def->is_narrow_integer = 1;
 }
 
 static void mark_float_type(tl_type_registry *self, str name) {
@@ -2568,14 +2577,20 @@ int tl_type_subs_unify_mono(tl_type_subs *subs, tl_monotype *left, tl_monotype *
 
     // Same-family integer types unify and canonicalize to the family's canonical type.
     // Cross-family (signed vs unsigned) is a type error.
+    // Narrow integer types (char, byte, fixed-width) unify within their family but are NOT canonicalized,
+    // preserving their specific C type in codegen.
     if (tl_monotype_is_signed_integer(left) && tl_monotype_is_signed_integer(right)) {
-        left->cons_inst  = canonical_signed;
-        right->cons_inst = canonical_signed;
+        if (!left->cons_inst->def->is_narrow_integer && !right->cons_inst->def->is_narrow_integer) {
+            left->cons_inst  = canonical_signed;
+            right->cons_inst = canonical_signed;
+        }
         return 0;
     }
     if (tl_monotype_is_unsigned_integer(left) && tl_monotype_is_unsigned_integer(right)) {
-        left->cons_inst  = canonical_unsigned;
-        right->cons_inst = canonical_unsigned;
+        if (!left->cons_inst->def->is_narrow_integer && !right->cons_inst->def->is_narrow_integer) {
+            left->cons_inst  = canonical_unsigned;
+            right->cons_inst = canonical_unsigned;
+        }
         return 0;
     }
 

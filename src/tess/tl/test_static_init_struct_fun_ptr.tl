@@ -16,7 +16,7 @@ allocator := Ctx(malloc_fun = malloc/1)
 #import <stdlib.tl>
 
 main() {
-    p := Foo.allocator.malloc_fun(16)
+    p := Foo.allocator.malloc_fun(16u)
     c_free(p)
     0
 }

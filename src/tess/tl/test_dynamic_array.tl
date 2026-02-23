@@ -5,11 +5,11 @@
 Point[a]: { x: a, y: a                            }
 Rect [a]: { topleft: Point[a], botright: Point[a] }
 
-make_points(count) { Array.with_capacity[Point[Int]](count) }
+make_points(count: UInt) { Array.with_capacity[Point[Int]](count) }
 make_rects ()      { Array.empty[Rect[Int]]()               }
 
 main() {
-    points := make_points(8)
+    points := make_points(8u)
     rects  := make_rects()
 
     Array.push(points.&, Point(x = 0, y = 1))

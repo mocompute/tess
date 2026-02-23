@@ -9,13 +9,13 @@ main() {
 
     // Test alignof with primitive types
     // CChar typically has alignment of 1
-    error += if alignof[CChar]() >= 1 {0} else {1}
+    error += if alignof[CChar]() >= 1u {0} else {1}
 
     // Int typically has alignment >= 4
-    error += if alignof[Int]() >= 4 {0} else {1}
+    error += if alignof[Int]() >= 4u {0} else {1}
 
     // Pointer alignment (typically 4 on 32-bit, 8 on 64-bit)
-    error += if alignof[Ptr[Int]]() >= 4 {0} else {1}
+    error += if alignof[Ptr[Int]]() >= 4u {0} else {1}
 
     // Test alignof with struct type
     // Struct alignment should be at least as large as its largest member
@@ -27,10 +27,10 @@ main() {
     error += if sizeof[Ptr[Void]]() >= alignof[Ptr[Void]]() {0} else {1}
 
     // Test alignof with fixed-width types
-    error += if alignof[CInt8]() >= 1 {0} else {1}
-    error += if alignof[CInt16]() >= 2 {0} else {1}
-    error += if alignof[CInt32]() >= 4 {0} else {1}
-    error += if alignof[CInt64]() >= 4 {0} else {1} // 8 on most 64-bit platforms
+    error += if alignof[CInt8]() >= 1u {0} else {1}
+    error += if alignof[CInt16]() >= 2u {0} else {1}
+    error += if alignof[CInt32]() >= 4u {0} else {1}
+    error += if alignof[CInt64]() >= 4u {0} else {1} // 8 on most 64-bit platforms
 
     error
 }

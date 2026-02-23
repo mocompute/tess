@@ -2,19 +2,19 @@
 #import <Array.tl>
 
 main() {
-    xs := Array.with_capacity_undefined[Int](4)
+    xs := Array.with_capacity_undefined[UInt](4u)
 
     // Note: the for statement refers to the Array.Indexed module defined in <Array.tl>.
     // Iterator modules may define arbitrary fields on the iterator, such as `index` in this example.
     // By using `it.&` the caller signals its desire to get a mutable iterator.
     // See the section `Iterator interface` in <Array-tutorial.tl> for more documentation.
     for it.& in Array.Indexed xs {
-        it.ptr.* = it.index + 1
+        it.ptr.* = it.index + 1u
     }
 
-    sum := 0
+    sum := 0u
     for it in Array.Indexed xs {
         sum = sum + it.value
     }
-    sum - 10
+    sum - 10u
 }

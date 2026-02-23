@@ -1,10 +1,9 @@
 #module main
 
-// Helper: narrows Int to Byte range, returning Option[Byte]
-narrowing(x: Int) -> Option[Byte] {
+// Helper: narrows Int to small range, returning Option[Int]
+narrowing(x: Int) -> Option[Int] {
     if x < -128 || x > 255 { return None() }
-    b: Byte := x
-    Some(b)
+    Some(x)
 }
 
 // Helper: returns Some(a - b) if a >= b, else None
