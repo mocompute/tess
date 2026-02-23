@@ -112,6 +112,86 @@ test_sizeof_unsigned() {
     error
 }
 
+// --- 7. Narrow types preserve their C ABI type ---
+
+// Narrow types (CInt8, CUInt8, etc.) unify within their family but are not
+// canonicalized, preserving their specific C type in codegen.
+test_narrow_signed() {
+    error := 0
+
+    x: CInt8 := 42
+    y: Int   := x    // narrow signed -> canonical signed: same family, OK
+    error += if y == 42 {0} else {1}
+
+    // CInt8 preserves its size (1 byte) despite unifying with Int
+    error += if sizeof[CInt8]() == 1u {0} else {1}
+
+    a: CInt16 := 1000
+    b: Int    := a
+    error += if b == 1000 {0} else {1}
+    error += if sizeof[CInt16]() == 2u {0} else {1}
+
+    error
+}
+
+test_narrow_unsigned() {
+    error := 0
+
+    x: CUInt8 := 200u
+    y: UInt   := x    // narrow unsigned -> canonical unsigned: same family, OK
+    error += if y == 200u {0} else {1}
+
+    error += if sizeof[CUInt8]() == 1u {0} else {1}
+
+    a: CUInt16 := 50000u
+    b: UInt    := a
+    error += if b == 50000u {0} else {1}
+    error += if sizeof[CUInt16]() == 2u {0} else {1}
+
+    error
+}
+
+// --- 8. Non-canonical family members ---
+
+// CLong, CShort, etc. are signed-family members distinct from the canonical CLongLong.
+// CUnsignedLong, CUnsignedShort are unsigned-family members distinct from CUnsignedLongLong.
+test_non_canonical_signed() {
+    error := 0
+
+    a: CShort := 123
+    b: Int    := a
+    error += if b == 123 {0} else {1}
+
+    c: CLong := 456
+    d: Int   := c
+    error += if d == 456 {0} else {1}
+
+    // CPtrDiff is signed
+    e: CPtrDiff := -10
+    f: Int      := e
+    error += if f == -10 {0} else {1}
+
+    error
+}
+
+test_non_canonical_unsigned() {
+    error := 0
+
+    a: CUnsignedShort := 123u
+    b: UInt           := a
+    error += if b == 123u {0} else {1}
+
+    c: CUnsignedLong := 456u
+    d: UInt          := c
+    error += if d == 456u {0} else {1}
+
+    e: CUnsignedInt := 789u
+    f: UInt         := e
+    error += if f == 789u {0} else {1}
+
+    error
+}
+
 // --- Main ---
 
 main() {
@@ -124,6 +204,10 @@ main() {
     error += test_option_unsigned_family()
     error += test_signed_family_assignment()
     error += test_sizeof_unsigned()
+    error += test_narrow_signed()
+    error += test_narrow_unsigned()
+    error += test_non_canonical_signed()
+    error += test_non_canonical_unsigned()
 
     error
 }

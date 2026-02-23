@@ -137,16 +137,16 @@ tl_type_registry *tl_type_registry_create(allocator *alloc, allocator *transient
       BUILTIN("CChar",                               0,    1,      1,    0),
       BUILTIN("CUnsignedChar",                       0,    1,      1,    0),
       BUILTIN("CSignedChar",                         1,    0,      1,    0),
-      BUILTIN("CShort",                              1,    0,      0,    0),
-      BUILTIN("CUnsignedShort",                      0,    1,      0,    0),
-      BUILTIN("CInt",                                1,    0,      0,    0),
-      BUILTIN("CUnsignedInt",                        0,    1,      0,    0),
-      BUILTIN("CLong",                               1,    0,      0,    0),
-      BUILTIN("CUnsignedLong",                       0,    1,      0,    0),
+      BUILTIN("CShort",                              1,    0,      1,    0),
+      BUILTIN("CUnsignedShort",                      0,    1,      1,    0),
+      BUILTIN("CInt",                                1,    0,      1,    0),
+      BUILTIN("CUnsignedInt",                        0,    1,      1,    0),
+      BUILTIN("CLong",                               1,    0,      1,    0),
+      BUILTIN("CUnsignedLong",                       0,    1,      1,    0),
       BUILTIN("CLongLong",                           1,    0,      0,    0),
       BUILTIN("CUnsignedLongLong",                   0,    1,      0,    0),
-      BUILTIN("CSize",                               0,    1,      0,    0),
-      BUILTIN("CPtrDiff",                            1,    0,      0,    0),
+      BUILTIN("CSize",                               0,    1,      1,    0),
+      BUILTIN("CPtrDiff",                            1,    0,      1,    0),
       BUILTIN("CInt8",                               1,    0,      1,    0),
       BUILTIN("CUInt8",                              0,    1,      1,    0),
       BUILTIN("CInt16",                              1,    0,      1,    0),
@@ -281,6 +281,7 @@ static tl_type_constructor_def *make_tc_def(tl_type_registry *self, str name) {
     def->is_variable_args        = 0;
     def->is_signed_integer       = 0;
     def->is_unsigned_integer     = 0;
+    def->is_narrow_integer       = 0;
     def->is_float_convertible    = 0;
     return def;
 }
@@ -2579,10 +2580,12 @@ int tl_type_subs_unify_mono(tl_type_subs *subs, tl_monotype *left, tl_monotype *
     // act as if the correct number of `any` types are present as required to unify with the target tuple.
     if (tl_monotype_is_ellipsis(left) || tl_monotype_is_ellipsis(right)) return 0;
 
-    // Same-family integer types unify and canonicalize to the family's canonical type.
+    // Same-family integer types unify within their family.
     // Cross-family (signed vs unsigned) is a type error.
-    // Narrow integer types (char, byte, fixed-width) unify within their family but are NOT canonicalized,
-    // preserving their specific C type in codegen.
+    // Only non-narrow types (CLongLong, CUnsignedLongLong) are canonicalized in-place.
+    // All other C integer types are narrow: they unify within their family but preserve their
+    // specific C ABI type in codegen (e.g. CSize stays size_t, CInt stays int).
+    // Dual monomorphization is prevented by using Int/UInt consistently in Tess-facing stdlib code.
     if (tl_monotype_is_signed_integer(left) && tl_monotype_is_signed_integer(right)) {
         if (!left->cons_inst->def->is_narrow_integer && !right->cons_inst->def->is_narrow_integer) {
             left->cons_inst  = canonical_signed;

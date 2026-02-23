@@ -565,6 +565,10 @@ TL_FAIL_TESTS =					\
 	fail_import_absolute			\
 	fail_import_missing_quotes		\
 	fail_integer_cross_family		\
+	fail_integer_cross_family_arithmetic	\
+	fail_integer_cross_family_assignment	\
+	fail_integer_cross_family_comparison	\
+	fail_integer_cross_family_unsigned_to_signed \
 	fail_lambda_implicit_return		\
 	fail_lambda_return			\
 	fail_monkey_patch			\

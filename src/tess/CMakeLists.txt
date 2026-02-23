@@ -530,6 +530,10 @@ tl_create_build_fail_test(fail_const_strip_nested)
 tl_create_build_fail_test(fail_import_absolute)
 tl_create_build_fail_test(fail_import_missing_quotes)
 tl_create_build_fail_test(fail_integer_cross_family)
+tl_create_build_fail_test(fail_integer_cross_family_arithmetic)
+tl_create_build_fail_test(fail_integer_cross_family_assignment)
+tl_create_build_fail_test(fail_integer_cross_family_comparison)
+tl_create_build_fail_test(fail_integer_cross_family_unsigned_to_signed)
 
 # Expected runtime failures (debug mode: compile succeeds, run must fail)
 
