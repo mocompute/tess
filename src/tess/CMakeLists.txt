@@ -529,6 +529,7 @@ tl_create_build_fail_test(fail_const_strip_lambda)
 tl_create_build_fail_test(fail_const_strip_nested)
 tl_create_build_fail_test(fail_import_absolute)
 tl_create_build_fail_test(fail_import_missing_quotes)
+tl_create_build_fail_test(fail_integer_cross_family)
 
 # Expected runtime failures (debug mode: compile succeeds, run must fail)
 

@@ -564,6 +564,7 @@ TL_FAIL_TESTS =					\
 	fail_generic_unused_type_param		\
 	fail_import_absolute			\
 	fail_import_missing_quotes		\
+	fail_integer_cross_family		\
 	fail_lambda_implicit_return		\
 	fail_lambda_return			\
 	fail_monkey_patch			\

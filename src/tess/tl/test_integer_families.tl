@@ -35,7 +35,7 @@ test_unsigned_literals() {
 
 // --- 2. Signed family unification ---
 
-// CInt and Int (CLongLong) are both signed — they should unify.
+// CInt and Int (CLongLong) are both signed — they should unify and canonicalize.
 test_signed_unification() {
     error := 0
 
@@ -48,7 +48,7 @@ test_signed_unification() {
 
 // --- 3. Unsigned family unification ---
 
-// CSize and CUnsignedLongLong (UInt) are both unsigned — they should unify.
+// CSize and CUnsignedLongLong (UInt) are both unsigned — they should unify and canonicalize.
 test_unsigned_unification() {
     error := 0
 
@@ -64,7 +64,7 @@ test_unsigned_unification() {
 test_option_signed_family() {
     error := 0
 
-    // Some(42) creates Option[Int], should work
+    // Some(42) creates Option[Int]
     opt := Some(42)
     error += when opt {
         s: Some { if s.v == 42 {0} else {1} }
@@ -87,26 +87,36 @@ test_option_unsigned_family() {
     error
 }
 
-// --- 5. Cross-family compatibility ---
+// --- 5. Same-family Option canonicalization ---
 
-// Signed integer literal assigned to CSize (unsigned) should still work
-test_cross_family() {
+// Option[CInt] should produce the same monomorphization as Option[Int]
+// because CInt canonicalizes to Int (CLongLong) during unification.
+accept_option_int(o: Option[Int]) -> Int {
+    when o {
+        s: Some { s.v }
+        n: None { -1 }
+    }
+}
+
+test_option_canonicalization() {
     error := 0
 
-    sz: CSize := 42
-    error += if sz == 42 {0} else {1}
+    // Pass Option[CInt] where Option[Int] is expected — same signed family
+    x: CInt := 77
+    opt     := Some(x)
+    error += if accept_option_int(opt) == 77 {0} else {1}
 
     error
 }
 
-// --- 6. Bool is distinct from integers ---
+// --- 6. sizeof returns CSize (unsigned), use with unsigned literals ---
 
-test_bool_distinct() {
+test_sizeof_unsigned() {
     error := 0
 
-    // Bool values are not integers
-    b := 1 == 1
-    error += if b {0} else {1}
+    // sizeof returns CSize (unsigned) — compare with unsigned literals
+    error += if sizeof[Int]() >= 8u {0} else {1}
+    error += if sizeof[UInt]() >= 8u {0} else {1}
 
     error
 }
@@ -121,8 +131,8 @@ main() {
     error += test_unsigned_unification()
     error += test_option_signed_family()
     error += test_option_unsigned_family()
-    error += test_cross_family()
-    error += test_bool_distinct()
+    error += test_option_canonicalization()
+    error += test_sizeof_unsigned()
 
     error
 }

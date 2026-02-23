@@ -73,9 +73,11 @@ static inline tl_monotype_sized tl_monotype_children(tl_monotype *self) {
 // integer/float convertibility.  Factory functions create nullary, unary, and
 // variable-arity constructors.
 
-static THREAD_LOCAL allocator *transient_allocator; // initialized by tl_type_registry_create
-static THREAD_LOCAL u32        substitute_gen = 1;  // generation counter for substitute cycle detection
-static THREAD_LOCAL u32        hash_gen       = 1;  // generation counter for hash memoization
+static THREAD_LOCAL allocator              *transient_allocator;   // initialized by tl_type_registry_create
+static THREAD_LOCAL u32                     substitute_gen = 1;   // generation counter for substitute cycle detection
+static THREAD_LOCAL u32                     hash_gen       = 1;   // generation counter for hash memoization
+static THREAD_LOCAL tl_type_constructor_inst *canonical_signed;    // canonical signed integer cons_inst (CLongLong)
+static THREAD_LOCAL tl_type_constructor_inst *canonical_unsigned;  // canonical unsigned integer cons_inst (CUnsignedLongLong)
 
 #define HASH_CYCLE_STACK_CAP 32
 
@@ -159,6 +161,18 @@ tl_type_registry *tl_type_registry_create(allocator *alloc, allocator *transient
         if (builtin_nullary[i].signed_int) mark_signed_integer_type(self, name);
         if (builtin_nullary[i].unsigned_int) mark_unsigned_integer_type(self, name);
         if (builtin_nullary[i].floating) mark_float_type(self, name);
+    }
+
+    // Cache canonical cons_inst pointers for integer family canonicalization during unification.
+    // Int = CLongLong (signed canonical), UInt = CUnsignedLongLong (unsigned canonical).
+    {
+        tl_polytype *p = tl_type_registry_get(self, S("CLongLong"));
+        assert(p && tl_monotype_is_inst(p->type));
+        canonical_signed = p->type->cons_inst;
+
+        p = tl_type_registry_get(self, S("CUnsignedLongLong"));
+        assert(p && tl_monotype_is_inst(p->type));
+        canonical_unsigned = p->type->cons_inst;
     }
 
     // Non-nullary built-in type constructors
@@ -2552,9 +2566,18 @@ int tl_type_subs_unify_mono(tl_type_subs *subs, tl_monotype *left, tl_monotype *
     // act as if the correct number of `any` types are present as required to unify with the target tuple.
     if (tl_monotype_is_ellipsis(left) || tl_monotype_is_ellipsis(right)) return 0;
 
-    // Integer-convertible types always unify (same or cross family).
-    // Same-family types canonicalize to the family's canonical type during unification.
-    if (tl_monotype_is_integer_convertible(left) && tl_monotype_is_integer_convertible(right)) return 0;
+    // Same-family integer types unify and canonicalize to the family's canonical type.
+    // Cross-family (signed vs unsigned) is a type error.
+    if (tl_monotype_is_signed_integer(left) && tl_monotype_is_signed_integer(right)) {
+        left->cons_inst  = canonical_signed;
+        right->cons_inst = canonical_signed;
+        return 0;
+    }
+    if (tl_monotype_is_unsigned_integer(left) && tl_monotype_is_unsigned_integer(right)) {
+        left->cons_inst  = canonical_unsigned;
+        right->cons_inst = canonical_unsigned;
+        return 0;
+    }
 
     // float-convertible types always unify
     if (tl_monotype_is_float_convertible(left) && tl_monotype_is_float_convertible(right)) return 0;
