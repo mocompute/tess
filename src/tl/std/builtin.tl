@@ -10,6 +10,7 @@ _tl_alignof_[T]()     -> CSize
 _tl_alignof_[T](x: T) -> CSize
 
 Int     = CLongLong
+UInt    = CUnsignedLongLong
 Float   = CDouble
 Byte    = CUnsignedChar
 CString = Ptr[CChar]

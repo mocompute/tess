@@ -744,6 +744,11 @@ start:; // loop point for skip_depth > 0
                 }
                 continue;
             case '_': continue;
+            case 'u':
+            case 'U':
+                // Unsigned suffix: consume it and stop the number
+                state = stop_number;
+                continue;
             case 'x':
             case 'X':
             case 'b':

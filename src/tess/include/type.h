@@ -22,7 +22,8 @@ typedef struct {
     str       generic_name;     // used to recover canonical name, eg Ptr_1 -> Ptr
     str_sized field_names;      // for user types
     int       is_variable_args; // non-zero if type allows a variable number of arguments, e.g. Union(...)
-    int       is_integer_convertible; // the type is implicitly convertible to any other integer type
+    int       is_signed_integer;      // unifies with other signed integers, canonical: Int
+    int       is_unsigned_integer;    // unifies with other unsigned integers, canonical: UInt
     int       is_float_convertible;   // the type is implicitly convertible to any other float type
 } tl_type_constructor_def;
 
@@ -156,9 +157,12 @@ int                    tl_monotype_arrow_has_arrow(tl_monotype *);
 int                    tl_monotype_has_ptr(tl_monotype *);
 int                    tl_monotype_is_union(tl_monotype *);
 int                    tl_monotype_is_tv(tl_monotype *);
+int                    tl_monotype_is_signed_integer(tl_monotype *);
+int                    tl_monotype_is_unsigned_integer(tl_monotype *);
 int                    tl_monotype_is_integer_convertible(tl_monotype *);
 int                    tl_monotype_is_float_convertible(tl_monotype *);
-void                   tl_monotype_set_integer_convertible(tl_monotype *);
+void                   tl_monotype_set_signed_integer(tl_monotype *);
+void                   tl_monotype_set_unsigned_integer(tl_monotype *);
 void                   tl_monotype_set_float_convertible(tl_monotype *);
 tl_monotype           *tl_monotype_unary_target(tl_monotype *);
 tl_monotype           *tl_monotype_ptr_target(tl_monotype *);

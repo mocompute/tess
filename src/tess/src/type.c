@@ -44,7 +44,8 @@ static tl_polytype              *make_generic_inst(tl_type_registry *, tl_type_c
                                                    tl_type_variable_sized);
 static void                      make_carray(tl_type_registry *);
 
-static void                      mark_integer_type(tl_type_registry *, str);
+static void                      mark_signed_integer_type(tl_type_registry *, str);
+static void                      mark_unsigned_integer_type(tl_type_registry *, str);
 static void                      mark_float_type(tl_type_registry *, str);
 
 // Forward declarations for post-resolution fixup
@@ -114,46 +115,49 @@ tl_type_registry *tl_type_registry_create(allocator *alloc, allocator *transient
     self->specialized      = map_create(self->alloc, sizeof(tl_monotype *), 1024); // key: registry_key
     self->type_aliases     = map_new(self->alloc, str, tl_polytype *, 1024);
 
-    // Nullary built-in types: {name, is_integer, is_float}
+    // Nullary built-in types: {name, signed_int, unsigned_int, floating}
     static const struct {
         char *name;
         u32   len;
-        int   integer;
+        int   signed_int;
+        int   unsigned_int;
         int   floating;
     } builtin_nullary[] = {
-#define BUILTIN(n, i, f) {n, sizeof(n) - 1, i, f}
-      BUILTIN("Void", 0, 0),
-      BUILTIN("Bool", 1, 0),
-      BUILTIN("CChar", 1, 0),
-      BUILTIN("CUnsignedChar", 1, 0),
-      BUILTIN("CSignedChar", 1, 0),
-      BUILTIN("CShort", 1, 0),
-      BUILTIN("CUnsignedShort", 1, 0),
-      BUILTIN("CInt", 1, 0),
-      BUILTIN("CUnsignedInt", 1, 0),
-      BUILTIN("CLong", 1, 0),
-      BUILTIN("CUnsignedLong", 1, 0),
-      BUILTIN("CLongLong", 1, 0),
-      BUILTIN("CUnsignedLongLong", 1, 0),
-      BUILTIN("CSize", 1, 0),
-      BUILTIN("CPtrDiff", 1, 0),
-      BUILTIN("CInt8", 1, 0),
-      BUILTIN("CUInt8", 1, 0),
-      BUILTIN("CInt16", 1, 0),
-      BUILTIN("CUInt16", 1, 0),
-      BUILTIN("CInt32", 1, 0),
-      BUILTIN("CUInt32", 1, 0),
-      BUILTIN("CInt64", 1, 0),
-      BUILTIN("CUInt64", 1, 0),
-      BUILTIN("CFloat", 0, 1),
-      BUILTIN("CDouble", 0, 1),
-      BUILTIN("CLongDouble", 0, 1),
+#define BUILTIN(n, s, u, f) {n, sizeof(n) - 1, s, u, f}
+      //                     name                  signed unsigned float
+      BUILTIN("Void",                                0,    0,      0),
+      BUILTIN("Bool",                                1,    0,      0),
+      BUILTIN("CChar",                               0,    1,      0),
+      BUILTIN("CUnsignedChar",                       0,    1,      0),
+      BUILTIN("CSignedChar",                         1,    0,      0),
+      BUILTIN("CShort",                              1,    0,      0),
+      BUILTIN("CUnsignedShort",                      0,    1,      0),
+      BUILTIN("CInt",                                1,    0,      0),
+      BUILTIN("CUnsignedInt",                        0,    1,      0),
+      BUILTIN("CLong",                               1,    0,      0),
+      BUILTIN("CUnsignedLong",                       0,    1,      0),
+      BUILTIN("CLongLong",                           1,    0,      0),
+      BUILTIN("CUnsignedLongLong",                   0,    1,      0),
+      BUILTIN("CSize",                               0,    1,      0),
+      BUILTIN("CPtrDiff",                            1,    0,      0),
+      BUILTIN("CInt8",                               1,    0,      0),
+      BUILTIN("CUInt8",                              0,    1,      0),
+      BUILTIN("CInt16",                              1,    0,      0),
+      BUILTIN("CUInt16",                             0,    1,      0),
+      BUILTIN("CInt32",                              1,    0,      0),
+      BUILTIN("CUInt32",                             0,    1,      0),
+      BUILTIN("CInt64",                              1,    0,      0),
+      BUILTIN("CUInt64",                             0,    1,      0),
+      BUILTIN("CFloat",                              0,    0,      1),
+      BUILTIN("CDouble",                             0,    0,      1),
+      BUILTIN("CLongDouble",                         0,    0,      1),
 #undef BUILTIN
     };
     for (u32 i = 0; i < sizeof builtin_nullary / sizeof builtin_nullary[0]; i++) {
         str name = (str){.big = {.buf = builtin_nullary[i].name, .len = builtin_nullary[i].len}};
         make_nullary_inst(self, name);
-        if (builtin_nullary[i].integer) mark_integer_type(self, name);
+        if (builtin_nullary[i].signed_int) mark_signed_integer_type(self, name);
+        if (builtin_nullary[i].unsigned_int) mark_unsigned_integer_type(self, name);
         if (builtin_nullary[i].floating) mark_float_type(self, name);
     }
 
@@ -254,7 +258,8 @@ static tl_type_constructor_def *make_tc_def(tl_type_registry *self, str name) {
     def->generic_name            = str_copy(self->alloc, name);
     def->field_names             = (str_sized){0};
     def->is_variable_args        = 0;
-    def->is_integer_convertible  = 0;
+    def->is_signed_integer       = 0;
+    def->is_unsigned_integer     = 0;
     def->is_float_convertible    = 0;
     return def;
 }
@@ -287,10 +292,16 @@ static void make_nullary_inst(tl_type_registry *self, str name) {
     tl_type_registry_specialize(self, name, blank, empty_mt);
 }
 
-static void mark_integer_type(tl_type_registry *self, str name) {
+static void mark_signed_integer_type(tl_type_registry *self, str name) {
     tl_polytype *poly = tl_type_registry_get(self, name);
     if (!poly || !tl_monotype_is_inst(poly->type)) fatal("logic error");
-    tl_monotype_set_integer_convertible(poly->type);
+    tl_monotype_set_signed_integer(poly->type);
+}
+
+static void mark_unsigned_integer_type(tl_type_registry *self, str name) {
+    tl_polytype *poly = tl_type_registry_get(self, name);
+    if (!poly || !tl_monotype_is_inst(poly->type)) fatal("logic error");
+    tl_monotype_set_unsigned_integer(poly->type);
 }
 
 static void mark_float_type(tl_type_registry *self, str name) {
@@ -496,6 +507,9 @@ tl_monotype *tl_type_registry_nil(tl_type_registry *self) {
 }
 tl_monotype *tl_type_registry_int(tl_type_registry *self) {
     return tl_type_registry_instantiate(self, S("Int"));
+}
+tl_monotype *tl_type_registry_uint(tl_type_registry *self) {
+    return tl_type_registry_instantiate(self, S("CUnsignedLongLong"));
 }
 tl_monotype *tl_type_registry_float(tl_type_registry *self) {
     return tl_type_registry_instantiate(self, S("Float"));
@@ -1954,16 +1968,27 @@ int tl_monotype_arrow_has_arrow(tl_monotype *self) {
     return has_arrow;
 }
 
+int tl_monotype_is_signed_integer(tl_monotype *self) {
+    return tl_monotype_is_inst(self) && self->cons_inst->def->is_signed_integer;
+}
+int tl_monotype_is_unsigned_integer(tl_monotype *self) {
+    return tl_monotype_is_inst(self) && self->cons_inst->def->is_unsigned_integer;
+}
 int tl_monotype_is_integer_convertible(tl_monotype *self) {
-    return tl_monotype_is_inst(self) && self->cons_inst->def->is_integer_convertible;
+    return tl_monotype_is_signed_integer(self) || tl_monotype_is_unsigned_integer(self);
 }
 int tl_monotype_is_float_convertible(tl_monotype *self) {
     return tl_monotype_is_inst(self) && self->cons_inst->def->is_float_convertible;
 }
 
-void tl_monotype_set_integer_convertible(tl_monotype *self) {
+void tl_monotype_set_signed_integer(tl_monotype *self) {
     if (!tl_monotype_is_inst(self)) fatal("logic error");
-    self->cons_inst->def->is_integer_convertible = 1;
+    self->cons_inst->def->is_signed_integer = 1;
+}
+
+void tl_monotype_set_unsigned_integer(tl_monotype *self) {
+    if (!tl_monotype_is_inst(self)) fatal("logic error");
+    self->cons_inst->def->is_unsigned_integer = 1;
 }
 
 void tl_monotype_set_float_convertible(tl_monotype *self) {
@@ -2527,7 +2552,8 @@ int tl_type_subs_unify_mono(tl_type_subs *subs, tl_monotype *left, tl_monotype *
     // act as if the correct number of `any` types are present as required to unify with the target tuple.
     if (tl_monotype_is_ellipsis(left) || tl_monotype_is_ellipsis(right)) return 0;
 
-    // integer-convertible types always unify
+    // Integer-convertible types always unify (same or cross family).
+    // Same-family types canonicalize to the family's canonical type during unification.
     if (tl_monotype_is_integer_convertible(left) && tl_monotype_is_integer_convertible(right)) return 0;
 
     // float-convertible types always unify

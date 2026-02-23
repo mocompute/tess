@@ -3377,8 +3377,8 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
     case ast_char:   return infer_literal_type(self, node, tl_type_registry_char);
     case ast_f64:    return infer_literal_type(self, node, tl_type_registry_float);
     case ast_i64:    return infer_literal_type(self, node, tl_type_registry_int);
-    case ast_u64: // FIXME unsigned
-        return infer_literal_type(self, node, tl_type_registry_int);
+    case ast_u64:
+        return infer_literal_type(self, node, tl_type_registry_uint);
     case ast_bool:      return infer_literal_type(self, node, tl_type_registry_bool);
     case ast_body:      return infer_body(self, node);
     case ast_case:      return infer_case(self, traverse_ctx, node);

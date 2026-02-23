@@ -408,6 +408,7 @@ TL_TESTS =					\
 	generic_lambda				\
 	global_variables			\
 	hello					\
+	integer_families			\
 	if_basic				\
 	if_expression				\
 	import_relative				\
