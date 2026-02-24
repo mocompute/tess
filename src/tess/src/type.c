@@ -552,6 +552,12 @@ tl_monotype *tl_type_registry_int(tl_type_registry *self) {
 tl_monotype *tl_type_registry_uint(tl_type_registry *self) {
     return tl_type_registry_instantiate(self, S("CUnsignedLongLong"));
 }
+tl_monotype *tl_type_registry_csize(tl_type_registry *self) {
+    return tl_type_registry_instantiate(self, S("CSize"));
+}
+tl_monotype *tl_type_registry_cptrdiff(tl_type_registry *self) {
+    return tl_type_registry_instantiate(self, S("CPtrDiff"));
+}
 tl_monotype *tl_type_registry_float(tl_type_registry *self) {
     return tl_type_registry_instantiate(self, S("Float"));
 }
@@ -1366,6 +1372,8 @@ void tl_polytype_list_append(allocator *alloc, tl_polytype *lhs, tl_polytype *rh
     case tl_ellipsis:
     case tl_var:
     case tl_weak:
+    case tl_weak_int_signed:
+    case tl_weak_int_unsigned:
     case tl_cons_inst:   array_push(arr, right); break;
     case tl_arrow:
     case tl_tuple:       array_push_many(arr, right->list.xs.v, right->list.xs.size); break;
@@ -1428,7 +1436,9 @@ static void replace_tv(tl_monotype *self, tl_type_subs *subs, hashmap **map, has
         if (replace) self->var = *replace;
     } break;
 
-    case tl_weak: {
+    case tl_weak:
+    case tl_weak_int_signed:
+    case tl_weak_int_unsigned: {
         // Every weak tv gets a fresh tv on instantiation.
         tl_type_variable *replace = map_get(*map, &self->var, sizeof self->var);
         if (replace) self->var = *replace;
@@ -1464,7 +1474,9 @@ static void replace_tv_mono(tl_monotype *self, tl_type_subs *subs, hashmap **map
     case tl_ellipsis:
     case tl_var:         break;
 
-    case tl_weak:        {
+    case tl_weak:
+    case tl_weak_int_signed:
+    case tl_weak_int_unsigned: {
         // Every weak tv gets a fresh tv on instantiation.
         tl_type_variable *replace = map_get(*map, &self->var, sizeof self->var);
         if (replace) self->var = *replace;
@@ -1601,7 +1613,9 @@ static void generalize(tl_monotype *self, tl_type_variable_array *quant, hashmap
         array_set_insert(*quant, self->var);
         break;
 
-    case tl_weak:      break;
+    case tl_weak:
+    case tl_weak_int_signed:
+    case tl_weak_int_unsigned: break;
 
     case tl_cons_inst:
     case tl_arrow:
@@ -1700,6 +1714,28 @@ nodiscard tl_monotype *tl_monotype_create_fresh_weak(tl_type_subs *self) {
     return tl_monotype_create_weak(self->data.alloc, tv);
 }
 
+tl_monotype *tl_monotype_create_weak_int_signed(allocator *alloc, tl_type_variable tv) {
+    tl_monotype *self = alloc_malloc(alloc, sizeof *self);
+    *self             = (tl_monotype){.tag = tl_weak_int_signed, .var = tv};
+    return self;
+}
+
+tl_monotype *tl_monotype_create_weak_int_unsigned(allocator *alloc, tl_type_variable tv) {
+    tl_monotype *self = alloc_malloc(alloc, sizeof *self);
+    *self             = (tl_monotype){.tag = tl_weak_int_unsigned, .var = tv};
+    return self;
+}
+
+nodiscard tl_monotype *tl_monotype_create_fresh_weak_int_signed(tl_type_subs *self) {
+    tl_type_variable tv = tl_type_subs_fresh(self);
+    return tl_monotype_create_weak_int_signed(self->data.alloc, tv);
+}
+
+nodiscard tl_monotype *tl_monotype_create_fresh_weak_int_unsigned(tl_type_subs *self) {
+    tl_type_variable tv = tl_type_subs_fresh(self);
+    return tl_monotype_create_weak_int_unsigned(self->data.alloc, tv);
+}
+
 tl_monotype *tl_type_registry_create_arrow(tl_type_registry *self, tl_monotype *lhs, tl_monotype *rhs) {
     tl_monotype      *left  = tl_monotype_clone(self->alloc, lhs);
     tl_monotype      *right = tl_monotype_clone(self->alloc, rhs);
@@ -1751,7 +1787,9 @@ static tl_monotype *tl_monotype_clone_(allocator *alloc, tl_monotype *orig, hash
     switch (orig->tag) {
 
     case tl_var:
-    case tl_weak: clone->var = orig->var; return clone;
+    case tl_weak:
+    case tl_weak_int_signed:
+    case tl_weak_int_unsigned: clone->var = orig->var; return clone;
 
     case tl_cons_inst:
         // copy the tl_type_constructor_inst struct
@@ -1803,6 +1841,8 @@ int tl_monotype_is_concrete_(tl_monotype *self, hashmap **seen) {
         return 1;
 
     case tl_weak:
+    case tl_weak_int_signed:
+    case tl_weak_int_unsigned:
         // consider weak type variables as concrete, which is *usually* what type inference client wants.
         // There are _no_weak variants, otherwise.
         return 1;
@@ -1846,7 +1886,9 @@ int tl_monotype_is_weak_(tl_monotype *self, hashmap **seen) {
     case tl_var:
     case tl_ellipsis:    return 0;
 
-    case tl_weak:        return 1;
+    case tl_weak:
+    case tl_weak_int_signed:
+    case tl_weak_int_unsigned: return 1;
 
     case tl_cons_inst:
         forall(i,
@@ -1894,6 +1936,18 @@ int tl_monotype_is_integer(tl_monotype *self) {
 }
 int tl_monotype_is_weak(tl_monotype *self) {
     return self && tl_weak == self->tag;
+}
+int tl_monotype_is_weak_int(tl_monotype *self) {
+    return self && (tl_weak_int_signed == self->tag || tl_weak_int_unsigned == self->tag);
+}
+int tl_monotype_is_weak_int_signed(tl_monotype *self) {
+    return self && tl_weak_int_signed == self->tag;
+}
+int tl_monotype_is_weak_int_unsigned(tl_monotype *self) {
+    return self && tl_weak_int_unsigned == self->tag;
+}
+int tl_monotype_is_any_weak(tl_monotype *self) {
+    return tl_monotype_is_weak(self) || tl_monotype_is_weak_int(self);
 }
 int tl_monotype_is_ellipsis(tl_monotype *self) {
     return self && tl_ellipsis == self->tag;
@@ -2201,7 +2255,9 @@ u64 tl_monotype_hash64_(tl_monotype *self, u32 gen, hash_cycle_stack *in_progres
     case tl_any:
     case tl_ellipsis:    break;
     case tl_var:
-    case tl_weak:        hash = hash64_combine(hash, &self->var, sizeof self->var); break;
+    case tl_weak:
+    case tl_weak_int_signed:
+    case tl_weak_int_unsigned: hash = hash64_combine(hash, &self->var, sizeof self->var); break;
 
     case tl_integer:     hash = hash64_combine(hash, &self->integer, sizeof self->integer); break;
 
@@ -2320,6 +2376,18 @@ str tl_monotype_to_string_(allocator *alloc, tl_monotype *self, hashmap **map) {
     case tl_weak: {
         char buf[64];
         snprintf(buf, sizeof buf, "w%u", self->var);
+        str_build_cat(&b, str_init(alloc, buf));
+    } break;
+
+    case tl_weak_int_signed: {
+        char buf[64];
+        snprintf(buf, sizeof buf, "ws%u", self->var);
+        str_build_cat(&b, str_init(alloc, buf));
+    } break;
+
+    case tl_weak_int_unsigned: {
+        char buf[64];
+        snprintf(buf, sizeof buf, "wu%u", self->var);
         str_build_cat(&b, str_init(alloc, buf));
     } break;
 
@@ -2469,6 +2537,12 @@ static int tl_type_subs_unify_tv_weak(tl_type_subs *, tl_type_variable, tl_monot
                                       void *, hashmap **seen);
 static int tl_type_subs_unify_weak(tl_type_subs *, tl_monotype *weak, tl_monotype *, type_error_cb_fun,
                                    void *, hashmap            **seen);
+static int tl_type_subs_unify_tv_weak_int(tl_type_subs *, tl_type_variable, tl_monotype *, type_error_cb_fun,
+                                          void *, hashmap **seen);
+static int tl_type_subs_unify_weak_int_concrete(tl_type_subs *, tl_monotype *weak_int, tl_monotype *concrete,
+                                                type_error_cb_fun, void *, hashmap **seen);
+static int unify_weak_int_other(tl_type_subs *, tl_monotype *weak_int, tl_monotype *other,
+                                type_error_cb_fun, void *, hashmap **seen);
 int        tl_type_subs_unify_tv_mono(tl_type_subs *self, tl_type_variable tv, tl_monotype *mono,
                                       type_error_cb_fun cb, void *user, hashmap **seen);
 int tl_type_subs_unify_mono(tl_type_subs *subs, tl_monotype *left, tl_monotype *right, type_error_cb_fun cb,
@@ -2498,6 +2572,9 @@ int unify_type_constructor_union(tl_type_subs *subs, tl_monotype *left, tl_monot
 
     case tl_var:         return tl_type_subs_unify_tv_mono(subs, right->var, left, cb, user, seen);
     case tl_weak:        return tl_type_subs_unify_weak(subs, right, left, cb, user, seen);
+    case tl_weak_int_signed:
+    case tl_weak_int_unsigned:
+        return tl_type_subs_unify_weak_int_concrete(subs, right, left, cb, user, seen);
 
     case tl_cons_inst:   {
         if (right->cons_inst->def->is_variable_args) {
@@ -2547,6 +2624,9 @@ int unify_type_constructor(tl_type_subs *subs, tl_monotype *left, tl_monotype *r
 
     case tl_var:         return tl_type_subs_unify_tv_mono(subs, right->var, left, cb, user, seen);
     case tl_weak:        return tl_type_subs_unify_weak(subs, right, left, cb, user, seen);
+    case tl_weak_int_signed:
+    case tl_weak_int_unsigned:
+        return tl_type_subs_unify_weak_int_concrete(subs, right, left, cb, user, seen);
 
     case tl_cons_inst:   {
 
@@ -2577,6 +2657,9 @@ static int unify_var_other(tl_type_subs *subs, tl_type_variable tv, tl_monotype 
     case tl_integer:     return 1;
     case tl_var:         return tl_type_subs_unity_tv_tv(subs, tv, other->var, cb, user, seen);
     case tl_weak:        return tl_type_subs_unify_tv_weak(subs, tv, other, cb, user, seen);
+    case tl_weak_int_signed:
+    case tl_weak_int_unsigned:
+        return tl_type_subs_unify_tv_weak_int(subs, tv, other, cb, user, seen);
     case tl_cons_inst:
     case tl_arrow:
     case tl_tuple:       return tl_type_subs_unify_tv_mono(subs, tv, other, cb, user, seen);
@@ -2594,6 +2677,9 @@ static int unify_weak_other(tl_type_subs *subs, tl_monotype *weak, tl_monotype *
     case tl_integer:     return 1;
     case tl_var:         return tl_type_subs_unify_tv_weak(subs, other->var, weak, cb, user, seen);
     case tl_weak:        return tl_type_subs_unity_tv_tv(subs, weak->var, other->var, cb, user, seen);
+    case tl_weak_int_signed:
+    case tl_weak_int_unsigned:
+        return 1; // error: pointer-weak meets integer-weak
     case tl_cons_inst:
     case tl_arrow:
     case tl_tuple:       return tl_type_subs_unify_weak(subs, weak, other, cb, user, seen);
@@ -2657,6 +2743,12 @@ int tl_type_subs_unify_mono(tl_type_subs *subs, tl_monotype *left, tl_monotype *
     if (tl_weak == left->tag) return unify_weak_other(subs, left, right, cb, user, seen);
     if (tl_weak == right->tag) return unify_weak_other(subs, right, left, cb, user, seen);
 
+    // Weak integer variables on either side
+    if (tl_weak_int_signed == left->tag || tl_weak_int_unsigned == left->tag)
+        return unify_weak_int_other(subs, left, right, cb, user, seen);
+    if (tl_weak_int_signed == right->tag || tl_weak_int_unsigned == right->tag)
+        return unify_weak_int_other(subs, right, left, cb, user, seen);
+
     // Remaining structural cases: both sides must have the same tag
     if (left->tag != right->tag) {
         if (cb) cb(user, left, right);
@@ -2673,6 +2765,8 @@ int tl_type_subs_unify_mono(tl_type_subs *subs, tl_monotype *left, tl_monotype *
     case tl_ellipsis:
     case tl_var:
     case tl_weak:
+    case tl_weak_int_signed:
+    case tl_weak_int_unsigned:
     case tl_cons_inst:   fatal("unreachable");
     }
     fatal("unreachable");
@@ -2733,7 +2827,9 @@ static int tl_type_subs_monotype_occurs_(tl_type_subs *self, tl_type_variable tv
     case tl_ellipsis:    return 0;
 
     case tl_var:
-    case tl_weak:        {
+    case tl_weak:
+    case tl_weak_int_signed:
+    case tl_weak_int_unsigned: {
         tl_type_variable root = uf_find(self, mono->var);
         if (root == tv) {
             return 1;
@@ -2838,6 +2934,95 @@ static int tl_type_subs_unify_weak(tl_type_subs *self, tl_monotype *weak, tl_mon
     return 0;
 }
 
+// Unify when one side is a weak integer variable (tl_weak_int_signed or tl_weak_int_unsigned)
+// and the other is a concrete type (tl_cons_inst).
+static int tl_type_subs_unify_weak_int_concrete(tl_type_subs *subs, tl_monotype *weak_int,
+                                                tl_monotype *concrete, type_error_cb_fun cb, void *user,
+                                                hashmap **seen) {
+    assert(tl_monotype_is_weak_int(weak_int));
+    assert(tl_monotype_is_inst(concrete));
+
+    tl_type_constructor_def *def = concrete->cons_inst->def;
+
+    // Check family: weak_int_signed requires signed integer, weak_int_unsigned requires unsigned integer.
+    if (tl_weak_int_signed == weak_int->tag) {
+        if (!def->is_signed_integer) {
+            if (cb) cb(user, weak_int, concrete);
+            return 1;
+        }
+    } else {
+        if (!def->is_unsigned_integer) {
+            if (cb) cb(user, weak_int, concrete);
+            return 1;
+        }
+    }
+
+    // Check standalone: standalone types (CSize, CPtrDiff, CChar) require explicit z/zu suffix.
+    if (def->integer_subchain >= TL_INTEGER_SUBCHAIN_CSIZE) {
+        if (cb) cb(user, weak_int, concrete);
+        return 1;
+    }
+
+    // Resolve: store the concrete type at the weak-int's root in union-find.
+    tl_type_variable root     = uf_find(subs, weak_int->var);
+    tl_monotype     *existing = subs->data.v[root].type;
+    if (existing) {
+        // recursive unify existing with concrete
+        if (tl_type_subs_unify_mono(subs, existing, concrete, cb, user, seen)) return 1;
+    }
+    subs->data.v[root].type = concrete;
+    return 0;
+}
+
+// Unify when a regular type variable meets a weak-int.
+// Same pattern as tl_type_subs_unify_tv_weak: store the weak-int at the tv's root.
+static int tl_type_subs_unify_tv_weak_int(tl_type_subs *self, tl_type_variable left, tl_monotype *right,
+                                          type_error_cb_fun cb, void *user, hashmap **seen) {
+    assert(tl_monotype_is_weak_int(right));
+
+    tl_type_variable left_root  = uf_find(self, left);
+
+    tl_monotype     *left_type  = self->data.v[left_root].type;
+    if (left_type) {
+        // tv is already resolved: must unify
+        if (tl_type_subs_unify_mono(self, left_type, right, cb, user, seen)) {
+            return 1;
+        }
+    }
+
+    // store the weak-int type at the root
+    self->data.v[left_root].type = right;
+
+    return 0;
+}
+
+// Unify when one side is a weak integer variable (tl_weak_int_signed or tl_weak_int_unsigned).
+static int unify_weak_int_other(tl_type_subs *subs, tl_monotype *weak_int, tl_monotype *other,
+                                type_error_cb_fun cb, void *user, hashmap **seen) {
+    switch (other->tag) {
+    case tl_placeholder: fatal("unreachable");
+    case tl_any:
+    case tl_ellipsis:    return 0;
+    case tl_integer:     return 1; // type-level integer, not value integer
+    case tl_var:         return tl_type_subs_unify_tv_weak_int(subs, other->var, weak_int, cb, user, seen);
+    case tl_weak:        return 1; // error: pointer-weak meets integer-weak
+    case tl_weak_int_signed:
+    case tl_weak_int_unsigned:
+        // same family? merge via tv_tv; different family? error
+        if (weak_int->tag == other->tag)
+            return tl_type_subs_unity_tv_tv(subs, weak_int->var, other->var, cb, user, seen);
+        if (cb) cb(user, weak_int, other);
+        return 1;
+    case tl_cons_inst:
+        return tl_type_subs_unify_weak_int_concrete(subs, weak_int, other, cb, user, seen);
+    case tl_arrow:
+    case tl_tuple:
+        if (cb) cb(user, weak_int, other);
+        return 1;
+    }
+    fatal("unreachable");
+}
+
 int tl_type_subs_unify_tv_mono(tl_type_subs *self, tl_type_variable tv, tl_monotype *mono,
                                type_error_cb_fun cb, void *user, hashmap **seen) {
     if (tl_type_subs_monotype_occurs(self, tv, mono)) return 1;
@@ -2858,6 +3043,10 @@ int tl_type_subs_unify_tv_mono(tl_type_subs *self, tl_type_variable tv, tl_monot
     case tl_weak:
         // case 2: one is weak type variable
         return tl_type_subs_unify_tv_weak(self, tv, mono, cb, user, seen);
+    case tl_weak_int_signed:
+    case tl_weak_int_unsigned:
+        // case 2b: one is weak integer type variable
+        return tl_type_subs_unify_tv_weak_int(self, tv, mono, cb, user, seen);
 
     case tl_integer:
     case tl_cons_inst:
@@ -2893,7 +3082,9 @@ static void tl_monotype_substitute_(allocator *alloc, tl_monotype *self, tl_type
     case tl_ellipsis:    break;
 
     case tl_var:
-    case tl_weak:        {
+    case tl_weak:
+    case tl_weak_int_signed:
+    case tl_weak_int_unsigned: {
 
         if (exclude && hset_contains(exclude, &self->var, sizeof self->var)) return;
         tl_type_variable root = uf_find((tl_type_subs *)subs, self->var);

@@ -90,6 +90,8 @@ tl_monotype *tl_type_registry_create_arrow(tl_type_registry *, tl_monotype *lhs,
 tl_monotype *tl_type_registry_nil(tl_type_registry *);
 tl_monotype *tl_type_registry_int(tl_type_registry *);
 tl_monotype *tl_type_registry_uint(tl_type_registry *);
+tl_monotype *tl_type_registry_csize(tl_type_registry *);
+tl_monotype *tl_type_registry_cptrdiff(tl_type_registry *);
 tl_monotype *tl_type_registry_float(tl_type_registry *);
 tl_monotype *tl_type_registry_bool(tl_type_registry *);
 tl_monotype *tl_type_registry_str(tl_type_registry *);

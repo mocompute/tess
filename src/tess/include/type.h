@@ -67,6 +67,8 @@ typedef struct tl_monotype {
         tl_integer,
         tl_var,
         tl_weak,
+        tl_weak_int_signed,
+        tl_weak_int_unsigned,
         tl_cons_inst,
         tl_arrow,
         tl_tuple,
@@ -131,6 +133,10 @@ nodiscard tl_monotype *tl_monotype_create_tv(allocator *, tl_type_variable) mall
 nodiscard tl_monotype *tl_monotype_create_fresh_tv(tl_type_subs *) mallocfun;
 nodiscard tl_monotype *tl_monotype_create_weak(allocator *, tl_type_variable) mallocfun;
 nodiscard tl_monotype *tl_monotype_create_fresh_weak(tl_type_subs *) mallocfun;
+nodiscard tl_monotype *tl_monotype_create_weak_int_signed(allocator *, tl_type_variable) mallocfun;
+nodiscard tl_monotype *tl_monotype_create_weak_int_unsigned(allocator *, tl_type_variable) mallocfun;
+nodiscard tl_monotype *tl_monotype_create_fresh_weak_int_signed(tl_type_subs *) mallocfun;
+nodiscard tl_monotype *tl_monotype_create_fresh_weak_int_unsigned(tl_type_subs *) mallocfun;
 nodiscard tl_monotype *tl_monotype_create_list(allocator *, tl_monotype_sized);
 nodiscard tl_monotype *tl_monotype_create_tuple(allocator *, tl_monotype_sized);
 nodiscard tl_monotype *tl_monotype_create_cons(allocator *, tl_type_constructor_inst *) mallocfun;
@@ -157,6 +163,10 @@ int                    tl_monotype_is_tuple(tl_monotype *);
 int                    tl_monotype_is_concrete(tl_monotype *);
 int                    tl_monotype_arrow_is_concrete(tl_monotype *);
 int                    tl_monotype_is_weak(tl_monotype *);
+int                    tl_monotype_is_weak_int(tl_monotype *);
+int                    tl_monotype_is_weak_int_signed(tl_monotype *);
+int                    tl_monotype_is_weak_int_unsigned(tl_monotype *);
+int                    tl_monotype_is_any_weak(tl_monotype *);
 int                    tl_monotype_is_weak_deep(tl_monotype *);
 int                    tl_monotype_sized_is_concrete(tl_monotype_sized);
 int                    tl_monotype_is_concrete_no_arrow(tl_monotype *); // constructed non-arrow type

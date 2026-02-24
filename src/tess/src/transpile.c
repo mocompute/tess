@@ -863,7 +863,7 @@ static str_array generate_args(transpile *self, ast_node_sized args, tl_monotype
 
 static int is_nil_result(tl_monotype *type) {
     return tl_monotype_is_void(type) || tl_monotype_is_tv(type) || tl_monotype_is_any(type) ||
-           tl_monotype_is_weak(type);
+           tl_monotype_is_weak(type) || tl_monotype_is_weak_int(type);
 }
 
 static int should_assign_result(eval_ctx *ctx, tl_monotype *type) {
@@ -2357,6 +2357,10 @@ static void generate_decl(transpile *self, str name, tl_monotype *type) {
 
     else if (tl_monotype_is_weak(type)) {
         fatal("got a weak variable");
+    }
+
+    else if (tl_monotype_is_weak_int(type)) {
+        fatal("got a weak integer variable");
     }
 
     else {

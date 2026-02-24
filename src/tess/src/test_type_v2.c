@@ -209,6 +209,120 @@ static int test_same_subchain(void) {
     return error;
 }
 
+// ---------------------------------------------------------------------------
+// Test: weak integer literal construction and predicates
+// ---------------------------------------------------------------------------
+static int test_weak_int_construction(void) {
+    int               error = 0;
+    tl_type_registry *reg   = test_registry();
+    tl_type_subs     *subs  = tl_type_subs_create(reg->alloc);
+
+    // Fresh weak-int signed
+    tl_monotype *ws = tl_monotype_create_fresh_weak_int_signed(subs);
+    error += !ws;
+    error += ws->tag != tl_weak_int_signed;
+
+    // Fresh weak-int unsigned
+    tl_monotype *wu = tl_monotype_create_fresh_weak_int_unsigned(subs);
+    error += !wu;
+    error += wu->tag != tl_weak_int_unsigned;
+
+    // Different type variables
+    error += ws->var == wu->var;
+
+    // Direct constructors
+    tl_monotype *ws2 = tl_monotype_create_weak_int_signed(reg->alloc, 42);
+    error += ws2->tag != tl_weak_int_signed;
+    error += ws2->var != 42;
+
+    tl_monotype *wu2 = tl_monotype_create_weak_int_unsigned(reg->alloc, 99);
+    error += wu2->tag != tl_weak_int_unsigned;
+    error += wu2->var != 99;
+
+    return error;
+}
+
+// ---------------------------------------------------------------------------
+// Test: weak integer predicates
+// ---------------------------------------------------------------------------
+static int test_weak_int_predicates(void) {
+    int               error = 0;
+    tl_type_registry *reg   = test_registry();
+    tl_type_subs     *subs  = tl_type_subs_create(reg->alloc);
+
+    tl_monotype *ws = tl_monotype_create_fresh_weak_int_signed(subs);
+    tl_monotype *wu = tl_monotype_create_fresh_weak_int_unsigned(subs);
+    tl_monotype *w  = tl_monotype_create_fresh_weak(subs);
+    tl_monotype *tv = tl_monotype_create_fresh_tv(subs);
+
+    // is_weak_int
+    error += !tl_monotype_is_weak_int(ws);
+    error += !tl_monotype_is_weak_int(wu);
+    error += tl_monotype_is_weak_int(w);
+    error += tl_monotype_is_weak_int(tv);
+
+    // is_weak_int_signed
+    error += !tl_monotype_is_weak_int_signed(ws);
+    error += tl_monotype_is_weak_int_signed(wu);
+    error += tl_monotype_is_weak_int_signed(w);
+
+    // is_weak_int_unsigned
+    error += tl_monotype_is_weak_int_unsigned(ws);
+    error += !tl_monotype_is_weak_int_unsigned(wu);
+    error += tl_monotype_is_weak_int_unsigned(w);
+
+    // is_any_weak
+    error += !tl_monotype_is_any_weak(ws);
+    error += !tl_monotype_is_any_weak(wu);
+    error += !tl_monotype_is_any_weak(w);
+    error += tl_monotype_is_any_weak(tv);
+
+    // is_weak (pointer-weak only — unchanged)
+    error += tl_monotype_is_weak(ws);
+    error += tl_monotype_is_weak(wu);
+    error += !tl_monotype_is_weak(w);
+
+    // is_concrete: weak-int counts as concrete
+    error += !tl_monotype_is_concrete(ws);
+    error += !tl_monotype_is_concrete(wu);
+
+    // is_weak_deep: weak-int counts as weak
+    error += !tl_monotype_is_weak_deep(ws);
+    error += !tl_monotype_is_weak_deep(wu);
+
+    // is_concrete_no_weak: weak-int is NOT concrete-no-weak
+    error += tl_monotype_is_concrete_no_weak(ws);
+    error += tl_monotype_is_concrete_no_weak(wu);
+
+    return error;
+}
+
+// ---------------------------------------------------------------------------
+// Test: type registry csize/cptrdiff helpers
+// ---------------------------------------------------------------------------
+static int test_registry_csize_cptrdiff(void) {
+    int               error = 0;
+    tl_type_registry *reg   = test_registry();
+
+    tl_monotype *csize    = tl_type_registry_csize(reg);
+    tl_monotype *cptrdiff = tl_type_registry_cptrdiff(reg);
+
+    error += !csize;
+    error += !cptrdiff;
+    error += !tl_monotype_is_inst(csize);
+    error += !tl_monotype_is_inst(cptrdiff);
+
+    // Check they are the right types
+    error += !tl_monotype_is_unsigned_integer(csize);
+    error += !tl_monotype_is_signed_integer(cptrdiff);
+
+    // Check subchain IDs
+    error += tl_monotype_integer_subchain(csize) != TL_INTEGER_SUBCHAIN_CSIZE;
+    error += tl_monotype_integer_subchain(cptrdiff) != TL_INTEGER_SUBCHAIN_CPTRDIFF;
+
+    return error;
+}
+
 int main(void) {
     int error      = 0;
     int this_error = 0;
@@ -218,6 +332,9 @@ int main(void) {
     T(test_compare_width_same_chain);
     T(test_compare_width_cross_chain);
     T(test_same_subchain);
+    T(test_weak_int_construction);
+    T(test_weak_int_predicates);
+    T(test_registry_csize_cptrdiff);
 
     return error;
 }
