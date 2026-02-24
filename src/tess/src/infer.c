@@ -2654,10 +2654,12 @@ static int traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, trave
     case ast_eof:
     case ast_f64:
     case ast_i64:
+    case ast_i64_z:
     case ast_string:
     case ast_char:
     case ast_symbol:
     case ast_u64:
+    case ast_u64_zu:
     case ast_type_alias:
     case ast_type_predicate:
     case ast_user_type_definition:
@@ -3373,8 +3375,11 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
     case ast_string: return infer_literal_type(self, node, tl_type_registry_ptr_char);
     case ast_char:   return infer_literal_type(self, node, tl_type_registry_char);
     case ast_f64:    return infer_literal_type(self, node, tl_type_registry_float);
-    case ast_i64:    return infer_literal_type(self, node, tl_type_registry_int);
+    case ast_i64:
+    case ast_i64_z:  // temporary: treat as ast_i64 until Chunk C
+        return infer_literal_type(self, node, tl_type_registry_int);
     case ast_u64:
+    case ast_u64_zu: // temporary: treat as ast_u64 until Chunk C
         return infer_literal_type(self, node, tl_type_registry_uint);
     case ast_bool:      return infer_literal_type(self, node, tl_type_registry_bool);
     case ast_body:      return infer_body(self, node);
@@ -4886,7 +4891,9 @@ static void rename_variables(tl_infer *self, ast_node *node, rename_variables_ct
     case ast_eof:
     case ast_f64:
     case ast_i64:
+    case ast_i64_z:
     case ast_u64:
+    case ast_u64_zu:
     case ast_type_alias:    break;
     }
 }

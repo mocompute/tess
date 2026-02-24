@@ -41,6 +41,14 @@ typedef struct ast_node {
             u64 val;
         } u64;
 
+        struct ast_i64_z {
+            i64 val;
+        } i64_z;
+
+        struct ast_u64_zu {
+            u64 val;
+        } u64_zu;
+
         struct ast_f64 {
             f64 val;
         } f64;
@@ -234,6 +242,8 @@ struct ast_user_type_def      *ast_node_utd(ast_node *);
 nodiscard ast_node *ast_node_create(allocator *, ast_tag) mallocfun;
 nodiscard ast_node *ast_node_create_i64(allocator *, i64) mallocfun;
 nodiscard ast_node *ast_node_create_u64(allocator *, u64) mallocfun;
+nodiscard ast_node *ast_node_create_i64_z(allocator *, i64) mallocfun;
+nodiscard ast_node *ast_node_create_u64_zu(allocator *, u64) mallocfun;
 nodiscard ast_node *ast_node_create_f64(allocator *, f64) mallocfun;
 nodiscard ast_node *ast_node_create_arrow(allocator *, ast_node *, ast_node *, ast_node_sized) mallocfun;
 nodiscard ast_node *ast_node_create_assignment(allocator *, ast_node *, ast_node *) mallocfun;

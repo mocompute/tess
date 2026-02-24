@@ -44,6 +44,16 @@ ast_node *ast_node_create_u64(allocator *alloc, u64 x) {
     self->u64.val  = x;
     return self;
 }
+ast_node *ast_node_create_i64_z(allocator *alloc, i64 x) {
+    ast_node *self  = ast_node_create(alloc, ast_i64_z);
+    self->i64_z.val = x;
+    return self;
+}
+ast_node *ast_node_create_u64_zu(allocator *alloc, u64 x) {
+    ast_node *self   = ast_node_create(alloc, ast_u64_zu);
+    self->u64_zu.val = x;
+    return self;
+}
 ast_node *ast_node_create_f64(allocator *alloc, f64 x) {
     ast_node *self = ast_node_create(alloc, ast_f64);
     self->f64.val  = x;
@@ -293,6 +303,8 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
     case ast_bool:          clone->bool_.val = orig->bool_.val; break;
     case ast_i64:           clone->i64.val = orig->i64.val; break;
     case ast_u64:           clone->u64.val = orig->u64.val; break;
+    case ast_i64_z:         clone->i64_z.val = orig->i64_z.val; break;
+    case ast_u64_zu:        clone->u64_zu.val = orig->u64_zu.val; break;
     case ast_f64:           clone->f64.val = orig->f64.val; break;
 
     case ast_arrow:         {
@@ -612,6 +624,8 @@ void ast_node_each_node(void *ctx, ast_node_each_node_fun fun, ast_node *node) {
     case ast_hash_command:
     case ast_i64:
     case ast_u64:
+    case ast_i64_z:
+    case ast_u64_zu:
     case ast_f64:
     case ast_string:
     case ast_char:
@@ -860,6 +874,8 @@ char const *ast_tag_to_string(ast_tag tag) {
       "ast_type_alias",
       "ast_type_predicate",
       "ast_u64",
+      "ast_i64_z",
+      "ast_u64_zu",
       "ast_unary_op",
       "ast_user_type_definition",
       "ast_while",
@@ -967,6 +983,10 @@ str v2_ast_node_to_string(allocator *alloc, ast_node const *node) {
         return str_init(alloc, buf);
 
     case ast_u64:      snprintf(buf, sizeof buf, "%" PRIu64, node->u64.val); return str_init(alloc, buf);
+    case ast_i64_z:
+        snprintf(buf, sizeof buf, "(%" PRIi64 "z : %s)", node->i64_z.val, str_cstr(&ty_str));
+        return str_init(alloc, buf);
+    case ast_u64_zu:   snprintf(buf, sizeof buf, "%" PRIu64 "zu", node->u64_zu.val); return str_init(alloc, buf);
     case ast_string:   return str_cat_3(alloc, S("\""), node->symbol.name, S("\""));
     case ast_char:     return str_cat_3(alloc, S("'"), node->symbol.name, S("'"));
     case ast_bool:     return node->bool_.val ? str_copy(alloc, S("true")) : str_copy(alloc, S("false"));
@@ -1196,6 +1216,8 @@ str ast_node_to_short_string(allocator *alloc, ast_node const *node) {
     case ast_f64:
     case ast_i64:
     case ast_u64:
+    case ast_i64_z:
+    case ast_u64_zu:
     case ast_string:
     case ast_char:
     case ast_bool:
@@ -1471,6 +1493,16 @@ u64 ast_node_hash(ast_node const *self) {
     case ast_u64:
         //
         hash = hash64_combine(hash, (byte *)&self->u64.val, sizeof(self->u64.val));
+        break;
+
+    case ast_i64_z:
+        //
+        hash = hash64_combine(hash, (byte *)&self->i64_z.val, sizeof(self->i64_z.val));
+        break;
+
+    case ast_u64_zu:
+        //
+        hash = hash64_combine(hash, (byte *)&self->u64_zu.val, sizeof(self->u64_zu.val));
         break;
 
     case ast_type_alias:

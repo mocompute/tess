@@ -198,6 +198,47 @@ static int test_parse_cnum_binary(void) {
     return error;
 }
 
+static int test_parse_cnum_z_suffix(void) {
+    int error = 0;
+    i64 i;
+    u64 u;
+    f64 f;
+
+    // z suffix -> return 4, i64
+    error += str_parse_cnum("42z", &i, &u, &f) == 4 ? 0 : 1;
+    error += i == 42 ? 0 : 1;
+
+    // zu suffix -> return 5, u64
+    error += str_parse_cnum("42zu", &i, &u, &f) == 5 ? 0 : 1;
+    error += u == 42 ? 0 : 1;
+
+    // hex with z
+    error += str_parse_cnum("0xFFz", &i, &u, &f) == 4 ? 0 : 1;
+    error += i == 0xFF ? 0 : 1;
+
+    // hex with zu
+    error += str_parse_cnum("0xFFzu", &i, &u, &f) == 5 ? 0 : 1;
+    error += u == 0xFF ? 0 : 1;
+
+    // binary with z
+    error += str_parse_cnum("0b1010z", &i, &u, &f) == 4 ? 0 : 1;
+    error += i == 10 ? 0 : 1;
+
+    // binary with zu
+    error += str_parse_cnum("0b1010zu", &i, &u, &f) == 5 ? 0 : 1;
+    error += u == 10 ? 0 : 1;
+
+    // uppercase Z
+    error += str_parse_cnum("42Z", &i, &u, &f) == 4 ? 0 : 1;
+    error += i == 42 ? 0 : 1;
+
+    // uppercase ZU
+    error += str_parse_cnum("42ZU", &i, &u, &f) == 5 ? 0 : 1;
+    error += u == 42 ? 0 : 1;
+
+    return error;
+}
+
 static int test_cat_multi(void) {
     int        error = 0;
     allocator *alloc = leak_detector_create();
@@ -741,6 +782,7 @@ int main(void) {
     T(test_cmp);
     T(test_cat_multi);
     T(test_parse_cnum_binary);
+    T(test_parse_cnum_z_suffix);
     T(test_prefix_char);
     T(test_rprefix_char);
     T(test_replace_char);

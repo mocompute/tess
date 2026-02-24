@@ -744,6 +744,14 @@ start:; // loop point for skip_depth > 0
                 }
                 continue;
             case '_': continue;
+            case 'z':
+            case 'Z':
+                // z/zu suffix: peek ahead for u/U
+                if (peek_char(self, self->pos) == 'u' || peek_char(self, self->pos) == 'U') {
+                    next_char(self); // consume the 'u'/'U' so token includes "zu"
+                }
+                state = stop_number;
+                continue;
             case 'u':
             case 'U':
                 // Unsigned suffix: consume it and stop the number

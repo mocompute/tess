@@ -113,9 +113,11 @@ static int           result_ast(parser *, ast_tag);
 static int           result_ast_bool(parser *, int);
 static int           result_ast_f64(parser *, f64);
 static int           result_ast_i64(parser *, i64);
+static int           result_ast_i64_z(parser *, i64);
 static int           result_ast_node(parser *, ast_node *);
 static int           result_ast_str(parser *, ast_tag, char const *s);
 static int           result_ast_u64(parser *, u64);
+static int           result_ast_u64_zu(parser *, u64);
 
 static int           is_eof(parser *);
 static int           is_unary_operator(char const *);
@@ -311,6 +313,18 @@ static int result_ast_i64(parser *p, i64 val) {
 
 static int result_ast_u64(parser *p, u64 val) {
     p->result = ast_node_create_u64(p->ast_arena, val);
+    set_result_file(p);
+    return 0;
+}
+
+static int result_ast_i64_z(parser *p, i64 val) {
+    p->result = ast_node_create_i64_z(p->ast_arena, val);
+    set_result_file(p);
+    return 0;
+}
+
+static int result_ast_u64_zu(parser *p, u64 val) {
+    p->result = ast_node_create_u64_zu(p->ast_arena, val);
     set_result_file(p);
     return 0;
 }
@@ -962,6 +976,8 @@ static int string_to_number(parser *parser, char const *const in) {
     case 1:  return result_ast_i64(parser, i);
     case 2:  return result_ast_u64(parser, u);
     case 3:  return result_ast_f64(parser, d);
+    case 4:  return result_ast_i64_z(parser, i);
+    case 5:  return result_ast_u64_zu(parser, u);
     default: return 1;
     }
 }

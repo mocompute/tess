@@ -537,7 +537,8 @@ TL_TESTS =					\
 	while_break				\
 	while_continue				\
 	while_statement				\
-	while_update_statement
+	while_update_statement			\
+	z_literals
 
 TL_FAIL_TESTS =					\
 	fail_alias_chain			\

@@ -454,6 +454,7 @@ tl_create_test(while_break)
 tl_create_test(while_continue)
 tl_create_test(while_statement)
 tl_create_test(while_update_statement)
+tl_create_test(z_literals)
 tl_create_test_optimized(tail_call)
 
 # Special test for import_relative_dotdot (needs different working directory)

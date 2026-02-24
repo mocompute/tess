@@ -39,6 +39,8 @@ typedef enum ast_tag {
     ast_type_alias,
     ast_type_predicate,
     ast_u64,
+    ast_i64_z,
+    ast_u64_zu,
     ast_unary_op,
     ast_user_type_definition,
     ast_while,
