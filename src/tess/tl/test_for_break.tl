@@ -3,7 +3,7 @@
 // Test break statement in for loop
 // Loop should exit early when we find a value >= 5
 main() {
-    xs: Ptr[Int] := c_malloc(10u * sizeof[Int]())
+    xs: Ptr[Int] := c_malloc(10zu * sizeof[Int]())
 
     // Initialize array with values 0..9
     i := 0

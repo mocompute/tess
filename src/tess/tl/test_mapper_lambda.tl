@@ -37,7 +37,7 @@ main() {
 
     // When constructing an object, all fields must be provided. But they may be assigned `void`, which leaves
     // them uninitialised, shown here for the purpose of an example.
-    vals := Arr(v: Ptr[Int] = c_malloc(sizeof[Int]() * 4u), size = void, capacity = 4u)
+    vals := Arr(v: Ptr[Int] = c_malloc(sizeof[Int]() * 4zu), size = void, capacity = 4u)
 
     // Note that `:=` always defines a new variable. A plain `=` is used to assign to an existing variable (or
     // a field or indexed location).

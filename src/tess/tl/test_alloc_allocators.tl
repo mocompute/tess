@@ -107,9 +107,9 @@ test_bump_calloc_zero_fill() {
     error := 0
     bump  := Alloc.bump_create(Alloc.context.managed, 1024u)
 
-    p: Ptr[CSize] := bump->calloc(bump, 4u, sizeof[CSize]())
+    p: Ptr[CSize] := bump->calloc(bump, 4zu, sizeof[CSize]())
     // Check that calloc returns zeroed memory
-    if p.* != 0u { error += 1 }
+    if p.* != 0zu { error += 1 }
 
     Alloc.bump_destroy(bump)
     error

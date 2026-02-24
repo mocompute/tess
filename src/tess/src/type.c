@@ -3158,6 +3158,27 @@ void tl_type_subs_apply(tl_type_subs *subs, tl_type_env *env) {
     }
 }
 
+void tl_type_subs_default_weak_ints(tl_type_subs *subs, tl_monotype *int_type, tl_monotype *uint_type) {
+    forall(i, subs->data) {
+        tl_type_variable root = uf_find(subs, i);
+        if (root != (tl_type_variable)i) continue; // skip non-roots
+        tl_monotype *type = subs->data.v[root].type;
+        if (!type) continue;
+        if (tl_weak_int_signed == type->tag) {
+            // Also default the weak int's own var root (it may differ from this root)
+            tl_type_variable weak_root = uf_find(subs, type->var);
+            if (!subs->data.v[weak_root].type)
+                subs->data.v[weak_root].type = int_type;
+            subs->data.v[root].type = int_type;
+        } else if (tl_weak_int_unsigned == type->tag) {
+            tl_type_variable weak_root = uf_find(subs, type->var);
+            if (!subs->data.v[weak_root].type)
+                subs->data.v[weak_root].type = uint_type;
+            subs->data.v[root].type = uint_type;
+        }
+    }
+}
+
 // ============================================================================
 // Debug logging and utilities
 // ============================================================================

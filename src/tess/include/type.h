@@ -264,6 +264,7 @@ int  tl_type_subs_unify_tv_mono(tl_type_subs *, tl_type_variable, tl_monotype *,
 int  tl_type_subs_unify_mono(tl_type_subs *, tl_monotype *, tl_monotype *, type_error_cb_fun, void *,
                              hashmap **);
 void tl_type_subs_apply(tl_type_subs *, tl_type_env *);
+void tl_type_subs_default_weak_ints(tl_type_subs *, tl_monotype *int_type, tl_monotype *uint_type);
 void tl_type_subs_log(tl_type_subs *);
 
 // -- utilities --

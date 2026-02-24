@@ -28,7 +28,7 @@ main() {
 
     // Test that CArray decays properly to CString (Ptr[CChar])
     len := c_strlen(buf_ptr)
-    error += if len == 13u {0} else {1}
+    error += if len == 13zu {0} else {1}
 
     // Test modification through pointer
     ptr.[1] = 25

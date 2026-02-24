@@ -1101,6 +1101,14 @@ static int infer_literal_type(tl_infer *self, ast_node *node,
     return constrain_pm(self, node->type, ty, node);
 }
 
+static int infer_weak_int_literal(tl_infer *self, ast_node *node, int is_signed) {
+    ensure_tv(self, &node->type);
+    tl_monotype *weak = is_signed
+        ? tl_monotype_create_fresh_weak_int_signed(self->subs)
+        : tl_monotype_create_fresh_weak_int_unsigned(self->subs);
+    return constrain_pm(self, node->type, weak, node);
+}
+
 typedef struct {
     tl_monotype *parsed;
     hashmap     *type_arguments;
@@ -3375,12 +3383,10 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
     case ast_string: return infer_literal_type(self, node, tl_type_registry_ptr_char);
     case ast_char:   return infer_literal_type(self, node, tl_type_registry_char);
     case ast_f64:    return infer_literal_type(self, node, tl_type_registry_float);
-    case ast_i64:
-    case ast_i64_z:  // temporary: treat as ast_i64 until Chunk C
-        return infer_literal_type(self, node, tl_type_registry_int);
-    case ast_u64:
-    case ast_u64_zu: // temporary: treat as ast_u64 until Chunk C
-        return infer_literal_type(self, node, tl_type_registry_uint);
+    case ast_i64:    return infer_weak_int_literal(self, node, 1);
+    case ast_i64_z:  return infer_literal_type(self, node, tl_type_registry_cptrdiff);
+    case ast_u64:    return infer_weak_int_literal(self, node, 0);
+    case ast_u64_zu: return infer_literal_type(self, node, tl_type_registry_csize);
     case ast_bool:      return infer_literal_type(self, node, tl_type_registry_bool);
     case ast_body:      return infer_body(self, node);
     case ast_case:      return infer_case(self, traverse_ctx, node);
@@ -6157,6 +6163,13 @@ static int run_specialize(tl_infer *self, ast_node_sized nodes, ast_node *main) 
 
     arena_reset(self->transient);
 
+    // Default unconstrained weak integer literals: weak_int_signed -> Int, weak_int_unsigned -> UInt.
+    // Must happen after specialization (which re-infers literals, creating new weak types)
+    // and before the final substitution pass.
+    tl_type_subs_default_weak_ints(self->subs,
+        tl_type_registry_int(self->registry),
+        tl_type_registry_uint(self->registry));
+
     // apply subs to global environment
     tl_type_subs_apply(self->subs, self->env);
     apply_subs_to_ast(self);
@@ -6248,6 +6261,15 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *out_resu
     PHASE_START();
     if (run_check_free_variables(self)) return 1;
     PHASE_STOP(free_vars_ms);
+
+    // Default unconstrained weak integer literals before specialization, so that
+    // specialization sees concrete Int/UInt types for naming and instance creation.
+    tl_type_subs_default_weak_ints(self->subs,
+        tl_type_registry_int(self->registry),
+        tl_type_registry_uint(self->registry));
+    tl_type_subs_apply(self->subs, self->env);
+    apply_subs_to_ast(self);
+    arena_reset(self->transient);
 
     ast_node *main = null;
     if (!self->opts.is_library) {

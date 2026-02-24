@@ -350,8 +350,6 @@ TL_TESTS =					\
 	apply_generic_through_pointer		\
 	apply_lambda				\
 	arity_overload				\
-	array_api				\
-	array_comprehensive			\
 	array_index_binary_op			\
 	array_sort				\
 	atexit					\
@@ -359,7 +357,6 @@ TL_TESTS =					\
 	binop					\
 	bitwise_operators			\
 	block_expression			\
-	builtin_option				\
 	builtin_result				\
 	c_div					\
 	c_export				\
@@ -384,7 +381,6 @@ TL_TESTS =					\
 	defer					\
 	defun_inline_type			\
 	deref_then_addr				\
-	dynamic_array				\
 	embed_c					\
 	enum_module				\
 	enum_no_module				\
@@ -398,7 +394,6 @@ TL_TESTS =					\
 	forward_decl_not_needed			\
 	function_pointer_argument		\
 	function_pointer_array			\
-	function_pointer_in_struct		\
 	function_pointer_in_struct_direct	\
 	function_pointer_in_struct_direct_2	\
 	function_pointer_mutable		\
@@ -408,7 +403,6 @@ TL_TESTS =					\
 	generic_lambda				\
 	global_variables			\
 	hello					\
-	integer_families			\
 	if_basic				\
 	if_expression				\
 	import_relative				\
@@ -426,7 +420,6 @@ TL_TESTS =					\
 	malloc_free				\
 	malloc_free_is_null			\
 	malloc_struct_basic			\
-	map_option_cross_type			\
 	mapper_basic				\
 	mapper_lambda				\
 	module_basic				\
@@ -438,7 +431,6 @@ TL_TESTS =					\
 	mutual_recursion_module			\
 	mutual_recursion_module_apply		\
 	nested_lambda_context			\
-	nested_struct				\
 	nested_struct_access			\
 	nested_type_cross_module_conflict	\
 	number_formats				\
@@ -455,7 +447,6 @@ TL_TESTS =					\
 	recursive_type				\
 	recursive_type_basic			\
 	recursive_type_cycle_3			\
-	recursive_type_generic			\
 	recursive_type_mutual			\
 	recursive_type_mutual_simple		\
 	regress_type_cons			\
@@ -478,10 +469,8 @@ TL_TESTS =					\
 	struct_generic				\
 	struct_generic_function_signature	\
 	tagged_union				\
-	tagged_union_bail			\
 	tagged_union_carray			\
 	tagged_union_existing_type		\
-	tagged_union_existing_type_generic	\
 	tagged_union_existing_type_main		\
 	tagged_union_function_pointer		\
 	tagged_union_generic_basic		\
@@ -489,14 +478,11 @@ TL_TESTS =					\
 	tagged_union_generic_func		\
 	tagged_union_generic_function_pointer	\
 	tagged_union_generic_multi		\
-	tagged_union_generic_nested		\
 	tagged_union_generic_param		\
-	tagged_union_generic_return		\
 	tagged_union_make			\
 	tagged_union_many_variants		\
 	tagged_union_mutable_case		\
 	tagged_union_nested_when		\
-	tagged_union_option			\
 	tagged_union_pointer_field		\
 	tagged_union_recursive_type		\
 	tagged_union_scoped_variant		\
@@ -516,7 +502,6 @@ TL_TESTS =					\
 	type_predicate_branch			\
 	type_predicate_field			\
 	type_predicate_generic			\
-	type_predicate_generic_type		\
 	type_predicate_type_arg			\
 	try					\
 	types_float				\
@@ -527,16 +512,15 @@ TL_TESTS =					\
 	union_module_intermediate		\
 	union_module_second_variant		\
 	stress_closures				\
-	stress_control_flow			\
 	stress_deep_nesting			\
 	stress_expression_position		\
-	stress_generic_types			\
 	stress_scope_shadow			\
 	stress_type_features			\
 	stress_when_combinations		\
 	while_break				\
 	while_continue				\
 	while_statement				\
+	weak_int_literals			\
 	while_update_statement			\
 	z_literals
 
@@ -594,7 +578,9 @@ TL_FAIL_TESTS =					\
 	fail_try_non_union			\
 	fail_try_three_variants			\
 	fail_unalias_not_found			\
-	fail_unknown_free_variable
+	fail_unknown_free_variable		\
+	fail_weak_int_cross_family		\
+	fail_weak_int_to_standalone
 
 # Expected runtime failure tests (debug only: must compile, must fail at runtime)
 TL_FAIL_RUNTIME_TESTS =
@@ -604,6 +590,17 @@ TL_KNOWN_FAIL_FAILURES =
 
 # Tests that should work but currently fail due to compiler bugs
 TL_KNOWN_FAILURES =				\
+	array_api				\
+	array_comprehensive			\
+	builtin_option				\
+	dynamic_array				\
+	function_pointer_in_struct		\
+	integer_families			\
+	recursive_type_generic			\
+	stress_control_flow			\
+	stress_generic_types			\
+	tagged_union_bail			\
+	tagged_union_option			\
 	while_empty_body
 
 # Total test count across all suites

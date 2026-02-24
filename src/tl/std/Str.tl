@@ -149,7 +149,7 @@ _is_whitespace(b: Byte) -> Bool {
 
 _init_small(src: Ptr[Const[CChar]], n: UInt) -> Str {
     s := Str(small = _Small(buf = void, tag_len = _make_tag_len(n)))
-    if n > 0u {
+    if n > 0zu {
         dst: Ptr[CChar] := s.small.buf
         c_memcpy(dst, src, n)
     }
@@ -157,9 +157,9 @@ _init_small(src: Ptr[Const[CChar]], n: UInt) -> Str {
 }
 
 _init_big(alloc: Ptr[Allocator], src: Ptr[Const[CChar]], n: UInt) -> Str {
-    buf: Ptr[CChar] := alloc->malloc(alloc, n + 1u)
+    buf: Ptr[CChar] := alloc->malloc(alloc, n + 1zu)
     if buf == null { _tl_fatal_(c"Str: out of memory") }
-    if n > 0u { c_memcpy(buf, src, n) }
+    if n > 0zu { c_memcpy(buf, src, n) }
     Str(big = _Big(len = n, buf = buf))
 }
 
@@ -593,7 +593,7 @@ to_upper(alloc, s: Str) -> Str {
     rp       := _buf(result.&)
     i: UInt := 0u
     while i < n, i += 1u {
-        if rp.[i] >= 97u && rp.[i] <= 122u { rp.[i] = rp.[i] - 32u }
+        if rp.[i] >= 'a' && rp.[i] <= 'z' { rp.[i] = rp.[i] - ' ' }
     }
     result
 }
@@ -608,7 +608,7 @@ to_lower(alloc, s: Str) -> Str {
     rp       := _buf(result.&)
     i: UInt := 0u
     while i < n, i += 1u {
-        if rp.[i] >= 65u && rp.[i] <= 90u { rp.[i] = rp.[i] + 32u }
+        if rp.[i] >= 'A' && rp.[i] <= 'Z' { rp.[i] = rp.[i] + ' ' }
     }
     result
 }

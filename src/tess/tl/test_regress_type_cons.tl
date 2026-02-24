@@ -8,10 +8,10 @@ Span[T] : { v: Ptr[T], sz: CSize }
 
 main() {
 
-    data: CString := Alloc.transient_alloc(128u * sizeof[CSignedChar]())
+    data: CString := Alloc.transient_alloc(128zu * sizeof[CSignedChar]())
 
     // regression test: cs was typed using unspecialized Foo.Span rather than specialized type
-    cs := Foo.Span(v = data, sz = 128u)
+    cs := Foo.Span(v = data, sz = 128zu)
 
     0
 }

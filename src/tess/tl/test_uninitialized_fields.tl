@@ -12,7 +12,7 @@ main() {
 
     // Test creating struct with uninitialized fields
     buf := Buffer(
-                  data     = c_malloc(1024u),
+                  data     = c_malloc(1024zu),
                   size     = void,      // Left uninitialized
                   capacity = 1024
                   )

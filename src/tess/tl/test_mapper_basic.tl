@@ -37,7 +37,7 @@ main() {
 
     error := 0
 
-    vals := Arr(v: Ptr[Int] = c_malloc(sizeof[Int]() * 4u), size = 0u, capacity = 4u)
+    vals := Arr(v: Ptr[Int] = c_malloc(sizeof[Int]() * 4zu), size = 0u, capacity = 4u)
 
     vals.v.[0] = 0
     vals.v.[1] = 1
@@ -66,7 +66,7 @@ main() {
     error += sum - 10
 
 
-    floats := Arr(v: Ptr[Float] = c_malloc(sizeof[Float]() * 4u), size = 0u, capacity = 4u)
+    floats := Arr(v: Ptr[Float] = c_malloc(sizeof[Float]() * 4zu), size = 0u, capacity = 4u)
     floats.v.[0] = 0.0
     floats.v.[1] = 1.0
     floats.v.[2] = 2.0

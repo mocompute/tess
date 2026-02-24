@@ -52,7 +52,7 @@ test_signed_unification() {
 test_unsigned_unification() {
     error := 0
 
-    x: CSize := 99u
+    x: CSize := 99zu
     y: UInt  := x
     error += if y == 99u {0} else {1}
 
@@ -106,8 +106,8 @@ test_sizeof_unsigned() {
     error := 0
 
     // sizeof returns CSize (unsigned) — compare with unsigned literals
-    error += if sizeof[Int]() >= 8u {0} else {1}
-    error += if sizeof[UInt]() >= 8u {0} else {1}
+    error += if sizeof[Int]() >= 8zu {0} else {1}
+    error += if sizeof[UInt]() >= 8zu {0} else {1}
 
     error
 }
@@ -124,12 +124,12 @@ test_narrow_signed() {
     error += if y == 42 {0} else {1}
 
     // CInt8 preserves its size (1 byte) despite unifying with Int
-    error += if sizeof[CInt8]() == 1u {0} else {1}
+    error += if sizeof[CInt8]() == 1zu {0} else {1}
 
     a: CInt16 := 1000
     b: Int    := a
     error += if b == 1000 {0} else {1}
-    error += if sizeof[CInt16]() == 2u {0} else {1}
+    error += if sizeof[CInt16]() == 2zu {0} else {1}
 
     error
 }
@@ -141,12 +141,12 @@ test_narrow_unsigned() {
     y: UInt   := x    // narrow unsigned -> canonical unsigned: same family, OK
     error += if y == 200u {0} else {1}
 
-    error += if sizeof[CUInt8]() == 1u {0} else {1}
+    error += if sizeof[CUInt8]() == 1zu {0} else {1}
 
     a: CUInt16 := 50000u
     b: UInt    := a
     error += if b == 50000u {0} else {1}
-    error += if sizeof[CUInt16]() == 2u {0} else {1}
+    error += if sizeof[CUInt16]() == 2zu {0} else {1}
 
     error
 }
@@ -167,7 +167,7 @@ test_non_canonical_signed() {
     error += if d == 456 {0} else {1}
 
     // CPtrDiff is signed
-    e: CPtrDiff := -10
+    e: CPtrDiff := -10z
     f: Int      := e
     error += if f == -10 {0} else {1}
 

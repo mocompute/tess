@@ -29,7 +29,7 @@ map[a, b](f, arr) {
 add1(x) { x + 1 }
 
 main() {
-    vals := Arr(v: Ptr[Int] = c_malloc(sizeof[Int]() * 4u), size = 0u, capacity = 4u)
+    vals := Arr(v: Ptr[Int] = c_malloc(sizeof[Int]() * 4zu), size = 0u, capacity = 4u)
     vals.v.[0] = 0
     vals.v.[1] = 1
     vals.v.[2] = 2

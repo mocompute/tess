@@ -133,7 +133,7 @@ test_mutable_when_via_ptr() {
 test_sizeof_union() {
     sz := sizeof[Shape]()
     // Just verify it's positive (actual size is platform-dependent)
-    if sz > 0u {0} else {1}
+    if sz > 0zu {0} else {1}
 }
 
 main() {
