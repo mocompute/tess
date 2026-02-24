@@ -17,6 +17,18 @@ defarray(tl_monotype_ptr_array, struct tl_monotype **);
 defarray(tl_polytype_array, struct tl_polytype *);
 defsized(tl_polytype_sized, struct tl_polytype *);
 
+// Integer sub-chain IDs for width ordering
+enum {
+    TL_INTEGER_SUBCHAIN_NONE            = 0, // not an integer type
+    TL_INTEGER_SUBCHAIN_C_SIGNED        = 1, // CSignedChar < CShort < CInt < CLong < CLongLong
+    TL_INTEGER_SUBCHAIN_C_UNSIGNED      = 2, // CUnsignedChar < CUnsignedShort < CUnsignedInt < CUnsignedLong < CUnsignedLongLong
+    TL_INTEGER_SUBCHAIN_FIXED_SIGNED    = 3, // CInt8 < CInt16 < CInt32 < CInt64
+    TL_INTEGER_SUBCHAIN_FIXED_UNSIGNED  = 4, // CUInt8 < CUInt16 < CUInt32 < CUInt64
+    TL_INTEGER_SUBCHAIN_CSIZE           = 5, // CSize (standalone)
+    TL_INTEGER_SUBCHAIN_CPTRDIFF        = 6, // CPtrDiff (standalone)
+    TL_INTEGER_SUBCHAIN_CCHAR           = 7, // CChar (standalone)
+};
+
 typedef struct {
     str       name;
     str       generic_name;     // used to recover canonical name, eg Ptr_1 -> Ptr
@@ -26,6 +38,8 @@ typedef struct {
     int       is_unsigned_integer;    // unifies with other unsigned integers
     int       is_narrow_integer;     // same-family unification OK, but preserve C ABI type (no canonicalization)
     int       is_float_convertible;   // the type is implicitly convertible to any other float type
+    int       integer_subchain;       // 0 = not an integer, 1-7 = sub-chain ID (TL_INTEGER_SUBCHAIN_*)
+    int       integer_width_rank;     // ordering within sub-chain (0 = narrowest), -1 if not integer
 } tl_type_constructor_def;
 
 typedef struct {
@@ -165,6 +179,12 @@ int                    tl_monotype_is_float_convertible(tl_monotype *);
 void                   tl_monotype_set_signed_integer(tl_monotype *);
 void                   tl_monotype_set_unsigned_integer(tl_monotype *);
 void                   tl_monotype_set_float_convertible(tl_monotype *);
+
+// Integer sub-chain queries
+int                    tl_monotype_integer_subchain(tl_monotype *);        // returns 0 if not integer
+int                    tl_monotype_integer_width_rank(tl_monotype *);      // returns -1 if not integer
+int                    tl_monotype_compare_integer_width(tl_monotype *left, tl_monotype *right); // -1/0/1/2
+int                    tl_monotype_same_integer_subchain(tl_monotype *left, tl_monotype *right);
 tl_monotype           *tl_monotype_unary_target(tl_monotype *);
 tl_monotype           *tl_monotype_ptr_target(tl_monotype *);
 void                   tl_monotype_ptr_set_target(tl_monotype *, tl_monotype *);
