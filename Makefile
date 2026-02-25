@@ -350,6 +350,8 @@ TL_TESTS =					\
 	apply_generic_through_pointer		\
 	apply_lambda				\
 	arity_overload				\
+	array_api				\
+	array_comprehensive			\
 	array_index_binary_op			\
 	array_sort				\
 	atexit					\
@@ -357,6 +359,7 @@ TL_TESTS =					\
 	binop					\
 	bitwise_operators			\
 	block_expression			\
+	builtin_option				\
 	builtin_result				\
 	c_div					\
 	c_export				\
@@ -394,6 +397,7 @@ TL_TESTS =					\
 	forward_decl_not_needed			\
 	function_pointer_argument		\
 	function_pointer_array			\
+	function_pointer_in_struct		\
 	function_pointer_in_struct_direct	\
 	function_pointer_in_struct_direct_2	\
 	function_pointer_mutable		\
@@ -407,6 +411,7 @@ TL_TESTS =					\
 	if_expression				\
 	import_relative				\
 	import_relative_dotdot			\
+	integer_families			\
 	lambda_apply				\
 	lambda_arg_annotated			\
 	lambda_arg_unused			\
@@ -469,6 +474,7 @@ TL_TESTS =					\
 	struct_generic				\
 	struct_generic_function_signature	\
 	tagged_union				\
+	tagged_union_bail			\
 	tagged_union_carray			\
 	tagged_union_existing_type		\
 	tagged_union_existing_type_main		\
@@ -483,6 +489,7 @@ TL_TESTS =					\
 	tagged_union_many_variants		\
 	tagged_union_mutable_case		\
 	tagged_union_nested_when		\
+	tagged_union_option			\
 	tagged_union_pointer_field		\
 	tagged_union_recursive_type		\
 	tagged_union_scoped_variant		\
@@ -512,8 +519,10 @@ TL_TESTS =					\
 	union_module_intermediate		\
 	union_module_second_variant		\
 	stress_closures				\
+	stress_control_flow			\
 	stress_deep_nesting			\
 	stress_expression_position		\
+	stress_generic_types			\
 	stress_scope_shadow			\
 	stress_type_features			\
 	stress_when_combinations		\
@@ -590,17 +599,8 @@ TL_KNOWN_FAIL_FAILURES =
 
 # Tests that should work but currently fail due to compiler bugs
 TL_KNOWN_FAILURES =				\
-	array_api				\
-	array_comprehensive			\
-	builtin_option				\
 	dynamic_array				\
-	function_pointer_in_struct		\
-	integer_families			\
 	recursive_type_generic			\
-	stress_control_flow			\
-	stress_generic_types			\
-	tagged_union_bail			\
-	tagged_union_option			\
 	while_empty_body
 
 # Total test count across all suites

@@ -1103,9 +1103,8 @@ static int infer_literal_type(tl_infer *self, ast_node *node,
 
 static int infer_weak_int_literal(tl_infer *self, ast_node *node, int is_signed) {
     ensure_tv(self, &node->type);
-    tl_monotype *weak = is_signed
-        ? tl_monotype_create_fresh_weak_int_signed(self->subs)
-        : tl_monotype_create_fresh_weak_int_unsigned(self->subs);
+    tl_monotype *weak = is_signed ? tl_monotype_create_fresh_weak_int_signed(self->subs)
+                                  : tl_monotype_create_fresh_weak_int_unsigned(self->subs);
     return constrain_pm(self, node->type, weak, node);
 }
 
@@ -3380,13 +3379,13 @@ static int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
         // else handled by maybe_handle_null()
         return infer_void(self, traverse_ctx, node);
 
-    case ast_string: return infer_literal_type(self, node, tl_type_registry_ptr_char);
-    case ast_char:   return infer_literal_type(self, node, tl_type_registry_char);
-    case ast_f64:    return infer_literal_type(self, node, tl_type_registry_float);
-    case ast_i64:    return infer_weak_int_literal(self, node, 1);
-    case ast_i64_z:  return infer_literal_type(self, node, tl_type_registry_cptrdiff);
-    case ast_u64:    return infer_weak_int_literal(self, node, 0);
-    case ast_u64_zu: return infer_literal_type(self, node, tl_type_registry_csize);
+    case ast_string:    return infer_literal_type(self, node, tl_type_registry_ptr_char);
+    case ast_char:      return infer_literal_type(self, node, tl_type_registry_char);
+    case ast_f64:       return infer_literal_type(self, node, tl_type_registry_float);
+    case ast_i64:       return infer_weak_int_literal(self, node, 1);
+    case ast_i64_z:     return infer_literal_type(self, node, tl_type_registry_cptrdiff);
+    case ast_u64:       return infer_weak_int_literal(self, node, 0);
+    case ast_u64_zu:    return infer_literal_type(self, node, tl_type_registry_csize);
     case ast_bool:      return infer_literal_type(self, node, tl_type_registry_bool);
     case ast_body:      return infer_body(self, node);
     case ast_case:      return infer_case(self, traverse_ctx, node);
@@ -3595,7 +3594,8 @@ static str specialize_type_constructor_(tl_infer *self, str name, tl_monotype_si
     forall(i, args) {
         if (tl_monotype_is_inst(args.v[i]) && !tl_monotype_is_inst_specialized(args.v[i])) {
             tl_polytype *poly         = null;
-            str          generic_name = args.v[i]->cons_inst->def->generic_name;
+            tl_monotype *arg_mono     = args.v[i];
+            str          generic_name = arg_mono->cons_inst->def->generic_name;
 
             // Do not recurse: fixup after
             if (str_eq(name, generic_name)) {
@@ -3622,7 +3622,7 @@ static str specialize_type_constructor_(tl_infer *self, str name, tl_monotype_si
                       str_cstr(&generic_name), str_cstr(&name));
 #endif
                     {
-                        tl_monotype **_t = &args.v[i]->cons_inst->args.v[0];
+                        tl_monotype **_t = &arg_mono->cons_inst->args.v[0];
                         array_push(recur_refs, _t);
                     }
                     continue;
@@ -3997,6 +3997,11 @@ static int post_specialize(tl_infer *self, traverse_ctx *traverse_ctx, ast_node 
             self->counters.specialize_infer_ms += hires_timer_elapsed_sec(&st) * 1000.0;
         }
 
+        // Default weak integer literals created during re-inference, so that
+        // specialization sees concrete Int/UInt for instance keys.
+        tl_type_subs_default_weak_ints(self->subs, tl_type_registry_int(self->registry),
+                                       tl_type_registry_uint(self->registry));
+
         // Apply substitutions to AST before specialization, so types are concrete
         if (stats) hires_timer_start(&st);
         apply_subs_to_ast_node(self, infer_target);
@@ -4029,7 +4034,7 @@ static void add_free_variables_to_arrow(tl_infer *self, ast_node *node, tl_polyt
 static str  specialize_arrow(tl_infer *self, traverse_ctx *traverse_ctx, str name, tl_monotype *arrow,
                              ast_node_sized callsite_type_arguments) {
 
-    if (!tl_monotype_is_concrete(arrow)) tl_monotype_substitute(self->arena, arrow, self->subs, null);
+    if (!tl_monotype_is_concrete_no_weak(arrow)) tl_monotype_substitute(self->arena, arrow, self->subs, null);
 
 #if DEBUG_INVARIANTS
     // Invariant: Callsite arrow type is expected to be concrete, but there may be edge cases where that is
@@ -5567,7 +5572,7 @@ tl_monotype *tl_infer_update_specialized_type_(tl_infer *self, tl_monotype *mono
     case tl_weak_int_signed:
     case tl_weak_int_unsigned: break;
 
-    case tl_cons_inst:   {
+    case tl_cons_inst:         {
 
         int did_replace  = !tl_monotype_is_inst_specialized(mono);
         str generic_name = mono->cons_inst->def->generic_name;
@@ -5642,7 +5647,7 @@ tl_monotype *tl_infer_update_specialized_type_(tl_infer *self, tl_monotype *mono
 
 tl_monotype *tl_infer_update_specialized_type(tl_infer *self, tl_monotype *mono) {
     switch (mono->tag) {
-    case tl_var:         tl_monotype_substitute(self->arena, mono, self->subs, null); break;
+    case tl_var:               tl_monotype_substitute(self->arena, mono, self->subs, null); break;
 
     case tl_any:
     case tl_ellipsis:
@@ -5650,11 +5655,11 @@ tl_monotype *tl_infer_update_specialized_type(tl_infer *self, tl_monotype *mono)
     case tl_weak:
     case tl_weak_int_signed:
     case tl_weak_int_unsigned:
-    case tl_placeholder: return null;
+    case tl_placeholder:       return null;
 
     case tl_cons_inst:
     case tl_arrow:
-    case tl_tuple:       {
+    case tl_tuple:             {
         hashmap     *in_progress = hset_create(self->transient, 64);
         tl_monotype *out         = tl_infer_update_specialized_type_(self, mono, &in_progress);
         return out;
@@ -5681,11 +5686,11 @@ static void update_types_one_type(tl_infer *self, update_types_ctx *ctx, tl_poly
     case tl_weak:
     case tl_weak_int_signed:
     case tl_weak_int_unsigned:
-    case tl_placeholder: return;
+    case tl_placeholder:       return;
 
     case tl_cons_inst:
     case tl_arrow:
-    case tl_tuple:       {
+    case tl_tuple:             {
         // For recursive types, bounce until no changes. update_specialized_type returns null if there is no
         // need to replace the type being tested.
         int tries = 3;
@@ -6166,9 +6171,8 @@ static int run_specialize(tl_infer *self, ast_node_sized nodes, ast_node *main) 
     // Default unconstrained weak integer literals: weak_int_signed -> Int, weak_int_unsigned -> UInt.
     // Must happen after specialization (which re-infers literals, creating new weak types)
     // and before the final substitution pass.
-    tl_type_subs_default_weak_ints(self->subs,
-        tl_type_registry_int(self->registry),
-        tl_type_registry_uint(self->registry));
+    tl_type_subs_default_weak_ints(self->subs, tl_type_registry_int(self->registry),
+                                   tl_type_registry_uint(self->registry));
 
     // apply subs to global environment
     tl_type_subs_apply(self->subs, self->env);
@@ -6264,9 +6268,8 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *out_resu
 
     // Default unconstrained weak integer literals before specialization, so that
     // specialization sees concrete Int/UInt types for naming and instance creation.
-    tl_type_subs_default_weak_ints(self->subs,
-        tl_type_registry_int(self->registry),
-        tl_type_registry_uint(self->registry));
+    tl_type_subs_default_weak_ints(self->subs, tl_type_registry_int(self->registry),
+                                   tl_type_registry_uint(self->registry));
     tl_type_subs_apply(self->subs, self->env);
     apply_subs_to_ast(self);
     arena_reset(self->transient);
