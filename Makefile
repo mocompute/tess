@@ -384,6 +384,7 @@ TL_TESTS =					\
 	defer					\
 	defun_inline_type			\
 	deref_then_addr				\
+	dynamic_array				\
 	embed_c					\
 	enum_module				\
 	enum_no_module				\
@@ -452,6 +453,7 @@ TL_TESTS =					\
 	recursive_type				\
 	recursive_type_basic			\
 	recursive_type_cycle_3			\
+	recursive_type_generic			\
 	recursive_type_mutual			\
 	recursive_type_mutual_simple		\
 	regress_type_cons			\
@@ -599,8 +601,6 @@ TL_KNOWN_FAIL_FAILURES =
 
 # Tests that should work but currently fail due to compiler bugs
 TL_KNOWN_FAILURES =				\
-	dynamic_array				\
-	recursive_type_generic			\
 	while_empty_body
 
 # Total test count across all suites
