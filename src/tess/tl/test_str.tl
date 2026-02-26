@@ -349,9 +349,9 @@ test_cat_4() {
 test_byte_at() {
     error := 0
     s     := Str.from_cstr(c"abc")
-    if unwrap(Str.byte_at(s, 0u), 0u) != 97u { error += 1 } // 'a'
-    if unwrap(Str.byte_at(s, 1u), 0u) != 98u { error += 1 } // 'b'
-    if unwrap(Str.byte_at(s, 2u), 0u) != 99u { error += 1 } // 'c'
+    if unwrap(Str.byte_at(s, 0u), '\0') != 'a' { error += 1 } // 'a'
+    if unwrap(Str.byte_at(s, 1u), '\0') != 'b' { error += 1 } // 'b'
+    if unwrap(Str.byte_at(s, 2u), '\0') != 'c' { error += 1 } // 'c'
     Str.free(s.&)
     error
 }
@@ -533,12 +533,12 @@ test_from_byte() {
     error := 0
     s     := Str.from_byte(65u)         // 'A'
     if Str.len(s) != 1u { error += 1 }
-    if unwrap(Str.byte_at(s, 0u), 0u) != 65u { error += 1 }
+    if unwrap(Str.byte_at(s, 0u), '\0') != 'A' { error += 1 }
     Str.free(s.&)
 
     s2 := Str.from_byte(122u)           // 'z'
     if Str.len(s2) != 1u { error += 1 }
-    if unwrap(Str.byte_at(s2, 0u), 0u) != 122u { error += 1 }
+    if unwrap(Str.byte_at(s2, 0u), '\0') != 'z' { error += 1 }
     Str.free(s2.&)
     error
 }
