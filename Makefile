@@ -613,6 +613,7 @@ $(TL_BUILD_DIR)/test_import_relative_dotdot: $(TL_TEST_DIR)/fixtures/test_import
 	@cd $(TL_TEST_DIR)/fixtures && \
 	export ASAN_OPTIONS=$(ASAN_OPTIONS) && \
 	if ! $(CURDIR)/$(TESS_EXE) exe --no-standard-includes -S $(CURDIR)/$(TL_STD_DIR) -o $(CURDIR)/$@ test_import_relative_dotdot.tl ; then \
+		rm -f $(CURDIR)/$@; \
 		$(MSG_FAIL) $@; \
 	fi
 
@@ -621,6 +622,7 @@ $(TL_BUILD_DIR)/test_%: $(TL_TEST_DIR)/test_%.tl $(TESS_EXE)
 	$(MSG_GEN) $@
 	@export ASAN_OPTIONS=$(ASAN_OPTIONS); \
 	if ! ./$(TESS_EXE) exe --no-standard-includes -S $(TL_STD_DIR) -o $@ $< ; then \
+		rm -f $@; \
 		$(MSG_FAIL) $@; \
 	fi
 
