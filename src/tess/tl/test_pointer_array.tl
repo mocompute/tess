@@ -11,6 +11,7 @@ main() {
     pp := p.&
 
     // double dereference
-    val := pp.*.*
-    result : CInt := val - 123456
+    val          := pp.*.*
+    result: CInt := val - 123456
+    result
 }

@@ -27,5 +27,6 @@ main() {
     c_free(xs)
 
     // found should be 5
-    result : CInt := found - 5
+    result: CInt := found - 5
+    result
 }

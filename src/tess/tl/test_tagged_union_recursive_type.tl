@@ -6,12 +6,13 @@ IntList: | Cons { head: Int, tail: Ptr[IntList] }
 
 main() {
     nil: IntList := Nil()
-    n1 := Cons(1, nil.&)
-    n2 := Cons(2, n1.&)
+    n1           := Cons(1, nil.&)
+    n2           := Cons(2, n1.&)
 
     result := when n2 {
         c: Cons { c.head }
         n: Nil { 0 }
     }
-    ret : CInt := result - 2
+    ret: CInt := result - 2
+    ret
 }

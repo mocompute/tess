@@ -1860,7 +1860,7 @@ static int infer_let_in(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
             // constructors so unification would corrupt type state.
             int skip = 0;
             if (is_cast && value_type) {
-                // tl_polytype_substitute(self->arena, value_type, self->subs);
+                tl_polytype_substitute(self->arena, value_type, self->subs);
                 skip = tl_monotype_is_inst_of(value_type->type, S("CArray"));
             }
             if (!skip) {

@@ -43,5 +43,6 @@ main() {
     while i < res.size, i = i + 1u {
         sum = sum + res.v.[i]
     }
-    result : CInt := sum - 10
+    result: CInt := sum - 10
+    result
 }
