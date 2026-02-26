@@ -327,6 +327,8 @@ tl_create_test(generic_lambda)
 tl_create_test(global_variables)
 tl_create_test(hello)
 tl_create_test(integer_families)
+tl_create_test(integer_same_type)
+tl_create_test(integer_widening)
 tl_create_test(if_basic)
 tl_create_test(if_expression)
 tl_create_test(import_relative)
@@ -544,7 +546,16 @@ tl_create_build_fail_test(fail_weak_int_to_standalone)
 tl_create_build_fail_test(fail_try_non_union)
 tl_create_build_fail_test(fail_try_three_variants)
 
+tl_create_build_fail_test(fail_integer_exact_case)
+tl_create_build_fail_test(fail_integer_exact_conditional)
+tl_create_build_fail_test(fail_integer_exact_operator)
+tl_create_build_fail_test(fail_integer_narrowing_funcall)
+tl_create_build_fail_test(fail_integer_narrowing_let)
+tl_create_build_fail_test(fail_integer_narrowing_reassign)
+tl_create_build_fail_test(fail_integer_narrowing_return)
+
 # Known fail-failures: expected-failure tests that the compiler doesn't reject yet
+tl_create_known_fail_failure(fail_integer_cross_chain)
 
 # Known failures: these should work but a compiler bug makes them fail
 tl_create_known_failure(while_empty_body)

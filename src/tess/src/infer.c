@@ -271,7 +271,8 @@ tl_infer_counters const *tl_infer_get_counters(tl_infer const *self) {
 // Populates the toplevel map from AST nodes (structs, enums, functions, let-in
 // bindings, type aliases, hash directives) and provides error-reporting helpers.
 
-static int constrain(tl_infer *self, tl_polytype *left, tl_polytype *right, ast_node const *node);
+static int constrain(tl_infer *self, tl_polytype *left, tl_polytype *right, ast_node const *node,
+                     tl_unify_direction dir);
 
 static int env_insert_constrain(tl_infer *self, str name, tl_polytype *type, ast_node const *name_node) {
 
@@ -279,7 +280,7 @@ static int env_insert_constrain(tl_infer *self, str name, tl_polytype *type, ast
 
     tl_polytype *exist = tl_type_env_lookup(self->env, name);
     if (exist) {
-        if (constrain(self, exist, type, name_node)) return 1;
+        if (constrain(self, exist, type, name_node, TL_UNIFY_SYMMETRIC)) return 1;
     } else {
         tl_type_env_insert(self->env, name, type);
         tl_infer_set_attributes(self, name_node);
@@ -996,7 +997,8 @@ static void type_error_cb(void *ctx_, tl_monotype *left, tl_monotype *right) {
     }
 }
 
-static int constrain_mono(tl_infer *self, tl_monotype *left, tl_monotype *right, ast_node const *node) {
+static int constrain_mono(tl_infer *self, tl_monotype *left, tl_monotype *right, ast_node const *node,
+                          tl_unify_direction dir) {
     type_error_cb_ctx error_ctx = {.self = self, .node = node};
 
 #if DEBUG_CONSTRAIN
@@ -1033,7 +1035,7 @@ static int constrain_mono(tl_infer *self, tl_monotype *left, tl_monotype *right,
 #endif
 
     hashmap *seen = hset_create(self->transient, 64);
-    int      res  = tl_type_subs_unify_mono(self->subs, left, right, type_error_cb, &error_ctx, &seen);
+    int      res  = tl_type_subs_unify_mono(self->subs, left, right, type_error_cb, &error_ctx, &seen, dir);
 
 #if DEBUG_CONSTRAIN
     if (res) {
@@ -1044,7 +1046,8 @@ static int constrain_mono(tl_infer *self, tl_monotype *left, tl_monotype *right,
     return res;
 }
 
-static int constrain(tl_infer *self, tl_polytype *left, tl_polytype *right, ast_node const *node) {
+static int constrain(tl_infer *self, tl_polytype *left, tl_polytype *right, ast_node const *node,
+                     tl_unify_direction dir) {
     if (self->report_stats) self->counters.unify_calls++;
     if (left == right) return 0;
     if (0) {
@@ -1064,7 +1067,7 @@ static int constrain(tl_infer *self, tl_polytype *left, tl_polytype *right, ast_
     if (right->quantifiers.size) rhs = tl_polytype_instantiate(self->arena, right, self->subs);
     else rhs = right->type;
 
-    int res = constrain_mono(self, lhs, rhs, node);
+    int res = constrain_mono(self, lhs, rhs, node, dir);
 
     if (self->report_stats) {
         hires_timer_stop(&ct);
@@ -1073,9 +1076,10 @@ static int constrain(tl_infer *self, tl_polytype *left, tl_polytype *right, ast_
     return res;
 }
 
-static int constrain_pm(tl_infer *self, tl_polytype *left, tl_monotype *right, ast_node const *node) {
+static int constrain_pm(tl_infer *self, tl_polytype *left, tl_monotype *right, ast_node const *node,
+                        tl_unify_direction dir) {
     tl_polytype wrap = tl_polytype_wrap(right);
-    return constrain(self, left, &wrap, node);
+    return constrain(self, left, &wrap, node, dir);
 }
 
 static void ensure_tv(tl_infer *self, tl_polytype **type) {
@@ -1098,14 +1102,14 @@ static int infer_literal_type(tl_infer *self, ast_node *node,
                 str_is_empty(node_type_str) ? "(null)" : str_cstr(&node_type_str));
     }
 #endif
-    return constrain_pm(self, node->type, ty, node);
+    return constrain_pm(self, node->type, ty, node, TL_UNIFY_SYMMETRIC);
 }
 
 static int infer_weak_int_literal(tl_infer *self, ast_node *node, int is_signed) {
     ensure_tv(self, &node->type);
     tl_monotype *weak = is_signed ? tl_monotype_create_fresh_weak_int_signed(self->subs)
                                   : tl_monotype_create_fresh_weak_int_unsigned(self->subs);
-    return constrain_pm(self, node->type, weak, node);
+    return constrain_pm(self, node->type, weak, node, TL_UNIFY_SYMMETRIC);
 }
 
 typedef struct {
@@ -1245,7 +1249,7 @@ static int is_ptr_cast_annotation(ast_node *node) {
 static int infer_nil(tl_infer *self, ast_node *node) {
     ensure_tv(self, &node->type);
     tl_monotype *weak = tl_monotype_create_fresh_weak(self->subs);
-    return constrain_pm(self, node->type, weak, node);
+    return constrain_pm(self, node->type, weak, node, TL_UNIFY_SYMMETRIC);
 }
 
 static int infer_void(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
@@ -1268,7 +1272,7 @@ static int infer_body(tl_infer *self, ast_node *node) {
             return 1;
         }
 
-        return constrain(self, node->type, last->type, node);
+        return constrain(self, node->type, last->type, node, TL_UNIFY_SYMMETRIC);
     }
     return 0;
 }
@@ -1286,18 +1290,18 @@ static int infer_tuple(tl_infer *self, ast_node *node) {
     }
 
     tl_monotype *tuple = tl_monotype_create_tuple(self->arena, (tl_monotype_sized)sized_all(tup_types));
-    return constrain(self, node->type, tl_polytype_absorb_mono(self->arena, tuple), node);
+    return constrain(self, node->type, tl_polytype_absorb_mono(self->arena, tuple), node, TL_UNIFY_SYMMETRIC);
 }
 
 static int infer_while(tl_infer *self, ast_node *node) {
     ensure_tv(self, &node->type);
     tl_monotype *nil = tl_type_registry_nil(self->registry);
-    return constrain_pm(self, node->type, nil, node);
+    return constrain_pm(self, node->type, nil, node, TL_UNIFY_SYMMETRIC);
 }
 
 static int infer_continue(tl_infer *self, ast_node *node) {
     ensure_tv(self, &node->type);
-    return constrain_pm(self, node->type, tl_monotype_create_any(self->arena), node);
+    return constrain_pm(self, node->type, tl_monotype_create_any(self->arena), node, TL_UNIFY_SYMMETRIC);
 }
 
 static int infer_return(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
@@ -1310,10 +1314,12 @@ static int infer_return(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
 
     ensure_tv(self, &node->type);
     if (!node->return_.is_break_statement && node->return_.value)
-        if (constrain(self, node->type, node->return_.value->type, node)) return 1;
+        if (constrain(self, node->type, node->return_.value->type, node, TL_UNIFY_SYMMETRIC)) return 1;
 
-    if (ctx->result_type && node->return_.value)
-        if (constrain_pm(self, node->return_.value->type, ctx->result_type, node)) return 1;
+    if (ctx->result_type && node->return_.value) {
+        tl_polytype wrap_result = tl_polytype_wrap(ctx->result_type);
+        if (constrain(self, &wrap_result, node->return_.value->type, node, TL_UNIFY_DIRECTED)) return 1;
+    }
 
     return 0;
 }
@@ -1362,11 +1368,11 @@ static int infer_try(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
 
     // Constrain the try expression's type to the inner field type (full unwrap)
     ensure_tv(self, &node->type);
-    if (constrain_pm(self, node->type, inner_type, node)) return 1;
+    if (constrain_pm(self, node->type, inner_type, node, TL_UNIFY_SYMMETRIC)) return 1;
 
     // Constrain the enclosing function's return type to be compatible with the wrapper type
     if (ctx->result_type)
-        if (constrain_pm(self, node->try_.operand->type, ctx->result_type, node)) return 1;
+        if (constrain_pm(self, node->try_.operand->type, ctx->result_type, node, TL_UNIFY_SYMMETRIC)) return 1;
 
     return 0;
 }
@@ -1391,9 +1397,9 @@ static int infer_lambda_function_application(tl_infer *self, traverse_ctx *ctx, 
 
     if (check_const_strip_in_call(self, inst, app, node)) return 1;
     tl_polytype wrap = tl_polytype_wrap(inst);
-    if (constrain(self, &wrap, app, node)) return 1;
+    if (constrain(self, &wrap, app, node, TL_UNIFY_DIRECTED)) return 1;
 
-    if (constrain(self, node->type, node->lambda_application.lambda->lambda_function.body->type, node))
+    if (constrain(self, node->type, node->lambda_application.lambda->lambda_function.body->type, node, TL_UNIFY_SYMMETRIC))
         return 1;
 
     return 0;
@@ -1406,25 +1412,25 @@ static int infer_lambda_function(tl_infer *self, traverse_ctx *ctx, ast_node *no
       make_arrow(self, ctx, ast_node_sized_from_ast_array(node), node->lambda_function.body, 1);
     if (!arrow) return 1;
     tl_polytype_generalize(arrow, self->env, self->subs);
-    if (constrain(self, node->type, arrow, node)) return 1;
+    if (constrain(self, node->type, arrow, node, TL_UNIFY_SYMMETRIC)) return 1;
 
     return 0;
 }
 
 static int infer_if_then_else(tl_infer *self, ast_node *node) {
     tl_monotype *bool_type = tl_type_registry_bool(self->registry);
-    if (constrain_pm(self, node->if_then_else.condition->type, bool_type, node)) return 1;
+    if (constrain_pm(self, node->if_then_else.condition->type, bool_type, node, TL_UNIFY_SYMMETRIC)) return 1;
 
     ensure_tv(self, &node->type);
     if (node->if_then_else.no) {
-        if (constrain(self, node->if_then_else.yes->type, node->if_then_else.no->type, node)) return 1;
-        if (constrain(self, node->type, node->if_then_else.yes->type, node)) return 1;
+        if (constrain(self, node->if_then_else.yes->type, node->if_then_else.no->type, node, TL_UNIFY_EXACT)) return 1;
+        if (constrain(self, node->type, node->if_then_else.yes->type, node, TL_UNIFY_SYMMETRIC)) return 1;
     } else {
         tl_monotype *nil      = tl_type_registry_nil(self->registry);
         tl_monotype *any_type = tl_monotype_create_any(self->arena);
-        if (constrain_pm(self, node->type, nil, node)) return 1;
+        if (constrain_pm(self, node->type, nil, node, TL_UNIFY_SYMMETRIC)) return 1;
 
-        if (constrain_pm(self, node->if_then_else.yes->type, any_type, node)) return 1;
+        if (constrain_pm(self, node->if_then_else.yes->type, any_type, node, TL_UNIFY_SYMMETRIC)) return 1;
     }
 
     return 0;
@@ -1441,7 +1447,7 @@ static int infer_assignment(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
 
     ensure_tv(self, &node->type);
 
-    if (constrain(self, node->type, node->assignment.value->type, node)) return 1;
+    if (constrain(self, node->type, node->assignment.value->type, node, TL_UNIFY_SYMMETRIC)) return 1;
 
     // Do not constrain name type because field names are not unique
 
@@ -1533,10 +1539,10 @@ static int infer_reassignment(tl_infer *self, traverse_ctx *ctx, ast_node *node)
 
     // reassignment nodes have void type
     tl_monotype *nil = tl_type_registry_nil(self->registry);
-    if (constrain_pm(self, node->type, nil, node)) return 1;
+    if (constrain_pm(self, node->type, nil, node, TL_UNIFY_SYMMETRIC)) return 1;
 
     // name and value are same type
-    if (constrain(self, node->assignment.name->type, node->assignment.value->type, node)) return 1;
+    if (constrain(self, node->assignment.name->type, node->assignment.value->type, node, TL_UNIFY_DIRECTED)) return 1;
 
     return 0;
 }
@@ -1552,16 +1558,18 @@ static int infer_binary_op(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
     ensure_tv(self, &node->type);
 
     if (is_arithmetic_operator(op)) {
-        if (constrain(self, node->type, left->type, node)) return 1;
-        if (constrain(self, left->type, right->type, node)) return 1;
+        if (constrain(self, node->type, left->type, node, TL_UNIFY_SYMMETRIC)) return 1;
+        if (constrain(self, left->type, right->type, node, TL_UNIFY_EXACT)) return 1;
     } else if (is_bitwise_operator(op)) {
         // Bitwise operators: operands must match each other (same integer family).
-        if (constrain(self, node->type, left->type, node)) return 1;
-        if (constrain(self, left->type, right->type, node)) return 1;
+        if (constrain(self, node->type, left->type, node, TL_UNIFY_SYMMETRIC)) return 1;
+        if (constrain(self, left->type, right->type, node, TL_UNIFY_EXACT)) return 1;
     } else if (is_logical_operator(op) || is_relational_operator(op)) {
         tl_monotype *bool_type = tl_type_registry_bool(self->registry);
-        if (constrain_pm(self, node->type, bool_type, node)) return 1;
-        if (constrain(self, left->type, right->type, node)) return 1;
+        if (constrain_pm(self, node->type, bool_type, node, TL_UNIFY_SYMMETRIC)) return 1;
+        // Relational/logical: operands stay SYMMETRIC for now (result is Bool, not integer).
+        // Phase 4+ may tighten this once stdlib CSize/UInt mixing is resolved.
+        if (constrain(self, left->type, right->type, node, TL_UNIFY_SYMMETRIC)) return 1;
     } else if (is_index_operator(op)) {
 
         // needed
@@ -1570,10 +1578,10 @@ static int infer_binary_op(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
 
         if (tl_monotype_has_ptr(left->type->type)) {
             tl_monotype *target = tl_monotype_ptr_target(left->type->type);
-            if (constrain_pm(self, node->type, target, node)) return 1;
+            if (constrain_pm(self, node->type, target, node, TL_UNIFY_SYMMETRIC)) return 1;
         } else if (tl_monotype_is_inst_of(left->type->type, S("CArray"))) {
             tl_monotype *target = left->type->type->cons_inst->args.v[0];
-            if (constrain_pm(self, node->type, target, node)) return 1;
+            if (constrain_pm(self, node->type, target, node, TL_UNIFY_SYMMETRIC)) return 1;
         }
 
     } else if (is_struct_access_operator(op)) {
@@ -1596,7 +1604,7 @@ static int infer_unary_op(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
         if (tl_monotype_has_ptr(operand->type->type)) {
             assert(!tl_polytype_is_scheme(operand->type));
             tl_monotype *target = tl_monotype_ptr_target(operand->type->type);
-            if (constrain_pm(self, node->type, target, node)) return 1;
+            if (constrain_pm(self, node->type, target, node, TL_UNIFY_SYMMETRIC)) return 1;
         } else if (tl_polytype_is_concrete(operand->type)) {
             array_push(self->errors, ((tl_infer_error){.tag = tl_err_expected_pointer, .node = node}));
             return 1;
@@ -1604,17 +1612,17 @@ static int infer_unary_op(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
     } else if (str_eq(op, S("&"))) {
         if (!tl_polytype_is_scheme(operand->type)) {
             tl_monotype *ptr = tl_type_registry_ptr(self->registry, operand->type->type);
-            if (constrain_pm(self, node->type, ptr, node)) return 1;
+            if (constrain_pm(self, node->type, ptr, node, TL_UNIFY_SYMMETRIC)) return 1;
         } else {
             tl_monotype *weak = tl_monotype_create_fresh_weak(self->subs);
             tl_monotype *ptr  = tl_type_registry_ptr(self->registry, weak);
-            if (constrain_pm(self, node->type, ptr, node)) return 1;
+            if (constrain_pm(self, node->type, ptr, node, TL_UNIFY_SYMMETRIC)) return 1;
         }
     } else if (str_eq(op, S("!"))) {
         tl_monotype *bool_type = tl_type_registry_bool(self->registry);
-        if (constrain_pm(self, node->type, bool_type, node)) return 1;
+        if (constrain_pm(self, node->type, bool_type, node, TL_UNIFY_SYMMETRIC)) return 1;
     } else if (str_eq(op, S("~")) || str_eq(op, S("-")) || str_eq(op, S("+"))) {
-        if (constrain(self, node->type, operand->type, node)) return 1;
+        if (constrain(self, node->type, operand->type, node, TL_UNIFY_SYMMETRIC)) return 1;
     } else {
         fatal("unknown unary operator");
     }
@@ -1662,7 +1670,7 @@ static int infer_tagged_union_case(tl_infer *self, traverse_ctx *ctx, ast_node *
             // a prior branch may have already constrained to a different type)
             int save                        = self->is_constrain_ignore_error;
             self->is_constrain_ignore_error = 1;
-            constrain_pm(self, expr_type, wrapper_type, node->case_.expression);
+            constrain_pm(self, expr_type, wrapper_type, node->case_.expression, TL_UNIFY_SYMMETRIC);
             self->is_constrain_ignore_error = save;
             tl_monotype_substitute(self->arena, wrapper_type, self->subs, null);
         }
@@ -1766,29 +1774,29 @@ static int infer_case(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
 
             if (resolve_node(self, node->case_.conditions.v[i], ctx, npos_operand)) return 1;
             ensure_tv(self, &node->case_.conditions.v[i]->type);
-            if (constrain(self, expr_type, node->case_.conditions.v[i]->type, node)) return 1;
+            if (constrain(self, expr_type, node->case_.conditions.v[i]->type, node, TL_UNIFY_SYMMETRIC)) return 1;
         }
     }
 
     switch (node->case_.arms.size) {
     case 0:
-        if (constrain_pm(self, node->type, nil, node)) return 1;
+        if (constrain_pm(self, node->type, nil, node, TL_UNIFY_SYMMETRIC)) return 1;
         break;
     case 1:
-        if (constrain_pm(self, node->type, nil, node)) return 1;
+        if (constrain_pm(self, node->type, nil, node, TL_UNIFY_SYMMETRIC)) return 1;
         if (resolve_node(self, node->case_.arms.v[0], ctx, npos_operand)) return 1;
-        if (constrain_pm(self, node->case_.arms.v[0]->type, any_type, node)) return 1;
+        if (constrain_pm(self, node->case_.arms.v[0]->type, any_type, node, TL_UNIFY_SYMMETRIC)) return 1;
         break;
 
     default: {
         if (resolve_node(self, node->case_.arms.v[0], ctx, npos_operand)) return 1;
         tl_polytype *arm_type = node->case_.arms.v[0]->type;
-        if (constrain(self, node->type, arm_type, node->case_.arms.v[0])) return 1;
+        if (constrain(self, node->type, arm_type, node->case_.arms.v[0], TL_UNIFY_SYMMETRIC)) return 1;
 
         forall(i, node->case_.arms) {
             if (resolve_node(self, node->case_.arms.v[i], ctx, npos_operand)) return 1;
             ensure_tv(self, &node->case_.arms.v[i]->type);
-            if (constrain(self, node->case_.arms.v[i]->type, arm_type, node)) return 1;
+            if (constrain(self, node->case_.arms.v[i]->type, arm_type, node, TL_UNIFY_EXACT)) return 1;
         }
     } break;
     }
@@ -1796,7 +1804,7 @@ static int infer_case(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
     if (node->case_.binary_predicate && node->case_.conditions.size) {
         tl_polytype *pred_arrow =
           make_binary_predicate_arrow(self, ctx, node->case_.expression, node->case_.conditions.v[0]);
-        if (constrain(self, node->case_.binary_predicate->type, pred_arrow, node)) return 1;
+        if (constrain(self, node->case_.binary_predicate->type, pred_arrow, node, TL_UNIFY_SYMMETRIC)) return 1;
     }
 
     return 0;
@@ -1817,7 +1825,7 @@ static int infer_let_in(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
         node->let_in.name->type = null;
 
         if (node->let_in.body)
-            if (constrain(self, node->type, node->let_in.body->type, node)) return 1;
+            if (constrain(self, node->type, node->let_in.body->type, node, TL_UNIFY_SYMMETRIC)) return 1;
 
         {
             ast_node *let_in_lambda    = ast_node_clone(self->arena, node);
@@ -1855,7 +1863,7 @@ static int infer_let_in(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
                 skip = tl_monotype_is_inst_of(value_type->type, S("CArray"));
             }
             if (!skip) {
-                if (constrain(self, name_type, value_type, node) && !is_cast) return 1;
+                if (constrain(self, name_type, value_type, node, TL_UNIFY_DIRECTED) && !is_cast) return 1;
             }
             self->is_constrain_ignore_error = 0;
         }
@@ -1863,7 +1871,7 @@ static int infer_let_in(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
         env_insert_constrain(self, node->let_in.name->symbol.name, name_type, node->let_in.name);
 
         if (node->let_in.body)
-            if (constrain(self, node->type, node->let_in.body->type, node)) return 1;
+            if (constrain(self, node->type, node->let_in.body->type, node, TL_UNIFY_SYMMETRIC)) return 1;
     }
     return 0;
 }
@@ -1966,10 +1974,10 @@ static int infer_type_constructor_nfa(tl_infer *self, traverse_ctx *ctx, ast_nod
             if (is_cast) {
                 tl_polytype *annotation_type = arg->assignment.name->symbol.annotation_type;
                 // Constrain annotation type against struct field to propagate concrete type info
-                if (constrain_pm(self, annotation_type, inst->cons_inst->args.v[found], node)) return 1;
+                if (constrain_pm(self, annotation_type, inst->cons_inst->args.v[found], node, TL_UNIFY_SYMMETRIC)) return 1;
                 // Constrain value type against annotation permissively (cast)
                 self->is_constrain_ignore_error = 1;
-                constrain_pm(self, arg->type, inst->cons_inst->args.v[found], node);
+                constrain_pm(self, arg->type, inst->cons_inst->args.v[found], node, TL_UNIFY_SYMMETRIC);
                 self->is_constrain_ignore_error = 0;
             } else {
 #if DEBUG_EXPLICIT_TYPE_ARGS
@@ -1988,7 +1996,7 @@ static int infer_type_constructor_nfa(tl_infer *self, traverse_ctx *ctx, ast_nod
                     fprintf(stderr, "  field type from inst: %s\n", str_cstr(&field_type_str));
                 }
 #endif
-                if (constrain_pm(self, arg->type, inst->cons_inst->args.v[found], node)) return 1;
+                if (constrain_pm(self, arg->type, inst->cons_inst->args.v[found], node, TL_UNIFY_SYMMETRIC)) return 1;
             }
         } else {
             // In this branch, node is a type literal.
@@ -1996,7 +2004,7 @@ static int infer_type_constructor_nfa(tl_infer *self, traverse_ctx *ctx, ast_nod
         ++i;
     }
 
-    return constrain_pm(self, node->type, inst, node);
+    return constrain_pm(self, node->type, inst, node, TL_UNIFY_SYMMETRIC);
 }
 
 static int infer_named_function_application(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
@@ -2099,7 +2107,7 @@ static int infer_named_function_application(tl_infer *self, traverse_ctx *ctx, a
         }
         if (check_const_strip_in_call(self, inst, app, node)) return 1;
         tl_polytype wrap = tl_polytype_wrap(inst);
-        if (constrain(self, &wrap, app, node)) return 1;
+        if (constrain(self, &wrap, app, node, TL_UNIFY_DIRECTED)) return 1;
     }
 
     return 0;
@@ -2294,7 +2302,7 @@ static void prepare_tagged_union_bindings(tl_infer *self, traverse_ctx *ctx, ast
             wrapper_type                    = result.parsed;
             int save                        = self->is_constrain_ignore_error;
             self->is_constrain_ignore_error = 1;
-            constrain_pm(self, expr_type, wrapper_type, node->case_.expression);
+            constrain_pm(self, expr_type, wrapper_type, node->case_.expression, TL_UNIFY_SYMMETRIC);
             self->is_constrain_ignore_error = save;
             tl_monotype_substitute(self->arena, wrapper_type, self->subs, null);
         }
@@ -2735,14 +2743,14 @@ static int type_literal_specialize(tl_infer *self, ast_node *node) {
         if (ast_node_is_symbol(node)) {
             ast_node_name_replace(node, name_inst);
             if (node->type) {
-                if (constrain(self, node->type, special_type, node)) return 1;
+                if (constrain(self, node->type, special_type, node, TL_UNIFY_SYMMETRIC)) return 1;
             } else {
                 ast_node_type_set(node, special_type);
             }
         } else if (ast_node_is_nfa(node)) {
             ast_node_name_replace(node->named_application.name, name_inst);
             if (node->named_application.name->type) {
-                if (constrain(self, node->named_application.name->type, special_type, node)) return 1;
+                if (constrain(self, node->named_application.name->type, special_type, node, TL_UNIFY_SYMMETRIC)) return 1;
             } else {
                 ast_node_type_set(node->named_application.name, special_type);
             }
@@ -2769,7 +2777,7 @@ static int constrain_or_set(tl_infer *self, ast_node *node, tl_polytype *type) {
         fprintf(stderr, "constrain_or_set: '%s' : %s :: %s\n", str_cstr(&name), str_cstr(&node_type_str),
                 str_cstr(&poly_str));
 #endif
-        if (constrain(self, node->type, type, node)) return type_error(self, node);
+        if (constrain(self, node->type, type, node, TL_UNIFY_SYMMETRIC)) return type_error(self, node);
     }
 
     else {
@@ -2891,7 +2899,7 @@ static int infer_struct_access(tl_infer *self, ast_node *node) {
         } else {
             tl_monotype *weak = tl_monotype_create_fresh_weak(self->subs);
             tl_monotype *ptr  = tl_type_registry_ptr(self->registry, weak);
-            if (constrain_pm(self, left->type, ptr, node)) return 1;
+            if (constrain_pm(self, left->type, ptr, node, TL_UNIFY_SYMMETRIC)) return 1;
             struct_type = weak;
         }
 
@@ -2947,9 +2955,9 @@ static int infer_struct_access(tl_infer *self, ast_node *node) {
             if (found != -1) {
                 if (!inst->args.size) {
                     // empty struct
-                    if (constrain_pm(self, right->type, struct_type, node)) return 1;
-                    if (constrain_pm(self, node->type, struct_type, node)) return 1;
-                    if (constrain(self, node->type, right->type, node)) return 1;
+                    if (constrain_pm(self, right->type, struct_type, node, TL_UNIFY_SYMMETRIC)) return 1;
+                    if (constrain_pm(self, node->type, struct_type, node, TL_UNIFY_SYMMETRIC)) return 1;
+                    if (constrain(self, node->type, right->type, node, TL_UNIFY_SYMMETRIC)) return 1;
                     goto end_struct_access_op;
                 }
 
@@ -2964,19 +2972,19 @@ static int infer_struct_access(tl_infer *self, ast_node *node) {
                         result_type = tl_monotype_create_fresh_tv(self->subs);
                     }
                     // right = nfa's name
-                    if (constrain_pm(self, right->type, field_type, node)) return 1;
-                    if (constrain_pm(self, nfa->type, result_type, node)) return 1;
-                    if (constrain_pm(self, node->type, result_type, node)) return 1;
+                    if (constrain_pm(self, right->type, field_type, node, TL_UNIFY_SYMMETRIC)) return 1;
+                    if (constrain_pm(self, nfa->type, result_type, node, TL_UNIFY_SYMMETRIC)) return 1;
+                    if (constrain_pm(self, node->type, result_type, node, TL_UNIFY_SYMMETRIC)) return 1;
                 } else {
-                    if (constrain_pm(self, right->type, field_type, node)) return 1;
+                    if (constrain_pm(self, right->type, field_type, node, TL_UNIFY_SYMMETRIC)) return 1;
 
                     if (tl_monotype_is_inst_of(field_type, S("CArray"))) {
                         tl_monotype *target   = field_type->cons_inst->args.v[0];
                         tl_monotype *ptr_type = tl_type_registry_ptr(self->registry, target);
-                        if (constrain_pm(self, node->type, ptr_type, node)) return 1;
+                        if (constrain_pm(self, node->type, ptr_type, node, TL_UNIFY_SYMMETRIC)) return 1;
                     } else {
-                        if (constrain_pm(self, node->type, field_type, node)) return 1;
-                        if (constrain(self, node->type, right->type, node)) return 1;
+                        if (constrain_pm(self, node->type, field_type, node, TL_UNIFY_SYMMETRIC)) return 1;
+                        if (constrain(self, node->type, right->type, node, TL_UNIFY_SYMMETRIC)) return 1;
                     }
                 }
             } else {
@@ -3296,7 +3304,7 @@ static int check_type_predicate(tl_infer *self, traverse_ctx *traverse_ctx, ast_
             self->is_constrain_ignore_error = 1;
 
             tl_polytype *lhs_poly           = tl_polytype_absorb_mono(self->arena, lhs_mono);
-            if (!rhs_type || constrain_pm(self, lhs_poly, rhs_type, node)) {
+            if (!rhs_type || constrain_pm(self, lhs_poly, rhs_type, node, TL_UNIFY_SYMMETRIC)) {
                 node->type_predicate.is_valid = 0;
             } else {
                 node->type_predicate.is_valid = 1;
@@ -3333,7 +3341,7 @@ static int check_type_predicate(tl_infer *self, traverse_ctx *traverse_ctx, ast_
         int save                        = self->is_constrain_ignore_error;
         self->is_constrain_ignore_error = 1;
 
-        if (!type || constrain_pm(self, node->type_predicate.lhs->type, type, node)) {
+        if (!type || constrain_pm(self, node->type_predicate.lhs->type, type, node, TL_UNIFY_SYMMETRIC)) {
             node->type_predicate.is_valid = 0;
         } else {
             node->type_predicate.is_valid = 1;
@@ -5291,7 +5299,8 @@ static int infer_one(tl_infer *self, ast_node *infer_target, tl_polytype *arrow)
         else if (ast_node_is_lambda_function(infer_target)) body = infer_target->lambda_function.body;
         if (!body) fatal("logic error");
 
-        if (constrain_pm(self, body->type, tl_monotype_arrow_result(arrow->type), body)) return 1;
+        tl_polytype wrap_result = tl_polytype_wrap(tl_monotype_arrow_result(arrow->type));
+        if (constrain(self, &wrap_result, body->type, body, TL_UNIFY_DIRECTED)) return 1;
     }
     return 0;
 }

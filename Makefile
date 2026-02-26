@@ -413,6 +413,8 @@ TL_TESTS =					\
 	import_relative				\
 	import_relative_dotdot			\
 	integer_families			\
+	integer_same_type			\
+	integer_widening			\
 	lambda_apply				\
 	lambda_arg_annotated			\
 	lambda_arg_unused			\
@@ -565,6 +567,13 @@ TL_FAIL_TESTS =					\
 	fail_integer_cross_family_assignment	\
 	fail_integer_cross_family_comparison	\
 	fail_integer_cross_family_unsigned_to_signed \
+	fail_integer_exact_case			\
+	fail_integer_exact_conditional		\
+	fail_integer_exact_operator		\
+	fail_integer_narrowing_funcall		\
+	fail_integer_narrowing_let		\
+	fail_integer_narrowing_reassign		\
+	fail_integer_narrowing_return		\
 	fail_lambda_implicit_return		\
 	fail_lambda_return			\
 	fail_monkey_patch			\
@@ -597,7 +606,8 @@ TL_FAIL_TESTS =					\
 TL_FAIL_RUNTIME_TESTS =
 
 # Expected-failure tests that the compiler doesn't reject yet
-TL_KNOWN_FAIL_FAILURES =
+TL_KNOWN_FAIL_FAILURES =			\
+	fail_integer_cross_chain
 
 # Tests that should work but currently fail due to compiler bugs
 TL_KNOWN_FAILURES =				\

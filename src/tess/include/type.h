@@ -251,6 +251,12 @@ int         tl_polytype_type_constructor_has_field(tl_polytype *, str);
 
 // -- substitution --
 
+typedef enum {
+    TL_UNIFY_SYMMETRIC = 0, // legacy: no directional integer checking
+    TL_UNIFY_DIRECTED  = 1, // left=expected, right=actual; widening OK
+    TL_UNIFY_EXACT     = 2, // same concrete integer type required
+} tl_unify_direction;
+
 typedef void (*type_error_cb_fun)(void *ctx, tl_monotype *, tl_monotype *);
 
 nodiscard tl_type_subs *tl_type_subs_create(allocator *) mallocfun;
@@ -260,9 +266,9 @@ tl_type_variable        tl_type_subs_fresh(tl_type_subs *);
 int                     tl_type_subs_monotype_occurs(tl_type_subs *, tl_type_variable, tl_monotype *);
 
 int  tl_type_subs_unify_tv_mono(tl_type_subs *, tl_type_variable, tl_monotype *, type_error_cb_fun, void *,
-                                hashmap **);
+                                hashmap **, tl_unify_direction, int tv_is_left);
 int  tl_type_subs_unify_mono(tl_type_subs *, tl_monotype *, tl_monotype *, type_error_cb_fun, void *,
-                             hashmap **);
+                             hashmap **, tl_unify_direction);
 void tl_type_subs_apply(tl_type_subs *, tl_type_env *);
 void tl_type_subs_default_weak_ints(tl_type_subs *, tl_monotype *int_type, tl_monotype *uint_type);
 void tl_type_subs_log(tl_type_subs *);

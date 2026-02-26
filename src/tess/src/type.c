@@ -53,7 +53,7 @@ static void                      mark_integer_subchain(tl_type_registry *, str, 
 // Forward declarations for post-resolution fixup
 static void generalize(tl_monotype *, tl_type_variable_array *, hashmap **);
 static int  tl_type_subs_unity_tv_tv(tl_type_subs *, tl_type_variable, tl_type_variable, type_error_cb_fun,
-                                     void *, hashmap **);
+                                     void *, hashmap **, tl_unify_direction);
 
 // Forward declaration for recursive parse_type_ helpers
 static tl_monotype *tl_type_registry_parse_type_(tl_type_registry *, tl_type_registry_parse_type_ctx *,
@@ -767,7 +767,8 @@ static void resolve_deferred_placeholders(tl_type_registry *self, tl_type_regist
                         if (tl_monotype_is_tv(stored_args->v[j])) {
                             hset_reset(useen);
                             tl_type_subs_unity_tv_tv(self->subs, stored_args->v[j]->var,
-                                                     poly->quantifiers.v[j], null, null, &useen);
+                                                     poly->quantifiers.v[j], null, null, &useen,
+                                                     TL_UNIFY_SYMMETRIC);
                         }
                     }
                 }
@@ -785,7 +786,7 @@ static void resolve_deferred_placeholders(tl_type_registry *self, tl_type_regist
                     for (u32 j = 0; j < source_q->size && j < source_poly->quantifiers.size; j++) {
                         hset_reset(useen);
                         tl_type_subs_unity_tv_tv(self->subs, source_q->v[j], source_poly->quantifiers.v[j],
-                                                 null, null, &useen);
+                                                 null, null, &useen, TL_UNIFY_SYMMETRIC);
                     }
                 }
 
@@ -2527,12 +2528,13 @@ static void uf_union(tl_type_subs *self, tl_type_variable tv1, tl_type_variable 
 }
 
 static int unify_list(tl_type_subs *subs, tl_monotype_sized left, tl_monotype_sized right, tl_monotype *lhs,
-                      tl_monotype *rhs, type_error_cb_fun cb, void *user, hashmap **seen);
+                      tl_monotype *rhs, type_error_cb_fun cb, void *user, hashmap **seen,
+                      tl_unify_direction dir);
 static int unify_tuple(tl_type_subs *subs, tl_monotype_sized left, tl_monotype_sized right,
                        tl_monotype *lhs, tl_monotype *rhs, type_error_cb_fun cb, void *user,
-                       hashmap **seen);
+                       hashmap **seen, tl_unify_direction dir);
 static int tl_type_subs_unity_tv_tv(tl_type_subs *, tl_type_variable, tl_type_variable, type_error_cb_fun,
-                                    void *, hashmap **seen);
+                                    void *, hashmap **seen, tl_unify_direction);
 static int tl_type_subs_unify_tv_weak(tl_type_subs *, tl_type_variable, tl_monotype *, type_error_cb_fun,
                                       void *, hashmap **seen);
 static int tl_type_subs_unify_weak(tl_type_subs *, tl_monotype *weak, tl_monotype *, type_error_cb_fun,
@@ -2544,9 +2546,10 @@ static int tl_type_subs_unify_weak_int_concrete(tl_type_subs *, tl_monotype *wea
 static int unify_weak_int_other(tl_type_subs *, tl_monotype *weak_int, tl_monotype *other,
                                 type_error_cb_fun, void *, hashmap **seen);
 int        tl_type_subs_unify_tv_mono(tl_type_subs *self, tl_type_variable tv, tl_monotype *mono,
-                                      type_error_cb_fun cb, void *user, hashmap **seen);
+                                      type_error_cb_fun cb, void *user, hashmap **seen,
+                                      tl_unify_direction dir, int tv_is_left);
 int tl_type_subs_unify_mono(tl_type_subs *subs, tl_monotype *left, tl_monotype *right, type_error_cb_fun cb,
-                            void *user, hashmap **);
+                            void *user, hashmap **, tl_unify_direction);
 
 static int unify_type_constructor_def(tl_type_constructor_def *lhs, tl_type_constructor_def *rhs) {
     if (lhs == rhs) return 0;
@@ -2557,7 +2560,9 @@ static int unify_type_constructor_def(tl_type_constructor_def *lhs, tl_type_cons
 }
 
 int unify_type_constructor_union(tl_type_subs *subs, tl_monotype *left, tl_monotype *right,
-                                 type_error_cb_fun cb, void *user, hashmap **seen) {
+                                 type_error_cb_fun cb, void *user, hashmap **seen,
+                                 tl_unify_direction dir) {
+    (void)dir; // union matching is always symmetric
     assert(tl_monotype_is_inst(left));
     assert(left->cons_inst->def->is_variable_args);
 
@@ -2570,7 +2575,8 @@ int unify_type_constructor_union(tl_type_subs *subs, tl_monotype *left, tl_monot
     case tl_any:
     case tl_ellipsis:    return 0;
 
-    case tl_var:         return tl_type_subs_unify_tv_mono(subs, right->var, left, cb, user, seen);
+    case tl_var:         return tl_type_subs_unify_tv_mono(subs, right->var, left, cb, user, seen,
+                                                          TL_UNIFY_SYMMETRIC, 0);
     case tl_weak:        return tl_type_subs_unify_weak(subs, right, left, cb, user, seen);
     case tl_weak_int_signed:
     case tl_weak_int_unsigned:
@@ -2583,14 +2589,16 @@ int unify_type_constructor_union(tl_type_subs *subs, tl_monotype *left, tl_monot
                 forall(j, right_unions) {
                     // don't pass cb so that any error is a soft error
                     if (0 ==
-                        tl_type_subs_unify_mono(subs, unions.v[i], right_unions.v[j], null, null, seen))
+                        tl_type_subs_unify_mono(subs, unions.v[i], right_unions.v[j], null, null, seen,
+                                                TL_UNIFY_SYMMETRIC))
                         return 0;
                 }
             }
         } else {
             forall(i, unions) {
                 // don't pass cb so that any error is a soft error
-                if (0 == tl_type_subs_unify_mono(subs, unions.v[i], right, null, null, seen)) return 0;
+                if (0 == tl_type_subs_unify_mono(subs, unions.v[i], right, null, null, seen,
+                                                TL_UNIFY_SYMMETRIC)) return 0;
             }
         }
     } break;
@@ -2599,7 +2607,8 @@ int unify_type_constructor_union(tl_type_subs *subs, tl_monotype *left, tl_monot
     case tl_tuple:
         // attempt to union with any of the union types
         forall(i, unions) {
-            if (0 == tl_type_subs_unify_mono(subs, unions.v[i], right, cb, user, seen)) return 0;
+            if (0 == tl_type_subs_unify_mono(subs, unions.v[i], right, cb, user, seen,
+                                             TL_UNIFY_SYMMETRIC)) return 0;
         }
         break;
     }
@@ -2609,10 +2618,10 @@ int unify_type_constructor_union(tl_type_subs *subs, tl_monotype *left, tl_monot
 }
 
 int unify_type_constructor(tl_type_subs *subs, tl_monotype *left, tl_monotype *right, type_error_cb_fun cb,
-                           void *user, hashmap **seen) {
+                           void *user, hashmap **seen, tl_unify_direction dir, int cons_is_left) {
     assert(tl_monotype_is_inst(left));
     if (left->cons_inst->def->is_variable_args)
-        return unify_type_constructor_union(subs, left, right, cb, user, seen);
+        return unify_type_constructor_union(subs, left, right, cb, user, seen, dir);
 
     switch (right->tag) {
     case tl_integer:     return !tl_monotype_is_integer_convertible(left);
@@ -2622,7 +2631,9 @@ int unify_type_constructor(tl_type_subs *subs, tl_monotype *left, tl_monotype *r
     case tl_any:
     case tl_ellipsis:    return 0;
 
-    case tl_var:         return tl_type_subs_unify_tv_mono(subs, right->var, left, cb, user, seen);
+    // TV is on the opposite side from the cons_inst
+    case tl_var:         return tl_type_subs_unify_tv_mono(subs, right->var, left, cb, user, seen,
+                                                          dir, !cons_is_left);
     case tl_weak:        return tl_type_subs_unify_weak(subs, right, left, cb, user, seen);
     case tl_weak_int_signed:
     case tl_weak_int_unsigned:
@@ -2631,13 +2642,15 @@ int unify_type_constructor(tl_type_subs *subs, tl_monotype *left, tl_monotype *r
     case tl_cons_inst:   {
 
         if (right->cons_inst->def->is_variable_args)
-            return unify_type_constructor_union(subs, right, left, cb, user, seen);
+            return unify_type_constructor_union(subs, right, left, cb, user, seen, dir);
 
         if (unify_type_constructor_def(left->cons_inst->def, right->cons_inst->def)) {
             if (cb) cb(user, left, right);
             return 1;
         }
-        return unify_list(subs, left->cons_inst->args, right->cons_inst->args, left, right, cb, user, seen);
+        // Type constructor args are invariant — always SYMMETRIC
+        return unify_list(subs, left->cons_inst->args, right->cons_inst->args, left, right, cb, user, seen,
+                          TL_UNIFY_SYMMETRIC);
     }
     case tl_arrow:
     case tl_tuple:
@@ -2648,21 +2661,26 @@ int unify_type_constructor(tl_type_subs *subs, tl_monotype *left, tl_monotype *r
 }
 
 // Unify when one side is a type variable (tl_var).
+// tv_is_left: 1 if the TV was on the left (expected) side in the original unification.
 static int unify_var_other(tl_type_subs *subs, tl_type_variable tv, tl_monotype *other,
-                           type_error_cb_fun cb, void *user, hashmap **seen) {
+                           type_error_cb_fun cb, void *user, hashmap **seen,
+                           tl_unify_direction dir, int tv_is_left) {
     switch (other->tag) {
     case tl_placeholder:
     case tl_any:
     case tl_ellipsis:    fatal("unreachable");
     case tl_integer:     return 1;
-    case tl_var:         return tl_type_subs_unity_tv_tv(subs, tv, other->var, cb, user, seen);
+    case tl_var:
+        // Preserve left/right ordering for directional unification
+        if (tv_is_left) return tl_type_subs_unity_tv_tv(subs, tv, other->var, cb, user, seen, dir);
+        else            return tl_type_subs_unity_tv_tv(subs, other->var, tv, cb, user, seen, dir);
     case tl_weak:        return tl_type_subs_unify_tv_weak(subs, tv, other, cb, user, seen);
     case tl_weak_int_signed:
     case tl_weak_int_unsigned:
         return tl_type_subs_unify_tv_weak_int(subs, tv, other, cb, user, seen);
     case tl_cons_inst:
     case tl_arrow:
-    case tl_tuple:       return tl_type_subs_unify_tv_mono(subs, tv, other, cb, user, seen);
+    case tl_tuple:       return tl_type_subs_unify_tv_mono(subs, tv, other, cb, user, seen, dir, tv_is_left);
     }
     fatal("unreachable");
 }
@@ -2676,7 +2694,8 @@ static int unify_weak_other(tl_type_subs *subs, tl_monotype *weak, tl_monotype *
     case tl_ellipsis:    fatal("unreachable");
     case tl_integer:     return 1;
     case tl_var:         return tl_type_subs_unify_tv_weak(subs, other->var, weak, cb, user, seen);
-    case tl_weak:        return tl_type_subs_unity_tv_tv(subs, weak->var, other->var, cb, user, seen);
+    case tl_weak:        return tl_type_subs_unity_tv_tv(subs, weak->var, other->var, cb, user, seen,
+                                                         TL_UNIFY_SYMMETRIC);
     case tl_weak_int_signed:
     case tl_weak_int_unsigned:
         return 1; // error: pointer-weak meets integer-weak
@@ -2687,8 +2706,32 @@ static int unify_weak_other(tl_type_subs *subs, tl_monotype *weak, tl_monotype *
     fatal("unreachable");
 }
 
+// Check directional integer width for DIRECTED and EXACT modes.
+// left = expected type, right = actual type.
+// Returns 0 if the conversion is allowed, 1 if it's a type error.
+// Returns -1 if direction check does not apply (cross-sub-chain: fall through to SYMMETRIC).
+static int check_integer_direction(tl_monotype *expected, tl_monotype *actual, tl_unify_direction dir,
+                                   type_error_cb_fun cb, void *user) {
+    if (expected->cons_inst->def == actual->cons_inst->def) return 0; // same type: always OK
+
+    // Only check direction within the same sub-chain.
+    // Cross-sub-chain types (e.g. CSize vs UInt) fall through to SYMMETRIC behavior.
+    if (!tl_monotype_same_integer_subchain(expected, actual)) return -1;
+
+    if (dir == TL_UNIFY_EXACT) {
+        if (cb) cb(user, expected, actual);
+        return 1;
+    }
+    // TL_UNIFY_DIRECTED: check width ordering
+    int cmp = tl_monotype_compare_integer_width(expected, actual);
+    if (cmp >= 0) return 0; // expected wider or equal → widening OK
+    // cmp == -1 (narrowing) → error
+    if (cb) cb(user, expected, actual);
+    return 1;
+}
+
 int tl_type_subs_unify_mono(tl_type_subs *subs, tl_monotype *left, tl_monotype *right, type_error_cb_fun cb,
-                            void *user, hashmap **seen) {
+                            void *user, hashmap **seen, tl_unify_direction dir) {
     if (!left || !right) return 1;
 
     tl_monotype_pair pair = {.left = left, .right = right};
@@ -2708,13 +2751,16 @@ int tl_type_subs_unify_mono(tl_type_subs *subs, tl_monotype *left, tl_monotype *
     // act as if the correct number of `any` types are present as required to unify with the target tuple.
     if (tl_monotype_is_ellipsis(left) || tl_monotype_is_ellipsis(right)) return 0;
 
-    // Same-family integer types unify within their family.
-    // Cross-family (signed vs unsigned) is a type error.
-    // Only non-narrow types (CLongLong, CUnsignedLongLong) are canonicalized in-place.
-    // All other C integer types are narrow: they unify within their family but preserve their
-    // specific C ABI type in codegen (e.g. CSize stays size_t, CInt stays int).
-    // Dual monomorphization is prevented by using Int/UInt consistently in Tess-facing stdlib code.
+    // Same-family integer types: behavior depends on direction mode.
+    // SYMMETRIC: legacy behavior — same-family unifies freely, non-narrow types canonicalized.
+    // DIRECTED:  left=expected, right=actual; widening (actual narrower) OK, narrowing/cross-chain error.
+    // EXACT:     same concrete type required (for operators/conditionals).
     if (tl_monotype_is_signed_integer(left) && tl_monotype_is_signed_integer(right)) {
+        if (dir != TL_UNIFY_SYMMETRIC) {
+            int rc = check_integer_direction(left, right, dir, cb, user);
+            if (rc >= 0) return rc; // 0 = OK, 1 = error; -1 = cross-sub-chain, fall through
+        }
+        // SYMMETRIC or cross-sub-chain fallback
         if (!left->cons_inst->def->is_narrow_integer && !right->cons_inst->def->is_narrow_integer) {
             left->cons_inst  = canonical_signed;
             right->cons_inst = canonical_signed;
@@ -2722,6 +2768,11 @@ int tl_type_subs_unify_mono(tl_type_subs *subs, tl_monotype *left, tl_monotype *
         return 0;
     }
     if (tl_monotype_is_unsigned_integer(left) && tl_monotype_is_unsigned_integer(right)) {
+        if (dir != TL_UNIFY_SYMMETRIC) {
+            int rc = check_integer_direction(left, right, dir, cb, user);
+            if (rc >= 0) return rc;
+        }
+        // SYMMETRIC or cross-sub-chain fallback
         if (!left->cons_inst->def->is_narrow_integer && !right->cons_inst->def->is_narrow_integer) {
             left->cons_inst  = canonical_unsigned;
             right->cons_inst = canonical_unsigned;
@@ -2732,12 +2783,12 @@ int tl_type_subs_unify_mono(tl_type_subs *subs, tl_monotype *left, tl_monotype *
     // float-convertible types always unify
     if (tl_monotype_is_float_convertible(left) && tl_monotype_is_float_convertible(right)) return 0;
 
-    if (tl_monotype_is_inst(left)) return unify_type_constructor(subs, left, right, cb, user, seen);
-    if (tl_monotype_is_inst(right)) return unify_type_constructor(subs, right, left, cb, user, seen);
+    if (tl_monotype_is_inst(left)) return unify_type_constructor(subs, left, right, cb, user, seen, dir, 1);
+    if (tl_monotype_is_inst(right)) return unify_type_constructor(subs, right, left, cb, user, seen, dir, 0);
 
     // Type variables on either side
-    if (tl_var == left->tag) return unify_var_other(subs, left->var, right, cb, user, seen);
-    if (tl_var == right->tag) return unify_var_other(subs, right->var, left, cb, user, seen);
+    if (tl_var == left->tag) return unify_var_other(subs, left->var, right, cb, user, seen, dir, 1);
+    if (tl_var == right->tag) return unify_var_other(subs, right->var, left, cb, user, seen, dir, 0);
 
     // Weak variables on either side
     if (tl_weak == left->tag) return unify_weak_other(subs, left, right, cb, user, seen);
@@ -2757,8 +2808,8 @@ int tl_type_subs_unify_mono(tl_type_subs *subs, tl_monotype *left, tl_monotype *
 
     switch (left->tag) {
     case tl_integer:     return !(left->integer == right->integer);
-    case tl_arrow:       return unify_list(subs, left->list.xs, right->list.xs, left, right, cb, user, seen);
-    case tl_tuple:       return unify_tuple(subs, left->list.xs, right->list.xs, left, right, cb, user, seen);
+    case tl_arrow:       return unify_list(subs, left->list.xs, right->list.xs, left, right, cb, user, seen, dir);
+    case tl_tuple:       return unify_tuple(subs, left->list.xs, right->list.xs, left, right, cb, user, seen, dir);
 
     case tl_placeholder:
     case tl_any:
@@ -2773,14 +2824,15 @@ int tl_type_subs_unify_mono(tl_type_subs *subs, tl_monotype *left, tl_monotype *
 }
 
 int unify_list(tl_type_subs *subs, tl_monotype_sized left, tl_monotype_sized right, tl_monotype *lhs,
-               tl_monotype *rhs, type_error_cb_fun cb, void *user, hashmap **seen) {
+               tl_monotype *rhs, type_error_cb_fun cb, void *user, hashmap **seen,
+               tl_unify_direction dir) {
     if (left.size != right.size) {
         if (cb) cb(user, lhs, rhs);
         return 1;
     }
 
     forall(i, left) {
-        if (tl_type_subs_unify_mono(subs, left.v[i], right.v[i], cb, user, seen)) {
+        if (tl_type_subs_unify_mono(subs, left.v[i], right.v[i], cb, user, seen, dir)) {
             if (cb) cb(user, lhs, rhs);
             return 1;
         }
@@ -2790,14 +2842,16 @@ int unify_list(tl_type_subs *subs, tl_monotype_sized left, tl_monotype_sized rig
 }
 
 int unify_tuple(tl_type_subs *subs, tl_monotype_sized left, tl_monotype_sized right, tl_monotype *lhs,
-                tl_monotype *rhs, type_error_cb_fun cb, void *user, hashmap **seen) {
+                tl_monotype *rhs, type_error_cb_fun cb, void *user, hashmap **seen,
+                tl_unify_direction dir) {
     // Care must be taken when unifying tuples, because an ellipsis type will automatically unify with any
     // number of elements.
 
     forall(i, left) {
         if (tl_monotype_is_ellipsis(left.v[i])) goto success;
         if (i + 1 < right.size && tl_monotype_is_ellipsis(right.v[i])) goto success;
-        if (i >= right.size || tl_type_subs_unify_mono(subs, left.v[i], right.v[i], cb, user, seen)) {
+        if (i >= right.size || tl_type_subs_unify_mono(subs, left.v[i], right.v[i], cb, user, seen,
+                                                     dir)) {
             if (cb) cb(user, lhs, rhs);
             return 1;
         }
@@ -2867,7 +2921,8 @@ int tl_type_subs_monotype_occurs(tl_type_subs *self, tl_type_variable tv, tl_mon
 }
 
 static int tl_type_subs_unity_tv_tv(tl_type_subs *self, tl_type_variable left, tl_type_variable right,
-                                    type_error_cb_fun cb, void *user, hashmap **seen) {
+                                    type_error_cb_fun cb, void *user, hashmap **seen,
+                                    tl_unify_direction dir) {
     if (left == right) return 0;
 
     tl_type_variable left_root  = uf_find(self, left);
@@ -2877,8 +2932,8 @@ static int tl_type_subs_unity_tv_tv(tl_type_subs *self, tl_type_variable left, t
     tl_monotype *left_type  = self->data.v[left_root].type;
     tl_monotype *right_type = self->data.v[right_root].type;
     if (left_type && right_type) {
-        // both are resolved: must unify
-        if (tl_type_subs_unify_mono(self, left_type, right_type, cb, user, seen)) {
+        // both are resolved: must unify, propagating direction
+        if (tl_type_subs_unify_mono(self, left_type, right_type, cb, user, seen, dir)) {
             return 1;
         }
     }
@@ -2902,7 +2957,7 @@ static int tl_type_subs_unify_tv_weak(tl_type_subs *self, tl_type_variable left,
     tl_monotype     *right_type = right;
     if (left_type && right_type) {
         // both are resolved: must unify
-        if (tl_type_subs_unify_mono(self, left_type, right_type, cb, user, seen)) {
+        if (tl_type_subs_unify_mono(self, left_type, right_type, cb, user, seen, TL_UNIFY_SYMMETRIC)) {
             return 1;
         }
     }
@@ -2923,7 +2978,7 @@ static int tl_type_subs_unify_weak(tl_type_subs *self, tl_monotype *weak, tl_mon
     tl_monotype     *right_type = right;
     if (weak_type && right_type) {
         // both are resolved: must unify
-        if (tl_type_subs_unify_mono(self, weak_type, right_type, cb, user, seen)) {
+        if (tl_type_subs_unify_mono(self, weak_type, right_type, cb, user, seen, TL_UNIFY_SYMMETRIC)) {
             return 1;
         }
     }
@@ -2968,7 +3023,7 @@ static int tl_type_subs_unify_weak_int_concrete(tl_type_subs *subs, tl_monotype 
     tl_monotype     *existing = subs->data.v[root].type;
     if (existing) {
         // recursive unify existing with concrete
-        if (tl_type_subs_unify_mono(subs, existing, concrete, cb, user, seen)) return 1;
+        if (tl_type_subs_unify_mono(subs, existing, concrete, cb, user, seen, TL_UNIFY_SYMMETRIC)) return 1;
     }
     subs->data.v[root].type = concrete;
     return 0;
@@ -2985,7 +3040,7 @@ static int tl_type_subs_unify_tv_weak_int(tl_type_subs *self, tl_type_variable l
     tl_monotype     *left_type  = self->data.v[left_root].type;
     if (left_type) {
         // tv is already resolved: must unify
-        if (tl_type_subs_unify_mono(self, left_type, right, cb, user, seen)) {
+        if (tl_type_subs_unify_mono(self, left_type, right, cb, user, seen, TL_UNIFY_SYMMETRIC)) {
             return 1;
         }
     }
@@ -3010,7 +3065,8 @@ static int unify_weak_int_other(tl_type_subs *subs, tl_monotype *weak_int, tl_mo
     case tl_weak_int_unsigned:
         // same family? merge via tv_tv; different family? error
         if (weak_int->tag == other->tag)
-            return tl_type_subs_unity_tv_tv(subs, weak_int->var, other->var, cb, user, seen);
+            return tl_type_subs_unity_tv_tv(subs, weak_int->var, other->var, cb, user, seen,
+                                               TL_UNIFY_SYMMETRIC);
         if (cb) cb(user, weak_int, other);
         return 1;
     case tl_cons_inst:
@@ -3024,7 +3080,8 @@ static int unify_weak_int_other(tl_type_subs *subs, tl_monotype *weak_int, tl_mo
 }
 
 int tl_type_subs_unify_tv_mono(tl_type_subs *self, tl_type_variable tv, tl_monotype *mono,
-                               type_error_cb_fun cb, void *user, hashmap **seen) {
+                               type_error_cb_fun cb, void *user, hashmap **seen,
+                               tl_unify_direction dir, int tv_is_left) {
     if (tl_type_subs_monotype_occurs(self, tv, mono)) return 1;
 
     tl_type_variable tv_root = uf_find(self, tv);
@@ -3039,7 +3096,7 @@ int tl_type_subs_unify_tv_mono(tl_type_subs *self, tl_type_variable tv, tl_monot
 
     case tl_var:
         // case 1: both are tvs
-        return tl_type_subs_unity_tv_tv(self, tv, mono->var, cb, user, seen);
+        return tl_type_subs_unity_tv_tv(self, tv, mono->var, cb, user, seen, TL_UNIFY_SYMMETRIC);
     case tl_weak:
         // case 2: one is weak type variable
         return tl_type_subs_unify_tv_weak(self, tv, mono, cb, user, seen);
@@ -3055,8 +3112,19 @@ int tl_type_subs_unify_tv_mono(tl_type_subs *self, tl_type_variable tv, tl_monot
         // case 3: tv = concrete type or arrow or tuple
         tl_monotype *tv_type = self->data.v[tv_root].type;
         if (tv_type) {
-            // must unify
-            return tl_type_subs_unify_mono(self, tv_type, mono, cb, user, seen);
+            // If tv_type is a weak int that's already been resolved, follow its resolution chain
+            // to get the concrete type. This prevents directional unification from re-resolving
+            // the weak to a different type.
+            if (tl_monotype_is_weak_int(tv_type)) {
+                tl_type_variable weak_root = uf_find(self, tv_type->var);
+                tl_monotype *resolved = self->data.v[weak_root].type;
+                if (resolved) tv_type = resolved;
+            }
+            // must unify; preserve left/right (expected/actual) ordering
+            if (tv_is_left)
+                return tl_type_subs_unify_mono(self, tv_type, mono, cb, user, seen, dir);
+            else
+                return tl_type_subs_unify_mono(self, mono, tv_type, cb, user, seen, dir);
         }
 
         // store the type at the root

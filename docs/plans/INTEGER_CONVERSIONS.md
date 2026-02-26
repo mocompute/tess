@@ -383,10 +383,77 @@ unification rules: literal meets concrete type, literal meets literal,
 literal meets type variable. Add defaulting at end of inference.
 
 ### Phase 3: Directionality in Unification
+
 The largest phase. Add expected/actual semantics to `constrain()` and
 the unification functions. Audit every call site to determine which
 operand is expected vs actual. Implement directional width checking
 for concrete integer pairs.
+
+#### Sub-Phase 3A: Tests (TDD)
+
+Write comprehensive tests before implementation. Expected-failure tests go
+to `TL_KNOWN_FAIL_FAILURES` (compiler doesn't reject them yet):
+
+- `test_fail_integer_narrowing_funcall.tl` — Int value to CInt parameter
+- `test_fail_integer_narrowing_let.tl` — Int assigned to CInt via let-in
+- `test_fail_integer_narrowing_return.tl` — returns Int, declared -> CInt
+- `test_fail_integer_narrowing_reassign.tl` — Int assigned to mut CInt var
+- `test_fail_integer_cross_chain.tl` — CInt to CInt32 (C-named vs fixed-width)
+- `test_fail_integer_exact_operator.tl` — CInt + CShort
+- `test_fail_integer_exact_conditional.tl` — branches: CInt vs CShort
+- `test_fail_integer_exact_case.tl` — case arms: CInt vs CShort
+
+Expected-passing tests go to `TL_TESTS`:
+
+- `test_integer_widening.tl` — CInt→Int, CShort→CInt, function call widening
+- `test_integer_same_type.tl` — same-type operators, comparisons, conditionals
+
+#### Sub-Phase 3B: Direction Enum and Parameter Plumbing
+
+Add `tl_unify_direction` enum with three values:
+
+```c
+TL_UNIFY_SYMMETRIC = 0   // legacy: no directional integer checking
+TL_UNIFY_DIRECTED  = 1   // left=expected, right=actual; widening OK
+TL_UNIFY_EXACT     = 2   // same concrete integer type required
+```
+
+Thread direction parameter through `constrain()` → `constrain_mono()` →
+`tl_type_subs_unify_mono()` → `unify_list()` / `unify_type_constructor()`.
+All callers initially pass `TL_UNIFY_SYMMETRIC`. Zero behavior change.
+
+Propagation rules:
+- Arrow element unification: propagate received direction
+- Type constructor args: always `TL_UNIFY_SYMMETRIC` (invariant)
+- All other internal recursion (TVs, weak vars, unions, tuples): `SYMMETRIC`
+
+#### Sub-Phase 3C: Directional Width Checking Logic
+
+Modify the integer unification block in `tl_type_subs_unify_mono()`:
+- `SYMMETRIC`: keep current behavior (same-family → success)
+- `DIRECTED`: use `tl_monotype_compare_integer_width()` — widening OK,
+  narrowing/cross-chain is an error
+- `EXACT`: different concrete types → error (even same sub-chain)
+
+#### Sub-Phase 3D: Annotate Call Sites
+
+Change call sites incrementally, testing after each batch:
+
+1. **Operators → EXACT**: arithmetic, bitwise, relational operand constraints
+2. **Conditionals → EXACT**: if-then-else branch, case arm constraints
+3. **Let-in / reassignment → DIRECTED**: name=expected, value=actual
+4. **Function application → DIRECTED**: callee=expected, callsite=actual
+5. **Return → DIRECTED**: declared return type=expected, value=actual
+
+All other calls (TV binding, bool/nil, env_insert, type predicates, struct
+access, specialization) remain `SYMMETRIC`.
+
+#### Sub-Phase 3E: Fix Regressions and Graduate Tests
+
+- Remove CSize→UInt and CPtrDiff→Int sub-tests from `test_integer_families.tl`
+  (these are cross-chain and require Phase 4 cast annotations)
+- Graduate known-fail-failure tests to regular fail tests
+- Full test suite verification (release + debug builds)
 
 ### Phase 4: Generalize Let-In Cast
 Extend `is_ptr_cast_annotation` (or replace with a broader
