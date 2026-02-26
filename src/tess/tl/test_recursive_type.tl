@@ -20,5 +20,5 @@ main() {
     if (points.v.[1].next->x != 0) { res = 1 }
 
     Array.free(points.&)
-    res
+    result : CInt := res
 }

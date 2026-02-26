@@ -81,5 +81,5 @@ main() {
     }
 
     error += Unsafe.float_to_int(sum - 10.0)
-    error
+    result : CInt := error
 }

@@ -135,5 +135,5 @@ main() {
     error += test_tail_call_from_when()
     error += test_bail_in_loop_break()
     error += test_bail_with_return()
-    error
+    result : CInt := error
 }

@@ -6,7 +6,7 @@ Shape : | Circle { radius: Int } | Square { length: Int }
 
 main() {
     c := S.Circle(1)
-    when c {
+    result : CInt := when c {
         ci: Circle { ci.radius - 1 }
         sq: Square { 1 }
     }

@@ -13,5 +13,5 @@ main() {
         c: Cons { c.head }
         n: Nil { 0 }
     }
-    result - 2
+    ret : CInt := result - 2
 }

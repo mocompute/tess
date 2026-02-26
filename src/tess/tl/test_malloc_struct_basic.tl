@@ -9,5 +9,5 @@ main() {
     p->y = 1
     res := p->x
     c_free(p)
-    res
+    result : CInt := res
 }

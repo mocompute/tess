@@ -62,5 +62,5 @@ main() {
 
     error += if 123 == has_param_attr(123) {0} else {1}
 
-    error
+    result : CInt := error
 }

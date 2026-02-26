@@ -19,5 +19,5 @@ main() {
     }
 
     // Should be 5, return 0 on success
-    result - 5
+    ret : CInt := result - 5
 }

@@ -20,5 +20,5 @@ main() {
         c: Circle { c.radius }
         else { 0 }
     }
-    result - 99
+    ret : CInt := result - 99
 }

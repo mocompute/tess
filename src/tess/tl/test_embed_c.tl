@@ -10,5 +10,5 @@ int add(int a, int b) { return a + b; }
 c_add(a: Int, b: Int) -> Int
 
 main() {
-    c_add(-1, 1)
+    result : CInt := c_add(-1, 1)
 }

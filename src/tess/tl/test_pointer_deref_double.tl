@@ -8,5 +8,5 @@ main() {
 
     val := pp.*.*
     c_free(p)
-    val - 123
+    result : CInt := val - 123
 }

@@ -6,5 +6,5 @@ double(x: Int) -> Int { x * 2 }
 
 main() {
     fp := L.double/1
-    fp(21) - 42
+    result : CInt := fp(21) - 42
 }

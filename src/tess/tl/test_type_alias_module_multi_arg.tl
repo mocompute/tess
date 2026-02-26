@@ -13,5 +13,5 @@ main() {
     // Direct usage: construct using multi-argument generic alias
     m2 := App.StringIntMap(keys = null, values = null, size = 0)
 
-    m1.size + m2.size
+    result : CInt := m1.size + m2.size
 }
