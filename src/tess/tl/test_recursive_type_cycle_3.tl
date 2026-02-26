@@ -15,4 +15,5 @@ main() {
     b.c            = c.&
     a.b->c->a->val = 0
     result : CInt := a.b->c->a->val
+    result
 }

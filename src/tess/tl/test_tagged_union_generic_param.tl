@@ -14,4 +14,5 @@ my_unwrap(opt: T[Int]) -> Int {
 main() {
     val := MySome(42)
     result : CInt := my_unwrap(val) - 42
+    result
 }

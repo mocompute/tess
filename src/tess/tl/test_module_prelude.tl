@@ -20,4 +20,5 @@ main() {
     b := Foo.make_point(3, 4)
     c := Foo.add(a, b)
     result : CInt := c.x + c.y - 10
+    result
 }

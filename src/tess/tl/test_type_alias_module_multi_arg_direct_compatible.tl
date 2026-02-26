@@ -12,4 +12,5 @@ main() {
     m2 := Collections.Map(keys: Ptr[CString] = null, values: Ptr[Int] = null, size = 0)
     m = m2
     result : CInt := m.size
+    result
 }

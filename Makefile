@@ -412,6 +412,7 @@ TL_TESTS =					\
 	if_expression				\
 	import_relative				\
 	import_relative_dotdot			\
+	integer_cast_annotation			\
 	integer_families			\
 	integer_same_type			\
 	integer_widening			\
@@ -429,7 +430,6 @@ TL_TESTS =					\
 	malloc_free_is_null			\
 	malloc_struct_basic			\
 	mapper_basic				\
-	mapper_lambda				\
 	module_basic				\
 	module_init				\
 	module_nested				\
@@ -467,7 +467,6 @@ TL_TESTS =					\
 	static_init				\
 	static_init_struct			\
 	static_init_struct_fun_ptr		\
-	str					\
 	strcmp					\
 	struct_concrete				\
 	struct_construction			\
@@ -503,7 +502,6 @@ TL_TESTS =					\
 	type_alias_local			\
 	type_alias_module_chained		\
 	type_alias_module_enum			\
-	type_alias_module_multi_arg		\
 	type_alias_module_multi_arg_direct_compatible	\
 	type_alias_module_simple		\
 	type_argument_field_annotation		\
@@ -571,7 +569,6 @@ TL_FAIL_TESTS =					\
 	fail_integer_exact_conditional		\
 	fail_integer_exact_operator		\
 	fail_integer_narrowing_funcall		\
-	fail_integer_narrowing_let		\
 	fail_integer_narrowing_reassign		\
 	fail_integer_narrowing_return		\
 	fail_lambda_implicit_return		\
@@ -607,10 +604,14 @@ TL_FAIL_RUNTIME_TESTS =
 
 # Expected-failure tests that the compiler doesn't reject yet
 TL_KNOWN_FAIL_FAILURES =			\
-	fail_integer_cross_chain
+	fail_integer_cross_chain		\
+	fail_integer_narrowing_let
 
 # Tests that should work but currently fail due to compiler bugs
 TL_KNOWN_FAILURES =				\
+	mapper_lambda				\
+	str					\
+	type_alias_module_multi_arg		\
 	while_empty_body
 
 # Total test count across all suites

@@ -136,4 +136,5 @@ main() {
     error += test_bail_in_loop_break()
     error += test_bail_with_return()
     result : CInt := error
+    result
 }

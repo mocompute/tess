@@ -21,4 +21,5 @@ main() {
 
     Array.free(points.&)
     result : CInt := res
+    result
 }

@@ -1222,7 +1222,8 @@ test_iter() {
     s         := Str.from_cstr(c"abc")
     sum: UInt := 0u
     for b in Str s {
-        sum = sum + b
+        wide: UInt := b
+        sum = sum + wide
     }
     // 'a'=97 + 'b'=98 + 'c'=99 = 294
     if sum != 294u { error += 1 }
@@ -1493,5 +1494,6 @@ main() {
     error += _check(c"strip_prefix", test_strip_prefix())
     error += _check(c"strip_suffix", test_strip_suffix())
     error += _check(c"from_bool", test_from_bool())
-    error
+    result: CInt := error
+    result
 }

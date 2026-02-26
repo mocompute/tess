@@ -24,4 +24,5 @@ main() {
     error += if (0x07u == b.[1]) {0} else {1}
     error += if (0x06u == b.[2]) {0} else {1}
     result : CInt := error
+    result
 }

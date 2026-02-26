@@ -10,4 +10,5 @@ main() {
     res := p->x
     c_free(p)
     result : CInt := res
+    result
 }

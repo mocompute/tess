@@ -7,4 +7,5 @@ main() {
     res := p.[3]
     c_free(p)
     result : CInt := res
+    result
 }

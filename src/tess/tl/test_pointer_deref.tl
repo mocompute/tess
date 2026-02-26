@@ -11,4 +11,5 @@ main() {
     obj := p.*
     c_free(p)
     result : CInt := obj.x
+    result
 }

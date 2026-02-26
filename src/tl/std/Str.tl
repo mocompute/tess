@@ -139,7 +139,10 @@ _buf(s: Ptr[Str]) -> Ptr[CChar] {
 }
 
 _make_tag_len(n: UInt) -> Byte {
-    ((n & 0x0Fu) << 4u) | _STR_SMALL_TAG
+    tag: UInt := _STR_SMALL_TAG
+    r: UInt := ((n & 0x0Fu) << 4u) | tag
+    result: Byte := r
+    result
 }
 
 _is_whitespace(b: Byte) -> Bool {

@@ -14,4 +14,5 @@ main() {
     m2 := App.StringIntMap(keys = null, values = null, size = 0)
 
     result : CInt := m1.size + m2.size
+    result
 }

@@ -8,4 +8,5 @@ the_bar := Bar(x = 123)
 
 main() {
     result : CInt := Foo.the_bar.x - 123
+    result
 }

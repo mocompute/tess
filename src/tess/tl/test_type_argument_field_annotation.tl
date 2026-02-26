@@ -13,4 +13,5 @@ empty[a]() {
 main() {
     x := empty[Int]()
     result : CInt := x.size
+    result
 }

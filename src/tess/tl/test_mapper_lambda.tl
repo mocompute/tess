@@ -66,6 +66,7 @@ main() {
     c_assert(sum == 10)
 
     result : CInt := sum - 10
+    result
 
     // The two c_malloc'd buffers are leaked here.
 }

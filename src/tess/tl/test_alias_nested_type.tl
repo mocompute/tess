@@ -10,4 +10,5 @@ main() {
         ci: Circle { ci.radius - 1 }
         sq: Square { 1 }
     }
+    result
 }

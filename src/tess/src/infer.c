@@ -1232,9 +1232,10 @@ static int is_std_function(ast_node *node) {
     return ast_node_is_std_application(node);
 }
 
-static int is_ptr_cast_annotation(ast_node *node) {
-    return ast_node_is_symbol(node) && node->symbol.annotation_type &&
-           tl_monotype_is_ptr(node->symbol.annotation_type->type);
+static int is_cast_annotation(ast_node *node) {
+    if (!ast_node_is_symbol(node) || !node->symbol.annotation_type) return 0;
+    tl_monotype *type = node->symbol.annotation_type->type;
+    return tl_monotype_is_ptr(type) || tl_monotype_is_integer_convertible(type);
 }
 
 // ============================================================================
@@ -1843,7 +1844,7 @@ static int infer_let_in(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
         tl_polytype *value_type           = node->let_in.value->type;
 
         {
-            int is_cast = is_ptr_cast_annotation(node->let_in.name);
+            int is_cast = is_cast_annotation(node->let_in.name);
 
             if (is_cast) self->is_constrain_ignore_error = 1;
             if (name_annotation_type) {
@@ -1970,7 +1971,7 @@ static int infer_type_constructor_nfa(tl_infer *self, traverse_ctx *ctx, ast_nod
             }
             assert(found < (i32)inst->cons_inst->args.size);
 
-            int is_cast = is_ptr_cast_annotation(arg->assignment.name);
+            int is_cast = is_cast_annotation(arg->assignment.name);
             if (is_cast) {
                 tl_polytype *annotation_type = arg->assignment.name->symbol.annotation_type;
                 // Constrain annotation type against struct field to propagate concrete type info
@@ -3863,10 +3864,10 @@ static int specialize_user_type(tl_infer *self, traverse_ctx *traverse_ctx, ast_
                 continue;
             }
 
-            // For struct field assignments with a Ptr annotation (cast), use the
-            // annotation type instead of the value type for specialization.
+            // For struct field assignments with a cast annotation (Ptr or integer),
+            // use the annotation type instead of the value type for specialization.
             tl_polytype *arg_type = arg->type;
-            if (ast_node_is_assignment(arg) && is_ptr_cast_annotation(arg->assignment.name)) {
+            if (ast_node_is_assignment(arg) && is_cast_annotation(arg->assignment.name)) {
                 arg_type = arg->assignment.name->symbol.annotation_type;
             }
 
