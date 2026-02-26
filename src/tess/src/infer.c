@@ -1856,13 +1856,21 @@ static int infer_let_in(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
                 dbg(self, "let_in cast '%s': using annotation type '%s'", str_cstr(&name), str_cstr(&tmp));
             }
 
-            // Skip constraint for CArray-to-Ptr casts: CArray and Ptr are different type
-            // constructors so unification would corrupt type state.
+            // Integer cast annotations: the annotation is intentionally a different
+            // (narrower) type than the value.  Do not constrain, because unification
+            // would back-propagate the narrow type into upstream expressions.
+            // Pointer cast annotations: keep the constraint (with ignore-error) because
+            // the value may be a generic that needs the annotation to resolve.
+            int is_integer_cast = is_cast && name_annotation_type
+                               && tl_monotype_is_integer_convertible(name_annotation_type->type);
+
             int skip = 0;
-            if (is_cast && value_type) {
+            if (is_cast && !is_integer_cast && value_type) {
                 tl_polytype_substitute(self->arena, value_type, self->subs);
                 skip = tl_monotype_is_inst_of(value_type->type, S("CArray"));
             }
+            if (is_integer_cast) skip = 1;
+
             if (!skip) {
                 if (constrain(self, name_type, value_type, node, TL_UNIFY_DIRECTED) && !is_cast) return 1;
             }

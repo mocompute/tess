@@ -430,6 +430,7 @@ TL_TESTS =					\
 	malloc_free_is_null			\
 	malloc_struct_basic			\
 	mapper_basic				\
+	mapper_lambda				\
 	module_basic				\
 	module_init				\
 	module_nested				\
@@ -502,6 +503,7 @@ TL_TESTS =					\
 	type_alias_local			\
 	type_alias_module_chained		\
 	type_alias_module_enum			\
+	type_alias_module_multi_arg		\
 	type_alias_module_multi_arg_direct_compatible	\
 	type_alias_module_simple		\
 	type_argument_field_annotation		\
@@ -515,7 +517,6 @@ TL_TESTS =					\
 	try					\
 	types_float				\
 	types_integer				\
-	types_integer_cast			\
 	uninitialized_fields			\
 	union_basic				\
 	union_module_intermediate		\
@@ -609,9 +610,8 @@ TL_KNOWN_FAIL_FAILURES =			\
 
 # Tests that should work but currently fail due to compiler bugs
 TL_KNOWN_FAILURES =				\
-	mapper_lambda				\
 	str					\
-	type_alias_module_multi_arg		\
+	types_integer_cast			\
 	while_empty_body
 
 # Total test count across all suites
