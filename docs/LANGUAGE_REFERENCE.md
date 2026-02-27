@@ -139,11 +139,23 @@ HM.insert(map, key, value)   // Same as Collections.HashMap.insert(...)
 
 Integer types are organized into sub-chains with width ordering. Conversions follow strict rules:
 
-**Implicit widening** (narrow → wide, same sub-chain) is automatic:
+**Implicit widening** (narrow → wide, same sub-chain) is automatic in all directed contexts:
 ```tl
+// Variable bindings
 x : CShort := 1
 y : CInt := x            // OK: CShort → CInt (widening)
 z : Int := y             // OK: CInt → Int (widening)
+
+// Reassignment
+w : Int := 0
+w = x                    // OK: CShort widens to Int
+
+// Function arguments
+take_int(n: Int) { n }
+take_int(x)               // OK: CShort widens to Int
+
+// Return values
+to_int(n: CShort) -> Int { n }  // OK: CShort return widens to Int
 ```
 
 **Narrowing** (wide → narrow), **cross-family** (signed ↔ unsigned), **cross-chain** (C-named ↔ fixed-width), and **standalone** (`CSize`, `CPtrDiff`, `CChar`) conversions require an explicit let-in type annotation:

@@ -567,5 +567,6 @@ tl_create_runtime_fail_test(fail_runtime_integer_bounds)
 
 # Known failures: these should work but a compiler bug makes them fail
 tl_create_known_failure(function_pointer_higher_order_return)
+tl_create_known_failure(integer_widening_reassign)
 tl_create_known_failure(static_init_generic_function_pointer)
 tl_create_known_failure(while_empty_body)

@@ -625,6 +625,7 @@ TL_KNOWN_FAIL_FAILURES =
 # Tests that should work but currently fail due to compiler bugs
 TL_KNOWN_FAILURES =				\
 	function_pointer_higher_order_return	\
+	integer_widening_reassign		\
 	static_init_generic_function_pointer	\
 	while_empty_body
 

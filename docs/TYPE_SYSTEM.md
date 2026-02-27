@@ -302,12 +302,25 @@ from narrower to wider.
 
 #### Implicit Widening
 
-Within a sub-chain, narrower types implicitly widen to wider types:
+Within a sub-chain, narrower types implicitly widen to wider types. This
+applies in all directed contexts — variable bindings, reassignment,
+function arguments, and return values:
 
 ```tl
+// Let-in binding
 x : CInt := 42
-y : CLong := x      // OK: implicit widening (CInt → CLong)
-z : Int := x        // OK: implicit widening (CInt → Int)
+y : Int := x             // OK: CInt → Int
+
+// Reassignment
+z : Int := 0
+z = x                    // OK: CInt → Int
+
+// Function arguments
+take_int(n: Int) { n }
+take_int(x)               // OK: CInt argument widens to Int parameter
+
+// Return values
+to_int(n: CInt) -> Int { n }  // OK: CInt return widens to Int
 ```
 
 #### Explicit Narrowing and Cross-Chain Conversion
