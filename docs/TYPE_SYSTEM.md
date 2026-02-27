@@ -58,6 +58,7 @@ Type annotations are needed when:
 4. **Disambiguation** - When multiple types would be valid:
    ```tl
    x : CInt := 42    // Force CInt instead of Int
+   ch := 'a'         // Character literal: CChar
    ```
 
 ## Generics (Parametric Polymorphism)

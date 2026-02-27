@@ -538,12 +538,14 @@ result := sum_to(1000000, 0)       // Works without stack overflow
 3.14                // Float
 1.5e-10             // Scientific notation
 "hello"             // String (CString)
-'a'                 // Character
-'\n'                // Escape sequence
+'a'                 // Character literal (CChar)
+'\n'                // Character with escape sequence
 true, false         // Boolean
 null                // Null pointer
 void                // Void value
 ```
+
+Character literals use C syntax: single-quoted characters with the same escape sequences as C (`'\0'`, `'\n'`, `'\t'`, `'\\'`, `'\''`, etc.). They have type `CChar`.
 
 ### Let-in Expressions
 

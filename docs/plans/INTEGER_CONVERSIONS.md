@@ -496,7 +496,6 @@ annotation form. Deprecate or remove the `Unsafe` functions.
    operators that accept different-width same-chain operands and return the
    wider type. Defer unless ergonomics are unacceptable.
 
-5. **CChar literal suffix**: No literal suffix is currently planned for
-   `CChar`. If needed, consider adding one (e.g., `c`). Character literals
-   (if added to the language) would be the natural way to produce `CChar`
-   values.
+5. **CChar literals**: Character literals already exist (`'a'`, `'\n'`, etc.)
+   and produce `CChar` values. No integer literal suffix for `CChar` is
+   planned since character literals serve this purpose.
