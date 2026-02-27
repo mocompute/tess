@@ -7,10 +7,7 @@
 // Sentinel for unwrapping Option[UInt] — any value impossible as a valid index.
 _NONE: UInt := 9999u
 // Null byte sentinel for unwrapping Option[Byte].
-_nul_byte() -> Byte {
-    b: Byte := 0u
-    b
-}
+_NUL: Byte := 0u
 
 // -- Construction and basic queries --
 
@@ -353,11 +350,10 @@ test_cat_4() {
 
 test_byte_at() {
     error := 0
-    nul   := _nul_byte()
     s     := Str.from_cstr(c"abc")
-    if unwrap(Str.byte_at(s, 0u), nul) != 97u  { error += 1 } // 'a'
-    if unwrap(Str.byte_at(s, 1u), nul) != 98u  { error += 1 } // 'b'
-    if unwrap(Str.byte_at(s, 2u), nul) != 99u  { error += 1 } // 'c'
+    if unwrap(Str.byte_at(s, 0u), _NUL) != 97u { error += 1 } // 'a'
+    if unwrap(Str.byte_at(s, 1u), _NUL) != 98u { error += 1 } // 'b'
+    if unwrap(Str.byte_at(s, 2u), _NUL) != 99u { error += 1 } // 'c'
     Str.free(s.&)
     error
 }
@@ -537,15 +533,14 @@ test_replace_byte() {
 
 test_from_byte() {
     error := 0
-    nul   := _nul_byte()
-    s     := Str.from_byte(65u)         // 'A'
+    s     := Str.from_byte(65u)                               // 'A'
     if Str.len(s) != 1u { error += 1 }
-    if unwrap(Str.byte_at(s, 0u), nul) != 65u { error += 1 }  // 'A'
+    if unwrap(Str.byte_at(s, 0u), _NUL) != 65u { error += 1 } // 'A'
     Str.free(s.&)
 
-    s2 := Str.from_byte(122u)           // 'z'
+    s2 := Str.from_byte(122u)                                   // 'z'
     if Str.len(s2) != 1u { error += 1 }
-    if unwrap(Str.byte_at(s2, 0u), nul) != 122u { error += 1 } // 'z'
+    if unwrap(Str.byte_at(s2, 0u), _NUL) != 122u { error += 1 } // 'z'
     Str.free(s2.&)
     error
 }
