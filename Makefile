@@ -523,6 +523,7 @@ TL_TESTS =					\
 	type_predicate_generic			\
 	type_predicate_generic_type		\
 	type_predicate_type_arg			\
+	types_integer_cast			\
 	try					\
 	types_float				\
 	types_integer				\
@@ -623,7 +624,6 @@ TL_KNOWN_FAIL_FAILURES =			\
 TL_KNOWN_FAILURES =				\
 	function_pointer_higher_order_return	\
 	static_init_generic_function_pointer	\
-	types_integer_cast			\
 	while_empty_body
 
 # Total test count across all suites

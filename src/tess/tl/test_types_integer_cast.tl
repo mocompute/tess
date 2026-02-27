@@ -13,7 +13,7 @@ main() {
     error += if 1zu == sizeof(ui8) {0} else {1}
     error += if 0377u == ui8 {0} else {1} // 0 prefix: octal, like C
 
-    i8: CInt8 := Unsafe.unsigned_to_signed(sz)
+    i8: CInt8 := sz
     error += if 1zu == sizeof(i8) {0} else {1}
     error += if i8 == -1 {0} else {1}
 
@@ -21,7 +21,7 @@ main() {
     error += if 2zu == sizeof(ui16) {0} else {1}
     error += if 0xffffu == ui16 {0} else {1} // 0x prefix: hex, like C
 
-    i16: CInt16 := Unsafe.unsigned_to_signed(sz)
+    i16: CInt16 := sz
     error += if 2zu == sizeof(i16) {0} else {1}
     error += if - 1 == i16 {0} else {1}
 
