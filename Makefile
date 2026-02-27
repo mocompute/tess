@@ -415,6 +415,7 @@ TL_TESTS =					\
 	integer_bounds_check			\
 	integer_cast_annotation			\
 	integer_families			\
+	integer_narrowing_let_cast		\
 	integer_same_type			\
 	integer_widening			\
 	lambda_apply				\
@@ -615,7 +616,8 @@ TL_FAIL_RUNTIME_TESTS =			\
 # Expected-failure tests that the compiler doesn't reject yet
 TL_KNOWN_FAIL_FAILURES =			\
 	fail_integer_cross_chain		\
-	fail_integer_narrowing_let
+	fail_integer_exact_generic		\
+	fail_integer_literal_overflow
 
 # Tests that should work but currently fail due to compiler bugs
 TL_KNOWN_FAILURES =				\

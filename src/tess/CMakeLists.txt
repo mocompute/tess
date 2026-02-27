@@ -329,6 +329,7 @@ tl_create_test(hello)
 tl_create_test(integer_bounds_check)
 tl_create_test(integer_cast_annotation)
 tl_create_test(integer_families)
+tl_create_test(integer_narrowing_let_cast)
 tl_create_test(integer_same_type)
 tl_create_test(integer_widening)
 tl_create_test(if_basic)
@@ -559,7 +560,8 @@ tl_create_runtime_fail_test(fail_runtime_integer_bounds)
 
 # Known fail-failures: expected-failure tests that the compiler doesn't reject yet
 tl_create_known_fail_failure(fail_integer_cross_chain)
-tl_create_known_fail_failure(fail_integer_narrowing_let)
+tl_create_known_fail_failure(fail_integer_exact_generic)
+tl_create_known_fail_failure(fail_integer_literal_overflow)
 
 # Known failures: these should work but a compiler bug makes them fail
 tl_create_known_failure(function_pointer_higher_order_return)

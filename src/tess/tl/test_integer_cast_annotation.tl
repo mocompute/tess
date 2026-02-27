@@ -51,6 +51,36 @@ test_uint_to_int() {
     error
 }
 
+// --- Cross-chain cast (C-signed -> fixed-signed) ---
+
+test_cint_to_cint32() {
+    error := 0
+    a: CInt := 42
+    result: CInt32 := a   // cross-chain: C-signed -> fixed-signed (explicit cast)
+    error += if result == 42 {0} else {1}
+    error
+}
+
+// --- Standalone type casts ---
+
+test_uint_to_csize() {
+    error := 0
+    a: UInt := 100u
+    size: CSize := a   // standalone: UInt -> CSize (explicit cast)
+    expected: CSize := 100u
+    error += if size == expected {0} else {1}
+    error
+}
+
+test_int_to_cptrdiff() {
+    error := 0
+    a: Int := 77
+    diff: CPtrDiff := a   // standalone: Int -> CPtrDiff (explicit cast)
+    expected: CPtrDiff := 77
+    error += if diff == expected {0} else {1}
+    error
+}
+
 // --- Cast in return value ---
 
 compute_int() -> Int { 99 }
@@ -69,6 +99,9 @@ main() {
     error += test_uint_to_cuchar()
     error += test_int_to_uint()
     error += test_uint_to_int()
+    error += test_cint_to_cint32()
+    error += test_uint_to_csize()
+    error += test_int_to_cptrdiff()
     error += test_return_cast()
     result: CInt := error
     result

@@ -2,9 +2,10 @@
 
 // Narrowing: Int value passed to CInt parameter should fail.
 
-take_cint(x: CInt) { x }
+take_cint(x: CInt) -> CInt { x }
 
-main() -> CInt {
+main() {
     a: Int := 42
     take_cint(a)
+    0
 }

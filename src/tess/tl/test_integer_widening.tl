@@ -78,6 +78,32 @@ test_funcall_widening() {
     error
 }
 
+// --- Widening through return type ---
+
+return_cint_as_int() -> Int {
+    a: CInt := 77
+    a   // CInt -> Int return: widening OK
+}
+
+test_return_widening() {
+    error := 0
+    b := return_cint_as_int()
+    error += if b == 77 {0} else {1}
+    error
+}
+
+// --- Fixed-width funcall widening ---
+
+take_cint32(x: CInt32) -> CInt32 { x }
+
+test_cint8_to_cint32_funcall() {
+    error := 0
+    a: CInt8 := 42
+    b := take_cint32(a)   // CInt8 -> CInt32 parameter: widening OK
+    error += if b == 42 {0} else {1}
+    error
+}
+
 // --- Same-type assignment (trivially OK) ---
 
 test_same_type() {
@@ -98,6 +124,8 @@ main() {
     error += test_cint8_to_cint32()
     error += test_cuint8_to_cuint32()
     error += test_funcall_widening()
+    error += test_return_widening()
+    error += test_cint8_to_cint32_funcall()
     error += test_same_type()
     error
 }

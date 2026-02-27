@@ -8,6 +8,7 @@ narrow_return() -> CInt {
     get_value()
 }
 
-main() -> CInt {
+main() {
     narrow_return()
+    0
 }

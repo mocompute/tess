@@ -2,7 +2,7 @@
 
 // Exact match required: case arms CInt vs CShort should fail.
 
-main() -> CInt {
+main() {
     a: CInt := 10
     b: CShort := 5
     x := 1
@@ -10,4 +10,5 @@ main() -> CInt {
         1 { a }
         2 { b }
     }
+    0
 }
