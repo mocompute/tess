@@ -418,6 +418,7 @@ TL_TESTS =					\
 	integer_narrowing_let_cast		\
 	integer_same_type			\
 	integer_widening			\
+	integer_widening_reassign		\
 	lambda_apply				\
 	lambda_arg_annotated			\
 	lambda_arg_unused			\
@@ -625,7 +626,6 @@ TL_KNOWN_FAIL_FAILURES =
 # Tests that should work but currently fail due to compiler bugs
 TL_KNOWN_FAILURES =				\
 	function_pointer_higher_order_return	\
-	integer_widening_reassign		\
 	static_init_generic_function_pointer	\
 	while_empty_body
 
