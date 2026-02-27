@@ -404,6 +404,7 @@ TL_TESTS =					\
 	function_pointer_mutable		\
 	function_pointer_pointer		\
 	function_pointer_recursive_type		\
+	function_pointer_higher_order_return	\
 	function_pointer_value			\
 	generic_lambda				\
 	global_variables			\
@@ -625,8 +626,8 @@ TL_KNOWN_FAIL_FAILURES =
 
 # Tests that should work but currently fail due to compiler bugs
 TL_KNOWN_FAILURES =				\
-	function_pointer_higher_order_return	\
 	static_init_generic_function_pointer	\
+	tagged_union_scoped_variant_as_union	\
 	while_empty_body
 
 # Total test count across all suites
