@@ -641,11 +641,13 @@ static void generate_toplevel_values(transpile *self) {
         if (!ast_node_is_let_in(node)) continue;
         str name = ast_node_str(node->let_in.name);
         if (is_c_symbol(name)) continue;
-        tl_polytype *type = node->let_in.value->type;
-        if (!tl_polytype_is_concrete(type)) continue;
+
+        tl_monotype *type = env_lookup(self, name);
+        if (!type) type = node->let_in.value->type->type;
+        if (!tl_monotype_is_concrete(type)) continue;
 
         cat(self, S("TL_THREAD_LOCAL "));
-        generate_decl(self, name, type->type);
+        generate_decl(self, name, type);
     }
 
     cat_nl(self);
@@ -1142,7 +1144,7 @@ static int is_integer_narrowing_cast(transpile *self, tl_monotype *target, ast_n
     if (!tl_monotype_is_integer_convertible(ann)) return 0;
 
     // Get the value expression's type
-    ast_node *val_node = node->let_in.value;
+    ast_node    *val_node = node->let_in.value;
     tl_monotype *val_type = NULL;
     if (ast_node_is_symbol(val_node)) {
         val_type = env_lookup(self, ast_node_str(val_node));
@@ -1156,26 +1158,25 @@ static int is_integer_narrowing_cast(transpile *self, tl_monotype *target, ast_n
 }
 
 // Emit a bounds-check macro call: one of four variants depending on source/target signedness.
-static void emit_bounds_check(transpile *self, tl_monotype *target, str value,
-                              ast_node const *node) {
+static void emit_bounds_check(transpile *self, tl_monotype *target, str value, ast_node const *node) {
     char const *c_max = tl_monotype_integer_c_max(target);
     if (!c_max) return;
 
-    str target_c = type_to_c_mono(self, target);
-    str source_c = S("(unknown)");
-    int source_is_unsigned = 0;
-    ast_node *val_node = node->let_in.value;
+    str       target_c           = type_to_c_mono(self, target);
+    str       source_c           = S("(unknown)");
+    int       source_is_unsigned = 0;
+    ast_node *val_node           = node->let_in.value;
     if (ast_node_is_symbol(val_node)) {
         tl_monotype *val_type = env_lookup(self, ast_node_str(val_node));
         if (val_type) {
-            source_c = type_to_c_mono(self, val_type);
+            source_c           = type_to_c_mono(self, val_type);
             source_is_unsigned = tl_monotype_is_unsigned_family(val_type);
         }
     }
 
-    int target_is_unsigned = tl_monotype_is_unsigned_family(target);
-    char const *file = node->file ? node->file : "<unknown>";
-    u32 line = node->line;
+    int         target_is_unsigned = tl_monotype_is_unsigned_family(target);
+    char const *file               = node->file ? node->file : "<unknown>";
+    u32         line               = node->line;
 
     // Choose macro based on source/target signedness combination:
     // signed->signed:     tl_narrowing_assert(val, MIN, MAX, ...)
@@ -1183,10 +1184,10 @@ static void emit_bounds_check(transpile *self, tl_monotype *target, str value,
     // unsigned->signed:    tl_unsigned_to_signed_assert(val, MAX, ...)
     // signed->unsigned:    tl_signed_to_unsigned_assert(val, MAX, ...)
     char const *macro_name;
-    int use_min = 0; // only signed->signed uses min
+    int         use_min = 0; // only signed->signed uses min
     if (!source_is_unsigned && !target_is_unsigned) {
         macro_name = "tl_narrowing_assert(";
-        use_min = 1;
+        use_min    = 1;
     } else if (source_is_unsigned && target_is_unsigned) {
         macro_name = "tl_unsigned_narrowing_assert(";
     } else if (source_is_unsigned && !target_is_unsigned) {
@@ -2137,8 +2138,8 @@ static str generate_try(transpile *self, tl_monotype *type, ast_node const *node
     tl_monotype *success_variant_type = union_type->cons_inst->args.v[0];
     str          field_name           = success_variant_type->cons_inst->def->field_names.v[0];
 
-    str          res          = next_res(self);
-    tl_monotype *success_type = node->type->type;
+    str          res                  = next_res(self);
+    tl_monotype *success_type         = node->type->type;
     generate_decl(self, res, success_type);
     generate_assign_lhs(self, res);
     cat(self, tmp);
@@ -2269,10 +2270,14 @@ static str generate_expr(transpile *self, tl_monotype *type, ast_node const *nod
     case ast_let_in:                      return generate_let_in(self, type, node, ctx);
     case ast_i64:                         return generate_str(self, str_init_i64(self->transient, node->i64.val), type);
     case ast_i64_z:                       return generate_str(self, str_init_i64(self->transient, node->i64_z.val), type);
-    case ast_u64:                         return generate_str(self, str_cat(self->transient, str_init_u64(self->transient, node->u64.val), S("ULL")), type);
-    case ast_u64_zu:                      return generate_str(self, str_cat(self->transient, str_init_u64(self->transient, node->u64_zu.val), S("ULL")), type);
-    case ast_f64:                         return generate_str(self, str_init_f64(self->transient, node->f64.val), type);
-    case ast_bool:                        return generate_str(self, node->bool_.val ? S("1 /*true*/") : S("0 /*false*/"), type);
+    case ast_u64:
+        return generate_str(
+          self, str_cat(self->transient, str_init_u64(self->transient, node->u64.val), S("ULL")), type);
+    case ast_u64_zu:
+        return generate_str(
+          self, str_cat(self->transient, str_init_u64(self->transient, node->u64_zu.val), S("ULL")), type);
+    case ast_f64:  return generate_str(self, str_init_f64(self->transient, node->f64.val), type);
+    case ast_bool: return generate_str(self, node->bool_.val ? S("1 /*true*/") : S("0 /*false*/"), type);
     case ast_char:
         return generate_str(self, str_cat_3(self->transient, S("'"), node->symbol.name, S("'")), type);
     case ast_string:

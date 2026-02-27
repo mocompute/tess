@@ -543,6 +543,7 @@ TL_TESTS =					\
 	while_continue				\
 	while_statement				\
 	weak_int_literals			\
+	weak_int_module_const			\
 	while_update_statement			\
 	z_literals
 
@@ -625,7 +626,6 @@ TL_KNOWN_FAIL_FAILURES =
 TL_KNOWN_FAILURES =				\
 	function_pointer_higher_order_return	\
 	static_init_generic_function_pointer	\
-	weak_int_module_const			\
 	while_empty_body
 
 # Total test count across all suites

@@ -1884,6 +1884,13 @@ static int infer_let_in(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
                         return 1;
                     }
                 }
+                // Weak integer literals should resolve to the annotation type rather than
+                // defaulting to the canonical type (Int/UInt).  This is safe because weak
+                // literals are polymorphic within their family; constraining them to the
+                // annotation does not back-propagate an unwanted narrow type upstream.
+                if (value_type && tl_monotype_is_weak_int(value_type->type)) {
+                    constrain(self, name_annotation_type, value_type, node, TL_UNIFY_DIRECTED);
+                }
             }
 
             if (!skip) {
@@ -5379,8 +5386,11 @@ static int add_generic(tl_infer *self, ast_node *node) {
         }
 
         assert(node->let_in.value->type);
-        tl_type_env_insert(self->env, name, node->let_in.value->type);
-        ast_node_type_set(node->let_in.name, node->let_in.value->type);
+        tl_polytype *let_type = node->let_in.name->symbol.annotation_type
+                              ? node->let_in.name->symbol.annotation_type
+                              : node->let_in.value->type;
+        tl_type_env_insert(self->env, name, let_type);
+        ast_node_type_set(node->let_in.name, let_type);
         return 0;
 
     } else {
