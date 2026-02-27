@@ -580,6 +580,7 @@ TL_FAIL_TESTS =					\
 	fail_integer_exact_case			\
 	fail_integer_exact_conditional		\
 	fail_integer_exact_generic		\
+	fail_integer_exact_generic_standalone	\
 	fail_integer_exact_operator		\
 	fail_integer_literal_overflow		\
 	fail_integer_narrowing_funcall		\
@@ -618,13 +619,13 @@ TL_FAIL_RUNTIME_TESTS =			\
 	fail_runtime_integer_bounds
 
 # Expected-failure tests that the compiler doesn't reject yet
-TL_KNOWN_FAIL_FAILURES = \
-	fail_integer_exact_generic_standalone
+TL_KNOWN_FAIL_FAILURES =
 
 # Tests that should work but currently fail due to compiler bugs
 TL_KNOWN_FAILURES =				\
 	function_pointer_higher_order_return	\
 	static_init_generic_function_pointer	\
+	weak_int_module_const			\
 	while_empty_body
 
 # Total test count across all suites

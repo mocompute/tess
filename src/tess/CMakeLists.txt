@@ -226,7 +226,7 @@ function(tl_create_known_fail_failure NAME)
   )
 endfunction()
 
-tl_create_known_fail_failure(fail_integer_exact_generic_standalone)
+tl_create_build_fail_test(fail_integer_exact_generic_standalone)
 
 # Expected runtime failures (must compile, must fail at runtime)
 function(tl_create_runtime_fail_test NAME)
@@ -567,4 +567,5 @@ tl_create_runtime_fail_test(fail_runtime_integer_bounds)
 # Known failures: these should work but a compiler bug makes them fail
 tl_create_known_failure(function_pointer_higher_order_return)
 tl_create_known_failure(static_init_generic_function_pointer)
+tl_create_known_failure(weak_int_module_const)
 tl_create_known_failure(while_empty_body)

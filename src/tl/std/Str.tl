@@ -345,7 +345,8 @@ contains_byte(s: Str, b: Byte) -> Bool {
     sp       := _buf(s.&)
     i: UInt := 0u
     while i < n, i += 1u {
-        if sp.[i] == b { return true }
+        ch: Byte := sp.[i]
+        if ch == b { return true }
     }
     false
 }
@@ -478,7 +479,8 @@ index_of_byte(s: Str, b: Byte) -> Option[UInt] {
     sp       := _buf(s.&)
     i: UInt := 0u
     while i < n, i += 1u {
-        if sp.[i] == b { return Some(i) }
+        ch: Byte := sp.[i]
+        if ch == b { return Some(i) }
     }
     None
 }
@@ -489,7 +491,8 @@ index_of_byte_from(s: Str, b: Byte, start: UInt) -> Option[UInt] {
     sp       := _buf(s.&)
     i: UInt := start
     while i < n, i += 1u {
-        if sp.[i] == b { return Some(i) }
+        ch: Byte := sp.[i]
+        if ch == b { return Some(i) }
     }
     None
 }
@@ -501,7 +504,8 @@ last_index_of_byte(s: Str, b: Byte) -> Option[UInt] {
     i: UInt := n
     while i > 0u {
         i = i - 1u
-        if sp.[i] == b { return Some(i) }
+        ch: Byte := sp.[i]
+        if ch == b { return Some(i) }
     }
     None
 }
@@ -543,7 +547,8 @@ count_byte(s: Str, b: Byte) -> UInt {
     c: UInt  := 0u
     i: UInt := 0u
     while i < n, i += 1u {
-        if sp.[i] == b { c = c + 1u }
+        ch: Byte := sp.[i]
+        if ch == b { c = c + 1u }
     }
     c
 }
@@ -578,7 +583,11 @@ replace_byte(alloc, s: Str, find: Byte, replace: Byte) -> Str {
     rp       := _buf(result.&)
     i: UInt := 0u
     while i < n, i += 1u {
-        if rp.[i] == find { rp.[i] = replace }
+        ch: Byte := rp.[i]
+        if ch == find {
+            r: CChar := replace
+            rp.[i] = r
+        }
     }
     result
 }
@@ -949,7 +958,7 @@ Iter: {
 
 iter_init  (s: Ptr[Str])     -> Iter
 iter_ptr   (iter: Ptr[Iter]) -> Ptr[CChar]
-iter_value (iter: Ptr[Iter]) -> Byte
+iter_value (iter: Ptr[Iter]) -> CChar
 iter_cond  (iter: Ptr[Iter]) -> Bool
 iter_update(iter: Ptr[Iter]) -> Void
 iter_deinit(iter: Ptr[Iter]) -> Void
