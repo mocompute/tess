@@ -226,6 +226,8 @@ function(tl_create_known_fail_failure NAME)
   )
 endfunction()
 
+tl_create_known_fail_failure(fail_integer_exact_generic_standalone)
+
 # Expected runtime failures (must compile, must fail at runtime)
 function(tl_create_runtime_fail_test NAME)
   set(TEST_NAME test-tl-${NAME})
@@ -536,6 +538,7 @@ tl_create_build_fail_test(fail_const_strip_lambda)
 tl_create_build_fail_test(fail_const_strip_nested)
 tl_create_build_fail_test(fail_import_absolute)
 tl_create_build_fail_test(fail_import_missing_quotes)
+tl_create_build_fail_test(fail_integer_cross_chain)
 tl_create_build_fail_test(fail_integer_cross_family)
 tl_create_build_fail_test(fail_integer_cross_family_arithmetic)
 tl_create_build_fail_test(fail_integer_cross_family_assignment)
@@ -551,18 +554,15 @@ tl_create_build_fail_test(fail_try_three_variants)
 
 tl_create_build_fail_test(fail_integer_exact_case)
 tl_create_build_fail_test(fail_integer_exact_conditional)
+tl_create_build_fail_test(fail_integer_exact_generic)
 tl_create_build_fail_test(fail_integer_exact_operator)
+tl_create_build_fail_test(fail_integer_literal_overflow)
 tl_create_build_fail_test(fail_integer_narrowing_funcall)
 tl_create_build_fail_test(fail_integer_narrowing_reassign)
 tl_create_build_fail_test(fail_integer_narrowing_return)
 
 # Expected runtime failures (must compile, must abort at runtime with --bounds-check)
 tl_create_runtime_fail_test(fail_runtime_integer_bounds)
-
-# Known fail-failures: expected-failure tests that the compiler doesn't reject yet
-tl_create_known_fail_failure(fail_integer_cross_chain)
-tl_create_known_fail_failure(fail_integer_exact_generic)
-tl_create_known_fail_failure(fail_integer_literal_overflow)
 
 # Known failures: these should work but a compiler bug makes them fail
 tl_create_known_failure(function_pointer_higher_order_return)

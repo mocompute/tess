@@ -95,6 +95,8 @@ typedef struct {
     tl_type_variable parent;
     tl_monotype     *type; // null if unresolved
     u32              rank;
+    i64              literal_value;     // for weak-int: the source literal's value
+    int              has_literal_value; // non-zero if literal_value is set
 } tl_type_uf_node;
 
 defarray(tl_type_uf_node_array, tl_type_uf_node);
@@ -195,6 +197,7 @@ int                    tl_monotype_integer_subchain(tl_monotype *);        // re
 int                    tl_monotype_integer_width_rank(tl_monotype *);      // returns -1 if not integer
 int                    tl_monotype_compare_integer_width(tl_monotype *left, tl_monotype *right); // -1/0/1/2
 int                    tl_monotype_same_integer_subchain(tl_monotype *left, tl_monotype *right);
+int                    tl_monotype_integer_value_fits(tl_monotype *, i64);
 char const            *tl_monotype_integer_c_min(tl_monotype *);  // e.g. "SHRT_MIN", NULL if unsigned
 char const            *tl_monotype_integer_c_max(tl_monotype *);  // e.g. "SHRT_MAX"
 int                    tl_monotype_is_unsigned_family(tl_monotype *); // unsigned subchains (2, 4, 5=CSize)
@@ -266,6 +269,7 @@ nodiscard tl_type_subs *tl_type_subs_create(allocator *) mallocfun;
 void                    tl_type_subs_destroy(allocator *, tl_type_subs **);
 
 tl_type_variable        tl_type_subs_fresh(tl_type_subs *);
+void                    tl_type_subs_set_literal_value(tl_type_subs *, tl_type_variable, i64);
 int                     tl_type_subs_monotype_occurs(tl_type_subs *, tl_type_variable, tl_monotype *);
 
 int  tl_type_subs_unify_tv_mono(tl_type_subs *, tl_type_variable, tl_monotype *, type_error_cb_fun, void *,

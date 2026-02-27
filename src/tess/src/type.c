@@ -50,6 +50,8 @@ static void                      mark_narrow_integer_type(tl_type_registry *, st
 static void                      mark_float_type(tl_type_registry *, str);
 static void                      mark_integer_subchain(tl_type_registry *, str, int subchain, int rank);
 
+static int                       integer_value_fits(tl_type_constructor_def *, i64);
+
 // Forward declarations for post-resolution fixup
 static void generalize(tl_monotype *, tl_type_variable_array *, hashmap **);
 static int  tl_type_subs_unity_tv_tv(tl_type_subs *, tl_type_variable, tl_type_variable, type_error_cb_fun,
@@ -2564,6 +2566,12 @@ static tl_type_variable uf_find(tl_type_subs *self, tl_type_variable tv) {
     return self->data.v[tv].parent;
 }
 
+void tl_type_subs_set_literal_value(tl_type_subs *self, tl_type_variable var, i64 value) {
+    tl_type_variable root = uf_find(self, var);
+    self->data.v[root].literal_value     = value;
+    self->data.v[root].has_literal_value = 1;
+}
+
 static void uf_union(tl_type_subs *self, tl_type_variable tv1, tl_type_variable tv2) {
     tl_type_variable x = uf_find(self, tv1);
     tl_type_variable y = uf_find(self, tv2);
@@ -2766,9 +2774,17 @@ static int check_integer_direction(tl_monotype *expected, tl_monotype *actual, t
                                    type_error_cb_fun cb, void *user) {
     if (expected->cons_inst->def == actual->cons_inst->def) return 0; // same type: always OK
 
-    // Only check direction within the same sub-chain.
-    // Cross-sub-chain types (e.g. CSize vs UInt) fall through to SYMMETRIC behavior.
-    if (!tl_monotype_same_integer_subchain(expected, actual)) return -1;
+    // Cross-sub-chain between multi-member chains (e.g. CInt vs CInt32) requires an explicit cast.
+    // Standalone types (CSize, CPtrDiff, CChar) mixing with other chains fall through to SYMMETRIC.
+    if (!tl_monotype_same_integer_subchain(expected, actual)) {
+        int esc = expected->cons_inst->def->integer_subchain;
+        int asc = actual->cons_inst->def->integer_subchain;
+        if (esc >= 1 && esc <= 4 && asc >= 1 && asc <= 4) {
+            if (cb) cb(user, expected, actual);
+            return 1;
+        }
+        return -1;
+    }
 
     if (dir == TL_UNIFY_EXACT) {
         if (cb) cb(user, expected, actual);
@@ -3041,6 +3057,33 @@ static int tl_type_subs_unify_weak(tl_type_subs *self, tl_monotype *weak, tl_mon
     return 0;
 }
 
+// Check whether a literal value fits in the given integer type's range.
+// Returns 1 if it fits, 0 if it overflows.
+int tl_monotype_integer_value_fits(tl_monotype *type, i64 val) {
+    if (!tl_monotype_is_inst(type)) return 1;
+    return integer_value_fits(type->cons_inst->def, val);
+}
+
+static int integer_value_fits(tl_type_constructor_def *def, i64 val) {
+    str n = def->name;
+    // Signed types
+    if (str_eq(n, S("CSignedChar")) || str_eq(n, S("CInt8")))  return val >= -128            && val <= 127;
+    if (str_eq(n, S("CShort"))      || str_eq(n, S("CInt16"))) return val >= -32768           && val <= 32767;
+    if (str_eq(n, S("CInt"))        || str_eq(n, S("CInt32"))) return val >= -2147483648LL    && val <= 2147483647LL;
+    if (str_eq(n, S("CLong"))       || str_eq(n, S("CInt64"))  || str_eq(n, S("CLongLong"))
+                                    || str_eq(n, S("CPtrDiff")))
+        return 1; // full i64 range always fits
+    // Unsigned types
+    if (str_eq(n, S("CUnsignedChar")) || str_eq(n, S("CUInt8")))  return val >= 0 && val <= 255;
+    if (str_eq(n, S("CUnsignedShort"))|| str_eq(n, S("CUInt16"))) return val >= 0 && val <= 65535;
+    if (str_eq(n, S("CUnsignedInt"))  || str_eq(n, S("CUInt32"))) return val >= 0 && val <= 4294967295LL;
+    if (str_eq(n, S("CUnsignedLong")) || str_eq(n, S("CUInt64")) || str_eq(n, S("CUnsignedLongLong"))
+                                      || str_eq(n, S("CSize")))
+        return val >= 0; // unsigned 64-bit: any non-negative i64 fits
+    if (str_eq(n, S("CChar")))        return val >= -128 && val <= 127; // conservative: treat as signed char
+    return 1; // unknown type: assume fits
+}
+
 // Unify when one side is a weak integer variable (tl_weak_int_signed or tl_weak_int_unsigned)
 // and the other is a concrete type (tl_cons_inst).
 static int tl_type_subs_unify_weak_int_concrete(tl_type_subs *subs, tl_monotype *weak_int,
@@ -3068,6 +3111,18 @@ static int tl_type_subs_unify_weak_int_concrete(tl_type_subs *subs, tl_monotype 
     if (def->integer_subchain >= TL_INTEGER_SUBCHAIN_CSIZE) {
         if (cb) cb(user, weak_int, concrete);
         return 1;
+    }
+
+    // Check compile-time literal range: if the weak int originated from a literal, verify it fits.
+    {
+        tl_type_variable lit_root = uf_find(subs, weak_int->var);
+        if (subs->data.v[lit_root].has_literal_value) {
+            i64 val = subs->data.v[lit_root].literal_value;
+            if (!integer_value_fits(def, val)) {
+                if (cb) cb(user, weak_int, concrete);
+                return 1;
+            }
+        }
     }
 
     // Resolve: store the concrete type at the weak-int's root in union-find.
@@ -3172,11 +3227,22 @@ int tl_type_subs_unify_tv_mono(tl_type_subs *self, tl_type_variable tv, tl_monot
                 tl_monotype *resolved = self->data.v[weak_root].type;
                 if (resolved) tv_type = resolved;
             }
+            // When TV is already resolved to a narrow concrete integer, force EXACT to prevent
+            // implicit widening/narrowing through generics (e.g. f(x: T, y: T) with CInt and CShort).
+            // Non-narrow canonicals (CLongLong/CUnsignedLongLong = Int/UInt) are excluded because
+            // TVs frequently resolve to them via weak literal defaulting.
+            tl_unify_direction effective_dir = dir;
+            if (tl_monotype_is_inst(tv_type)
+                && tv_type->cons_inst->def->is_narrow_integer
+                && tl_monotype_is_inst(mono)
+                && mono->cons_inst->def->is_narrow_integer)
+                effective_dir = TL_UNIFY_EXACT;
+
             // must unify; preserve left/right (expected/actual) ordering
             if (tv_is_left)
-                return tl_type_subs_unify_mono(self, tv_type, mono, cb, user, seen, dir);
+                return tl_type_subs_unify_mono(self, tv_type, mono, cb, user, seen, effective_dir);
             else
-                return tl_type_subs_unify_mono(self, mono, tv_type, cb, user, seen, dir);
+                return tl_type_subs_unify_mono(self, mono, tv_type, cb, user, seen, effective_dir);
         }
 
         // store the type at the root

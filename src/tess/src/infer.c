@@ -1109,6 +1109,9 @@ static int infer_weak_int_literal(tl_infer *self, ast_node *node, int is_signed)
     ensure_tv(self, &node->type);
     tl_monotype *weak = is_signed ? tl_monotype_create_fresh_weak_int_signed(self->subs)
                                   : tl_monotype_create_fresh_weak_int_unsigned(self->subs);
+    // Store the literal's numeric value for compile-time range checking.
+    i64 val = is_signed ? ast_node_i64(node)->val : (i64)ast_node_u64(node)->val;
+    tl_type_subs_set_literal_value(self->subs, weak->var, val);
     return constrain_pm(self, node->type, weak, node, TL_UNIFY_SYMMETRIC);
 }
 
@@ -1869,7 +1872,19 @@ static int infer_let_in(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
                 tl_polytype_substitute(self->arena, value_type, self->subs);
                 skip = tl_monotype_is_inst_of(value_type->type, S("CArray"));
             }
-            if (is_integer_cast) skip = 1;
+            if (is_integer_cast) {
+                skip = 1;
+                // Even for integer casts, check literal range at compile time.
+                ast_node *val = node->let_in.value;
+                if (val->tag == ast_i64 || val->tag == ast_u64) {
+                    i64 lit = (val->tag == ast_i64) ? ast_node_i64(val)->val : (i64)ast_node_u64(val)->val;
+                    if (!tl_monotype_integer_value_fits(name_annotation_type->type, lit)) {
+                        log_type_error(self, name_annotation_type, value_type, node);
+                        type_error(self, node);
+                        return 1;
+                    }
+                }
+            }
 
             if (!skip) {
                 if (constrain(self, name_type, value_type, node, TL_UNIFY_DIRECTED) && !is_cast) return 1;

@@ -571,6 +571,7 @@ TL_FAIL_TESTS =					\
 	fail_generic_unused_type_param		\
 	fail_import_absolute			\
 	fail_import_missing_quotes		\
+	fail_integer_cross_chain		\
 	fail_integer_cross_family		\
 	fail_integer_cross_family_arithmetic	\
 	fail_integer_cross_family_assignment	\
@@ -578,7 +579,9 @@ TL_FAIL_TESTS =					\
 	fail_integer_cross_family_unsigned_to_signed \
 	fail_integer_exact_case			\
 	fail_integer_exact_conditional		\
+	fail_integer_exact_generic		\
 	fail_integer_exact_operator		\
+	fail_integer_literal_overflow		\
 	fail_integer_narrowing_funcall		\
 	fail_integer_narrowing_reassign		\
 	fail_integer_narrowing_return		\
@@ -615,10 +618,8 @@ TL_FAIL_RUNTIME_TESTS =			\
 	fail_runtime_integer_bounds
 
 # Expected-failure tests that the compiler doesn't reject yet
-TL_KNOWN_FAIL_FAILURES =			\
-	fail_integer_cross_chain		\
-	fail_integer_exact_generic		\
-	fail_integer_literal_overflow
+TL_KNOWN_FAIL_FAILURES = \
+	fail_integer_exact_generic_standalone
 
 # Tests that should work but currently fail due to compiler bugs
 TL_KNOWN_FAILURES =				\
