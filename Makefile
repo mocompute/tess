@@ -429,6 +429,7 @@ TL_TESTS =					\
 	malloc_free				\
 	malloc_free_is_null			\
 	malloc_struct_basic			\
+	map_option_cross_type			\
 	mapper_basic				\
 	mapper_lambda				\
 	module_basic				\
@@ -440,6 +441,7 @@ TL_TESTS =					\
 	mutual_recursion_module			\
 	mutual_recursion_module_apply		\
 	nested_lambda_context			\
+	nested_struct				\
 	nested_struct_access			\
 	nested_type_cross_module_conflict	\
 	number_formats				\
@@ -468,6 +470,7 @@ TL_TESTS =					\
 	static_init				\
 	static_init_struct			\
 	static_init_struct_fun_ptr		\
+	str					\
 	strcmp					\
 	struct_concrete				\
 	struct_construction			\
@@ -481,6 +484,7 @@ TL_TESTS =					\
 	tagged_union_bail			\
 	tagged_union_carray			\
 	tagged_union_existing_type		\
+	tagged_union_existing_type_generic	\
 	tagged_union_existing_type_main		\
 	tagged_union_function_pointer		\
 	tagged_union_generic_basic		\
@@ -488,7 +492,9 @@ TL_TESTS =					\
 	tagged_union_generic_func		\
 	tagged_union_generic_function_pointer	\
 	tagged_union_generic_multi		\
+	tagged_union_generic_nested		\
 	tagged_union_generic_param		\
+	tagged_union_generic_return		\
 	tagged_union_make			\
 	tagged_union_many_variants		\
 	tagged_union_mutable_case		\
@@ -513,6 +519,7 @@ TL_TESTS =					\
 	type_predicate_branch			\
 	type_predicate_field			\
 	type_predicate_generic			\
+	type_predicate_generic_type		\
 	type_predicate_type_arg			\
 	try					\
 	types_float				\
@@ -610,7 +617,8 @@ TL_KNOWN_FAIL_FAILURES =			\
 
 # Tests that should work but currently fail due to compiler bugs
 TL_KNOWN_FAILURES =				\
-	str					\
+	function_pointer_higher_order_return	\
+	static_init_generic_function_pointer	\
 	types_integer_cast			\
 	while_empty_body
 
