@@ -53,6 +53,9 @@ typedef struct {
     int               report_stats; // --stats option
     int               help;
     int               no_optimize;
+    int               bounds_check;           // --bounds-check (override: ON)
+    int               no_bounds_check;        // --no-bounds-check (override: OFF)
+    int               effective_bounds_check;  // computed from the above + no_optimize
 
     int               in_place;
     int               unpack_list; // --list option for unpack command
@@ -112,6 +115,8 @@ noreturn void usage(int status, char const *argv0) {
     printf("    --list                 list archive contents without extracting (unpack only)\n");
     printf("    -v                     verbose logging\n");
     printf("    --no-line-directive    suppress output of #line directives in C file\n");
+    printf("    --bounds-check         enable integer narrowing bounds checks (default in debug)\n");
+    printf("    --no-bounds-check      disable integer narrowing bounds checks\n");
     printf("    --no-optimize          compile C build with -O0 (default is -O2. See also CFLAGS.)\n");
     printf("    --no-standard-includes do not add default standard library paths\n");
     printf("    --static               create static library instead of shared (lib command only)\n");
@@ -154,7 +159,10 @@ void state_init(state *self) {
     self->no_standard_includes = 0;
     self->help                 = 0;
     self->no_optimize          = 0;
-    self->in_place             = 0;
+    self->bounds_check           = 0;
+    self->no_bounds_check        = 0;
+    self->effective_bounds_check = 0;
+    self->in_place               = 0;
     self->is_library           = 0;
     self->is_static_library    = 0;
     self->is_executable        = 0;
@@ -203,6 +211,8 @@ void state_gather_long_option(state *self, char *str) {
     else if (0 == strcmp("--time", str)) self->report_time = 1;
     else if (0 == strcmp("--stats", str)) self->report_stats = 1;
     else if (0 == strcmp("--static", str)) self->is_static_library = 1;
+    else if (0 == strcmp("--bounds-check", str)) self->bounds_check = 1;
+    else if (0 == strcmp("--no-bounds-check", str)) self->no_bounds_check = 1;
     else usage(1, self->argv0);
 }
 
@@ -1002,6 +1012,7 @@ int compile(state *self) {
       .no_line_directive = self->no_line_directive,
       .verbose           = self->verbose,
       .lib_name          = lib_name,
+      .bounds_check      = self->effective_bounds_check,
     };
     transpile *transpile = transpile_create(self->arena, &transpile_opts);
 
@@ -1091,6 +1102,11 @@ static void add_c_flags(state *self, c_string_array *argv) {
         }
     }
 
+    if (self->effective_bounds_check) {
+        char const *_t = "-DTL_BOUNDS_CHECK";
+        array_push(*argv, _t);
+    }
+
     forall(i, self->cflags) {
         char const *cstr = str_cstr(&self->cflags.v[i]);
         array_push(*argv, cstr);
@@ -1109,6 +1125,11 @@ static void add_c_flags_msvc(state *self, c_string_array *argv) {
             char const *_t = "/O2";
             array_push(*argv, _t);
         }
+    }
+
+    if (self->effective_bounds_check) {
+        char const *_t = "/DTL_BOUNDS_CHECK";
+        array_push(*argv, _t);
     }
 
     forall(i, self->cflags) {
@@ -1990,6 +2011,8 @@ static char const *validate_command_flags(state const *self, char const *cmd) {
     if (self->report_time && !has_stats) return "--time";
     if (self->verbose_ast && !is_compile) return "--verbose-ast";
     if (self->verbose_parse && !is_compile) return "--verbose-parse";
+    if (self->bounds_check && !is_compile) return "--bounds-check";
+    if (self->no_bounds_check && !is_compile) return "--no-bounds-check";
     return NULL;
 }
 
@@ -2010,6 +2033,12 @@ int main(int argc, char *argv[]) {
     state self;
     state_init(&self);
     state_gather_options(&self, argc, argv);
+
+    // Bounds checking: ON in debug (no_optimize), OFF in release.
+    // --bounds-check overrides to ON; --no-bounds-check overrides to OFF.
+    self.effective_bounds_check = self.no_optimize;
+    if (self.bounds_check) self.effective_bounds_check = 1;
+    if (self.no_bounds_check) self.effective_bounds_check = 0;
 
     // Auto-define DEBUG or NDEBUG based on optimization mode
     str auto_def = str_init(self.arena, self.no_optimize ? "NDEBUG" : "DEBUG");

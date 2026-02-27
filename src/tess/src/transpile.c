@@ -1133,6 +1133,88 @@ static str generate_funcall(transpile *self, ast_node const *node, eval_ctx *ctx
     return generate_funcall_with_args(self, node, ctx, args_res);
 }
 
+// Detect if a let-in binding is an explicit integer cast annotation where the value type
+// differs from the target (narrowing or cross-chain).
+static int is_integer_narrowing_cast(transpile *self, tl_monotype *target, ast_node const *node) {
+    ast_node *name_node = node->let_in.name;
+    if (!ast_node_is_symbol(name_node) || !name_node->symbol.annotation_type) return 0;
+    tl_monotype *ann = name_node->symbol.annotation_type->type;
+    if (!tl_monotype_is_integer_convertible(ann)) return 0;
+
+    // Get the value expression's type
+    ast_node *val_node = node->let_in.value;
+    tl_monotype *val_type = NULL;
+    if (ast_node_is_symbol(val_node)) {
+        val_type = env_lookup(self, ast_node_str(val_node));
+    }
+    if (!val_type || !tl_monotype_is_integer_convertible(val_type)) return 0;
+
+    // Same type = no narrowing
+    if (str_eq(target->cons_inst->def->name, val_type->cons_inst->def->name)) return 0;
+
+    return 1;
+}
+
+// Emit a bounds-check macro call: one of four variants depending on source/target signedness.
+static void emit_bounds_check(transpile *self, tl_monotype *target, str value,
+                              ast_node const *node) {
+    char const *c_max = tl_monotype_integer_c_max(target);
+    if (!c_max) return;
+
+    str target_c = type_to_c_mono(self, target);
+    str source_c = S("(unknown)");
+    int source_is_unsigned = 0;
+    ast_node *val_node = node->let_in.value;
+    if (ast_node_is_symbol(val_node)) {
+        tl_monotype *val_type = env_lookup(self, ast_node_str(val_node));
+        if (val_type) {
+            source_c = type_to_c_mono(self, val_type);
+            source_is_unsigned = tl_monotype_is_unsigned_family(val_type);
+        }
+    }
+
+    int target_is_unsigned = tl_monotype_is_unsigned_family(target);
+    char const *file = node->file ? node->file : "<unknown>";
+    u32 line = node->line;
+
+    // Choose macro based on source/target signedness combination:
+    // signed->signed:     tl_narrowing_assert(val, MIN, MAX, ...)
+    // unsigned->unsigned:  tl_unsigned_narrowing_assert(val, MAX, ...)
+    // unsigned->signed:    tl_unsigned_to_signed_assert(val, MAX, ...)
+    // signed->unsigned:    tl_signed_to_unsigned_assert(val, MAX, ...)
+    char const *macro_name;
+    int use_min = 0; // only signed->signed uses min
+    if (!source_is_unsigned && !target_is_unsigned) {
+        macro_name = "tl_narrowing_assert(";
+        use_min = 1;
+    } else if (source_is_unsigned && target_is_unsigned) {
+        macro_name = "tl_unsigned_narrowing_assert(";
+    } else if (source_is_unsigned && !target_is_unsigned) {
+        macro_name = "tl_unsigned_to_signed_assert(";
+    } else {
+        macro_name = "tl_signed_to_unsigned_assert(";
+    }
+
+    cat(self, str_init_static(macro_name));
+    cat(self, value);
+    if (use_min) {
+        char const *c_min = tl_monotype_integer_c_min(target);
+        cat(self, S(", "));
+        cat(self, str_init_static(c_min));
+    }
+    cat(self, S(", "));
+    cat(self, str_init_static(c_max));
+    cat(self, S(", \""));
+    cat(self, source_c);
+    cat(self, S("\", \""));
+    cat(self, target_c);
+    cat(self, S("\", \""));
+    cat(self, str_init_static(file));
+    cat(self, S("\", "));
+    cat(self, str_init_u64(self->transient, line));
+    cat(self, S(");\n"));
+}
+
 static str generate_let_in_lambda(transpile *self, tl_monotype *result_type, ast_node const *node,
                                   eval_ctx *ctx) {
 
@@ -1195,6 +1277,19 @@ static str generate_let_in(transpile *self, tl_monotype *result_type, ast_node c
                             cat(self, type_to_c_mono(self, type));
                             cat_close_round(self);
 
+                            cat(self, value);
+                            cat_semicolonln(self);
+                        } else if (tl_monotype_is_integer_convertible(type)) {
+                            // Integer cast: emit (target_type)value for all integer let-in bindings.
+                            // Silences -Wconversion for narrowing and makes casts explicit.
+                            if (is_integer_narrowing_cast(self, type, node)) {
+                                emit_bounds_check(self, type, value, node);
+                            }
+                            cat(self, name);
+                            cat_assign(self);
+                            cat_open_round(self);
+                            cat(self, type_to_c_mono(self, type));
+                            cat_close_round(self);
                             cat(self, value);
                             cat_semicolonln(self);
                         } else {

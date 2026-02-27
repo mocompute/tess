@@ -412,6 +412,7 @@ TL_TESTS =					\
 	if_expression				\
 	import_relative				\
 	import_relative_dotdot			\
+	integer_bounds_check			\
 	integer_cast_annotation			\
 	integer_families			\
 	integer_same_type			\
@@ -607,8 +608,9 @@ TL_FAIL_TESTS =					\
 	fail_weak_int_cross_family		\
 	fail_weak_int_to_standalone
 
-# Expected runtime failure tests (debug only: must compile, must fail at runtime)
-TL_FAIL_RUNTIME_TESTS =
+# Expected runtime failure tests (must compile, must fail at runtime with --bounds-check)
+TL_FAIL_RUNTIME_TESTS =			\
+	fail_runtime_integer_bounds
 
 # Expected-failure tests that the compiler doesn't reject yet
 TL_KNOWN_FAIL_FAILURES =			\
@@ -679,7 +681,7 @@ test-tl: build-tl-tests
 	count_fail_rt=0; \
 	for name in $(TL_FAIL_RUNTIME_TESTS); do \
 		$(MSG_TEST) $$name; \
-		if ./$(TESS_EXE) exe --no-standard-includes -S $(TL_STD_DIR) -o /tmp/tl_test_$$name $(TL_TEST_DIR)/test_$$name.tl 2>/dev/null; then \
+		if ./$(TESS_EXE) exe --no-standard-includes --bounds-check -S $(TL_STD_DIR) -o /tmp/tl_test_$$name $(TL_TEST_DIR)/test_$$name.tl 2>/dev/null; then \
 			if /tmp/tl_test_$$name 2>/dev/null; then \
 				$(MSG_FAIL2) $$name; \
 				failed=$$((failed + 1)); \

@@ -2114,6 +2114,58 @@ int tl_monotype_compare_integer_width(tl_monotype *left, tl_monotype *right) {
     return 0;
 }
 
+char const *tl_monotype_integer_c_min(tl_monotype *self) {
+    if (!tl_monotype_is_inst(self)) return NULL;
+    str n = self->cons_inst->def->name;
+    if (str_eq(n, S("CSignedChar")))       return "SCHAR_MIN";
+    if (str_eq(n, S("CShort")))            return "SHRT_MIN";
+    if (str_eq(n, S("CInt")))              return "INT_MIN";
+    if (str_eq(n, S("CLong")))             return "LONG_MIN";
+    if (str_eq(n, S("CLongLong")))         return "LLONG_MIN";
+    if (str_eq(n, S("Int")))              return "LLONG_MIN";  // alias for CLongLong
+    if (str_eq(n, S("CInt8")))             return "INT8_MIN";
+    if (str_eq(n, S("CInt16")))            return "INT16_MIN";
+    if (str_eq(n, S("CInt32")))            return "INT32_MIN";
+    if (str_eq(n, S("CInt64")))            return "INT64_MIN";
+    if (str_eq(n, S("CPtrDiff")))          return "PTRDIFF_MIN";
+    if (str_eq(n, S("CChar")))             return "CHAR_MIN";
+    return NULL; // unsigned types have no MIN (implicitly 0)
+}
+
+char const *tl_monotype_integer_c_max(tl_monotype *self) {
+    if (!tl_monotype_is_inst(self)) return NULL;
+    str n = self->cons_inst->def->name;
+    if (str_eq(n, S("CSignedChar")))       return "SCHAR_MAX";
+    if (str_eq(n, S("CShort")))            return "SHRT_MAX";
+    if (str_eq(n, S("CInt")))              return "INT_MAX";
+    if (str_eq(n, S("CLong")))             return "LONG_MAX";
+    if (str_eq(n, S("CLongLong")))         return "LLONG_MAX";
+    if (str_eq(n, S("Int")))              return "LLONG_MAX";  // alias for CLongLong
+    if (str_eq(n, S("CUnsignedChar")))     return "UCHAR_MAX";
+    if (str_eq(n, S("Byte")))             return "UCHAR_MAX"; // alias for CUnsignedChar
+    if (str_eq(n, S("CUnsignedShort")))    return "USHRT_MAX";
+    if (str_eq(n, S("CUnsignedInt")))      return "UINT_MAX";
+    if (str_eq(n, S("CUnsignedLong")))     return "ULONG_MAX";
+    if (str_eq(n, S("CUnsignedLongLong"))) return "ULLONG_MAX";
+    if (str_eq(n, S("UInt")))             return "ULLONG_MAX"; // alias for CUnsignedLongLong
+    if (str_eq(n, S("CInt8")))             return "INT8_MAX";
+    if (str_eq(n, S("CInt16")))            return "INT16_MAX";
+    if (str_eq(n, S("CInt32")))            return "INT32_MAX";
+    if (str_eq(n, S("CInt64")))            return "INT64_MAX";
+    if (str_eq(n, S("CUInt8")))            return "UINT8_MAX";
+    if (str_eq(n, S("CUInt16")))           return "UINT16_MAX";
+    if (str_eq(n, S("CUInt32")))           return "UINT32_MAX";
+    if (str_eq(n, S("CUInt64")))           return "UINT64_MAX";
+    if (str_eq(n, S("CSize")))             return "SIZE_MAX";
+    if (str_eq(n, S("CPtrDiff")))          return "PTRDIFF_MAX";
+    if (str_eq(n, S("CChar")))             return "CHAR_MAX";
+    return NULL;
+}
+
+int tl_monotype_is_unsigned_family(tl_monotype *self) {
+    return tl_monotype_is_unsigned_integer(self);
+}
+
 int tl_monotype_same_integer_subchain(tl_monotype *left, tl_monotype *right) {
     int lsc = tl_monotype_integer_subchain(left);
     int rsc = tl_monotype_integer_subchain(right);

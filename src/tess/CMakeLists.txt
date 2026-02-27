@@ -232,7 +232,7 @@ function(tl_create_runtime_fail_test NAME)
   set(TEST_EXE ${CMAKE_CURRENT_BINARY_DIR}/tl/test_${NAME}${CMAKE_EXECUTABLE_SUFFIX})
   add_custom_command(
     OUTPUT ${TEST_EXE}
-    COMMAND $<TARGET_FILE:tess_exe> exe --no-standard-includes -I ${CMAKE_CURRENT_SOURCE_DIR} -S ${PROJECT_SOURCE_DIR}/src/tl/std -o ${TEST_EXE}
+    COMMAND $<TARGET_FILE:tess_exe> exe --no-standard-includes --bounds-check -I ${CMAKE_CURRENT_SOURCE_DIR} -S ${PROJECT_SOURCE_DIR}/src/tl/std -o ${TEST_EXE}
       ${CMAKE_CURRENT_SOURCE_DIR}/tl/test_${NAME}.tl
     DEPENDS tess_exe
       ${CMAKE_CURRENT_SOURCE_DIR}/tl/test_${NAME}.tl
@@ -326,6 +326,7 @@ tl_create_test(function_pointer_value)
 tl_create_test(generic_lambda)
 tl_create_test(global_variables)
 tl_create_test(hello)
+tl_create_test(integer_bounds_check)
 tl_create_test(integer_cast_annotation)
 tl_create_test(integer_families)
 tl_create_test(integer_same_type)
@@ -552,6 +553,9 @@ tl_create_build_fail_test(fail_integer_exact_operator)
 tl_create_build_fail_test(fail_integer_narrowing_funcall)
 tl_create_build_fail_test(fail_integer_narrowing_reassign)
 tl_create_build_fail_test(fail_integer_narrowing_return)
+
+# Expected runtime failures (must compile, must abort at runtime with --bounds-check)
+tl_create_runtime_fail_test(fail_runtime_integer_bounds)
 
 # Known fail-failures: expected-failure tests that the compiler doesn't reject yet
 tl_create_known_fail_failure(fail_integer_cross_chain)

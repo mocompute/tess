@@ -195,6 +195,9 @@ int                    tl_monotype_integer_subchain(tl_monotype *);        // re
 int                    tl_monotype_integer_width_rank(tl_monotype *);      // returns -1 if not integer
 int                    tl_monotype_compare_integer_width(tl_monotype *left, tl_monotype *right); // -1/0/1/2
 int                    tl_monotype_same_integer_subchain(tl_monotype *left, tl_monotype *right);
+char const            *tl_monotype_integer_c_min(tl_monotype *);  // e.g. "SHRT_MIN", NULL if unsigned
+char const            *tl_monotype_integer_c_max(tl_monotype *);  // e.g. "SHRT_MAX"
+int                    tl_monotype_is_unsigned_family(tl_monotype *); // unsigned subchains (2, 4, 5=CSize)
 tl_monotype           *tl_monotype_unary_target(tl_monotype *);
 tl_monotype           *tl_monotype_ptr_target(tl_monotype *);
 void                   tl_monotype_ptr_set_target(tl_monotype *, tl_monotype *);
