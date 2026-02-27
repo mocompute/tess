@@ -1,5 +1,8 @@
 # Integer Conversions — Design Document
 
+**Status: Fully implemented** (all 7 phases). See [TYPE_SYSTEM.md](../TYPE_SYSTEM.md)
+and [LANGUAGE_REFERENCE.md](../LANGUAGE_REFERENCE.md) for user-facing documentation.
+
 ## Problem Statement
 
 The current integer type system has a disconnect between unification and

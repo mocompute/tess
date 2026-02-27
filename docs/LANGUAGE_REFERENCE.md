@@ -133,6 +133,41 @@ HM.insert(map, key, value)   // Same as Collections.HashMap.insert(...)
 **Size types:**
 - `CSize`, `CPtrDiff`
 
+`Int` is an alias for `CLongLong` and `UInt` is an alias for `CUnsignedLongLong`.
+
+### Integer Type Conversions
+
+Integer types are organized into sub-chains with width ordering. Conversions follow strict rules:
+
+**Implicit widening** (narrow → wide, same sub-chain) is automatic:
+```tl
+x : CShort := 1
+y : CInt := x            // OK: CShort → CInt (widening)
+z : Int := y             // OK: CInt → Int (widening)
+```
+
+**Narrowing** (wide → narrow), **cross-family** (signed ↔ unsigned), **cross-chain** (C-named ↔ fixed-width), and **standalone** (`CSize`, `CPtrDiff`, `CChar`) conversions require an explicit let-in type annotation:
+```tl
+narrow : CInt := some_int_value       // Narrowing: Int → CInt
+unsigned : UInt := some_int_value     // Cross-family: signed → unsigned
+fixed : CInt32 := some_cint_value     // Cross-chain: C-named → fixed-width
+size : CSize := some_uint_value       // Standalone: UInt → CSize
+```
+
+The let-in annotation is the only cast syntax — there is no `as` keyword. This makes every conversion point visually prominent.
+
+**Operators and generics require exact type match:**
+```tl
+a : CInt := 1
+b : CShort := 2
+c := a + b               // Error: CInt != CShort
+wide : CInt := b
+c := a + wide            // OK: CInt + CInt
+c := a + 2               // OK: literal 2 adapts to CInt
+```
+
+See [TYPE_SYSTEM.md](TYPE_SYSTEM.md) for the full sub-chain hierarchy and conversion rules.
+
 ### Pointer Types
 
 ```tl
@@ -184,7 +219,7 @@ The Tess compiler uses Hindley-Milner style type inference. Annotations are opti
 
 | Pattern | Example | Reason |
 |---------|---------|--------|
-| Integer literals | `x := 42` | Literal type is `Int` |
+| Integer literals | `x := 42` | Weak signed, defaults to `Int` |
 | Float literals | `x := 3.14` | Literal type is `Float` |
 | Struct constructors | `p := Point(x = 1, y = 2)` | Type inferred from constructor |
 | Tagged union constructors (with constraining fields) | `opt := Some(42)` | Type parameter inferred from argument value |
@@ -220,13 +255,15 @@ bytes : Ptr[CUnsignedChar] := int_ptr // Explicit cast required
 
 #### C Type Disambiguation
 
-Integer literals default to `Int`, float literals to `Float`. Use annotations to specify C types:
+Integer literals are polymorphic — they adapt to context. A bare literal like `42` can become any signed integer type. Use a type annotation when there is no context to determine the type, or to perform an explicit conversion:
 
 ```tl
-x : CInt := 42                  // Force CInt instead of Int
+x : CInt := 42                  // Literal adapts to CInt
 f : CFloat := 3.14              // Force CFloat instead of Float
-sz : CSize := 1024              // Force CSize
+sz := 1024zu                    // CSize literal (zu suffix)
 ```
+
+See [Integer Literals](#integer-literals) for the full set of literal suffixes.
 
 #### c_malloc Return Type
 
@@ -291,7 +328,7 @@ foo() -> Ptr[any] { return null }     // Required - null has no type
 
 | Scenario | Annotation Required? |
 |----------|---------------------|
-| Integer literal `42` | No (inferred as `Int`) |
+| Integer literal `42` | No (weak signed, defaults to `Int`) |
 | Float literal `3.14` | No (inferred as `Float`) |
 | Struct constructor | No (inferred from constructor) |
 | Tagged union with constraining field | No |
@@ -301,7 +338,9 @@ foo() -> Ptr[any] { return null }     // Required - null has no type
 | CArray declaration | **Yes** (type annotation required) |
 | CArray decay to pointer | **Yes** (explicit `Ptr[T]` annotation) |
 | Pointer cast to different type | **Yes** |
-| C type (CInt, CFloat, etc.) | **Yes** |
+| C type via literal suffix (`42u`, `42zu`) | No (suffix determines type) |
+| C type via narrowing/cross-chain cast | **Yes** (let-in annotation) |
+| C float type (CFloat, etc.) | **Yes** |
 | c_malloc result | **Yes** |
 | C FFI function declaration | **Yes** |
 | Function called directly | No (params and return inferred) |
@@ -531,9 +570,13 @@ result := sum_to(1000000, 0)       // Works without stack overflow
 ### Literals
 
 ```tl
-42                  // Integer
+42                  // Integer (weak signed, defaults to Int)
+42u                 // Unsigned integer (weak unsigned, defaults to UInt)
+42z                 // CPtrDiff (signed, platform-dependent size)
+42zu                // CSize (unsigned, platform-dependent size)
 1_234_567           // Integer with separators (underscores ignored)
-0xFF                // Hexadecimal
+0xFF                // Hexadecimal (weak signed)
+0xFFu               // Hexadecimal unsigned (weak unsigned)
 0377                // Octal
 3.14                // Float
 1.5e-10             // Scientific notation
@@ -546,6 +589,28 @@ void                // Void value
 ```
 
 Character literals use C syntax: single-quoted characters with the same escape sequences as C (`'\0'`, `'\n'`, `'\t'`, `'\\'`, `'\''`, etc.). They have type `CChar`.
+
+#### Integer Literals
+
+Integer literals have a **polymorphic (weak) type** that adapts to context. The suffix determines which family of integer types the literal can become:
+
+| Suffix | Type | Polymorphic? |
+|--------|------|-------------|
+| (none) | Weak signed | Yes — resolves to any signed integer; defaults to `Int` |
+| `u`/`U` | Weak unsigned | Yes — resolves to any unsigned integer; defaults to `UInt` |
+| `z`/`Z` | `CPtrDiff` | No — always exactly `CPtrDiff` |
+| `zu`/`ZU` | `CSize` | No — always exactly `CSize` |
+
+```tl
+f(x: CInt) { x }
+f(42)                    // OK: 42 adapts to CInt
+c_malloc(10zu)           // OK: 10zu is CSize
+offset : CPtrDiff := -4z // OK: -4z is CPtrDiff
+```
+
+A weak literal resolves to a concrete type when it meets one in unification. If unconstrained at the end of type inference, it defaults to `Int` (signed) or `UInt` (unsigned). The compiler checks that the literal value fits in the resolved type's range — for example, `256` resolving to `CInt8` is a compile-time error.
+
+Weak literals do not resolve to standalone types (`CSize`, `CPtrDiff`, `CChar`). Use the `z`/`zu` suffixes or a type annotation instead.
 
 ### Let-in Expressions
 
@@ -1209,14 +1274,21 @@ ptr.[i]               // Index into pointer (pointer arithmetic)
 ptr.[i] = value       // Write through pointer index
 ```
 
-### Pointer Casts
+### Type Casts via Let-In Annotation
 
-Pointers can be cast implicitly via type annotation:
+The let-in type annotation is the universal cast syntax in Tess. It covers both pointer casts and integer conversions:
 
 ```tl
-p : Ptr[Int] := c_malloc(sizeof[Int]() * 10)
+// Pointer casts
+p : Ptr[Int] := c_malloc(sizeof[Int]() * 10zu)
 b : Ptr[Byte] := p    // Cast to different pointer type
+
+// Integer conversions (narrowing, cross-family, cross-chain, standalone)
+narrow : CInt := some_int_value
+size : CSize := some_uint_value
 ```
+
+See [Integer Type Conversions](#integer-type-conversions) for the full conversion rules.
 
 ### Const Pointers
 

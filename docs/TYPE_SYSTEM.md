@@ -286,11 +286,87 @@ Tess performs limited implicit type coercion:
 
 ### Integer Types
 
-C integer types are implicitly convertible:
+Integer types are organized into **seven sub-chains**, each with a width
+ordering. Implicit widening is only permitted within a single sub-chain,
+from narrower to wider.
+
+**C-Named Signed:** `CSignedChar < CShort < CInt < CLong < CLongLong (= Int)`
+
+**C-Named Unsigned:** `CUnsignedChar < CUnsignedShort < CUnsignedInt < CUnsignedLong < CUnsignedLongLong (= UInt)`
+
+**Fixed-Width Signed:** `CInt8 < CInt16 < CInt32 < CInt64`
+
+**Fixed-Width Unsigned:** `CUInt8 < CUInt16 < CUInt32 < CUInt64`
+
+**Standalone Types** (no implicit conversion): `CSize`, `CPtrDiff`, `CChar`
+
+#### Implicit Widening
+
+Within a sub-chain, narrower types implicitly widen to wider types:
+
 ```tl
 x : CInt := 42
-y : CLong := x      // Implicit widening
+y : CLong := x      // OK: implicit widening (CInt → CLong)
+z : Int := x        // OK: implicit widening (CInt → Int)
 ```
+
+#### Explicit Narrowing and Cross-Chain Conversion
+
+Narrowing (wide → narrow), cross-chain (e.g., signed ↔ unsigned, C-named ↔
+fixed-width), and standalone type conversions require an explicit **let-in
+type annotation**:
+
+```tl
+narrow : CInt := some_int_value       // Narrowing: Int → CInt
+unsigned : UInt := some_int_value     // Cross-family: signed → unsigned
+fixed : CInt32 := some_cint_value     // Cross-chain: C-named → fixed-width
+size : CSize := some_uint_value       // Standalone: UInt → CSize
+```
+
+The let-in annotation is the only syntax for explicit conversion — there is
+no `as` keyword or cast function. This makes every conversion point visually
+prominent when scanning code.
+
+#### Weak Integer Literals
+
+Integer literals receive a **polymorphic (weak) type** that adapts to context:
+
+- `42` — weak signed, resolves to any signed integer type; defaults to `Int`
+- `42u` — weak unsigned, resolves to any unsigned integer type; defaults to `UInt`
+- `42z` — concrete `CPtrDiff` (not polymorphic)
+- `42zu` — concrete `CSize` (not polymorphic)
+
+```tl
+f(x: CInt) { x }
+f(42)                    // OK: literal 42 adapts to CInt
+c_malloc(10zu)           // OK: 10zu is CSize
+```
+
+When a weak literal resolves to a concrete type, the compiler verifies the
+literal value fits in that type's range. For example, `256` resolving to
+`CInt8` is a compile-time error.
+
+#### Exact Match in Generics and Operators
+
+Type variables require exact type match — no implicit widening through generics:
+
+```tl
+f(x: T, y: T) -> T { x + y }
+
+a : CInt := 1
+b : CShort := 2
+f(a, b)              // Error: T bound to CInt, CShort != CInt
+```
+
+Arithmetic and comparison operators are typed as `(T, T) -> T`, requiring
+both operands to be the same concrete type. Conditional (`if`) and `case`
+expressions also require all branches to have the same type.
+
+#### Debug Bounds Checking
+
+In debug builds, narrowing conversions emit a runtime bounds check before the
+cast. If the value does not fit in the target type, the program aborts with
+a diagnostic message.
 
 ### Pointer Types
 
@@ -346,7 +422,7 @@ c_strcmp(s1: Ptr[Const[CChar]], s2: Ptr[Const[CChar]]) -> CInt
 
 This is why the standard library `mem*` bindings (`c_memcpy`, `c_memmove`, `c_memcmp`, `c_memchr`) use `Ptr[T]` without `Const`, while string functions that use concrete `CChar` types include `Const` where the C headers specify `const`.
 
-### No Implicit Numeric Coercion
+### No Implicit Float/Integer Coercion
 
 `Int` and `Float` are not implicitly convertible:
 ```tl
@@ -361,9 +437,9 @@ x : Float := 3.7
 y := Unsafe.float_to_int(x)   // y is Int
 ```
 
-Note that integer literals are always `Int`, not `Float`:
+Integer literals are always integer-typed, not `Float`:
 ```tl
-x : Float := 0      // Error: 0 is Int, not Float
+x : Float := 0      // Error: 0 is an integer literal, not Float
 x : Float := 0.0    // OK: 0.0 is Float
 ```
 

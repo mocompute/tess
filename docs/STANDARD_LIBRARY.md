@@ -254,15 +254,18 @@ The same pattern exists for `transient_*`.
 #import <Unsafe.tl>
 ```
 
-Low-level pointer operations that bypass the type system. Use with care.
+Low-level pointer operations and numeric conversions that bypass the type system. Use with care.
 
 | Function | Signature | Description |
 |----------|-----------|-------------|
-| `pointer_add` | `(ptr: Ptr[any], n: CPtrDiff) -> Ptr[any]` | Advance pointer by `n` bytes |
-| `pointer_subtract` | `(ptr: Ptr[any], n: CPtrDiff) -> Ptr[any]` | Move pointer back by `n` bytes |
+| `pointer_add` | `(ptr: Ptr[any], n: UInt) -> Ptr[any]` | Advance pointer by `n` bytes |
+| `pointer_subtract` | `(ptr: Ptr[any], n: UInt) -> Ptr[any]` | Move pointer back by `n` bytes |
 | `pointer_difference` | `(lhs: Ptr[any], rhs: Ptr[any]) -> CPtrDiff` | Byte distance between two pointers |
 | `pointer_compare` | `(lhs: Ptr[any], rhs: Ptr[any]) -> CInt` | Returns -1, 0, or 1 |
 | `float_to_int` | `(d: CDouble) -> CLongLong` | Truncating cast from float to integer |
+| `int_to_float` | `(i: CLongLong) -> CDouble` | Cast from integer to float |
+
+**Note:** Integer signedness conversions (signed ↔ unsigned) no longer require `Unsafe` functions. Use a let-in type annotation instead: `unsigned : UInt := signed_value`. See [Integer Type Conversions](LANGUAGE_REFERENCE.md#integer-type-conversions).
 
 ---
 
