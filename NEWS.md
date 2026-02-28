@@ -5,6 +5,42 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased] - 2026-02-23 to 2026-02-27 (981ea8c5..5ba6d8ad)
+
+### Highlights
+
+- Integer type safety: implicit widening within sub-chains, explicit narrowing and cross-chain conversions via let-in annotation casts
+- Weak (polymorphic) integer literals: `42` adapts to any signed integer context, `42u` to unsigned, `42z`/`42zu` for `CPtrDiff`/`CSize`
+- Seven integer sub-chains with width ordering replace the old bidirectional same-family unification
+- Directional unification in the type checker (expected/actual semantics) for integer type checking
+- Debug-mode runtime bounds checking on narrowing casts
+- `Unsafe` integer conversion functions removed in favor of the let-in annotation syntax
+
+### Added
+
+- **Integer Sub-Chain Ordering**: Seven sub-chains define the integer type hierarchy: C-named signed (`CSignedChar` < `CShort` < `CInt` < `CLong` < `CLongLong`), C-named unsigned (`CUnsignedChar` < `CUnsignedShort` < `CUnsignedInt` < `CUnsignedLong` < `CUnsignedLongLong`), fixed-width signed (`CInt8` < `CInt16` < `CInt32` < `CInt64`), fixed-width unsigned (`CUInt8` < `CUInt16` < `CUInt32` < `CUInt64`), and three standalone types (`CSize`, `CPtrDiff`, `CChar`). Implicit widening is only permitted within a single sub-chain, following the width ordering.
+- **Weak Integer Literals**: Integer literals are now polymorphic. Unsuffixed `42` receives a weak signed literal type that resolves to any signed integer from context (defaulting to `Int`). The `u`/`U` suffix produces a weak unsigned literal (defaulting to `UInt`). New `z`/`Z` and `zu`/`ZU` suffixes produce concrete `CPtrDiff` and `CSize` literals respectively for size-typed contexts.
+- **Directional Unification**: The type checker now distinguishes expected (target) and actual (source) types in integer comparisons. Three modes: `SYMMETRIC` (legacy, no directional checking), `DIRECTED` (widening OK, narrowing rejected), and `EXACT` (same concrete type required). Function parameters, return types, let-in bindings, and assignments use `DIRECTED`; operators, conditionals, and generic type variables use `EXACT`.
+- **Integer Cast Annotations**: The existing let-in type annotation mechanism (previously used for pointer casts) is generalized to all integer type conversions. Writing `narrow: CInt := int_val` performs an explicit narrowing cast; `fixed: CInt32 := cint_val` performs a cross-chain cast. This is the only syntax for explicit conversion — no `as` keyword or cast function.
+- **Debug Bounds Checking**: In debug mode, narrowing conversions emit a runtime bounds check (`_tl_assert_bounds_`) before the C cast that verifies the value fits in the target type's range. Controlled by optimization mode (on for debug, off for release).
+- **Compile-Time Literal Overflow Detection**: When a weak literal resolves to a concrete type, the compiler checks that the literal value fits in the target type's range, producing a compile-time error on overflow.
+- **30+ New Tests**: Comprehensive test coverage including implicit widening, narrowing rejection, cross-chain rejection, cross-family rejection, cast annotations, weak literal resolution, `z`/`zu` literals, operator exact match, conditional exact match, generic exact match, bounds checking, and literal overflow.
+
+### Changed
+
+- **Integer Unification is Now Directional (Breaking Change)**: Integer types no longer unify freely within the same family. Narrowing conversions (e.g., `Int` to `CInt`) and cross-chain conversions (e.g., `CInt` to `CInt32`) now require explicit let-in annotation casts. Existing code that relied on implicit narrowing or cross-chain conversion will need annotations added.
+- **Operators Require Exact Type Match (Breaking Change)**: Arithmetic and comparison operators now require both operands to have the exact same integer type. `a: CInt + b: CShort` is a type error; widen explicitly or use weak literals.
+- **Conditionals and Case Arms Require Exact Type Match (Breaking Change)**: All branches of `if`/`else` and `when`/`case` expressions must have the exact same integer type.
+- **Generic Type Variables Require Exact Match**: When a type variable `T` is bound to a concrete integer type, all other uses of `T` must match exactly — no implicit widening through generics.
+- **Standard Library Uses `UInt` Internally**: Tess-level code now uses `UInt` for sizes and counts, with `CSize` reserved for C FFI boundaries. Standard library bindings updated accordingly.
+- **`stdint.h` Always Included**: The transpiler now always includes `<stdint.h>` since fixed-width types (`int8_t`, `uint64_t`, etc.) are built-in to the type system.
+- **Test `main()` Returns `CInt`**: Test files updated to use `CInt` return type for `main()` (matching C convention) with explicit narrowing casts where needed.
+
+### Removed
+
+- **`Unsafe.unsigned_to_signed` and `Unsafe.signed_to_unsigned`**: Removed in favor of the let-in annotation syntax for cross-family integer conversions (e.g., `signed: Int := unsigned_val`).
+
+
 ## [Unreleased] - 2026-02-16 to 2026-02-16 (51575693..ac4f2b5d)
 
 ### Highlights
