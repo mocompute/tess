@@ -290,8 +290,8 @@ Before creating a new specialization, `instance_lookup_arrow()` checks if this c
 identity(x) { x }
 
 main() {
-    identity(42)        // Creates identity_0 : Int -> Int
-    identity("hello")   // Creates identity_1 : CString -> CString
+    identity(42)        // Creates identity_0: Int -> Int
+    identity("hello")   // Creates identity_1: CString -> CString
     identity(42)        // Reuses identity_0 (cached)
 }
 ```
@@ -441,9 +441,9 @@ swap(a, b) { (b, a) }
 #import <Utils.tl>
 
 main() {
-    Utils.identity(42)       // Creates Utils__identity__1_0 : Int -> Int
-    Utils.identity("hi")     // Creates Utils__identity__1_1 : CString -> CString
-    Utils.swap(1, 2)         // Creates Utils__swap__2_0 : (Int, Int) -> (Int, Int)
+    Utils.identity(42)       // Creates Utils__identity__1_0: Int -> Int
+    Utils.identity("hi")     // Creates Utils__identity__1_1: CString -> CString
+    Utils.swap(1, 2)         // Creates Utils__swap__2_0: (Int, Int) -> (Int, Int)
 }
 ```
 

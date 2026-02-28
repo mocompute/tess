@@ -99,19 +99,19 @@ casts) is generalized to cover all explicit type conversions:
 
 ```tl
 // Pointer cast (existing)
-p : Ptr[Int] := c_malloc(sizeof[Int]() * 10zu)
+p: Ptr[Int] := c_malloc(sizeof[Int]() * 10zu)
 
 // Integer narrowing (new)
-narrow : CInt := some_int_value
+narrow: CInt := some_int_value
 
 // Cross-family (new)
-unsigned : UInt := some_int_value
+unsigned: UInt := some_int_value
 
 // Cross-chain (new)
-fixed : CInt32 := some_cint_value
+fixed: CInt32 := some_cint_value
 
 // Standalone type (new)
-size : CSize := some_uint_value
+size: CSize := some_uint_value
 ```
 
 The let-in annotation is the **only** syntax for explicit conversion. This
@@ -128,7 +128,7 @@ to a mutable variable, an intermediate let-in is required if narrowing:
 x: mut CInt := 0
 
 // Later, with an Int value that needs narrowing:
-narrow : CInt := some_int_value
+narrow: CInt := some_int_value
 x = narrow
 ```
 
@@ -298,7 +298,7 @@ b: CShort := 2
 c := a + b      // Error: CInt != CShort
 
 // Fix: widen explicitly or use same type
-wide : CInt := b
+wide: CInt := b
 c := a + wide   // OK: CInt + CInt -> CInt
 
 // Or with literals (weak literals resolve to CInt from context):

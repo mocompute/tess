@@ -233,7 +233,7 @@ adder_call(self: Ptr(Adder), x: Int) -> Int {
 }
 
 make_adder(n: Int) -> Ptr(Adder) {
-  a : Ptr(Adder) := c_malloc(sizeof(Adder))
+  a: Ptr(Adder) := c_malloc(sizeof(Adder))
   a->n = n
   a
 }
@@ -517,7 +517,7 @@ Given this is exploratory (low priority), I recommend starting with a minimal Ph
    Adder : { n: Int }
    adder_call(self: Ptr(Adder), x: Int) { self->n + x }
    make_adder(n) -> Ptr(Adder) {
-     a : Ptr(Adder) := c_malloc(sizeof(Adder))
+     a: Ptr(Adder) := c_malloc(sizeof(Adder))
      a->n = n
      a
    }

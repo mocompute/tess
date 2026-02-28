@@ -44,7 +44,7 @@ Type annotations are needed when:
 
 2. **Ambiguous pointer types** - When `c_malloc` or similar returns `Ptr[any]`:
    ```tl
-   p : Ptr[Int] := c_malloc(sizeof[Int]() * 10)
+   p: Ptr[Int] := c_malloc(sizeof[Int]() * 10)
    ```
 
 3. **Functions only used through pointers** - Without a direct call site, the compiler cannot specialize:
@@ -57,7 +57,7 @@ Type annotations are needed when:
 
 4. **Disambiguation** - When multiple types would be valid:
    ```tl
-   x : CInt := 42    // Force CInt instead of Int
+   x: CInt := 42     // Force CInt instead of Int
    ch := 'a'         // Character literal: CChar
    ```
 
@@ -266,7 +266,7 @@ Generates:
 3. Return type = `t1`
 4. Body `x` means `t1 = t0`
 5. Call `id(42)` means `t0 = Int`
-6. Therefore: `id : Int -> Int` for this call site
+6. Therefore: `id: Int -> Int` for this call site
 
 ### Occurs Check
 
@@ -308,11 +308,11 @@ function arguments, and return values:
 
 ```tl
 // Let-in binding
-x : CInt := 42
-y : Int := x             // OK: CInt → Int
+x: CInt := 42
+y: Int := x              // OK: CInt → Int
 
 // Reassignment
-z : Int := 0
+z: Int := 0
 z = x                    // OK: CInt → Int
 
 // Function arguments
@@ -330,10 +330,10 @@ fixed-width), and standalone type conversions require an explicit **let-in
 type annotation**:
 
 ```tl
-narrow : CInt := some_int_value       // Narrowing: Int → CInt
-unsigned : UInt := some_int_value     // Cross-family: signed → unsigned
-fixed : CInt32 := some_cint_value     // Cross-chain: C-named → fixed-width
-size : CSize := some_uint_value       // Standalone: UInt → CSize
+narrow: CInt := some_int_value        // Narrowing: Int → CInt
+unsigned: UInt := some_int_value      // Cross-family: signed → unsigned
+fixed: CInt32 := some_cint_value      // Cross-chain: C-named → fixed-width
+size: CSize := some_uint_value        // Standalone: UInt → CSize
 ```
 
 The let-in annotation is the only syntax for explicit conversion — there is
@@ -366,8 +366,8 @@ Type variables require exact type match — no implicit widening through generic
 ```tl
 f(x: T, y: T) -> T { x + y }
 
-a : CInt := 1
-b : CShort := 2
+a: CInt := 1
+b: CShort := 2
 f(a, b)              // Error: T bound to CInt, CShort != CInt
 ```
 
@@ -385,8 +385,8 @@ a diagnostic message.
 
 Pointers can be implicitly cast:
 ```tl
-p : Ptr[Int] := c_malloc(...)
-q : Ptr[Byte] := p  // Implicit cast
+p: Ptr[Int] := c_malloc(...)
+q: Ptr[Byte] := p   // Implicit cast
 ```
 
 ### Const Pointer Coercion
@@ -397,7 +397,7 @@ q : Ptr[Byte] := p  // Implicit cast
 read(p: Ptr[Const[Int]]) { p.* }
 
 main() {
-  p : Ptr[Int] := c_malloc(8)
+  p: Ptr[Int] := c_malloc(8)
   p.* = 42
   val := read(p)     // OK: Ptr[Int] -> Ptr[Const[Int]]
 }
@@ -439,21 +439,21 @@ This is why the standard library `mem*` bindings (`c_memcpy`, `c_memmove`, `c_me
 
 `Int` and `Float` are not implicitly convertible:
 ```tl
-x : Int := 42
-y : Float := x      // Error: conflicting types Float versus Int
+x: Int := 42
+y: Float := x       // Error: conflicting types Float versus Int
 ```
 
 To convert between `Int` and `Float`, use the `Unsafe` module:
 ```tl
 #import <Unsafe.tl>
-x : Float := 3.7
+x: Float := 3.7
 y := Unsafe.float_to_int(x)   // y is Int
 ```
 
 Integer literals are always integer-typed, not `Float`:
 ```tl
-x : Float := 0      // Error: 0 is an integer literal, not Float
-x : Float := 0.0    // OK: 0.0 is Float
+x: Float := 0       // Error: 0 is an integer literal, not Float
+x: Float := 0.0     // OK: 0.0 is Float
 ```
 
 ## Recursive Types
@@ -499,8 +499,8 @@ c_malloc(size: CSize) -> Ptr[any]
 
 `Ptr[any]` can be assigned to any pointer type:
 ```tl
-p : Ptr[Int] := c_malloc(...)     // Ptr[any] -> Ptr[Int]
-q : Ptr[Point[Float]] := c_malloc(...)
+p: Ptr[Int] := c_malloc(...)      // Ptr[any] -> Ptr[Int]
+q: Ptr[Point[Float]] := c_malloc(...)
 ```
 
 ## Type Predicates

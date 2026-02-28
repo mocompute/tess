@@ -265,7 +265,7 @@ Low-level pointer operations and numeric conversions that bypass the type system
 | `float_to_int` | `(d: CDouble) -> CLongLong` | Truncating cast from float to integer |
 | `int_to_float` | `(i: CLongLong) -> CDouble` | Cast from integer to float |
 
-**Note:** Integer signedness conversions (signed ↔ unsigned) no longer require `Unsafe` functions. Use a let-in type annotation instead: `unsigned : UInt := signed_value`. See [Integer Type Conversions](LANGUAGE_REFERENCE.md#integer-type-conversions).
+**Note:** Integer signedness conversions (signed ↔ unsigned) no longer require `Unsafe` functions. Use a let-in type annotation instead: `unsigned: UInt := signed_value`. See [Integer Type Conversions](LANGUAGE_REFERENCE.md#integer-type-conversions).
 
 ---
 
