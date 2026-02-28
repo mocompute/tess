@@ -1294,7 +1294,8 @@ static int infer_tuple(tl_infer *self, ast_node *node) {
     }
 
     tl_monotype *tuple = tl_monotype_create_tuple(self->arena, (tl_monotype_sized)sized_all(tup_types));
-    return constrain(self, node->type, tl_polytype_absorb_mono(self->arena, tuple), node, TL_UNIFY_SYMMETRIC);
+    return constrain(self, node->type, tl_polytype_absorb_mono(self->arena, tuple), node,
+                     TL_UNIFY_SYMMETRIC);
 }
 
 static int infer_while(tl_infer *self, ast_node *node) {
@@ -1376,7 +1377,8 @@ static int infer_try(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
 
     // Constrain the enclosing function's return type to be compatible with the wrapper type
     if (ctx->result_type)
-        if (constrain_pm(self, node->try_.operand->type, ctx->result_type, node, TL_UNIFY_SYMMETRIC)) return 1;
+        if (constrain_pm(self, node->try_.operand->type, ctx->result_type, node, TL_UNIFY_SYMMETRIC))
+            return 1;
 
     return 0;
 }
@@ -1403,7 +1405,8 @@ static int infer_lambda_function_application(tl_infer *self, traverse_ctx *ctx, 
     tl_polytype wrap = tl_polytype_wrap(inst);
     if (constrain(self, &wrap, app, node, TL_UNIFY_DIRECTED)) return 1;
 
-    if (constrain(self, node->type, node->lambda_application.lambda->lambda_function.body->type, node, TL_UNIFY_SYMMETRIC))
+    if (constrain(self, node->type, node->lambda_application.lambda->lambda_function.body->type, node,
+                  TL_UNIFY_SYMMETRIC))
         return 1;
 
     return 0;
@@ -1423,11 +1426,14 @@ static int infer_lambda_function(tl_infer *self, traverse_ctx *ctx, ast_node *no
 
 static int infer_if_then_else(tl_infer *self, ast_node *node) {
     tl_monotype *bool_type = tl_type_registry_bool(self->registry);
-    if (constrain_pm(self, node->if_then_else.condition->type, bool_type, node, TL_UNIFY_SYMMETRIC)) return 1;
+    if (constrain_pm(self, node->if_then_else.condition->type, bool_type, node, TL_UNIFY_SYMMETRIC))
+        return 1;
 
     ensure_tv(self, &node->type);
     if (node->if_then_else.no) {
-        if (constrain(self, node->if_then_else.yes->type, node->if_then_else.no->type, node, TL_UNIFY_EXACT)) return 1;
+        if (constrain(self, node->if_then_else.yes->type, node->if_then_else.no->type, node,
+                      TL_UNIFY_EXACT))
+            return 1;
         if (constrain(self, node->type, node->if_then_else.yes->type, node, TL_UNIFY_SYMMETRIC)) return 1;
     } else {
         tl_monotype *nil      = tl_type_registry_nil(self->registry);
@@ -1781,7 +1787,8 @@ static int infer_case(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
 
             if (resolve_node(self, node->case_.conditions.v[i], ctx, npos_operand)) return 1;
             ensure_tv(self, &node->case_.conditions.v[i]->type);
-            if (constrain(self, expr_type, node->case_.conditions.v[i]->type, node, TL_UNIFY_SYMMETRIC)) return 1;
+            if (constrain(self, expr_type, node->case_.conditions.v[i]->type, node, TL_UNIFY_SYMMETRIC))
+                return 1;
         }
     }
 
@@ -1811,7 +1818,8 @@ static int infer_case(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
     if (node->case_.binary_predicate && node->case_.conditions.size) {
         tl_polytype *pred_arrow =
           make_binary_predicate_arrow(self, ctx, node->case_.expression, node->case_.conditions.v[0]);
-        if (constrain(self, node->case_.binary_predicate->type, pred_arrow, node, TL_UNIFY_SYMMETRIC)) return 1;
+        if (constrain(self, node->case_.binary_predicate->type, pred_arrow, node, TL_UNIFY_SYMMETRIC))
+            return 1;
     }
 
     return 0;
@@ -1867,8 +1875,8 @@ static int infer_let_in(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
             // would back-propagate the narrow type into upstream expressions.
             // Pointer cast annotations: keep the constraint (with ignore-error) because
             // the value may be a generic that needs the annotation to resolve.
-            int is_integer_cast = is_cast && name_annotation_type
-                               && tl_monotype_is_integer_convertible(name_annotation_type->type);
+            int is_integer_cast = is_cast && name_annotation_type &&
+                                  tl_monotype_is_integer_convertible(name_annotation_type->type);
 
             int skip = 0;
             if (is_cast && !is_integer_cast && value_type) {
@@ -1879,10 +1887,9 @@ static int infer_let_in(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
                 skip = 1;
                 // Even for integer casts, check literal range at compile time.
                 // Look through unary minus to catch negative literals like -129.
-                ast_node *val = node->let_in.value;
-                int negate = 0;
-                if (val->tag == ast_unary_op
-                    && str_eq(ast_node_str(val->unary_op.op), S("-"))) {
+                ast_node *val    = node->let_in.value;
+                int       negate = 0;
+                if (val->tag == ast_unary_op && str_eq(ast_node_str(val->unary_op.op), S("-"))) {
                     val    = val->unary_op.operand;
                     negate = 1;
                 }
@@ -2016,7 +2023,9 @@ static int infer_type_constructor_nfa(tl_infer *self, traverse_ctx *ctx, ast_nod
             if (is_cast) {
                 tl_polytype *annotation_type = arg->assignment.name->symbol.annotation_type;
                 // Constrain annotation type against struct field to propagate concrete type info
-                if (constrain_pm(self, annotation_type, inst->cons_inst->args.v[found], node, TL_UNIFY_SYMMETRIC)) return 1;
+                if (constrain_pm(self, annotation_type, inst->cons_inst->args.v[found], node,
+                                 TL_UNIFY_SYMMETRIC))
+                    return 1;
                 // Constrain value type against annotation permissively (cast)
                 self->is_constrain_ignore_error = 1;
                 constrain_pm(self, arg->type, inst->cons_inst->args.v[found], node, TL_UNIFY_SYMMETRIC);
@@ -2038,7 +2047,8 @@ static int infer_type_constructor_nfa(tl_infer *self, traverse_ctx *ctx, ast_nod
                     fprintf(stderr, "  field type from inst: %s\n", str_cstr(&field_type_str));
                 }
 #endif
-                if (constrain_pm(self, arg->type, inst->cons_inst->args.v[found], node, TL_UNIFY_SYMMETRIC)) return 1;
+                if (constrain_pm(self, arg->type, inst->cons_inst->args.v[found], node, TL_UNIFY_SYMMETRIC))
+                    return 1;
             }
         } else {
             // In this branch, node is a type literal.
@@ -2792,7 +2802,9 @@ static int type_literal_specialize(tl_infer *self, ast_node *node) {
         } else if (ast_node_is_nfa(node)) {
             ast_node_name_replace(node->named_application.name, name_inst);
             if (node->named_application.name->type) {
-                if (constrain(self, node->named_application.name->type, special_type, node, TL_UNIFY_SYMMETRIC)) return 1;
+                if (constrain(self, node->named_application.name->type, special_type, node,
+                              TL_UNIFY_SYMMETRIC))
+                    return 1;
             } else {
                 ast_node_type_set(node->named_application.name, special_type);
             }
@@ -4085,7 +4097,8 @@ static void add_free_variables_to_arrow(tl_infer *self, ast_node *node, tl_polyt
 static str  specialize_arrow(tl_infer *self, traverse_ctx *traverse_ctx, str name, tl_monotype *arrow,
                              ast_node_sized callsite_type_arguments) {
 
-    if (!tl_monotype_is_concrete_no_weak(arrow)) tl_monotype_substitute(self->arena, arrow, self->subs, null);
+    if (!tl_monotype_is_concrete_no_weak(arrow))
+        tl_monotype_substitute(self->arena, arrow, self->subs, null);
 
 #if DEBUG_INVARIANTS
     // Invariant: Callsite arrow type is expected to be concrete, but there may be edge cases where that is
@@ -5399,8 +5412,8 @@ static int add_generic(tl_infer *self, ast_node *node) {
 
         assert(node->let_in.value->type);
         tl_polytype *let_type = node->let_in.name->symbol.annotation_type
-                              ? node->let_in.name->symbol.annotation_type
-                              : node->let_in.value->type;
+                                  ? node->let_in.name->symbol.annotation_type
+                                  : node->let_in.value->type;
         tl_type_env_insert(self->env, name, let_type);
         ast_node_type_set(node->let_in.name, let_type);
         return 0;

@@ -173,7 +173,8 @@ tl_type_registry *tl_type_registry_create(allocator *alloc, allocator *transient
         if (builtin_nullary[i].unsigned_int) mark_unsigned_integer_type(self, name);
         if (builtin_nullary[i].narrow) mark_narrow_integer_type(self, name);
         if (builtin_nullary[i].floating) mark_float_type(self, name);
-        if (builtin_nullary[i].subchain) mark_integer_subchain(self, name, builtin_nullary[i].subchain, builtin_nullary[i].rank);
+        if (builtin_nullary[i].subchain)
+            mark_integer_subchain(self, name, builtin_nullary[i].subchain, builtin_nullary[i].rank);
     }
 
     // Cache canonical cons_inst pointers for integer family canonicalization during unification.
@@ -349,8 +350,8 @@ static void mark_float_type(tl_type_registry *self, str name) {
 static void mark_integer_subchain(tl_type_registry *self, str name, int subchain, int rank) {
     tl_polytype *poly = tl_type_registry_get(self, name);
     if (!poly || !tl_monotype_is_inst(poly->type)) fatal("logic error");
-    poly->type->cons_inst->def->integer_subchain    = subchain;
-    poly->type->cons_inst->def->integer_width_rank  = rank;
+    poly->type->cons_inst->def->integer_subchain   = subchain;
+    poly->type->cons_inst->def->integer_width_rank = rank;
 }
 
 static void make_carray(tl_type_registry *self) {
@@ -1384,9 +1385,9 @@ void tl_polytype_list_append(allocator *alloc, tl_polytype *lhs, tl_polytype *rh
     case tl_weak:
     case tl_weak_int_signed:
     case tl_weak_int_unsigned:
-    case tl_cons_inst:   array_push(arr, right); break;
+    case tl_cons_inst:         array_push(arr, right); break;
     case tl_arrow:
-    case tl_tuple:       array_push_many(arr, right->list.xs.v, right->list.xs.size); break;
+    case tl_tuple:             array_push_many(arr, right->list.xs.v, right->list.xs.size); break;
     }
 
     array_shrink(arr);
@@ -1482,7 +1483,7 @@ static void replace_tv_mono(tl_monotype *self, tl_type_subs *subs, hashmap **map
     case tl_placeholder:
     case tl_any:
     case tl_ellipsis:
-    case tl_var:         break;
+    case tl_var:               break;
 
     case tl_weak:
     case tl_weak_int_signed:
@@ -1629,7 +1630,7 @@ static void generalize(tl_monotype *self, tl_type_variable_array *quant, hashmap
 
     case tl_cons_inst:
     case tl_arrow:
-    case tl_tuple:     {
+    case tl_tuple:             {
         tl_monotype_sized arr = tl_monotype_children(self);
         forall(i, arr) generalize(arr.v[i], quant, seen);
 
@@ -1894,7 +1895,7 @@ int tl_monotype_is_weak_(tl_monotype *self, hashmap **seen) {
     case tl_placeholder:
     case tl_any:
     case tl_var:
-    case tl_ellipsis:    return 0;
+    case tl_ellipsis:          return 0;
 
     case tl_weak:
     case tl_weak_int_signed:
@@ -2126,48 +2127,48 @@ int tl_monotype_compare_integer_width(tl_monotype *left, tl_monotype *right) {
 char const *tl_monotype_integer_c_min(tl_monotype *self) {
     if (!tl_monotype_is_inst(self)) return NULL;
     str n = self->cons_inst->def->name;
-    if (str_eq(n, S("CSignedChar")))       return "SCHAR_MIN";
-    if (str_eq(n, S("CShort")))            return "SHRT_MIN";
-    if (str_eq(n, S("CInt")))              return "INT_MIN";
-    if (str_eq(n, S("CLong")))             return "LONG_MIN";
-    if (str_eq(n, S("CLongLong")))         return "LLONG_MIN";
-    if (str_eq(n, S("Int")))              return "LLONG_MIN";  // alias for CLongLong
-    if (str_eq(n, S("CInt8")))             return "INT8_MIN";
-    if (str_eq(n, S("CInt16")))            return "INT16_MIN";
-    if (str_eq(n, S("CInt32")))            return "INT32_MIN";
-    if (str_eq(n, S("CInt64")))            return "INT64_MIN";
-    if (str_eq(n, S("CPtrDiff")))          return "PTRDIFF_MIN";
-    if (str_eq(n, S("CChar")))             return "CHAR_MIN";
+    if (str_eq(n, S("CSignedChar"))) return "SCHAR_MIN";
+    if (str_eq(n, S("CShort"))) return "SHRT_MIN";
+    if (str_eq(n, S("CInt"))) return "INT_MIN";
+    if (str_eq(n, S("CLong"))) return "LONG_MIN";
+    if (str_eq(n, S("CLongLong"))) return "LLONG_MIN";
+    if (str_eq(n, S("Int"))) return "LLONG_MIN"; // alias for CLongLong
+    if (str_eq(n, S("CInt8"))) return "INT8_MIN";
+    if (str_eq(n, S("CInt16"))) return "INT16_MIN";
+    if (str_eq(n, S("CInt32"))) return "INT32_MIN";
+    if (str_eq(n, S("CInt64"))) return "INT64_MIN";
+    if (str_eq(n, S("CPtrDiff"))) return "PTRDIFF_MIN";
+    if (str_eq(n, S("CChar"))) return "CHAR_MIN";
     return NULL; // unsigned types have no MIN (implicitly 0)
 }
 
 char const *tl_monotype_integer_c_max(tl_monotype *self) {
     if (!tl_monotype_is_inst(self)) return NULL;
     str n = self->cons_inst->def->name;
-    if (str_eq(n, S("CSignedChar")))       return "SCHAR_MAX";
-    if (str_eq(n, S("CShort")))            return "SHRT_MAX";
-    if (str_eq(n, S("CInt")))              return "INT_MAX";
-    if (str_eq(n, S("CLong")))             return "LONG_MAX";
-    if (str_eq(n, S("CLongLong")))         return "LLONG_MAX";
-    if (str_eq(n, S("Int")))              return "LLONG_MAX";  // alias for CLongLong
-    if (str_eq(n, S("CUnsignedChar")))     return "UCHAR_MAX";
-    if (str_eq(n, S("Byte")))             return "UCHAR_MAX"; // alias for CUnsignedChar
-    if (str_eq(n, S("CUnsignedShort")))    return "USHRT_MAX";
-    if (str_eq(n, S("CUnsignedInt")))      return "UINT_MAX";
-    if (str_eq(n, S("CUnsignedLong")))     return "ULONG_MAX";
+    if (str_eq(n, S("CSignedChar"))) return "SCHAR_MAX";
+    if (str_eq(n, S("CShort"))) return "SHRT_MAX";
+    if (str_eq(n, S("CInt"))) return "INT_MAX";
+    if (str_eq(n, S("CLong"))) return "LONG_MAX";
+    if (str_eq(n, S("CLongLong"))) return "LLONG_MAX";
+    if (str_eq(n, S("Int"))) return "LLONG_MAX"; // alias for CLongLong
+    if (str_eq(n, S("CUnsignedChar"))) return "UCHAR_MAX";
+    if (str_eq(n, S("Byte"))) return "UCHAR_MAX"; // alias for CUnsignedChar
+    if (str_eq(n, S("CUnsignedShort"))) return "USHRT_MAX";
+    if (str_eq(n, S("CUnsignedInt"))) return "UINT_MAX";
+    if (str_eq(n, S("CUnsignedLong"))) return "ULONG_MAX";
     if (str_eq(n, S("CUnsignedLongLong"))) return "ULLONG_MAX";
-    if (str_eq(n, S("UInt")))             return "ULLONG_MAX"; // alias for CUnsignedLongLong
-    if (str_eq(n, S("CInt8")))             return "INT8_MAX";
-    if (str_eq(n, S("CInt16")))            return "INT16_MAX";
-    if (str_eq(n, S("CInt32")))            return "INT32_MAX";
-    if (str_eq(n, S("CInt64")))            return "INT64_MAX";
-    if (str_eq(n, S("CUInt8")))            return "UINT8_MAX";
-    if (str_eq(n, S("CUInt16")))           return "UINT16_MAX";
-    if (str_eq(n, S("CUInt32")))           return "UINT32_MAX";
-    if (str_eq(n, S("CUInt64")))           return "UINT64_MAX";
-    if (str_eq(n, S("CSize")))             return "SIZE_MAX";
-    if (str_eq(n, S("CPtrDiff")))          return "PTRDIFF_MAX";
-    if (str_eq(n, S("CChar")))             return "CHAR_MAX";
+    if (str_eq(n, S("UInt"))) return "ULLONG_MAX"; // alias for CUnsignedLongLong
+    if (str_eq(n, S("CInt8"))) return "INT8_MAX";
+    if (str_eq(n, S("CInt16"))) return "INT16_MAX";
+    if (str_eq(n, S("CInt32"))) return "INT32_MAX";
+    if (str_eq(n, S("CInt64"))) return "INT64_MAX";
+    if (str_eq(n, S("CUInt8"))) return "UINT8_MAX";
+    if (str_eq(n, S("CUInt16"))) return "UINT16_MAX";
+    if (str_eq(n, S("CUInt32"))) return "UINT32_MAX";
+    if (str_eq(n, S("CUInt64"))) return "UINT64_MAX";
+    if (str_eq(n, S("CSize"))) return "SIZE_MAX";
+    if (str_eq(n, S("CPtrDiff"))) return "PTRDIFF_MAX";
+    if (str_eq(n, S("CChar"))) return "CHAR_MAX";
     return NULL;
 }
 
@@ -2312,18 +2313,18 @@ u64 tl_monotype_hash64_(tl_monotype *self, u32 gen, hash_cycle_stack *in_progres
     u64 hash = hash64(&self->tag, sizeof self->tag);
 
     switch (self->tag) {
-    case tl_placeholder: hash = str_hash64_combine(hash, self->placeholder); break;
+    case tl_placeholder:       hash = str_hash64_combine(hash, self->placeholder); break;
 
     case tl_any:
-    case tl_ellipsis:    break;
+    case tl_ellipsis:          break;
     case tl_var:
     case tl_weak:
     case tl_weak_int_signed:
     case tl_weak_int_unsigned: hash = hash64_combine(hash, &self->var, sizeof self->var); break;
 
-    case tl_integer:     hash = hash64_combine(hash, &self->integer, sizeof self->integer); break;
+    case tl_integer:           hash = hash64_combine(hash, &self->integer, sizeof self->integer); break;
 
-    case tl_cons_inst:   {
+    case tl_cons_inst:         {
         tl_type_constructor_def *def      = self->cons_inst->def;
         u64                      def_hash = tl_type_constructor_def_hash64(def);
         hash                              = hash64_combine(hash, &def_hash, sizeof def_hash);
@@ -2574,7 +2575,7 @@ static tl_type_variable uf_find(tl_type_subs *self, tl_type_variable tv) {
 }
 
 void tl_type_subs_set_literal_value(tl_type_subs *self, tl_type_variable var, i64 value) {
-    tl_type_variable root = uf_find(self, var);
+    tl_type_variable root                = uf_find(self, var);
     self->data.v[root].literal_value     = value;
     self->data.v[root].has_literal_value = 1;
 }
@@ -2598,23 +2599,24 @@ static int unify_list(tl_type_subs *subs, tl_monotype_sized left, tl_monotype_si
                       tl_monotype *rhs, type_error_cb_fun cb, void *user, hashmap **seen,
                       tl_unify_direction dir);
 static int unify_tuple(tl_type_subs *subs, tl_monotype_sized left, tl_monotype_sized right,
-                       tl_monotype *lhs, tl_monotype *rhs, type_error_cb_fun cb, void *user,
-                       hashmap **seen, tl_unify_direction dir);
+                       tl_monotype *lhs, tl_monotype *rhs, type_error_cb_fun cb, void *user, hashmap **seen,
+                       tl_unify_direction dir);
 static int tl_type_subs_unity_tv_tv(tl_type_subs *, tl_type_variable, tl_type_variable, type_error_cb_fun,
                                     void *, hashmap **seen, tl_unify_direction);
 static int tl_type_subs_unify_tv_weak(tl_type_subs *, tl_type_variable, tl_monotype *, type_error_cb_fun,
                                       void *, hashmap **seen);
 static int tl_type_subs_unify_weak(tl_type_subs *, tl_monotype *weak, tl_monotype *, type_error_cb_fun,
                                    void *, hashmap            **seen);
-static int tl_type_subs_unify_tv_weak_int(tl_type_subs *, tl_type_variable, tl_monotype *, type_error_cb_fun,
-                                          void *, hashmap **seen);
-static int tl_type_subs_unify_weak_int_concrete(tl_type_subs *, tl_monotype *weak_int, tl_monotype *concrete,
-                                                type_error_cb_fun, void *, hashmap **seen);
+static int tl_type_subs_unify_tv_weak_int(tl_type_subs *, tl_type_variable, tl_monotype *,
+                                          type_error_cb_fun, void *, hashmap **seen);
+static int tl_type_subs_unify_weak_int_concrete(tl_type_subs *, tl_monotype *weak_int,
+                                                tl_monotype *concrete, type_error_cb_fun, void *,
+                                                hashmap    **seen);
 static int unify_weak_int_other(tl_type_subs *, tl_monotype *weak_int, tl_monotype *other,
-                                type_error_cb_fun, void *, hashmap **seen);
+                                type_error_cb_fun, void *, hashmap                **seen);
 int        tl_type_subs_unify_tv_mono(tl_type_subs *self, tl_type_variable tv, tl_monotype *mono,
-                                      type_error_cb_fun cb, void *user, hashmap **seen,
-                                      tl_unify_direction dir, int tv_is_left);
+                                      type_error_cb_fun cb, void *user, hashmap **seen, tl_unify_direction dir,
+                                      int tv_is_left);
 int tl_type_subs_unify_mono(tl_type_subs *subs, tl_monotype *left, tl_monotype *right, type_error_cb_fun cb,
                             void *user, hashmap **, tl_unify_direction);
 
@@ -2627,8 +2629,7 @@ static int unify_type_constructor_def(tl_type_constructor_def *lhs, tl_type_cons
 }
 
 int unify_type_constructor_union(tl_type_subs *subs, tl_monotype *left, tl_monotype *right,
-                                 type_error_cb_fun cb, void *user, hashmap **seen,
-                                 tl_unify_direction dir) {
+                                 type_error_cb_fun cb, void *user, hashmap **seen, tl_unify_direction dir) {
     (void)dir; // union matching is always symmetric
     assert(tl_monotype_is_inst(left));
     assert(left->cons_inst->def->is_variable_args);
@@ -2642,30 +2643,30 @@ int unify_type_constructor_union(tl_type_subs *subs, tl_monotype *left, tl_monot
     case tl_any:
     case tl_ellipsis:    return 0;
 
-    case tl_var:         return tl_type_subs_unify_tv_mono(subs, right->var, left, cb, user, seen,
-                                                          TL_UNIFY_SYMMETRIC, 0);
-    case tl_weak:        return tl_type_subs_unify_weak(subs, right, left, cb, user, seen);
+    case tl_var:
+        return tl_type_subs_unify_tv_mono(subs, right->var, left, cb, user, seen, TL_UNIFY_SYMMETRIC, 0);
+    case tl_weak: return tl_type_subs_unify_weak(subs, right, left, cb, user, seen);
     case tl_weak_int_signed:
     case tl_weak_int_unsigned:
         return tl_type_subs_unify_weak_int_concrete(subs, right, left, cb, user, seen);
 
-    case tl_cons_inst:   {
+    case tl_cons_inst: {
         if (right->cons_inst->def->is_variable_args) {
             tl_monotype_sized right_unions = right->cons_inst->args;
             forall(i, unions) {
                 forall(j, right_unions) {
                     // don't pass cb so that any error is a soft error
-                    if (0 ==
-                        tl_type_subs_unify_mono(subs, unions.v[i], right_unions.v[j], null, null, seen,
-                                                TL_UNIFY_SYMMETRIC))
+                    if (0 == tl_type_subs_unify_mono(subs, unions.v[i], right_unions.v[j], null, null, seen,
+                                                     TL_UNIFY_SYMMETRIC))
                         return 0;
                 }
             }
         } else {
             forall(i, unions) {
                 // don't pass cb so that any error is a soft error
-                if (0 == tl_type_subs_unify_mono(subs, unions.v[i], right, null, null, seen,
-                                                TL_UNIFY_SYMMETRIC)) return 0;
+                if (0 ==
+                    tl_type_subs_unify_mono(subs, unions.v[i], right, null, null, seen, TL_UNIFY_SYMMETRIC))
+                    return 0;
             }
         }
     } break;
@@ -2674,8 +2675,8 @@ int unify_type_constructor_union(tl_type_subs *subs, tl_monotype *left, tl_monot
     case tl_tuple:
         // attempt to union with any of the union types
         forall(i, unions) {
-            if (0 == tl_type_subs_unify_mono(subs, unions.v[i], right, cb, user, seen,
-                                             TL_UNIFY_SYMMETRIC)) return 0;
+            if (0 == tl_type_subs_unify_mono(subs, unions.v[i], right, cb, user, seen, TL_UNIFY_SYMMETRIC))
+                return 0;
         }
         break;
     }
@@ -2699,14 +2700,14 @@ int unify_type_constructor(tl_type_subs *subs, tl_monotype *left, tl_monotype *r
     case tl_ellipsis:    return 0;
 
     // TV is on the opposite side from the cons_inst
-    case tl_var:         return tl_type_subs_unify_tv_mono(subs, right->var, left, cb, user, seen,
-                                                          dir, !cons_is_left);
-    case tl_weak:        return tl_type_subs_unify_weak(subs, right, left, cb, user, seen);
+    case tl_var:
+        return tl_type_subs_unify_tv_mono(subs, right->var, left, cb, user, seen, dir, !cons_is_left);
+    case tl_weak: return tl_type_subs_unify_weak(subs, right, left, cb, user, seen);
     case tl_weak_int_signed:
     case tl_weak_int_unsigned:
         return tl_type_subs_unify_weak_int_concrete(subs, right, left, cb, user, seen);
 
-    case tl_cons_inst:   {
+    case tl_cons_inst: {
 
         if (right->cons_inst->def->is_variable_args)
             return unify_type_constructor_union(subs, right, left, cb, user, seen, dir);
@@ -2730,8 +2731,8 @@ int unify_type_constructor(tl_type_subs *subs, tl_monotype *left, tl_monotype *r
 // Unify when one side is a type variable (tl_var).
 // tv_is_left: 1 if the TV was on the left (expected) side in the original unification.
 static int unify_var_other(tl_type_subs *subs, tl_type_variable tv, tl_monotype *other,
-                           type_error_cb_fun cb, void *user, hashmap **seen,
-                           tl_unify_direction dir, int tv_is_left) {
+                           type_error_cb_fun cb, void *user, hashmap **seen, tl_unify_direction dir,
+                           int tv_is_left) {
     switch (other->tag) {
     case tl_placeholder:
     case tl_any:
@@ -2740,14 +2741,13 @@ static int unify_var_other(tl_type_subs *subs, tl_type_variable tv, tl_monotype 
     case tl_var:
         // Preserve left/right ordering for directional unification
         if (tv_is_left) return tl_type_subs_unity_tv_tv(subs, tv, other->var, cb, user, seen, dir);
-        else            return tl_type_subs_unity_tv_tv(subs, other->var, tv, cb, user, seen, dir);
-    case tl_weak:        return tl_type_subs_unify_tv_weak(subs, tv, other, cb, user, seen);
+        else return tl_type_subs_unity_tv_tv(subs, other->var, tv, cb, user, seen, dir);
+    case tl_weak:              return tl_type_subs_unify_tv_weak(subs, tv, other, cb, user, seen);
     case tl_weak_int_signed:
-    case tl_weak_int_unsigned:
-        return tl_type_subs_unify_tv_weak_int(subs, tv, other, cb, user, seen);
+    case tl_weak_int_unsigned: return tl_type_subs_unify_tv_weak_int(subs, tv, other, cb, user, seen);
     case tl_cons_inst:
     case tl_arrow:
-    case tl_tuple:       return tl_type_subs_unify_tv_mono(subs, tv, other, cb, user, seen, dir, tv_is_left);
+    case tl_tuple:             return tl_type_subs_unify_tv_mono(subs, tv, other, cb, user, seen, dir, tv_is_left);
     }
     fatal("unreachable");
 }
@@ -2761,14 +2761,13 @@ static int unify_weak_other(tl_type_subs *subs, tl_monotype *weak, tl_monotype *
     case tl_ellipsis:    fatal("unreachable");
     case tl_integer:     return 1;
     case tl_var:         return tl_type_subs_unify_tv_weak(subs, other->var, weak, cb, user, seen);
-    case tl_weak:        return tl_type_subs_unity_tv_tv(subs, weak->var, other->var, cb, user, seen,
-                                                         TL_UNIFY_SYMMETRIC);
+    case tl_weak:
+        return tl_type_subs_unity_tv_tv(subs, weak->var, other->var, cb, user, seen, TL_UNIFY_SYMMETRIC);
     case tl_weak_int_signed:
-    case tl_weak_int_unsigned:
-        return 1; // error: pointer-weak meets integer-weak
+    case tl_weak_int_unsigned: return 1; // error: pointer-weak meets integer-weak
     case tl_cons_inst:
     case tl_arrow:
-    case tl_tuple:       return tl_type_subs_unify_weak(subs, weak, other, cb, user, seen);
+    case tl_tuple:             return tl_type_subs_unify_weak(subs, weak, other, cb, user, seen);
     }
     fatal("unreachable");
 }
@@ -2793,9 +2792,8 @@ static int check_integer_direction(tl_monotype *expected, tl_monotype *actual, t
         // EXACT with two narrow integers: reject cross-subchain standalone pairs too.
         // This catches e.g. CUnsignedChar (subchain 2) vs CSize (subchain 5) through generics.
         // Non-narrow types (CUnsignedLongLong + CSize in operators) still fall through to SYMMETRIC.
-        if (dir == TL_UNIFY_EXACT
-            && expected->cons_inst->def->is_narrow_integer
-            && actual->cons_inst->def->is_narrow_integer) {
+        if (dir == TL_UNIFY_EXACT && expected->cons_inst->def->is_narrow_integer &&
+            actual->cons_inst->def->is_narrow_integer) {
             if (cb) cb(user, expected, actual);
             return 1;
         }
@@ -2868,7 +2866,8 @@ int tl_type_subs_unify_mono(tl_type_subs *subs, tl_monotype *left, tl_monotype *
     if (tl_monotype_is_float_convertible(left) && tl_monotype_is_float_convertible(right)) return 0;
 
     if (tl_monotype_is_inst(left)) return unify_type_constructor(subs, left, right, cb, user, seen, dir, 1);
-    if (tl_monotype_is_inst(right)) return unify_type_constructor(subs, right, left, cb, user, seen, dir, 0);
+    if (tl_monotype_is_inst(right))
+        return unify_type_constructor(subs, right, left, cb, user, seen, dir, 0);
 
     // Type variables on either side
     if (tl_var == left->tag) return unify_var_other(subs, left->var, right, cb, user, seen, dir, 1);
@@ -2891,9 +2890,10 @@ int tl_type_subs_unify_mono(tl_type_subs *subs, tl_monotype *left, tl_monotype *
     }
 
     switch (left->tag) {
-    case tl_integer:     return !(left->integer == right->integer);
-    case tl_arrow:       return unify_list(subs, left->list.xs, right->list.xs, left, right, cb, user, seen, dir);
-    case tl_tuple:       return unify_tuple(subs, left->list.xs, right->list.xs, left, right, cb, user, seen, dir);
+    case tl_integer: return !(left->integer == right->integer);
+    case tl_arrow:   return unify_list(subs, left->list.xs, right->list.xs, left, right, cb, user, seen, dir);
+    case tl_tuple:
+        return unify_tuple(subs, left->list.xs, right->list.xs, left, right, cb, user, seen, dir);
 
     case tl_placeholder:
     case tl_any:
@@ -2902,14 +2902,13 @@ int tl_type_subs_unify_mono(tl_type_subs *subs, tl_monotype *left, tl_monotype *
     case tl_weak:
     case tl_weak_int_signed:
     case tl_weak_int_unsigned:
-    case tl_cons_inst:   fatal("unreachable");
+    case tl_cons_inst:         fatal("unreachable");
     }
     fatal("unreachable");
 }
 
 int unify_list(tl_type_subs *subs, tl_monotype_sized left, tl_monotype_sized right, tl_monotype *lhs,
-               tl_monotype *rhs, type_error_cb_fun cb, void *user, hashmap **seen,
-               tl_unify_direction dir) {
+               tl_monotype *rhs, type_error_cb_fun cb, void *user, hashmap **seen, tl_unify_direction dir) {
     if (left.size != right.size) {
         if (cb) cb(user, lhs, rhs);
         return 1;
@@ -2934,8 +2933,7 @@ int unify_tuple(tl_type_subs *subs, tl_monotype_sized left, tl_monotype_sized ri
     forall(i, left) {
         if (tl_monotype_is_ellipsis(left.v[i])) goto success;
         if (i + 1 < right.size && tl_monotype_is_ellipsis(right.v[i])) goto success;
-        if (i >= right.size || tl_type_subs_unify_mono(subs, left.v[i], right.v[i], cb, user, seen,
-                                                     dir)) {
+        if (i >= right.size || tl_type_subs_unify_mono(subs, left.v[i], right.v[i], cb, user, seen, dir)) {
             if (cb) cb(user, lhs, rhs);
             return 1;
         }
@@ -2962,7 +2960,7 @@ static int tl_type_subs_monotype_occurs_(tl_type_subs *self, tl_type_variable tv
     case tl_integer:
     case tl_placeholder:
     case tl_any:
-    case tl_ellipsis:    return 0;
+    case tl_ellipsis:          return 0;
 
     case tl_var:
     case tl_weak:
@@ -3083,21 +3081,21 @@ int tl_monotype_integer_value_fits(tl_monotype *type, i64 val) {
 static int integer_value_fits(tl_type_constructor_def *def, i64 val) {
     str n = def->name;
     // Signed types
-    if (str_eq(n, S("CSignedChar")) || str_eq(n, S("CInt8")))  return val >= -128            && val <= 127;
-    if (str_eq(n, S("CShort"))      || str_eq(n, S("CInt16"))) return val >= -32768           && val <= 32767;
-    if (str_eq(n, S("CInt"))        || str_eq(n, S("CInt32"))) return val >= -2147483648LL    && val <= 2147483647LL;
-    if (str_eq(n, S("CLong"))       || str_eq(n, S("CInt64"))  || str_eq(n, S("CLongLong"))
-                                    || str_eq(n, S("CPtrDiff")))
+    if (str_eq(n, S("CSignedChar")) || str_eq(n, S("CInt8"))) return val >= -128 && val <= 127;
+    if (str_eq(n, S("CShort")) || str_eq(n, S("CInt16"))) return val >= -32768 && val <= 32767;
+    if (str_eq(n, S("CInt")) || str_eq(n, S("CInt32"))) return val >= -2147483648LL && val <= 2147483647LL;
+    if (str_eq(n, S("CLong")) || str_eq(n, S("CInt64")) || str_eq(n, S("CLongLong")) ||
+        str_eq(n, S("CPtrDiff")))
         return 1; // full i64 range always fits
     // Unsigned types
-    if (str_eq(n, S("CUnsignedChar")) || str_eq(n, S("CUInt8")))  return val >= 0 && val <= 255;
-    if (str_eq(n, S("CUnsignedShort"))|| str_eq(n, S("CUInt16"))) return val >= 0 && val <= 65535;
-    if (str_eq(n, S("CUnsignedInt"))  || str_eq(n, S("CUInt32"))) return val >= 0 && val <= 4294967295LL;
-    if (str_eq(n, S("CUnsignedLong")) || str_eq(n, S("CUInt64")) || str_eq(n, S("CUnsignedLongLong"))
-                                      || str_eq(n, S("CSize")))
+    if (str_eq(n, S("CUnsignedChar")) || str_eq(n, S("CUInt8"))) return val >= 0 && val <= 255;
+    if (str_eq(n, S("CUnsignedShort")) || str_eq(n, S("CUInt16"))) return val >= 0 && val <= 65535;
+    if (str_eq(n, S("CUnsignedInt")) || str_eq(n, S("CUInt32"))) return val >= 0 && val <= 4294967295LL;
+    if (str_eq(n, S("CUnsignedLong")) || str_eq(n, S("CUInt64")) || str_eq(n, S("CUnsignedLongLong")) ||
+        str_eq(n, S("CSize")))
         return val >= 0; // unsigned 64-bit: any non-negative i64 fits
-    if (str_eq(n, S("CChar")))        return val >= -128 && val <= 127; // conservative: treat as signed char
-    return 1; // unknown type: assume fits
+    if (str_eq(n, S("CChar"))) return val >= -128 && val <= 127; // conservative: treat as signed char
+    return 1;                                                    // unknown type: assume fits
 }
 
 // Unify when one side is a weak integer variable (tl_weak_int_signed or tl_weak_int_unsigned)
@@ -3158,9 +3156,9 @@ static int tl_type_subs_unify_tv_weak_int(tl_type_subs *self, tl_type_variable l
                                           type_error_cb_fun cb, void *user, hashmap **seen) {
     assert(tl_monotype_is_weak_int(right));
 
-    tl_type_variable left_root  = uf_find(self, left);
+    tl_type_variable left_root = uf_find(self, left);
 
-    tl_monotype     *left_type  = self->data.v[left_root].type;
+    tl_monotype     *left_type = self->data.v[left_root].type;
     if (left_type) {
         // tv is already resolved: must unify
         if (tl_type_subs_unify_mono(self, left_type, right, cb, user, seen, TL_UNIFY_SYMMETRIC)) {
@@ -3189,11 +3187,10 @@ static int unify_weak_int_other(tl_type_subs *subs, tl_monotype *weak_int, tl_mo
         // same family? merge via tv_tv; different family? error
         if (weak_int->tag == other->tag)
             return tl_type_subs_unity_tv_tv(subs, weak_int->var, other->var, cb, user, seen,
-                                               TL_UNIFY_SYMMETRIC);
+                                            TL_UNIFY_SYMMETRIC);
         if (cb) cb(user, weak_int, other);
         return 1;
-    case tl_cons_inst:
-        return tl_type_subs_unify_weak_int_concrete(subs, weak_int, other, cb, user, seen);
+    case tl_cons_inst: return tl_type_subs_unify_weak_int_concrete(subs, weak_int, other, cb, user, seen);
     case tl_arrow:
     case tl_tuple:
         if (cb) cb(user, weak_int, other);
@@ -3203,8 +3200,8 @@ static int unify_weak_int_other(tl_type_subs *subs, tl_monotype *weak_int, tl_mo
 }
 
 int tl_type_subs_unify_tv_mono(tl_type_subs *self, tl_type_variable tv, tl_monotype *mono,
-                               type_error_cb_fun cb, void *user, hashmap **seen,
-                               tl_unify_direction dir, int tv_is_left) {
+                               type_error_cb_fun cb, void *user, hashmap **seen, tl_unify_direction dir,
+                               int tv_is_left) {
     if (tl_type_subs_monotype_occurs(self, tv, mono)) return 1;
 
     tl_type_variable tv_root = uf_find(self, tv);
@@ -3240,7 +3237,7 @@ int tl_type_subs_unify_tv_mono(tl_type_subs *self, tl_type_variable tv, tl_monot
             // the weak to a different type.
             if (tl_monotype_is_weak_int(tv_type)) {
                 tl_type_variable weak_root = uf_find(self, tv_type->var);
-                tl_monotype *resolved = self->data.v[weak_root].type;
+                tl_monotype     *resolved  = self->data.v[weak_root].type;
                 if (resolved) tv_type = resolved;
             }
             // When TV is already resolved to a narrow concrete integer, force EXACT to prevent
@@ -3248,17 +3245,14 @@ int tl_type_subs_unify_tv_mono(tl_type_subs *self, tl_type_variable tv, tl_monot
             // Non-narrow canonicals (CLongLong/CUnsignedLongLong = Int/UInt) are excluded because
             // TVs frequently resolve to them via weak literal defaulting.
             tl_unify_direction effective_dir = dir;
-            if (tl_monotype_is_inst(tv_type)
-                && tv_type->cons_inst->def->is_narrow_integer
-                && tl_monotype_is_inst(mono)
-                && mono->cons_inst->def->is_narrow_integer)
+            if (tl_monotype_is_inst(tv_type) && tv_type->cons_inst->def->is_narrow_integer &&
+                tl_monotype_is_inst(mono) && mono->cons_inst->def->is_narrow_integer)
                 effective_dir = TL_UNIFY_EXACT;
 
             // must unify; preserve left/right (expected/actual) ordering
             if (tv_is_left)
                 return tl_type_subs_unify_mono(self, tv_type, mono, cb, user, seen, effective_dir);
-            else
-                return tl_type_subs_unify_mono(self, mono, tv_type, cb, user, seen, effective_dir);
+            else return tl_type_subs_unify_mono(self, mono, tv_type, cb, user, seen, effective_dir);
         }
 
         // store the type at the root
@@ -3281,7 +3275,7 @@ static void tl_monotype_substitute_(allocator *alloc, tl_monotype *self, tl_type
     case tl_integer:
     case tl_placeholder:
     case tl_any:
-    case tl_ellipsis:    break;
+    case tl_ellipsis:          break;
 
     case tl_var:
     case tl_weak:
@@ -3369,13 +3363,11 @@ void tl_type_subs_default_weak_ints(tl_type_subs *subs, tl_monotype *int_type, t
         if (tl_weak_int_signed == type->tag) {
             // Also default the weak int's own var root (it may differ from this root)
             tl_type_variable weak_root = uf_find(subs, type->var);
-            if (!subs->data.v[weak_root].type)
-                subs->data.v[weak_root].type = int_type;
+            if (!subs->data.v[weak_root].type) subs->data.v[weak_root].type = int_type;
             subs->data.v[root].type = int_type;
         } else if (tl_weak_int_unsigned == type->tag) {
             tl_type_variable weak_root = uf_find(subs, type->var);
-            if (!subs->data.v[weak_root].type)
-                subs->data.v[weak_root].type = uint_type;
+            if (!subs->data.v[weak_root].type) subs->data.v[weak_root].type = uint_type;
             subs->data.v[root].type = uint_type;
         }
     }
