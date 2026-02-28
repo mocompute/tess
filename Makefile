@@ -576,6 +576,7 @@ TL_FAIL_TESTS =					\
 	fail_generic_unused_type_param		\
 	fail_import_absolute			\
 	fail_import_missing_quotes		\
+	fail_integer_compound_assign_mixed	\
 	fail_integer_cross_chain		\
 	fail_integer_cross_family		\
 	fail_integer_cross_family_arithmetic	\
@@ -628,8 +629,7 @@ TL_FAIL_RUNTIME_TESTS =			\
 	fail_runtime_integer_bounds_cross_family
 
 # Expected-failure tests that the compiler doesn't reject yet
-TL_KNOWN_FAIL_FAILURES =			\
-	fail_integer_compound_assign_mixed
+TL_KNOWN_FAIL_FAILURES =
 
 # Tests that should work but currently fail due to compiler bugs
 TL_KNOWN_FAILURES =				\

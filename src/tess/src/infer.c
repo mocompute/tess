@@ -1545,8 +1545,11 @@ static int infer_reassignment(tl_infer *self, traverse_ctx *ctx, ast_node *node)
     tl_monotype *nil = tl_type_registry_nil(self->registry);
     if (constrain_pm(self, node->type, nil, node, TL_UNIFY_SYMMETRIC)) return 1;
 
-    // name and value are same type
-    if (constrain(self, node->assignment.name->type, node->assignment.value->type, node, TL_UNIFY_DIRECTED)) return 1;
+    // For compound assignment (+=, -=, etc.) the value is an arithmetic operand,
+    // so require exact type match — same rule as binary operators.
+    // For plain reassignment (=), widening is allowed via directed unification.
+    int mode = (node->tag == ast_reassignment_op) ? TL_UNIFY_EXACT : TL_UNIFY_DIRECTED;
+    if (constrain(self, node->assignment.name->type, node->assignment.value->type, node, mode)) return 1;
 
     return 0;
 }
