@@ -12,6 +12,7 @@ This directory contains technical documentation for the Tess programming languag
 | [NAME_MANGLING.md](NAME_MANGLING.md) | Name mangling system for arity overloading, modules, and specialization |
 | [ALPHA_CONVERSION.md](ALPHA_CONVERSION.md) | Variable renaming system that ensures type safety across specializations |
 | [PACKAGES.md](PACKAGES.md) | Package system for distributing reusable `.tlib` libraries |
+| [TAGGED_UNION_PARSER.md](TAGGED_UNION_PARSER.md) | Parser internals for tagged union variant construction and auto-wrapping |
 | [STANDARD_LIBRARY.md](STANDARD_LIBRARY.md) | Standard library API reference (Array, Alloc, Unsafe, C bindings) |
 | [FAQ.md](FAQ.md) | Historical background, motivations and miscellaneous |
 
@@ -28,6 +29,7 @@ This directory contains technical documentation for the Tess programming languag
 2. [SPECIALIZATION.md](SPECIALIZATION.md) - Learn how generics are monomorphized
 3. [ALPHA_CONVERSION.md](ALPHA_CONVERSION.md) - Variable renaming for type safety
 4. [NAME_MANGLING.md](NAME_MANGLING.md) - Learn identifier transformation for C output
+5. [TAGGED_UNION_PARSER.md](TAGGED_UNION_PARSER.md) - Tagged union construction code paths and pitfalls
 
 ## See Also
 
