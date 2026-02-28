@@ -394,6 +394,7 @@ tl_create_test(sizeof)
 tl_create_test(sizeof_type_literal)
 tl_create_test(static_init)
 tl_create_test(static_init_struct)
+tl_create_test(static_init_generic_function_pointer)
 tl_create_test(static_init_struct_fun_ptr)
 tl_create_test(str)
 tl_create_test(strcmp)
@@ -578,5 +579,4 @@ tl_create_runtime_fail_test(fail_runtime_integer_bounds)
 tl_create_runtime_fail_test(fail_runtime_integer_bounds_cross_family)
 
 # Known failures: these should work but a compiler bug makes them fail
-tl_create_known_failure(static_init_generic_function_pointer)
 tl_create_known_failure(while_empty_body)

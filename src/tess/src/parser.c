@@ -3436,6 +3436,19 @@ static int annotation_uses_type_param(ast_node *node, str param_name) {
         }
     }
 
+    if (ast_node_is_arrow(node)) {
+        if (annotation_uses_type_param(node->arrow.left, param_name)) return 1;
+        if (annotation_uses_type_param(node->arrow.right, param_name)) return 1;
+        return 0;
+    }
+
+    if (ast_node_is_tuple(node)) {
+        for (u8 i = 0; i < node->tuple.n_elements; i++) {
+            if (annotation_uses_type_param(node->tuple.elements[i], param_name)) return 1;
+        }
+        return 0;
+    }
+
     return 0;
 }
 

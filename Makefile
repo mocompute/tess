@@ -475,6 +475,7 @@ TL_TESTS =					\
 	sizeof_type_literal			\
 	static_init				\
 	static_init_struct			\
+	static_init_generic_function_pointer	\
 	static_init_struct_fun_ptr		\
 	str					\
 	strcmp					\
@@ -636,7 +637,6 @@ TL_KNOWN_FAIL_FAILURES =
 
 # Tests that should work but currently fail due to compiler bugs
 TL_KNOWN_FAILURES =				\
-	static_init_generic_function_pointer	\
 	while_empty_body
 
 # Total test count across all suites
