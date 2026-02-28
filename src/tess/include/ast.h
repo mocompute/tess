@@ -17,6 +17,9 @@ defslice(ast_node_slice, struct ast_node *);
 #define AST_TAGGED_UNION_VALUE   1
 #define AST_TAGGED_UNION_MUTABLE 2
 
+#define AST_TAGGED_UNION_TAG_FIELD   "tag"
+#define AST_TAGGED_UNION_UNION_FIELD "u"
+
 typedef struct ast_node {
     union {
         struct ast_symbol {

@@ -451,22 +451,19 @@ ASAN).
 
 ---
 
-### Session 12: Reduce Tagged Union Special-Casing
+### Session 12: Reduce Tagged Union Special-Casing ✓ DONE
 
-**Target:** transpile.c primarily, infer.c secondarily
-**Risk:** Moderate
-**Goal:** Make tagged union codegen less dependent on magic strings and implicit
-conventions.
+**Target:** ast.h, parser.c, infer.c, transpile.c
+**Branch:** wip-refactor
 
-The hardcoded `"tag"` and `"u"` field names in transpile.c are a coupling hazard — they
-must match what the type system generates but are not defined in any shared location.
-
-1. Define tag/union field name constants in a shared header
-2. Consider whether `is_union` could carry more information (a struct describing the
-   union layout) rather than being a bare flag that triggers lookup logic
-3. Review whether the mutable (`&`) vs value distinction could be handled more uniformly
-
-**Validation:** Full test suite including tagged union tests.
+Added `AST_TAGGED_UNION_TAG_FIELD`/`AST_TAGGED_UNION_UNION_FIELD` constants to ast.h,
+replacing 11 magic string sites across parser.c (4), infer.c (4), and transpile.c (3).
+Extracted `tagged_union_variant_poly()` in infer.c to deduplicate Ptr-wrapping for
+mutable union bindings (2 sites). Extracted `tagged_union_wrapper_fields()` in
+transpile.c to deduplicate field-lookup loops (2 sites). Fixed `is_union_struct()` static
+inconsistency (made definition static, removed redundant forward declaration). Reviewed
+`is_union` struct promotion and mutable/value uniformity — concluded current design is
+already well-factored after these changes. All 310 tests pass (release, debug, ASAN).
 
 ---
 

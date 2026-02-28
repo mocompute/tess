@@ -1524,6 +1524,20 @@ static str generate_body(transpile *self, tl_monotype *type, ast_node const *nod
     return out;
 }
 
+// Look up the tag and/or union field types from a tagged union wrapper type.
+// Either out pointer may be null if that field is not needed.
+static void tagged_union_wrapper_fields(tl_monotype *wrapper_type,
+                                        tl_monotype **out_tag_type,
+                                        tl_monotype **out_union_type) {
+    str_sized field_names = wrapper_type->cons_inst->def->field_names;
+    forall(f, field_names) {
+        if (out_tag_type && str_eq(field_names.v[f], S(AST_TAGGED_UNION_TAG_FIELD)))
+            *out_tag_type = wrapper_type->cons_inst->args.v[f];
+        if (out_union_type && str_eq(field_names.v[f], S(AST_TAGGED_UNION_UNION_FIELD)))
+            *out_union_type = wrapper_type->cons_inst->args.v[f];
+    }
+}
+
 // Generate case expression for tagged union pattern matching
 // case s: Shape { c: Circle { ... } sq: Square { ... } }
 // Generates:
@@ -1610,16 +1624,9 @@ static str generate_tagged_union_case(transpile *self, ast_node const *node, eva
         // Get the variant name (unmangled) from the annotation
         str variant_name = ast_node_name_original(variant_type_node);
 
-        // Get the tag type from the wrapper's first field (tag)
-        // The wrapper has fields in order: tag, u
-        tl_monotype *tag_type    = null;
-        str_sized    field_names = wrapper_type->cons_inst->def->field_names;
-        forall(f, field_names) {
-            if (str_eq(field_names.v[f], S("tag"))) {
-                tag_type = wrapper_type->cons_inst->args.v[f];
-                break;
-            }
-        }
+        // Get the tag type from the wrapper struct
+        tl_monotype *tag_type = null;
+        tagged_union_wrapper_fields(wrapper_type, &tag_type, null);
         if (!tag_type) fatal("wrapper type missing 'tag' field");
         str tag_enum_name = tag_type->cons_inst->def->name;
 
@@ -2095,13 +2102,9 @@ static str generate_try(transpile *self, tl_monotype *type, ast_node const *node
     tl_monotype *wrapper_type = node->try_.operand->type->type;
 
     // Find tag and union fields
-    str_sized    field_names = wrapper_type->cons_inst->def->field_names;
-    tl_monotype *tag_type    = null;
-    tl_monotype *union_type  = null;
-    forall(f, field_names) {
-        if (str_eq(field_names.v[f], S("tag"))) tag_type = wrapper_type->cons_inst->args.v[f];
-        if (str_eq(field_names.v[f], S("u"))) union_type = wrapper_type->cons_inst->args.v[f];
-    }
+    tl_monotype *tag_type   = null;
+    tl_monotype *union_type = null;
+    tagged_union_wrapper_fields(wrapper_type, &tag_type, &union_type);
     if (!tag_type || !union_type) fatal("runtime error");
 
     // Get variant names: first = success, second = error

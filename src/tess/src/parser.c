@@ -3601,12 +3601,12 @@ static ast_node *build_tagged_union_wrapping(parser *self, str tu_name, str var_
     set_node_file(self, tag_access);
 
     // Wrapper construction: Shape(tag = tagAccess, u = unionCall)
-    ast_node *tag_arg_name               = ast_node_create_sym_c(arena, "tag");
+    ast_node *tag_arg_name               = ast_node_create_sym_c(arena, AST_TAGGED_UNION_TAG_FIELD);
     ast_node *tag_assign                 = ast_node_create_assignment(arena, tag_arg_name, tag_access);
     tag_assign->assignment.is_field_name = 1;
     set_node_file(self, tag_assign);
 
-    ast_node *u_arg_name               = ast_node_create_sym_c(arena, "u");
+    ast_node *u_arg_name               = ast_node_create_sym_c(arena, AST_TAGGED_UNION_UNION_FIELD);
     ast_node *u_assign                 = ast_node_create_assignment(arena, u_arg_name, union_call);
     u_assign->assignment.is_field_name = 1;
     set_node_file(self, u_assign);
@@ -3947,7 +3947,7 @@ static int toplevel_tagged_union(parser *self) {
 
         // Field: tag: __Shape__Tag_
         {
-            ast_node *tag_field    = ast_node_create_sym_c(self->ast_arena, "tag");
+            ast_node *tag_field    = ast_node_create_sym_c(self->ast_arena, AST_TAGGED_UNION_TAG_FIELD);
             str       tag_type_str = str_cat_3(self->ast_arena, S("__"), tu_name_str, S("__Tag_"));
             ast_node *tag_ann      = ast_node_create_sym(self->ast_arena, tag_type_str);
             mangle_name(self, tag_ann);
@@ -3957,7 +3957,7 @@ static int toplevel_tagged_union(parser *self) {
 
         // Field: u: __Shape__Union_ (or __Shape__Union_[T] for generics)
         {
-            ast_node *u_field        = ast_node_create_sym_c(self->ast_arena, "u");
+            ast_node *u_field        = ast_node_create_sym_c(self->ast_arena, AST_TAGGED_UNION_UNION_FIELD);
             str       union_type_str = str_cat_3(self->ast_arena, S("__"), tu_name_str, S("__Union_"));
 
             ast_node *u_ann          = null;

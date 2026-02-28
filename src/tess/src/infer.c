@@ -1343,8 +1343,8 @@ static int infer_try(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
         return 1;
     }
 
-    // Find the 'u' (union) field in the wrapper type
-    i32 u_index = tl_monotype_type_constructor_field_index(operand_type, S("u"));
+    // Find the union field in the wrapper type
+    i32 u_index = tl_monotype_type_constructor_field_index(operand_type, S(AST_TAGGED_UNION_UNION_FIELD));
     if (u_index < 0) {
         array_push(self->errors,
                    ((tl_infer_error){.tag = tl_err_try_requires_two_variant_union, .node = node}));
@@ -1648,7 +1648,7 @@ static int infer_unary_op(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
 // Returns the variant's monotype, or null if the wrapper has no 'u' field or variant not found.
 // If out_index is non-null, stores the variant's index within the union.
 static tl_monotype *tagged_union_find_variant(tl_monotype *wrapper_type, str variant_name, int *out_index) {
-    i32 u_index = tl_monotype_type_constructor_field_index(wrapper_type, S("u"));
+    i32 u_index = tl_monotype_type_constructor_field_index(wrapper_type, S(AST_TAGGED_UNION_UNION_FIELD));
     if (u_index < 0) return null;
     tl_monotype *union_type  = wrapper_type->cons_inst->args.v[u_index];
     str_sized    field_names = union_type->cons_inst->def->field_names;
@@ -1659,6 +1659,13 @@ static tl_monotype *tagged_union_find_variant(tl_monotype *wrapper_type, str var
         }
     }
     return null;
+}
+
+// Wrap a variant type in Ptr if the binding is mutable (&), otherwise return as-is.
+static tl_polytype *tagged_union_variant_poly(tl_infer *self, tl_monotype *variant_type, int is_union_flag) {
+    if (is_union_flag == AST_TAGGED_UNION_MUTABLE)
+        return tl_polytype_absorb_mono(self->arena, tl_type_registry_ptr(self->registry, variant_type));
+    return tl_polytype_absorb_mono(self->arena, variant_type);
 }
 
 static int infer_tagged_union_case(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
@@ -1694,10 +1701,9 @@ static int infer_tagged_union_case(tl_infer *self, traverse_ctx *ctx, ast_node *
         return 1;
     }
 
-    // Find the 'u' (union) field in the wrapper type
-    i32 u_index = tl_monotype_type_constructor_field_index(wrapper_type, S("u"));
+    // Find the union field in the wrapper type
+    i32 u_index = tl_monotype_type_constructor_field_index(wrapper_type, S(AST_TAGGED_UNION_UNION_FIELD));
     if (u_index < 0) {
-        // wrapper type missing 'u'
         expected_tagged_union(self, node->case_.expression);
         return 1;
     }
@@ -1740,13 +1746,7 @@ static int infer_tagged_union_case(tl_infer *self, traverse_ctx *ctx, ast_node *
         // Set the binding's type (not as a literal - this is a value, not a type expression).
         // Note that we set both the condition node and the annotation_type.
         // If the case variable is mutable (var.&), we have a pointer type.
-        tl_polytype *variant_poly = null;
-        if (node->case_.is_union == AST_TAGGED_UNION_MUTABLE) {
-            variant_poly =
-              tl_polytype_absorb_mono(self->arena, tl_type_registry_ptr(self->registry, variant_type));
-        } else {
-            variant_poly = tl_polytype_absorb_mono(self->arena, variant_type);
-        }
+        tl_polytype *variant_poly = tagged_union_variant_poly(self, variant_type, node->case_.is_union);
 
         ast_node_type_set(cond, variant_poly);
         cond->symbol.annotation_type = variant_poly;
@@ -2363,7 +2363,7 @@ static void prepare_tagged_union_bindings(tl_infer *self, traverse_ctx *ctx, ast
     if (!tl_monotype_is_inst(wrapper_type))
         return; // type not yet resolved; defer to infer_tagged_union_case
 
-    i32 u_index = tl_monotype_type_constructor_field_index(wrapper_type, S("u"));
+    i32 u_index = tl_monotype_type_constructor_field_index(wrapper_type, S(AST_TAGGED_UNION_UNION_FIELD));
     if (u_index < 0) return;
 
     forall(i, node->case_.conditions) {
@@ -2382,13 +2382,7 @@ static void prepare_tagged_union_bindings(tl_infer *self, traverse_ctx *ctx, ast
         tl_monotype *variant_type = tagged_union_find_variant(wrapper_type, variant_name, null);
         if (!variant_type) continue; // will be caught later by infer_tagged_union_case
 
-        tl_polytype *variant_poly = null;
-        if (node->case_.is_union == AST_TAGGED_UNION_MUTABLE) {
-            variant_poly =
-              tl_polytype_absorb_mono(self->arena, tl_type_registry_ptr(self->registry, variant_type));
-        } else {
-            variant_poly = tl_polytype_absorb_mono(self->arena, variant_type);
-        }
+        tl_polytype *variant_poly = tagged_union_variant_poly(self, variant_type, node->case_.is_union);
 
         ast_node_type_set(cond, variant_poly);
         cond->symbol.annotation_type = variant_poly;
@@ -3408,8 +3402,6 @@ static int check_type_predicate(tl_infer *self, traverse_ctx *traverse_ctx, ast_
     return 0;
 }
 
-int is_union_struct(tl_infer *self, str name);
-
 // ============================================================================
 // Inference dispatch (infer_traverse_cb)
 // ============================================================================
@@ -3848,7 +3840,7 @@ static str specialize_type_constructor(tl_infer *self, str name, tl_monotype_siz
     return out;
 }
 
-int is_union_struct(tl_infer *self, str name) {
+static int is_union_struct(tl_infer *self, str name) {
     ast_node *utd = toplevel_get(self, name);
     if (utd && ast_node_is_union_def(utd)) return 1;
     return 0;
