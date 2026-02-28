@@ -563,6 +563,7 @@ tl_create_build_fail_test(fail_integer_exact_conditional)
 tl_create_build_fail_test(fail_integer_exact_generic)
 tl_create_build_fail_test(fail_integer_exact_operator)
 tl_create_build_fail_test(fail_integer_literal_overflow)
+tl_create_build_fail_test(fail_integer_literal_overflow_negative)
 tl_create_build_fail_test(fail_integer_literal_overflow_unsigned)
 tl_create_build_fail_test(fail_integer_narrowing_funcall)
 tl_create_build_fail_test(fail_integer_narrowing_reassign)
@@ -579,4 +580,3 @@ tl_create_known_failure(while_empty_body)
 
 # Known fail-failures: fail tests the compiler doesn't reject yet
 tl_create_known_fail_failure(fail_integer_compound_assign_mixed)
-tl_create_known_fail_failure(fail_integer_literal_overflow_negative)

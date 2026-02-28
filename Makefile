@@ -588,6 +588,7 @@ TL_FAIL_TESTS =					\
 	fail_integer_exact_generic_standalone	\
 	fail_integer_exact_operator		\
 	fail_integer_literal_overflow		\
+	fail_integer_literal_overflow_negative	\
 	fail_integer_literal_overflow_unsigned	\
 	fail_integer_narrowing_funcall		\
 	fail_integer_narrowing_reassign		\
@@ -628,8 +629,7 @@ TL_FAIL_RUNTIME_TESTS =			\
 
 # Expected-failure tests that the compiler doesn't reject yet
 TL_KNOWN_FAIL_FAILURES =			\
-	fail_integer_compound_assign_mixed	\
-	fail_integer_literal_overflow_negative
+	fail_integer_compound_assign_mixed
 
 # Tests that should work but currently fail due to compiler bugs
 TL_KNOWN_FAILURES =				\

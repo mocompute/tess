@@ -1875,9 +1875,17 @@ static int infer_let_in(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
             if (is_integer_cast) {
                 skip = 1;
                 // Even for integer casts, check literal range at compile time.
+                // Look through unary minus to catch negative literals like -129.
                 ast_node *val = node->let_in.value;
+                int negate = 0;
+                if (val->tag == ast_unary_op
+                    && str_eq(ast_node_str(val->unary_op.op), S("-"))) {
+                    val    = val->unary_op.operand;
+                    negate = 1;
+                }
                 if (val->tag == ast_i64 || val->tag == ast_u64) {
                     i64 lit = (val->tag == ast_i64) ? ast_node_i64(val)->val : (i64)ast_node_u64(val)->val;
+                    if (negate) lit = -lit;
                     if (!tl_monotype_integer_value_fits(name_annotation_type->type, lit)) {
                         log_type_error(self, name_annotation_type, value_type, node);
                         type_error(self, node);
