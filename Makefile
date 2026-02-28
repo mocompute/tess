@@ -504,7 +504,9 @@ TL_TESTS =					\
 	tagged_union_option			\
 	tagged_union_pointer_field		\
 	tagged_union_recursive_type		\
+	tagged_union_scoped_bare_cross_module	\
 	tagged_union_scoped_variant		\
+	tagged_union_scoped_variant_as_union	\
 	tagged_union_unscoped			\
 	tail_call				\
 	type_alias_generic			\

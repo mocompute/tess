@@ -26,7 +26,7 @@ main() {
     }
     error += if r2 >= 3.0 {0} else {1}
 
-    // Scoped construction with positional args (existing behavior)
+    // Scoped construction with named args (existing behavior)
     shape3 := Foo.Shape.Square(length = 4.0)
 
     r3 := when shape3 {

@@ -53,7 +53,6 @@ struct parser {
     hashmap               *module_preludes_seen; // str hset: modules declared with #module_prelude
     hashmap               *nested_type_parents;  // str hset: types that have nested types
     hashmap               *tagged_union_variant_parents; // str hset: type names that are tagged union parents
-    hashmap               *variant_to_tagged_union;      // str map: variant_name -> tu_name
     hashmap               *module_aliases;       // map str -> str: alias name -> original module name
 
     ast_node              *result;
@@ -198,7 +197,6 @@ parser *parser_create(allocator *alloc, parser_opts const *opts) {
     self->module_preludes_seen    = hset_create(self->parent_alloc, 32);
     self->nested_type_parents     = hset_create(self->parent_alloc, 1024);
     self->tagged_union_variant_parents = hset_create(self->parent_alloc, 256);
-    self->variant_to_tagged_union = map_new(self->parent_alloc, str, str, 256);
     self->module_aliases          = map_new(self->parent_alloc, str, str, 32);
     self->result                  = null;
     self->tokens                  = (token_array){0};
@@ -241,7 +239,6 @@ void parser_destroy(parser **self) {
     hset_destroy(&(*self)->builtin_module_symbols);
     hset_destroy(&(*self)->current_module_symbols);
     hset_destroy(&(*self)->nested_type_parents);
-    map_destroy(&(*self)->variant_to_tagged_union);
     hset_destroy(&(*self)->tagged_union_variant_parents);
     hset_destroy(&(*self)->module_preludes_seen);
     hset_destroy(&(*self)->modules_seen);
@@ -1291,49 +1288,6 @@ static int a_funcall(parser *self) {
 done:
     array_shrink(args);
 
-    // Auto-wrap: if the function name is a known tagged union variant and the first argument
-    // looks like a named argument (binary op with "="), rewrite as variant struct construction
-    // wrapped in the tagged union.
-    // E.g., Circle(radius = 2.0) -> Shape(tag = __Shape__Tag_.Circle,
-    //                                     u = __Shape__Union_(Circle = Shape__Circle(radius = 2.0)))
-    if (args.size && ast_node_is_binary_op(args.v[0])) {
-        str original_name = name->symbol.name;
-        str *tu_name_ptr  = str_map_get(self->variant_to_tagged_union, original_name);
-        if (tu_name_ptr && 0 == str_cmp_c(args.v[0]->binary_op.op->symbol.name, "=")) {
-            str tu_name = *tu_name_ptr;
-
-            // Convert binary "=" ops to proper field assignments
-            ast_node_array field_args = {.alloc = self->ast_arena};
-            forall(i, args) {
-                ast_node *arg = args.v[i];
-                if (ast_node_is_binary_op(arg) && 0 == str_cmp_c(arg->binary_op.op->symbol.name, "=")) {
-                    ast_node *fa = ast_node_create_assignment(self->ast_arena,
-                                                              arg->binary_op.left, arg->binary_op.right);
-                    fa->assignment.is_field_name = 1;
-                    set_node_file(self, fa);
-                    array_push(field_args, fa);
-                } else {
-                    array_push(field_args, arg);
-                }
-            }
-            array_shrink(field_args);
-
-            // Build inner call: Shape__Circle(radius = 2.0)
-            str       var_struct_str  = str_cat_3(self->ast_arena, tu_name, S("__"), original_name);
-            ast_node *inner_call_name = ast_node_create_sym(self->ast_arena, var_struct_str);
-            mangle_name(self, inner_call_name);
-            ast_node *inner_call = ast_node_create_nfa(self->ast_arena, inner_call_name,
-                                                       (ast_node_sized){0},
-                                                       (ast_node_sized)array_sized(field_args));
-            set_node_file(self, inner_call);
-
-            // Wrap: Shape(tag = ..., u = __Shape__Union_(Circle = inner_call))
-            ast_node *wrapper = build_tagged_union_wrapping(self, tu_name, original_name,
-                                                            str_empty(), inner_call);
-            return result_ast_node(self, wrapper);
-        }
-    }
-
     // IMPORTANT: arity-mangle FIRST, then module-mangle.
     // symbol_is_module_function checks for the arity-mangled name (e.g., "foo__0") in
     // current_module_symbols. If we module-mangle first, we'd be checking for the wrong name.
@@ -1907,12 +1861,23 @@ static int maybe_mangle_binop(parser *self, ast_node *op, ast_node **inout, ast_
                     if (!str_is_empty(module)) mangle_name_for_module(self, to_mangle, module);
                     else mangle_name(self, to_mangle);
 
-                    // Auto-wrap: if parent is a tagged union and right is an NFA (construction call),
-                    // wrap the result so it returns the tagged union instead of the bare variant struct.
-                    if (ast_node_is_nfa(right) &&
-                        str_hset_contains(self->tagged_union_variant_parents, parent_name)) {
-                        *inout = build_tagged_union_wrapping(self, parent_name, child_name,
-                                                             module, right);
+                    // Auto-wrap: if parent is a tagged union, wrap the result so it
+                    // returns the tagged union instead of the bare variant struct.
+                    if (str_hset_contains(self->tagged_union_variant_parents, parent_name)) {
+                        if (ast_node_is_nfa(right)) {
+                            // NFA case: Circle(2.0) or Circle(radius = 2.0) — already a call
+                            *inout = build_tagged_union_wrapping(self, parent_name, child_name,
+                                                                 module, right);
+                        } else {
+                            // Bare symbol case: Op.A (zero-field variant, no parentheses)
+                            // Promote to zero-arg NFA_TC then wrap (same pattern as None sugar)
+                            ast_node *inner_call = ast_node_create_nfa_tc(self->ast_arena, right,
+                                                                           (ast_node_sized){0},
+                                                                           (ast_node_sized){0});
+                            set_node_file(self, inner_call);
+                            *inout = build_tagged_union_wrapping(self, parent_name, child_name,
+                                                                 module, inner_call);
+                        }
                     } else {
                         *inout = right;
                     }
@@ -3854,9 +3819,6 @@ static int toplevel_tagged_union(parser *self) {
 
         variant v = {.name = var_name, .fields = fields};
         array_push(variants, v);
-
-        // Map variant name -> tagged union name for unscoped named-arg detection
-        str_map_set(&self->variant_to_tagged_union, var_name->symbol.name, &tu_name_str);
 
         // Check for next variant or end
         if (a_try(self, a_vertical_bar)) break; // no more variants
