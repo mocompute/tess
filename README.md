@@ -92,7 +92,21 @@ An ML-flavoured systems language that transpiles to C.
   tess lib --static mylib.tl  # produces libmylib.a + libmylib.h
   ```
 
-- **250+ tests** - Unit tests for the compiler internals and integration tests for every language feature, including expected-failure tests that verify the compiler rejects invalid programs.
+- **Integer type safety** - Seven integer sub-chains with implicit widening within a chain and explicit narrowing via let-in annotation casts. Polymorphic integer literals adapt to context (`42` becomes any signed type, `42u` any unsigned):
+  ```tl
+  x: CShort := 1
+  y: Int := x               // OK: implicit widening
+  narrow: CInt := y         // OK: explicit narrowing cast
+  ```
+
+- **Conditional compilation** - `#ifdef`, `#ifndef`, `#define`, `#undef`, and `#endif` directives with `-D` command-line flag:
+  ```tl
+  #ifdef DEBUG
+  log(msg) { c_printf("%s\n", msg)  void }
+  #endif
+  ```
+
+- **380+ tests** - Unit tests for the compiler internals and integration tests for every language feature, including expected-failure tests that verify the compiler rejects invalid programs.
 
 ## Example
 
@@ -159,18 +173,18 @@ This is a research project exploring what a minimal, C-like language might look 
 
 - **[Language Reference](docs/LANGUAGE_REFERENCE.md)** - Complete syntax guide
 - **[Packages](docs/PACKAGES.md)** - Creating and consuming reusable `.tlib` libraries
-- **[Array Tutorial](src/tl/std/Array-tutorial.tl)** - Tutorial introduction to Tess through the Array implementation
+- **[Type System](docs/TYPE_SYSTEM.md)** - Integer sub-chains, conversions, and type inference details
 - **[Standard Library Reference](docs/STANDARD_LIBRARY.md)** - API reference for Array, Alloc, and other modules
-- **[All Documentation](docs/)** - Type system, specialization, and compiler internals
+- **[All Documentation](docs/)** - Specialization, name mangling, and compiler internals
 
 ## Standard Library
 
 The standard library is located in [src/tl/std/](src/tl/std/) and includes:
-- `Array.tl` - Generic dynamic array
-- `Alloc.tl` - Memory allocation interface
+- `Array.tl` - Generic dynamic array with sort, map, filter, reduce
+- `Str.tl` - String type with small string optimization
+- `Alloc.tl` - Memory allocation interface with bump allocator
+- `builtin.tl` - Option, Result, and other built-in types
 - `stdlib.tl`, `stdio.tl`, `string.tl` - C standard library bindings
-
-See [Array-tutorial.tl](src/tl/std/Array-tutorial.tl) for extensively commented example code.
 
 ## License
 
