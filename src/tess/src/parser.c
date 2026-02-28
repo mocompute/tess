@@ -1124,6 +1124,7 @@ static int set_node_parameters(parser *self, ast_node *node, ast_node_array *par
     return 0;
 }
 
+static int a_type_identifier_base(parser *self);
 static int a_type_identifier(parser *self);
 
 // Parse a comma-separated parameter list between ( and ).
@@ -1166,15 +1167,12 @@ static int a_type_arrow(parser *self) {
 
 static int maybe_mangle_binop(parser *self, ast_node *op, ast_node **inout, ast_node *right);
 
-static int a_type_identifier(parser *self) {
+static int a_type_identifier_base(parser *self) {
     // Callers expect name to be mangled.
     if (0 == a_try(self, a_type_arrow)) return 0;
 
     if (0 == a_try(self, a_funcall)) {
         mangle_name(self, self->result->named_application.name);
-        return 0;
-    }
-    if (0 == a_try(self, a_ellipsis)) {
         return 0;
     }
     if (0 == a_try(self, a_attributed_identifier)) {
@@ -1184,8 +1182,7 @@ static int a_type_identifier(parser *self) {
         if (0 == a_try(self, a_dot)) {
             ast_node *op = self->result;
 
-            // FIXME: recurses, but ellipsis should not be accepted
-            if (a_try(self, a_type_identifier)) return 1;
+            if (a_try(self, a_type_identifier_base)) return 1;
             ast_node *right = self->result;
 
             if (maybe_mangle_binop(self, op, &ident, right)) {
@@ -1212,6 +1209,11 @@ static int a_type_identifier(parser *self) {
     }
 
     return 1;
+}
+
+static int a_type_identifier(parser *self) {
+    if (0 == a_try(self, a_ellipsis)) return 0;
+    return a_type_identifier_base(self);
 }
 
 static int a_type_annotation(parser *self) {
