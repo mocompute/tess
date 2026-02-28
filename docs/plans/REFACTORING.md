@@ -263,29 +263,18 @@ already well-factored after these changes. All 310 tests pass (release, debug, A
 
 ### Remaining Sessions (in execution order)
 
-#### Session 1: Parser Deduplication
+#### Parser Deduplication ✓ DONE (originally Session 1)
 
 **Target:** parser.c
-**Risk:** Low
-**Goal:** Address the three self-documented duplication TODOs.
+**Commit:** 808247a3 (wip-refactor)
 
-1. **Line 2242 — Merge reassignment cases.** `a_reassignment()` has two near-identical
-   branches for `=` vs compound assignment operators (`+=`, etc.). The structure
-   (parse lvalue, parse expression, create node) is shared; only the final node
-   constructor differs.
-
-2. **Line 3382 — Combine `toplevel_union` with `toplevel_struct`.** Both parse a type
-   name (with optional type parameters), a field list in braces, then construct an
-   `ast_user_type_definition` node. The only difference is `is_union = 1` and the
-   `|`-separated field syntax. A shared helper could handle the common tail.
-
-3. **Line 2708 — Extract shared parameter-parsing logic from `toplevel_defun` and
-   `a_type_arrow`.** Both parse type parameter lists in `[]` and value parameter lists
-   in `()`. The shared prefix (type params, value params, return type annotation)
-   could become a helper that returns a param descriptor.
-
-**Validation:** `make -j test` — all parser changes are exercised by existing integration
-tests.
+Extracted `parse_param_list()` shared by `a_type_arrow` and `toplevel_defun`, merged
+the two `a_reassignment()` branches into shared tail code, and unified struct/union
+type definition via `create_utd()` (replacing `create_struct_utd` + `create_union_utd`)
+and `finalize_type_definition()` (shared post-field-parsing logic for reserved name
+check, UTD creation, unused type param check, module symbol registration, and nested
+UTD wrapping). Removed all three duplication TODO comments. Net -65 lines. All 310
+tests pass (release, debug).
 
 ---
 

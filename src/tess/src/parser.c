@@ -1110,20 +1110,27 @@ static int set_node_parameters(parser *self, ast_node *node, ast_node_array *par
 
 static int a_type_identifier(parser *self);
 
-static int a_type_arrow(parser *self) {
-    ast_node_array params = {.alloc = self->ast_arena};
+// Parse a comma-separated parameter list between ( and ).
+// Returns 0 on success, error_code on mid-list failure, 1 if ( is missing.
+// Shared by a_type_arrow and toplevel_defun.
+static int parse_param_list(parser *self, ast_node_array *out_params, int error_code) {
     if (a_try(self, a_open_round)) return 1;
-    if (0 == a_try(self, a_close_round)) goto decl_done;
-    if (0 == a_try(self, a_param)) array_push(params, self->result);
+    if (0 == a_try(self, a_close_round)) return 0;
+    if (a_try(self, a_param)) return 1;
+    array_push(*out_params, self->result);
 
     while (1) {
-        if (0 == a_try(self, a_close_round)) goto decl_done;
-        if (a_try(self, a_comma)) return ERROR_STOP;
-        if (a_try(self, a_param)) return ERROR_STOP;
-        array_push(params, self->result);
+        if (0 == a_try(self, a_close_round)) return 0;
+        if (a_try(self, a_comma)) return error_code;
+        if (a_try(self, a_param)) return error_code;
+        array_push(*out_params, self->result);
     }
+}
 
-decl_done:
+static int a_type_arrow(parser *self) {
+    ast_node_array params = {.alloc = self->ast_arena};
+    int res = parse_param_list(self, &params, ERROR_STOP);
+    if (res) return res;
 
     if (a_try(self, a_arrow)) return 1;
 
@@ -2239,23 +2246,21 @@ static int a_reassignment(parser *self) {
     ast_node *lval = parse_lvalue(self);
     if (!lval) return 1;
 
-    // TODO: merge these two similar cases
+    ast_node *op = null;
     if (0 == a_try(self, a_equal_sign)) {
-        ast_node *val = parse_expression(self, INT_MIN);
-        if (!val) return 1;
-
-        ast_node *a = ast_node_create_reassignment(self->ast_arena, lval, val);
-        return result_ast_node(self, a);
+        // op stays null
     } else if (0 == a_try_int(self, a_assignment_by_operator, INT_MIN)) {
-        ast_node *op  = self->result;
-
-        ast_node *val = parse_expression(self, INT_MIN);
-        if (!val) return 1;
-
-        ast_node *a = ast_node_create_reassignment_op(self->ast_arena, lval, val, op);
-        return result_ast_node(self, a);
+        op = self->result;
+    } else {
+        return 1;
     }
-    return 1;
+
+    ast_node *val = parse_expression(self, INT_MIN);
+    if (!val) return 1;
+
+    ast_node *a = op ? ast_node_create_reassignment_op(self->ast_arena, lval, val, op)
+                     : ast_node_create_reassignment(self->ast_arena, lval, val);
+    return result_ast_node(self, a);
 }
 
 static int a_field_assignment(parser *self) {
@@ -2705,8 +2710,6 @@ static ast_node *create_body_fallback(parser *self, ast_node_array exprs, ast_no
 }
 
 static int toplevel_defun(parser *self) {
-    // TODO: a portion is duplicated with a_type_arrow, but this function needs access to the params that
-    // a_type_arrow embeds in an arrow.
     if (a_try(self, a_attributed_identifier)) return 1;
     ast_node      *name        = self->result;
     ast_node_array type_params = {.alloc = self->ast_arena};
@@ -2725,20 +2728,9 @@ static int toplevel_defun(parser *self) {
         }
     }
 
-type_params_done:
-    if (a_try(self, a_open_round)) return 1;
-    if (0 == a_try(self, a_close_round)) goto decl_done;
-    if (a_try(self, a_param)) return 1;
-    array_push(params, self->result);
-
-    while (1) {
-        if (0 == a_try(self, a_close_round)) goto decl_done;
-        if (a_try(self, a_comma)) return 1;
-        if (a_try(self, a_param)) return 1;
-        array_push(params, self->result);
-    }
-
-decl_done:
+type_params_done:;
+    int res = parse_param_list(self, &params, 1);
+    if (res) return res;
 
     // optional arrow: if it is present, we need to add an annotation to the defun name's symbol
     if (0 == a_try(self, a_arrow)) {
@@ -3125,8 +3117,8 @@ static int toplevel_enum(parser *self) {
 // Forward declarations needed by parse_struct_fields
 static u8        collect_used_type_params(parser *self, u8 n_type_args, ast_node **type_args,
                                           ast_node_array fields, ast_node ***out_used_type_args);
-static ast_node *create_struct_utd(parser *self, ast_node *name, u8 n_type_args, ast_node **type_args,
-                                   ast_node_array fields);
+static ast_node *create_utd(parser *self, ast_node *name, u8 n_type_args, ast_node **type_args,
+                            ast_node_array fields, int is_union);
 
 // Nested struct name tracking for annotation rewriting
 typedef struct {
@@ -3198,7 +3190,7 @@ static int parse_struct_fields(parser *self, str parent_prefix, u8 parent_n_type
             // Create the nested struct UTD
             ast_node *nested_name = ast_node_create_sym(self->ast_arena, prefixed_name);
             ast_node *nested_utd =
-              create_struct_utd(self, nested_name, n_used_type_args, used_type_args, nested_fields);
+              create_utd(self, nested_name, n_used_type_args, used_type_args, nested_fields, 0);
             add_module_symbol(self, nested_name);
             mangle_name(self, nested_name);
             str_hset_insert(&self->nested_type_parents, parent_prefix);
@@ -3261,65 +3253,30 @@ static int parse_struct_fields(parser *self, str parent_prefix, u8 parent_n_type
     return 0;
 }
 
-static int toplevel_struct(parser *self) {
-
-    if (a_try(self, a_type_identifier)) return 1; // a_type_identifer mangles name
-    ast_node *type_ident = self->result;
-
-    if (a_try(self, a_colon)) return 1;
-
-    if (a_try(self, a_open_curly)) return 1;
-
-    // Check for reserved type keywords to disallow
+// Shared post-field-parsing logic for struct and union type definitions.
+// Creates the UTD node, checks for reserved names and unused type params (structs only),
+// registers the module symbol, and wraps with nested UTDs if present (structs only).
+static int finalize_type_definition(parser *self, ast_node *type_ident,
+                                    ast_node_array fields, ast_node_array nested_utds,
+                                    int is_union) {
     if (is_reserved_type_name(type_ident)) return ERROR_STOP;
 
-    // Extract parent name and type args.
-    // a_type_identifier -> a_funcall parses e.g. Point[a, b] as an NFA where the type params
-    // (a, b) are in .type_arguments (via maybe_type_arguments which parses [...]).
-    ast_node  *parent_name = null;
     u8         n_type_args = 0;
     ast_node **type_args   = null;
+    ast_node  *name        = null;
 
     if (ast_node_is_symbol(type_ident)) {
-        parent_name = type_ident;
+        name = type_ident;
     } else if (ast_node_is_nfa(type_ident)) {
-        parent_name = type_ident->named_application.name;
+        name        = type_ident->named_application.name;
         n_type_args = type_ident->named_application.n_type_arguments;
         type_args   = type_ident->named_application.type_arguments;
     } else fatal("logic error");
 
-    str parent_prefix = parent_name->symbol.name;
+    ast_node *r = create_utd(self, name, n_type_args, type_args, fields, is_union);
 
-    // Parse fields, collecting nested struct UTDs
-    ast_node_array fields      = {.alloc = self->ast_arena};
-    ast_node_array nested_utds = {.alloc = self->ast_arena};
-    int res = parse_struct_fields(self, parent_prefix, n_type_args, type_args, &fields, &nested_utds);
-    if (res) return res;
-
-    ast_node *r               = ast_node_create(self->ast_arena, ast_user_type_definition);
-    r->user_type_def.is_union = 0;
-    if (ast_node_is_symbol(type_ident)) {
-        r->user_type_def.n_type_arguments = 0;
-        r->user_type_def.type_arguments   = null;
-        r->user_type_def.name             = type_ident;
-    } else if (ast_node_is_nfa(type_ident)) {
-        r->user_type_def.n_type_arguments = type_ident->named_application.n_type_arguments;
-        r->user_type_def.type_arguments   = type_ident->named_application.type_arguments;
-        r->user_type_def.name             = type_ident->named_application.name;
-    } else fatal("logic error");
-
-    // The utd struct separates names from annotations, while they are both in the same symbol ast
-    // node variant. So we have to do this splitting just for it to recombine later.
-    r->user_type_def.n_fields          = fields.size;
-    r->user_type_def.field_names       = alloc_malloc(self->ast_arena, fields.size * sizeof(ast_node *));
-    r->user_type_def.field_annotations = alloc_malloc(self->ast_arena, fields.size * sizeof(ast_node *));
-    forall(i, fields) {
-        r->user_type_def.field_names[i]       = fields.v[i];
-        r->user_type_def.field_annotations[i] = fields.v[i]->symbol.annotation;
-    }
-
-    // Check for unused type parameters
-    if (r->user_type_def.n_type_arguments) {
+    // Check for unused type parameters (structs only)
+    if (!is_union && r->user_type_def.n_type_arguments) {
         for (u8 j = 0; j < r->user_type_def.n_type_arguments; j++) {
             int used = 0;
             for (u32 i = 0; i < r->user_type_def.n_fields; i++) {
@@ -3331,14 +3288,11 @@ static int toplevel_struct(parser *self) {
             }
             if (!used) {
                 self->error.tag = tl_err_unused_type_parameter;
-                return ERROR_STOP; // a stopping error
+                return ERROR_STOP;
             }
         }
     }
 
-    // Note: mangle_name has several escapes, including not mangling names on their first usage in the
-    // module which defines them. So while it looks like type_ident is being mangled twice, that isn't
-    // happening.
     add_module_symbol(self, type_ident);
     mangle_name(self, type_ident);
 
@@ -3359,6 +3313,39 @@ static int toplevel_struct(parser *self) {
     return result_ast_node(self, r);
 }
 
+static int toplevel_struct(parser *self) {
+
+    if (a_try(self, a_type_identifier)) return 1; // a_type_identifer mangles name
+    ast_node *type_ident = self->result;
+
+    if (a_try(self, a_colon)) return 1;
+    if (a_try(self, a_open_curly)) return 1;
+
+    // Check for reserved type keywords before parsing fields
+    if (is_reserved_type_name(type_ident)) return ERROR_STOP;
+
+    // Extract parent name and type args for nested struct parsing
+    ast_node  *parent_name = null;
+    u8         n_type_args = 0;
+    ast_node **type_args   = null;
+
+    if (ast_node_is_symbol(type_ident)) {
+        parent_name = type_ident;
+    } else if (ast_node_is_nfa(type_ident)) {
+        parent_name = type_ident->named_application.name;
+        n_type_args = type_ident->named_application.n_type_arguments;
+        type_args   = type_ident->named_application.type_arguments;
+    } else fatal("logic error");
+
+    ast_node_array fields      = {.alloc = self->ast_arena};
+    ast_node_array nested_utds = {.alloc = self->ast_arena};
+    int res = parse_struct_fields(self, parent_name->symbol.name, n_type_args, type_args,
+                                  &fields, &nested_utds);
+    if (res) return res;
+
+    return finalize_type_definition(self, type_ident, fields, nested_utds, 0);
+}
+
 static int toplevel_union(parser *self) {
 
     if (a_try(self, a_type_identifier)) return 1; // mangles name
@@ -3367,51 +3354,19 @@ static int toplevel_union(parser *self) {
     if (a_try(self, a_colon)) return 1;
 
     // Format: MyUnion : { | variant1 : Type1 | variant2 : Type 2 }
-
     if (a_try(self, a_open_curly)) return 1;
 
     ast_node_array fields = {.alloc = self->ast_arena};
     while (1) {
         if (0 == a_try(self, a_close_curly)) break;
         if (a_try(self, a_vertical_bar)) return 1;
-        if (a_try(self, a_param)) return ERROR_STOP; // exit parse
+        if (a_try(self, a_param)) return ERROR_STOP;
         array_push(fields, self->result);
     }
     array_shrink(fields);
 
-    // TODO: combine with toplevel_struct
-
-    // Check for reserved type keywords to disallow
-    if (is_reserved_type_name(type_ident)) return ERROR_STOP;
-
-    ast_node *r               = ast_node_create(self->ast_arena, ast_user_type_definition);
-    r->user_type_def.is_union = 1;
-    if (ast_node_is_symbol(type_ident)) {
-        r->user_type_def.n_type_arguments = 0;
-        r->user_type_def.type_arguments   = null;
-        r->user_type_def.name             = type_ident;
-    } else if (ast_node_is_nfa(type_ident)) {
-        r->user_type_def.n_type_arguments = type_ident->named_application.n_type_arguments;
-        r->user_type_def.type_arguments   = type_ident->named_application.type_arguments;
-        r->user_type_def.name             = type_ident->named_application.name;
-    } else fatal("logic error");
-
-    // The utd struct separates names from annotations, while they are both in the same symbol ast
-    // node variant. So we have to do this splitting just for it to recombine later.
-    r->user_type_def.n_fields          = fields.size;
-    r->user_type_def.field_names       = alloc_malloc(self->ast_arena, fields.size * sizeof(ast_node *));
-    r->user_type_def.field_annotations = alloc_malloc(self->ast_arena, fields.size * sizeof(ast_node *));
-    forall(i, fields) {
-        r->user_type_def.field_names[i]       = fields.v[i];
-        r->user_type_def.field_annotations[i] = fields.v[i]->symbol.annotation;
-    }
-
-    // Note: mangle_name has several escapes, including not mangling names on their first usage in the
-    // module which defines them. So while it looks like type_ident is being mangled twice, that isn't
-    // happening.
-    add_module_symbol(self, type_ident);
-    mangle_name(self, type_ident);
-    return result_ast_node(self, r);
+    ast_node_array no_nested_utds = {0};
+    return finalize_type_definition(self, type_ident, fields, no_nested_utds, 1);
 }
 
 // Helper to check if an AST node references a type parameter name
@@ -3498,11 +3453,11 @@ static u8 collect_used_type_params(parser *self, u8 n_type_args, ast_node **type
     return count;
 }
 
-// Helper to create a struct UTD node from variant data
-static ast_node *create_struct_utd(parser *self, ast_node *name, u8 n_type_args, ast_node **type_args,
-                                   ast_node_array fields) {
+// Helper to create a UTD node (struct or union) from name, type args, and fields
+static ast_node *create_utd(parser *self, ast_node *name, u8 n_type_args, ast_node **type_args,
+                            ast_node_array fields, int is_union) {
     ast_node *r                       = ast_node_create(self->ast_arena, ast_user_type_definition);
-    r->user_type_def.is_union         = 0;
+    r->user_type_def.is_union         = is_union;
     r->user_type_def.name             = name;
     r->user_type_def.n_type_arguments = n_type_args;
     r->user_type_def.type_arguments   = type_args;
@@ -3539,26 +3494,6 @@ static ast_node *create_enum_utd(parser *self, ast_node *name, ast_node_array id
     r->user_type_def.field_annotations = null;
     forall(i, idents) {
         r->user_type_def.field_names[i] = idents.v[i];
-    }
-    set_node_file(self, r);
-    return r;
-}
-
-// Helper to create a union UTD node
-static ast_node *create_union_utd(parser *self, ast_node *name, u8 n_type_args, ast_node **type_args,
-                                  ast_node_array fields) {
-    ast_node *r                        = ast_node_create(self->ast_arena, ast_user_type_definition);
-    r->user_type_def.is_union          = 1;
-    r->user_type_def.name              = name;
-    r->user_type_def.n_type_arguments  = n_type_args;
-    r->user_type_def.type_arguments    = type_args;
-    r->user_type_def.n_fields          = fields.size;
-    r->user_type_def.field_types       = null;
-    r->user_type_def.field_names       = alloc_malloc(self->ast_arena, fields.size * sizeof(ast_node *));
-    r->user_type_def.field_annotations = alloc_malloc(self->ast_arena, fields.size * sizeof(ast_node *));
-    forall(i, fields) {
-        r->user_type_def.field_names[i]       = fields.v[i];
-        r->user_type_def.field_annotations[i] = fields.v[i]->symbol.annotation;
     }
     set_node_file(self, r);
     return r;
@@ -3875,7 +3810,7 @@ static int toplevel_tagged_union(parser *self) {
         u8         var_n_type_args =
           collect_used_type_params(self, n_type_args, type_args, v->fields, &var_type_args);
 
-        ast_node *var_struct = create_struct_utd(self, var_name, var_n_type_args, var_type_args, v->fields);
+        ast_node *var_struct = create_utd(self, var_name, var_n_type_args, var_type_args, v->fields, 0);
         var_struct->user_type_def.tagged_union_name = tu_name_str;
         add_module_symbol(self, var_name);
         mangle_name(self, var_name);
@@ -3931,7 +3866,7 @@ static int toplevel_tagged_union(parser *self) {
         }
 
         ast_node *union_utd =
-          create_union_utd(self, union_name, n_type_args, union_type_args, union_fields);
+          create_utd(self, union_name, n_type_args, union_type_args, union_fields, 1);
         union_utd->user_type_def.tagged_union_name = tu_name_str;
         add_module_symbol(self, union_name);
         mangle_name(self, union_name);
@@ -3992,7 +3927,7 @@ static int toplevel_tagged_union(parser *self) {
         }
 
         ast_node *wrapper_utd =
-          create_struct_utd(self, wrapper_name, n_type_args, wrapper_type_args, wrapper_fields);
+          create_utd(self, wrapper_name, n_type_args, wrapper_type_args, wrapper_fields, 0);
         wrapper_utd->user_type_def.tagged_union_name = tu_name_str;
         add_module_symbol(self, wrapper_name);
         mangle_name(self, wrapper_name);
