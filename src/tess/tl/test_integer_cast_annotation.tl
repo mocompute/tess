@@ -81,6 +81,50 @@ test_int_to_cptrdiff() {
     error
 }
 
+// --- Fixed-width narrowing casts ---
+
+test_cint64_to_cint8() {
+    error := 0
+    a: CInt64 := 42
+    b: CInt8 := a   // fixed-signed narrowing: CInt64 -> CInt8 (explicit cast)
+    error += if b == 42 {0} else {1}
+    error
+}
+
+test_cuint64_to_cuint8() {
+    error := 0
+    a: CUInt64 := 200u
+    b: CUInt8 := a   // fixed-unsigned narrowing: CUInt64 -> CUInt8 (explicit cast)
+    error += if b == 200u {0} else {1}
+    error
+}
+
+test_cint32_to_cint16() {
+    error := 0
+    a: CInt32 := 1000
+    b: CInt16 := a   // fixed-signed narrowing: CInt32 -> CInt16 (explicit cast)
+    error += if b == 1000 {0} else {1}
+    error
+}
+
+// --- CChar casts (standalone sub-chain) ---
+
+test_int_to_cchar() {
+    error := 0
+    a: Int := 65
+    b: CChar := a   // cross-chain: Int -> CChar (explicit cast)
+    error += if b == 'A' {0} else {1}
+    error
+}
+
+test_cchar_to_int() {
+    error := 0
+    a: CChar := 'A'
+    b: Int := a   // cross-chain: CChar -> Int (explicit cast)
+    error += if b == 65 {0} else {1}
+    error
+}
+
 // --- Cast in return value ---
 
 compute_int() -> Int { 99 }
@@ -102,6 +146,11 @@ main() {
     error += test_cint_to_cint32()
     error += test_uint_to_csize()
     error += test_int_to_cptrdiff()
+    error += test_cint64_to_cint8()
+    error += test_cuint64_to_cuint8()
+    error += test_cint32_to_cint16()
+    error += test_int_to_cchar()
+    error += test_cchar_to_int()
     error += test_return_cast()
     result: CInt := error
     result

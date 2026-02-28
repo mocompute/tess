@@ -415,7 +415,9 @@ TL_TESTS =					\
 	import_relative_dotdot			\
 	integer_bounds_check			\
 	integer_cast_annotation			\
+	integer_compound_assign			\
 	integer_families			\
+	integer_generic_type_args		\
 	integer_narrowing_let_cast		\
 	integer_same_type			\
 	integer_widening			\
@@ -586,9 +588,11 @@ TL_FAIL_TESTS =					\
 	fail_integer_exact_generic_standalone	\
 	fail_integer_exact_operator		\
 	fail_integer_literal_overflow		\
+	fail_integer_literal_overflow_unsigned	\
 	fail_integer_narrowing_funcall		\
 	fail_integer_narrowing_reassign		\
 	fail_integer_narrowing_return		\
+	fail_integer_standalone_cchar		\
 	fail_lambda_implicit_return		\
 	fail_lambda_return			\
 	fail_monkey_patch			\
@@ -619,10 +623,13 @@ TL_FAIL_TESTS =					\
 
 # Expected runtime failure tests (must compile, must fail at runtime with --bounds-check)
 TL_FAIL_RUNTIME_TESTS =			\
-	fail_runtime_integer_bounds
+	fail_runtime_integer_bounds		\
+	fail_runtime_integer_bounds_cross_family
 
 # Expected-failure tests that the compiler doesn't reject yet
-TL_KNOWN_FAIL_FAILURES =
+TL_KNOWN_FAIL_FAILURES =			\
+	fail_integer_compound_assign_mixed	\
+	fail_integer_literal_overflow_negative
 
 # Tests that should work but currently fail due to compiler bugs
 TL_KNOWN_FAILURES =				\

@@ -104,6 +104,65 @@ test_cint8_to_cint32_funcall() {
     error
 }
 
+// --- Additional widening pairs (C-signed) ---
+
+test_clong_to_int() {
+    error := 0
+    a: CLong := 999
+    b: Int := a   // CLong -> Int (CLongLong): widening OK
+    error += if b == 999 {0} else {1}
+    error
+}
+
+test_csignedchar_to_cshort() {
+    error := 0
+    a: CSignedChar := 42
+    b: CShort := a   // CSignedChar -> CShort: widening OK
+    error += if b == 42 {0} else {1}
+    error
+}
+
+// --- Additional widening pairs (C-unsigned) ---
+
+test_cuint_to_culong() {
+    error := 0
+    a: CUnsignedInt := 5000u
+    b: CUnsignedLong := a   // CUnsignedInt -> CUnsignedLong: widening OK
+    error += if b == 5000u {0} else {1}
+    error
+}
+
+// --- Additional widening pairs (fixed-width, skip) ---
+
+test_cint16_to_cint64() {
+    error := 0
+    a: CInt16 := 1000
+    b: CInt64 := a   // CInt16 -> CInt64: widening OK (skip)
+    error += if b == 1000 {0} else {1}
+    error
+}
+
+test_cuint16_to_cuint64() {
+    error := 0
+    a: CUInt16 := 5000u
+    b: CUInt64 := a   // CUInt16 -> CUInt64: widening OK (skip)
+    error += if b == 5000u {0} else {1}
+    error
+}
+
+// --- Widening through function pointer call ---
+
+take_int_fn(x: Int) -> Int { x }
+
+test_funcptr_widening() {
+    error := 0
+    f_ptr := take_int_fn/1
+    a: CInt := 42
+    result := f_ptr(a)   // CInt widens to Int through function pointer
+    error += if result == 42 {0} else {1}
+    error
+}
+
 // --- Same-type assignment (trivially OK) ---
 
 test_same_type() {
@@ -126,6 +185,12 @@ main() {
     error += test_funcall_widening()
     error += test_return_widening()
     error += test_cint8_to_cint32_funcall()
+    error += test_clong_to_int()
+    error += test_csignedchar_to_cshort()
+    error += test_cuint_to_culong()
+    error += test_cint16_to_cint64()
+    error += test_cuint16_to_cuint64()
+    error += test_funcptr_widening()
     error += test_same_type()
     error
 }

@@ -49,6 +49,27 @@ test_same_type_conditional() {
     error
 }
 
+test_weak_literal_in_conditional() {
+    error := 0
+
+    // Weak literal 0 in else branch should resolve to CInt from a
+    a: CInt := 10
+    b := if 1 == 1 { a } else { 0 }   // 0 becomes CInt
+    error += if b == 10 {0} else {1}
+
+    // Weak literal 0 in else branch should resolve to Int from c
+    c: Int := 100
+    d := if 1 == 1 { c } else { 0 }   // 0 becomes Int
+    error += if d == 100 {0} else {1}
+
+    // Weak unsigned literal in else branch
+    e: UInt := 42u
+    f := if 1 == 1 { e } else { 0u }   // 0u becomes UInt
+    error += if f == 42u {0} else {1}
+
+    error
+}
+
 test_weak_literals_in_operators() {
     error := 0
 
@@ -75,6 +96,7 @@ main() {
     error += test_same_type_arithmetic()
     error += test_same_type_comparison()
     error += test_same_type_conditional()
+    error += test_weak_literal_in_conditional()
     error += test_weak_literals_in_operators()
     error
 }
