@@ -1110,13 +1110,31 @@ Shape : | Circle    { radius: Float }
 
 ### Construction
 
-There are three ways to construct tagged union values:
+All construction forms return the tagged union type.
 
-**Unscoped constructor functions** take positional arguments and return the wrapped tagged union:
+**Unscoped positional:** Constructor functions take positional arguments:
 
 ```tl
 s := Circle(2.0)              // returns Shape
 n := None()                   // returns Shape
+```
+
+**Unscoped named:** Named arguments also return the tagged union:
+
+```tl
+s := Circle(radius = 2.0)    // returns Shape
+```
+
+**Scoped positional:** Prefix with the type name:
+
+```tl
+s := Shape.Circle(2.0)       // returns Shape
+```
+
+**Scoped named:** Prefix with the type name and use named arguments:
+
+```tl
+s := Shape.Circle(radius = 2.0)   // returns Shape
 ```
 
 **Bare None sugar:** Variants with no fields (like `None`) can omit the parentheses. Bare `None` is promoted to `None()` automatically. Since `None` carries no data, the type must be inferrable from context (type annotation, function return type, if/else branch, etc.):
@@ -1130,36 +1148,8 @@ From another module, prefix with the module name:
 
 ```tl
 s := Foo.Circle(2.0)          // returns Foo.Shape
+s := Foo.Shape.Circle(radius = 2.0)  // also returns Foo.Shape
 ```
-
-**Scoped type constructors** use named arguments and return the bare variant struct (not the tagged union):
-
-```tl
-c := Shape.Circle(radius = 2.0)   // returns bare Circle struct
-```
-
-**Make functions** wrap a bare variant struct into the tagged union:
-
-```tl
-c := Shape.Circle(radius = 2.0)   // bare Circle struct
-s := make_Shape_Circle(c)         // wrapped Shape
-```
-
-### Existing Types as Variants
-
-A variant can reference a pre-existing type using module-qualified syntax:
-
-```tl
-#module Geo
-
-Point: { x: Float, y: Float }
-
-Shape: | Circle { radius: Float }
-       | Geo.Point
-       | None
-```
-
-For types in the `main` module, use `main.TypeName`. A bare name (e.g., `| None`) always creates a new variant. No constructor function is generated for existing type variants — use the type's own constructor and the make function.
 
 ### Pattern Matching (When Expression)
 

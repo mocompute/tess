@@ -484,8 +484,8 @@ Option[a] : | Some { v: a } | None
 //   Types.Option.None()
 //
 // Generated internal names:
-// Option__Some     → Types__Option__Some   (variant struct, scoped)
-// Option__None     → Types__Option__None   (variant struct, scoped)
+// Option__Some     → Types__Option__Some   (variant struct, internal)
+// Option__None     → Types__Option__None   (variant struct, internal)
 // __Option__Tag_   → Types____Option__Tag_ (tag enum)
 // __Option__Union_ → Types____Option__Union_ (internal union)
 ```

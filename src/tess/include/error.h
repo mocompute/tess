@@ -123,7 +123,6 @@
     X(tl_err_cannot_return_lambda, "cannot_return_lambda")                                                 \
     X(tl_err_unused_type_parameter, "unused_type_parameter")                                               \
     X(tl_err_nested_module_parent_not_found, "nested_module_parent_not_found")                             \
-    X(tl_err_invalid_existing_type_arg, "invalid_existing_type_arg")                                       \
     X(tl_err_const_violation, "const_violation")                                                           \
     X(tl_err_tagged_union_bail_else_must_diverge, "tagged_union_bail_else_must_diverge")               \
     X(tl_err_try_requires_two_variant_union, "try_requires_two_variant_union")                     \
