@@ -968,37 +968,6 @@ static str generate_type_constructor(transpile *self, ast_node const *node, eval
     return res;
 }
 
-static str generate_funcall_std(transpile *self, ast_node const *node, eval_ctx *ctx) {
-
-    // a funcall to a std function is fundamentally different: we don't have type information on the
-    // function or the arguments.
-
-    // generate untyped arguments
-    str            name     = ast_node_str(node->named_application.name);
-    ast_node_sized args     = ast_node_sized_from_ast_array((ast_node *)node);
-    str_array      args_res = {.alloc = self->transient};
-    array_reserve(args_res, args.size);
-
-    forall(i, args) {
-        str res = generate_expr(self, null, args.v[i], ctx);
-        array_push(args_res, res);
-    }
-
-    // Note: all std_ functions have nil result
-
-    // function call
-    generate_funcall_head(self, name, str_empty(), args_res.size);
-
-    // args list
-    str_build b = str_build_init(self->transient, 128);
-    str_build_join_array(&b, S(", "), args_res);
-    cat(self, str_build_finish(&b));
-    cat_close_round(self);
-    cat_semicolonln(self);
-
-    return str_empty();
-}
-
 static str remove_c_prefix(allocator *alloc, str name) {
     span s = str_span(&name);
     s.buf += 2;
@@ -1108,7 +1077,6 @@ static str generate_funcall(transpile *self, ast_node const *node, eval_ctx *ctx
     assert(ast_node_is_nfa(node));
     str name = ast_node_str(node->named_application.name);
     if (is_intrinsic(name)) return generate_funcall_intrinsic(self, node, ctx);
-    if (0 == str_cmp_nc(name, "std_", 4)) return generate_funcall_std(self, node, ctx);
 
     // c_ prefix: may be a c_ funcall or a c_ type constructor. If there is no type
     tl_monotype *type = env_lookup(self, name);
@@ -1526,8 +1494,7 @@ static str generate_body(transpile *self, tl_monotype *type, ast_node const *nod
 
 // Look up the tag and/or union field types from a tagged union wrapper type.
 // Either out pointer may be null if that field is not needed.
-static void tagged_union_wrapper_fields(tl_monotype *wrapper_type,
-                                        tl_monotype **out_tag_type,
+static void tagged_union_wrapper_fields(tl_monotype *wrapper_type, tl_monotype **out_tag_type,
                                         tl_monotype **out_union_type) {
     str_sized field_names = wrapper_type->cons_inst->def->field_names;
     forall(f, field_names) {
@@ -2714,7 +2681,6 @@ static void cat_commentln(transpile *self, str s) {
 static str mangle_fun(transpile *self, str s) {
     // If name is already mangled, it could be a variable name. Don't mangle it further.
     if (0 == str_cmp_nc(s, "tl_", 3)) return s;
-    if (0 == str_cmp_nc(s, "std_", 4)) return s; // std_ functions use literal names (see generate_funcall_std)
 
     // don't mangle names which don't refer to actual functions. This helps avoid mangling struct field
     // names that have an arrow type.
