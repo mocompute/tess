@@ -40,6 +40,12 @@ typedef struct {
     int       is_float_convertible;   // the type is implicitly convertible to any other float type
     int       integer_subchain;       // 0 = not an integer, 1-7 = sub-chain ID (TL_INTEGER_SUBCHAIN_*)
     int       integer_width_rank;     // ordering within sub-chain (0 = narrowest), -1 if not integer
+    str       c_type_name;            // C type string, e.g. "long long", empty if not a builtin
+    char const *c_min_macro;          // C MIN macro, e.g. "INT_MIN", NULL if unsigned or non-integer
+    char const *c_max_macro;          // C MAX macro, e.g. "INT_MAX", NULL if non-integer
+    i64       integer_min_value;      // minimum value for compile-time range checking
+    u64       integer_max_value;      // maximum value for compile-time range checking (u64 for unsigned)
+    int       has_integer_range;      // non-zero if integer_min_value/max_value are valid
 } tl_type_constructor_def;
 
 typedef struct {

@@ -2755,68 +2755,10 @@ static str type_to_c(transpile *self, tl_polytype *type) {
     tl_monotype *mono = type->type;
     if (tl_monotype_is_concrete_no_arrow(mono)) {
         str cons_name = mono->cons_inst->def->name;
-        if (str_eq(S("Int"), cons_name)) {
-            return S("long long");
-        } else if (str_eq(S("CChar"), cons_name)) {
-            return S("char");
-        } else if (str_eq(S("CUnsignedChar"), cons_name)) {
-            return S("unsigned char");
-        } else if (str_eq(S("CSignedChar"), cons_name)) {
-            return S("signed char");
-        } else if (str_eq(S("CShort"), cons_name)) {
-            return S("short");
-        } else if (str_eq(S("CUnsignedShort"), cons_name)) {
-            return S("unsigned short");
-        } else if (str_eq(S("CInt"), cons_name)) {
-            return S("int");
-        } else if (str_eq(S("CUnsignedInt"), cons_name)) {
-            return S("unsigned int");
-        } else if (str_eq(S("CLong"), cons_name)) {
-            return S("long");
-        } else if (str_eq(S("CUnsignedLong"), cons_name)) {
-            return S("unsigned long");
-        } else if (str_eq(S("CLongLong"), cons_name)) {
-            return S("long long");
-        } else if (str_eq(S("CUnsignedLongLong"), cons_name)) {
-            return S("unsigned long long");
-        } else if (str_eq(S("CSize"), cons_name)) {
-            return S("size_t");
-        } else if (str_eq(S("CPtrDiff"), cons_name)) {
-            return S("ptrdiff_t");
-        }
 
-        else if (str_eq(S("CInt8"), cons_name)) {
-            return S("int8_t");
-        } else if (str_eq(S("CUInt8"), cons_name)) {
-            return S("uint8_t");
-        } else if (str_eq(S("CInt16"), cons_name)) {
-            return S("int16_t");
-        } else if (str_eq(S("CUInt16"), cons_name)) {
-            return S("uint16_t");
-        } else if (str_eq(S("CInt32"), cons_name)) {
-            return S("int32_t");
-        } else if (str_eq(S("CUInt32"), cons_name)) {
-            return S("uint32_t");
-        } else if (str_eq(S("CInt64"), cons_name)) {
-            return S("int64_t");
-        } else if (str_eq(S("CUInt64"), cons_name)) {
-            return S("uint64_t");
-        }
-
-        else if (str_eq(S("CFloat"), cons_name)) {
-            return S("float");
-        } else if (str_eq(S("CDouble"), cons_name)) {
-            return S("double");
-        } else if (str_eq(S("CLongDouble"), cons_name)) {
-            return S("long double");
-        }
-
-        else if (str_eq(S("Float"), cons_name)) {
-            return S("double");
-        } else if (str_eq(S("Bool"), cons_name)) {
-            return S("/*bool*/int");
-        } else if (str_eq(S("Void"), cons_name)) {
-            return S("void");
+        // Data-driven: builtin types have c_type_name set in the type constructor def
+        if (!str_is_empty(mono->cons_inst->def->c_type_name)) {
+            return mono->cons_inst->def->c_type_name;
         } else if (tl_monotype_is_ptr(mono)) {
             // Special case for Ptr(..(Arrow)..) -> int (**...*)(int) format
             str ptr_arrow = ptr_to_arrow_to_c(self, mono);
@@ -3291,35 +3233,8 @@ static int is_c_exportable_type(tl_monotype *type) {
 
     str name = type->cons_inst->def->name;
 
-    // Allowed C-compatible types
-    if (str_eq(name, S("Void"))) return 1;
-    if (str_eq(name, S("CChar"))) return 1;
-    if (str_eq(name, S("CUnsignedChar"))) return 1;
-    if (str_eq(name, S("CSignedChar"))) return 1;
-    if (str_eq(name, S("CShort"))) return 1;
-    if (str_eq(name, S("CUnsignedShort"))) return 1;
-    if (str_eq(name, S("CInt"))) return 1;
-    if (str_eq(name, S("CUnsignedInt"))) return 1;
-    if (str_eq(name, S("CLong"))) return 1;
-    if (str_eq(name, S("CUnsignedLong"))) return 1;
-    if (str_eq(name, S("CLongLong"))) return 1;
-    if (str_eq(name, S("CUnsignedLongLong"))) return 1;
-    if (str_eq(name, S("CSize"))) return 1;
-    if (str_eq(name, S("CPtrDiff"))) return 1;
-    if (str_eq(name, S("CInt8"))) return 1;
-    if (str_eq(name, S("CUInt8"))) return 1;
-    if (str_eq(name, S("CInt16"))) return 1;
-    if (str_eq(name, S("CUInt16"))) return 1;
-    if (str_eq(name, S("CInt32"))) return 1;
-    if (str_eq(name, S("CUInt32"))) return 1;
-    if (str_eq(name, S("CInt64"))) return 1;
-    if (str_eq(name, S("CUInt64"))) return 1;
-    if (str_eq(name, S("CFloat"))) return 1;
-    if (str_eq(name, S("CDouble"))) return 1;
-    if (str_eq(name, S("CLongDouble"))) return 1;
-    if (str_eq(name, S("Int"))) return 1;
-    if (str_eq(name, S("Float"))) return 1;
-    if (str_eq(name, S("Bool"))) return 1;
+    // Builtin types with c_type_name are C-compatible (integers, floats, Void, Bool)
+    if (!str_is_empty(type->cons_inst->def->c_type_name)) return 1;
     if (is_c_symbol(name)) return 1;
 
     // Disallowed: Str, user structs, tagged unions, enums, etc.

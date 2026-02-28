@@ -123,46 +123,57 @@ tl_type_registry *tl_type_registry_create(allocator *alloc, allocator *transient
     self->specialized      = map_create(self->alloc, sizeof(tl_monotype *), 1024); // key: registry_key
     self->type_aliases     = map_new(self->alloc, str, tl_polytype *, 1024);
 
-    // Nullary built-in types: {name, signed_int, unsigned_int, narrow, floating, subchain, rank}
+    // Nullary built-in types with data-driven properties.
+    // c_type: the C type string for transpilation (NULL if not a builtin C type)
+    // c_min/c_max: C limit macros (NULL if not applicable)
+    // min_val/max_val: compile-time range for integer_value_fits
+    // has_range: non-zero if min_val/max_val are valid (0 for full-range types that always fit)
     static const struct {
-        char *name;
-        u32   len;
-        int   signed_int;
-        int   unsigned_int;
-        int   narrow;
-        int   floating;
-        int   subchain;
-        int   rank;
+        char       *name;
+        u32         len;
+        int         signed_int;
+        int         unsigned_int;
+        int         narrow;
+        int         floating;
+        int         subchain;
+        int         rank;
+        char const *c_type;
+        char const *c_min;
+        char const *c_max;
+        i64         min_val;
+        u64         max_val;
+        int         has_range;
     } builtin_nullary[] = {
     // clang-format off
-#define BUILTIN(n, s, u, w, f, sc, r) {n, sizeof(n) - 1, s, u, w, f, sc, r}
-      //                     name                  signed unsigned narrow float  subchain                          rank
-      BUILTIN("Void",                                0,    0,      0,    0,     TL_INTEGER_SUBCHAIN_NONE,           -1),
-      BUILTIN("Bool",                                0,    0,      0,    0,     TL_INTEGER_SUBCHAIN_NONE,           -1),
-      BUILTIN("CChar",                               0,    1,      1,    0,     TL_INTEGER_SUBCHAIN_CCHAR,           0),
-      BUILTIN("CUnsignedChar",                       0,    1,      1,    0,     TL_INTEGER_SUBCHAIN_C_UNSIGNED,      0),
-      BUILTIN("CSignedChar",                         1,    0,      1,    0,     TL_INTEGER_SUBCHAIN_C_SIGNED,        0),
-      BUILTIN("CShort",                              1,    0,      1,    0,     TL_INTEGER_SUBCHAIN_C_SIGNED,        1),
-      BUILTIN("CUnsignedShort",                      0,    1,      1,    0,     TL_INTEGER_SUBCHAIN_C_UNSIGNED,      1),
-      BUILTIN("CInt",                                1,    0,      1,    0,     TL_INTEGER_SUBCHAIN_C_SIGNED,        2),
-      BUILTIN("CUnsignedInt",                        0,    1,      1,    0,     TL_INTEGER_SUBCHAIN_C_UNSIGNED,      2),
-      BUILTIN("CLong",                               1,    0,      1,    0,     TL_INTEGER_SUBCHAIN_C_SIGNED,        3),
-      BUILTIN("CUnsignedLong",                       0,    1,      1,    0,     TL_INTEGER_SUBCHAIN_C_UNSIGNED,      3),
-      BUILTIN("CLongLong",                           1,    0,      0,    0,     TL_INTEGER_SUBCHAIN_C_SIGNED,        4),
-      BUILTIN("CUnsignedLongLong",                   0,    1,      0,    0,     TL_INTEGER_SUBCHAIN_C_UNSIGNED,      4),
-      BUILTIN("CSize",                               0,    1,      1,    0,     TL_INTEGER_SUBCHAIN_CSIZE,           0),
-      BUILTIN("CPtrDiff",                            1,    0,      1,    0,     TL_INTEGER_SUBCHAIN_CPTRDIFF,        0),
-      BUILTIN("CInt8",                               1,    0,      1,    0,     TL_INTEGER_SUBCHAIN_FIXED_SIGNED,    0),
-      BUILTIN("CUInt8",                              0,    1,      1,    0,     TL_INTEGER_SUBCHAIN_FIXED_UNSIGNED,   0),
-      BUILTIN("CInt16",                              1,    0,      1,    0,     TL_INTEGER_SUBCHAIN_FIXED_SIGNED,    1),
-      BUILTIN("CUInt16",                             0,    1,      1,    0,     TL_INTEGER_SUBCHAIN_FIXED_UNSIGNED,   1),
-      BUILTIN("CInt32",                              1,    0,      1,    0,     TL_INTEGER_SUBCHAIN_FIXED_SIGNED,    2),
-      BUILTIN("CUInt32",                             0,    1,      1,    0,     TL_INTEGER_SUBCHAIN_FIXED_UNSIGNED,   2),
-      BUILTIN("CInt64",                              1,    0,      1,    0,     TL_INTEGER_SUBCHAIN_FIXED_SIGNED,    3),
-      BUILTIN("CUInt64",                             0,    1,      1,    0,     TL_INTEGER_SUBCHAIN_FIXED_UNSIGNED,   3),
-      BUILTIN("CFloat",                              0,    0,      0,    1,     TL_INTEGER_SUBCHAIN_NONE,           -1),
-      BUILTIN("CDouble",                             0,    0,      0,    1,     TL_INTEGER_SUBCHAIN_NONE,           -1),
-      BUILTIN("CLongDouble",                         0,    0,      0,    1,     TL_INTEGER_SUBCHAIN_NONE,           -1),
+#define BUILTIN(n, s, u, w, f, sc, r, ct, cmin, cmax, mn, mx, hr) \
+    {n, sizeof(n) - 1, s, u, w, f, sc, r, ct, cmin, cmax, mn, mx, hr}
+      //                     name                  signed unsigned narrow float  subchain                          rank  c_type               c_min           c_max            min_val             max_val              has_range
+      BUILTIN("Void",                                0,    0,      0,    0,     TL_INTEGER_SUBCHAIN_NONE,           -1,  "void",              NULL,           NULL,            0,                  0,                   0),
+      BUILTIN("Bool",                                0,    0,      0,    0,     TL_INTEGER_SUBCHAIN_NONE,           -1,  "/*bool*/int",       NULL,           NULL,            0,                  0,                   0),
+      BUILTIN("CChar",                               0,    1,      1,    0,     TL_INTEGER_SUBCHAIN_CCHAR,           0,  "char",              "CHAR_MIN",     "CHAR_MAX",      -128,               127,                 1),
+      BUILTIN("CUnsignedChar",                       0,    1,      1,    0,     TL_INTEGER_SUBCHAIN_C_UNSIGNED,      0,  "unsigned char",     NULL,           "UCHAR_MAX",     0,                  255,                 1),
+      BUILTIN("CSignedChar",                         1,    0,      1,    0,     TL_INTEGER_SUBCHAIN_C_SIGNED,        0,  "signed char",       "SCHAR_MIN",    "SCHAR_MAX",     -128,               127,                 1),
+      BUILTIN("CShort",                              1,    0,      1,    0,     TL_INTEGER_SUBCHAIN_C_SIGNED,        1,  "short",             "SHRT_MIN",     "SHRT_MAX",      -32768,             32767,               1),
+      BUILTIN("CUnsignedShort",                      0,    1,      1,    0,     TL_INTEGER_SUBCHAIN_C_UNSIGNED,      1,  "unsigned short",    NULL,           "USHRT_MAX",     0,                  65535,               1),
+      BUILTIN("CInt",                                1,    0,      1,    0,     TL_INTEGER_SUBCHAIN_C_SIGNED,        2,  "int",               "INT_MIN",      "INT_MAX",       -2147483648LL,      2147483647ULL,       1),
+      BUILTIN("CUnsignedInt",                        0,    1,      1,    0,     TL_INTEGER_SUBCHAIN_C_UNSIGNED,      2,  "unsigned int",      NULL,           "UINT_MAX",      0,                  4294967295ULL,       1),
+      BUILTIN("CLong",                               1,    0,      1,    0,     TL_INTEGER_SUBCHAIN_C_SIGNED,        3,  "long",              "LONG_MIN",     "LONG_MAX",      0,                  0,                   0),
+      BUILTIN("CUnsignedLong",                       0,    1,      1,    0,     TL_INTEGER_SUBCHAIN_C_UNSIGNED,      3,  "unsigned long",     NULL,           "ULONG_MAX",     0,                  0,                   0),
+      BUILTIN("CLongLong",                           1,    0,      0,    0,     TL_INTEGER_SUBCHAIN_C_SIGNED,        4,  "long long",         "LLONG_MIN",    "LLONG_MAX",     0,                  0,                   0),
+      BUILTIN("CUnsignedLongLong",                   0,    1,      0,    0,     TL_INTEGER_SUBCHAIN_C_UNSIGNED,      4,  "unsigned long long",NULL,           "ULLONG_MAX",    0,                  0,                   0),
+      BUILTIN("CSize",                               0,    1,      1,    0,     TL_INTEGER_SUBCHAIN_CSIZE,           0,  "size_t",            NULL,           "SIZE_MAX",      0,                  0,                   0),
+      BUILTIN("CPtrDiff",                            1,    0,      1,    0,     TL_INTEGER_SUBCHAIN_CPTRDIFF,        0,  "ptrdiff_t",         "PTRDIFF_MIN",  "PTRDIFF_MAX",   0,                  0,                   0),
+      BUILTIN("CInt8",                               1,    0,      1,    0,     TL_INTEGER_SUBCHAIN_FIXED_SIGNED,    0,  "int8_t",            "INT8_MIN",     "INT8_MAX",      -128,               127,                 1),
+      BUILTIN("CUInt8",                              0,    1,      1,    0,     TL_INTEGER_SUBCHAIN_FIXED_UNSIGNED,  0,  "uint8_t",           NULL,           "UINT8_MAX",     0,                  255,                 1),
+      BUILTIN("CInt16",                              1,    0,      1,    0,     TL_INTEGER_SUBCHAIN_FIXED_SIGNED,    1,  "int16_t",           "INT16_MIN",    "INT16_MAX",     -32768,             32767,               1),
+      BUILTIN("CUInt16",                             0,    1,      1,    0,     TL_INTEGER_SUBCHAIN_FIXED_UNSIGNED,  1,  "uint16_t",          NULL,           "UINT16_MAX",    0,                  65535,               1),
+      BUILTIN("CInt32",                              1,    0,      1,    0,     TL_INTEGER_SUBCHAIN_FIXED_SIGNED,    2,  "int32_t",           "INT32_MIN",    "INT32_MAX",     -2147483648LL,      2147483647ULL,       1),
+      BUILTIN("CUInt32",                             0,    1,      1,    0,     TL_INTEGER_SUBCHAIN_FIXED_UNSIGNED,  2,  "uint32_t",          NULL,           "UINT32_MAX",    0,                  4294967295ULL,       1),
+      BUILTIN("CInt64",                              1,    0,      1,    0,     TL_INTEGER_SUBCHAIN_FIXED_SIGNED,    3,  "int64_t",           "INT64_MIN",    "INT64_MAX",     0,                  0,                   0),
+      BUILTIN("CUInt64",                             0,    1,      1,    0,     TL_INTEGER_SUBCHAIN_FIXED_UNSIGNED,  3,  "uint64_t",          NULL,           "UINT64_MAX",    0,                  0,                   0),
+      BUILTIN("CFloat",                              0,    0,      0,    1,     TL_INTEGER_SUBCHAIN_NONE,           -1,  "float",             NULL,           NULL,            0,                  0,                   0),
+      BUILTIN("CDouble",                             0,    0,      0,    1,     TL_INTEGER_SUBCHAIN_NONE,           -1,  "double",            NULL,           NULL,            0,                  0,                   0),
+      BUILTIN("CLongDouble",                         0,    0,      0,    1,     TL_INTEGER_SUBCHAIN_NONE,           -1,  "long double",       NULL,           NULL,            0,                  0,                   0),
 #undef BUILTIN
     };
     // clang-format on
@@ -175,6 +186,17 @@ tl_type_registry *tl_type_registry_create(allocator *alloc, allocator *transient
         if (builtin_nullary[i].floating) mark_float_type(self, name);
         if (builtin_nullary[i].subchain)
             mark_integer_subchain(self, name, builtin_nullary[i].subchain, builtin_nullary[i].rank);
+
+        // Set data-driven type properties on the constructor def
+        tl_polytype *poly = tl_type_registry_get(self, name);
+        assert(poly && tl_monotype_is_inst(poly->type));
+        tl_type_constructor_def *def = poly->type->cons_inst->def;
+        if (builtin_nullary[i].c_type) def->c_type_name = str_init_static(builtin_nullary[i].c_type);
+        def->c_min_macro       = builtin_nullary[i].c_min;
+        def->c_max_macro       = builtin_nullary[i].c_max;
+        def->integer_min_value = builtin_nullary[i].min_val;
+        def->integer_max_value = builtin_nullary[i].max_val;
+        def->has_integer_range = builtin_nullary[i].has_range;
     }
 
     // Cache canonical cons_inst pointers for integer family canonicalization during unification.
@@ -292,6 +314,12 @@ static tl_type_constructor_def *make_tc_def(tl_type_registry *self, str name) {
     def->is_float_convertible    = 0;
     def->integer_subchain        = TL_INTEGER_SUBCHAIN_NONE;
     def->integer_width_rank      = -1;
+    def->c_type_name             = str_empty();
+    def->c_min_macro             = NULL;
+    def->c_max_macro             = NULL;
+    def->integer_min_value       = 0;
+    def->integer_max_value       = 0;
+    def->has_integer_range       = 0;
     return def;
 }
 
@@ -2126,50 +2154,12 @@ int tl_monotype_compare_integer_width(tl_monotype *left, tl_monotype *right) {
 
 char const *tl_monotype_integer_c_min(tl_monotype *self) {
     if (!tl_monotype_is_inst(self)) return NULL;
-    str n = self->cons_inst->def->name;
-    if (str_eq(n, S("CSignedChar"))) return "SCHAR_MIN";
-    if (str_eq(n, S("CShort"))) return "SHRT_MIN";
-    if (str_eq(n, S("CInt"))) return "INT_MIN";
-    if (str_eq(n, S("CLong"))) return "LONG_MIN";
-    if (str_eq(n, S("CLongLong"))) return "LLONG_MIN";
-    if (str_eq(n, S("Int"))) return "LLONG_MIN"; // alias for CLongLong
-    if (str_eq(n, S("CInt8"))) return "INT8_MIN";
-    if (str_eq(n, S("CInt16"))) return "INT16_MIN";
-    if (str_eq(n, S("CInt32"))) return "INT32_MIN";
-    if (str_eq(n, S("CInt64"))) return "INT64_MIN";
-    if (str_eq(n, S("CPtrDiff"))) return "PTRDIFF_MIN";
-    if (str_eq(n, S("CChar"))) return "CHAR_MIN";
-    return NULL; // unsigned types have no MIN (implicitly 0)
+    return self->cons_inst->def->c_min_macro;
 }
 
 char const *tl_monotype_integer_c_max(tl_monotype *self) {
     if (!tl_monotype_is_inst(self)) return NULL;
-    str n = self->cons_inst->def->name;
-    if (str_eq(n, S("CSignedChar"))) return "SCHAR_MAX";
-    if (str_eq(n, S("CShort"))) return "SHRT_MAX";
-    if (str_eq(n, S("CInt"))) return "INT_MAX";
-    if (str_eq(n, S("CLong"))) return "LONG_MAX";
-    if (str_eq(n, S("CLongLong"))) return "LLONG_MAX";
-    if (str_eq(n, S("Int"))) return "LLONG_MAX"; // alias for CLongLong
-    if (str_eq(n, S("CUnsignedChar"))) return "UCHAR_MAX";
-    if (str_eq(n, S("Byte"))) return "UCHAR_MAX"; // alias for CUnsignedChar
-    if (str_eq(n, S("CUnsignedShort"))) return "USHRT_MAX";
-    if (str_eq(n, S("CUnsignedInt"))) return "UINT_MAX";
-    if (str_eq(n, S("CUnsignedLong"))) return "ULONG_MAX";
-    if (str_eq(n, S("CUnsignedLongLong"))) return "ULLONG_MAX";
-    if (str_eq(n, S("UInt"))) return "ULLONG_MAX"; // alias for CUnsignedLongLong
-    if (str_eq(n, S("CInt8"))) return "INT8_MAX";
-    if (str_eq(n, S("CInt16"))) return "INT16_MAX";
-    if (str_eq(n, S("CInt32"))) return "INT32_MAX";
-    if (str_eq(n, S("CInt64"))) return "INT64_MAX";
-    if (str_eq(n, S("CUInt8"))) return "UINT8_MAX";
-    if (str_eq(n, S("CUInt16"))) return "UINT16_MAX";
-    if (str_eq(n, S("CUInt32"))) return "UINT32_MAX";
-    if (str_eq(n, S("CUInt64"))) return "UINT64_MAX";
-    if (str_eq(n, S("CSize"))) return "SIZE_MAX";
-    if (str_eq(n, S("CPtrDiff"))) return "PTRDIFF_MAX";
-    if (str_eq(n, S("CChar"))) return "CHAR_MAX";
-    return NULL;
+    return self->cons_inst->def->c_max_macro;
 }
 
 int tl_monotype_is_unsigned_family(tl_monotype *self) {
@@ -3079,23 +3069,10 @@ int tl_monotype_integer_value_fits(tl_monotype *type, i64 val) {
 }
 
 static int integer_value_fits(tl_type_constructor_def *def, i64 val) {
-    str n = def->name;
-    // Signed types
-    if (str_eq(n, S("CSignedChar")) || str_eq(n, S("CInt8"))) return val >= -128 && val <= 127;
-    if (str_eq(n, S("CShort")) || str_eq(n, S("CInt16"))) return val >= -32768 && val <= 32767;
-    if (str_eq(n, S("CInt")) || str_eq(n, S("CInt32"))) return val >= -2147483648LL && val <= 2147483647LL;
-    if (str_eq(n, S("CLong")) || str_eq(n, S("CInt64")) || str_eq(n, S("CLongLong")) ||
-        str_eq(n, S("CPtrDiff")))
-        return 1; // full i64 range always fits
-    // Unsigned types
-    if (str_eq(n, S("CUnsignedChar")) || str_eq(n, S("CUInt8"))) return val >= 0 && val <= 255;
-    if (str_eq(n, S("CUnsignedShort")) || str_eq(n, S("CUInt16"))) return val >= 0 && val <= 65535;
-    if (str_eq(n, S("CUnsignedInt")) || str_eq(n, S("CUInt32"))) return val >= 0 && val <= 4294967295LL;
-    if (str_eq(n, S("CUnsignedLong")) || str_eq(n, S("CUInt64")) || str_eq(n, S("CUnsignedLongLong")) ||
-        str_eq(n, S("CSize")))
-        return val >= 0; // unsigned 64-bit: any non-negative i64 fits
-    if (str_eq(n, S("CChar"))) return val >= -128 && val <= 127; // conservative: treat as signed char
-    return 1;                                                    // unknown type: assume fits
+    if (!def->has_integer_range) return 1; // full-range or non-integer: always fits
+    if (def->integer_min_value < 0)        // signed range (includes CChar: conservative signed treatment)
+        return val >= def->integer_min_value && val <= (i64)def->integer_max_value;
+    return val >= 0 && (u64)val <= def->integer_max_value;
 }
 
 // Unify when one side is a weak integer variable (tl_weak_int_signed or tl_weak_int_unsigned)
