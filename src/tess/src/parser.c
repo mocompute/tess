@@ -164,9 +164,6 @@ static void          mangle_name_for_arity(parser *self, ast_node *name, u8 arit
 static void          unmangle_name(parser *, ast_node *);
 static str           next_var_name(parser *);
 
-static str           tagged_union_tag_name(parser *, ast_node *);
-static str           tagged_union_union_name(parser *, ast_node *);
-
 static void          tokens_push_back(struct parser *, struct token *);
 static void          tokens_shrink(struct parser *, u32);
 static int           too_many_arguments(parser *);
@@ -1463,46 +1460,23 @@ static int operator_precedence(char const *op, int is_prefix) {
     };
     static struct item const infix[] = {
 
-      {"=", 5},
-      {"+=", 5},
-      {"-=", 5},
-      {"*=", 5},
-      {"/=", 5},
-      {"%=", 5},
+      {"=", 5},   {"+=", 5},   {"-=", 5},  {"*=", 5}, {"/=", 5}, {"%=", 5},
 
-      {"<<=", 5},
-      {">>=", 5},
-      {"&=", 5},
-      {"^=", 5},
-      {"|=", 5},
+      {"<<=", 5}, {">>=", 5},  {"&=", 5},  {"^=", 5}, {"|=", 5},
 
-      {"||", 10},
-      {"&&", 20},
-      {"|", 30},
-      {"&", 40},
+      {"||", 10}, {"&&", 20},  {"|", 30},  {"&", 40},
 
-      {"::", 50},
-      {"==", 50},
-      {"!=", 50},
+      {"::", 50}, {"==", 50},  {"!=", 50},
 
-      {"<", 60},
-      {"<=", 60},
-      {">=", 60},
-      {">", 60},
+      {"<", 60},  {"<=", 60},  {">=", 60}, {">", 60},
 
-      {"<<", 70},
-      {">>", 70},
+      {"<<", 70}, {">>", 70},
 
-      {"+", 80},
-      {"-", 80},
+      {"+", 80},  {"-", 80},
 
-      {"*", 90},
-      {"/", 90},
-      {"%", 90},
+      {"*", 90},  {"/", 90},   {"%", 90},
 
-      {".", 110},
-      {"->", 110},
-      {"[", 110},
+      {".", 110}, {"->", 110}, {"[", 110},
 
       {null, 0},
     };
@@ -1636,8 +1610,6 @@ static ast_node *parse_case_expr(parser *self) {
     // look for optional union type for destructure expression. Exclusive with predicate, however.
     ast_node *union_type   = null;
     str       union_module = str_empty();
-    str       tag_name     = str_empty();
-    str       union_name   = str_empty();
     if (!bin_pred) {
         if (0 == a_try(self, a_type_annotation)) {
             // case s: Foo.Shape { c: Circle { ... } ... }
@@ -1647,12 +1619,6 @@ static ast_node *parse_case_expr(parser *self) {
             // Must be a symbol: other type annotations e.g. arrows and nfas are not permitted.
             if (!ast_node_is_symbol(union_type)) goto begin_body;
             union_module = union_type->symbol.module;
-
-            tag_name     = tagged_union_tag_name(self, union_type);
-            union_name   = tagged_union_union_name(self, union_type);
-            // FIXME: not yet implemented
-            (void)tag_name;
-            (void)union_name;
         }
     }
 
@@ -2133,12 +2099,6 @@ static int symbol_is_module_function(parser *self, ast_node *name, u8 arity) {
     return str_hset_contains(module_syms, mangled_name);
 }
 
-static str unmangled_name(ast_node *name) {
-    if (!ast_node_is_symbol(name)) return str_empty();
-    if (!name->symbol.is_mangled) return name->symbol.name;
-    return name->symbol.original;
-}
-
 static str mangle_str_for_module(parser *self, str name, str module) {
     str safe_module = str_replace_char_str(self->ast_arena, module, '.', S("__"));
     return str_cat_3(self->ast_arena, safe_module, S("__"), name);
@@ -2146,22 +2106,6 @@ static str mangle_str_for_module(parser *self, str name, str module) {
 
 str mangle_str_for_arity(allocator *alloc, str name, u8 arity) {
     return str_fmt(alloc, "%s__%i", str_cstr(&name), (int)arity);
-}
-
-static str tagged_union_tag_name(parser *self, ast_node *tu_name) {
-    str unmangled = unmangled_name(tu_name);
-    if (str_is_empty(unmangled)) return unmangled;
-
-    str tag_name = str_cat_3(self->ast_arena, S("__"), unmangled, S("__Tag_"));
-    return mangle_str_for_module(self, tag_name, tu_name->symbol.module);
-}
-
-static str tagged_union_union_name(parser *self, ast_node *tu_name) {
-    str unmangled = unmangled_name(tu_name);
-    if (str_is_empty(unmangled)) return unmangled;
-
-    str tag_name = str_cat_3(self->ast_arena, S("__"), unmangled, S("__Union_"));
-    return mangle_str_for_module(self, tag_name, tu_name->symbol.module);
 }
 
 static void mangle_name_for_module(parser *self, ast_node *name, str module) {
@@ -3059,8 +3003,7 @@ static int toplevel_hash(parser *self) {
 
 static int toplevel_type_alias(parser *self) {
     ast_node *name = null;
-    // FIXME: this accepts funcalls as alias names, but we may not want to support that.
-    if (0 == a_try(self, a_funcall) || 0 == a_try(self, a_attributed_identifier)) name = self->result;
+    if (0 == a_try(self, a_attributed_identifier)) name = self->result;
     else return 1;
     if (a_try(self, a_equal_sign)) return 1;
 
