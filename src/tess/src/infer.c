@@ -1592,8 +1592,8 @@ static int infer_binary_op(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
         if (tl_monotype_has_ptr(left->type->type)) {
             tl_monotype *target = tl_monotype_ptr_target(left->type->type);
             if (constrain_pm(self, node->type, target, node, TL_UNIFY_SYMMETRIC)) return 1;
-        } else if (tl_monotype_is_inst_of(left->type->type, S("CArray"))) {
-            tl_monotype *target = left->type->type->cons_inst->args.v[0];
+        } else if (tl_monotype_is_carray(left->type->type)) {
+            tl_monotype *target = tl_monotype_carray_element(left->type->type);
             if (constrain_pm(self, node->type, target, node, TL_UNIFY_SYMMETRIC)) return 1;
         }
 
@@ -1881,7 +1881,7 @@ static int infer_let_in(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
             int skip = 0;
             if (is_cast && !is_integer_cast && value_type) {
                 tl_polytype_substitute(self->arena, value_type, self->subs);
-                skip = tl_monotype_is_inst_of(value_type->type, S("CArray"));
+                skip = tl_monotype_is_carray(value_type->type);
             }
             if (is_integer_cast) {
                 skip = 1;
@@ -3032,8 +3032,8 @@ static int infer_struct_access(tl_infer *self, ast_node *node) {
                 } else {
                     if (constrain_pm(self, right->type, field_type, node, TL_UNIFY_SYMMETRIC)) return 1;
 
-                    if (tl_monotype_is_inst_of(field_type, S("CArray"))) {
-                        tl_monotype *target   = field_type->cons_inst->args.v[0];
+                    if (tl_monotype_is_carray(field_type)) {
+                        tl_monotype *target   = tl_monotype_carray_element(field_type);
                         tl_monotype *ptr_type = tl_type_registry_ptr(self->registry, target);
                         if (constrain_pm(self, node->type, ptr_type, node, TL_UNIFY_SYMMETRIC)) return 1;
                     } else {

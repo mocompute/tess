@@ -181,10 +181,24 @@ int                    tl_monotype_is_concrete_no_arrow(tl_monotype *); // const
 int                    tl_monotype_is_concrete_no_weak(tl_monotype *);
 int                    tl_monotype_sized_is_concrete_no_weak(tl_monotype_sized);
 int                    tl_monotype_is_arrow(tl_monotype *);
+
+// -- Pointer, Const, and CArray type queries --
+//
+// Ptr(T):       single-indirection pointer. Target via ptr_target().
+// Const(T):     const wrapper. Transparent in unification; meaningful
+//               only inside Ptr (Ptr(Const(T)) -> "const T*" in C).
+// CArray(T,N):  fixed-size C array. Element via carray_element(),
+//               count via carray_count(). Decays to Ptr(T) in values.
+// has_ptr()     traverses Union variants; is_ptr() does not.
+// ptr_target()  works on Ptr, PtrOrNull, and Union containing Ptr.
+
 int                    tl_monotype_is_ptr(tl_monotype *);
 int                    tl_monotype_is_const(tl_monotype *);
 tl_monotype           *tl_monotype_const_target(tl_monotype *);
 int                    tl_monotype_is_ptr_to_const(tl_monotype *);
+int                    tl_monotype_is_carray(tl_monotype *);
+tl_monotype           *tl_monotype_carray_element(tl_monotype *);
+i32                    tl_monotype_carray_count(tl_monotype *);
 int                    tl_monotype_is_unary(tl_monotype *);
 int                    tl_monotype_arrow_has_arrow(tl_monotype *);
 int                    tl_monotype_has_ptr(tl_monotype *);
@@ -213,7 +227,6 @@ void                   tl_monotype_ptr_set_target(tl_monotype *, tl_monotype *);
 tl_monotype           *tl_monotype_arrow_args(tl_monotype *);
 tl_monotype_sized      tl_monotype_arrow_get_args(tl_monotype *);
 i32                    tl_monotype_type_constructor_field_index(tl_monotype *, str);
-int                    tl_monotype_is_string(tl_monotype *);
 int                    tl_monotype_is_ptr_to_char(tl_monotype *);
 int                    tl_monotype_is_ptr_to_tv(tl_monotype *);
 i32                    tl_monotype_integer(tl_monotype *);

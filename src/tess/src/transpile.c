@@ -1884,7 +1884,7 @@ static str generate_binary_op(transpile *self, tl_monotype *type, ast_node const
     // When accessing a CArray struct field, generate the left operand as an lvalue to avoid copying
     // the struct into a temporary. Otherwise the CArray decays to a pointer into the dead temporary.
     int carray_field = is_struct_access_operator(str_cstr(&op)) && node->binary_op.right->type &&
-                       tl_monotype_is_inst_of(node->binary_op.right->type->type, S("CArray"));
+                       tl_monotype_is_carray(node->binary_op.right->type->type);
 
     int save_lvalue = ctx->want_lvalue;
     if (carray_field) ctx->want_lvalue = 1;
@@ -2413,9 +2413,9 @@ static void generate_decl(transpile *self, str name, tl_monotype *type) {
 
     else if (tl_cons_inst == type->tag) {
         // Special case for CArray(T, N) - emit as T name[N]
-        if (tl_monotype_is_inst_of(type, S("CArray")) && type->cons_inst->args.size == 2) {
-            str typec = type_to_c_mono(self, type->cons_inst->args.v[0]);
-            i32 count = tl_monotype_integer(type->cons_inst->args.v[1]);
+        if (tl_monotype_is_carray(type)) {
+            str typec = type_to_c_mono(self, tl_monotype_carray_element(type));
+            i32 count = tl_monotype_carray_count(type);
             str line  = str_fmt(self->transient, "%s %s[%i];\n", str_cstr(&typec), str_cstr(&name), count);
             cat(self, line);
             return;
@@ -2750,6 +2750,25 @@ static int should_generate(transpile *self, str name, tl_polytype *type) {
     return 1;
 }
 
+static str type_to_c(transpile *self, tl_polytype *type);
+
+static str render_ptr_to_c(transpile *self, tl_monotype *mono) {
+    str ptr_arrow = ptr_to_arrow_to_c(self, mono);
+    if (!str_is_empty(ptr_arrow)) return ptr_arrow;
+
+    tl_monotype *arg = tl_monotype_ptr_target(mono);
+    if (tl_monotype_is_const(arg)) {
+        tl_monotype *inner = tl_monotype_const_target(arg);
+        tl_polytype  wrap  = tl_polytype_wrap(inner);
+        str          typec = type_to_c(self, &wrap);
+        return str_cat_3(self->transient, S("const "), typec, S("*"));
+    }
+
+    tl_polytype wrap  = tl_polytype_wrap(arg);
+    str         typec = type_to_c(self, &wrap);
+    return str_cat(self->transient, typec, S("*"));
+}
+
 static str type_to_c(transpile *self, tl_polytype *type) {
     if (type->quantifiers.size) fatal("type scheme");
     tl_monotype *mono = type->type;
@@ -2760,23 +2779,7 @@ static str type_to_c(transpile *self, tl_polytype *type) {
         if (!str_is_empty(mono->cons_inst->def->c_type_name)) {
             return mono->cons_inst->def->c_type_name;
         } else if (tl_monotype_is_ptr(mono)) {
-            // Special case for Ptr(..(Arrow)..) -> int (**...*)(int) format
-            str ptr_arrow = ptr_to_arrow_to_c(self, mono);
-            if (!str_is_empty(ptr_arrow)) return ptr_arrow;
-
-            // Ptr(Const(T)) -> const T*
-            tl_monotype *arg = tl_monotype_ptr_target(mono);
-            if (tl_monotype_is_const(arg)) {
-                tl_monotype *inner = tl_monotype_const_target(arg);
-                tl_polytype  wrap  = tl_polytype_wrap(inner);
-                str          typec = type_to_c(self, &wrap);
-                return str_cat_3(self->transient, S("const "), typec, S("*"));
-            }
-
-            // Normal Ptr handling for non-arrow targets
-            tl_polytype wrap  = tl_polytype_wrap(arg);
-            str         typec = type_to_c(self, &wrap);
-            return str_cat(self->transient, typec, S("*"));
+            return render_ptr_to_c(self, mono);
         }
 
         else if (tl_monotype_is_const(mono)) {
@@ -2786,9 +2789,9 @@ static str type_to_c(transpile *self, tl_polytype *type) {
             return type_to_c(self, &wrap);
         }
 
-        else if (str_eq(S("CArray"), cons_name) && mono->cons_inst->args.size == 2) {
+        else if (tl_monotype_is_carray(mono)) {
             // CArray(T, N) renders as T* (decayed pointer)
-            tl_monotype *element = mono->cons_inst->args.v[0];
+            tl_monotype *element = tl_monotype_carray_element(mono);
             tl_polytype  wrap_el = tl_polytype_wrap(element);
             str          typec   = type_to_c(self, &wrap_el);
             return str_cat(self->transient, typec, S("*"));
@@ -2833,23 +2836,7 @@ static str type_to_c(transpile *self, tl_polytype *type) {
     } else if (tl_monotype_is_tv(mono)) {
         return S("/*tv*/void");
     } else if (tl_monotype_is_ptr(mono)) {
-        // Special case for Ptr(..(Arrow)..) -> int (**...*)(int) format
-        str ptr_arrow = ptr_to_arrow_to_c(self, mono);
-        if (!str_is_empty(ptr_arrow)) return ptr_arrow;
-
-        // Ptr(Const(T)) -> const T*
-        tl_monotype *arg = tl_monotype_ptr_target(mono);
-        if (tl_monotype_is_const(arg)) {
-            tl_monotype *inner = tl_monotype_const_target(arg);
-            tl_polytype  wrap  = tl_polytype_wrap(inner);
-            str          typec = type_to_c(self, &wrap);
-            return str_cat_3(self->transient, S("const "), typec, S("*"));
-        }
-
-        // Normal Ptr handling for non-arrow targets
-        tl_polytype wrap  = tl_polytype_wrap(arg);
-        str         typec = type_to_c(self, &wrap);
-        return str_cat(self->transient, typec, S("*"));
+        return render_ptr_to_c(self, mono);
     }
 
     else {
@@ -2858,9 +2845,6 @@ static str type_to_c(transpile *self, tl_polytype *type) {
         if (self->verbose) fprintf(stderr, "can't render a type variable: %s\n", str_cstr(&tmp));
         return S("/*untyped*/void*");
     }
-
-    // else
-    //     fatal("can't render a type variable");
 }
 static str type_to_c_mono(transpile *self, tl_monotype *type) {
     tl_polytype wrap = tl_polytype_wrap((tl_monotype *)type);

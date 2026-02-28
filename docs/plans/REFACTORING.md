@@ -417,7 +417,23 @@ with field accesses. Net -102 lines. All 310 tests pass (release, debug, ASAN).
 
 ---
 
-### Session 10: Consolidate `main()` Special Cases
+### Session 10: CArray Helpers and Ptr Deduplication ✓ DONE
+
+**Target:** type.h, type.c, infer.c, transpile.c
+**Branch:** wip-refactor
+
+Added `tl_monotype_is_carray`, `tl_monotype_carray_element`, `tl_monotype_carray_count`
+helpers (matching the existing Ptr/Const pattern). Replaced 5 inline
+`tl_monotype_is_inst_of(x, S("CArray"))` + raw `cons_inst->args.v[0]` accesses with
+the new helpers (3 in infer.c, 2 in transpile.c, plus 1 `is_carray`-only check).
+Extracted `render_ptr_to_c()` to deduplicate two identical 15-line Ptr rendering blocks
+in `type_to_c()`. Removed dead `tl_monotype_is_string` declaration from type.h. Added
+doc comment for the Ptr/Const/CArray helper group. All 310 tests pass (release, debug,
+ASAN).
+
+---
+
+### Session 11: Consolidate `main()` Special Cases
 
 **Target:** parser.c, infer.c, transpile.c
 **Risk:** Low
@@ -435,7 +451,7 @@ with field accesses. Net -102 lines. All 310 tests pass (release, debug, ASAN).
 
 ---
 
-### Session 11: Reduce Tagged Union Special-Casing
+### Session 12: Reduce Tagged Union Special-Casing
 
 **Target:** transpile.c primarily, infer.c secondarily
 **Risk:** Moderate

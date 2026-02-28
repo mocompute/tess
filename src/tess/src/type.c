@@ -2068,6 +2068,19 @@ int tl_monotype_is_ptr_or_null(tl_monotype *self) {
 int tl_monotype_is_union(tl_monotype *self) {
     return tl_monotype_is_inst_of(self, S("Union"));
 }
+int tl_monotype_is_carray(tl_monotype *self) {
+    return tl_monotype_is_inst_of(self, S("CArray"));
+}
+tl_monotype *tl_monotype_carray_element(tl_monotype *self) {
+    assert(tl_monotype_is_carray(self));
+    assert(self->cons_inst->args.size == 2);
+    return self->cons_inst->args.v[0];
+}
+i32 tl_monotype_carray_count(tl_monotype *self) {
+    assert(tl_monotype_is_carray(self));
+    assert(self->cons_inst->args.size == 2);
+    return tl_monotype_integer(self->cons_inst->args.v[1]);
+}
 int tl_monotype_has_ptr(tl_monotype *self) {
     if (!tl_monotype_is_inst(self)) return 0;
     if (tl_monotype_is_union(self)) {
