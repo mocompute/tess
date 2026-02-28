@@ -243,7 +243,7 @@ function(tl_create_runtime_fail_test NAME)
   )
   add_custom_target(${TEST_NAME} ALL DEPENDS ${TEST_EXE})
   add_test(NAME ${TEST_NAME}
-    COMMAND ${TEST_EXE}
+    COMMAND ${CMAKE_COMMAND} -E env ${TEST_EXE}
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
   )
   set_tests_properties(${TEST_NAME} PROPERTIES
