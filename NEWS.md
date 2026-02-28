@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
-## [Unreleased] - 2026-02-23 to 2026-02-27 (981ea8c5..5ba6d8ad)
+## [Unreleased] - 2026-02-23 to 2026-02-28 (981ea8c5..c98a9048)
 
 ### Highlights
 
@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Seven integer sub-chains with width ordering replace the old bidirectional same-family unification
 - Directional unification in the type checker (expected/actual semantics) for integer type checking
 - Debug-mode runtime bounds checking on narrowing casts
+- Tagged union cleanup: scoped construction always returns the union type, make functions and existing-type variants removed
 - `Unsafe` integer conversion functions removed in favor of the let-in annotation syntax
 
 ### Added
@@ -23,15 +24,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - **Directional Unification**: The type checker now distinguishes expected (target) and actual (source) types in integer comparisons. Three modes: `SYMMETRIC` (legacy, no directional checking), `DIRECTED` (widening OK, narrowing rejected), and `EXACT` (same concrete type required). Function parameters, return types, let-in bindings, and assignments use `DIRECTED`; operators, conditionals, and generic type variables use `EXACT`.
 - **Integer Cast Annotations**: The existing let-in type annotation mechanism (previously used for pointer casts) is generalized to all integer type conversions. Writing `narrow: CInt := int_val` performs an explicit narrowing cast; `fixed: CInt32 := cint_val` performs a cross-chain cast. This is the only syntax for explicit conversion — no `as` keyword or cast function.
 - **Debug Bounds Checking**: In debug mode, narrowing conversions emit a runtime bounds check (`_tl_assert_bounds_`) before the C cast that verifies the value fits in the target type's range. Controlled by optimization mode (on for debug, off for release).
-- **Compile-Time Literal Overflow Detection**: When a weak literal resolves to a concrete type, the compiler checks that the literal value fits in the target type's range, producing a compile-time error on overflow.
-- **30+ New Tests**: Comprehensive test coverage including implicit widening, narrowing rejection, cross-chain rejection, cross-family rejection, cast annotations, weak literal resolution, `z`/`zu` literals, operator exact match, conditional exact match, generic exact match, bounds checking, and literal overflow.
+- **Compile-Time Literal Overflow Detection**: When a weak literal resolves to a concrete type, the compiler checks that the literal value fits in the target type's range, producing a compile-time error on overflow. Correctly handles negative literals (e.g., `-129` rejected for `CInt8`).
+- **Tagged Union Tests**: New tests for scoped construction (`Shape.Circle(radius = 2.0)` returning `Shape`), cross-module positional construction, `when`/case with type annotations, generic scoped variants, bare-symbol scoped variants (`Op.A`), and multi-union-same-module scenarios.
+- **30+ New Integer Tests**: Comprehensive test coverage including implicit widening, narrowing rejection, cross-chain rejection, cross-family rejection, cast annotations, weak literal resolution, `z`/`zu` literals, operator exact match, conditional exact match, generic exact match, bounds checking, literal overflow, and compound assignment type matching.
+- **Tagged Union Parser Documentation**: New `docs/TAGGED_UNION_PARSER.md` documenting the three construction code paths, critical parser invariants, and the historical dead-code bug to prevent recurrence.
 
 ### Changed
 
 - **Integer Unification is Now Directional (Breaking Change)**: Integer types no longer unify freely within the same family. Narrowing conversions (e.g., `Int` to `CInt`) and cross-chain conversions (e.g., `CInt` to `CInt32`) now require explicit let-in annotation casts. Existing code that relied on implicit narrowing or cross-chain conversion will need annotations added.
 - **Operators Require Exact Type Match (Breaking Change)**: Arithmetic and comparison operators now require both operands to have the exact same integer type. `a: CInt + b: CShort` is a type error; widen explicitly or use weak literals.
+- **Compound Assignment Requires Exact Type Match (Breaking Change)**: Compound assignment operators (`+=`, `-=`, etc.) now enforce that the RHS type exactly matches the LHS type, consistent with regular binary operators.
 - **Conditionals and Case Arms Require Exact Type Match (Breaking Change)**: All branches of `if`/`else` and `when`/`case` expressions must have the exact same integer type.
 - **Generic Type Variables Require Exact Match**: When a type variable `T` is bound to a concrete integer type, all other uses of `T` must match exactly — no implicit widening through generics.
+- **Tagged Union Scoped Construction Returns Union Type (Breaking Change)**: `Shape.Circle(radius = 2.0)` now returns `Shape` (the parent union type) instead of the bare variant struct `Shape__Circle`. All construction paths — unscoped (`Circle(2.0)`), scoped (`Shape.Circle(...)`), and bare-symbol (`Op.A`) — consistently return the union type.
 - **Standard Library Uses `UInt` Internally**: Tess-level code now uses `UInt` for sizes and counts, with `CSize` reserved for C FFI boundaries. Standard library bindings updated accordingly.
 - **`stdint.h` Always Included**: The transpiler now always includes `<stdint.h>` since fixed-width types (`int8_t`, `uint64_t`, etc.) are built-in to the type system.
 - **Test `main()` Returns `CInt`**: Test files updated to use `CInt` return type for `main()` (matching C convention) with explicit narrowing casts where needed.
@@ -39,6 +44,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Removed
 
 - **`Unsafe.unsigned_to_signed` and `Unsafe.signed_to_unsigned`**: Removed in favor of the let-in annotation syntax for cross-family integer conversions (e.g., `signed: Int := unsigned_val`).
+- **Tagged Union Make Functions**: Removed per-variant `make_Shape_Circle` wrapper functions. Scoped construction (`Shape.Circle(...)`) now handles this directly.
+- **Existing-Type Variants**: Removed support for using existing types as tagged union variants (`| Foo.Special` syntax). Variants are now always defined inline within the union declaration.
+
+### Fixed
+
+- **Unused Type Parameter False Positive**: `annotation_uses_type_param()` now recurses into arrow and tuple type nodes, fixing false "unused type parameter" errors on generic structs with function-pointer fields (e.g., `Processor[T] : { process: (T) -> T }`).
+- **Negative Literal Overflow Detection**: Compile-time range checking now correctly handles negative literals (e.g., `-129` for `CInt8`), which were previously missed because the check only ran on positive values.
 
 
 ## [Unreleased] - 2026-02-16 to 2026-02-16 (51575693..ac4f2b5d)
