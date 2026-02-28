@@ -215,10 +215,55 @@ understand any one case in isolation.
 ## Refactoring Sessions
 
 Each session is designed to be completable independently, with `make -j test` validating
-the result. Sessions are ordered by a combination of value and safety — early sessions
-build confidence with lower-risk changes before tackling the larger structural work.
+the result. Sessions are ordered by a combination of value and safety — low-risk cleanup
+sessions come first to build confidence, followed by the higher-risk structural splits.
 
-### Session 1: Parser Deduplication
+### Completed Sessions
+
+#### Data-Driven Type-to-C Mapping ✓ DONE (originally Session 9)
+
+**Target:** transpile.c, type.c, type.h
+**Commit:** acc7defa (wip-refactor)
+
+Extended `tl_type_constructor_def` with `c_type_name`, `c_min_macro`, `c_max_macro`,
+`integer_min_value`, `integer_max_value`, and `has_integer_range` fields. Populated them
+from the `builtin_nullary[]` table. Replaced ~104 `str_eq` calls across 5 functions
+(`integer_value_fits`, `integer_c_min`, `integer_c_max`, `type_to_c`, `is_c_exportable_type`)
+with field accesses. Net -102 lines. All 310 tests pass (release, debug, ASAN).
+
+#### CArray Helpers and Ptr Deduplication ✓ DONE (originally Session 10)
+
+**Target:** type.h, type.c, infer.c, transpile.c
+**Branch:** wip-refactor
+
+Added `tl_monotype_is_carray`, `tl_monotype_carray_element`, `tl_monotype_carray_count`
+helpers (matching the existing Ptr/Const pattern). Replaced 5 inline
+`tl_monotype_is_inst_of(x, S("CArray"))` + raw `cons_inst->args.v[0]` accesses with
+the new helpers (3 in infer.c, 2 in transpile.c, plus 1 `is_carray`-only check).
+Extracted `render_ptr_to_c()` to deduplicate two identical 15-line Ptr rendering blocks
+in `type_to_c()`. Removed dead `tl_monotype_is_string` declaration from type.h. Added
+doc comment for the Ptr/Const/CArray helper group. All 310 tests pass (release, debug,
+ASAN).
+
+#### Reduce Tagged Union Special-Casing ✓ DONE (originally Session 12)
+
+**Target:** ast.h, parser.c, infer.c, transpile.c
+**Branch:** wip-refactor
+
+Added `AST_TAGGED_UNION_TAG_FIELD`/`AST_TAGGED_UNION_UNION_FIELD` constants to ast.h,
+replacing 11 magic string sites across parser.c (4), infer.c (4), and transpile.c (3).
+Extracted `tagged_union_variant_poly()` in infer.c to deduplicate Ptr-wrapping for
+mutable union bindings (2 sites). Extracted `tagged_union_wrapper_fields()` in
+transpile.c to deduplicate field-lookup loops (2 sites). Fixed `is_union_struct()` static
+inconsistency (made definition static, removed redundant forward declaration). Reviewed
+`is_union` struct promotion and mutable/value uniformity — concluded current design is
+already well-factored after these changes. All 310 tests pass (release, debug, ASAN).
+
+---
+
+### Remaining Sessions (in execution order)
+
+#### Session 1: Parser Deduplication
 
 **Target:** parser.c
 **Risk:** Low
@@ -244,7 +289,7 @@ tests.
 
 ---
 
-### Session 2: Silence the Safe FIXMEs
+#### Session 2: Silence the Safe FIXMEs
 
 **Target:** infer.c, transpile.c, type.c, parser.c
 **Risk:** Low
@@ -268,7 +313,92 @@ Candidates (representative, not exhaustive):
 
 ---
 
-### Session 3: Split infer.c — Extract Specialization
+#### Session 3: Parser Structural Cleanup
+
+**Target:** parser.c
+**Risk:** Low-Moderate
+**Goal:** Address remaining parser FIXMEs and improve structural organization.
+
+Moved before the infer.c splits — cleaning up parser.c while it's stable reduces noise
+in later sessions that touch cross-file boundaries.
+
+Candidates:
+
+- **Line 918:** Arity-qualified names accepted in places they shouldn't be — add
+  validation or restrict parsing context.
+- **Line 1164:** Ellipsis accepted via recursion where it shouldn't be — add guard.
+- **Line 1448:** Tokens not yet supported by tokenizer — either implement or emit clear
+  error.
+- **Line 1629:** Feature not yet implemented — implement or emit clear error.
+- **Line 3054:** Funcalls as alias names — decide whether to support and either implement
+  properly or reject.
+
+**Validation:** `make -j test` — rejection tests (`test_fail_*.tl`) specifically cover
+parser error cases.
+
+---
+
+#### Session 4: Transpile Cleanup
+
+**Target:** transpile.c
+**Risk:** Low
+**Goal:** Address transpile.c FIXMEs and reduce string-building fragility.
+
+Moved before the infer.c splits for the same reason as Session 3 — clean up transpile.c
+while it's stable.
+
+- Remove dead code (`std_` prefix check at line 2714 if confirmed unused)
+- Fix source location tracking (line 1123)
+- Replace `FIXME_generate_expr` placeholder (lines 2324-2325) with proper error
+- Add missing error reporting (line 3166)
+- Consider extracting type-to-C conversion helpers into a focused helper section
+
+**Validation:** Full test suite. Generated C code correctness is validated by the
+integration tests actually compiling and running the output.
+
+---
+
+#### Session 5: Consolidate Cast Annotation Logic
+
+**Target:** infer.c
+**Risk:** Moderate
+**Goal:** Consolidate the five `is_cast` / `is_cast_annotation` forking paths into a
+coherent subsystem before the infer.c splits scatter them across files.
+
+The `is_cast` flag currently creates parallel inference paths at five sites within infer.c
+(see cross-cutting concern #4). If infer.c is split first, these sites end up distributed
+across specialize.c and infer_traverse.c, making future consolidation harder. Doing this
+before the split keeps all five sites in one file.
+
+**Sites to consolidate:**
+
+| Location | Forking behavior |
+|----------|-----------------|
+| infer.c:1861 | Cast flag detected, suppresses unification errors |
+| infer.c:1878 | Sub-flag: `is_integer_cast` for integer-specific handling |
+| infer.c:1909 | Weak int + cast annotation: constrain to annotation type |
+| infer.c:2022 | Cast annotation in struct field: permissive constraint |
+| infer.c:3924 | Cast annotation in specialize_user_type: use annotation type |
+
+**Approach options (to be decided during session):**
+
+1. **Extract helper functions.** Pull the cast-specific constraint logic into named
+   helpers (e.g., `apply_cast_constraint()`, `cast_specialize_user_type()`) so each call
+   site becomes a single function call rather than an inline fork.
+
+2. **AST transformation pass.** Rewrite cast annotations as explicit conversion nodes
+   before inference, eliminating the flag entirely. More ambitious but cleaner — inference
+   would never see `is_cast` at all.
+
+3. **Hybrid.** Extract helpers now (option 1) to make the split clean, defer the
+   transformation pass (option 2) to a future session if warranted.
+
+**Validation:** `make -j test`, `make CONFIG=debug -j test`. Cast behavior is exercised
+by `test_cast.tl` and integer cast tests.
+
+---
+
+#### Session 6: Split infer.c — Extract Specialization
 
 **Target:** infer.c → infer.c + specialize.c
 **Risk:** Moderate
@@ -305,17 +435,17 @@ registry, toplevels hashmap, instance cache, arenas). This is already bundled in
 
 ---
 
-### Session 4: Split infer.c — Extract Traversal
+#### Session 7: Split infer.c — Extract Traversal
 
 **Target:** infer.c → infer.c + infer_traverse.c
 **Risk:** Moderate
 **Goal:** Extract the AST traversal/visitor callbacks into their own file.
 
-After Session 3 removes specialization, the remaining infer.c should be around 4000-4500
+After Session 6 removes specialization, the remaining infer.c should be around 4000-4500
 lines. The traversal callbacks (`infer_traverse_cb`, `infer_named_function_application`,
 `infer_let_in`, `infer_case`, etc.) form another natural module.
 
-**Steps:** Same pattern as Session 3 — identify functions, shared helpers, move, update
+**Steps:** Same pattern as Session 6 — identify functions, shared helpers, move, update
 build files.
 
 **Post-state:** infer.c should be under 2500 lines, containing core constraint generation
@@ -325,12 +455,15 @@ and unification orchestration.
 
 ---
 
-### Session 5: Extract Integer Type Subsystem
+#### Session 8: Extract Integer Type Subsystem
 
 **Target:** type.c → type.c + type_integers.c
 **Risk:** Moderate
 **Goal:** Pull the integer sub-chain logic, weak int handling, narrowness checks, and
 integer family comparison into a dedicated file.
+
+Must come after the infer.c splits (Sessions 6-7) because weak integer handling has
+tendrils in infer.c — the final file structure needs to be settled first.
 
 The integer type system is a well-defined subsystem with clear boundaries:
 - Sub-chain definitions and width ordering
@@ -347,123 +480,46 @@ etc.) specifically exercise this subsystem.
 
 ---
 
-### Session 6: Parser Structural Cleanup
+#### Session 9: Centralize Naming Predicates
 
-**Target:** parser.c
-**Risk:** Low-Moderate
-**Goal:** Address remaining parser FIXMEs and improve structural organization.
-
-Candidates:
-
-- **Line 918:** Arity-qualified names accepted in places they shouldn't be — add
-  validation or restrict parsing context.
-- **Line 1164:** Ellipsis accepted via recursion where it shouldn't be — add guard.
-- **Line 1448:** Tokens not yet supported by tokenizer — either implement or emit clear
-  error.
-- **Line 1629:** Feature not yet implemented — implement or emit clear error.
-- **Line 3054:** Funcalls as alias names — decide whether to support and either implement
-  properly or reject.
-
-**Validation:** `make -j test` — rejection tests (`test_fail_*.tl`) specifically cover
-parser error cases.
-
----
-
-### Session 7: Transpile Cleanup
-
-**Target:** transpile.c
+**Target:** parser.c, infer.c, transpile.c → new shared header
 **Risk:** Low
-**Goal:** Address transpile.c FIXMEs and reduce string-building fragility.
+**Goal:** Consolidate all scattered name-based prefix checks and special-case predicates
+into a single shared header.
 
-- Remove dead code (`std_` prefix check at line 2714 if confirmed unused)
-- Fix source location tracking (line 1123)
-- Replace `FIXME_generate_expr` placeholder (lines 2324-2325) with proper error
-- Add missing error reporting (line 3166)
-- Consider extracting type-to-C conversion helpers into a focused helper section
+This combines three closely related concerns that were previously separate sessions:
 
-**Validation:** Full test suite. Generated C code correctness is validated by the
-integration tests actually compiling and running the output.
+**C interop prefixes (cross-cutting concern #2).** Currently `is_c_symbol()`,
+`is_c_struct_symbol()`, and `is_intrinsic()` are defined as static helpers in infer.c,
+while transpile.c has its own inline `str_cmp_nc` checks for the same prefixes. parser.c
+has yet another check for `c__` in identifier validation.
 
----
+**`main()` special cases (cross-cutting concern #1).** Five independent
+`str_eq(name, S("main"))` checks across parser.c, infer.c, and transpile.c, each
+encoding a different aspect of "main is special." No `is_main_function()` predicate
+exists — each site reinvents the check.
 
-### Session 8: Centralize C Interop Prefix Handling
+**Module name mangling (cross-cutting concern #8).** Four special cases across parser.c
+and transpile.c: `builtin` module names are not mangled, empty/main module names are not
+mangled, arity mangling must precede module mangling, and `tl_`/`std_` prefixed names
+skip mangling. These conventions are undocumented and scattered.
 
-**Target:** infer.c, transpile.c, parser.c
-**Risk:** Low
-**Goal:** Consolidate the scattered `c_`, `c_struct_`, `_tl_` prefix checks.
+**Steps:**
 
-Currently `is_c_symbol()`, `is_c_struct_symbol()`, and `is_intrinsic()` are defined as
-static helpers in infer.c, while transpile.c has its own inline `str_cmp_nc` checks for
-the same prefixes. parser.c has yet another check for `c__` in identifier validation.
-
-1. Move prefix predicates to a shared header (e.g., `names.h` or `conventions.h`)
-2. Replace all inline `str_cmp_nc(name, "c_", 2)` checks with the named predicates
-3. Add a comment block documenting what each prefix means and where it's used
+1. Create a shared header (e.g., `names.h` or `conventions.h`)
+2. Move `is_c_symbol()`, `is_c_struct_symbol()`, `is_intrinsic()` to the shared header
+3. Add `is_main_function()` predicate; replace all `str_eq(name, S("main"))` checks
+4. Add `is_builtin_module()` and document mangling-skip conventions for `tl_`/`std_`
+5. Replace all inline `str_cmp_nc(name, "c_", 2)` checks with the named predicates
+6. Add a comment block documenting what each prefix/convention means and where it's used:
+   - `c_` — C interop function (prefix stripped in codegen, skipped in alpha-renaming)
+   - `c_struct_` — C struct interop (rendered with `struct` keyword prefix)
+   - `_tl_` — compiler intrinsic (skipped in specialization, dispatched to handlers)
+   - `main` — entry point (never mangled, forced CInt return, always generated)
+   - `builtin` — builtin module (names not mangled)
+   - `tl_`/`std_` — standard library prefixes (mangling skipped in codegen)
 
 **Validation:** `make -j test` — purely mechanical, no behavior change.
-
----
-
-### Session 9: Data-Driven Type-to-C Mapping ✓ DONE
-
-**Target:** transpile.c, type.c, type.h
-**Commit:** acc7defa (wip-refactor)
-
-Extended `tl_type_constructor_def` with `c_type_name`, `c_min_macro`, `c_max_macro`,
-`integer_min_value`, `integer_max_value`, and `has_integer_range` fields. Populated them
-from the `builtin_nullary[]` table. Replaced ~104 `str_eq` calls across 5 functions
-(`integer_value_fits`, `integer_c_min`, `integer_c_max`, `type_to_c`, `is_c_exportable_type`)
-with field accesses. Net -102 lines. All 310 tests pass (release, debug, ASAN).
-
----
-
-### Session 10: CArray Helpers and Ptr Deduplication ✓ DONE
-
-**Target:** type.h, type.c, infer.c, transpile.c
-**Branch:** wip-refactor
-
-Added `tl_monotype_is_carray`, `tl_monotype_carray_element`, `tl_monotype_carray_count`
-helpers (matching the existing Ptr/Const pattern). Replaced 5 inline
-`tl_monotype_is_inst_of(x, S("CArray"))` + raw `cons_inst->args.v[0]` accesses with
-the new helpers (3 in infer.c, 2 in transpile.c, plus 1 `is_carray`-only check).
-Extracted `render_ptr_to_c()` to deduplicate two identical 15-line Ptr rendering blocks
-in `type_to_c()`. Removed dead `tl_monotype_is_string` declaration from type.h. Added
-doc comment for the Ptr/Const/CArray helper group. All 310 tests pass (release, debug,
-ASAN).
-
----
-
-### Session 11: Consolidate `main()` Special Cases
-
-**Target:** parser.c, infer.c, transpile.c
-**Risk:** Low
-**Goal:** Make the "main is special" logic discoverable and consistent.
-
-1. Add `is_main_function()` predicate alongside the C interop predicates (Session 8)
-2. Replace all `str_eq(name, S("main"))` checks with the predicate
-3. Add a comment at the predicate documenting all the ways main is special:
-   - Never arity-mangled
-   - Forced CInt return type
-   - Excluded from generic analysis and removal
-   - Always generated in codegen
-
-**Validation:** `make -j test` — no behavior change.
-
----
-
-### Session 12: Reduce Tagged Union Special-Casing ✓ DONE
-
-**Target:** ast.h, parser.c, infer.c, transpile.c
-**Branch:** wip-refactor
-
-Added `AST_TAGGED_UNION_TAG_FIELD`/`AST_TAGGED_UNION_UNION_FIELD` constants to ast.h,
-replacing 11 magic string sites across parser.c (4), infer.c (4), and transpile.c (3).
-Extracted `tagged_union_variant_poly()` in infer.c to deduplicate Ptr-wrapping for
-mutable union bindings (2 sites). Extracted `tagged_union_wrapper_fields()` in
-transpile.c to deduplicate field-lookup loops (2 sites). Fixed `is_union_struct()` static
-inconsistency (made definition static, removed redundant forward declaration). Reviewed
-`is_union` struct promotion and mutable/value uniformity — concluded current design is
-already well-factored after these changes. All 310 tests pass (release, debug, ASAN).
 
 ---
 
@@ -472,7 +528,7 @@ already well-factored after these changes. All 310 tests pass (release, debug, A
 These are larger architectural changes that may be worth considering after the above
 cleanup is complete:
 
-- **Internal header for infer subsystem.** After Sessions 3-4, the split files will need
+- **Internal header for infer subsystem.** After Sessions 6-7, the split files will need
   shared declarations. An `infer_internal.h` (not installed, not part of public API)
   would be cleaner than putting everything in `infer.h`.
 
@@ -490,11 +546,6 @@ cleanup is complete:
   — perhaps Const stripping as an explicit phase or a `strip_const_if_transparent()`
   helper — would reduce the five independent "should I strip Const here?" decisions.
 
-- **Cast annotation refactoring.** The `is_cast` flag creates five forking paths through
-  inference in infer.c. Consider whether cast annotations could be handled as a
-  transformation pass (rewriting the AST before inference) rather than as a flag that
-  modifies inference behavior inline.
-
 ---
 
 ## Principles
@@ -503,7 +554,7 @@ cleanup is complete:
    Don't mix file splitting with bug fixes.
 
 2. **Test between every session.** Run `make -j test` at minimum. For structural changes
-   (Sessions 3-5), also run debug and ASAN configurations.
+   (Sessions 5-8), also run debug and ASAN configurations.
 
 3. **Keep both build systems in sync.** Any new .c file must be added to both Makefile
    and CMakeLists.txt.
