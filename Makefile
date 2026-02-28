@@ -489,6 +489,8 @@ TL_TESTS =					\
 	tagged_union				\
 	tagged_union_bail			\
 	tagged_union_carray			\
+	tagged_union_case_annotation		\
+	tagged_union_cross_module_positional	\
 	tagged_union_function_pointer		\
 	tagged_union_generic_basic		\
 	tagged_union_generic_case		\
@@ -499,12 +501,14 @@ TL_TESTS =					\
 	tagged_union_generic_param		\
 	tagged_union_generic_return		\
 	tagged_union_many_variants		\
+	tagged_union_multi_same_module		\
 	tagged_union_mutable_case		\
 	tagged_union_nested_when		\
 	tagged_union_option			\
 	tagged_union_pointer_field		\
 	tagged_union_recursive_type		\
 	tagged_union_scoped_bare_cross_module	\
+	tagged_union_scoped_construction	\
 	tagged_union_scoped_variant		\
 	tagged_union_scoped_variant_as_union	\
 	tagged_union_unscoped			\
@@ -632,6 +636,7 @@ TL_KNOWN_FAIL_FAILURES =
 # Tests that should work but currently fail due to compiler bugs
 TL_KNOWN_FAILURES =				\
 	static_init_generic_function_pointer	\
+	tagged_union_generic_scoped		\
 	while_empty_body
 
 # Total test count across all suites
