@@ -35,30 +35,30 @@ typedef enum {
 } parser_mode;
 
 struct parser {
-    allocator             *parent_alloc;
-    allocator             *file_arena;
-    allocator             *tokens_arena; // for tokens only
-    allocator             *ast_arena;    // for ast nodes and related
-    allocator             *transient;    // reset after each call to parser_next
-    allocator             *speculative;  // for speculative AST allocations in toplevel()
+    allocator          *parent_alloc;
+    allocator          *file_arena;
+    allocator          *tokens_arena; // for tokens only
+    allocator          *ast_arena;    // for ast nodes and related
+    allocator          *transient;    // reset after each call to parser_next
+    allocator          *speculative;  // for speculative AST allocations in toplevel()
 
-    parser_opts            opts;
+    parser_opts         opts;
 
-    tokenizer             *tokenizer;
+    tokenizer          *tokenizer;
 
-    str_sized              files;
-    u32                    files_index;
-    char_csized            current_file_data;
-    hashmap               *modules_seen;         // str hset
-    hashmap               *module_preludes_seen; // str hset: modules declared with #module_prelude
-    hashmap               *nested_type_parents;  // str hset: types that have nested types
-    hashmap               *tagged_union_variant_parents; // str hset: type names that are tagged union parents
-    hashmap               *module_aliases;       // map str -> str: alias name -> original module name
+    str_sized           files;
+    u32                 files_index;
+    char_csized         current_file_data;
+    hashmap            *modules_seen;                 // str hset
+    hashmap            *module_preludes_seen;         // str hset: modules declared with #module_prelude
+    hashmap            *nested_type_parents;          // str hset: types that have nested types
+    hashmap            *tagged_union_variant_parents; // str hset: type names that are tagged union parents
+    hashmap            *module_aliases;               // map str -> str: alias name -> original module name
 
-    ast_node              *result;
-    token_array            tokens;
+    ast_node           *result;
+    token_array         tokens;
 
-    struct parser_error    error;
+    struct parser_error error;
     struct tokenizer_error tokenizer_error;
     struct token           token;
 
@@ -110,8 +110,8 @@ static ast_node     *parse_if_expr(parser *);
 static ast_node     *parse_lvalue(parser *);
 static int           toplevel_defun(parser *);
 
-static ast_node     *build_tagged_union_wrapping(parser *, str tu_name, str var_name,
-                                                  str module, ast_node *inner_call);
+static ast_node     *build_tagged_union_wrapping(parser *, str tu_name, str var_name, str module,
+                                                 ast_node *inner_call);
 static int           result_ast(parser *, ast_tag);
 static int           result_ast_bool(parser *, int);
 static int           result_ast_f64(parser *, f64);
@@ -146,6 +146,7 @@ static int           a_comma(parser *);
 static int           a_ellipsis(parser *);
 static int           a_equal_sign(parser *);
 static int           a_identifier(parser *);
+static int           a_identifier_optional_arity(parser *);
 static int           a_attributed_identifier(parser *);
 static int           a_nil(parser *);
 static int           a_null(parser *);
@@ -181,43 +182,43 @@ static void dbg(struct parser *, char const *restrict fmt, ...);
 parser *parser_create(allocator *alloc, parser_opts const *opts) {
     parser *self = alloc_malloc(alloc, sizeof(struct parser));
     alloc_zero(self);
-    self->opts                    = *opts;
-    self->parent_alloc            = alloc;
-    self->file_arena              = arena_create(alloc, 64 * 1024);
-    self->tokens_arena            = arena_create(alloc, PARSER_ARENA_SIZE);
-    self->ast_arena               = arena_create(alloc, PARSER_ARENA_SIZE);
-    self->transient               = arena_create(alloc, PARSER_ARENA_SIZE);
-    self->speculative             = arena_create(alloc, PARSER_ARENA_SIZE);
-    self->tokenizer               = null;
-    self->files                   = opts->files;
-    self->files_index             = 0;
-    self->current_file_data.v     = null;
-    self->current_file_data.size  = 0;
-    self->modules_seen            = hset_create(self->parent_alloc, 32);
-    self->module_preludes_seen    = hset_create(self->parent_alloc, 32);
-    self->nested_type_parents     = hset_create(self->parent_alloc, 1024);
+    self->opts                         = *opts;
+    self->parent_alloc                 = alloc;
+    self->file_arena                   = arena_create(alloc, 64 * 1024);
+    self->tokens_arena                 = arena_create(alloc, PARSER_ARENA_SIZE);
+    self->ast_arena                    = arena_create(alloc, PARSER_ARENA_SIZE);
+    self->transient                    = arena_create(alloc, PARSER_ARENA_SIZE);
+    self->speculative                  = arena_create(alloc, PARSER_ARENA_SIZE);
+    self->tokenizer                    = null;
+    self->files                        = opts->files;
+    self->files_index                  = 0;
+    self->current_file_data.v          = null;
+    self->current_file_data.size       = 0;
+    self->modules_seen                 = hset_create(self->parent_alloc, 32);
+    self->module_preludes_seen         = hset_create(self->parent_alloc, 32);
+    self->nested_type_parents          = hset_create(self->parent_alloc, 1024);
     self->tagged_union_variant_parents = hset_create(self->parent_alloc, 256);
-    self->module_aliases          = map_new(self->parent_alloc, str, str, 32);
-    self->result                  = null;
-    self->tokens                  = (token_array){0};
-    self->error                   = (struct parser_error){0};
-    self->tokenizer_error         = (struct tokenizer_error){0};
-    self->token                   = (struct token){0};
-    self->current_module          = str_empty();
-    self->current_module_symbols  = hset_create(self->parent_alloc, 512);
-    self->builtin_module_symbols  = hset_create(self->parent_alloc, 512);
-    self->module_symbols          = map_create_ptr(self->parent_alloc, 64); // str -> hashmap*
-    self->next_var_name           = 0;
-    self->verbose                 = 0;
-    self->indent_level            = 0;
-    self->in_function_application = 0;
-    self->skip_module             = 0;
-    self->prelude_consumed        = 0;
-    self->expect_module           = 0;
-    self->mode                    = mode_none;
+    self->module_aliases               = map_new(self->parent_alloc, str, str, 32);
+    self->result                       = null;
+    self->tokens                       = (token_array){0};
+    self->error                        = (struct parser_error){0};
+    self->tokenizer_error              = (struct tokenizer_error){0};
+    self->token                        = (struct token){0};
+    self->current_module               = str_empty();
+    self->current_module_symbols       = hset_create(self->parent_alloc, 512);
+    self->builtin_module_symbols       = hset_create(self->parent_alloc, 512);
+    self->module_symbols               = map_create_ptr(self->parent_alloc, 64); // str -> hashmap*
+    self->next_var_name                = 0;
+    self->verbose                      = 0;
+    self->indent_level                 = 0;
+    self->in_function_application      = 0;
+    self->skip_module                  = 0;
+    self->prelude_consumed             = 0;
+    self->expect_module                = 0;
+    self->mode                         = mode_none;
 
-    self->tokenizer               = null;
-    self->tokens                  = (token_array){.alloc = self->tokens_arena};
+    self->tokenizer                    = null;
+    self->tokens                       = (token_array){.alloc = self->tokens_arena};
 
     token_init(&self->token, tok_invalid);
     self->error.token     = &self->token;
@@ -882,7 +883,7 @@ done:;
     return result_ast_node(self, out);
 }
 
-static int a_identifier(parser *p) {
+static int identifier_base(parser *p, str *name) {
     if (next_token(p)) return 1;
 
     if (tok_symbol != p->token.tag || 0 == strlen(p->token.s) || is_reserved(p->token.s)) goto error;
@@ -912,20 +913,7 @@ static int a_identifier(parser *p) {
         // check for reserved words, which are not allowed as identifiers
         if (is_reserved(p->token.s)) goto error;
 
-        str name = str_init(p->ast_arena, p->token.s);
-
-        // check for arity-qualified name
-        // TODO: arity-qualified names are not legal in all places a_identifier is parsed.
-        int arity = unmangle_arity(name);
-        if (arity != -1) {
-            str base = unmangle_arity_qualified_name(p->ast_arena, name);
-            assert(!str_is_empty(base));
-            str mangled = mangle_str_for_arity(p->ast_arena, base, (u8)arity);
-            result_ast_str_(p, ast_symbol, mangled);
-            goto success;
-        }
-
-        result_ast_str_(p, ast_symbol, name);
+        *name = str_init(p->ast_arena, p->token.s);
         goto success;
     }
 
@@ -937,15 +925,43 @@ success:
     return 0;
 }
 
+static int a_identifier(parser *p) {
+    int res = 0;
+    str name;
+    if ((res = identifier_base(p, &name))) return res;
+
+    result_ast_str_(p, ast_symbol, name);
+    return 0;
+}
+
+static int a_identifier_optional_arity(parser *p) {
+    int res = 0;
+    str name;
+    if ((res = identifier_base(p, &name))) return res;
+
+    // check for arity-qualified name
+    int arity = unmangle_arity(name);
+    if (arity != -1) {
+        str base = unmangle_arity_qualified_name(p->ast_arena, name);
+        assert(!str_is_empty(base));
+        str mangled = mangle_str_for_arity(p->ast_arena, base, (u8)arity);
+        return result_ast_str_(p, ast_symbol, mangled);
+    }
+
+    return result_ast_str_(p, ast_symbol, name);
+}
+
 static int a_attributed_identifier(parser *self) {
     // All identifiers may now have an attribute set, denoted by a [[...]] expression immediately preceding
     // the identifer. This will be tokenized as `[[, <zero or more tokens>, ]]`
+
+    // This is pathed through a_value, so it must also support arity-qualified identifiers, e.g. foo/1
 
     ast_node *attributes = null;
     if (0 == a_try(self, a_attribute_set)) {
         attributes = self->result;
     }
-    if (0 == a_try(self, a_identifier)) {
+    if (0 == a_try(self, a_identifier_optional_arity)) {
         ast_node_set_attributes(self->result, attributes);
         return 0;
     }
@@ -1129,7 +1145,7 @@ static int parse_param_list(parser *self, ast_node_array *out_params, int error_
 
 static int a_type_arrow(parser *self) {
     ast_node_array params = {.alloc = self->ast_arena};
-    int res = parse_param_list(self, &params, ERROR_STOP);
+    int            res    = parse_param_list(self, &params, ERROR_STOP);
     if (res) return res;
 
     if (a_try(self, a_arrow)) return 1;
@@ -1873,17 +1889,16 @@ static int maybe_mangle_binop(parser *self, ast_node *op, ast_node **inout, ast_
                     if (str_hset_contains(self->tagged_union_variant_parents, parent_name)) {
                         if (ast_node_is_nfa(right)) {
                             // NFA case: Circle(2.0) or Circle(radius = 2.0) — already a call
-                            *inout = build_tagged_union_wrapping(self, parent_name, child_name,
-                                                                 module, right);
+                            *inout =
+                              build_tagged_union_wrapping(self, parent_name, child_name, module, right);
                         } else {
                             // Bare symbol case: Op.A (zero-field variant, no parentheses)
                             // Promote to zero-arg NFA_TC then wrap (same pattern as None sugar)
-                            ast_node *inner_call = ast_node_create_nfa_tc(self->ast_arena, right,
-                                                                           (ast_node_sized){0},
-                                                                           (ast_node_sized){0});
+                            ast_node *inner_call = ast_node_create_nfa_tc(
+                              self->ast_arena, right, (ast_node_sized){0}, (ast_node_sized){0});
                             set_node_file(self, inner_call);
-                            *inout = build_tagged_union_wrapping(self, parent_name, child_name,
-                                                                 module, inner_call);
+                            *inout = build_tagged_union_wrapping(self, parent_name, child_name, module,
+                                                                 inner_call);
                         }
                     } else {
                         *inout = right;
@@ -3256,9 +3271,8 @@ static int parse_struct_fields(parser *self, str parent_prefix, u8 parent_n_type
 // Shared post-field-parsing logic for struct and union type definitions.
 // Creates the UTD node, checks for reserved names and unused type params (structs only),
 // registers the module symbol, and wraps with nested UTDs if present (structs only).
-static int finalize_type_definition(parser *self, ast_node *type_ident,
-                                    ast_node_array fields, ast_node_array nested_utds,
-                                    int is_union) {
+static int finalize_type_definition(parser *self, ast_node *type_ident, ast_node_array fields,
+                                    ast_node_array nested_utds, int is_union) {
     if (is_reserved_type_name(type_ident)) return ERROR_STOP;
 
     u8         n_type_args = 0;
@@ -3339,8 +3353,8 @@ static int toplevel_struct(parser *self) {
 
     ast_node_array fields      = {.alloc = self->ast_arena};
     ast_node_array nested_utds = {.alloc = self->ast_arena};
-    int res = parse_struct_fields(self, parent_name->symbol.name, n_type_args, type_args,
-                                  &fields, &nested_utds);
+    int            res =
+      parse_struct_fields(self, parent_name->symbol.name, n_type_args, type_args, &fields, &nested_utds);
     if (res) return res;
 
     return finalize_type_definition(self, type_ident, fields, nested_utds, 0);
@@ -3504,8 +3518,8 @@ static ast_node *create_enum_utd(parser *self, ast_node *name, ast_node_array id
 //              -> __Shape__Tag_.Circle
 //              -> Shape(tag = ..., u = ...)
 // The 'module' parameter is used for cross-module mangling; pass str_empty() for same-module.
-static ast_node *build_tagged_union_wrapping(parser *self, str tu_name, str var_name,
-                                              str module, ast_node *inner_call) {
+static ast_node *build_tagged_union_wrapping(parser *self, str tu_name, str var_name, str module,
+                                             ast_node *inner_call) {
     allocator *arena = self->ast_arena;
 
     // Union construction: __Shape__Union_(Circle = innerCall)
@@ -3641,8 +3655,8 @@ static ast_node *create_variant_constructor(parser *self,
     set_node_file(self, inner_call);
 
     // Wrap inner_call in union + tag + wrapper struct using shared helper
-    ast_node *wrapper_call = build_tagged_union_wrapping(self, tu_name_str, var_name_str,
-                                                         str_empty(), inner_call);
+    ast_node *wrapper_call =
+      build_tagged_union_wrapping(self, tu_name_str, var_name_str, str_empty(), inner_call);
 
     // Create body with just the wrapper call
     ast_node_array body_exprs = {.alloc = arena};
@@ -3800,7 +3814,7 @@ static int toplevel_tagged_union(parser *self) {
     // 2. Variant structs: Shape__Circle : { radius: Float }, etc.
     //    Scoped under tagged union type, accessed as Shape.Circle via nested_type_parents.
     forall(i, variants) {
-        variant *v = &variants.v[i];
+        variant  *v            = &variants.v[i];
 
         str       var_name_str = str_cat_3(self->ast_arena, tu_name_str, S("__"), v->name->symbol.name);
         ast_node *var_name     = ast_node_create_sym(self->ast_arena, var_name_str);
@@ -3831,7 +3845,7 @@ static int toplevel_tagged_union(parser *self) {
             ast_node *field_name = ast_node_create_sym(self->ast_arena, v->name->symbol.name);
 
             // Field annotation: the variant type (may be generic)
-            ast_node **used_type_args   = null;
+            ast_node **used_type_args = null;
             u8         n_used_type_args =
               collect_used_type_params(self, n_type_args, type_args, v->fields, &used_type_args);
 
@@ -3865,8 +3879,7 @@ static int toplevel_tagged_union(parser *self) {
             }
         }
 
-        ast_node *union_utd =
-          create_utd(self, union_name, n_type_args, union_type_args, union_fields, 1);
+        ast_node *union_utd = create_utd(self, union_name, n_type_args, union_type_args, union_fields, 1);
         union_utd->user_type_def.tagged_union_name = tu_name_str;
         add_module_symbol(self, union_name);
         mangle_name(self, union_name);
@@ -3936,7 +3949,7 @@ static int toplevel_tagged_union(parser *self) {
 
     // 5. Constructor functions for each variant
     forall(i, variants) {
-        variant *v = &variants.v[i];
+        variant  *v    = &variants.v[i];
 
         ast_node *ctor = create_variant_constructor(self, tu_name_str, v->name->symbol.name, n_type_args,
                                                     type_args, v->fields);
