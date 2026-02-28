@@ -1958,8 +1958,7 @@ int tl_monotype_sized_is_concrete_no_weak(tl_monotype_sized arr) {
     return 1;
 }
 
-int tl_monotype_is_concrete_no_arrow(tl_monotype *self) {
-    // FIXME: the name of this function is misleading
+int tl_monotype_is_concrete_inst(tl_monotype *self) {
     return self && tl_cons_inst == self->tag && tl_monotype_is_concrete(self);
 }
 
@@ -2203,8 +2202,8 @@ int tl_polytype_is_concrete(tl_polytype *self) {
     return !tl_polytype_is_scheme(self) && tl_monotype_is_concrete(self->type);
 }
 
-int tl_polytype_is_concrete_no_arrow(tl_polytype *self) {
-    return !tl_polytype_is_scheme(self) && tl_monotype_is_concrete_no_arrow(self->type);
+int tl_polytype_is_concrete_inst(tl_polytype *self) {
+    return !tl_polytype_is_scheme(self) && tl_monotype_is_concrete_inst(self->type);
 }
 
 int tl_polytype_is_concrete_no_weak(tl_polytype *self) {

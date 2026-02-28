@@ -1120,9 +1120,9 @@ static str generate_funcall(transpile *self, ast_node const *node, eval_ctx *ctx
     if (is_c_symbol(name)) return generate_funcall_c(self, node, ctx);
 
     if (!type) {
-        // FIXME: file/line here is not accurate
-        exit_error(node->file, node->line, "unknown function or function type: %s (%s:%i)", str_cstr(&name),
-                   __FILE__, __LINE__);
+        ast_node const *name_node = node->named_application.name;
+        exit_error(name_node->file, name_node->line, "unknown function or function type: %s (%s:%i)",
+                   str_cstr(&name), __FILE__, __LINE__);
     }
 
     // type constructor?
@@ -2714,7 +2714,7 @@ static void cat_commentln(transpile *self, str s) {
 static str mangle_fun(transpile *self, str s) {
     // If name is already mangled, it could be a variable name. Don't mangle it further.
     if (0 == str_cmp_nc(s, "tl_", 3)) return s;
-    if (0 == str_cmp_nc(s, "std_", 4)) return s; // FIXME: do we still use std_ ?
+    if (0 == str_cmp_nc(s, "std_", 4)) return s; // std_ functions use literal names (see generate_funcall_std)
 
     // don't mangle names which don't refer to actual functions. This helps avoid mangling struct field
     // names that have an arrow type.
@@ -2775,7 +2775,7 @@ static str render_ptr_to_c(transpile *self, tl_monotype *mono) {
 static str type_to_c(transpile *self, tl_polytype *type) {
     if (type->quantifiers.size) fatal("type scheme");
     tl_monotype *mono = type->type;
-    if (tl_monotype_is_concrete_no_arrow(mono)) {
+    if (tl_monotype_is_concrete_inst(mono)) {
         str cons_name = mono->cons_inst->def->name;
 
         // Data-driven: builtin types have c_type_name set in the type constructor def
@@ -3216,7 +3216,7 @@ static int is_c_exportable_type(tl_monotype *type) {
         return is_c_exportable_type(tl_monotype_const_target(type));
     }
 
-    if (!tl_monotype_is_concrete_no_arrow(type)) return 0;
+    if (!tl_monotype_is_concrete_inst(type)) return 0;
 
     str name = type->cons_inst->def->name;
 

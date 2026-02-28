@@ -278,27 +278,27 @@ tests pass (release, debug).
 
 ---
 
-#### Session 2: Silence the Safe FIXMEs
+#### Silence the Safe FIXMEs ✓ DONE (originally Session 2)
 
-**Target:** infer.c, transpile.c, type.c, parser.c
-**Risk:** Low
-**Goal:** Resolve FIXMEs that have clear, safe fixes — primarily missing error messages,
-stale comments, and dead code questions.
+**Target:** infer.c, transpile.c, type.c, type.h
+**Branch:** wip-refactor
 
-Candidates (representative, not exhaustive):
+Resolved 7 FIXMEs across 4 files:
+- infer.c:492 — fixed stale comment (typo "assmues", inaccurate description)
+- infer.c:882 — replaced `fatal()` crash with proper `tl_err_expected_type` error
+- infer.c:1166-1189 — removed dead code: commented-out `map_merge`, `add_to_lexicals`
+  block (+ struct field + call site), and secondary type-arg lookup (3 FIXMEs)
+- transpile.c:2717 — replaced answered FIXME with factual comment (`std_` is used)
+- transpile.c:1123 — fixed inaccurate source location (use name child node)
+- type.c/type.h — renamed `tl_monotype_is_concrete_no_arrow` →
+  `tl_monotype_is_concrete_inst` (and polytype variant) across 7 sites
 
-| Location | FIXME | Resolution |
-|----------|-------|------------|
-| infer.c:492 | "assumes alias name is a symbol" | Add nfa handling or assert |
-| infer.c:882 | "could not parse type — better error" | Emit proper diagnostic |
-| infer.c:1166-1189 | "v2 type arguments may not be needed" | Verify and remove dead code |
-| infer.c:4197, 4300 | "ignores error" | Propagate error or emit diagnostic |
-| infer.c:6201 | "ignores specialize_arrow error" | Propagate error |
-| transpile.c:2714 | "do we still use std_?" | Check and remove if dead |
-| transpile.c:1123 | "file/line not accurate" | Fix source location tracking |
-| type.c:1934 | "name of this function is misleading" | Rename |
+**Not changed** (3 FIXMEs kept): `specialize_operand` and `specialize_case` "ignores
+error" returns, and library export `specialize_arrow` error — changing `return 0` to
+`return 1` caused 39 test failures because empty `inst_name` is a normal/expected case
+for function pointers, not an error. These need deeper investigation in a future session.
 
-**Validation:** `make -j test` plus `make CONFIG=debug -j test`.
+All 310 tests pass (release, debug).
 
 ---
 

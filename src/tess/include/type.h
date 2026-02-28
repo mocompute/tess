@@ -177,7 +177,7 @@ int                    tl_monotype_is_weak_int_unsigned(tl_monotype *);
 int                    tl_monotype_is_any_weak(tl_monotype *);
 int                    tl_monotype_is_weak_deep(tl_monotype *);
 int                    tl_monotype_sized_is_concrete(tl_monotype_sized);
-int                    tl_monotype_is_concrete_no_arrow(tl_monotype *); // constructed non-arrow type
+int                    tl_monotype_is_concrete_inst(tl_monotype *); // concrete constructor instance (non-arrow, non-var)
 int                    tl_monotype_is_concrete_no_weak(tl_monotype *);
 int                    tl_monotype_sized_is_concrete_no_weak(tl_monotype_sized);
 int                    tl_monotype_is_arrow(tl_monotype *);
@@ -267,7 +267,7 @@ str         tl_polytype_to_string(allocator *, tl_polytype *);
 
 int         tl_polytype_is_scheme(tl_polytype *);
 int         tl_polytype_is_concrete(tl_polytype *);
-int         tl_polytype_is_concrete_no_arrow(tl_polytype *);
+int         tl_polytype_is_concrete_inst(tl_polytype *);
 int         tl_polytype_is_concrete_no_weak(tl_polytype *);
 int         tl_polytype_is_type_constructor(tl_polytype *);
 int         tl_polytype_is_nullary(tl_polytype *);

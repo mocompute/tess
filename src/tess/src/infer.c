@@ -489,7 +489,7 @@ static void load_toplevel(tl_infer *self, ast_node_sized nodes) {
         }
 
         else if (ast_node_is_type_alias(node)) {
-            // FIXME: assmues alias name is a symbol. Parser may produce an nfa.
+            // Alias name may be a symbol or an nfa (from the parser). Only symbols are valid.
             if (!ast_node_is_symbol(node->type_alias.name)) {
                 array_push(self->errors,
                            ((tl_infer_error){.tag = tl_err_expected_type_alias_symbol, .node = node}));
@@ -877,9 +877,9 @@ static int traverse_ctx_assign_type_arguments(tl_infer *self, traverse_ctx *ctx,
                 parsed =
                   tl_type_registry_parse_type_with_ctx(self->registry, type_arg_node, &self->hot_parse_ctx);
                 if (!parsed) {
-                    str tmp = v2_ast_node_to_string(self->transient, type_arg_node);
-                    fprintf(stderr, "error: parse failed: %s\n", str_cstr(&tmp));
-                    fatal("could not parse type"); // FIXME better error
+                    array_push(self->errors,
+                               ((tl_infer_error){.tag = tl_err_expected_type, .node = type_arg_node}));
+                    return 1;
                 }
             }
             self->hot_parse_ctx_guard = 0;
@@ -1139,7 +1139,6 @@ static annotation_parse_result parse_type_annotation(tl_infer *self, traverse_ct
 }
 
 typedef struct {
-    int add_to_lexicals;     // Add type args to ctx->lexical_names
     int check_type_arg_self; // Check if name is in type_arguments (for formal params)
 } annotation_opts;
 
@@ -1161,35 +1160,12 @@ static int process_annotation(tl_infer *self, traverse_ctx *ctx, ast_node *node,
 
     if (!result.parsed) return 0;
 
-    // Merge type arguments into context
-    if (ctx) {
-        // FIXME: type arguments v2 may not be needed
-        // map_merge(&ctx->type_arguments, result.type_arguments);
-
-        // FIXME: with v2 type arguments, they should already be added to lexicals by the time any
-        // annotation is processed; so this entire block could be removed.
-        if (opts.add_to_lexicals) {
-            str_array arr = str_map_keys(self->transient, result.type_arguments);
-            forall(i, arr) {
-#if DEBUG_RESOLVE
-                fprintf(stderr, "resolve_node: adding type argument to lexicals: '%s'\n",
-                        str_cstr(&arr.v[i]));
-#endif
-                str_hset_insert(&ctx->lexical_names, arr.v[i]);
-            }
-        }
-    }
-
     tl_monotype *mono = result.parsed;
 
     // Handle type argument self-reference (for formal parameters)
     if (opts.check_type_arg_self && ast_node_is_symbol(node)) {
         str          name  = ast_node_str(node);
         tl_monotype *found = str_map_get_ptr(result.type_arguments, name);
-        // FIXME explicit type args: do we need this secondary lookup? Doesn't seem to fix any of the
-        // failing tests, though.
-
-        if (!found && ctx) found = str_map_get_ptr(ctx->type_arguments, name);
         if (found) mono = found;
     }
 
@@ -3111,7 +3087,6 @@ static int resolve_node(tl_infer *self, ast_node *node, traverse_ctx *ctx, node_
             int res = process_annotation(
               self, ctx, node,
               (annotation_opts){
-                .add_to_lexicals     = 1, // Add type args (e.g., T in `x: T`) to lexical_names
                 .check_type_arg_self = 1, // Handle self-referential type args
               });
             if (res < 0) {
