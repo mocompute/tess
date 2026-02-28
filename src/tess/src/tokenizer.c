@@ -598,7 +598,7 @@ start:; // loop point for skip_depth > 0
 
         case in_equal: {
             if (self->pos == end) {
-                replace_token(self->strings, &res, tok_ampersand);
+                replace_token(self->strings, &res, tok_equal_sign);
                 state = stop;
                 goto finish;
             }
@@ -630,6 +630,11 @@ start:; // loop point for skip_depth > 0
                 replace_token(self->strings, &res, tok_logical_and);
                 state = stop;
                 goto finish;
+            } else if ('=' == c) {
+                // &=
+                replace_token_s(self->strings, &res, tok_symbol, "&=");
+                state = stop;
+                goto finish;
             } else {
                 reverse_pos(self);
                 replace_token(self->strings, &res, tok_ampersand);
@@ -649,6 +654,11 @@ start:; // loop point for skip_depth > 0
             if ('|' == c) {
                 // ||
                 replace_token(self->strings, &res, tok_logical_or);
+                state = stop;
+                goto finish;
+            } else if ('=' == c) {
+                // |=
+                replace_token_s(self->strings, &res, tok_symbol, "|=");
                 state = stop;
                 goto finish;
             } else {

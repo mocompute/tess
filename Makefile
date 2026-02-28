@@ -357,6 +357,7 @@ TL_TESTS =					\
 	atexit					\
 	attributes				\
 	binop					\
+	bitwise_compound_assign			\
 	bitwise_operators			\
 	block_expression			\
 	builtin_option				\

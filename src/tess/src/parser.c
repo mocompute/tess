@@ -1470,7 +1470,6 @@ static int operator_precedence(char const *op, int is_prefix) {
       {"/=", 5},
       {"%=", 5},
 
-      // FIXME: these aren't supported by the tokenizer yet
       {"<<=", 5},
       {">>=", 5},
       {"&=", 5},

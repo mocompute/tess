@@ -154,6 +154,55 @@ static int test_tokenizer_terminal_static_string(void) {
     return error;
 }
 
+static int test_tokenizer_compound_assignment_operators(void) {
+    int error = 0;
+
+    struct {
+        char const *input;
+        char const *expected;
+    } cases[] = {
+        {"&=",  "&="},
+        {"|=",  "|="},
+        {"^=",  "^="},
+        {"<<=", "<<="},
+        {">>=", ">>="},
+    };
+
+    size_t n = sizeof(cases) / sizeof(cases[0]);
+
+    for (size_t i = 0; i < n; i++) {
+        allocator     *alloc = default_allocator();
+        tokenizer_opts opts  = {
+           .input = (char_csized){.v = cases[i].input, .size = strlen(cases[i].input)},
+           .file  = "",
+        };
+        tokenizer *t = tokenizer_create(alloc, &opts);
+        if (!t) return ++error;
+
+        token           tok;
+        tokenizer_error err;
+
+        // expect tok_symbol with correct value
+        error += 0 == tokenizer_next(t, &tok, &err) ? 0 : 1;
+        if (error) {
+            tokenizer_destroy(&t);
+            return error;
+        }
+        error += tok_symbol == tok.tag ? 0 : 1;
+        error += 0 == strcmp(cases[i].expected, tok.s) ? 0 : 1;
+        token_deinit(alloc, &tok);
+
+        // expect eof
+        error += 1 == tokenizer_next(t, &tok, &err) ? 0 : 1;
+        error += tl_err_eof == err.tag ? 0 : 1;
+        if (err.tag == tl_err_ok) token_deinit(alloc, &tok);
+
+        tokenizer_destroy(&t);
+    }
+
+    return error;
+}
+
 #define T(name)                                                                                            \
     this_error = name();                                                                                   \
     if (this_error) {                                                                                      \
@@ -174,6 +223,7 @@ int main(void) {
     T(test_tokenizer_basic);
     T(test_tokenizer_string);
     T(test_tokenizer_terminal_static_string);
+    T(test_tokenizer_compound_assignment_operators);
 
     return error;
 }
