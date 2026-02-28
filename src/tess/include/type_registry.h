@@ -67,6 +67,7 @@ void         tl_type_registry_type_alias_insert(tl_type_registry *, str, tl_poly
 int          tl_type_registry_is_type_alias(tl_type_registry *, str);
 
 tl_monotype *tl_type_registry_parse_type(tl_type_registry *, ast_node const *);
+tl_monotype *tl_type_registry_parse_type_except_integer_literal(tl_type_registry *, ast_node const *);
 tl_monotype *tl_type_registry_parse_type_with_ctx(tl_type_registry *, ast_node const *,
                                                   tl_type_registry_parse_type_ctx *);
 tl_monotype *tl_type_registry_parse_type_out_ctx(tl_type_registry *self, ast_node const *node,

@@ -3895,8 +3895,9 @@ static int specialize_user_type(tl_infer *self, traverse_ctx *traverse_ctx, ast_
         ast_node          *arg;
         while ((arg = ast_arguments_next(&iter))) {
 
+            // Note: parse_type may return an integer type (i64) when ast is an integer literal
             tl_monotype *type_id = null;
-            if ((type_id = tl_type_registry_parse_type(self->registry, arg))) {
+            if ((type_id = tl_type_registry_parse_type_except_integer_literal(self->registry, arg))) {
                 // a literal type
                 {
                     fatal("oops: a type literal?");

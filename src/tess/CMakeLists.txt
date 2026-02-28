@@ -419,6 +419,7 @@ tl_create_test(tagged_union_generic_multi)
 tl_create_test(tagged_union_generic_nested)
 tl_create_test(tagged_union_generic_param)
 tl_create_test(tagged_union_generic_return)
+tl_create_test(tagged_union_generic_scoped)
 tl_create_test(tagged_union_many_variants)
 tl_create_test(tagged_union_multi_same_module)
 tl_create_test(tagged_union_mutable_case)
@@ -578,5 +579,4 @@ tl_create_runtime_fail_test(fail_runtime_integer_bounds_cross_family)
 
 # Known failures: these should work but a compiler bug makes them fail
 tl_create_known_failure(static_init_generic_function_pointer)
-tl_create_known_failure(tagged_union_generic_scoped)
 tl_create_known_failure(while_empty_body)

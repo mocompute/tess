@@ -500,6 +500,7 @@ TL_TESTS =					\
 	tagged_union_generic_nested		\
 	tagged_union_generic_param		\
 	tagged_union_generic_return		\
+	tagged_union_generic_scoped		\
 	tagged_union_many_variants		\
 	tagged_union_multi_same_module		\
 	tagged_union_mutable_case		\
@@ -636,7 +637,6 @@ TL_KNOWN_FAIL_FAILURES =
 # Tests that should work but currently fail due to compiler bugs
 TL_KNOWN_FAILURES =				\
 	static_init_generic_function_pointer	\
-	tagged_union_generic_scoped		\
 	while_empty_body
 
 # Total test count across all suites

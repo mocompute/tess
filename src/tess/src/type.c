@@ -1203,6 +1203,13 @@ tl_monotype *tl_type_registry_parse_type_out_ctx(tl_type_registry *self, ast_nod
     return result;
 }
 
+tl_monotype *tl_type_registry_parse_type_except_integer_literal(tl_type_registry *self,
+                                                                ast_node const   *node) {
+    tl_monotype *res = tl_type_registry_parse_type(self, node);
+    if (tl_monotype_is_integer(res)) return null;
+    return res;
+}
+
 // ============================================================================
 // Type environment
 // ============================================================================
