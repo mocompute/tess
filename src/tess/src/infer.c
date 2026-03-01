@@ -1211,10 +1211,83 @@ static int is_std_function(ast_node *node) {
     return ast_node_is_std_application(node);
 }
 
+// ============================================================================
+// Cast annotation helpers
+// ============================================================================
+//
+// Cast annotations (x: CInt = expr, field: Ptr(Foo) = ptr_expr) suppress
+// normal type-error behavior.  Integer casts skip constraint entirely to
+// prevent narrow-type back-propagation; pointer casts constrain with error
+// suppression for generic resolution.
+
 static int is_cast_annotation(ast_node *node) {
     if (!ast_node_is_symbol(node) || !node->symbol.annotation_type) return 0;
     tl_monotype *type = node->symbol.annotation_type->type;
     return tl_monotype_is_ptr(type) || tl_monotype_is_integer_convertible(type);
+}
+
+// Handle cast annotation in let-in bindings.
+// Integer casts: skip constraint + range check + weak-int resolve.
+// Pointer casts: constrain with error suppression (skip if CArray).
+static int cast_constrain_let_in(tl_infer *self, ast_node *node) {
+    tl_polytype *annotation_type    = node->let_in.name->symbol.annotation_type;
+    tl_polytype *value_type         = node->let_in.value->type;
+
+    int          saved              = self->is_constrain_ignore_error;
+    self->is_constrain_ignore_error = 1;
+
+    if (tl_monotype_is_integer_convertible(annotation_type->type)) {
+        // Integer cast: do not constrain (would back-propagate narrow type upstream).
+        // Check literal range at compile time; look through unary minus for e.g. -129.
+        ast_node *val    = node->let_in.value;
+        int       negate = 0;
+        if (val->tag == ast_unary_op && str_eq(ast_node_str(val->unary_op.op), S("-"))) {
+            val    = val->unary_op.operand;
+            negate = 1;
+        }
+        if (val->tag == ast_i64 || val->tag == ast_u64) {
+            i64 lit = (val->tag == ast_i64) ? ast_node_i64(val)->val : (i64)ast_node_u64(val)->val;
+            if (negate) lit = -lit;
+            if (!tl_monotype_integer_value_fits(annotation_type->type, lit)) {
+                log_type_error(self, annotation_type, value_type, node);
+                type_error(self, node);
+                self->is_constrain_ignore_error = saved;
+                return 1;
+            }
+        }
+        // Weak integer literals resolve to the annotation type rather than
+        // defaulting to the canonical type (Int/UInt).
+        if (value_type && tl_monotype_is_weak_int(value_type->type)) {
+            constrain(self, annotation_type, value_type, node, TL_UNIFY_DIRECTED);
+        }
+    } else {
+        // Pointer cast: constrain with error suppression (the value may be a
+        // generic that needs the annotation to resolve).
+        // Skip CArray values — they decay to pointers without constraint.
+        if (value_type) {
+            tl_polytype_substitute(self->arena, value_type, self->subs);
+            if (!tl_monotype_is_carray(value_type->type))
+                constrain(self, annotation_type, value_type, node, TL_UNIFY_DIRECTED);
+        }
+    }
+
+    self->is_constrain_ignore_error = saved;
+    return 0;
+}
+
+// Handle cast annotation in struct field initialization.
+// Two-phase: constrain annotation vs field (strict), then value vs field (permissive).
+static int cast_constrain_struct_field(tl_infer *self, ast_node *arg, tl_monotype *field_type,
+                                       ast_node const *node) {
+    tl_polytype *annotation_type = arg->assignment.name->symbol.annotation_type;
+    // Constrain annotation type against struct field to propagate concrete type info
+    if (constrain_pm(self, annotation_type, field_type, node, TL_UNIFY_SYMMETRIC)) return 1;
+    // Constrain value type against field permissively (cast)
+    int saved                       = self->is_constrain_ignore_error;
+    self->is_constrain_ignore_error = 1;
+    constrain_pm(self, arg->type, field_type, node, TL_UNIFY_SYMMETRIC);
+    self->is_constrain_ignore_error = saved;
+    return 0;
 }
 
 // ============================================================================
@@ -1638,7 +1711,8 @@ static tl_monotype *tagged_union_find_variant(tl_monotype *wrapper_type, str var
 }
 
 // Wrap a variant type in Ptr if the binding is mutable (&), otherwise return as-is.
-static tl_polytype *tagged_union_variant_poly(tl_infer *self, tl_monotype *variant_type, int is_union_flag) {
+static tl_polytype *tagged_union_variant_poly(tl_infer *self, tl_monotype *variant_type,
+                                              int is_union_flag) {
     if (is_union_flag == AST_TAGGED_UNION_MUTABLE)
         return tl_polytype_absorb_mono(self->arena, tl_type_registry_ptr(self->registry, variant_type));
     return tl_polytype_absorb_mono(self->arena, variant_type);
@@ -1833,64 +1907,19 @@ static int infer_let_in(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
         tl_polytype *name_annotation_type = node->let_in.name->symbol.annotation_type;
         tl_polytype *value_type           = node->let_in.value->type;
 
-        {
-            int is_cast = is_cast_annotation(node->let_in.name);
+        if (name_annotation_type) {
+            name_type = name_annotation_type;
 
-            if (is_cast) self->is_constrain_ignore_error = 1;
-            if (name_annotation_type) {
-                name_type = name_annotation_type;
+            str name  = ast_node_str(node->let_in.name);
+            str tmp   = tl_polytype_to_string(self->transient, name_annotation_type);
 
-                str name  = ast_node_str(node->let_in.name);
-                str tmp   = tl_polytype_to_string(self->transient, name_annotation_type);
+            dbg(self, "let_in cast '%s': using annotation type '%s'", str_cstr(&name), str_cstr(&tmp));
+        }
 
-                dbg(self, "let_in cast '%s': using annotation type '%s'", str_cstr(&name), str_cstr(&tmp));
-            }
-
-            // Integer cast annotations: the annotation is intentionally a different
-            // (narrower) type than the value.  Do not constrain, because unification
-            // would back-propagate the narrow type into upstream expressions.
-            // Pointer cast annotations: keep the constraint (with ignore-error) because
-            // the value may be a generic that needs the annotation to resolve.
-            int is_integer_cast = is_cast && name_annotation_type &&
-                                  tl_monotype_is_integer_convertible(name_annotation_type->type);
-
-            int skip = 0;
-            if (is_cast && !is_integer_cast && value_type) {
-                tl_polytype_substitute(self->arena, value_type, self->subs);
-                skip = tl_monotype_is_carray(value_type->type);
-            }
-            if (is_integer_cast) {
-                skip = 1;
-                // Even for integer casts, check literal range at compile time.
-                // Look through unary minus to catch negative literals like -129.
-                ast_node *val    = node->let_in.value;
-                int       negate = 0;
-                if (val->tag == ast_unary_op && str_eq(ast_node_str(val->unary_op.op), S("-"))) {
-                    val    = val->unary_op.operand;
-                    negate = 1;
-                }
-                if (val->tag == ast_i64 || val->tag == ast_u64) {
-                    i64 lit = (val->tag == ast_i64) ? ast_node_i64(val)->val : (i64)ast_node_u64(val)->val;
-                    if (negate) lit = -lit;
-                    if (!tl_monotype_integer_value_fits(name_annotation_type->type, lit)) {
-                        log_type_error(self, name_annotation_type, value_type, node);
-                        type_error(self, node);
-                        return 1;
-                    }
-                }
-                // Weak integer literals should resolve to the annotation type rather than
-                // defaulting to the canonical type (Int/UInt).  This is safe because weak
-                // literals are polymorphic within their family; constraining them to the
-                // annotation does not back-propagate an unwanted narrow type upstream.
-                if (value_type && tl_monotype_is_weak_int(value_type->type)) {
-                    constrain(self, name_annotation_type, value_type, node, TL_UNIFY_DIRECTED);
-                }
-            }
-
-            if (!skip) {
-                if (constrain(self, name_type, value_type, node, TL_UNIFY_DIRECTED) && !is_cast) return 1;
-            }
-            self->is_constrain_ignore_error = 0;
+        if (is_cast_annotation(node->let_in.name)) {
+            if (cast_constrain_let_in(self, node)) return 1;
+        } else {
+            if (constrain(self, name_type, value_type, node, TL_UNIFY_DIRECTED)) return 1;
         }
 
         env_insert_constrain(self, node->let_in.name->symbol.name, name_type, node->let_in.name);
@@ -1995,17 +2024,8 @@ static int infer_type_constructor_nfa(tl_infer *self, traverse_ctx *ctx, ast_nod
             }
             assert(found < (i32)inst->cons_inst->args.size);
 
-            int is_cast = is_cast_annotation(arg->assignment.name);
-            if (is_cast) {
-                tl_polytype *annotation_type = arg->assignment.name->symbol.annotation_type;
-                // Constrain annotation type against struct field to propagate concrete type info
-                if (constrain_pm(self, annotation_type, inst->cons_inst->args.v[found], node,
-                                 TL_UNIFY_SYMMETRIC))
-                    return 1;
-                // Constrain value type against annotation permissively (cast)
-                self->is_constrain_ignore_error = 1;
-                constrain_pm(self, arg->type, inst->cons_inst->args.v[found], node, TL_UNIFY_SYMMETRIC);
-                self->is_constrain_ignore_error = 0;
+            if (is_cast_annotation(arg->assignment.name)) {
+                if (cast_constrain_struct_field(self, arg, inst->cons_inst->args.v[found], node)) return 1;
             } else {
 #if DEBUG_EXPLICIT_TYPE_ARGS
                 {
@@ -3084,11 +3104,10 @@ static int resolve_node(tl_infer *self, ast_node *node, traverse_ctx *ctx, node_
         }
 
         {
-            int res = process_annotation(
-              self, ctx, node,
-              (annotation_opts){
-                .check_type_arg_self = 1, // Handle self-referential type args
-              });
+            int res = process_annotation(self, ctx, node,
+                                         (annotation_opts){
+                                           .check_type_arg_self = 1, // Handle self-referential type args
+                                         });
             if (res < 0) {
 #if DEBUG_RESOLVE
                 str name = ast_node_is_symbol(node) ? node->symbol.name : S("<non-symbol>");
