@@ -214,11 +214,11 @@ copy(s: Str) -> Str {
 #ifc
 #include <stdio.h>
 static size_t tl_string_snprintf_int(char *buf, size_t sz, long long n) {
-    int r = snprintf   (buf, sz, "%lld", n);
+    int r = snprintf(buf, sz, "%lld", n);
     return r < 0 ? 0 : (size_t)r;
 }
 static size_t tl_string_snprintf_float(char *buf, size_t sz, double f) {
-    int r = snprintf   (buf, sz, "%g", f);
+    int r = snprintf(buf, sz, "%g", f);
     return r < 0 ? 0 : (size_t)r;
 }
 #endc
