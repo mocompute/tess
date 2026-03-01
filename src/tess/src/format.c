@@ -791,8 +791,22 @@ static void align_pass(allocator *alloc, char **lines, int nlines) {
     int *opener_line = alloc_calloc(alloc, nlines + 1, sizeof(int)); // opener_line[depth] = line index
     int  cur_depth   = 0;
 
+    int in_c_block = 0;
     for (int i = 0; i < nlines; i++) {
         char const *trimmed = ltrim(lines[i]);
+
+        // Skip #ifc/#endc blocks entirely
+        if (!in_c_block && starts_with(trimmed, "#ifc")) {
+            in_c_block = 1;
+            depth_at[i] = cur_depth;
+            continue;
+        }
+        if (in_c_block) {
+            depth_at[i] = cur_depth;
+            if (starts_with(trimmed, "#endc")) in_c_block = 0;
+            continue;
+        }
+
         // Dedent for leading }
         int cc = 0;
         if (trimmed[0] == '}') {
@@ -817,9 +831,21 @@ static void align_pass(allocator *alloc, char **lines, int nlines) {
     }
 
     // Now run alignment groups
-    int i = 0;
+    in_c_block = 0;
+    int i      = 0;
     while (i < nlines) {
-        if (lines[i][0] == '\0' || ltrim(lines[i])[0] == '#') {
+        char const *t = ltrim(lines[i]);
+        if (!in_c_block && starts_with(t, "#ifc")) {
+            in_c_block = 1;
+            i++;
+            continue;
+        }
+        if (in_c_block) {
+            if (starts_with(t, "#endc")) in_c_block = 0;
+            i++;
+            continue;
+        }
+        if (lines[i][0] == '\0' || t[0] == '#') {
             i++;
             continue;
         }
