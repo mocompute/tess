@@ -13,7 +13,7 @@
 // The tag_len byte (byte 15) packs a 4-bit tag in the upper nibble and 4-bit length in the lower nibble.
 // Tag value 0x01 indicates a small string.
 
-_STR_SMALL_TAG: Byte  := 0x01u
+_STR_SMALL_TAG: Byte := 0x01u
 _STR_MAX_SMALL: UInt := 14u
 
 // The following are in prelude.tl:
@@ -35,25 +35,25 @@ _STR_MAX_SMALL: UInt := 14u
 // -- Synopsis --
 
 // Construction.
-empty     ()                                                      -> Str
-from_cstr (alloc: Ptr[Allocator], s: Ptr[Const[CChar]])           -> Str
+empty     ()                                                     -> Str
+from_cstr (alloc: Ptr[Allocator], s: Ptr[Const[CChar]])          -> Str
 from_bytes(alloc: Ptr[Allocator], s: Ptr[Const[CChar]], n: UInt) -> Str
 from_bytes(s: Ptr[Const[CChar]], n: UInt)                        -> Str
-copy      (alloc: Ptr[Allocator], s: Str)                         -> Str
-copy      (s: Str)                                                -> Str
-from_int  (alloc: Ptr[Allocator], n: Int)                         -> Str
-from_int  (n: Int)                                                -> Str
-from_float(alloc: Ptr[Allocator], f: Float)                       -> Str
-from_float(f: Float)                                              -> Str
-from_byte (b: Byte)                                               -> Str
-from_bool (b: Bool)                                               -> Str
+copy      (alloc: Ptr[Allocator], s: Str)                        -> Str
+copy      (s: Str)                                               -> Str
+from_int  (alloc: Ptr[Allocator], n: Int)                        -> Str
+from_int  (n: Int)                                               -> Str
+from_float(alloc: Ptr[Allocator], f: Float)                      -> Str
+from_float(f: Float)                                             -> Str
+from_byte (b: Byte)                                              -> Str
+from_bool (b: Bool)                                              -> Str
 
 // Queries.
-len       (s: Str)               -> UInt
-is_empty  (s: Str)               -> Bool
-_is_small (s: Str)               -> Bool
+len       (s: Str)              -> UInt
+is_empty  (s: Str)              -> Bool
+_is_small (s: Str)              -> Bool
 byte_at   (s: Str, index: UInt) -> Option[Byte]
-cstr      (s: Ptr[Str])          -> CString
+cstr      (s: Ptr[Str])         -> CString
 
 // Comparison.
 eq           (a: Str, b: Str)             -> Bool
@@ -79,13 +79,13 @@ slice (alloc: Ptr[Allocator], s: Str, start: UInt, end: UInt) -> Str
 slice (s: Str, start: UInt, end: UInt)                        -> Str
 
 // Search.
-index_of_byte     (s: Str, b: Byte)               -> Option[UInt]
+index_of_byte     (s: Str, b: Byte)              -> Option[UInt]
 index_of_byte_from(s: Str, b: Byte, start: UInt) -> Option[UInt]
-last_index_of_byte(s: Str, b: Byte)               -> Option[UInt]
-index_of          (s: Str, needle: Str)           -> Option[UInt]
-last_index_of     (s: Str, needle: Str)           -> Option[UInt]
-count_byte        (s: Str, b: Byte)               -> UInt
-count             (s: Str, needle: Str)           -> UInt
+last_index_of_byte(s: Str, b: Byte)              -> Option[UInt]
+index_of          (s: Str, needle: Str)          -> Option[UInt]
+last_index_of     (s: Str, needle: Str)          -> Option[UInt]
+count_byte        (s: Str, b: Byte)              -> UInt
+count             (s: Str, needle: Str)          -> UInt
 
 // Mutation.
 replace_byte(alloc: Ptr[Allocator], s: Str, find: Byte, replace: Byte) -> Str
@@ -139,8 +139,8 @@ _buf(s: Ptr[Str]) -> Ptr[CChar] {
 }
 
 _make_tag_len(n: UInt) -> Byte {
-    tag: UInt := _STR_SMALL_TAG
-    r: UInt := ((n & 0x0Fu) << 4u) | tag
+    tag:    UInt := _STR_SMALL_TAG
+    r:      UInt := ((n & 0x0Fu) << 4u) | tag
     result: Byte := r
     result
 }
@@ -214,11 +214,11 @@ copy(s: Str) -> Str {
 #ifc
 #include <stdio.h>
 static size_t tl_string_snprintf_int(char *buf, size_t sz, long long n) {
-    int r = snprintf(buf, sz, "%lld", n);
+    int r = snprintf   (buf, sz, "%lld", n);
     return r < 0 ? 0 : (size_t)r;
 }
 static size_t tl_string_snprintf_float(char *buf, size_t sz, double f) {
-    int r = snprintf(buf, sz, "%g", f);
+    int r = snprintf   (buf, sz, "%g", f);
     return r < 0 ? 0 : (size_t)r;
 }
 #endc
@@ -330,8 +330,8 @@ contains(haystack: Str, needle: Str) -> Bool {
     nn := len(needle)
     if nn == 0u { return true }
     if nn > hn { return false }
-    hp       := _buf(haystack.&)
-    np       := _buf(needle.&)
+    hp      := _buf(haystack.&)
+    np      := _buf(needle.&)
     i: UInt := 0u
     while i <= hn - nn, i += 1u {
         candidate: Ptr[CChar] := Unsafe.pointer_add(hp, i)
@@ -341,8 +341,8 @@ contains(haystack: Str, needle: Str) -> Bool {
 }
 
 contains_byte(s: Str, b: Byte) -> Bool {
-    n        := len(s)
-    sp       := _buf(s.&)
+    n       := len(s)
+    sp      := _buf(s.&)
     i: UInt := 0u
     while i < n, i += 1u {
         ch: Byte := sp.[i]
@@ -371,8 +371,8 @@ _cat_impl(alloc: Ptr[Allocator], bufs: Ptr[Ptr[CChar]], lens: Ptr[UInt], count: 
     if total <= _STR_MAX_SMALL {
         s               := Str(small = _Small(buf = void, tag_len = _make_tag_len(total)))
         dst: Ptr[CChar] := s.small.buf
-        off: UInt      := 0u
-        j:   UInt      := 0u
+        off: UInt       := 0u
+        j:   UInt       := 0u
         while j < count, j += 1u {
             if lens.[j] > 0u {
                 d: Ptr[CChar] := Unsafe.pointer_add(dst, off)
@@ -399,11 +399,11 @@ _cat_impl(alloc: Ptr[Allocator], bufs: Ptr[Ptr[CChar]], lens: Ptr[UInt], count: 
 
 cat(alloc, a: Str, b: Str) -> Str {
     bufs: CArray[Ptr[CChar], 2] := void
-    lens: CArray[UInt, 2]      := void
+    lens: CArray[UInt, 2]       := void
     bufs.[0u] = _buf(a.&) lens.[0u] = len(a)
     bufs.[1u] = _buf(b.&) lens.[1u] = len(b)
     bp: Ptr[Ptr[CChar]] := bufs
-    lp: Ptr[UInt]      := lens
+    lp: Ptr[UInt]       := lens
     _cat_impl(alloc, bp, lp, 2u)
 }
 
@@ -413,12 +413,12 @@ cat(a: Str, b: Str) -> Str {
 
 cat_3(alloc, a: Str, b: Str, c: Str) -> Str {
     bufs: CArray[Ptr[CChar], 3] := void
-    lens: CArray[UInt, 3]      := void
+    lens: CArray[UInt, 3]       := void
     bufs.[0u] = _buf(a.&) lens.[0u] = len(a)
     bufs.[1u] = _buf(b.&) lens.[1u] = len(b)
     bufs.[2u] = _buf(c.&) lens.[2u] = len(c)
     bp: Ptr[Ptr[CChar]] := bufs
-    lp: Ptr[UInt]      := lens
+    lp: Ptr[UInt]       := lens
     _cat_impl(alloc, bp, lp, 3u)
 }
 
@@ -428,13 +428,13 @@ cat_3(a: Str, b: Str, c: Str) -> Str {
 
 cat_4(alloc, a: Str, b: Str, c: Str, d: Str) -> Str {
     bufs: CArray[Ptr[CChar], 4] := void
-    lens: CArray[UInt, 4]      := void
+    lens: CArray[UInt, 4]       := void
     bufs.[0u] = _buf(a.&) lens.[0u] = len(a)
     bufs.[1u] = _buf(b.&) lens.[1u] = len(b)
     bufs.[2u] = _buf(c.&) lens.[2u] = len(c)
     bufs.[3u] = _buf(d.&) lens.[3u] = len(d)
     bp: Ptr[Ptr[CChar]] := bufs
-    lp: Ptr[UInt]      := lens
+    lp: Ptr[UInt]       := lens
     _cat_impl(alloc, bp, lp, 4u)
 }
 
@@ -475,8 +475,8 @@ slice(s: Str, start: UInt, end: UInt) -> Str {
 // -- Search --
 
 index_of_byte(s: Str, b: Byte) -> Option[UInt] {
-    n        := len(s)
-    sp       := _buf(s.&)
+    n       := len(s)
+    sp      := _buf(s.&)
     i: UInt := 0u
     while i < n, i += 1u {
         ch: Byte := sp.[i]
@@ -488,7 +488,7 @@ index_of_byte(s: Str, b: Byte) -> Option[UInt] {
 index_of_byte_from(s: Str, b: Byte, start: UInt) -> Option[UInt] {
     n := len(s)
     if start >= n { return None }
-    sp       := _buf(s.&)
+    sp      := _buf(s.&)
     i: UInt := start
     while i < n, i += 1u {
         ch: Byte := sp.[i]
@@ -500,7 +500,7 @@ index_of_byte_from(s: Str, b: Byte, start: UInt) -> Option[UInt] {
 last_index_of_byte(s: Str, b: Byte) -> Option[UInt] {
     n := len(s)
     if n == 0u { return None }
-    sp       := _buf(s.&)
+    sp      := _buf(s.&)
     i: UInt := n
     while i > 0u {
         i = i - 1u
@@ -515,8 +515,8 @@ index_of(s: Str, needle: Str) -> Option[UInt] {
     nn := len(needle)
     if nn == 0u { return Some(0u) }
     if nn > sn { return None }
-    sp       := _buf(s.&)
-    np       := _buf(needle.&)
+    sp      := _buf(s.&)
+    np      := _buf(needle.&)
     i: UInt := 0u
     while i <= sn - nn, i += 1u {
         candidate: Ptr[CChar] := Unsafe.pointer_add(sp, i)
@@ -530,8 +530,8 @@ last_index_of(s: Str, needle: Str) -> Option[UInt] {
     nn := len(needle)
     if nn == 0u { return Some(sn) }
     if nn > sn { return None }
-    sp       := _buf(s.&)
-    np       := _buf(needle.&)
+    sp      := _buf(s.&)
+    np      := _buf(needle.&)
     i: UInt := sn - nn + 1u
     while i > 0u {
         i = i - 1u
@@ -542,9 +542,9 @@ last_index_of(s: Str, needle: Str) -> Option[UInt] {
 }
 
 count_byte(s: Str, b: Byte) -> UInt {
-    n        := len(s)
-    sp       := _buf(s.&)
-    c: UInt  := 0u
+    n       := len(s)
+    sp      := _buf(s.&)
+    c: UInt := 0u
     i: UInt := 0u
     while i < n, i += 1u {
         ch: Byte := sp.[i]
@@ -558,9 +558,9 @@ count(s: Str, needle: Str) -> UInt {
     nn := len(needle)
     if nn == 0u { _tl_fatal_(c"Str.count: empty needle") }
     if nn > sn { return 0u }
-    sp       := _buf(s.&)
-    np       := _buf(needle.&)
-    c: UInt  := 0u
+    sp      := _buf(s.&)
+    np      := _buf(needle.&)
+    c: UInt := 0u
     i: UInt := 0u
     while i <= sn - nn {
         candidate: Ptr[CChar] := Unsafe.pointer_add(sp, i)
@@ -578,9 +578,9 @@ count(s: Str, needle: Str) -> UInt {
 // -- Mutation --
 
 replace_byte(alloc, s: Str, find: Byte, replace: Byte) -> Str {
-    result   := copy(alloc, s)
-    n        := len(result)
-    rp       := _buf(result.&)
+    result  := copy(alloc, s)
+    n       := len(result)
+    rp      := _buf(result.&)
     i: UInt := 0u
     while i < n, i += 1u {
         ch: Byte := rp.[i]
@@ -600,9 +600,9 @@ replace_byte(s: Str, find: Byte, replace: Byte) -> Str {
 // -- Transformation --
 
 to_upper(alloc, s: Str) -> Str {
-    result   := copy(alloc, s)
-    n        := len(result)
-    rp       := _buf(result.&)
+    result  := copy(alloc, s)
+    n       := len(result)
+    rp      := _buf(result.&)
     i: UInt := 0u
     while i < n, i += 1u {
         if rp.[i] >= 'a' && rp.[i] <= 'z' { rp.[i] = rp.[i] - ' ' }
@@ -615,9 +615,9 @@ to_upper(s: Str) -> Str {
 }
 
 to_lower(alloc, s: Str) -> Str {
-    result   := copy(alloc, s)
-    n        := len(result)
-    rp       := _buf(result.&)
+    result  := copy(alloc, s)
+    n       := len(result)
+    rp      := _buf(result.&)
     i: UInt := 0u
     while i < n, i += 1u {
         if rp.[i] >= 'A' && rp.[i] <= 'Z' { rp.[i] = rp.[i] + ' ' }
@@ -630,8 +630,8 @@ to_lower(s: Str) -> Str {
 }
 
 trim_left(alloc, s: Str) -> Str {
-    n        := len(s)
-    sp       := _buf(s.&)
+    n       := len(s)
+    sp      := _buf(s.&)
     i: UInt := 0u
     while i < n {
         if !_is_whitespace(sp.[i]) { break }
@@ -649,7 +649,7 @@ trim_left(s: Str) -> Str {
 trim_right(alloc, s: Str) -> Str {
     n := len(s)
     if n == 0u { return empty() }
-    sp       := _buf(s.&)
+    sp      := _buf(s.&)
     i: UInt := n
     while i > 0u {
         if !_is_whitespace(sp.[i - 1u]) { break }
@@ -666,7 +666,7 @@ trim_right(s: Str) -> Str {
 trim(alloc, s: Str) -> Str {
     n := len(s)
     if n == 0u { return empty() }
-    sp           := _buf(s.&)
+    sp          := _buf(s.&)
     start: UInt := 0u
     while start < n {
         if !_is_whitespace(sp.[start]) { break }
@@ -691,12 +691,12 @@ repeat(alloc, s: Str, count: UInt) -> Str {
     sn := len(s)
     if sn == 0u { return empty() }
     total: UInt := sn * count
-    sp           := _buf(s.&)
+    sp          := _buf(s.&)
 
     if total <= _STR_MAX_SMALL {
         result          := Str(small = _Small(buf = void, tag_len = _make_tag_len(total)))
         dst: Ptr[CChar] := result.small.buf
-        off: UInt      := 0u
+        off: UInt       := 0u
         i:   UInt       := 0u
         while i < count, i += 1u {
             d: Ptr[CChar] := Unsafe.pointer_add(dst, off)
@@ -709,7 +709,7 @@ repeat(alloc, s: Str, count: UInt) -> Str {
     buf: Ptr[CChar] := alloc->malloc(alloc, total + 1u)
     if buf == null { _tl_fatal_(c"Str.repeat: out of memory") }
     off: UInt := 0u
-    i:   UInt  := 0u
+    i:   UInt := 0u
     while i < count, i += 1u {
         d: Ptr[CChar] := Unsafe.pointer_add(buf, off)
         c_memcpy(d, sp, sn)
@@ -732,8 +732,8 @@ replace(alloc, s: Str, old: Str, new_s: Str) -> Str {
     op := _buf(old.&)
 
     // Count occurrences
-    occ:   UInt := 0u
-    i:     UInt := 0u
+    occ: UInt := 0u
+    i:   UInt := 0u
     while i <= sn - on, i += 1u {
         candidate: Ptr[CChar] := Unsafe.pointer_add(sp, i)
         if c_memcmp(candidate, op, on) == 0 {
@@ -837,8 +837,8 @@ split(alloc, s: Str, delimiter: Str) -> Array.Array[Str] {
         return result
     }
 
-    sp           := _buf(s.&)
-    dp           := _buf(delimiter.&)
+    sp          := _buf(s.&)
+    dp          := _buf(delimiter.&)
     start: UInt := 0u
     i:     UInt := 0u
     while i <= sn - dn, i += 1u {
@@ -873,7 +873,7 @@ join(alloc, sep: Str, arr: Array.Array[Str]) -> Str {
 
     // Calculate total length
     total: UInt := 0u
-    i:     UInt  := 0u
+    i:     UInt := 0u
     while i < arr.size, i += 1u {
         total = total + len(Array.get(arr, i))
     }
@@ -885,7 +885,7 @@ join(alloc, sep: Str, arr: Array.Array[Str]) -> Str {
     if total <= _STR_MAX_SMALL {
         result          := Str(small = _Small(buf = void, tag_len = _make_tag_len(total)))
         dst: Ptr[CChar] := result.small.buf
-        off: UInt      := 0u
+        off: UInt       := 0u
         j:   UInt       := 0u
         while j < arr.size, j += 1u {
             elem := Array.get(arr, j)
@@ -908,7 +908,7 @@ join(alloc, sep: Str, arr: Array.Array[Str]) -> Str {
     buf: Ptr[CChar] := alloc->malloc(alloc, total + 1u)
     if buf == null { _tl_fatal_(c"Str.join: out of memory") }
     off: UInt := 0u
-    j:   UInt  := 0u
+    j:   UInt := 0u
     while j < arr.size, j += 1u {
         elem := Array.get(arr, j)
         en   := len(elem)
