@@ -5217,7 +5217,7 @@ static int can_be_free_variable(tl_infer *self, traverse_ctx *traverse_ctx, ast_
     if (tl_type_registry_is_nullary_type(self->registry, name)) return 0;
 
     // don't collect symbols that start with c_
-    if (0 == str_cmp_nc(name, "c_", 2)) return 0;
+    if (is_c_symbol(name)) return 0;
 
     // don't collect symbols that are already in lexical scope (e.g., union case bindings)
     if (str_hset_contains(traverse_ctx->lexical_names, name)) return 0;
