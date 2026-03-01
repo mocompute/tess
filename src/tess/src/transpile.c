@@ -2698,7 +2698,7 @@ static int should_generate(transpile *self, str name, tl_polytype *type) {
     // during its processing of functions in the environment.
 
     // generate main even if generic type
-    if (str_eq(name, S("main"))) return 1;
+    if (is_main_function(name)) return 1;
 
     // never generate c_ prefixed functions
     if (is_c_symbol(name)) return 0;

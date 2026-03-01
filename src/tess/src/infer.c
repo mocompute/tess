@@ -5370,7 +5370,7 @@ static int add_generic(tl_infer *self, ast_node *node) {
     if (ast_node_is_let(node)) {
         if (!provisional) {
             // Note: special case: force main() to have a CInt result type
-            if (str_eq(name, S("main"))) {
+            if (is_main_function(name)) {
                 provisional = make_arrow_result_type(self, null, ast_node_sized_from_ast_array(node),
                                                      tl_type_registry_get(self->registry, S("CInt")), 1);
             }
@@ -5494,7 +5494,7 @@ void remove_generic_toplevels(tl_infer *self) {
     while ((node = toplevel_iter(self, &iter))) {
 
         str name = ast_node_str(toplevel_name_node(node));
-        if (str_eq(S("main"), name)) continue;
+        if (is_main_function(name)) continue;
 
         tl_polytype *type = tl_type_env_lookup(self->env, name);
         if (!type) fatal("runtime error");
@@ -6172,7 +6172,7 @@ static int run_specialize(tl_infer *self, ast_node_sized nodes, ast_node *main) 
             if (ast_node_is_let(node)) {
                 ast_node *name     = toplevel_name_node(node);
                 str       fun_name = ast_node_str(name);
-                if (str_eq(fun_name, S("main"))) continue;
+                if (is_main_function(fun_name)) continue;
                 tl_polytype *type = tl_type_env_lookup(self->env, fun_name);
                 if (tl_polytype_is_concrete(type)) {
                     dbg(self, "library: exporting '%s'", str_cstr(&fun_name));
@@ -6486,6 +6486,10 @@ int is_c_struct_symbol(str name) {
 
 int is_module_init(str name) {
     return str_ends_with(name, S("____init__0"));
+}
+
+int is_main_function(str name) {
+    return str_eq(name, S("main"));
 }
 
 //

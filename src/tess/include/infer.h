@@ -42,6 +42,7 @@ int                 is_c_symbol(str);
 int                 is_c_struct_symbol(str);
 int                 is_intrinsic(str);
 int                 is_module_init(str);
+int                 is_main_function(str);
 
 // -- stats --
 

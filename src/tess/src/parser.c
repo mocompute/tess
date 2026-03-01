@@ -2123,7 +2123,7 @@ static void mangle_name_for_module(parser *self, ast_node *name, str module) {
 static void mangle_name_for_arity(parser *self, ast_node *name, u8 arity, int is_definition) {
     if (!ast_node_is_symbol(name)) return;
     str name_str = name->symbol.name;
-    if (str_eq(name_str, S("main"))) return;
+    if (is_main_function(name_str)) return;
     if (is_c_symbol(name_str)) return;
 
     // For function calls (not definitions), only mangle if the symbol is a known module-level function.
@@ -2881,7 +2881,7 @@ static int toplevel_hash_module(parser *self, str cmd, str module) {
 
         // Prelude: don't add to modules_seen
         if (!is_prelude) str_hset_insert(&self->modules_seen, module);
-        if (str_eq(module, S("main"))) self->current_module = str_empty();
+        if (is_main_function(module)) self->current_module = str_empty();
         else {
             // Note: do not use ast_arena, as it could be speculative and discarded
             self->current_module = str_copy(self->parent_alloc, module);
@@ -2930,7 +2930,7 @@ static int toplevel_hash_alias(parser *self, str_array words) {
         return ERROR_STOP;
     }
     // source is main
-    if (str_eq(source, S("main"))) {
+    if (is_main_function(source)) {
         self->error.tag = tl_err_alias_source_is_main;
         return ERROR_STOP;
     }
