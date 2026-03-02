@@ -12,10 +12,10 @@ Tess is a statically-typed, compiled programming language that transpiles to C. 
 greet(name) { c_printf("Hello, %s\n", name)  void }
 ```
 
-If a function ends with an assignment statement (`=`), it already returns `Void` since assignments have no value:
+If a function ends with an assignment statement (`=`), it returns `Void` since assignments have no value:
 
 ```tl
-set_name(n) { name = n }   // No void needed - assignment has no value
+set_name(n) { name = n }   // returns Void - assignment has no value
 ```
 
 **Parentheses for grouping:** Use `( )` to group expressions and control evaluation order, or to introduce local bindings with let-in style:
