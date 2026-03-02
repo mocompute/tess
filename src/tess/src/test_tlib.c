@@ -2142,7 +2142,7 @@ static int test_e2e_c_export_emit_c(void) {
     char src[512];
     snprintf(src, sizeof(src), "%smylib.tl", dir);
     if (write_file(src, "#module mylib\n"
-                        "[[c_export]] add(x: CInt, y: CInt) { x + y }\n"
+                        "[[c_export]] add(x: CInt, y: CInt) -> CInt { x + y }\n"
                         "[[c_export(\"my_mul\")]] mul(a: CInt, b: CInt) { a * b }\n"
                         "helper(x: CInt) -> CInt { x + 1 }\n")) {
         fprintf(stderr, "  failed to write mylib.tl\n");

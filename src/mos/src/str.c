@@ -815,8 +815,23 @@ str str_init_u64(allocator *alloc, u64 val) {
 }
 
 str str_init_f64(allocator *alloc, f64 val) {
-    char buf[40];
-    int  len = snprintf(buf, sizeof buf, "%f", val);
+    char buf[64];
+    int  len = snprintf(buf, sizeof buf, "%.17g", val);
+    if (len < 0) len = 0;
+    if (len >= (int)sizeof buf) len = (int)sizeof buf - 1;
+
+    // Ensure output is a valid C float literal: must contain '.' or 'e'/'E'.
+    // %.17g strips trailing zeros and may produce "3" for 3.0 — append ".0".
+    int has_dot_or_exp = 0;
+    for (int i = 0; i < len; i++) {
+        if (buf[i] == '.' || buf[i] == 'e' || buf[i] == 'E') { has_dot_or_exp = 1; break; }
+    }
+    if (!has_dot_or_exp && len + 2 < (int)sizeof buf) {
+        buf[len]     = '.';
+        buf[len + 1] = '0';
+        len += 2;
+    }
+
     return str_init_n(alloc, buf, len);
 }
 

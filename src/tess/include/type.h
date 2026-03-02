@@ -27,6 +27,7 @@ enum {
     TL_INTEGER_SUBCHAIN_CSIZE           = 5, // CSize (standalone)
     TL_INTEGER_SUBCHAIN_CPTRDIFF        = 6, // CPtrDiff (standalone)
     TL_INTEGER_SUBCHAIN_CCHAR           = 7, // CChar (standalone)
+    TL_INTEGER_SUBCHAIN_FLOAT           = 8, // CFloat < CDouble < CLongDouble
 };
 
 typedef struct {
@@ -75,6 +76,7 @@ typedef struct tl_monotype {
         tl_weak,
         tl_weak_int_signed,
         tl_weak_int_unsigned,
+        tl_weak_float,
         tl_cons_inst,
         tl_arrow,
         tl_tuple,
@@ -145,6 +147,8 @@ nodiscard tl_monotype *tl_monotype_create_weak_int_signed(allocator *, tl_type_v
 nodiscard tl_monotype *tl_monotype_create_weak_int_unsigned(allocator *, tl_type_variable) mallocfun;
 nodiscard tl_monotype *tl_monotype_create_fresh_weak_int_signed(tl_type_subs *) mallocfun;
 nodiscard tl_monotype *tl_monotype_create_fresh_weak_int_unsigned(tl_type_subs *) mallocfun;
+nodiscard tl_monotype *tl_monotype_create_weak_float(allocator *, tl_type_variable) mallocfun;
+nodiscard tl_monotype *tl_monotype_create_fresh_weak_float(tl_type_subs *) mallocfun;
 nodiscard tl_monotype *tl_monotype_create_list(allocator *, tl_monotype_sized);
 nodiscard tl_monotype *tl_monotype_create_tuple(allocator *, tl_monotype_sized);
 nodiscard tl_monotype *tl_monotype_create_cons(allocator *, tl_type_constructor_inst *) mallocfun;
@@ -174,6 +178,7 @@ int                    tl_monotype_is_weak(tl_monotype *);
 int                    tl_monotype_is_weak_int(tl_monotype *);
 int                    tl_monotype_is_weak_int_signed(tl_monotype *);
 int                    tl_monotype_is_weak_int_unsigned(tl_monotype *);
+int                    tl_monotype_is_weak_float(tl_monotype *);
 int                    tl_monotype_is_any_weak(tl_monotype *);
 int                    tl_monotype_is_weak_deep(tl_monotype *);
 int                    tl_monotype_sized_is_concrete(tl_monotype_sized);
@@ -296,7 +301,8 @@ int  tl_type_subs_unify_tv_mono(tl_type_subs *, tl_type_variable, tl_monotype *,
 int  tl_type_subs_unify_mono(tl_type_subs *, tl_monotype *, tl_monotype *, type_error_cb_fun, void *,
                              hashmap **, tl_unify_direction);
 void tl_type_subs_apply(tl_type_subs *, tl_type_env *);
-void tl_type_subs_default_weak_ints(tl_type_subs *, tl_monotype *int_type, tl_monotype *uint_type);
+void tl_type_subs_default_weak_ints(tl_type_subs *, tl_monotype *int_type, tl_monotype *uint_type,
+                                    tl_monotype *float_type);
 void tl_type_subs_log(tl_type_subs *);
 
 // -- utilities --

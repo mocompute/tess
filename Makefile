@@ -396,6 +396,10 @@ TL_TESTS =					\
 	escape_sequences			\
 	factorial				\
 	fatal_intrinsic				\
+	float_same_type				\
+	float_weak_literal			\
+	float_cast				\
+	float_widening				\
 	for_break				\
 	for_continue				\
 	for_statement_basic			\
@@ -632,11 +636,18 @@ TL_FAIL_TESTS =					\
 	fail_try_three_variants			\
 	fail_unalias_not_found			\
 	fail_unknown_free_variable		\
+	fail_float_exact_conditional		\
+	fail_float_exact_operator		\
+	fail_float_int_implicit			\
+	fail_float_narrowing_funcall		\
+	fail_float_narrowing_return		\
 	fail_weak_int_cross_family		\
 	fail_weak_int_to_standalone
 
 # Expected runtime failure tests (must compile, must fail at runtime with --bounds-check)
 TL_FAIL_RUNTIME_TESTS =			\
+	fail_runtime_float_narrowing		\
+	fail_runtime_float_to_int		\
 	fail_runtime_integer_bounds		\
 	fail_runtime_integer_bounds_cross_family
 

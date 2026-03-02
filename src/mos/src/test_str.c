@@ -628,6 +628,18 @@ static int test_init_num(void) {
     error += fv > 2.4 && fv < 2.6 ? 0 : 1;
     str_deinit(alloc, &s);
 
+    // f64 integer value must contain decimal point (valid C float literal)
+    s = str_init_f64(alloc, 3.0);
+    { span sp = str_span(&s); int found = 0;
+      for (u32 j = 0; j < sp.len; j++) if (sp.buf[j] == '.') found = 1;
+      error += found ? 0 : 1; }
+    str_deinit(alloc, &s);
+
+    // f64 large value must not overflow buffer (was a bug with %f format)
+    s = str_init_f64(alloc, 1e300);
+    error += str_len(s) < 40 ? 0 : 1;
+    str_deinit(alloc, &s);
+
     leak_detector_destroy(&alloc);
     return error;
 }

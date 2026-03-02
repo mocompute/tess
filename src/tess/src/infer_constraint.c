@@ -706,6 +706,12 @@ static int infer_literal_type(tl_infer *self, ast_node *node,
     return constrain_pm(self, node->type, ty, node, TL_UNIFY_SYMMETRIC);
 }
 
+static int infer_weak_float_literal(tl_infer *self, ast_node *node) {
+    ensure_tv(self, &node->type);
+    tl_monotype *weak = tl_monotype_create_fresh_weak_float(self->subs);
+    return constrain_pm(self, node->type, weak, node, TL_UNIFY_SYMMETRIC);
+}
+
 static int infer_weak_int_literal(tl_infer *self, ast_node *node, int is_signed) {
     ensure_tv(self, &node->type);
     tl_monotype *weak = is_signed ? tl_monotype_create_fresh_weak_int_signed(self->subs)
@@ -803,7 +809,8 @@ static int is_std_function(ast_node *node) {
 int is_cast_annotation(ast_node *node) {
     if (!ast_node_is_symbol(node) || !node->symbol.annotation_type) return 0;
     tl_monotype *type = node->symbol.annotation_type->type;
-    return tl_monotype_is_ptr(type) || tl_monotype_is_integer_convertible(type);
+    return tl_monotype_is_ptr(type) || tl_monotype_is_integer_convertible(type) ||
+           tl_monotype_is_float_convertible(type);
 }
 
 // Handle cast annotation in let-in bindings.
@@ -840,6 +847,13 @@ static int cast_constrain_let_in(tl_infer *self, ast_node *node) {
         if (value_type && tl_monotype_is_weak_int(value_type->type)) {
             constrain(self, annotation_type, value_type, node, TL_UNIFY_DIRECTED);
         }
+    } else if (tl_monotype_is_float_convertible(annotation_type->type)) {
+        // Float cast: do not constrain (would back-propagate narrow type upstream).
+        // Weak float literals resolve to the annotation type.
+        if (value_type && tl_monotype_is_weak_float(value_type->type)) {
+            constrain(self, annotation_type, value_type, node, TL_UNIFY_DIRECTED);
+        }
+        // Weak int to float: no constraint needed, weak int defaults and cast handles it.
     } else {
         // Pointer cast: constrain with error suppression (the value may be a
         // generic that needs the annotation to resolve).
@@ -2739,7 +2753,7 @@ int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_node *node
 
     case ast_string:    return infer_literal_type(self, node, tl_type_registry_ptr_char);
     case ast_char:      return infer_literal_type(self, node, tl_type_registry_char);
-    case ast_f64:       return infer_literal_type(self, node, tl_type_registry_float);
+    case ast_f64:       return infer_weak_float_literal(self, node);
     case ast_i64:       return infer_weak_int_literal(self, node, 1);
     case ast_i64_z:     return infer_literal_type(self, node, tl_type_registry_cptrdiff);
     case ast_u64:       return infer_weak_int_literal(self, node, 0);

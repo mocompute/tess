@@ -316,7 +316,8 @@ static int run_specialize(tl_infer *self, ast_node_sized nodes, ast_node *main) 
     // Must happen after specialization (which re-infers literals, creating new weak types)
     // and before the final substitution pass.
     tl_type_subs_default_weak_ints(self->subs, tl_type_registry_int(self->registry),
-                                   tl_type_registry_uint(self->registry));
+                                   tl_type_registry_uint(self->registry),
+                                   tl_type_registry_float(self->registry));
 
     // apply subs to global environment
     tl_type_subs_apply(self->subs, self->env);
@@ -415,7 +416,8 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *out_resu
     // Default unconstrained weak integer literals before specialization, so that
     // specialization sees concrete Int/UInt types for naming and instance creation.
     tl_type_subs_default_weak_ints(self->subs, tl_type_registry_int(self->registry),
-                                   tl_type_registry_uint(self->registry));
+                                   tl_type_registry_uint(self->registry),
+                                   tl_type_registry_float(self->registry));
     tl_type_subs_apply(self->subs, self->env);
     apply_subs_to_ast(self);
     arena_reset(self->transient);

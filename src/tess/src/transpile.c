@@ -1103,48 +1103,60 @@ static str generate_funcall(transpile *self, ast_node const *node, eval_ctx *ctx
     return generate_funcall_with_args(self, node, ctx, args_res);
 }
 
-// Detect if a let-in binding is an explicit integer cast annotation where the value type
+// Look up the type of a let-in value expression (returns NULL if not a symbol or not found).
+static tl_monotype *let_in_val_type(transpile *self, ast_node const *node) {
+    ast_node *val_node = node->let_in.value;
+    if (ast_node_is_symbol(val_node)) return env_lookup(self, ast_node_str(val_node));
+    return NULL;
+}
+
+// Emit the common trailing arguments for bounds-check macros: "source", "target", file, line
+static void emit_bounds_check_tail(transpile *self, str source_c, str target_c,
+                                   ast_node const *node) {
+    char const *file = node->file ? node->file : "<unknown>";
+    u32         line = node->line;
+    cat(self, S(", \""));
+    cat(self, source_c);
+    cat(self, S("\", \""));
+    cat(self, target_c);
+    cat(self, S("\", \""));
+    cat(self, str_init_static(file));
+    cat(self, S("\", "));
+    cat(self, str_init_u64(self->transient, line));
+    cat(self, S(");\n"));
+}
+
+// Detect if a let-in binding is an explicit integer cast where the value type
 // differs from the target (narrowing or cross-chain).
-static int is_integer_narrowing_cast(transpile *self, tl_monotype *target, ast_node const *node) {
-    ast_node *name_node = node->let_in.name;
-    if (!ast_node_is_symbol(name_node) || !name_node->symbol.annotation_type) return 0;
-    tl_monotype *ann = name_node->symbol.annotation_type->type;
-    if (!tl_monotype_is_integer_convertible(ann)) return 0;
-
-    // Get the value expression's type
-    ast_node    *val_node = node->let_in.value;
-    tl_monotype *val_type = NULL;
-    if (ast_node_is_symbol(val_node)) {
-        val_type = env_lookup(self, ast_node_str(val_node));
-    }
+static int is_integer_narrowing_cast(tl_monotype *target, tl_monotype *val_type) {
     if (!val_type || !tl_monotype_is_integer_convertible(val_type)) return 0;
-
-    // Same type = no narrowing
     if (str_eq(target->cons_inst->def->name, val_type->cons_inst->def->name)) return 0;
-
     return 1;
 }
 
+// Detect if a let-in binding is a float narrowing cast (wider float -> narrower float).
+static int is_float_narrowing_cast(tl_monotype *target, tl_monotype *val_type) {
+    if (!val_type || !tl_monotype_is_float_convertible(val_type)) return 0;
+    if (target->cons_inst->def == val_type->cons_inst->def) return 0;
+    int cmp = tl_monotype_compare_integer_width(target, val_type);
+    return cmp < 0;
+}
+
+// Detect if a let-in value is a float (for float-to-integer cast bounds checking).
+static int is_float_to_int_val(tl_monotype *val_type) {
+    return val_type && tl_monotype_is_float_convertible(val_type);
+}
+
 // Emit a bounds-check macro call: one of four variants depending on source/target signedness.
-static void emit_bounds_check(transpile *self, tl_monotype *target, str value, ast_node const *node) {
+static void emit_bounds_check(transpile *self, tl_monotype *target, tl_monotype *val_type, str value,
+                              ast_node const *node) {
     char const *c_max = tl_monotype_integer_c_max(target);
     if (!c_max) return;
 
-    str       target_c           = type_to_c_mono(self, target);
-    str       source_c           = S("(unknown)");
-    int       source_is_unsigned = 0;
-    ast_node *val_node           = node->let_in.value;
-    if (ast_node_is_symbol(val_node)) {
-        tl_monotype *val_type = env_lookup(self, ast_node_str(val_node));
-        if (val_type) {
-            source_c           = type_to_c_mono(self, val_type);
-            source_is_unsigned = tl_monotype_is_unsigned_family(val_type);
-        }
-    }
-
-    int         target_is_unsigned = tl_monotype_is_unsigned_family(target);
-    char const *file               = node->file ? node->file : "<unknown>";
-    u32         line               = node->line;
+    str target_c           = type_to_c_mono(self, target);
+    str source_c           = val_type ? type_to_c_mono(self, val_type) : S("(unknown)");
+    int source_is_unsigned = val_type ? tl_monotype_is_unsigned_family(val_type) : 0;
+    int target_is_unsigned = tl_monotype_is_unsigned_family(target);
 
     // Choose macro based on source/target signedness combination:
     // signed->signed:     tl_narrowing_assert(val, MIN, MAX, ...)
@@ -1173,15 +1185,46 @@ static void emit_bounds_check(transpile *self, tl_monotype *target, str value, a
     }
     cat(self, S(", "));
     cat(self, str_init_static(c_max));
-    cat(self, S(", \""));
-    cat(self, source_c);
-    cat(self, S("\", \""));
+    emit_bounds_check_tail(self, source_c, target_c, node);
+}
+
+// Emit a float narrowing bounds check: verifies the narrowed result is finite.
+static void emit_float_narrowing_bounds_check(transpile *self, tl_monotype *target, tl_monotype *val_type,
+                                              str value, ast_node const *node) {
+    str source_c = val_type ? type_to_c_mono(self, val_type) : S("(unknown)");
+    str target_c = type_to_c_mono(self, target);
+
+    // tl_float_narrowing_assert(val, (target_c)val, "source", "target", file, line)
+    cat(self, S("tl_float_narrowing_assert("));
+    cat(self, value);
+    cat(self, S(", ("));
     cat(self, target_c);
-    cat(self, S("\", \""));
-    cat(self, str_init_static(file));
-    cat(self, S("\", "));
-    cat(self, str_init_u64(self->transient, line));
-    cat(self, S(");\n"));
+    cat(self, S(")"));
+    cat(self, value);
+    emit_bounds_check_tail(self, source_c, target_c, node);
+}
+
+// Emit a float-to-integer bounds check: verifies the float is within the integer range and not NaN.
+static void emit_float_to_int_bounds_check(transpile *self, tl_monotype *target, tl_monotype *val_type,
+                                           str value, ast_node const *node) {
+    char const *c_max = tl_monotype_integer_c_max(target);
+    if (!c_max) return;
+
+    str source_c = val_type ? type_to_c_mono(self, val_type) : S("(unknown)");
+    str target_c = type_to_c_mono(self, target);
+
+    int         target_is_unsigned = tl_monotype_is_unsigned_family(target);
+    char const *c_min              = target_is_unsigned ? "0" : tl_monotype_integer_c_min(target);
+    if (!c_min) c_min = "0";
+
+    // tl_float_to_int_assert(val, MIN, MAX, "source", "target", file, line)
+    cat(self, S("tl_float_to_int_assert("));
+    cat(self, value);
+    cat(self, S(", "));
+    cat(self, str_init_static(c_min));
+    cat(self, S(", "));
+    cat(self, str_init_static(c_max));
+    emit_bounds_check_tail(self, source_c, target_c, node);
 }
 
 static str generate_let_in_lambda(transpile *self, tl_monotype *result_type, ast_node const *node,
@@ -1248,11 +1291,19 @@ static str generate_let_in(transpile *self, tl_monotype *result_type, ast_node c
 
                             cat(self, value);
                             cat_semicolonln(self);
-                        } else if (tl_monotype_is_integer_convertible(type)) {
-                            // Integer cast: emit (target_type)value for all integer let-in bindings.
+                        } else if (tl_monotype_is_integer_convertible(type)
+                                   || tl_monotype_is_float_convertible(type)) {
+                            // Numeric cast: emit (target_type)value for all numeric let-in bindings.
                             // Silences -Wconversion for narrowing and makes casts explicit.
-                            if (is_integer_narrowing_cast(self, type, node)) {
-                                emit_bounds_check(self, type, value, node);
+                            tl_monotype *val_type = let_in_val_type(self, node);
+                            if (tl_monotype_is_integer_convertible(type)) {
+                                if (is_integer_narrowing_cast(type, val_type))
+                                    emit_bounds_check(self, type, val_type, value, node);
+                                else if (is_float_to_int_val(val_type))
+                                    emit_float_to_int_bounds_check(self, type, val_type, value, node);
+                            } else {
+                                if (is_float_narrowing_cast(type, val_type))
+                                    emit_float_narrowing_bounds_check(self, type, val_type, value, node);
                             }
                             cat(self, name);
                             cat_assign(self);

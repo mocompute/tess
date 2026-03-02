@@ -66,10 +66,14 @@ static int test_subchain_ids(void) {
     error += tl_monotype_integer_subchain(lookup(reg, "CPtrDiff")) != TL_INTEGER_SUBCHAIN_CPTRDIFF;
     error += tl_monotype_integer_subchain(lookup(reg, "CChar"))    != TL_INTEGER_SUBCHAIN_CCHAR;
 
-    // Non-integer types
+    // Float sub-chain (sub-chain 8)
+    error += tl_monotype_integer_subchain(lookup(reg, "CFloat"))      != TL_INTEGER_SUBCHAIN_FLOAT;
+    error += tl_monotype_integer_subchain(lookup(reg, "CDouble"))     != TL_INTEGER_SUBCHAIN_FLOAT;
+    error += tl_monotype_integer_subchain(lookup(reg, "CLongDouble")) != TL_INTEGER_SUBCHAIN_FLOAT;
+
+    // Non-integer, non-float types
     error += tl_monotype_integer_subchain(lookup(reg, "Void"))   != TL_INTEGER_SUBCHAIN_NONE;
     error += tl_monotype_integer_subchain(lookup(reg, "Bool"))   != TL_INTEGER_SUBCHAIN_NONE;
-    error += tl_monotype_integer_subchain(lookup(reg, "CFloat")) != TL_INTEGER_SUBCHAIN_NONE;
 
     allocator *arena = reg->alloc;
     arena_destroy(&arena);
@@ -114,10 +118,14 @@ static int test_width_ranks(void) {
     error += tl_monotype_integer_width_rank(lookup(reg, "CPtrDiff")) != 0;
     error += tl_monotype_integer_width_rank(lookup(reg, "CChar"))    != 0;
 
-    // Non-integer types: -1
+    // Float sub-chain: 0, 1, 2
+    error += tl_monotype_integer_width_rank(lookup(reg, "CFloat"))      != 0;
+    error += tl_monotype_integer_width_rank(lookup(reg, "CDouble"))     != 1;
+    error += tl_monotype_integer_width_rank(lookup(reg, "CLongDouble")) != 2;
+
+    // Non-integer, non-float types: -1
     error += tl_monotype_integer_width_rank(lookup(reg, "Void"))   != -1;
     error += tl_monotype_integer_width_rank(lookup(reg, "Bool"))   != -1;
-    error += tl_monotype_integer_width_rank(lookup(reg, "CFloat")) != -1;
 
     allocator *arena = reg->alloc;
     arena_destroy(&arena);
