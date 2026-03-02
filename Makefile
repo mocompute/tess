@@ -123,6 +123,10 @@ TESS_SOURCES =				\
 	$(TESS_SRC_DIR)/src/token.c	\
 	$(TESS_SRC_DIR)/src/tokenizer.c \
 	$(TESS_SRC_DIR)/src/infer.c	\
+	$(TESS_SRC_DIR)/src/infer_alpha.c	\
+	$(TESS_SRC_DIR)/src/infer_constraint.c	\
+	$(TESS_SRC_DIR)/src/infer_specialize.c	\
+	$(TESS_SRC_DIR)/src/infer_update.c	\
 	$(TESS_SRC_DIR)/src/transpile.c \
 	$(TESS_SRC_DIR)/src/manifest.c \
 	$(TESS_SRC_DIR)/src/source_scanner.c \

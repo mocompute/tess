@@ -79,6 +79,10 @@ set(SOURCES
   src/tokenizer.c
 
   src/infer.c
+  src/infer_alpha.c
+  src/infer_constraint.c
+  src/infer_specialize.c
+  src/infer_update.c
   src/transpile.c
   src/tlib.c
   src/type.c
