@@ -567,6 +567,45 @@ sum_to(n, acc) {
 result := sum_to(1000000, 0)       // Works without stack overflow
 ```
 
+### Uniform Function Call Syntax (UFCS)
+
+Any function can be called using dot syntax on its first argument. If `x.foo(a, b)` does not match a struct field named `foo`, the compiler rewrites it to `foo(x, a, b)`:
+
+```tl
+Vec2: { x: Int, y: Int }
+
+length_sq(v: Vec2) -> Int { v.x * v.x + v.y * v.y }
+scale(v: Vec2, s: Int) -> Vec2 { Vec2(x = v.x * s, y = v.y * s) }
+
+main() {
+    v := Vec2(x = 3, y = 4)
+
+    v.length_sq()            // calls length_sq(v)
+    v.scale(2)               // calls scale(v, 2)
+    v.scale(3).length_sq()   // chaining works
+}
+```
+
+**Priority:** Struct fields always take priority over UFCS. If a struct has a field `foo`, then `x.foo(...)` calls the field's function pointer, not a free function named `foo`.
+
+**Pointer receiver:** The `->` operator also supports UFCS, passing the pointer as the first argument:
+
+```tl
+reset(p: Ptr(Vec2)) { p->x = 0  p->y = 0  void }
+
+ptr := v.&
+ptr->reset()                 // calls reset(ptr)
+```
+
+**Cross-module UFCS:** To call a function from another module, include the module name after the dot:
+
+```tl
+v.veclib.length_sq()         // calls veclib.length_sq(v)
+v.veclib.scale(2)            // calls veclib.scale(v, 2)
+```
+
+**Generics:** UFCS works with generic structs and generic functions. Inside generic function bodies, UFCS resolution is deferred to specialization, when the receiver's type is known.
+
 ## Expressions
 
 ### Operators

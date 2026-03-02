@@ -55,6 +55,8 @@ An ML-flavoured systems language that transpiles to C.
   vf := Vec2(x = 1.0, y = 2.0)       // Vec2[Float]
   ```
 
+- **Uniform function call syntax** - Call any function with dot syntax on its first argument. `v.length_sq()` calls `length_sq(v)`. Struct fields take priority. Works with `->`, chaining, generics, and cross-module calls (`v.Mod.foo()`).
+
 - **Minimal syntax** - No semicolons. Colons always introduce types. Braces delimit blocks uniformly. Postfix pointer operators (`.&`, `.*`, `->`) read left-to-right like field access.
 
 - **Case expressions** - `case` for value matching with support for custom predicates:
