@@ -216,11 +216,11 @@ tess validate
 
 Runs the same checks as `tess pack` without producing an archive. Reads `package.tl` from the current working directory and uses `source()` entries to discover files. Like `tess pack`, files can be listed explicitly on the command line to override `source()`.
 
-### Inspecting an archive
+### Inspecting and extracting an archive
 
 ```bash
-tess unpack archive.tlib --list       # Show metadata and file list
-tess unpack archive.tlib [-o outdir]  # Extract files
+tess pack --list archive.tlib                # Show metadata and file list
+tess pack --unpack archive.tlib [-o outdir]  # Extract files
 ```
 
 ---

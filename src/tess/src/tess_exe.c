@@ -58,7 +58,8 @@ typedef struct {
     int               effective_bounds_check;  // computed from the above + no_optimize
 
     int               in_place;
-    int               unpack_list; // --list option for unpack command
+    int               pack_list;   // --list option for pack command
+    int               pack_unpack; // --unpack option for pack command
 
     int               is_library;
     int               is_static_library;
@@ -100,10 +101,8 @@ noreturn void usage(int status, char const *argv0) {
     printf("    init                   create a package.tl in the current directory\n");
     printf("    lib                    compile and create library (-o or package.tl required)\n");
     printf("    lib-emit-c             transpile input files to C as library source code\n");
-    printf("    pack                   create .tlib archive from source files (reads package.tl)\n");
+    printf("    pack                   create .tlib archive, or extract with --unpack\n");
     printf("    validate               validate source files against package.tl\n");
-    printf(
-      "    unpack                 extract .tlib archive (-o for output dir (default .), --list to list)\n");
     printf("\nOptions:\n");
     printf("    -h                     print usage and exit\n");
     printf("    -V, --version          print version and exit\n");
@@ -112,7 +111,8 @@ noreturn void usage(int status, char const *argv0) {
     printf("    -S <path>              add standard library path for <...> imports. Multiple ok.\n");
     printf("    -o <path>              write output to path instead of stdout\n");
     printf("    -i, --in-place         overwrite file in place (fmt command only)\n");
-    printf("    --list                 list archive contents without extracting (unpack only)\n");
+    printf("    --list                 list archive contents (pack command only)\n");
+    printf("    --unpack               extract .tlib archive (-o for output dir, default .)\n");
     printf("    -v                     verbose logging\n");
     printf("    --no-line-directive    suppress output of #line directives in C file\n");
     printf("    --bounds-check         enable integer narrowing bounds checks (default in debug)\n");
@@ -207,7 +207,8 @@ void state_gather_long_option(state *self, char *str) {
     else if (0 == strcmp("--no-optimize", str)) self->no_optimize = 1;
     else if (0 == strcmp("--no-standard-includes", str)) self->no_standard_includes = 1;
     else if (0 == strcmp("--in-place", str)) self->in_place = 1;
-    else if (0 == strcmp("--list", str)) self->unpack_list = 1;
+    else if (0 == strcmp("--list", str)) self->pack_list = 1;
+    else if (0 == strcmp("--unpack", str)) self->pack_unpack = 1;
     else if (0 == strcmp("--time", str)) self->report_time = 1;
     else if (0 == strcmp("--stats", str)) self->report_stats = 1;
     else if (0 == strcmp("--static", str)) self->is_static_library = 1;
@@ -1719,7 +1720,32 @@ static int format_file(state *self) {
     return 0;
 }
 
+static int unpack_files(state *self) {
+    // Validate arguments
+    if (self->words.size < 2) {
+        fprintf(stderr, "error: pack --unpack requires input archive\n");
+        usage(1, self->argv0);
+        return 1;
+    }
+
+    if (!self->pack_list && !self->out_path) {
+        // Default current directory.
+        self->out_path = ".";
+    }
+
+    char const         *archive_path = self->words.v[1];
+
+    tl_tlib_unpack_opts opts         = {
+              .list_only = self->pack_list,
+              .verbose   = self->verbose,
+    };
+
+    return tl_tlib_unpack(self->arena, archive_path, self->out_path, opts);
+}
+
 static int pack_files(state *self) {
+    if (self->pack_unpack || self->pack_list) return unpack_files(self);
+
     // Derive output path from package.tl if -o not given
     if (!self->out_path) {
         str path = default_out_path(self->arena, 2, NULL);
@@ -1973,29 +1999,6 @@ static int init_package(state *self) {
     return 0;
 }
 
-static int unpack_files(state *self) {
-    // Validate arguments
-    if (self->words.size < 2) {
-        fprintf(stderr, "error: unpack command requires input archive\n");
-        usage(1, self->argv0);
-        return 1;
-    }
-
-    if (!self->unpack_list && !self->out_path) {
-        // Default current directory.
-        self->out_path = ".";
-    }
-
-    char const         *archive_path = self->words.v[1];
-
-    tl_tlib_unpack_opts opts         = {
-              .list_only = self->unpack_list,
-              .verbose   = self->verbose,
-    };
-
-    return tl_tlib_unpack(self->arena, archive_path, self->out_path, opts);
-}
-
 static char const *validate_command_flags(state const *self, char const *cmd) {
     int is_compile = (0 == strcmp(cmd, "c") || 0 == strcmp(cmd, "exe") ||
                       0 == strcmp(cmd, "run") || 0 == strcmp(cmd, "lib") ||
@@ -2005,7 +2008,8 @@ static char const *validate_command_flags(state const *self, char const *cmd) {
     if (self->no_line_directive && !is_compile) return "--no-line-directive";
     if (self->no_optimize && !is_compile) return "--no-optimize";
     if (self->in_place && 0 != strcmp(cmd, "fmt")) return "--in-place";
-    if (self->unpack_list && 0 != strcmp(cmd, "unpack")) return "--list";
+    if (self->pack_unpack && 0 != strcmp(cmd, "pack")) return "--unpack";
+    if (self->pack_list && 0 != strcmp(cmd, "pack")) return "--list";
     if (self->is_static_library && 0 != strcmp(cmd, "lib")) return "--static";
     if (self->report_stats && !has_stats) return "--stats";
     if (self->report_time && !has_stats) return "--time";
@@ -2245,10 +2249,6 @@ int main(int argc, char *argv[]) {
 
     else if (0 == strcmp("validate", self.words.v[0])) {
         result = validate_files(&self);
-    }
-
-    else if (0 == strcmp("unpack", self.words.v[0])) {
-        result = unpack_files(&self);
     }
 
     else if (0 == strcmp("init", self.words.v[0])) {

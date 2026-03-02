@@ -411,7 +411,8 @@ Implemented in `src/tess/src/tess_exe.c`:
 
 ```bash
 tess pack <file1.tl> [file2.tl ...] -o output.tlib [-v]
-tess unpack archive.tlib [-o output_dir] [--list] [-v]
+tess pack --unpack archive.tlib [-o output_dir] [-v]
+tess pack --list archive.tlib [-v]
 ```
 
 High-level operations in `src/tess/src/tlib.c`:
@@ -461,7 +462,7 @@ tess pack --name MyLib --pkg-version 1.0.0 --author "Alice" --modules "Foo,Bar" 
 
 - `--name` and `--pkg-version` are required (note: `--pkg-version` instead of `--version` to avoid collision with `-V/--version`)
 - `--author` and `--modules` are optional (default to empty)
-- `tess unpack --list` displays metadata followed by file list
+- `tess pack --unpack --list` displays metadata followed by file list
 
 **Unit tests** in `src/tess/src/test_tlib.c`:
 - `test_metadata_roundtrip()` - all fields preserved through write/read cycle
