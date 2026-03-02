@@ -581,13 +581,20 @@ cleanup:
     return error;
 }
 
-// Helper to write a string to a file
-// Read file contents into a static buffer. Returns null on failure.
+// Read file contents into a null-terminated buffer. Returns null on failure.
+// Uses a per-call arena; each call invalidates the pointer from the previous call.
 static char *read_file_contents(char const *path, size_t *out_len) {
-    static char buf[8192];
-    FILE       *f = fopen(path, "rb");
+    static allocator *alloc = null;
+    if (!alloc) alloc = arena_create(default_allocator(), 4096);
+    else arena_reset(alloc);
+    FILE *f = fopen(path, "rb");
     if (!f) return null;
-    size_t n = fread(buf, 1, sizeof(buf) - 1, f);
+    if (fseek(f, 0, SEEK_END) != 0) { fclose(f); return null; }
+    long size = ftell(f);
+    if (size < 0) { fclose(f); return null; }
+    if (fseek(f, 0, SEEK_SET) != 0) { fclose(f); return null; }
+    char  *buf = alloc_malloc(alloc, (size_t)size + 1);
+    size_t n   = fread(buf, 1, (size_t)size, f);
     fclose(f);
     buf[n] = '\0';
     if (out_len) *out_len = n;
@@ -2142,7 +2149,7 @@ static int test_e2e_c_export_emit_c(void) {
     char src[512];
     snprintf(src, sizeof(src), "%smylib.tl", dir);
     if (write_file(src, "#module mylib\n"
-                        "[[c_export]] add(x: CInt, y: CInt) -> CInt { x + y }\n"
+                        "[[c_export]] add(x: CInt, y: CInt) { x + y }\n"
                         "[[c_export(\"my_mul\")]] mul(a: CInt, b: CInt) { a * b }\n"
                         "helper(x: CInt) -> CInt { x + 1 }\n")) {
         fprintf(stderr, "  failed to write mylib.tl\n");
