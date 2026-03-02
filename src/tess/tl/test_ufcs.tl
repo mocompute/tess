@@ -76,7 +76,7 @@ main() {
 
 Pair[A, B]: { a: A, b: B }
 
-pair_sum(p: Pair(Int, Int)) -> Int { p.a + p.b } // FIXME: invalid type syntax Pair(Int, Int)
+pair_sum(p: Pair[Int, Int]) -> Int { p.a + p.b }
 
 identity[T](x: T) -> T { x }
 
@@ -88,10 +88,10 @@ apply_identity[T](x: T) -> T {
     x.identity()
 }
 
-vec2_length_sq_ptr(v: Ptr(Vec2)) -> Int {
+vec2_length_sq_ptr(v: Ptr[Vec2]) -> Int {
     v->x * v->x + v->y * v->y
 }
 
-vec2_scale_ptr(v: Ptr(Vec2), s: Int) -> Vec2 {
+vec2_scale_ptr(v: Ptr[Vec2], s: Int) -> Vec2 {
     Vec2(x = v->x * s, y = v->y * s)
 }

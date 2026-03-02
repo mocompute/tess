@@ -1168,10 +1168,6 @@ static int a_type_identifier_base(parser *self) {
     // Callers expect name to be mangled.
     if (0 == a_try(self, a_type_arrow)) return 0;
 
-    if (0 == a_try(self, a_funcall)) {
-        mangle_name(self, self->result->named_application.name);
-        return 0;
-    }
     if (0 == a_try(self, a_attributed_identifier)) {
         ast_node *ident = self->result;
 
