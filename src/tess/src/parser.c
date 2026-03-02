@@ -1811,6 +1811,18 @@ static int maybe_mangle_binop(parser *self, ast_node *op, ast_node **inout, ast_
             return 1;
         }
     }
+    // UFCS cross-module: (x.Mod).foo(a, b) → binary_op(".", x, nfa("Mod__foo", [a, b]))
+    if ((0 == str_cmp_c(op->symbol.name, ".")) &&
+        ast_node_is_binary_op_struct_access(*inout) && ast_node_is_nfa(right) &&
+        ast_node_is_symbol((*inout)->binary_op.right) &&
+        str_hset_contains(self->modules_seen, (*inout)->binary_op.right->symbol.name)) {
+        unmangle_name(self, right->named_application.name);
+        mangle_name_for_module(self, right->named_application.name,
+                               (*inout)->binary_op.right->symbol.name);
+        *inout = ast_node_create_binary_op(self->ast_arena, op, (*inout)->binary_op.left, right);
+        set_node_file(self, *inout);
+        return 1;
+    }
     // Check if left side is a type with nested types (dot syntax for nested structs / tagged union
     // variants)
     if ((0 == str_cmp_c(op->symbol.name, ".")) && ast_node_is_symbol(*inout)) {

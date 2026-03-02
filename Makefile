@@ -537,6 +537,7 @@ TL_TESTS =					\
 	types_float				\
 	types_integer				\
 	ufcs					\
+	ufcs_module				\
 	uninitialized_fields			\
 	union_basic				\
 	union_module_intermediate		\
