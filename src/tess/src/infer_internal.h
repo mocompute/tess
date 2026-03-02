@@ -170,10 +170,10 @@ typedef struct {
 // ============================================================================
 
 void      toplevel_add(tl_infer *, str, ast_node *);
-void      toplevel_del(tl_infer *self, str name);
+void      toplevel_del(tl_infer *, str);
 ast_node *toplevel_get(tl_infer *, str);
 ast_node *toplevel_iter(tl_infer *, hashmap_iterator *);
-void      tl_infer_dbg(tl_infer const *self, char const *restrict fmt, ...);
+void      tl_infer_dbg(tl_infer const *, char const *restrict, ...);
 #define dbg tl_infer_dbg
 void log_toplevels(tl_infer const *);
 void log_env(tl_infer const *);
@@ -182,122 +182,115 @@ void log_constraint(tl_infer *, tl_polytype *, tl_polytype *, ast_node const *);
 void log_type_error(tl_infer *, tl_polytype *, tl_polytype *, ast_node const *);
 void log_type_error_mm(tl_infer *, tl_monotype *, tl_monotype *, ast_node const *);
 
-void tl_infer_set_attributes(tl_infer *self, ast_node const *sym);
-void hot_parse_ctx_reinit(tl_infer *self, hashmap *outer_type_arguments);
+void tl_infer_set_attributes(tl_infer *, ast_node const *);
+void hot_parse_ctx_reinit(tl_infer *, hashmap *);
 void apply_subs_to_ast(tl_infer *);
 str  next_variable_name(tl_infer *, str);
 str  next_instantiation(tl_infer *, str);
 void cancel_last_instantiation(tl_infer *);
-void do_apply_subs(void *ctx, ast_node *node);
-void apply_subs_to_ast_node(tl_infer *self, ast_node *node);
+void do_apply_subs(void *, ast_node *);
+void apply_subs_to_ast_node(tl_infer *, ast_node *);
 
 // ============================================================================
 // Internal API: infer_constraint.c (Phases 2-4)
 // ============================================================================
 
-int           resolve_node(tl_infer *, ast_node *sym, traverse_ctx *ctx, node_position pos);
-int           constrain(tl_infer *self, tl_polytype *left, tl_polytype *right, ast_node const *node,
-                        tl_unify_direction dir);
-int           constrain_mono(tl_infer *self, tl_monotype *left, tl_monotype *right, ast_node const *node,
-                             tl_unify_direction dir);
-int           constrain_pm(tl_infer *self, tl_polytype *left, tl_monotype *right, ast_node const *node,
-                           tl_unify_direction dir);
-int           constrain_or_set(tl_infer *, ast_node *, tl_polytype *);
-void          ensure_tv(tl_infer *self, tl_polytype **type);
-int           type_error(tl_infer *self, ast_node const *node);
-int           unresolved_type_error(tl_infer *self, ast_node const *node);
-void          expected_type(tl_infer *self, ast_node const *node);
-void          expected_tagged_union(tl_infer *self, ast_node const *node);
-void          wrong_number_of_arguments(tl_infer *self, ast_node const *node);
-void          tagged_union_case_syntax_error(tl_infer *self, ast_node const *node);
-int           expected_symbol(tl_infer *self, ast_node const *node);
-int           traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, traverse_cb cb);
-int           traverse_ast_case(tl_infer *self, traverse_ctx *ctx, ast_node *node, traverse_cb cb);
-int           traverse_ast_node_params(tl_infer *self, traverse_ctx *ctx, ast_node *node, traverse_cb cb);
-traverse_ctx *traverse_ctx_create(allocator *transient);
-void          traverse_ctx_load_type_arguments(tl_infer *self, traverse_ctx *ctx, ast_node const *node);
-int           traverse_ctx_assign_type_arguments(tl_infer *self, traverse_ctx *ctx, ast_node const *node);
-int           traverse_ctx_is_param(traverse_ctx *self, str name);
-int           env_insert_constrain(tl_infer *self, str name, tl_polytype *type, ast_node const *name_node);
-int           process_annotation(tl_infer *self, traverse_ctx *ctx, ast_node *node, annotation_opts opts);
-annotation_parse_result parse_type_annotation(tl_infer *self, traverse_ctx *ctx, ast_node *annotation_node);
-int                     infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_node *node);
-int                     add_generic(tl_infer *, ast_node *);
-int                     check_missing_free_variables(tl_infer *self);
-void                    sync_with_env(tl_infer *self, traverse_ctx *ctx, ast_node *node, int want_fresh);
-void                    ensure_symbol_type_from_env(tl_infer *self, ast_node *node);
-int                     check_is_pointer(tl_infer *self, tl_polytype *type, ast_node *node);
-void                    load_toplevel(tl_infer *self, ast_node_sized nodes);
-int                     check_type_predicate(tl_infer *self, traverse_ctx *traverse_ctx, ast_node *node);
-tl_monotype *tagged_union_find_variant(tl_monotype *wrapper_type, str variant_name, int *out_index);
-int          is_cast_annotation(ast_node *node);
+int          resolve_node(tl_infer *, ast_node *, traverse_ctx *, node_position);
+int          constrain(tl_infer *, tl_polytype *, tl_polytype *, ast_node const *, tl_unify_direction);
+int          constrain_mono(tl_infer *, tl_monotype *, tl_monotype *, ast_node const *, tl_unify_direction);
+int          constrain_pm(tl_infer *, tl_polytype *, tl_monotype *, ast_node const *, tl_unify_direction);
+int          constrain_or_set(tl_infer *, ast_node *, tl_polytype *);
+void         ensure_tv(tl_infer *, tl_polytype **);
+int          type_error(tl_infer *, ast_node const *);
+int          unresolved_type_error(tl_infer *, ast_node const *);
+void         expected_type(tl_infer *, ast_node const *);
+void         expected_tagged_union(tl_infer *, ast_node const *);
+void         wrong_number_of_arguments(tl_infer *, ast_node const *);
+void         tagged_union_case_syntax_error(tl_infer *, ast_node const *);
+int          expected_symbol(tl_infer *, ast_node const *);
+int          traverse_ast(tl_infer *, traverse_ctx *, ast_node *, traverse_cb);
+int          traverse_ast_case(tl_infer *, traverse_ctx *, ast_node *, traverse_cb);
+int          traverse_ast_node_params(tl_infer *, traverse_ctx *, ast_node *, traverse_cb);
+void         traverse_ctx_load_type_arguments(tl_infer *, traverse_ctx *, ast_node const *);
+int          traverse_ctx_assign_type_arguments(tl_infer *, traverse_ctx *, ast_node const *);
+int          traverse_ctx_is_param(traverse_ctx *, str);
+int          env_insert_constrain(tl_infer *, str, tl_polytype *, ast_node const *);
+int          process_annotation(tl_infer *, traverse_ctx *, ast_node *, annotation_opts);
+int          infer_traverse_cb(tl_infer *, traverse_ctx *, ast_node *);
+int          add_generic(tl_infer *, ast_node *);
+int          check_missing_free_variables(tl_infer *);
+void         sync_with_env(tl_infer *, traverse_ctx *, ast_node *, int);
+void         ensure_symbol_type_from_env(tl_infer *, ast_node *);
+int          check_is_pointer(tl_infer *, tl_polytype *, ast_node *);
+void         load_toplevel(tl_infer *, ast_node_sized);
+int          check_type_predicate(tl_infer *, traverse_ctx *, ast_node *);
+tl_monotype *tagged_union_find_variant(tl_monotype *, str, int *);
+int          is_cast_annotation(ast_node *);
+
+traverse_ctx           *traverse_ctx_create(allocator *);
+annotation_parse_result parse_type_annotation(tl_infer *, traverse_ctx *, ast_node *);
 
 // ============================================================================
 // Internal API: infer_alpha.c (Phase 1)
 // ============================================================================
 
 void rename_variables(tl_infer *, ast_node *, rename_variables_ctx *, int);
-void rename_let_in(tl_infer *self, ast_node *node, rename_variables_ctx *ctx);
-void add_free_variables_to_arrow(tl_infer *self, ast_node *node, tl_polytype *arrow);
-void concretize_params(tl_infer *self, ast_node *node, tl_monotype *callsite, hashmap *type_arguments,
-                       ast_node_sized callsite_type_arguments);
-int  collect_free_variables_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_node *node);
-int  can_be_free_variable(tl_infer *self, traverse_ctx *traverse_ctx, ast_node const *node);
-void promote_free_variables(str_array *out, tl_monotype *in);
+void rename_let_in(tl_infer *, ast_node *, rename_variables_ctx *);
+void add_free_variables_to_arrow(tl_infer *, ast_node *, tl_polytype *);
+void concretize_params(tl_infer *, ast_node *, tl_monotype *, hashmap *, ast_node_sized);
+int  collect_free_variables_cb(tl_infer *, traverse_ctx *, ast_node *);
+int  can_be_free_variable(tl_infer *, traverse_ctx *, ast_node const *);
+void promote_free_variables(str_array *, tl_monotype *);
 
 // ============================================================================
 // Internal API: infer_specialize.c (Phase 5)
 // ============================================================================
 
-str *instance_lookup_arrow(tl_infer *self, str generic_name, tl_monotype *arrow,
-                           ast_node_sized type_arguments, hashmap *outer_type_arguments);
-str  specialize_type_constructor(tl_infer *self, str name, tl_monotype_sized args, tl_polytype **out_type);
-str  specialize_arrow(tl_infer *self, traverse_ctx *traverse_ctx, str name, tl_monotype *arrow,
-                      ast_node_sized callsite_type_arguments);
-int  specialize_applications_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_node *node);
-ast_node *clone_generic_for_arrow(tl_infer *self, ast_node const *node, tl_monotype *arrow, str inst_name,
-                                  hashmap *type_arguments, ast_node_sized callsite_type_arguments);
-tl_polytype *make_arrow(tl_infer *, traverse_ctx *, ast_node_sized, ast_node *, int);
-tl_polytype *make_arrow_result_type(tl_infer *, traverse_ctx *, ast_node_sized, tl_polytype *,
-                                    int is_params);
-tl_polytype *make_arrow_with(tl_infer *, traverse_ctx *, ast_node *, tl_polytype *);
-tl_polytype *make_binary_predicate_arrow(tl_infer *, traverse_ctx *, ast_node *, ast_node *);
-int  post_specialize(tl_infer *self, traverse_ctx *traverse_ctx, ast_node *special, tl_monotype *callsite);
-void specialized_add_to_env(tl_infer *self, str inst_name, tl_monotype *mono);
-void remove_generic_toplevels(tl_infer *self);
-int  check_main_function(tl_infer *self, ast_node *main);
-int  instance_name_exists(tl_infer *self, str instance_name);
-int  is_union_struct(tl_infer *, str);
-int  is_type_literal(tl_infer *, traverse_ctx const *, ast_node const *);
-int  type_literal_specialize(tl_infer *self, ast_node *node);
-void specialize_type_alias(tl_infer *self, ast_node *node);
-ast_node     *get_infer_target(ast_node *node);
-void          toplevel_name_replace(ast_node *node, str name_replace);
-name_and_type make_instance_key(tl_infer *self, str generic_name, tl_monotype *arrow,
-                                ast_node_sized type_arguments, hashmap *outer_type_arguments);
-str          *instance_lookup(tl_infer *self, name_and_type *key);
+str          *instance_lookup_arrow(tl_infer *, str, tl_monotype *, ast_node_sized, hashmap *);
+str           specialize_type_constructor(tl_infer *, str, tl_monotype_sized, tl_polytype **);
+str           specialize_arrow(tl_infer *, traverse_ctx *, str, tl_monotype *, ast_node_sized);
+int           specialize_applications_cb(tl_infer *, traverse_ctx *, ast_node *);
+ast_node     *clone_generic_for_arrow(tl_infer *, ast_node const *, tl_monotype *, str, hashmap *,
+                                      ast_node_sized);
+tl_polytype  *make_arrow(tl_infer *, traverse_ctx *, ast_node_sized, ast_node *, int);
+tl_polytype  *make_arrow_result_type(tl_infer *, traverse_ctx *, ast_node_sized, tl_polytype *, int);
+tl_polytype  *make_arrow_with(tl_infer *, traverse_ctx *, ast_node *, tl_polytype *);
+tl_polytype  *make_binary_predicate_arrow(tl_infer *, traverse_ctx *, ast_node *, ast_node *);
+int           post_specialize(tl_infer *, traverse_ctx *, ast_node *, tl_monotype *);
+void          specialized_add_to_env(tl_infer *, str, tl_monotype *);
+void          remove_generic_toplevels(tl_infer *);
+int           check_main_function(tl_infer *, ast_node *);
+int           instance_name_exists(tl_infer *, str);
+int           is_union_struct(tl_infer *, str);
+int           is_type_literal(tl_infer *, traverse_ctx const *, ast_node const *);
+int           type_literal_specialize(tl_infer *, ast_node *);
+void          specialize_type_alias(tl_infer *, ast_node *);
+ast_node     *get_infer_target(ast_node *);
+void          toplevel_name_replace(ast_node *, str);
+name_and_type make_instance_key(tl_infer *, str, tl_monotype *, ast_node_sized, hashmap *);
+str          *instance_lookup(tl_infer *, name_and_type *);
 
 // ============================================================================
 // Internal API: infer_update.c (Phases 6-7)
 // ============================================================================
 
 hashmap     *tree_shake(tl_infer *, ast_node const *);
-void         tree_shake_toplevels(tl_infer *self, ast_node const *start);
-void         update_specialized_types(tl_infer *self);
-void         check_unresolved_types(tl_infer *self);
-tl_monotype *tl_infer_update_specialized_type_(tl_infer *self, tl_monotype *mono, hashmap **in_progress);
+void         tree_shake_toplevels(tl_infer *, ast_node const *);
+void         update_specialized_types(tl_infer *);
+void         check_unresolved_types(tl_infer *);
+tl_monotype *tl_infer_update_specialized_type_(tl_infer *, tl_monotype *, hashmap **);
 
 #if DEBUG_INVARIANTS
-void report_invariant_failure(tl_infer *self, char const *phase, char const *invariant, char const *detail,
-                              ast_node const *node);
-void check_types_null_cb(void *ctx_ptr, ast_node *node);
-int  check_all_types_null(tl_infer *self, ast_node_sized nodes, char const *phase);
-void check_type_arg_types_null_one(struct check_types_null_ctx *ctx, ast_node *node);
-void check_type_arg_types_null_cb(void *ctx_ptr, ast_node *node);
-int  check_type_arg_types_null(tl_infer *self, ast_node_sized nodes, char const *phase);
-int  check_no_generic_toplevels(tl_infer *self, char const *phase);
-void check_specialized_nfa_type_args_cb(void *ctx_ptr, ast_node *node);
-int  check_specialized_nfa_type_args(tl_infer *self, ast_node *node, char const *phase);
+void report_invariant_failure(tl_infer *, char const *phase, char const *invariant, char const *detail,
+                              ast_node const *);
+void check_types_null_cb(void *, ast_node *);
+int  check_all_types_null(tl_infer *, ast_node_sized, char const *);
+void check_type_arg_types_null_one(struct check_types_null_ctx *, ast_node *);
+void check_type_arg_types_null_cb(void *, ast_node *);
+int  check_type_arg_types_null(tl_infer *, ast_node_sized, char const *);
+int  check_no_generic_toplevels(tl_infer *, char const *);
+void check_specialized_nfa_type_args_cb(void *, ast_node *);
+int  check_specialized_nfa_type_args(tl_infer *, ast_node *, char const *);
 #endif
 
 #endif // TESS_INFER_INTERNAL_H
