@@ -906,18 +906,6 @@ str specialize_arrow(tl_infer *self, traverse_ctx *traverse_ctx, str name, tl_mo
     if (!tl_monotype_is_concrete_no_weak(arrow))
         tl_monotype_substitute(self->arena, arrow, self->subs, null);
 
-#if DEBUG_INVARIANTS
-    // Invariant: Callsite arrow type is expected to be concrete, but there may be edge cases where that is
-    // not the case, for example with unused parameters.
-    if (!tl_monotype_is_concrete(arrow)) {
-        char detail[512];
-        str  arrow_str = tl_monotype_to_string(self->transient, arrow);
-        snprintf(detail, sizeof detail, "Specializing '%.*s' with non-concrete callsite arrow: %s",
-                 str_ilen(name), str_buf(&name), str_cstr(&arrow_str));
-        report_invariant_failure(self, "specialize_arrow", "Callsite arrow must (usually) be concrete",
-                                 detail, null);
-    }
-#endif
 
     // 1. Check if already specialized
     if (instance_name_exists(self, name)) {

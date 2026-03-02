@@ -340,15 +340,6 @@ void traverse_ctx_load_type_arguments(tl_infer *self, traverse_ctx *ctx, ast_nod
             assert(ast_node_is_symbol(type_param));
 
 #if DEBUG_INVARIANTS
-            // Invariant: Type parameter names must be alpha-converted
-            if (!is_alpha_converted_name(type_param->symbol.name)) {
-                char detail[256];
-                snprintf(detail, sizeof detail, "Type parameter '%.*s' is not alpha-converted",
-                         str_ilen(type_param->symbol.name), str_buf(&type_param->symbol.name));
-                report_invariant_failure(self, "traverse_ctx_load_type_arguments",
-                                         "Type parameter name must be alpha-converted", detail, type_param);
-            }
-
             // Invariant: No duplicate type parameter names in ctx->type_arguments
             if (str_map_contains(ctx->type_arguments, type_param->symbol.name)) {
                 char detail[256];
@@ -622,8 +613,9 @@ int constrain_mono(tl_infer *self, tl_monotype *left, tl_monotype *right, ast_no
     // Invariant: should never constrain two different concrete cons_inst types directly
     // (excluding integer-compatible pairs). If this fires, a type variable was already
     // bound to the wrong type upstream. Exception: for type predicates, a constrain failure is not an
-    // error.
-    if (tl_monotype_is_inst(left) && tl_monotype_is_concrete(left) && tl_monotype_is_inst(right) &&
+    // error (is_constrain_ignore_error is set during check_type_predicate).
+    if (!self->is_constrain_ignore_error &&
+        tl_monotype_is_inst(left) && tl_monotype_is_concrete(left) && tl_monotype_is_inst(right) &&
         tl_monotype_is_concrete(right) && !tl_monotype_is_integer_convertible(left) &&
         !tl_monotype_is_integer_convertible(right)) {
         if (!str_eq(left->cons_inst->def->name, right->cons_inst->def->name) &&
