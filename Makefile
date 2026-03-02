@@ -536,6 +536,7 @@ TL_TESTS =					\
 	try					\
 	types_float				\
 	types_integer				\
+	ufcs					\
 	uninitialized_fields			\
 	union_basic				\
 	union_module_intermediate		\
@@ -622,6 +623,7 @@ TL_FAIL_TESTS =					\
 	fail_tagged_union_unknown_variant	\
 	fail_type_alias_partial_specialization	\
 	fail_try_non_union			\
+	fail_ufcs_not_found			\
 	fail_try_three_variants			\
 	fail_unalias_not_found			\
 	fail_unknown_free_variable		\

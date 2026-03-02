@@ -1143,7 +1143,7 @@ typedef struct {
 } annotation_opts;
 
 static int          constrain_or_set(tl_infer *, ast_node *, tl_polytype *);
-static int          infer_struct_access(tl_infer *, ast_node *);
+static int          infer_struct_access(tl_infer *, traverse_ctx *, ast_node *);
 static int          add_generic(tl_infer *, ast_node *);
 static int          is_type_literal(tl_infer *, traverse_ctx const *, ast_node const *);
 static int          is_union_struct(tl_infer *, str);
@@ -1647,7 +1647,7 @@ static int infer_binary_op(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
         }
 
     } else if (is_struct_access_operator(op)) {
-        if (infer_struct_access(self, node)) return 1;
+        if (infer_struct_access(self, ctx, node)) return 1;
     } else {
         fatal("unknown operator type");
     }
@@ -2914,7 +2914,7 @@ static void ensure_symbol_type_from_env(tl_infer *self, ast_node *node) {
     if (!node->type || !tl_polytype_is_concrete(node->type)) constrain_or_set(self, node, poly);
 }
 
-static int infer_struct_access(tl_infer *self, ast_node *node) {
+static int infer_struct_access(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
     if (!ast_node_is_binary_op_struct_access(node)) fatal("logic error");
     ensure_tv(self, &node->type);
     ensure_tv(self, &node->binary_op.left->type);
@@ -3031,6 +3031,36 @@ static int infer_struct_access(tl_infer *self, ast_node *node) {
                         if (constrain(self, node->type, right->type, node, TL_UNIFY_SYMMETRIC)) return 1;
                     }
                 }
+            } else if (nfa) {
+                // UFCS: field not found, but right side is a function call.
+                // Rewrite x.foo(a, b) to foo(x, a, b).
+                u8  ufcs_arity = nfa->named_application.n_arguments + 1;
+                str ufcs_name  = mangle_str_for_arity(self->arena, field_name, ufcs_arity);
+                if (!tl_type_env_lookup(self->env, ufcs_name) &&
+                    !tl_type_registry_get(self->registry, ufcs_name)) {
+                    array_push(self->errors,
+                               ((tl_infer_error){.tag = tl_err_field_not_found, .node = right}));
+                    return 1;
+                }
+
+                // Prepend `left` to the NFA's argument list
+                u8         old_n    = nfa->named_application.n_arguments;
+                ast_node **new_args = alloc_malloc(self->arena, (old_n + 1) * sizeof(ast_node *));
+                new_args[0]         = left;
+                for (u8 i = 0; i < old_n; i++) new_args[i + 1] = nfa->named_application.arguments[i];
+
+                // Rewrite node in place from binary_op to NFA
+                ast_node_name_replace(nfa->named_application.name, ufcs_name);
+                node->tag                          = nfa->tag;
+                node->named_application.name       = nfa->named_application.name;
+                node->named_application.arguments  = new_args;
+                node->named_application.n_arguments = ufcs_arity;
+                node->named_application.type_arguments   = null;
+                node->named_application.n_type_arguments  = 0;
+                node->named_application.is_specialized    = 0;
+                node->named_application.is_type_constructor = 0;
+
+                return infer_named_function_application(self, ctx, node);
             } else {
                 array_push(self->errors, ((tl_infer_error){.tag = tl_err_field_not_found, .node = right}));
                 return 1;
@@ -3130,7 +3160,7 @@ static int resolve_node(tl_infer *self, ast_node *node, traverse_ctx *ctx, node_
         break;
 
     case npos_function_argument:
-        if (ast_node_is_binary_op_struct_access(node)) return infer_struct_access(self, node);
+        if (ast_node_is_binary_op_struct_access(node)) return infer_struct_access(self, ctx, node);
 
         // handle null/void, if any
         maybe_handle_null(self, node);
@@ -3164,7 +3194,7 @@ static int resolve_node(tl_infer *self, ast_node *node, traverse_ctx *ctx, node_
         break;
 
     case npos_assign_lhs:
-        if (ast_node_is_binary_op_struct_access(node)) return infer_struct_access(self, node);
+        if (ast_node_is_binary_op_struct_access(node)) return infer_struct_access(self, ctx, node);
 
         // Support annotations on lhs of field name assignments
         if (ast_node_is_symbol(node)) {
@@ -3184,7 +3214,7 @@ static int resolve_node(tl_infer *self, ast_node *node, traverse_ctx *ctx, node_
         break;
 
     case npos_reassign_lhs:
-        if (ast_node_is_binary_op_struct_access(node)) return infer_struct_access(self, node);
+        if (ast_node_is_binary_op_struct_access(node)) return infer_struct_access(self, ctx, node);
 
         // Take symbol's existing type: this ensures let-in symbols retain their type info through
         // subsequent mutations.
@@ -3192,7 +3222,7 @@ static int resolve_node(tl_infer *self, ast_node *node, traverse_ctx *ctx, node_
         break;
 
     case npos_field_name:
-        if (ast_node_is_binary_op_struct_access(node)) return infer_struct_access(self, node);
+        if (ast_node_is_binary_op_struct_access(node)) return infer_struct_access(self, ctx, node);
 
         // assign a fresh type variable to field name, because we can't know its generic instantiated type
         ensure_tv(self, &node->type);
@@ -3201,7 +3231,7 @@ static int resolve_node(tl_infer *self, ast_node *node, traverse_ctx *ctx, node_
     case npos_operand: {
         if (!ctx) fatal("logic error");
 
-        if (ast_node_is_binary_op_struct_access(node)) return infer_struct_access(self, node);
+        if (ast_node_is_binary_op_struct_access(node)) return infer_struct_access(self, ctx, node);
 
         maybe_handle_null(self, node);
 
