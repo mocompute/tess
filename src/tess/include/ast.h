@@ -112,6 +112,7 @@ typedef struct ast_node {
             struct ast_node  *name;
             int               is_specialized;
             int               is_type_constructor;
+            int               is_function_reference;
         } named_application;
 
         struct ast_tuple {

@@ -1093,6 +1093,12 @@ static str generate_funcall(transpile *self, ast_node const *node, eval_ctx *ctx
                    str_cstr(&name), __FILE__, __LINE__);
     }
 
+    // Function reference with explicit type args: emit as symbol (function pointer)
+    if (node->named_application.is_function_reference) {
+        return generate_expr_symbol(self, type, name, ast_node_name_original(node->named_application.name),
+                                    ctx);
+    }
+
     // type constructor?
     if (tl_monotype_is_inst(type)) return generate_type_constructor(self, node, ctx);
 

@@ -1416,6 +1416,22 @@ done:;
     return result_ast_node(self, node);
 }
 
+// Parse arity qualifier: /N where N is a non-negative integer.
+// Used for function references with explicit type args: name[TypeArgs]/N
+static int a_arity_qualifier(parser *self) {
+    if (next_token(self)) return 1;
+    if (tok_symbol != self->token.tag || 0 != strcmp("/", self->token.s)) return 1;
+
+    if (next_token(self)) return 1;
+    if (tok_number != self->token.tag) return 1;
+
+    // Arities are plain non-negative integers only (no suffixes, no floats)
+    char *end;
+    long n = strtol(self->token.s, &end, 10);
+    if (end == self->token.s || *end != '\0' || n < 0 || n > 255) return 1;
+    return result_ast_i64(self, (i64)n);
+}
+
 static int a_value(parser *self) {
     // Put funcall before type constructor, due to arity mangling
     if (0 == a_try(self, a_funcall)) return 0;
@@ -1439,8 +1455,16 @@ static int a_value(parser *self) {
         ast_node_array type_args;
         if (ERROR_STOP == maybe_type_arguments(self, &type_args)) return ERROR_STOP;
         if (type_args.size) {
+            // Check for arity qualifier: name[TypeArgs]/N (function reference with explicit type args)
+            int is_fn_ref = 0;
+            if (0 == a_try(self, a_arity_qualifier)) {
+                u8 arity = (u8)self->result->i64.val;
+                ast_node_name_replace(ident, mangle_str_for_arity(self->ast_arena, ident->symbol.name, arity));
+                is_fn_ref = 1;
+            }
             ast_node *r = ast_node_create_nfa(self->ast_arena, ident, (ast_node_sized)sized_all(type_args),
                                               (ast_node_sized){0});
+            r->named_application.is_function_reference = is_fn_ref;
             return result_ast_node(self, r);
         } else {
             // Special case: syntax sugar: promote naked None symbol to funcall None(), a type constructor

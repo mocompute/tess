@@ -395,7 +395,10 @@ void traverse_ctx_load_type_arguments(tl_infer *self, traverse_ctx *ctx, ast_nod
 
 int traverse_ctx_assign_type_arguments(tl_infer *self, traverse_ctx *ctx, ast_node const *node) {
     if (ast_node_is_nfa(node)) {
-        if (!node->named_application.is_specialized) return 0;
+        if (!node->named_application.is_specialized
+            && !node->named_application.is_function_reference
+            && !node->named_application.is_type_constructor)
+            return 0;
 
         u32 argc = node->named_application.n_type_arguments;
         if (argc == 0) return 0;
@@ -1724,6 +1727,14 @@ static int infer_named_function_application(tl_infer *self, traverse_ctx *ctx, a
             inst = tl_polytype_instantiate(self->arena, type, self->subs);
         }
 
+        // Function reference with explicit type args: name[TypeArgs]/N
+        // Set node type to the function type itself, not a call result.
+        if (node->named_application.is_function_reference) {
+            tl_polytype wrap = tl_polytype_wrap(inst);
+            if (constrain(self, &wrap, node->type, node, TL_UNIFY_DIRECTED)) return 1;
+            return 0;
+        }
+
         str          inst_str = tl_monotype_to_string(self->transient, inst);
         tl_polytype *app      = make_arrow(self, ctx, iter.nodes, node, 0);
         if (!app) return 1;
@@ -2423,8 +2434,9 @@ static int infer_struct_access(tl_infer *self, traverse_ctx *ctx, ast_node *node
                 node->named_application.n_arguments         = ufcs_arity;
                 node->named_application.type_arguments      = null;
                 node->named_application.n_type_arguments    = 0;
-                node->named_application.is_specialized      = 0;
-                node->named_application.is_type_constructor = 0;
+                node->named_application.is_specialized        = 0;
+                node->named_application.is_type_constructor   = 0;
+                node->named_application.is_function_reference = 0;
 
                 return infer_named_function_application(self, ctx, node);
             } else {

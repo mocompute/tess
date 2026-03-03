@@ -1302,11 +1302,20 @@ int specialize_applications_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_n
         }
 
         if (!callsite) {
-            // Important: use _with variant to copy free variables info to the arrow, which is added to the
-            // environment further down.
-            callsite = make_arrow_with(self, traverse_ctx, node, type);
-            if (!callsite) {
-                return 1;
+            if (node->named_application.is_function_reference) {
+                // Function reference with explicit type args: use the resolved function type
+                // as the callsite instead of constructing an arrow from (empty) value arguments.
+                if (!node->type) return 1;
+                if (!tl_monotype_is_concrete_no_weak(node->type->type))
+                    tl_monotype_substitute(self->arena, node->type->type, self->subs, null);
+                callsite = node->type;
+            } else {
+                // Important: use _with variant to copy free variables info to the arrow, which is added to the
+                // environment further down.
+                callsite = make_arrow_with(self, traverse_ctx, node, type);
+                if (!callsite) {
+                    return 1;
+                }
             }
         }
 

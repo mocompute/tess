@@ -67,8 +67,9 @@ ast_node *ast_node_create_nfa(allocator *alloc, ast_node *name, ast_node_sized t
     self->named_application.type_arguments      = type_args.v;
     self->named_application.n_arguments         = args.size;
     self->named_application.arguments           = args.v;
-    self->named_application.is_specialized      = 0;
-    self->named_application.is_type_constructor = 0;
+    self->named_application.is_specialized        = 0;
+    self->named_application.is_type_constructor   = 0;
+    self->named_application.is_function_reference = 0;
     return self;
 }
 ast_node *ast_node_create_nfa_tc(allocator *alloc, ast_node *name, ast_node_sized type_args,
@@ -409,8 +410,9 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
             vclone->type_arguments[i] = ast_node_clone(alloc, vorig->type_arguments[i]);
 
         vclone->name                = ast_node_clone(alloc, vorig->name);
-        vclone->is_specialized      = vorig->is_specialized;
-        vclone->is_type_constructor = vorig->is_type_constructor;
+        vclone->is_specialized        = vorig->is_specialized;
+        vclone->is_type_constructor   = vorig->is_type_constructor;
+        vclone->is_function_reference = vorig->is_function_reference;
     } break;
 
     case ast_try:
