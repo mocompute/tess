@@ -2488,12 +2488,12 @@ str tl_monotype_to_string_(allocator *alloc, tl_monotype *self, hashmap **map) {
         if (!str_is_empty(self->cons_inst->special_name)) str_build_cat(&b, self->cons_inst->special_name);
         else str_build_cat(&b, self->cons_inst->def->name);
         if (self->cons_inst->args.size) {
-            str_build_cat(&b, S("("));
+            str_build_cat(&b, S("["));
             forall(i, self->cons_inst->args) {
                 str_build_cat(&b, tl_monotype_to_string_(alloc, self->cons_inst->args.v[i], map));
                 if (i + 1 < self->cons_inst->args.size) str_build_cat(&b, S(", "));
             }
-            str_build_cat(&b, S(")"));
+            str_build_cat(&b, S("]"));
         }
     } break;
 
