@@ -213,6 +213,17 @@ int type_literal_specialize(tl_infer *self, ast_node *node) {
 
     if (ast_node_is_symbol(node)) return 1;
 
+    // Value constructors with named field arguments (e.g. Simple[Int](data = null, size = 0u))
+    // are not type literals. They must go through specialize_user_type for proper struct
+    // specialization including field type resolution and value argument handling.
+    if (ast_node_is_nfa(node) && node->named_application.is_type_constructor) {
+        ast_arguments_iter check = ast_node_arguments_iter((ast_node *)node);
+        ast_node *a;
+        while ((a = ast_arguments_next(&check))) {
+            if (ast_node_is_assignment(a)) return 1;
+        }
+    }
+
     tl_monotype *parsed = tl_type_registry_parse_type(self->registry, node);
     if (parsed) {
         tl_monotype *target = parsed;

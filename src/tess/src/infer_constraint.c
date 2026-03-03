@@ -456,19 +456,29 @@ int traverse_ctx_assign_type_arguments(tl_infer *self, traverse_ctx *ctx, ast_no
 
             tl_monotype *parsed = null;
 
+            // If the type argument is a symbol bound in the current context's type_arguments
+            // (set by concretize_params), prefer that binding over any type on the node.
+            // The node may carry a stale type variable from the add_free_variables_to_arrow
+            // traversal that runs before concretize_params.
+            if (ast_node_is_symbol(type_arg_node)) {
+                tl_monotype *from_ctx = str_map_get_ptr(ctx->type_arguments, type_arg_node->symbol.name);
+                if (from_ctx) {
+                    parsed = from_ctx;
+                }
+            }
+
             // If the type argument node already has a type set (from a previous pass), reuse it.
-            // This happens when multiple calls within the same specialized function share type
-            // argument AST nodes (e.g., sizeof[T]() and alignof[T]() both reference the same T).
-            // We don't require the type to be concrete - type variables are valid and will be
-            // unified later.
-            if (type_arg_node->type) { // Re-enabled: use existing type on node
+            if (!parsed && type_arg_node->type) {
                 parsed = type_arg_node->type->type;
 
 #if DEBUG_EXPLICIT_TYPE_ARGS
                 str reused_str = tl_monotype_to_string(self->transient, parsed);
                 fprintf(stderr, "  type_arg[%u]: reused existing type = %s\n", i, str_cstr(&reused_str));
 #endif
-            } else {
+            }
+
+            // Fall back to parsing the type argument node from scratch.
+            if (!parsed) {
 #if DEBUG_EXPLICIT_TYPE_ARGS
                 // Debug: show what's in the parse context
                 str_array keys = str_map_keys(self->transient, self->hot_parse_ctx.type_arguments);
