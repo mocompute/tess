@@ -104,7 +104,26 @@ MOS_SOURCES =					\
 
 MOS_OBJECTS = $(patsubst $(MOS_SRC_DIR)/src/%.c,$(BUILD_DIR)/mos/%.o,$(MOS_SOURCES))
 
-$(BUILD_DIR)/mos/%.o: $(MOS_SRC_DIR)/src/%.c
+MOS_HEADERS =					\
+	$(MOS_SRC_DIR)/include/alloc.h		\
+	$(MOS_SRC_DIR)/include/alloc_internal.h	\
+	$(MOS_SRC_DIR)/include/array.h		\
+	$(MOS_SRC_DIR)/include/dbg.h		\
+	$(MOS_SRC_DIR)/include/file.h		\
+	$(MOS_SRC_DIR)/include/hash.h		\
+	$(MOS_SRC_DIR)/include/hashmap.h	\
+	$(MOS_SRC_DIR)/include/nodiscard.h	\
+	$(MOS_SRC_DIR)/include/platform.h	\
+	$(MOS_SRC_DIR)/include/sexp.h		\
+	$(MOS_SRC_DIR)/include/sexp_parser.h	\
+	$(MOS_SRC_DIR)/include/str.h		\
+	$(MOS_SRC_DIR)/include/types.h		\
+	$(MOS_SRC_DIR)/include/util.h
+
+$(foreach h,$(MOS_HEADERS),$(if $(wildcard $h),,$(error MOS_HEADERS: not found: $h)))
+
+
+$(BUILD_DIR)/mos/%.o: $(MOS_SRC_DIR)/src/%.c $(MOS_HEADERS)
 	@mkdir -p $(dir $@)
 	$(MSG_CC) $<
 	$(Q)$(CC) $(CFLAGS) $(CPPFLAGS) -c -o $@ $<
@@ -135,10 +154,33 @@ TESS_SOURCES =				\
 
 TESS_OBJECTS = $(patsubst $(TESS_SRC_DIR)/src/%.c,$(BUILD_DIR)/tess/%.o,$(TESS_SOURCES))
 
-$(BUILD_DIR)/tess/%.o: $(TESS_SRC_DIR)/src/%.c
+TESS_HEADERS =						\
+	$(TESS_SRC_DIR)/src/infer_internal.h		\
+	$(TESS_SRC_DIR)/include/ast.h			\
+	$(TESS_SRC_DIR)/include/ast_tags.h		\
+	$(TESS_SRC_DIR)/include/error.h			\
+	$(TESS_SRC_DIR)/include/format.h		\
+	$(TESS_SRC_DIR)/include/import_resolver.h	\
+	$(TESS_SRC_DIR)/include/infer.h			\
+	$(TESS_SRC_DIR)/include/manifest.h		\
+	$(TESS_SRC_DIR)/include/parser.h		\
+	$(TESS_SRC_DIR)/include/source_scanner.h	\
+	$(TESS_SRC_DIR)/include/syntax.h		\
+	$(TESS_SRC_DIR)/include/tess.h			\
+	$(TESS_SRC_DIR)/include/tlib.h			\
+	$(TESS_SRC_DIR)/include/token.h			\
+	$(TESS_SRC_DIR)/include/tokenizer.h		\
+	$(TESS_SRC_DIR)/include/transpile.h		\
+	$(TESS_SRC_DIR)/include/type.h			\
+	$(TESS_SRC_DIR)/include/type_registry.h
+
+$(foreach h,$(TESS_HEADERS),$(if $(wildcard $h),,$(error TESS_HEADERS: not found: $h)))
+
+$(BUILD_DIR)/tess/%.o: $(TESS_SRC_DIR)/src/%.c $(TESS_HEADERS)
 	@mkdir -p $(dir $@)
 	$(MSG_CC) $<
 	$(Q)$(CC) $(CFLAGS) $(CPPFLAGS) -c -o $@ $<
+
 
 # ------------------------------------------------------------------------------
 # Embed Tool and Generated Sources
