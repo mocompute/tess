@@ -1222,7 +1222,20 @@ static int a_type_annotation(parser *self) {
 static int a_param(parser *self) {
     if (a_try(self, a_attributed_identifier)) return 1;
     ast_node *ident = self->result;
-    ast_node *ann   = null;
+
+    // If followed by type arguments (e.g., Ptr[K] in a function pointer type),
+    // parse as a generic type application rather than a named parameter.
+    ast_node_array type_args;
+    if (ERROR_STOP == maybe_type_arguments(self, &type_args)) return ERROR_STOP;
+
+    if (type_args.size) {
+        mangle_name(self, ident);
+        ast_node *r = ast_node_create_nfa(
+          self->ast_arena, ident, (ast_node_sized)sized_all(type_args), (ast_node_sized){0});
+        return result_ast_node(self, r);
+    }
+
+    ast_node *ann = null;
     if (0 == a_try(self, a_type_annotation)) {
         ann = self->result;
     }
