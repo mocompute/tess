@@ -665,16 +665,16 @@ int str_parse_cnum(char const *buf, i64 *out_i64, u64 *out_u64, f64 *out_f64) {
     // Returns: 0: error, 1: i64, 2: u64, 3: f64, 4: i64 (z suffix), 5: u64 (zu suffix).
     // Unlike C functions, input string must not have garbage after valid number.
 
-    size_t      len = strlen(buf);
+    size_t len = strlen(buf);
 
     // Handle zu/ZU suffix (2-char, must check before single-char suffixes): strip suffix and parse as u64
     if (len >= 3 && (buf[len - 2] == 'z' || buf[len - 2] == 'Z') &&
         (buf[len - 1] == 'u' || buf[len - 1] == 'U')) {
-        char tmp[64];
+        char   tmp[64];
         size_t slen = len - 2;
         if (slen > 63) return 0;
         memcpy(tmp, buf, slen);
-        tmp[slen] = '\0';
+        tmp[slen]               = '\0';
 
         char const *parse_start = tmp;
         char const *end         = tmp + slen;
@@ -684,9 +684,9 @@ int str_parse_cnum(char const *buf, i64 *out_i64, u64 *out_u64, f64 *out_f64) {
             parse_start = tmp + 2;
         }
 
-        errno          = 0;
-        char *p_end    = 0;
-        unsigned long long u = strtoull(parse_start, &p_end, base);
+        errno                    = 0;
+        char              *p_end = 0;
+        unsigned long long u     = strtoull(parse_start, &p_end, base);
         if (p_end == end && !errno) {
             *out_u64 = u;
             return 5;
@@ -696,11 +696,11 @@ int str_parse_cnum(char const *buf, i64 *out_i64, u64 *out_u64, f64 *out_f64) {
 
     // Handle z/Z suffix (1-char): strip suffix and parse as i64
     if (len >= 2 && (buf[len - 1] == 'z' || buf[len - 1] == 'Z')) {
-        char tmp[64];
+        char   tmp[64];
         size_t slen = len - 1;
         if (slen > 63) return 0;
         memcpy(tmp, buf, slen);
-        tmp[slen] = '\0';
+        tmp[slen]               = '\0';
 
         char const *parse_start = tmp;
         char const *end         = tmp + slen;
@@ -723,11 +723,11 @@ int str_parse_cnum(char const *buf, i64 *out_i64, u64 *out_u64, f64 *out_f64) {
     // Handle unsigned suffix (u or U): strip suffix and parse as u64
     if (len >= 2 && (buf[len - 1] == 'u' || buf[len - 1] == 'U')) {
         // Copy without suffix to a local buffer
-        char tmp[64];
+        char   tmp[64];
         size_t slen = len - 1;
         if (slen > 63) return 0;
         memcpy(tmp, buf, slen);
-        tmp[slen] = '\0';
+        tmp[slen]               = '\0';
 
         char const *parse_start = tmp;
         char const *end         = tmp + slen;
@@ -737,9 +737,9 @@ int str_parse_cnum(char const *buf, i64 *out_i64, u64 *out_u64, f64 *out_f64) {
             parse_start = tmp + 2;
         }
 
-        errno          = 0;
-        char *p_end    = 0;
-        unsigned long long u = strtoull(parse_start, &p_end, base);
+        errno                    = 0;
+        char              *p_end = 0;
+        unsigned long long u     = strtoull(parse_start, &p_end, base);
         if (p_end == end && !errno) {
             *out_u64 = u;
             return 2;
@@ -899,6 +899,10 @@ void str_build_deinit(str_build self) {
 void str_build_cat(str_build *self, str str) {
     span s = str_span(&str);
     array_push_many(*self, s.buf, s.len);
+}
+
+void str_build_cat_n(str_build *self, char const *buf, u32 len) {
+    array_push_many(*self, buf, len);
 }
 
 void str_build_join(str_build *self, str sep, str const *strs, u32 len) {

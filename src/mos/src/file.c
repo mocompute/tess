@@ -282,7 +282,7 @@ str file_path_normalize(allocator *alloc, str path) {
 
     // Add prefix for absolute paths
     if (is_abs) {
-        str_build_cat(&build, str_init_n(alloc, s.buf, prefix_len));
+        str_build_cat_n(&build, s.buf, prefix_len);
     }
 
     // Add components
@@ -291,7 +291,7 @@ str file_path_normalize(allocator *alloc, str path) {
             (is_abs && prefix_len > 0 && s.buf[prefix_len - 1] != '/' && s.buf[prefix_len - 1] != '\\')) {
             str_build_cat(&build, S("/"));
         }
-        str_build_cat(&build, str_init_n(alloc, s.buf + comp_start[i], comp_len[i]));
+        str_build_cat_n(&build, s.buf + comp_start[i], comp_len[i]);
     }
 
     // Handle empty result
@@ -522,8 +522,8 @@ static int has_extension(char const *name, char const *ext) {
 }
 
 #ifdef MOS_WINDOWS
-static void scan_recursive(allocator *alloc, char const *dir,
-                           char const *ext, c_string_carray *out, int depth) {
+static void scan_recursive(allocator *alloc, char const *dir, char const *ext, c_string_carray *out,
+                           int depth) {
     if (depth >= FILE_SCAN_MAX_DEPTH) return;
 
     char pattern[PLATFORM_PATH_MAX];
@@ -557,8 +557,8 @@ static void scan_recursive(allocator *alloc, char const *dir,
     FindClose(h);
 }
 #else
-static void scan_recursive(allocator *alloc, char const *dir,
-                           char const *ext, c_string_carray *out, int depth) {
+static void scan_recursive(allocator *alloc, char const *dir, char const *ext, c_string_carray *out,
+                           int depth) {
     if (depth >= FILE_SCAN_MAX_DEPTH) return;
 
     DIR *d = opendir(dir);
@@ -591,7 +591,6 @@ static void scan_recursive(allocator *alloc, char const *dir,
 }
 #endif
 
-void file_scan_dir_recursive(allocator *alloc, char const *dir,
-                             char const *ext, c_string_carray *out) {
+void file_scan_dir_recursive(allocator *alloc, char const *dir, char const *ext, c_string_carray *out) {
     scan_recursive(alloc, dir, ext, out, 0);
 }

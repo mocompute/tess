@@ -2451,31 +2451,31 @@ str tl_monotype_to_string_(allocator *alloc, tl_monotype *self, hashmap **map) {
     case tl_integer: {
         char buf[64];
         snprintf(buf, sizeof buf, "i%i", self->integer);
-        str_build_cat(&b, str_init(alloc, buf));
+        str_build_cat_n(&b, buf, strlen(buf));
     } break;
 
     case tl_var: {
         char buf[64];
         snprintf(buf, sizeof buf, "t%u", self->var);
-        str_build_cat(&b, str_init(alloc, buf));
+        str_build_cat_n(&b, buf, strlen(buf));
     } break;
 
     case tl_weak: {
         char buf[64];
         snprintf(buf, sizeof buf, "w%u", self->var);
-        str_build_cat(&b, str_init(alloc, buf));
+        str_build_cat_n(&b, buf, strlen(buf));
     } break;
 
     case tl_weak_int_signed: {
         char buf[64];
         snprintf(buf, sizeof buf, "ws%u", self->var);
-        str_build_cat(&b, str_init(alloc, buf));
+        str_build_cat_n(&b, buf, strlen(buf));
     } break;
 
     case tl_weak_int_unsigned: {
         char buf[64];
         snprintf(buf, sizeof buf, "wu%u", self->var);
-        str_build_cat(&b, str_init(alloc, buf));
+        str_build_cat_n(&b, buf, strlen(buf));
     } break;
 
     case tl_weak_float: {
@@ -2545,7 +2545,7 @@ str tl_polytype_to_string(allocator *alloc, tl_polytype *self) {
             char buf[64];
             snprintf(buf, sizeof buf, "t%u", self->quantifiers.v[i]);
             str_build_cat(&b, S(" "));
-            str_build_cat(&b, str_init(alloc, buf));
+            str_build_cat_n(&b, buf, strlen(buf));
         }
         str_build_cat(&b, S(". "));
     }

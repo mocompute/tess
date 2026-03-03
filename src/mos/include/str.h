@@ -138,6 +138,7 @@ typedef char_array  str_build;
 
 nodiscard str_build str_build_init(allocator *, u32); // init builder with initial size
 void                str_build_cat(str_build *, str);
+void                str_build_cat_n(str_build *self, char const *, u32);
 void                str_build_join(str_build *, str, str const *, u32);
 void                str_build_join_array(str_build *, str, str_array);
 void                str_build_join_sized(str_build *, str, str_sized);
