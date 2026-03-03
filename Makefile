@@ -457,7 +457,10 @@ TL_TESTS =					\
 	function_pointer_recursive_type		\
 	function_pointer_higher_order_return	\
 	function_pointer_value			\
+	generic_fn_ref_explicit_type_args	\
 	generic_lambda				\
+	generic_struct_fn_ptr_field		\
+	generic_struct_null_fn_ptr_field	\
 	global_variables			\
 	hello					\
 	if_basic				\
@@ -698,6 +701,8 @@ TL_KNOWN_FAIL_FAILURES =
 
 # Tests that should work but currently fail due to compiler bugs
 TL_KNOWN_FAILURES =				\
+	generic_nested_sizeof			\
+	hashmap					\
 	while_empty_body
 
 # Total test count across all suites
