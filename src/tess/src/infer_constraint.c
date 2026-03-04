@@ -2652,10 +2652,8 @@ int check_type_predicate(tl_infer *self, traverse_ctx *traverse_ctx, ast_node *n
 
         if (lhs_type_arg) {
             // LHS is a type argument - handle it specially
-            hot_parse_ctx_reinit(self, traverse_ctx->type_arguments);
-            tl_monotype *rhs_type = tl_type_registry_parse_type_with_ctx(
-              self->registry, node->type_predicate.rhs, &self->hot_parse_ctx);
-            self->hot_parse_ctx_guard = 0;
+            tl_monotype *rhs_type = parse_type_arg(self, traverse_ctx->type_arguments,
+                                                    node->type_predicate.rhs);
 
             tl_monotype *lhs_mono     = lhs_type_arg;
 
@@ -2685,10 +2683,8 @@ int check_type_predicate(tl_infer *self, traverse_ctx *traverse_ctx, ast_node *n
     }
     // Fall through to existing expression handling...
 
-    hot_parse_ctx_reinit(self, traverse_ctx->type_arguments);
-    tl_monotype *type =
-      tl_type_registry_parse_type_with_ctx(self->registry, node->type_predicate.rhs, &self->hot_parse_ctx);
-    self->hot_parse_ctx_guard = 0;
+    tl_monotype *type = parse_type_arg(self, traverse_ctx->type_arguments,
+                                       node->type_predicate.rhs);
 
     if (resolve_node(self, node->type_predicate.lhs, traverse_ctx, npos_operand)) {
         dbg(self, "assert resolve node failed");

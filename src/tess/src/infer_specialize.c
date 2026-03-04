@@ -227,14 +227,7 @@ int type_literal_specialize(tl_infer *self, ast_node *node, hashmap *type_argume
     // Parse with context when available, so type variables from the outer generic
     // function (e.g. K, V) resolve to their concrete bindings (e.g. Int, Int).
     // Without context, these become fresh unresolvable type variables.
-    tl_monotype *parsed;
-    if (type_arguments) {
-        hot_parse_ctx_reinit(self, type_arguments);
-        parsed = tl_type_registry_parse_type_with_ctx(self->registry, node, &self->hot_parse_ctx);
-        self->hot_parse_ctx_guard = 0;
-    } else {
-        parsed = tl_type_registry_parse_type(self->registry, node);
-    }
+    tl_monotype *parsed = parse_type_arg(self, type_arguments, node);
     if (parsed) {
         tl_monotype *target = parsed;
         if (!tl_monotype_is_inst(target)) return 1;
