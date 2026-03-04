@@ -360,7 +360,7 @@ static void fixup_arrow_name(tl_infer *self, ast_node *ident) {
         str name = ast_node_str(ident);
 
         // TODO: function pointers with type arguments
-        str *inst_name = instance_lookup_arrow(self, name, type, (ast_node_sized){0}, null);
+        str *inst_name = instance_lookup_arrow(self, name, type, (tl_monotype_sized){0});
         if (inst_name) ast_node_name_replace(ident, *inst_name);
     }
 }

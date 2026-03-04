@@ -247,7 +247,7 @@ void promote_free_variables(str_array *, tl_monotype *);
 // Internal API: infer_specialize.c (Phase 5)
 // ============================================================================
 
-str          *instance_lookup_arrow(tl_infer *, str, tl_monotype *, ast_node_sized, hashmap *);
+str          *instance_lookup_arrow(tl_infer *, str, tl_monotype *, tl_monotype_sized);
 str           specialize_type_constructor(tl_infer *, str, tl_monotype_sized, tl_polytype **);
 str           specialize_arrow(tl_infer *, traverse_ctx *, str, tl_monotype *, ast_node_sized);
 int           specialize_applications_cb(tl_infer *, traverse_ctx *, ast_node *);
@@ -268,7 +268,7 @@ int           type_literal_specialize(tl_infer *, ast_node *, hashmap *type_argu
 void          specialize_type_alias(tl_infer *, ast_node *);
 ast_node     *get_infer_target(ast_node *);
 void          toplevel_name_replace(ast_node *, str);
-name_and_type make_instance_key(tl_infer *, str, tl_monotype *, ast_node_sized, hashmap *);
+name_and_type make_instance_key(tl_infer *, str, tl_monotype *, tl_monotype_sized);
 str          *instance_lookup(tl_infer *, name_and_type *);
 
 // ============================================================================

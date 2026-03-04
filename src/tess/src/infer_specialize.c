@@ -322,21 +322,13 @@ int is_type_literal(tl_infer *self, traverse_ctx const *ctx, ast_node const *nod
 // ============================================================================
 
 name_and_type make_instance_key(tl_infer *self, str generic_name, tl_monotype *arrow,
-                                ast_node_sized type_arguments, hashmap *outer_type_arguments) {
+                                tl_monotype_sized resolved_type_args) {
 
-    tl_monotype_sized type_arg_types = {
-      .size = type_arguments.size,
-      .v    = alloc_malloc(self->transient, type_arguments.size * sizeof(tl_monotype *)),
-    };
+    forall(i, resolved_type_args) {
+        if (!resolved_type_args.v[i]) continue;
 
-    forall(i, type_arguments) {
-        ast_node *type_arg = type_arguments.v[i];
-        type_arg_types.v[i] = parse_type_arg(self, outer_type_arguments, type_arg);
-
-        if (!type_arg_types.v[i]) continue;
-
-        if (!tl_monotype_is_concrete(type_arg_types.v[i])) {
-            tl_monotype_substitute(self->arena, type_arg_types.v[i], self->subs, null);
+        if (!tl_monotype_is_concrete(resolved_type_args.v[i])) {
+            tl_monotype_substitute(self->arena, resolved_type_args.v[i], self->subs, null);
         }
 
         // Keep non-concrete type args in the hash as-is (don't null them out).
@@ -347,24 +339,21 @@ name_and_type make_instance_key(tl_infer *self, str generic_name, tl_monotype *a
     name_and_type key         = {
               .name_hash               = str_hash64(generic_name),
               .type_hash               = tl_monotype_hash64(arrow),
-              .type_args_hash          = tl_monotype_sized_hash64(hash64("args", 4), type_arg_types),
+              .type_args_hash          = tl_monotype_sized_hash64(hash64("args", 4), resolved_type_args),
     };
 
 #if DEBUG_INSTANCE_CACHE
     {
         str arrow_str = tl_monotype_to_string(self->transient, arrow);
         fprintf(stderr, "[INSTANCE_KEY] name='%s' arrow='%s' n_type_args=%u\n", str_cstr(&generic_name),
-                str_cstr(&arrow_str), type_arguments.size);
+                str_cstr(&arrow_str), resolved_type_args.size);
         fprintf(stderr, "  -> name_hash=%016llx type_hash=%016llx type_args_hash=%016llx\n",
                 (unsigned long long)key.name_hash, (unsigned long long)key.type_hash,
                 (unsigned long long)key.type_args_hash);
-        forall(i, type_arg_types) {
-            str ta_str = tl_monotype_to_string(self->transient, type_arg_types.v[i]);
+        forall(i, resolved_type_args) {
+            str ta_str = tl_monotype_to_string(self->transient, resolved_type_args.v[i]);
             fprintf(stderr, "  type_arg[%u] = '%s' (hash=%016llx)\n", i, str_cstr(&ta_str),
-                    (unsigned long long)tl_monotype_hash64(type_arg_types.v[i]));
-        }
-        if (outer_type_arguments) {
-            fprintf(stderr, "  outer_type_arguments present (size=%zu)\n", map_size(outer_type_arguments));
+                    (unsigned long long)tl_monotype_hash64(resolved_type_args.v[i]));
         }
     }
 #endif
@@ -377,12 +366,12 @@ str *instance_lookup(tl_infer *self, name_and_type *key) {
 }
 
 str *instance_lookup_arrow(tl_infer *self, str generic_name, tl_monotype *arrow,
-                           ast_node_sized type_arguments, hashmap *outer_type_arguments) {
+                           tl_monotype_sized resolved_type_args) {
     if (!tl_monotype_is_concrete(arrow)) return null;
 
     // de-duplicate instances: hashes give us structural equality (barring hash collisions), which we need
     // because types are frequently cloned.
-    name_and_type key = make_instance_key(self, generic_name, arrow, type_arguments, outer_type_arguments);
+    name_and_type key = make_instance_key(self, generic_name, arrow, resolved_type_args);
 
     str          *result = instance_lookup(self, &key);
 
@@ -549,7 +538,7 @@ static str specialize_type_constructor_(tl_infer *self, str name, tl_monotype_si
     }
     if (!tl_monotype_is_inst(inst_ctx.specialized)) fatal("runtime error");
 
-    name_and_type key      = make_instance_key(self, name, inst_ctx.specialized, (ast_node_sized){0}, null);
+    name_and_type key      = make_instance_key(self, name, inst_ctx.specialized, (tl_monotype_sized){0});
     str          *existing = instance_lookup(self, &key);
     if (existing) {
 #if DEBUG_RECURSIVE_TYPES
@@ -919,9 +908,20 @@ str specialize_arrow(tl_infer *self, traverse_ctx *traverse_ctx, str name, tl_mo
         return name;
     }
 
-    // 2. Check cache for this name+type combination
+    // 2. Resolve AST type args to monotypes for cache key
     hashmap *outer_type_args = traverse_ctx ? traverse_ctx->type_arguments : null;
-    str     *found = instance_lookup_arrow(self, name, arrow, callsite_type_arguments, outer_type_args);
+
+    tl_monotype_sized resolved_type_args = {
+        .size = callsite_type_arguments.size,
+        .v    = callsite_type_arguments.size
+                  ? alloc_malloc(self->transient, callsite_type_arguments.size * sizeof(tl_monotype *))
+                  : null,
+    };
+    forall(i, callsite_type_arguments) {
+        resolved_type_args.v[i] = parse_type_arg(self, outer_type_args, callsite_type_arguments.v[i]);
+    }
+
+    str *found = instance_lookup_arrow(self, name, arrow, resolved_type_args);
     if (found) {
         if (self->report_stats) self->counters.specialize_cache_hits++;
         return *found;
@@ -932,7 +932,7 @@ str specialize_arrow(tl_infer *self, traverse_ctx *traverse_ctx, str name, tl_mo
     if (!toplevel) return str_empty();
 
     // 3. Create unique instance name(e.g., "identity_0")
-    name_and_type key = make_instance_key(self, name, arrow, callsite_type_arguments, outer_type_args);
+    name_and_type key = make_instance_key(self, name, arrow, resolved_type_args);
     str           inst_name = next_instantiation(self, name);
     instance_add(self, &key, inst_name);
     if (self->report_stats) self->counters.specialize_created++;
