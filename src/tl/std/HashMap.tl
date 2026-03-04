@@ -10,6 +10,10 @@
 #import <fatal.tl>
 #import <string.tl>
 
+// -- Aliases --
+
+Allocator = Alloc.Allocator
+
 // -- Types --
 
 _Entry[K, V]: {
@@ -41,10 +45,10 @@ Entry[K, V]: { key: K, value: V }
 
 // -- Synopsis --
 
-create[K, V] ()                                                  -> Ptr[HashMap[K, V]]
-create[K, V] (alloc: Ptr[Alloc.Allocator])                       -> Ptr[HashMap[K, V]]
-create[K, V] (alloc: Ptr[Alloc.Allocator], opts: HashMapOpts[K]) -> Ptr[HashMap[K, V]]
-destroy[K, V](self: Ptr[HashMap[K, V]])                          -> Void
+create[K, V] ()                                            -> Ptr[HashMap[K, V]]
+create[K, V] (alloc: Ptr[Allocator])                       -> Ptr[HashMap[K, V]]
+create[K, V] (alloc: Ptr[Allocator], opts: HashMapOpts[K]) -> Ptr[HashMap[K, V]]
+destroy[K, V](self: Ptr[HashMap[K, V]])                    -> Void
 
 set[K, V]     (self: Ptr[HashMap[K, V]], key: K, value: V) -> Void
 get[K, V]     (self: Ptr[HashMap[K, V]], key: K)           -> Ptr[V]
@@ -56,10 +60,10 @@ size[K, V]    (self: Ptr[HashMap[K, V]]) -> UInt
 is_empty[K, V](self: Ptr[HashMap[K, V]]) -> Bool
 clear[K, V]   (self: Ptr[HashMap[K, V]]) -> Void
 
-keys[K, V]  (self: Ptr[HashMap[K, V]])                              -> Array.Array[K]
-keys[K, V]  (self: Ptr[HashMap[K, V]], alloc: Ptr[Alloc.Allocator]) -> Array.Array[K]
-values[K, V](self: Ptr[HashMap[K, V]])                              -> Array.Array[V]
-values[K, V](self: Ptr[HashMap[K, V]], alloc: Ptr[Alloc.Allocator]) -> Array.Array[V]
+keys[K, V]  (self: Ptr[HashMap[K, V]])                        -> Array.Array[K]
+keys[K, V]  (self: Ptr[HashMap[K, V]], alloc: Ptr[Allocator]) -> Array.Array[K]
+values[K, V](self: Ptr[HashMap[K, V]])                        -> Array.Array[V]
+values[K, V](self: Ptr[HashMap[K, V]], alloc: Ptr[Allocator]) -> Array.Array[V]
 
 
 // -- C helpers --
@@ -86,7 +90,7 @@ _default_hash[K]    (key: Ptr[K]) -> UInt
 _default_eq[K]      (a: Ptr[K], b: Ptr[K]) -> Bool
 _entry_width[K, V]  () -> UInt
 _grow[K, V]         (self: Ptr[HashMap[K, V]]) -> Void
-_alloc_entries[K, V](alloc: Ptr[Alloc.Allocator], capacity: UInt) -> Ptr[_Entry[K, V]]
+_alloc_entries[K, V](alloc: Ptr[Allocator], capacity: UInt) -> Ptr[_Entry[K, V]]
 _insert_entry[K, V] (entries: Ptr[_Entry[K, V]], capacity: UInt, eq: (Ptr[K], Ptr[K]) -> Bool,
                     key: K, value: V, hash: UInt) -> UInt
 
@@ -123,7 +127,7 @@ _alloc_entries[K, V](alloc, capacity) {
 
 // -- Create / Destroy --
 
-create[K, V](alloc: Ptr[Alloc.Allocator], opts: HashMapOpts[K]) -> Ptr[HashMap[K, V]] {
+create[K, V](alloc: Ptr[Allocator], opts: HashMapOpts[K]) -> Ptr[HashMap[K, V]] {
     cap := if opts.capacity == 0u { 16u } else { Alloc.next_power_of_two(opts.capacity) }
 
     hash_fn := opts.hash
@@ -148,7 +152,7 @@ create[K, V]() -> Ptr[HashMap[K, V]] {
     create[K, V](Alloc.context.default, opts)
 }
 
-create[K, V](alloc: Ptr[Alloc.Allocator]) -> Ptr[HashMap[K, V]] {
+create[K, V](alloc: Ptr[Allocator]) -> Ptr[HashMap[K, V]] {
     opts := HashMapOpts[K](hash = null, eq = null, capacity = 0u)
     create[K, V](alloc, opts)
 }
@@ -341,7 +345,7 @@ clear[K, V](self: Ptr[HashMap[K, V]]) -> Void {
 
 // -- Bulk --
 
-keys[K, V](self: Ptr[HashMap[K, V]], alloc: Ptr[Alloc.Allocator]) -> Array.Array[K] {
+keys[K, V](self: Ptr[HashMap[K, V]], alloc: Ptr[Allocator]) -> Array.Array[K] {
     result  := Array.with_capacity[K](alloc, self->_size)
     i: UInt := 0u
     while i < self->_capacity, i += 1u {
@@ -357,7 +361,7 @@ keys[K, V](self: Ptr[HashMap[K, V]]) -> Array.Array[K] {
     keys(self, Alloc.context.default)
 }
 
-values[K, V](self: Ptr[HashMap[K, V]], alloc: Ptr[Alloc.Allocator]) -> Array.Array[V] {
+values[K, V](self: Ptr[HashMap[K, V]], alloc: Ptr[Allocator]) -> Array.Array[V] {
     result  := Array.with_capacity[V](alloc, self->_size)
     i: UInt := 0u
     while i < self->_capacity, i += 1u {
