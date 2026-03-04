@@ -336,6 +336,267 @@ test_remove_and_reinsert() {
     error
 }
 
+// Hash that maps everything to one of 4 buckets — forces heavy collisions,
+// Robin Hood displacement, and backward-shift deletion chains.
+_colliding_hash(key: Ptr[Int]) -> UInt {
+    k: UInt := key.*
+    k & 3u
+}
+
+test_collision_stress() {
+    error := 0
+    opts := HashMap.HashMapOpts[Int](hash = _colliding_hash/1, eq = _custom_eq/2, capacity = 8u)
+    m := HashMap.create[Int, Int](Alloc.context.default, opts)
+
+    // Insert 32 entries — all land in buckets 0-3, forces Robin Hood swaps
+    n := 32
+    i := 0
+    while i < n, i += 1 {
+        HashMap.set(m, i, i * 7)
+    }
+    if HashMap.size(m) != 32u { error += 1 }
+
+    // Verify all entries are accessible
+    i = 0
+    while i < n, i += 1 {
+        p := HashMap.get(m, i)
+        if p == null { error += 1 }
+        if p != null && p.* != i * 7 { error += 1 }
+    }
+
+    // Overwrite in collision-heavy map
+    HashMap.set(m, 4, 999)
+    if HashMap.size(m) != 32u { error += 1 }
+    p := HashMap.get(m, 4)
+    if p == null { error += 1 }
+    if p != null && p.* != 999 { error += 1 }
+
+    // Remove entries from the middle of collision chains
+    i = 0
+    while i < 16, i += 1 {
+        if !HashMap.remove(m, i) { error += 1 }
+    }
+    if HashMap.size(m) != 16u { error += 1 }
+
+    // Remaining entries (16..31) must still be accessible after backward-shift
+    i = 16
+    while i < n, i += 1 {
+        p2 := HashMap.get(m, i)
+        if p2 == null { error += 1 }
+        if p2 != null && p2.* != i * 7 { error += 1 }
+    }
+
+    // Removed entries must be gone
+    i = 0
+    while i < 16, i += 1 {
+        if HashMap.contains(m, i) { error += 1 }
+    }
+
+    HashMap.destroy(m)
+    error
+}
+
+test_large_remove() {
+    error := 0
+    m := HashMap.create[Int, Int]()
+
+    // Insert 200, remove all, verify empty
+    n := 200
+    i := 0
+    while i < n, i += 1 {
+        HashMap.set(m, i, i)
+    }
+    if HashMap.size(m) != 200u { error += 1 }
+
+    i = 0
+    while i < n, i += 1 {
+        if !HashMap.remove(m, i) { error += 1 }
+    }
+    if HashMap.size(m) != 0u { error += 1 }
+    if !HashMap.is_empty(m) { error += 1 }
+
+    // Re-insert after mass removal
+    i = 0
+    while i < 50, i += 1 {
+        HashMap.set(m, i, i * 3)
+    }
+    if HashMap.size(m) != 50u { error += 1 }
+    i = 0
+    while i < 50, i += 1 {
+        p := HashMap.get(m, i)
+        if p == null { error += 1 }
+        if p != null && p.* != i * 3 { error += 1 }
+    }
+
+    HashMap.destroy(m)
+    error
+}
+
+test_zero_and_negative_keys() {
+    error := 0
+    m := HashMap.create[Int, Int]()
+
+    HashMap.set(m, 0, 100)
+    HashMap.set(m, -1, 200)
+    HashMap.set(m, -999, 300)
+
+    if HashMap.size(m) != 3u { error += 1 }
+
+    p := HashMap.get(m, 0)
+    if p == null { error += 1 }
+    if p != null && p.* != 100 { error += 1 }
+
+    p = HashMap.get(m, -1)
+    if p == null { error += 1 }
+    if p != null && p.* != 200 { error += 1 }
+
+    p = HashMap.get(m, -999)
+    if p == null { error += 1 }
+    if p != null && p.* != 300 { error += 1 }
+
+    // Remove key 0
+    if !HashMap.remove(m, 0) { error += 1 }
+    if HashMap.contains(m, 0) { error += 1 }
+    if HashMap.size(m) != 2u { error += 1 }
+
+    HashMap.destroy(m)
+    error
+}
+
+test_struct_values() {
+    error := 0
+    m := HashMap.create[Int, Point]()
+
+    HashMap.set(m, 1, Point(x = 10, y = 20))
+    HashMap.set(m, 2, Point(x = 30, y = 40))
+    HashMap.set(m, 3, Point(x = 50, y = 60))
+
+    if HashMap.size(m) != 3u { error += 1 }
+
+    p := HashMap.get(m, 1)
+    if p == null { error += 1 }
+    if p != null && (p->x != 10 || p->y != 20) { error += 1 }
+
+    p = HashMap.get(m, 2)
+    if p == null { error += 1 }
+    if p != null && (p->x != 30 || p->y != 40) { error += 1 }
+
+    // Overwrite with different struct value
+    HashMap.set(m, 1, Point(x = 99, y = 88))
+    if HashMap.size(m) != 3u { error += 1 }
+    p = HashMap.get(m, 1)
+    if p == null { error += 1 }
+    if p != null && (p->x != 99 || p->y != 88) { error += 1 }
+
+    HashMap.destroy(m)
+    error
+}
+
+test_create_with_alloc() {
+    error := 0
+    m := HashMap.create[Int, Int](Alloc.context.default)
+
+    HashMap.set(m, 1, 10)
+    HashMap.set(m, 2, 20)
+
+    if HashMap.size(m) != 2u { error += 1 }
+    p := HashMap.get(m, 1)
+    if p == null { error += 1 }
+    if p != null && p.* != 10 { error += 1 }
+
+    HashMap.destroy(m)
+    error
+}
+
+test_keys_values_with_alloc() {
+    error := 0
+    m := HashMap.create[Int, Int]()
+
+    HashMap.set(m, 1, 10)
+    HashMap.set(m, 2, 20)
+
+    alloc := Alloc.context.default
+    ks := HashMap.keys(m, alloc)
+    vs := HashMap.values(m, alloc)
+
+    if ks.size != 2u { error += 1 }
+    if vs.size != 2u { error += 1 }
+
+    found_1 := false
+    found_2 := false
+    i: UInt := 0u
+    while i < ks.size, i += 1u {
+        if ks.v.[i] == 1 { found_1 = true }
+        if ks.v.[i] == 2 { found_2 = true }
+    }
+    if !found_1 { error += 1 }
+    if !found_2 { error += 1 }
+
+    found_10 := false
+    found_20 := false
+    i = 0u
+    while i < vs.size, i += 1u {
+        if vs.v.[i] == 10 { found_10 = true }
+        if vs.v.[i] == 20 { found_20 = true }
+    }
+    if !found_10 { error += 1 }
+    if !found_20 { error += 1 }
+
+    Array.free(ks.&)
+    Array.free(vs.&)
+    HashMap.destroy(m)
+    error
+}
+
+test_remove_then_grow() {
+    error := 0
+    m := HashMap.create[Int, Int]()
+
+    // Fill up, remove half, then insert enough to trigger growth
+    i := 0
+    while i < 100, i += 1 {
+        HashMap.set(m, i, i)
+    }
+
+    i = 0
+    while i < 50, i += 1 {
+        HashMap.remove(m, i)
+    }
+    if HashMap.size(m) != 50u { error += 1 }
+
+    // Insert 200 more to trigger growth from a partially-removed state
+    i = 1000
+    while i < 1200, i += 1 {
+        HashMap.set(m, i, i * 2)
+    }
+    if HashMap.size(m) != 250u { error += 1 }
+
+    // Verify surviving original entries
+    i = 50
+    while i < 100, i += 1 {
+        p := HashMap.get(m, i)
+        if p == null { error += 1 }
+        if p != null && p.* != i { error += 1 }
+    }
+
+    // Verify new entries
+    i = 1000
+    while i < 1200, i += 1 {
+        p := HashMap.get(m, i)
+        if p == null { error += 1 }
+        if p != null && p.* != i * 2 { error += 1 }
+    }
+
+    // Removed entries still gone
+    i = 0
+    while i < 50, i += 1 {
+        if HashMap.contains(m, i) { error += 1 }
+    }
+
+    HashMap.destroy(m)
+    error
+}
+
 main() {
     error := 0
     error += test_create_destroy()
@@ -351,5 +612,12 @@ main() {
     error += test_custom_hash_eq()
     error += test_struct_keys()
     error += test_remove_and_reinsert()
+    error += test_collision_stress()
+    error += test_large_remove()
+    error += test_zero_and_negative_keys()
+    error += test_struct_values()
+    error += test_create_with_alloc()
+    error += test_keys_values_with_alloc()
+    error += test_remove_then_grow()
     error
 }
