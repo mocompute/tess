@@ -72,6 +72,19 @@ static void create_type_constructor_from_user_type(tl_infer *self, ast_node *nod
 
     env_insert_constrain(self, name, poly, node->user_type_def.name);
     ast_node_type_set(node, poly);
+
+    // Auto-collapse: if type is Module__Module (e.g. Array__Array), register
+    // bare module name as alias so clients can write Array[T] instead of Array.Array[T].
+    ast_node *type_name_node = node->user_type_def.name;
+    if (ast_node_is_symbol(type_name_node) && type_name_node->symbol.is_mangled) {
+        str module   = type_name_node->symbol.module;
+        str original = type_name_node->symbol.original;
+        if (!str_is_empty(module) && str_eq(original, module)) {
+            if (!tl_type_registry_get(self->registry, module)) {
+                tl_type_registry_type_alias_insert(self->registry, module, poly);
+            }
+        }
+    }
 }
 
 // ============================================================================

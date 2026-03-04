@@ -494,6 +494,7 @@ TL_TESTS =					\
 	map_option_cross_type			\
 	mapper_basic				\
 	mapper_lambda				\
+	module_auto_collapse			\
 	module_basic				\
 	module_init				\
 	module_nested				\
