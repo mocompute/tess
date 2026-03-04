@@ -485,10 +485,11 @@ tl_create_test(stress_type_features)
 tl_create_test(stress_when_combinations)
 tl_create_test(while_break)
 tl_create_test(while_continue)
+tl_create_test(while_empty_body)
 tl_create_test(while_statement)
+tl_create_test(while_update_statement)
 tl_create_test(weak_int_literals)
 tl_create_test(weak_int_module_const)
-tl_create_test(while_update_statement)
 tl_create_test(z_literals)
 tl_create_test_optimized(tail_call)
 
@@ -607,4 +608,4 @@ tl_create_runtime_fail_test(fail_runtime_integer_bounds_cross_family)
 # Known fail failures: compiler should reject but doesn't yet
 
 # Known failures: these should work but a compiler bug makes them fail
-tl_create_known_failure(while_empty_body)
+# tl_create_known_failure(while_empty_body)

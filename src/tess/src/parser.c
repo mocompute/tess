@@ -2460,10 +2460,10 @@ static int a_while_statement(parser *self) {
     ast_node_array exprs  = {.alloc = self->ast_arena};
     ast_node_array defers = {.alloc = self->ast_arena};
     while (1) {
+        if (0 == a_try(self, a_close_curly)) break;
         if (0 == a_try(self, a_defer_statement)) array_push(defers, self->result);
         else if (a_try(self, a_body_element)) return 1;
         else array_push(exprs, self->result);
-        if (0 == a_try(self, a_close_curly)) break;
     }
 
     ast_node *body = create_body(self, exprs, defers);

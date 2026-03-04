@@ -609,10 +609,11 @@ TL_TESTS =					\
 	stress_when_combinations		\
 	while_break				\
 	while_continue				\
+	while_empty_body			\
 	while_statement				\
+	while_update_statement			\
 	weak_int_literals			\
 	weak_int_module_const			\
-	while_update_statement			\
 	z_literals
 
 TL_FAIL_TESTS =					\
@@ -704,8 +705,8 @@ TL_FAIL_RUNTIME_TESTS =			\
 TL_KNOWN_FAIL_FAILURES =
 
 # Tests that should work but currently fail due to compiler bugs
-TL_KNOWN_FAILURES =				\
-	while_empty_body
+TL_KNOWN_FAILURES =
+
 
 # Total test count across all suites
 TOTAL_TESTS = $(words $(MOS_TESTS) $(TESS_TESTS) $(VENDOR_TESTS) \
