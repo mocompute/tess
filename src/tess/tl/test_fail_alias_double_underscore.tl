@@ -2,6 +2,6 @@
 f() { 1 }
 
 #module main
-#alias Foo my__alias
+#alias my__alias Foo
 
 main() { my__alias.f() }

@@ -1,4 +1,4 @@
 #module main
-#alias NonExistent NE
+#alias NE NonExistent
 
 main() { NE.f() }

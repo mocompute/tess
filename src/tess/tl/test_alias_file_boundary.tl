@@ -5,7 +5,7 @@ value() { 55 }
 other() { 33 }
 
 #module FileOne
-#alias Foo F
+#alias F Foo
 use_alias() { F.value() }
 
 // Simulate a file boundary: aliases are reset
@@ -13,7 +13,7 @@ use_alias() { F.value() }
 
 #module FileTwo
 // After #unity_file, alias F is cleared and can be reused for a different module.
-#alias Bar F
+#alias F Bar
 use_bar() { F.other() }
 
 #module main

@@ -3,7 +3,7 @@ value() { 42 }
 add(a, b) { a + b }
 
 #module main
-#alias Foo F
+#alias F Foo
 
 main() {
     x := F.value()

@@ -2,7 +2,7 @@
 value() { 10 }
 
 #module main
-#alias Foo F
+#alias F Foo
 use_alias() { F.value() }
 
 #unalias F

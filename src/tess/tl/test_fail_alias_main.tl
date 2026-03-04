@@ -1,4 +1,4 @@
 #module main
-#alias main M
+#alias M main
 
 main() { 0 }

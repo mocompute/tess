@@ -2,7 +2,7 @@
 f() { 1 }
 
 #module main
-#alias Foo F
-#alias F G
+#alias F Foo
+#alias G F
 
 main() { G.f() }

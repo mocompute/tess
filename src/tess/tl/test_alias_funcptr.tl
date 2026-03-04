@@ -2,7 +2,7 @@
 double(x: Int) -> Int { x * 2 }
 
 #module main
-#alias Lib L
+#alias L Lib
 
 main() {
     fp := L.double/1

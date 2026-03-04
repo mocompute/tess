@@ -81,7 +81,7 @@ Module initialization functions are called in dependency order before `main()` e
 The `#alias` directive creates a shorthand name for an imported module:
 
 ```tl
-#alias Outer.Inner OI        // OI is now shorthand for Outer.Inner
+#alias OI Outer.Inner        // OI is now shorthand for Outer.Inner
 #unalias OI                  // Remove the alias
 ```
 
@@ -89,7 +89,7 @@ Aliases substitute the leftmost segment of a dotted reference. All references to
 
 ```tl
 #import <Collections/HashMap.tl>
-#alias Collections.HashMap HM
+#alias HM Collections.HashMap
 
 HM.create()                  // Same as Collections.HashMap.create()
 HM.insert(map, key, value)   // Same as Collections.HashMap.insert(...)

@@ -5,7 +5,7 @@ f() { 1 }
 g() { 2 }
 
 #module main
-#alias Foo F
-#alias Bar F
+#alias F Foo
+#alias F Bar
 
 main() { F.f() }

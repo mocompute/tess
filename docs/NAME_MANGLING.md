@@ -195,8 +195,8 @@ Module aliases provide shorthand names for modules using the `#alias` directive.
 ### Directive Syntax
 
 ```tl
-#alias Original NewName       // NewName becomes shorthand for Original
-#alias Outer.Inner Short      // Dotted paths supported as source
+#alias NewName Original       // NewName becomes shorthand for Original
+#alias Short Outer.Inner      // Dotted paths supported as source
 #unalias NewName              // Remove alias for current file
 ```
 
@@ -205,7 +205,7 @@ Module aliases provide shorthand names for modules using the `#alias` directive.
 When the parser encounters `NewName.foo(...)`, the alias replaces the leftmost segment before module mangling proceeds:
 
 ```
-Source: Short.add(1, 2)    (with #alias Outer.Inner Short)
+Source: Short.add(1, 2)    (with #alias Short Outer.Inner)
      |
      v
 Alias:  Outer.Inner.add(1, 2)   (leftmost segment replaced)
@@ -241,7 +241,7 @@ Module: Outer__Inner__add__2    (module mangling)
 
 ```tl
 #import <Outer/Inner.tl>
-#alias Outer.Inner OI
+#alias OI Outer.Inner
 
 OI.process(data)          // Resolved as Outer.Inner.process(data)
                           // Mangled to Outer__Inner__process__1

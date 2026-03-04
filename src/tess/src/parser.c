@@ -2959,8 +2959,8 @@ static int toplevel_hash_alias(parser *self, str_array words) {
         self->error.tag = tl_err_expected_hash_command;
         return ERROR_STOP;
     }
-    str source = words.v[1];
-    str alias  = words.v[2];
+    str alias  = words.v[1];
+    str source = words.v[2];
 
     // self-alias
     if (str_eq(source, alias)) {

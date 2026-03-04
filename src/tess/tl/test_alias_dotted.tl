@@ -5,7 +5,7 @@
 value() { 99 }
 
 #module main
-#alias Outer.Inner OI
+#alias OI Outer.Inner
 
 main() {
     if OI.value() == 99 { 0 } else { 1 }
