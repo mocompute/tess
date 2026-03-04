@@ -1464,6 +1464,7 @@ static int a_value(parser *self) {
                 ast_node_name_replace(ident, mangle_str_for_arity(self->ast_arena, ident->symbol.name, arity));
                 is_fn_ref = 1;
             }
+            mangle_name(self, ident);
             ast_node *r = ast_node_create_nfa(self->ast_arena, ident, (ast_node_sized)sized_all(type_args),
                                               (ast_node_sized){0});
             r->named_application.is_function_reference = is_fn_ref;
