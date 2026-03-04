@@ -206,7 +206,7 @@ static str specialize_type_constructor_(tl_infer *self, str name, tl_monotype_si
                                         tl_polytype **out_type, hashmap **seen);
 str specialize_type_constructor(tl_infer *self, str name, tl_monotype_sized args, tl_polytype **out_type);
 
-int type_literal_specialize(tl_infer *self, ast_node *node) {
+int type_literal_specialize(tl_infer *self, ast_node *node, hashmap *type_arguments) {
     // specialize a type id, e.g. `Point(Int)`. Contrast to specialize_type_constructor, which specialises
     // based on a callsite like `Point(1, 2)`. Assuming Point(a) { x : a, y : a }.
     // return 1 if node is not a type identifier or other error occurs.
@@ -224,7 +224,17 @@ int type_literal_specialize(tl_infer *self, ast_node *node) {
         }
     }
 
-    tl_monotype *parsed = tl_type_registry_parse_type(self->registry, node);
+    // Parse with context when available, so type variables from the outer generic
+    // function (e.g. K, V) resolve to their concrete bindings (e.g. Int, Int).
+    // Without context, these become fresh unresolvable type variables.
+    tl_monotype *parsed;
+    if (type_arguments) {
+        hot_parse_ctx_reinit(self, type_arguments);
+        parsed = tl_type_registry_parse_type_with_ctx(self->registry, node, &self->hot_parse_ctx);
+        self->hot_parse_ctx_guard = 0;
+    } else {
+        parsed = tl_type_registry_parse_type(self->registry, node);
+    }
     if (parsed) {
         tl_monotype *target = parsed;
         if (!tl_monotype_is_inst(target)) return 1;
@@ -332,6 +342,15 @@ name_and_type make_instance_key(tl_infer *self, str generic_name, tl_monotype *a
         ast_node *type_arg = type_arguments.v[i];
         type_arg_types.v[i] =
           tl_type_registry_parse_type_with_ctx(self->registry, type_arg, &self->hot_parse_ctx);
+
+        // If parsing from the AST structure failed (e.g. because type_literal_specialize
+        // has already renamed the node to a specialized name that the type registry doesn't
+        // know), fall back to the type already set on the AST node.  This mirrors the
+        // fallback in traverse_ctx_assign_type_arguments (infer_constraint.c).
+        if (!type_arg_types.v[i] && type_arg->type) {
+            type_arg_types.v[i] = type_arg->type->type;
+        }
+
         if (!type_arg_types.v[i]) continue;
 
         if (!tl_monotype_is_concrete(type_arg_types.v[i])) {
@@ -339,23 +358,16 @@ name_and_type make_instance_key(tl_infer *self, str generic_name, tl_monotype *a
             tl_monotype_substitute(self->arena, type_arg_types.v[i], self->subs, null);
         }
 
-        if (!tl_monotype_is_concrete(type_arg_types.v[i])) {
-            // Non-concrete type arguments are nulled out so they don't contribute to the
-            // instance key hash.  This is safe because concretize_params (called from
-            // clone_generic_for_arrow) now resolves type parameters positionally from the
-            // callsite's explicit type argument AST nodes.  Before that fix, two calls
-            // with different non-concrete type args (e.g. sizeof[Point_T]() vs
-            // sizeof[Rect_T]()) would produce identical keys and incorrectly share a
-            // single specialization.
-            type_arg_types.v[i] = null;
-        }
+        // Keep non-concrete type args in the hash as-is (don't null them out).
+        // Different non-concrete types (e.g. Inner[K,V] vs Outer[K,V]) are structurally
+        // different and hash differently, so the cache correctly distinguishes them.
     }
     self->hot_parse_ctx_guard = 0;
 
     name_and_type key         = {
-              .name_hash      = str_hash64(generic_name),
-              .type_hash      = tl_monotype_hash64(arrow),
-              .type_args_hash = tl_monotype_sized_hash64(hash64("args", 4), type_arg_types),
+              .name_hash               = str_hash64(generic_name),
+              .type_hash               = tl_monotype_hash64(arrow),
+              .type_args_hash          = tl_monotype_sized_hash64(hash64("args", 4), type_arg_types),
     };
 
 #if DEBUG_INSTANCE_CACHE
@@ -391,6 +403,7 @@ str *instance_lookup_arrow(tl_infer *self, str generic_name, tl_monotype *arrow,
     // de-duplicate instances: hashes give us structural equality (barring hash collisions), which we need
     // because types are frequently cloned.
     name_and_type key = make_instance_key(self, generic_name, arrow, type_arguments, outer_type_arguments);
+
     str          *result = instance_lookup(self, &key);
 
 #if DEBUG_INSTANCE_CACHE
@@ -679,7 +692,8 @@ static int specialize_value_arguments(tl_infer *self, traverse_ctx *traverse_ctx
 
 static int specialize_user_type(tl_infer *self, traverse_ctx *traverse_ctx, ast_node *node) {
     // divert if type constructor application is actually a type literal
-    if (0 == type_literal_specialize(self, node)) return 0;
+    if (0 == type_literal_specialize(self, node, traverse_ctx ? traverse_ctx->type_arguments : null))
+        return 0;
 
     if (!ast_node_is_nfa(node)) return 0;
 
@@ -1351,7 +1365,9 @@ int specialize_applications_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_n
 #endif
         for (u32 i = 0; i < node->named_application.n_type_arguments; i++) {
             ast_node *type_arg = node->named_application.type_arguments[i];
-            if (ast_node_is_nfa(type_arg) && 0 == type_literal_specialize(self, type_arg)) {
+            if (ast_node_is_nfa(type_arg) &&
+                0 == type_literal_specialize(self, type_arg,
+                                             traverse_ctx ? traverse_ctx->type_arguments : null)) {
                 // type_literal_specialize sets the type on the NFA's name node, but
                 // concretize_params and traverse_ctx_assign_type_arguments check the NFA
                 // node itself. Propagate the type up so both paths find it.

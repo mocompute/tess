@@ -333,6 +333,7 @@ tl_create_test(function_pointer_higher_order_return)
 tl_create_test(function_pointer_value)
 tl_create_test(generic_fn_ref_explicit_type_args)
 tl_create_test(generic_lambda)
+tl_create_test(generic_nested_sizeof)
 tl_create_test(generic_struct_fn_ptr_field)
 tl_create_test(generic_struct_null_fn_ptr_field)
 tl_create_test(global_variables)
@@ -603,6 +604,5 @@ tl_create_runtime_fail_test(fail_runtime_integer_bounds_cross_family)
 # Known fail failures: compiler should reject but doesn't yet
 
 # Known failures: these should work but a compiler bug makes them fail
-tl_create_known_failure(generic_nested_sizeof)
 tl_create_known_failure(hashmap)
 tl_create_known_failure(while_empty_body)

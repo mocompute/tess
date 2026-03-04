@@ -263,7 +263,7 @@ int           check_main_function(tl_infer *, ast_node *);
 int           instance_name_exists(tl_infer *, str);
 int           is_union_struct(tl_infer *, str);
 int           is_type_literal(tl_infer *, traverse_ctx const *, ast_node const *);
-int           type_literal_specialize(tl_infer *, ast_node *);
+int           type_literal_specialize(tl_infer *, ast_node *, hashmap *type_arguments);
 void          specialize_type_alias(tl_infer *, ast_node *);
 ast_node     *get_infer_target(ast_node *);
 void          toplevel_name_replace(ast_node *, str);
