@@ -109,7 +109,7 @@ tl_polytype *make_binary_predicate_arrow(tl_infer *self, traverse_ctx *ctx, ast_
 // ============================================================================
 
 ast_node *clone_generic_for_arrow(tl_infer *self, ast_node const *node, tl_monotype *arrow, str inst_name,
-                                  hashmap *type_arguments, ast_node_sized callsite_type_arguments) {
+                                  hashmap *type_arguments, tl_monotype_sized resolved_type_args) {
     ast_node *clone = ast_node_clone(self->arena, node);
     ast_node *name  = toplevel_name_node(clone);
     assert(ast_node_is_symbol(name));
@@ -159,7 +159,7 @@ ast_node *clone_generic_for_arrow(tl_infer *self, ast_node const *node, tl_monot
     tl_polytype wrap = tl_polytype_wrap(arrow);
     add_free_variables_to_arrow(self, clone, &wrap);
 
-    concretize_params(self, clone, arrow, type_arguments, callsite_type_arguments);
+    concretize_params(self, clone, arrow, type_arguments, resolved_type_args);
 
 #if DEBUG_INVARIANTS
     // Invariant: Type parameters with explicit bindings in type_arguments must have concrete types
@@ -896,7 +896,7 @@ int post_specialize(tl_infer *self, traverse_ctx *traverse_ctx, ast_node *specia
 // ============================================================================
 
 str specialize_arrow(tl_infer *self, traverse_ctx *traverse_ctx, str name, tl_monotype *arrow,
-                     ast_node_sized callsite_type_arguments) {
+                     tl_monotype_sized resolved_type_args) {
 
     if (!tl_monotype_is_concrete_no_weak(arrow))
         tl_monotype_substitute(self->arena, arrow, self->subs, null);
@@ -908,19 +908,7 @@ str specialize_arrow(tl_infer *self, traverse_ctx *traverse_ctx, str name, tl_mo
         return name;
     }
 
-    // 2. Resolve AST type args to monotypes for cache key
-    hashmap *outer_type_args = traverse_ctx ? traverse_ctx->type_arguments : null;
-
-    tl_monotype_sized resolved_type_args = {
-        .size = callsite_type_arguments.size,
-        .v    = callsite_type_arguments.size
-                  ? alloc_malloc(self->transient, callsite_type_arguments.size * sizeof(tl_monotype *))
-                  : null,
-    };
-    forall(i, callsite_type_arguments) {
-        resolved_type_args.v[i] = parse_type_arg(self, outer_type_args, callsite_type_arguments.v[i]);
-    }
-
+    // 2. Cache lookup using pre-resolved monotypes
     str *found = instance_lookup_arrow(self, name, arrow, resolved_type_args);
     if (found) {
         if (self->report_stats) self->counters.specialize_cache_hits++;
@@ -945,7 +933,7 @@ str specialize_arrow(tl_infer *self, traverse_ctx *traverse_ctx, str name, tl_mo
     }
     ast_node *generic_node =
       clone_generic_for_arrow(self, toplevel, arrow, inst_name,
-                              traverse_ctx ? traverse_ctx->type_arguments : null, callsite_type_arguments);
+                              traverse_ctx ? traverse_ctx->type_arguments : null, resolved_type_args);
     if (self->report_stats) {
         hires_timer_stop(&st);
         self->counters.specialize_clone_ms += hires_timer_elapsed_sec(&st) * 1000.0;
@@ -964,11 +952,11 @@ str specialize_arrow(tl_infer *self, traverse_ctx *traverse_ctx, str name, tl_mo
 }
 
 static int specialize_arrow_with_name(tl_infer *self, traverse_ctx *traverse_ctx, ast_node *fun_name_node,
-                                      tl_monotype *callsite, ast_node_sized callsite_type_arguments) {
+                                      tl_monotype *callsite, tl_monotype_sized resolved_type_args) {
     if (!tl_monotype_is_arrow(callsite)) return 0;
 
     str instance_name =
-      specialize_arrow(self, traverse_ctx, ast_node_str(fun_name_node), callsite, callsite_type_arguments);
+      specialize_arrow(self, traverse_ctx, ast_node_str(fun_name_node), callsite, resolved_type_args);
     if (str_is_empty(instance_name)) return 1;
     ast_node_name_replace(fun_name_node, instance_name);
     return 0;
@@ -993,7 +981,7 @@ static int specialize_operand(tl_infer *self, traverse_ctx *traverse_ctx, ast_no
 
     str value_name = ast_node_str(node);
     // TODO: function pointers with callsite type arguments
-    str inst_name = specialize_arrow(self, traverse_ctx, value_name, value_type->type, (ast_node_sized){0});
+    str inst_name = specialize_arrow(self, traverse_ctx, value_name, value_type->type, (tl_monotype_sized){0});
     if (str_is_empty(inst_name)) return 0; // FIXME: ignores error
     ast_node_name_replace(node, inst_name);
     return 0;
@@ -1095,7 +1083,7 @@ static int specialize_case(tl_infer *self, traverse_ctx *traverse_ctx, ast_node 
 
     str predicate_name = ast_node_str(predicate);
     str inst_name =
-      specialize_arrow(self, traverse_ctx, predicate_name, pred_arrow->type, (ast_node_sized){0});
+      specialize_arrow(self, traverse_ctx, predicate_name, pred_arrow->type, (tl_monotype_sized){0});
 
     if (str_is_empty(inst_name)) return 0; // FIXME: ignores error
     ast_node_name_replace(predicate, inst_name);
@@ -1169,7 +1157,7 @@ static int specialize_value_arguments(tl_infer *self, traverse_ctx *traverse_ctx
             str old_name = name_node->symbol.name;
 
             // Specialize the lambda argument
-            if (specialize_arrow_with_name(self, traverse_ctx, name_node, expected, (ast_node_sized){0}))
+            if (specialize_arrow_with_name(self, traverse_ctx, name_node, expected, (tl_monotype_sized){0}))
                 return 1;
 
             str new_name = name_node->symbol.name;
@@ -1194,7 +1182,7 @@ static int specialize_value_arguments(tl_infer *self, traverse_ctx *traverse_ctx
         if (!ast_node_is_symbol(arg)) goto next;
         if (!is_toplevel_function_name(self, arg)) goto next;
         if (i >= expected_types.size) fatal("runtime error");
-        if (specialize_arrow_with_name(self, traverse_ctx, arg, expected_types.v[i], (ast_node_sized){0}))
+        if (specialize_arrow_with_name(self, traverse_ctx, arg, expected_types.v[i], (tl_monotype_sized){0}))
             return 1;
 
     next:
@@ -1366,9 +1354,19 @@ int specialize_applications_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_n
             }
         }
 
-        // try to specialize
+        // try to specialize — resolve AST type args to monotypes
         ast_node_sized callsite_type_args = {.size = node->named_application.n_type_arguments,
                                              .v    = node->named_application.type_arguments};
+        hashmap *outer_type_args = traverse_ctx ? traverse_ctx->type_arguments : null;
+        tl_monotype_sized resolved_type_args = {
+            .size = callsite_type_args.size,
+            .v    = callsite_type_args.size
+                      ? alloc_malloc(self->transient, callsite_type_args.size * sizeof(tl_monotype *))
+                      : null,
+        };
+        forall(i, callsite_type_args) {
+            resolved_type_args.v[i] = parse_type_arg(self, outer_type_args, callsite_type_args.v[i]);
+        }
 #if DEBUG_RECURSIVE_TYPES
         {
             str arrow_str = tl_monotype_to_string(self->transient, callsite->type);
@@ -1379,7 +1377,7 @@ int specialize_applications_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_n
         }
 #endif
         if (specialize_arrow_with_name(self, traverse_ctx, node->named_application.name, callsite->type,
-                                       callsite_type_args)) {
+                                       resolved_type_args)) {
             dbg(self, "note: failed to specialize '%s'", str_cstr(&name));
             return 1;
         }
@@ -1396,7 +1394,7 @@ int specialize_applications_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_n
         dbg(self, "specialize_applications_cb: anon");
         callsite = make_arrow(self, traverse_ctx, ast_node_sized_from_ast_array(node), node, 0);
 
-        concretize_params(self, node, callsite->type, null, (ast_node_sized){0});
+        concretize_params(self, node, callsite->type, null, (tl_monotype_sized){0});
         if (post_specialize(self, traverse_ctx, node->lambda_application.lambda, callsite->type)) {
             return 1;
         }

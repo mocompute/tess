@@ -238,7 +238,7 @@ annotation_parse_result parse_type_annotation(tl_infer *, traverse_ctx *, ast_no
 void rename_variables(tl_infer *, ast_node *, rename_variables_ctx *, int);
 void rename_let_in(tl_infer *, ast_node *, rename_variables_ctx *);
 void add_free_variables_to_arrow(tl_infer *, ast_node *, tl_polytype *);
-void concretize_params(tl_infer *, ast_node *, tl_monotype *, hashmap *, ast_node_sized);
+void concretize_params(tl_infer *, ast_node *, tl_monotype *, hashmap *, tl_monotype_sized);
 int  collect_free_variables_cb(tl_infer *, traverse_ctx *, ast_node *);
 int  can_be_free_variable(tl_infer *, traverse_ctx *, ast_node const *);
 void promote_free_variables(str_array *, tl_monotype *);
@@ -249,10 +249,10 @@ void promote_free_variables(str_array *, tl_monotype *);
 
 str          *instance_lookup_arrow(tl_infer *, str, tl_monotype *, tl_monotype_sized);
 str           specialize_type_constructor(tl_infer *, str, tl_monotype_sized, tl_polytype **);
-str           specialize_arrow(tl_infer *, traverse_ctx *, str, tl_monotype *, ast_node_sized);
+str           specialize_arrow(tl_infer *, traverse_ctx *, str, tl_monotype *, tl_monotype_sized);
 int           specialize_applications_cb(tl_infer *, traverse_ctx *, ast_node *);
 ast_node     *clone_generic_for_arrow(tl_infer *, ast_node const *, tl_monotype *, str, hashmap *,
-                                      ast_node_sized);
+                                      tl_monotype_sized);
 tl_polytype  *make_arrow(tl_infer *, traverse_ctx *, ast_node_sized, ast_node *, int);
 tl_polytype  *make_arrow_result_type(tl_infer *, traverse_ctx *, ast_node_sized, tl_polytype *, int);
 tl_polytype  *make_arrow_with(tl_infer *, traverse_ctx *, ast_node *, tl_polytype *);

@@ -376,7 +376,7 @@ void rename_variables(tl_infer *self, ast_node *node, rename_variables_ctx *ctx,
 // ============================================================================
 
 void concretize_params(tl_infer *self, ast_node *node, tl_monotype *callsite, hashmap *type_arguments,
-                       ast_node_sized callsite_type_arguments) {
+                       tl_monotype_sized resolved_type_args) {
     if (ast_node_is_symbol(node)) return;
 
     ast_node      *body   = null;
@@ -435,26 +435,12 @@ void concretize_params(tl_infer *self, ast_node *node, tl_monotype *callsite, ha
             tl_monotype *bound_type = str_map_get_ptr(type_arguments, param_name);
 
             // If direct lookup failed (because clone's alpha-converted name differs from caller's),
-            // resolve positionally through the callsite type arguments. The callsite NFA's i-th type
-            // argument corresponds to this clone's i-th type parameter.
-            if (!bound_type && i < callsite_type_arguments.size) {
-                ast_node *callsite_arg = callsite_type_arguments.v[i];
-
-                // Try 1: If the callsite type arg is a symbol, look up its name in type_arguments.
-                // This bridges from the caller's alpha-converted name to the concrete type.
-                if (ast_node_is_symbol(callsite_arg)) {
-                    bound_type = str_map_get_ptr(type_arguments, callsite_arg->symbol.name);
-                }
-
-                // Try 2+3: Parse or use existing type, then clone + substitute + concrete-gate.
-                if (!bound_type) {
-                    tl_monotype *resolved = parse_type_arg(self, type_arguments, callsite_arg);
-                    if (resolved) {
-                        resolved = tl_monotype_clone(self->arena, resolved);
-                        tl_monotype_substitute(self->arena, resolved, self->subs, null);
-                        if (tl_monotype_is_concrete(resolved)) bound_type = resolved;
-                    }
-                }
+            // resolve positionally through the pre-resolved monotypes. The i-th resolved type arg
+            // corresponds to this clone's i-th type parameter.
+            if (!bound_type && i < resolved_type_args.size && resolved_type_args.v[i]) {
+                tl_monotype *resolved = tl_monotype_clone(self->arena, resolved_type_args.v[i]);
+                tl_monotype_substitute(self->arena, resolved, self->subs, null);
+                if (tl_monotype_is_concrete(resolved)) bound_type = resolved;
             }
 
 #if DEBUG_EXPLICIT_TYPE_ARGS
