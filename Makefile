@@ -60,9 +60,10 @@ INSTALL_BIN  = $(DESTDIR)$(PREFIX)/bin
 INSTALL_LIB  = $(DESTDIR)$(PREFIX)/lib/tess
 
 # Test directories
-TL_TEST_DIR  = $(TESS_SRC_DIR)/tl
-TL_STD_DIR   = src/tl/std
-TL_BUILD_DIR = $(BUILD_DIR)/tl
+TL_TEST_DIR    = $(TESS_SRC_DIR)/tl
+TL_STD_DIR     = src/tl/std
+TL_STD_SOURCES = $(wildcard $(TL_STD_DIR)/*.tl)
+TL_BUILD_DIR   = $(BUILD_DIR)/tl
 
 # ------------------------------------------------------------------------------
 # Output Control
@@ -717,7 +718,7 @@ TOTAL_TESTS = $(words $(MOS_TESTS) $(TESS_TESTS) $(VENDOR_TESTS) \
 TL_TEST_EXES = $(patsubst %,$(TL_BUILD_DIR)/test_%,$(TL_TESTS))
 
 # Special rule for test_import_relative_dotdot (needs to run from fixtures directory)
-$(TL_BUILD_DIR)/test_import_relative_dotdot: $(TL_TEST_DIR)/fixtures/test_import_relative_dotdot.tl $(TESS_EXE)
+$(TL_BUILD_DIR)/test_import_relative_dotdot: $(TL_TEST_DIR)/fixtures/test_import_relative_dotdot.tl $(TESS_EXE) $(TL_STD_SOURCES)
 	@mkdir -p $(dir $@)
 	$(MSG_GEN) $@
 	@cd $(TL_TEST_DIR)/fixtures && \
@@ -727,7 +728,7 @@ $(TL_BUILD_DIR)/test_import_relative_dotdot: $(TL_TEST_DIR)/fixtures/test_import
 		$(MSG_FAIL) $@; \
 	fi
 
-$(TL_BUILD_DIR)/test_%: $(TL_TEST_DIR)/test_%.tl $(TESS_EXE)
+$(TL_BUILD_DIR)/test_%: $(TL_TEST_DIR)/test_%.tl $(TESS_EXE) $(TL_STD_SOURCES)
 	@mkdir -p $(dir $@)
 	$(MSG_GEN) $@
 	@export ASAN_OPTIONS=$(ASAN_OPTIONS); \
