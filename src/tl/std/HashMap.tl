@@ -60,10 +60,10 @@ size[K, V]    (self: Ptr[HashMap[K, V]]) -> UInt
 is_empty[K, V](self: Ptr[HashMap[K, V]]) -> Bool
 clear[K, V]   (self: Ptr[HashMap[K, V]]) -> Void
 
-keys[K, V]  (self: Ptr[HashMap[K, V]])                        -> Array.Array[K]
-keys[K, V]  (self: Ptr[HashMap[K, V]], alloc: Ptr[Allocator]) -> Array.Array[K]
-values[K, V](self: Ptr[HashMap[K, V]])                        -> Array.Array[V]
-values[K, V](self: Ptr[HashMap[K, V]], alloc: Ptr[Allocator]) -> Array.Array[V]
+keys[K, V]  (self: Ptr[HashMap[K, V]])                        -> Array[K]
+keys[K, V]  (self: Ptr[HashMap[K, V]], alloc: Ptr[Allocator]) -> Array[K]
+values[K, V](self: Ptr[HashMap[K, V]])                        -> Array[V]
+values[K, V](self: Ptr[HashMap[K, V]], alloc: Ptr[Allocator]) -> Array[V]
 
 
 // -- C helpers --
@@ -345,7 +345,7 @@ clear[K, V](self: Ptr[HashMap[K, V]]) -> Void {
 
 // -- Bulk --
 
-keys[K, V](self: Ptr[HashMap[K, V]], alloc: Ptr[Allocator]) -> Array.Array[K] {
+keys[K, V](self: Ptr[HashMap[K, V]], alloc: Ptr[Allocator]) -> Array[K] {
     result  := Array.with_capacity[K](alloc, self->_size)
     i: UInt := 0u
     while i < self->_capacity, i += 1u {
@@ -357,11 +357,11 @@ keys[K, V](self: Ptr[HashMap[K, V]], alloc: Ptr[Allocator]) -> Array.Array[K] {
     result
 }
 
-keys[K, V](self: Ptr[HashMap[K, V]]) -> Array.Array[K] {
+keys[K, V](self: Ptr[HashMap[K, V]]) -> Array[K] {
     keys(self, Alloc.context.default)
 }
 
-values[K, V](self: Ptr[HashMap[K, V]], alloc: Ptr[Allocator]) -> Array.Array[V] {
+values[K, V](self: Ptr[HashMap[K, V]], alloc: Ptr[Allocator]) -> Array[V] {
     result  := Array.with_capacity[V](alloc, self->_size)
     i: UInt := 0u
     while i < self->_capacity, i += 1u {
@@ -373,6 +373,6 @@ values[K, V](self: Ptr[HashMap[K, V]], alloc: Ptr[Allocator]) -> Array.Array[V] 
     result
 }
 
-values[K, V](self: Ptr[HashMap[K, V]]) -> Array.Array[V] {
+values[K, V](self: Ptr[HashMap[K, V]]) -> Array[V] {
     values(self, Alloc.context.default)
 }
