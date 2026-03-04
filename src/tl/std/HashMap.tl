@@ -85,10 +85,11 @@ c_tl_hashmap_bytes_equal (a: Ptr[any], b: Ptr[any], n: CSize)   -> CInt
 
 _default_hash[K](key: Ptr[K])                                                                       -> UInt
 _default_eq[K](a: Ptr[K], b: Ptr[K])                                                                -> Bool
+_entry_width[K, V]()                                                                                 -> UInt
 _grow[K, V](self: Ptr[HashMap[K, V]])                                                                -> Void
 _alloc_entries[K, V](alloc: Ptr[Alloc.Allocator], capacity: UInt)                                    -> Ptr[_Entry[K, V]]
 _insert_entry[K, V](entries: Ptr[_Entry[K, V]], capacity: UInt, eq: (Ptr[K], Ptr[K]) -> Bool,
-                     key: K, value: V, hash: UInt)                                                   -> Ptr[UInt]
+                     key: K, value: V, hash: UInt)                                                   -> UInt
 
 
 // -- Implementation --
@@ -112,9 +113,10 @@ _default_eq[K](a: Ptr[K], b: Ptr[K]) -> Bool {
     c_tl_hashmap_bytes_equal(a, b, sizeof[K]()) != 0
 }
 
+_entry_width[K, V]() -> UInt { Alloc.align(sizeof[_Entry[K, V]](), alignof[_Entry[K, V]]()) }
+
 _alloc_entries[K, V](alloc, capacity) {
-    width := Alloc.align(sizeof[_Entry[K, V]](), alignof[_Entry[K, V]]())
-    p: Ptr[_Entry[K, V]] := alloc->calloc(alloc, capacity, width)
+    p: Ptr[_Entry[K, V]] := alloc->calloc(alloc, capacity, _entry_width[K, V]())
     if p == null { _tl_fatal_(c"HashMap: oom") }
     p
 }
@@ -162,9 +164,7 @@ destroy[K, V](self: Ptr[HashMap[K, V]]) -> Void {
 // -- Core: set, get, contains --
 
 // Insert into a raw entries table. Returns 1 for new insertion, 0 for overwrite.
-_insert_entry[K, V](entries, capacity, eq, key: K, value: V, hash: UInt) -> Ptr[UInt] {
-    _delta: UInt := 1u
-
+_insert_entry[K, V](entries, capacity, eq, key: K, value: V, hash: UInt) -> UInt {
     mask := capacity - 1u
     bucket := hash & mask
 
@@ -182,14 +182,12 @@ _insert_entry[K, V](entries, capacity, eq, key: K, value: V, hash: UInt) -> Ptr[
             e->hash   = cur_hash
             e->dist   = cur_dist
             e->status = _OCCUPIED
-            _delta = 1u
-            return _delta.&
+            return 1u
         }
 
         if e->hash == cur_hash && eq(e->key.&, cur_key.&) {
             e->value = cur_value
-            _delta = 0u
-            return _delta.&
+            return 0u
         }
 
         // Robin Hood: steal from rich
@@ -214,7 +212,7 @@ _insert_entry[K, V](entries, capacity, eq, key: K, value: V, hash: UInt) -> Ptr[
         bucket = (bucket + 1u) & mask
     }
 
-    _delta.&
+    0u
 }
 
 _grow[K, V](self: Ptr[HashMap[K, V]]) -> Void {
@@ -239,14 +237,14 @@ _grow[K, V](self: Ptr[HashMap[K, V]]) -> Void {
 }
 
 set[K, V](self: Ptr[HashMap[K, V]], key: K, value: V) -> Void {
-    // Check load factor: size * 20 >= capacity * 17  ≈  85%
+    hash := self->_hash(key.&)
+    delta := _insert_entry[K, V](self->_entries, self->_capacity, self->_eq, key, value, hash)
+    self->_size += delta
+
+    // Grow after insertion so overwrites (delta=0) don't trigger unnecessary growth.
     if self->_size * 20u >= self->_capacity * 17u {
         _grow[K, V](self)
     }
-
-    hash := self->_hash(key.&)
-    delta := _insert_entry[K, V](self->_entries, self->_capacity, self->_eq, key, value, hash)
-    self->_size += delta.*
 }
 
 get[K, V](self: Ptr[HashMap[K, V]], key: K) -> Ptr[V] {
@@ -337,8 +335,7 @@ size[K, V](self: Ptr[HashMap[K, V]]) -> UInt { self->_size }
 is_empty[K, V](self: Ptr[HashMap[K, V]]) -> Bool { self->_size == 0u }
 
 clear[K, V](self: Ptr[HashMap[K, V]]) -> Void {
-    width := Alloc.align(sizeof[_Entry[K, V]](), alignof[_Entry[K, V]]())
-    c_memset(self->_entries, 0, self->_capacity * width)
+    c_memset(self->_entries, 0, self->_capacity * _entry_width[K, V]())
     self->_size = 0u
 }
 

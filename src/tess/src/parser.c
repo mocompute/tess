@@ -15,6 +15,7 @@
 #include "types.h"
 
 #include <assert.h>
+#include <errno.h>
 #include <limits.h>
 #include <stdarg.h>
 #include <stddef.h>
@@ -1427,8 +1428,9 @@ static int a_arity_qualifier(parser *self) {
 
     // Arities are plain non-negative integers only (no suffixes, no floats)
     char *end;
+    errno = 0;
     long n = strtol(self->token.s, &end, 10);
-    if (end == self->token.s || *end != '\0' || n < 0 || n > 255) return 1;
+    if (errno || end == self->token.s || *end != '\0' || n < 0 || n > 255) return 1;
     return result_ast_i64(self, (i64)n);
 }
 

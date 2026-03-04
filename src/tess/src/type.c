@@ -2450,38 +2450,38 @@ str tl_monotype_to_string_(allocator *alloc, tl_monotype *self, hashmap **map) {
 
     case tl_integer: {
         char buf[64];
-        snprintf(buf, sizeof buf, "i%i", self->integer);
-        str_build_cat_n(&b, buf, strlen(buf));
+        int n = snprintf(buf, sizeof buf, "i%i", self->integer);
+        str_build_cat_n(&b, buf, (u32)n);
     } break;
 
     case tl_var: {
         char buf[64];
-        snprintf(buf, sizeof buf, "t%u", self->var);
-        str_build_cat_n(&b, buf, strlen(buf));
+        int n = snprintf(buf, sizeof buf, "t%u", self->var);
+        str_build_cat_n(&b, buf, (u32)n);
     } break;
 
     case tl_weak: {
         char buf[64];
-        snprintf(buf, sizeof buf, "w%u", self->var);
-        str_build_cat_n(&b, buf, strlen(buf));
+        int n = snprintf(buf, sizeof buf, "w%u", self->var);
+        str_build_cat_n(&b, buf, (u32)n);
     } break;
 
     case tl_weak_int_signed: {
         char buf[64];
-        snprintf(buf, sizeof buf, "ws%u", self->var);
-        str_build_cat_n(&b, buf, strlen(buf));
+        int n = snprintf(buf, sizeof buf, "ws%u", self->var);
+        str_build_cat_n(&b, buf, (u32)n);
     } break;
 
     case tl_weak_int_unsigned: {
         char buf[64];
-        snprintf(buf, sizeof buf, "wu%u", self->var);
-        str_build_cat_n(&b, buf, strlen(buf));
+        int n = snprintf(buf, sizeof buf, "wu%u", self->var);
+        str_build_cat_n(&b, buf, (u32)n);
     } break;
 
     case tl_weak_float: {
         char buf[64];
-        snprintf(buf, sizeof buf, "wf%u", self->var);
-        str_build_cat(&b, str_init(alloc, buf));
+        int n = snprintf(buf, sizeof buf, "wf%u", self->var);
+        str_build_cat_n(&b, buf, (u32)n);
     } break;
 
     case tl_cons_inst: {
@@ -2543,9 +2543,9 @@ str tl_polytype_to_string(allocator *alloc, tl_polytype *self) {
         str_build_cat(&b, S("forall"));
         forall(i, self->quantifiers) {
             char buf[64];
-            snprintf(buf, sizeof buf, "t%u", self->quantifiers.v[i]);
+            int n = snprintf(buf, sizeof buf, "t%u", self->quantifiers.v[i]);
             str_build_cat(&b, S(" "));
-            str_build_cat_n(&b, buf, strlen(buf));
+            str_build_cat_n(&b, buf, (u32)n);
         }
         str_build_cat(&b, S(". "));
     }
