@@ -530,11 +530,6 @@ int traverse_ctx_assign_type_arguments(tl_infer *self, traverse_ctx *ctx, ast_no
                 tl_type_registry_add_type_argument(self->registry, param_name, parsed,
                                                    &ctx->type_arguments);
 
-                // param names are alpha converted, and we use the environment to ensure constraints are
-                // fully propagated
-                tl_polytype *poly = tl_polytype_absorb_mono(self->arena, parsed);
-                env_insert_constrain(self, param_name, poly, argv[i]);
-
                 assert(str_map_contains(ctx->type_arguments, param_name));
             }
 

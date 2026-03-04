@@ -605,5 +605,4 @@ tl_create_runtime_fail_test(fail_runtime_integer_bounds_cross_family)
 # Known fail failures: compiler should reject but doesn't yet
 
 # Known failures: these should work but a compiler bug makes them fail
-tl_create_known_failure(hashmap)
 tl_create_known_failure(while_empty_body)
