@@ -201,8 +201,8 @@ offset: CPtrDiff := -4z          // OK: -4z is CPtrDiff
 | Meets | Result |
 |-------|--------|
 | Concrete integer in same family | Literal takes on that type |
-| Concrete integer in other family | Type error |
-| Standalone type (CSize, CPtrDiff, CChar) | Type error (use `z`/`zu` suffix or annotation) |
+| Concrete integer in other family | Unsuffixed: adopts that type (family-agnostic). `u`-suffixed: type error |
+| Standalone type (CSize, CPtrDiff, CChar) | Unsuffixed: adopts that type (family-agnostic). `u`-suffixed: type error |
 | Type variable `T` | Remains weak; resolved when `T` is resolved |
 | Another weak literal (same family) | Merge; both resolve together |
 | Another weak literal (other family) | Type error |

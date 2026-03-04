@@ -3148,23 +3148,23 @@ static int tl_type_subs_unify_weak_int_concrete(tl_type_subs *subs, tl_monotype 
 
     tl_type_constructor_def *def = concrete->cons_inst->def;
 
-    // Check family: weak_int_signed requires signed integer, weak_int_unsigned requires unsigned integer.
-    if (tl_weak_int_signed == weak_int->tag) {
-        if (!def->is_signed_integer) {
-            if (cb) cb(user, weak_int, concrete);
-            return 1;
-        }
-    } else {
+    // Check family.
+    // weak_int_signed (unsuffixed literal) is family-agnostic: can adopt any integer type.
+    // weak_int_unsigned (u-suffixed literal) requires an unsigned integer, non-standalone.
+    if (tl_weak_int_unsigned == weak_int->tag) {
         if (!def->is_unsigned_integer) {
             if (cb) cb(user, weak_int, concrete);
             return 1;
         }
-    }
-
-    // Check standalone: standalone types (CSize, CPtrDiff, CChar) require explicit z/zu suffix.
-    if (def->integer_subchain >= TL_INTEGER_SUBCHAIN_CSIZE) {
-        if (cb) cb(user, weak_int, concrete);
-        return 1;
+        if (def->integer_subchain >= TL_INTEGER_SUBCHAIN_CSIZE) {
+            if (cb) cb(user, weak_int, concrete);
+            return 1;
+        }
+    } else {
+        if (!def->is_signed_integer && !def->is_unsigned_integer) {
+            if (cb) cb(user, weak_int, concrete);
+            return 1;
+        }
     }
 
     // Check compile-time literal range: if the weak int originated from a literal, verify it fits.

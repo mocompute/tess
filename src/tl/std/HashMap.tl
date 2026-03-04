@@ -102,8 +102,8 @@ _default_hash[K](key: Ptr[K]) -> UInt {
     h:     UInt  := 0xcbf29ce484222325
     prime: UInt  := 0x100000001b3
     n:     CSize := sizeof[K]()
-    i:     CSize := 0zu
-    while i < n, i += 1zu {
+    i:     CSize := 0
+    while i < n, i += 1 {
         b := c_tl_hashmap_byte_at(key, i)
         h = h ^ b
         h = h * prime
@@ -132,8 +132,8 @@ create[K, V](alloc: Ptr[Allocator], opts: HashMapOpts[K]) -> Ptr[HashMap[K, V]] 
 
     hash_fn := opts.hash
     eq_fn   := opts.eq
-    if hash_fn == null { hash_fn = _default_hash[K] / 1 }
-    if eq_fn == null { eq_fn     = _default_eq[K] / 2 }
+    if hash_fn == null { hash_fn = _default_hash[K]/1 }
+    if eq_fn == null { eq_fn     = _default_eq[K]/2 }
 
     m: Ptr[HashMap[K, V]] := alloc->malloc(alloc, sizeof[HashMap[K, V]]())
     if m == null { _tl_fatal_(c"HashMap: oom") }
@@ -221,13 +221,13 @@ _insert_entry[K, V](entries, capacity, eq, key: K, value: V, hash: UInt) -> UInt
 _grow[K, V](self: Ptr[HashMap[K, V]]) -> Void {
     old_entries  := self->_entries
     old_capacity := self->_capacity
-    new_capacity := old_capacity * 2u
+    new_capacity := old_capacity * 2
     alloc        := self->_alloc
 
     new_entries := _alloc_entries[K, V](alloc, new_capacity)
 
     i: UInt := 0u
-    while i < old_capacity, i += 1u {
+    while i < old_capacity, i += 1 {
         e := old_entries.[i].&
         if e->status == _OCCUPIED {
             _insert_entry[K, V](new_entries, new_capacity, self->_eq, e->key, e->value, e->hash)
@@ -254,7 +254,7 @@ get[K, V](self: Ptr[HashMap[K, V]], key: K) -> Ptr[V] {
     if self->_size == 0u { return null }
 
     hash       := self->_hash(key.&)
-    mask       := self->_capacity - 1u
+    mask       := self->_capacity - 1
     bucket     := hash & mask
     dist: UInt := 0u
 
@@ -348,7 +348,7 @@ clear[K, V](self: Ptr[HashMap[K, V]]) -> Void {
 keys[K, V](self: Ptr[HashMap[K, V]], alloc: Ptr[Allocator]) -> Array[K] {
     result  := Array.with_capacity[K](alloc, self->_size)
     i: UInt := 0u
-    while i < self->_capacity, i += 1u {
+    while i < self->_capacity, i += 1 {
         e := self->_entries.[i].&
         if e->status == _OCCUPIED {
             Array.push(result.&, alloc, e->key)
@@ -364,7 +364,7 @@ keys[K, V](self: Ptr[HashMap[K, V]]) -> Array[K] {
 values[K, V](self: Ptr[HashMap[K, V]], alloc: Ptr[Allocator]) -> Array[V] {
     result  := Array.with_capacity[V](alloc, self->_size)
     i: UInt := 0u
-    while i < self->_capacity, i += 1u {
+    while i < self->_capacity, i += 1 {
         e := self->_entries.[i].&
         if e->status == _OCCUPIED {
             Array.push(result.&, alloc, e->value)

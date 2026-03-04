@@ -478,6 +478,7 @@ TL_TESTS =					\
 	integer_generic_type_args		\
 	integer_narrowing_let_cast		\
 	integer_same_type			\
+	integer_standalone_cchar		\
 	integer_widening			\
 	integer_widening_reassign		\
 	lambda_apply				\
@@ -616,6 +617,8 @@ TL_TESTS =					\
 	while_update_statement			\
 	weak_int_literals			\
 	weak_int_module_const			\
+	weak_int_to_standalone			\
+	weak_int_unsigned_update		\
 	z_literals
 
 TL_FAIL_TESTS =					\
@@ -645,7 +648,6 @@ TL_FAIL_TESTS =					\
 	fail_import_missing_quotes		\
 	fail_integer_compound_assign_mixed	\
 	fail_integer_cross_chain		\
-	fail_integer_cross_family		\
 	fail_integer_cross_family_arithmetic	\
 	fail_integer_cross_family_assignment	\
 	fail_integer_cross_family_comparison	\
@@ -661,7 +663,6 @@ TL_FAIL_TESTS =					\
 	fail_integer_narrowing_funcall		\
 	fail_integer_narrowing_reassign		\
 	fail_integer_narrowing_return		\
-	fail_integer_standalone_cchar		\
 	fail_lambda_implicit_return		\
 	fail_lambda_return			\
 	fail_monkey_patch			\
@@ -693,8 +694,7 @@ TL_FAIL_TESTS =					\
 	fail_float_int_implicit			\
 	fail_float_narrowing_funcall		\
 	fail_float_narrowing_return		\
-	fail_weak_int_cross_family		\
-	fail_weak_int_to_standalone
+	fail_weak_int_cross_family
 
 # Expected runtime failure tests (must compile, must fail at runtime with --bounds-check)
 TL_FAIL_RUNTIME_TESTS =			\
