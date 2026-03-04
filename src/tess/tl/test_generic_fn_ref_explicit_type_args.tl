@@ -6,8 +6,8 @@
 _default_hash[K](key: Ptr[K]) -> UInt { 42u }
 
 main() {
-    fn := _default_hash[Int]/1
+    fn          := _default_hash[Int]/1
     p: Ptr[Int] := null
-    r := fn(p)
-    0
+    r: CInt     := fn(p)
+    r - 42
 }

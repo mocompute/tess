@@ -184,6 +184,7 @@ void log_type_error_mm(tl_infer *, tl_monotype *, tl_monotype *, ast_node const 
 
 void tl_infer_set_attributes(tl_infer *, ast_node const *);
 void hot_parse_ctx_reinit(tl_infer *, hashmap *);
+tl_monotype *parse_type_arg(tl_infer *, hashmap *, ast_node *);
 void apply_subs_to_ast(tl_infer *);
 str  next_variable_name(tl_infer *, str);
 str  next_instantiation(tl_infer *, str);

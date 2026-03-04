@@ -430,9 +430,6 @@ int traverse_ctx_assign_type_arguments(tl_infer *self, traverse_ctx *ctx, ast_no
 #endif
 
         for (u32 i = 0; i < argc; i++) {
-            // Reinit per-iteration: specialize_type_constructor (below) can re-enter
-            // make_instance_key which clobbers hot_parse_ctx.
-            hot_parse_ctx_reinit(self, ctx->type_arguments);
             ast_node *type_arg_node = argv[i];
 
 #if DEBUG_EXPLICIT_TYPE_ARGS
@@ -467,34 +464,15 @@ int traverse_ctx_assign_type_arguments(tl_infer *self, traverse_ctx *ctx, ast_no
                 }
             }
 
-            // If the type argument node already has a type set (from a previous pass), reuse it.
-            if (!parsed && type_arg_node->type) {
-                parsed = type_arg_node->type->type;
-
-#if DEBUG_EXPLICIT_TYPE_ARGS
-                str reused_str = tl_monotype_to_string(self->transient, parsed);
-                fprintf(stderr, "  type_arg[%u]: reused existing type = %s\n", i, str_cstr(&reused_str));
-#endif
-            }
-
-            // Fall back to parsing the type argument node from scratch.
             if (!parsed) {
-#if DEBUG_EXPLICIT_TYPE_ARGS
-                // Debug: show what's in the parse context
-                str_array keys = str_map_keys(self->transient, self->hot_parse_ctx.type_arguments);
-                fprintf(stderr, "  hot_parse_ctx.type_arguments has %u keys:", keys.size);
-                forall(j, keys) fprintf(stderr, " '%s'", str_cstr(&keys.v[j]));
-                fprintf(stderr, "\n");
-#endif
-                parsed =
-                  tl_type_registry_parse_type_with_ctx(self->registry, type_arg_node, &self->hot_parse_ctx);
-                if (!parsed) {
-                    array_push(self->errors,
-                               ((tl_infer_error){.tag = tl_err_expected_type, .node = type_arg_node}));
-                    return 1;
-                }
+                parsed = parse_type_arg(self, ctx->type_arguments, type_arg_node);
             }
-            self->hot_parse_ctx_guard = 0;
+
+            if (!parsed) {
+                array_push(self->errors,
+                           ((tl_infer_error){.tag = tl_err_expected_type, .node = type_arg_node}));
+                return 1;
+            }
 
 #if DEBUG_EXPLICIT_TYPE_ARGS
             str parsed_str = tl_monotype_to_string(self->transient, parsed);

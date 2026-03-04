@@ -446,26 +446,13 @@ void concretize_params(tl_infer *self, ast_node *node, tl_monotype *callsite, ha
                     bound_type = str_map_get_ptr(type_arguments, callsite_arg->symbol.name);
                 }
 
-                // Try 2: If the callsite type arg has a resolved type on it, use that.
-                if (!bound_type && callsite_arg->type) {
-                    tl_monotype *resolved = tl_monotype_clone(self->arena, callsite_arg->type->type);
-                    tl_monotype_substitute(self->arena, resolved, self->subs, null);
-                    if (tl_monotype_is_concrete(resolved)) {
-                        bound_type = resolved;
-                    }
-                }
-
-                // Try 3: Parse the callsite type arg node using the type_arguments context.
+                // Try 2+3: Parse or use existing type, then clone + substitute + concrete-gate.
                 if (!bound_type) {
-                    hot_parse_ctx_reinit(self, type_arguments);
-                    tl_monotype *parsed = tl_type_registry_parse_type_with_ctx(self->registry, callsite_arg,
-                                                                               &self->hot_parse_ctx);
-                    self->hot_parse_ctx_guard = 0;
-                    if (parsed) {
-                        tl_monotype_substitute(self->arena, parsed, self->subs, null);
-                        if (tl_monotype_is_concrete(parsed)) {
-                            bound_type = parsed;
-                        }
+                    tl_monotype *resolved = parse_type_arg(self, type_arguments, callsite_arg);
+                    if (resolved) {
+                        resolved = tl_monotype_clone(self->arena, resolved);
+                        tl_monotype_substitute(self->arena, resolved, self->subs, null);
+                        if (tl_monotype_is_concrete(resolved)) bound_type = resolved;
                     }
                 }
             }

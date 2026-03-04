@@ -331,8 +331,6 @@ int is_type_literal(tl_infer *self, traverse_ctx const *ctx, ast_node const *nod
 name_and_type make_instance_key(tl_infer *self, str generic_name, tl_monotype *arrow,
                                 ast_node_sized type_arguments, hashmap *outer_type_arguments) {
 
-    hot_parse_ctx_reinit(self, outer_type_arguments);
-
     tl_monotype_sized type_arg_types = {
       .size = type_arguments.size,
       .v    = alloc_malloc(self->transient, type_arguments.size * sizeof(tl_monotype *)),
@@ -340,21 +338,11 @@ name_and_type make_instance_key(tl_infer *self, str generic_name, tl_monotype *a
 
     forall(i, type_arguments) {
         ast_node *type_arg = type_arguments.v[i];
-        type_arg_types.v[i] =
-          tl_type_registry_parse_type_with_ctx(self->registry, type_arg, &self->hot_parse_ctx);
-
-        // If parsing from the AST structure failed (e.g. because type_literal_specialize
-        // has already renamed the node to a specialized name that the type registry doesn't
-        // know), fall back to the type already set on the AST node.  This mirrors the
-        // fallback in traverse_ctx_assign_type_arguments (infer_constraint.c).
-        if (!type_arg_types.v[i] && type_arg->type) {
-            type_arg_types.v[i] = type_arg->type->type;
-        }
+        type_arg_types.v[i] = parse_type_arg(self, outer_type_arguments, type_arg);
 
         if (!type_arg_types.v[i]) continue;
 
         if (!tl_monotype_is_concrete(type_arg_types.v[i])) {
-            // attempt to substitute
             tl_monotype_substitute(self->arena, type_arg_types.v[i], self->subs, null);
         }
 
@@ -362,7 +350,6 @@ name_and_type make_instance_key(tl_infer *self, str generic_name, tl_monotype *a
         // Different non-concrete types (e.g. Inner[K,V] vs Outer[K,V]) are structurally
         // different and hash differently, so the cache correctly distinguishes them.
     }
-    self->hot_parse_ctx_guard = 0;
 
     name_and_type key         = {
               .name_hash               = str_hash64(generic_name),

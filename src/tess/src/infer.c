@@ -69,6 +69,28 @@ void hot_parse_ctx_reinit(tl_infer *self, hashmap *outer_type_arguments) {
       &self->hot_parse_ctx, outer_type_arguments ? outer_type_arguments : self->hot_parse_ctx_own_ta);
 }
 
+// Parse a type argument node, using type_arguments as context for resolving
+// type variables (e.g., K -> Int).  Falls back to node->type when fresh parse
+// fails (e.g., after type_literal_specialize renamed the node).
+// Returns null if neither path produces a result.
+tl_monotype *parse_type_arg(tl_infer *self, hashmap *type_arguments,
+                            ast_node *node) {
+    tl_monotype *parsed;
+    if (type_arguments) {
+        hot_parse_ctx_reinit(self, type_arguments);
+        parsed = tl_type_registry_parse_type_with_ctx(
+            self->registry, node, &self->hot_parse_ctx);
+        self->hot_parse_ctx_guard = 0;
+    } else {
+        parsed = tl_type_registry_parse_type(self->registry, node);
+    }
+    if (parsed) return parsed;
+
+    if (node->type) return node->type->type;
+
+    return null;
+}
+
 void tl_infer_destroy(allocator *alloc, tl_infer **p) {
 
     if ((*p)->toplevels) map_destroy(&(*p)->toplevels);
