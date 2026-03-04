@@ -186,6 +186,19 @@ StringMap[V] = Map[CString, V]   // Error: partial specialization
 
 Instead, use the full generic type or create a fully specialized alias.
 
+### Auto-Collapsed Type Aliases
+
+When a module's primary type has the same name as the module (e.g., `Array.Array`, `HashMap.HashMap`), the compiler automatically registers the bare module name as a type alias during type constructor creation. This is equivalent to an implicit:
+
+```tl
+Array = Array.Array      // auto-generated, not user-written
+HashMap = HashMap.HashMap
+```
+
+The alias is only created when the bare name is not already occupied by another type. Both the bare and qualified forms unify to the same type — they are fully interchangeable in all type positions.
+
+**Implementation:** In `create_type_constructor_from_user_type` (`infer_constraint.c`), after registering the mangled type (`Module__Module`), the compiler checks whether the symbol's `original` name equals its `module` name. If so, and the bare name is free, `tl_type_registry_type_alias_insert` registers the alias.
+
 ## Type Constructors
 
 User-defined types (structs, unions, enums) introduce **type constructors**.

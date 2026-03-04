@@ -107,6 +107,40 @@ HM.insert(map, key, value)   // Same as Collections.HashMap.insert(...)
 - The alias name cannot use reserved prefixes (`c_*`, `_tl_*`) or contain `__`
 - The `main` module cannot be aliased
 
+### Auto-Collapse for Same-Name Types
+
+When a module defines a type with the same name as the module itself, the compiler automatically registers the bare module name as a type alias. This means you can use the short form in type positions without an explicit `#alias`:
+
+```tl
+#import <Array.tl>
+
+// Instead of writing the fully qualified type:
+a: Array.Array[Int]
+
+// You can use the bare module name:
+a: Array[Int]
+```
+
+Both forms are interchangeable — they refer to the same type and can be mixed freely in function signatures:
+
+```tl
+convert(a: Array[Int]) -> Array.Array[Int] { a }   // OK
+```
+
+This applies to any module whose primary type shares its name, including standard library modules like `Array` and `HashMap`:
+
+```tl
+#import <HashMap.tl>
+
+make_map() -> Ptr[HashMap[Int, Int]] {
+    HashMap.create[Int, Int]()
+}
+```
+
+**Note:** Auto-collapse only affects type positions. Functions must still be called with the module prefix (`Array.push(...)`, `HashMap.set(...)`).
+
+**Precedence:** If the bare name is already registered as a type (e.g., by another module or an explicit type alias), auto-collapse does not override it.
+
 ## Types
 
 ### Primitive Types
