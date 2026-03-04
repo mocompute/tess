@@ -328,6 +328,9 @@ name_and_type make_instance_key(tl_infer *self, str generic_name, tl_monotype *a
         if (!resolved_type_args.v[i]) continue;
 
         if (!tl_monotype_is_concrete(resolved_type_args.v[i])) {
+            // Clone before substituting: parse_type_arg may return node->type->type
+            // (a direct pointer into the AST), so in-place substitution would corrupt the AST.
+            resolved_type_args.v[i] = tl_monotype_clone(self->arena, resolved_type_args.v[i]);
             tl_monotype_substitute(self->arena, resolved_type_args.v[i], self->subs, null);
         }
 

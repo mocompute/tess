@@ -438,9 +438,14 @@ void concretize_params(tl_infer *self, ast_node *node, tl_monotype *callsite, ha
             // resolve positionally through the pre-resolved monotypes. The i-th resolved type arg
             // corresponds to this clone's i-th type parameter.
             if (!bound_type && i < resolved_type_args.size && resolved_type_args.v[i]) {
-                tl_monotype *resolved = tl_monotype_clone(self->arena, resolved_type_args.v[i]);
-                tl_monotype_substitute(self->arena, resolved, self->subs, null);
-                if (tl_monotype_is_concrete(resolved)) bound_type = resolved;
+                tl_monotype *src = resolved_type_args.v[i];
+                if (tl_monotype_is_concrete(src)) {
+                    bound_type = src;
+                } else {
+                    tl_monotype *resolved = tl_monotype_clone(self->arena, src);
+                    tl_monotype_substitute(self->arena, resolved, self->subs, null);
+                    if (tl_monotype_is_concrete(resolved)) bound_type = resolved;
+                }
             }
 
 #if DEBUG_EXPLICIT_TYPE_ARGS
