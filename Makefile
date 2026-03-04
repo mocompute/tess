@@ -495,6 +495,7 @@ TL_TESTS =					\
 	mapper_basic				\
 	mapper_lambda				\
 	module_auto_collapse			\
+	module_auto_collapse_hashmap		\
 	module_basic				\
 	module_init				\
 	module_nested				\
