@@ -20,7 +20,7 @@ _Entry[K, V]: {
     status: UInt,
 }
 
-_OCCUPIED() -> UInt { 1u }
+_OCCUPIED := 1u
 
 HashMap[K, V]: {
     _entries:  Ptr[_Entry[K, V]],
@@ -41,26 +41,25 @@ Entry[K, V]: { key: K, value: V }
 
 // -- Synopsis --
 
-create[K, V]()                                                                     -> Ptr[HashMap[K, V]]
-create[K, V](alloc: Ptr[Alloc.Allocator])                                          -> Ptr[HashMap[K, V]]
-create[K, V](alloc: Ptr[Alloc.Allocator], opts: HashMapOpts[K])                    -> Ptr[HashMap[K, V]]
-destroy[K, V](self: Ptr[HashMap[K, V]])                                            -> Void
+create[K, V] ()                                                  -> Ptr[HashMap[K, V]]
+create[K, V] (alloc: Ptr[Alloc.Allocator])                       -> Ptr[HashMap[K, V]]
+create[K, V] (alloc: Ptr[Alloc.Allocator], opts: HashMapOpts[K]) -> Ptr[HashMap[K, V]]
+destroy[K, V](self: Ptr[HashMap[K, V]])                          -> Void
 
-set[K, V](self: Ptr[HashMap[K, V]], key: K, value: V)                              -> Void
-get[K, V](self: Ptr[HashMap[K, V]], key: K)                                        -> Ptr[V]
-get_copy[K, V](self: Ptr[HashMap[K, V]], key: K)                                   -> Option[V]
-contains[K, V](self: Ptr[HashMap[K, V]], key: K)                                   -> Bool
-remove[K, V](self: Ptr[HashMap[K, V]], key: K)                                     -> Bool
+set[K, V]     (self: Ptr[HashMap[K, V]], key: K, value: V) -> Void
+get[K, V]     (self: Ptr[HashMap[K, V]], key: K)           -> Ptr[V]
+get_copy[K, V](self: Ptr[HashMap[K, V]], key: K)           -> Option[V]
+contains[K, V](self: Ptr[HashMap[K, V]], key: K)           -> Bool
+remove[K, V]  (self: Ptr[HashMap[K, V]], key: K)           -> Bool
 
-size[K, V](self: Ptr[HashMap[K, V]])                                               -> UInt
-is_empty[K, V](self: Ptr[HashMap[K, V]])                                           -> Bool
-clear[K, V](self: Ptr[HashMap[K, V]])                                              -> Void
+size[K, V]    (self: Ptr[HashMap[K, V]]) -> UInt
+is_empty[K, V](self: Ptr[HashMap[K, V]]) -> Bool
+clear[K, V]   (self: Ptr[HashMap[K, V]]) -> Void
 
-keys[K, V](self: Ptr[HashMap[K, V]])                                               -> Array.Array[K]
-keys[K, V](self: Ptr[HashMap[K, V]], alloc: Ptr[Alloc.Allocator])                  -> Array.Array[K]
-values[K, V](self: Ptr[HashMap[K, V]])                                             -> Array.Array[V]
-values[K, V](self: Ptr[HashMap[K, V]], alloc: Ptr[Alloc.Allocator])                -> Array.Array[V]
-
+keys[K, V]  (self: Ptr[HashMap[K, V]])                              -> Array.Array[K]
+keys[K, V]  (self: Ptr[HashMap[K, V]], alloc: Ptr[Alloc.Allocator]) -> Array.Array[K]
+values[K, V](self: Ptr[HashMap[K, V]])                              -> Array.Array[V]
+values[K, V](self: Ptr[HashMap[K, V]], alloc: Ptr[Alloc.Allocator]) -> Array.Array[V]
 
 
 // -- C helpers --
@@ -77,29 +76,29 @@ int tl_hashmap_bytes_equal(void *a, void *b, size_t n) {
 }
 #endc
 
-c_tl_hashmap_byte_at     (p: Ptr[any], i: CSize)                -> UInt
-c_tl_hashmap_bytes_equal (a: Ptr[any], b: Ptr[any], n: CSize)   -> CInt
+c_tl_hashmap_byte_at     (p: Ptr[any], i: CSize)              -> UInt
+c_tl_hashmap_bytes_equal (a: Ptr[any], b: Ptr[any], n: CSize) -> CInt
 
 
 // -- Private helpers --
 
-_default_hash[K](key: Ptr[K])                                                                       -> UInt
-_default_eq[K](a: Ptr[K], b: Ptr[K])                                                                -> Bool
-_entry_width[K, V]()                                                                                 -> UInt
-_grow[K, V](self: Ptr[HashMap[K, V]])                                                                -> Void
-_alloc_entries[K, V](alloc: Ptr[Alloc.Allocator], capacity: UInt)                                    -> Ptr[_Entry[K, V]]
-_insert_entry[K, V](entries: Ptr[_Entry[K, V]], capacity: UInt, eq: (Ptr[K], Ptr[K]) -> Bool,
-                     key: K, value: V, hash: UInt)                                                   -> UInt
+_default_hash[K]    (key: Ptr[K]) -> UInt
+_default_eq[K]      (a: Ptr[K], b: Ptr[K]) -> Bool
+_entry_width[K, V]  () -> UInt
+_grow[K, V]         (self: Ptr[HashMap[K, V]]) -> Void
+_alloc_entries[K, V](alloc: Ptr[Alloc.Allocator], capacity: UInt) -> Ptr[_Entry[K, V]]
+_insert_entry[K, V] (entries: Ptr[_Entry[K, V]], capacity: UInt, eq: (Ptr[K], Ptr[K]) -> Bool,
+                    key: K, value: V, hash: UInt) -> UInt
 
 
 // -- Implementation --
 
 // FNV-1a 64-bit hash over the raw bytes of a key.
 _default_hash[K](key: Ptr[K]) -> UInt {
-    h: UInt    := 0xcbf29ce484222325u
-    prime: UInt := 0x100000001b3u
-    n: CSize   := sizeof[K]()
-    i: CSize   := 0zu
+    h:     UInt  := 0xcbf29ce484222325u
+    prime: UInt  := 0x100000001b3u
+    n:     CSize := sizeof[K]()
+    i:     CSize := 0zu
     while i < n, i += 1zu {
         b := c_tl_hashmap_byte_at(key, i)
         h = h ^ b
@@ -129,8 +128,8 @@ create[K, V](alloc: Ptr[Alloc.Allocator], opts: HashMapOpts[K]) -> Ptr[HashMap[K
 
     hash_fn := opts.hash
     eq_fn   := opts.eq
-    if hash_fn == null { hash_fn = _default_hash[K]/1 }
-    if eq_fn   == null { eq_fn   = _default_eq[K]/2   }
+    if hash_fn == null { hash_fn = _default_hash[K] / 1 }
+    if eq_fn == null { eq_fn     = _default_eq[K] / 2 }
 
     m: Ptr[HashMap[K, V]] := alloc->malloc(alloc, sizeof[HashMap[K, V]]())
     if m == null { _tl_fatal_(c"HashMap: oom") }
@@ -165,12 +164,12 @@ destroy[K, V](self: Ptr[HashMap[K, V]]) -> Void {
 
 // Insert into a raw entries table. Returns 1 for new insertion, 0 for overwrite.
 _insert_entry[K, V](entries, capacity, eq, key: K, value: V, hash: UInt) -> UInt {
-    mask := capacity - 1u
+    mask   := capacity - 1u
     bucket := hash & mask
 
-    cur_key   := key
-    cur_value := value
-    cur_hash  := hash
+    cur_key        := key
+    cur_value      := value
+    cur_hash       := hash
     cur_dist: UInt := 0u
 
     while true {
@@ -237,7 +236,7 @@ _grow[K, V](self: Ptr[HashMap[K, V]]) -> Void {
 }
 
 set[K, V](self: Ptr[HashMap[K, V]], key: K, value: V) -> Void {
-    hash := self->_hash(key.&)
+    hash  := self->_hash(key.&)
     delta := _insert_entry[K, V](self->_entries, self->_capacity, self->_eq, key, value, hash)
     self->_size += delta
 
@@ -250,9 +249,9 @@ set[K, V](self: Ptr[HashMap[K, V]], key: K, value: V) -> Void {
 get[K, V](self: Ptr[HashMap[K, V]], key: K) -> Ptr[V] {
     if self->_size == 0u { return null }
 
-    hash := self->_hash(key.&)
-    mask := self->_capacity - 1u
-    bucket := hash & mask
+    hash       := self->_hash(key.&)
+    mask       := self->_capacity - 1u
+    bucket     := hash & mask
     dist: UInt := 0u
 
     while true {
@@ -287,9 +286,9 @@ contains[K, V](self: Ptr[HashMap[K, V]], key: K) -> Bool {
 remove[K, V](self: Ptr[HashMap[K, V]], key: K) -> Bool {
     if self->_size == 0u { return false }
 
-    hash := self->_hash(key.&)
-    mask := self->_capacity - 1u
-    bucket := hash & mask
+    hash       := self->_hash(key.&)
+    mask       := self->_capacity - 1u
+    bucket     := hash & mask
     dist: UInt := 0u
 
     while true {
@@ -310,10 +309,10 @@ remove[K, V](self: Ptr[HashMap[K, V]], key: K) -> Bool {
                 if e->status != _OCCUPIED || e->dist == 0u { break }
 
                 self->_entries.[prev] = self->_entries.[bucket]
-                self->_entries.[prev].&->dist -= 1u
+                self->_entries.[prev].& -> dist -= 1u
                 e->status = 0u
 
-                prev = bucket
+                prev   = bucket
                 bucket = (bucket + 1u) & mask
             }
 
@@ -343,7 +342,7 @@ clear[K, V](self: Ptr[HashMap[K, V]]) -> Void {
 // -- Bulk --
 
 keys[K, V](self: Ptr[HashMap[K, V]], alloc: Ptr[Alloc.Allocator]) -> Array.Array[K] {
-    result := Array.with_capacity[K](alloc, self->_size)
+    result  := Array.with_capacity[K](alloc, self->_size)
     i: UInt := 0u
     while i < self->_capacity, i += 1u {
         e := self->_entries.[i].&
@@ -359,7 +358,7 @@ keys[K, V](self: Ptr[HashMap[K, V]]) -> Array.Array[K] {
 }
 
 values[K, V](self: Ptr[HashMap[K, V]], alloc: Ptr[Alloc.Allocator]) -> Array.Array[V] {
-    result := Array.with_capacity[V](alloc, self->_size)
+    result  := Array.with_capacity[V](alloc, self->_size)
     i: UInt := 0u
     while i < self->_capacity, i += 1u {
         e := self->_entries.[i].&
@@ -373,5 +372,3 @@ values[K, V](self: Ptr[HashMap[K, V]], alloc: Ptr[Alloc.Allocator]) -> Array.Arr
 values[K, V](self: Ptr[HashMap[K, V]]) -> Array.Array[V] {
     values(self, Alloc.context.default)
 }
-
-
