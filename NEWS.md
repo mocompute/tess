@@ -5,6 +5,65 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased] - 2026-02-28 to 2026-03-04 (c98a9048..eeee2aa4)
+
+### Highlights
+
+- Uniform Function Call Syntax (UFCS): `x.foo(a, b)` desugars to `foo(x, a, b)`, with struct field priority, chaining, and cross-module support
+- Float type conversion system with weak float literals, directional width checking, and debug bounds-check assertions
+- HashMap standard library module: Robin Hood open-addressing hashmap written in pure Tess
+- `infer.c` split into 5 focused compilation units for maintainability
+- Auto-collapse for same-name module types (e.g., `Array[Int]` instead of `Array.Array[Int]`)
+
+### Added
+
+- **Uniform Function Call Syntax (UFCS)**: `x.foo(a, b)` desugars to `foo(x, a, b)` when `foo` is not a struct field of `x`. Struct fields always take priority. Works with the `->` operator (passing a pointer as first argument), supports chaining (`v.scale(3).length_sq()`), and works with generic structs and generic functions. Cross-module UFCS is supported via `x.Mod.foo(a, b)` syntax.
+- **Float Type Conversion System**: Full float sub-chain (`CFloat` < `CDouble` < `CLongDouble`) with width ordering, mirroring the integer sub-chain design. Float literals like `3.14` receive a weak polymorphic type that adapts to context (defaulting to `CDouble`). Implicit widening within the sub-chain, explicit narrowing and float-to-integer/integer-to-float casts via let-in annotation. Debug bounds-check assertions fire on overflow, precision loss, or NaN.
+- **HashMap Standard Library Module**: Robin Hood open-addressing hashmap with backward-shift deletion, written in pure Tess. Includes `create`, `set`, `get`, `remove`, `contains`, `size`, `clear`, `keys`, `values`, `entries`, and custom hash/equality function support.
+- **Auto-Collapse for Same-Name Module Types**: When a module defines a primary type with the same name as itself (e.g., `Array` module defines `Array[T]`), the compiler auto-registers the bare module name as a type alias. Client code can write `Array[Int]` instead of `Array.Array[Int]` — both forms are interchangeable.
+- **Generic Function References with Explicit Type Arguments**: New `name[TypeArgs]/N` syntax (e.g., `_default_hash[Int]/1`) for taking references to specific specializations of generic functions as function pointers.
+- **`&=` and `|=` Compound Assignment Operators**: The tokenizer now emits these as single tokens, enabling bitwise compound assignment.
+- **`str_build_cat_n`**: New MOS library function to concatenate into a string builder without allocating an intermediate string.
+- **Header Dependencies in Makefile**: Object files now correctly depend on their headers, triggering rebuilds when headers change.
+
+### Changed
+
+- **`infer.c` Split Into 5 Compilation Units**: The monolithic ~6000-line `infer.c` was split into focused files: `infer.c` (orchestration/API), `infer_alpha.c` (alpha conversion), `infer_constraint.c` (loading/inference/constraints), `infer_specialize.c` (monomorphization), and `infer_update.c` (tree shaking/type updates), with `infer_internal.h` for shared declarations.
+- **Tagged Union Construction Returns Parent Type**: All tagged union construction paths now consistently return the parent union type. `Shape.Circle(radius = 2.0)` and `Circle(radius = 2.0)` both return `Shape`. Bare-symbol scoped variants (`Op.A`) also produce the parent type.
+- **Specialization Pipeline Refactor**: Type argument resolution now happens once at the callsite, with pre-resolved monotypes passed throughout the specialization chain. A shared `parse_type_arg` helper consolidates resolution.
+- **Integer Type Properties Data-Driven**: Replaced ~104 string comparisons across 5 functions with field accesses on a centralized `builtin_nullary[]` table extended with C type names and integer range fields.
+- **Parser Deduplication**: Extracted shared `parse_param_list()` for arrow types and function definitions, unified struct/union type definitions via `create_utd()`/`finalize_type_definition()`, centralized tagged union field name literals as constants, and added CArray helper functions.
+- **`unpack` Command Merged Into `pack`**: The standalone `unpack` command was absorbed into `pack` as the `--unpack` flag. `--list` also moved to `pack`.
+- **Type Constructor Display Uses Brackets**: Type constructor arguments are now displayed with `[]` instead of `()` (e.g., `Array[Int]` not `Array(Int)`).
+- **Type Annotation Style**: Documentation updated to use `x: Type` consistently (no space before colon).
+- **`test_tlib` Dynamic Buffer**: Replaced fixed 8KiB static buffer with arena-based dynamic file reading, preventing silent truncation of large files.
+- **CMake Runtime Fail Tests**: Wrapped with `cmake -E env` for portable SIGABRT handling via CTest's `WILL_FAIL`.
+
+### Removed
+
+- **Tagged Union Make Functions and Existing-Type Variants**: Removed per-variant `make` wrapper functions and support for using existing types as tagged union variants. Scoped construction handles these cases directly.
+- **Old-Style `Type(T, U)` Syntax**: The parser no longer accepts parenthesized type constructor arguments. The bracket syntax `Type[T, U]` is now the only form.
+- **Dead Code Cleanup**: Removed `if(0)`/`if(1)` blocks, commented-out code, unused functions, stale `DEBUG_INVARIANTS` checks, and outdated plan documents from the inference and transpilation passes.
+
+### Fixed
+
+- **`sizeof[T]` Type Confusion Across Call Sites**: `sizeof[Inner[K,V]]()` and `sizeof[Outer[K,V]]()` inside generic functions no longer share a single specialization. Fixed by passing the outer type argument context and skipping the cache when type args remain non-concrete.
+- **Generic Function Calls with Explicit Type Args**: Fixed two bugs preventing `make[Int]()` from working: type literal specialization incorrectly diverting value constructors, and type argument lookup being skipped.
+- **Generic Types in Function Pointer Parameter Lists**: `Ptr[K]` in function pointer type parameter lists was parsed as bare identifier `Ptr`, leaving `[K]` unconsumed.
+- **Generic Struct Null Function Pointer Fields**: `Foo[Int](f = null)` no longer leaves pointer type variables unresolved.
+- **`str_init_f64` Buffer Overread**: Large doubles (e.g., `1e300`) could overflow the formatting buffer. Changed to `%.17g` with length capping and `.0` suffix for integer-valued outputs.
+- **Type Pollution Across Specializations**: Type arguments from one specialization could leak into another during traversal.
+- **Module Name Mangling for Function References**: Function references with explicit type args now correctly apply module mangling.
+- **Aliased Type Mutation in `make_instance_key`**: Substitution could corrupt the AST by mutating a direct pointer. Fixed by cloning before substituting.
+- **Formatter Fixes**: Preserve arity syntax after type args (e.g., `foo[Int]/1`), skip `#ifc`/`#endc` blocks in alignment pass.
+- **Tokenizer `in_equal` EOF Fallback**: Copy-paste bug emitted wrong token type on EOF.
+- **Empty `while` Body**: Parser now allows empty while loop bodies.
+- **Arena Leak in `test_type_v2`**: Fixed for ASAN builds.
+
+### Security
+
+- **Debug Bounds Checking Extended to Float Types**: The runtime bounds-checking system now also checks float narrowing (verifies narrowed result is finite when original was) and float-to-integer conversion (verifies value is in target range and not NaN), aborting with a diagnostic message on failure.
+
 ## [Unreleased] - 2026-02-23 to 2026-02-28 (981ea8c5..c98a9048)
 
 ### Highlights
