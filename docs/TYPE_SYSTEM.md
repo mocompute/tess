@@ -293,9 +293,9 @@ main() {
 }
 ```
 
-## Type Coercion
+## Type Conversions
 
-Tess performs limited implicit type coercion:
+Tess supports both implicit and explicit type conversions:
 
 ### Integer Types
 
@@ -396,10 +396,10 @@ a diagnostic message.
 
 ### Pointer Types
 
-Pointers can be implicitly cast:
+Pointers can be explicitly cast using a let-in type annotation:
 ```tl
 p: Ptr[Int] := c_malloc(...)
-q: Ptr[Byte] := p   // Implicit cast
+q: Ptr[Byte] := p   // Explicit pointer cast
 ```
 
 ### Const Pointer Coercion
@@ -448,19 +448,18 @@ c_strcmp(s1: Ptr[Const[CChar]], s2: Ptr[Const[CChar]]) -> CInt
 
 This is why the standard library `mem*` bindings (`c_memcpy`, `c_memmove`, `c_memcmp`, `c_memchr`) use `Ptr[T]` without `Const`, while string functions that use concrete `CChar` types include `Const` where the C headers specify `const`.
 
-### No Implicit Float/Integer Coercion
+### Float/Integer Conversion
 
-`Int` and `Float` are not implicitly convertible:
-```tl
-x: Int := 42
-y: Float := x       // Error: conflicting types Float versus Int
-```
+`Int` and `Float` are not implicitly convertible. Conversion requires an
+explicit let-in type annotation (the same cast syntax used for integer
+narrowing and pointer casts):
 
-To convert between `Int` and `Float`, use the `Unsafe` module:
 ```tl
-#import <Unsafe.tl>
 x: Float := 3.7
-y := Unsafe.float_to_int(x)   // y is Int
+y: Int := x          // OK: float-to-integer cast (truncates)
+
+n: Int := 42
+f: Float := n        // OK: integer-to-float cast
 ```
 
 Integer literals are always integer-typed, not `Float`:
