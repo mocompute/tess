@@ -597,6 +597,47 @@ test_remove_then_grow() {
     error
 }
 
+test_default_eq() {
+    error := 0
+
+    // Use default hash/eq (exercises _default_eq via byte-level comparison)
+    m := HashMap.create[Int, Int]()
+
+    HashMap.set(m, 42, 100)
+
+    // Same key bytes must match (eq returns true)
+    p := HashMap.get(m, 42)
+    if p == null { error += 1 }
+    if p != null && p.* != 100 { error += 1 }
+
+    // Different key bytes must not match (eq returns false)
+    if HashMap.get(m, 43) != null { error += 1 }
+
+    // Overwrite: eq must return true for identical key so size stays 1
+    HashMap.set(m, 42, 200)
+    if HashMap.size(m) != 1u { error += 1 }
+    p = HashMap.get(m, 42)
+    if p == null { error += 1 }
+    if p != null && p.* != 200 { error += 1 }
+
+    // Test with struct keys: byte-equal structs must match
+    m2 := HashMap.create[Point, Int]()
+    HashMap.set(m2, Point(x = 10, y = 20), 999)
+
+    p2 := HashMap.get(m2, Point(x = 10, y = 20))
+    if p2 == null { error += 1 }
+    if p2 != null && p2.* != 999 { error += 1 }
+
+    // Structs with any different field must not match
+    if HashMap.get(m2, Point(x = 10, y = 21)) != null { error += 1 }
+    if HashMap.get(m2, Point(x = 11, y = 20)) != null { error += 1 }
+    if HashMap.get(m2, Point(x = 0, y = 0))   != null { error += 1 }
+
+    HashMap.destroy(m)
+    HashMap.destroy(m2)
+    error
+}
+
 main() {
     error := 0
     error += test_create_destroy()
@@ -619,5 +660,6 @@ main() {
     error += test_create_with_alloc()
     error += test_keys_values_with_alloc()
     error += test_remove_then_grow()
+    error += test_default_eq()
     error
 }

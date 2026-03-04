@@ -99,8 +99,8 @@ _insert_entry[K, V] (entries: Ptr[_Entry[K, V]], capacity: UInt, eq: (Ptr[K], Pt
 
 // FNV-1a 64-bit hash over the raw bytes of a key.
 _default_hash[K](key: Ptr[K]) -> UInt {
-    h:     UInt  := 0xcbf29ce484222325u
-    prime: UInt  := 0x100000001b3u
+    h:     UInt  := 0xcbf29ce484222325
+    prime: UInt  := 0x100000001b3
     n:     CSize := sizeof[K]()
     i:     CSize := 0zu
     while i < n, i += 1zu {
@@ -113,7 +113,7 @@ _default_hash[K](key: Ptr[K]) -> UInt {
 
 // Byte-level equality of two keys.
 _default_eq[K](a: Ptr[K], b: Ptr[K]) -> Bool {
-    c_tl_hashmap_bytes_equal(a, b, sizeof[K]()) != 0
+    !!c_tl_hashmap_bytes_equal(a, b, sizeof[K]())
 }
 
 _entry_width[K, V]() -> UInt { Alloc.align(sizeof[_Entry[K, V]](), alignof[_Entry[K, V]]()) }

@@ -464,6 +464,7 @@ TL_TESTS =					\
 	generic_struct_fn_ptr_field		\
 	generic_struct_null_fn_ptr_field	\
 	global_variables			\
+	hashmap					\
 	hello					\
 	if_basic				\
 	if_expression				\
