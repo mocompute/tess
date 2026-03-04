@@ -132,6 +132,10 @@ static int test_normalize_ops(void) {
 
     error += check(alloc, "dot-bracket indexing", "arr.[0]", "arr.[0]\n");
 
+    error += check(alloc, "arity after type args", "foo[Int]/1", "foo[Int]/1\n");
+
+    error += check(alloc, "arity after nested type args", "foo[Array[Int]]/2", "foo[Array[Int]]/2\n");
+
     arena_destroy(&alloc);
     return error;
 }

@@ -336,8 +336,9 @@ static char *normalize_ops(allocator *alloc, char const *line) {
 
         // /  (not comment, not /=)
         if (c == '/') {
-            // Check for arity syntax: ident/digit
-            if (out.size > 0 && is_ident_char(out.v[out.size - 1]) && isdigit((unsigned char)next)) {
+            // Check for arity syntax: ident/digit or ident[T]/digit
+            char prev_ch = (out.size > 0) ? out.v[out.size - 1] : '\0';
+            if ((is_ident_char(prev_ch) || prev_ch == ']') && isdigit((unsigned char)next)) {
                 EMIT_CHAR(out, c);
                 continue;
             }
