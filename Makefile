@@ -460,6 +460,7 @@ TL_TESTS =					\
 	generic_fn_ref_explicit_type_args	\
 	generic_lambda				\
 	generic_nested_sizeof			\
+	generic_null_field			\
 	generic_struct_fn_ptr_field		\
 	generic_struct_null_fn_ptr_field	\
 	global_variables			\
