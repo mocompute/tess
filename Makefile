@@ -499,6 +499,7 @@ TL_TESTS =					\
 	mapper_lambda				\
 	module_auto_collapse			\
 	module_auto_collapse_hashmap		\
+	module_auto_collapse_T			\
 	module_basic				\
 	module_init				\
 	module_nested				\
@@ -724,6 +725,8 @@ TL_FAIL_TESTS =					\
 	fail_try_three_variants			\
 	fail_unalias_not_found			\
 	fail_unknown_free_variable		\
+	fail_unknown_type_generic_arg		\
+	fail_unknown_type_param			\
 	fail_float_exact_conditional		\
 	fail_float_exact_operator		\
 	fail_float_int_implicit			\
@@ -739,7 +742,9 @@ TL_FAIL_RUNTIME_TESTS =			\
 	fail_runtime_integer_bounds_cross_family
 
 # Expected-failure tests that the compiler doesn't reject yet
-TL_KNOWN_FAIL_FAILURES =
+TL_KNOWN_FAIL_FAILURES =			\
+	fail_unknown_type_annotation		\
+	fail_unknown_type_return
 
 # Tests that should work but currently fail due to compiler bugs
 TL_KNOWN_FAILURES =

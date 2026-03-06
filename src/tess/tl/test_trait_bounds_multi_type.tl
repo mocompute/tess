@@ -1,5 +1,7 @@
 // Test that two types in separate modules can both satisfy Add and Ord/Eq
 // via the same trait-bounded generic functions.
+// Also exercises auto-collapse: each module names its type T, so Vec2(...)
+// and Vec3(...) work as constructors instead of requiring Vec2.T(...) etc.
 
 #module Vec2
 
@@ -40,11 +42,12 @@ are_equal[T: Eq](a: T, b: T) -> Bool { a == b }
 main() {
     error := 0
 
-    v2a := Vec2.T(x = 1, y = 2)
-    v2b := Vec2.T(x = 3, y = 4)
+    // Auto-collapse: Vec2.T and Vec3.T are accessible as Vec2 and Vec3
+    v2a := Vec2(x = 1, y = 2)
+    v2b := Vec2(x = 3, y = 4)
 
-    v3a := Vec3.T(x = 1, y = 2, z = 3)
-    v3b := Vec3.T(x = 4, y = 5, z = 6)
+    v3a := Vec3(x = 1, y = 2, z = 3)
+    v3b := Vec3(x = 4, y = 5, z = 6)
 
     // Add works for both types
     v2sum := double(v2a)

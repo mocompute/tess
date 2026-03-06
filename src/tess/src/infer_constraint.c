@@ -73,8 +73,9 @@ static void create_type_constructor_from_user_type(tl_infer *self, ast_node *nod
     env_insert_constrain(self, name, poly, node->user_type_def.name);
     ast_node_type_set(node, poly);
 
-    // Auto-collapse: if type is Module__Module (e.g. Array__Array), register
-    // bare module name as alias so clients can write Array[T] instead of Array.Array[T].
+    // Auto-collapse: if type is Module__Module (e.g. Array__Array) or Module__T,
+    // register bare module name as alias so clients can write Array[T] instead of
+    // Array.Array[T], or Vec2(...) instead of Vec2.T(...).
     // Also store the module name in the type constructor def for operator overload dispatch.
     ast_node *type_name_node = node->user_type_def.name;
     if (tl_monotype_is_inst(poly->type) && ast_node_is_symbol(type_name_node)) {
@@ -83,7 +84,7 @@ static void create_type_constructor_from_user_type(tl_infer *self, ast_node *nod
     if (ast_node_is_symbol(type_name_node) && type_name_node->symbol.is_mangled) {
         str module   = type_name_node->symbol.module;
         str original = type_name_node->symbol.original;
-        if (!str_is_empty(module) && str_eq(original, module)) {
+        if (!str_is_empty(module) && (str_eq(original, module) || str_eq(original, S("T")))) {
             if (!tl_type_registry_get(self->registry, module)) {
                 tl_type_registry_type_alias_insert(self->registry, module, poly);
             }
