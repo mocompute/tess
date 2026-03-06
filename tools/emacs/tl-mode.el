@@ -120,7 +120,7 @@
          ;; Types (comprehensive list)
          (types '("Int" "Float" "Bool" "Byte"
                   ;; C types
-                  "CChar" "CShort" "CInt" "CLong" "CLongLong"
+                  "CChar" "CSignedChar" "CShort" "CInt" "CLong" "CLongLong"
                   "CSize" "CPtrDiff"
                   ;; C unsigned types
                   "CUnsignedChar" "CUnsignedShort" "CUnsignedInt"
@@ -131,7 +131,11 @@
                   ;; C floating point
                   "CFloat" "CDouble" "CLongDouble"
                   ;; Common generic types
-                  "Ptr" "CArray" "Array" "Iter"))
+                  "Ptr" "Const" "CArray" "Array" "Iter"
+                  ;; Traits
+                  "Add" "Sub" "Mul" "Div" "Mod"
+                  "BitAnd" "BitOr" "BitXor" "Shl" "Shr"
+                  "Eq" "Ord" "Neg" "Not" "BitNot"))
 
          ;; Create regexp patterns
          (keywords-regexp (regexp-opt keywords 'symbols))
