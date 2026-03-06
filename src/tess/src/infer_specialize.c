@@ -1709,6 +1709,9 @@ int add_generic(tl_infer *self, ast_node *node) {
     } else if (ast_node_is_symbol(node)) {
         // toplevel symbol node, e.g. for declaration of intrinsics, or forward type annotations. They will
         // take precedence to any later declarations, so let's be careful
+    } else if (ast_node_is_trait_def(node)) {
+        // already loaded from load_toplevel
+        return 0;
     } else if (ast_node_is_utd(node)) {
         // already loaded from load_toplevel
         return 0;

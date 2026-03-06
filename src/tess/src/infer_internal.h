@@ -86,6 +86,7 @@ struct tl_infer {
     ast_node_array       synthesized_nodes;
 
     hashmap             *toplevels;      // str => ast_node*
+    hashmap             *traits;         // str => tl_trait_def* (trait registry)
     hashmap             *instances;      // u64 hash => str specialised name in env
     hashmap             *instance_names; // str set
     hashmap             *attributes;     // str => ast_node* attribute_set (possibly null)

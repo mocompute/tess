@@ -31,6 +31,7 @@ tl_infer *tl_infer_create(allocator *alloc, tl_infer_opts const *opts) {
     self->synthesized_nodes         = (ast_node_array){.alloc = self->arena};
 
     self->toplevels                 = null;
+    self->traits                    = map_new(self->arena, str, tl_trait_def *, 64);
     self->instances                 = map_new(self->arena, name_and_type, str, 4096);
     self->instance_names            = hset_create(self->arena, 4096);
     self->attributes                = map_new(self->arena, str, void *, 4096);
@@ -54,6 +55,41 @@ tl_infer *tl_infer_create(allocator *alloc, tl_infer_opts const *opts) {
     tl_type_registry_parse_type_ctx_init(self->arena, &self->hot_parse_ctx, null);
     self->hot_parse_ctx_own_ta = self->hot_parse_ctx.type_arguments;
     self->hot_parse_ctx_guard  = 0;
+
+    // Pre-populate compiler-provided traits
+    {
+        struct { char const *name; char const *func; u8 arity; } builtins[] = {
+            {"Add",    "add",     2}, {"Sub",    "sub",     2}, {"Mul",    "mul",     2},
+            {"Div",    "div",     2}, {"Mod",    "mod",     2},
+            {"BitAnd", "bit_and", 2}, {"BitOr",  "bit_or",  2}, {"BitXor", "bit_xor", 2},
+            {"Shl",    "shl",     2}, {"Shr",    "shr",     2},
+            {"Eq",     "eq",      2}, {"Neg",    "neg",     1}, {"Not",    "not",     1},
+            {"BitNot", "bit_not", 1},
+        };
+        for (u32 i = 0; i < sizeof(builtins) / sizeof(builtins[0]); i++) {
+            tl_trait_def *def  = new(self->arena, tl_trait_def);
+            def->name          = str_init(self->arena, builtins[i].name);
+            def->generic_name  = str_init(self->arena, builtins[i].name);
+            def->parents       = (str_array){.alloc = self->arena};
+            def->sigs          = (tl_trait_sig_array){.alloc = self->arena};
+            tl_trait_sig sig   = {.name = str_init(self->arena, builtins[i].func), .arity = builtins[i].arity};
+            array_push(def->sigs, sig);
+            str_map_set_ptr(&self->traits, def->name, def);
+        }
+        // Ord inherits from Eq and has cmp
+        {
+            tl_trait_def *def = new(self->arena, tl_trait_def);
+            def->name         = str_init(self->arena, "Ord");
+            def->generic_name = str_init(self->arena, "Ord");
+            def->parents      = (str_array){.alloc = self->arena};
+            def->sigs         = (tl_trait_sig_array){.alloc = self->arena};
+            str parent        = str_init(self->arena, "Eq");
+            array_push(def->parents, parent);
+            tl_trait_sig sig  = {.name = str_init(self->arena, "cmp"), .arity = 2};
+            array_push(def->sigs, sig);
+            str_map_set_ptr(&self->traits, def->name, def);
+        }
+    }
 
     return self;
 }
@@ -194,9 +230,55 @@ static int run_alpha_conversion(tl_infer *self, ast_node_sized nodes) {
 }
 
 // Phase 2: Load top-level definitions.
+static void check_trait_circular_inheritance(tl_infer *self, ast_node_sized nodes) {
+    hashmap_iterator iter = {0};
+    while (map_iter(self->traits, &iter)) {
+        tl_trait_def *def = *(tl_trait_def **)iter.data;
+        if (!def->parents.size) continue;
+
+        // Walk the parent chain with a visited set to detect cycles
+        hashmap *visited = hset_create(self->transient, 16);
+        str_hset_insert(&visited, def->name);
+        int circular = 0;
+
+        str_array work = {.alloc = self->transient};
+        forall(i, def->parents) {
+            str p = def->parents.v[i];
+            if (str_hset_contains(visited, p)) { circular = 1; break; }
+            str_hset_insert(&visited, p);
+            array_push(work, p);
+        }
+        for (u32 w = 0; !circular && w < work.size; w++) {
+            tl_trait_def *parent_def = str_map_get_ptr(self->traits, work.v[w]);
+            if (parent_def) {
+                forall(j, parent_def->parents) {
+                    str pp = parent_def->parents.v[j];
+                    if (str_hset_contains(visited, pp)) { circular = 1; break; }
+                    str_hset_insert(&visited, pp);
+                    array_push(work, pp);
+                }
+            }
+        }
+
+        if (circular) {
+            forall(i, nodes) {
+                if (ast_node_is_trait_def(nodes.v[i]) &&
+                    str_eq(ast_node_str(nodes.v[i]->trait_def.name), def->name)) {
+                    array_push(self->errors,
+                               ((tl_infer_error){.tag  = tl_err_trait_circular_inheritance,
+                                                 .node = nodes.v[i]}));
+                    break;
+                }
+            }
+        }
+    }
+}
+
 static int run_load_toplevels(tl_infer *self, ast_node_sized nodes) {
     self->toplevels = ast_node_str_map_create(self->arena, 1024);
     load_toplevel(self, nodes);
+    arena_reset(self->transient);
+    check_trait_circular_inheritance(self, nodes);
     arena_reset(self->transient);
     if (self->errors.size) return 1;
 
@@ -630,6 +712,7 @@ ast_node *toplevel_name_node(ast_node *node) {
     if (ast_node_is_let(node)) return node->let.name;
     else if (ast_node_is_let_in(node)) return node->let_in.name;
     else if (ast_node_is_symbol(node)) return node;
+    else if (ast_node_is_trait_def(node)) return node->trait_def.name;
     else if (ast_node_is_utd(node)) return node->user_type_def.name;
     else if (ast_node_is_nfa(node)) return node->named_application.name;
     else if (ast_node_is_type_alias(node)) {

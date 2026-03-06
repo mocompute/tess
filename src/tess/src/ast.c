@@ -442,6 +442,28 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
         clone->while_.body      = ast_node_clone(alloc, orig->while_.body);
         break;
 
+    case ast_trait_definition: {
+        struct ast_trait_def *vclone = &clone->trait_def, *vorig = &((ast_node *)orig)->trait_def;
+
+        vclone->name             = ast_node_clone(alloc, vorig->name);
+        vclone->n_type_arguments = vorig->n_type_arguments;
+        vclone->n_signatures     = vorig->n_signatures;
+        vclone->n_parents        = vorig->n_parents;
+
+        vclone->type_arguments = alloc_malloc(alloc, vclone->n_type_arguments * sizeof(ast_node *));
+        for (u32 i = 0; i < vclone->n_type_arguments; ++i)
+            vclone->type_arguments[i] = ast_node_clone(alloc, vorig->type_arguments[i]);
+
+        vclone->signatures = alloc_malloc(alloc, vclone->n_signatures * sizeof(ast_node *));
+        for (u32 i = 0; i < vclone->n_signatures; ++i)
+            vclone->signatures[i] = ast_node_clone(alloc, vorig->signatures[i]);
+
+        vclone->parents = alloc_malloc(alloc, vclone->n_parents * sizeof(ast_node *));
+        for (u32 i = 0; i < vclone->n_parents; ++i)
+            vclone->parents[i] = ast_node_clone(alloc, vorig->parents[i]);
+
+    } break;
+
     case ast_user_type_definition: {
         struct ast_user_type_def *vclone = ast_node_utd(clone), *vorig = ast_node_utd((ast_node *)orig);
 
@@ -698,6 +720,14 @@ void ast_node_each_node(void *ctx, ast_node_each_node_fun fun, ast_node *node) {
         fun(ctx, node->while_.body);
         break;
 
+    case ast_trait_definition: {
+        struct ast_trait_def *v = &node->trait_def;
+        fun(ctx, v->name);
+        for (u32 i = 0; i < v->n_type_arguments; ++i) fun(ctx, v->type_arguments[i]);
+        for (u32 i = 0; i < v->n_signatures; ++i) fun(ctx, v->signatures[i]);
+        for (u32 i = 0; i < v->n_parents; ++i) fun(ctx, v->parents[i]);
+    } break;
+
     case ast_user_type_definition: {
         struct ast_user_type_def *v = ast_node_utd(node);
 
@@ -796,7 +826,8 @@ static void dfs_one(void *ctx_, ast_node *node) {
 
     if (!node) return;
 
-    // exclude user type defs from dfs
+    // exclude type defs from dfs
+    if (ast_trait_definition == node->tag) return;
     if (ast_user_type_definition == node->tag) return;
 
     if (ctx->visited) {
@@ -878,6 +909,7 @@ char const *ast_tag_to_string(ast_tag tag) {
       "ast_u64",
       "ast_i64_z",
       "ast_u64_zu",
+      "ast_trait_definition",
       "ast_unary_op",
       "ast_user_type_definition",
       "ast_while",
@@ -1136,6 +1168,13 @@ str v2_ast_node_to_string(allocator *alloc, ast_node const *node) {
         return str_build_finish(&b);
     }
 
+    case ast_trait_definition: {
+        str out = str_copy(alloc, S("[trait_definition: "));
+        str_dcat(alloc, &out, node->trait_def.name->symbol.name);
+        str_dcat(alloc, &out, S("]"));
+        return out;
+    }
+
     case ast_user_type_definition: {
         str out = str_copy(alloc, S("[user_type_definition: "));
         str_dcat(alloc, &out, node->user_type_def.name->symbol.name);
@@ -1308,6 +1347,13 @@ str ast_node_to_short_string(allocator *alloc, ast_node const *node) {
         str_build_cat(&b, ast_node_to_short_string(alloc, node->type_alias.target));
         str_build_cat(&b, S(")"));
         return str_build_finish(&b);
+    }
+
+    case ast_trait_definition: {
+        str out = str_copy(alloc, S("[trait_definition: "));
+        str_dcat(alloc, &out, node->trait_def.name->symbol.name);
+        str_dcat(alloc, &out, S("]"));
+        return out;
     }
 
     case ast_user_type_definition: {
@@ -1519,6 +1565,11 @@ u64 ast_node_hash(ast_node const *self) {
         combine_node(self->type_predicate.rhs);
         break;
 
+    case ast_trait_definition:
+        //
+        combine_node(self->trait_def.name);
+        break;
+
     case ast_user_type_definition:
         //
         combine_node(self->user_type_def.name);
@@ -1635,6 +1686,9 @@ int ast_node_is_let(ast_node const *self) {
 }
 int ast_node_is_let_in(ast_node const *self) {
     return ast_let_in == self->tag;
+}
+int ast_node_is_trait_def(ast_node const *self) {
+    return ast_trait_definition == self->tag;
 }
 int ast_node_is_utd(ast_node const *self) {
     return ast_user_type_definition == self->tag;

@@ -81,6 +81,7 @@
     X(tl_err_too_many_expressions, "too_many_expressions")                                                 \
     X(tl_err_tokenizer_error, "tokenizer_error")                                                           \
     X(tl_err_type_exists, "type_exists")                                                                   \
+    X(tl_err_trait_circular_inheritance, "trait_circular_inheritance")                                       \
     X(tl_err_attributes_exist, "attributes_exist")                                                         \
     X(tl_err_unexpected_inline_annotation, "unexpected_inline_annotation")                                 \
     X(tl_err_unexpected_else, "unexpected_else")                                                           \

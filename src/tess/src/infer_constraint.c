@@ -291,11 +291,52 @@ void load_toplevel(tl_infer *self, ast_node_sized nodes) {
             load_toplevel_let(self, node);
         }
 
+        else if (ast_node_is_trait_def(node)) {
+            str name_str = ast_node_str(node->trait_def.name);
+
+            // Check for duplicate type/trait name
+            if (str_map_get(self->toplevels, name_str) || str_map_get_ptr(self->traits, name_str)) {
+                array_push(self->errors, ((tl_infer_error){.tag = tl_err_type_exists, .node = node}));
+            } else {
+                // Register trait in the trait registry
+                tl_trait_def *def = new(self->arena, tl_trait_def);
+                def->name         = str_copy(self->arena, name_str);
+                def->generic_name = str_copy(self->arena, node->trait_def.name->symbol.original);
+                def->parents      = (str_array){.alloc = self->arena};
+                def->sigs         = (tl_trait_sig_array){.alloc = self->arena};
+
+                // Collect parent trait names
+                for (u32 i = 0; i < node->trait_def.n_parents; i++) {
+                    ast_node *parent = node->trait_def.parents[i];
+                    str raw_name = ast_node_is_nfa(parent)
+                                     ? ast_node_str(parent->named_application.name)
+                                     : ast_node_str(parent);
+                    str parent_name = str_copy(self->arena, raw_name);
+                    array_push(def->parents, parent_name);
+                }
+
+                // Collect signatures (name + arity)
+                for (u32 i = 0; i < node->trait_def.n_signatures; i++) {
+                    ast_node *sig = node->trait_def.signatures[i];
+                    u8  arity     = 0;
+                    if (sig->symbol.annotation && ast_node_is_arrow(sig->symbol.annotation)) {
+                        ast_node_sized params =
+                          ast_node_sized_from_ast_array_const(sig->symbol.annotation->arrow.left);
+                        arity = (u8)params.size;
+                    }
+                    tl_trait_sig tsig = {.name = str_copy(self->arena, ast_node_str(sig)), .arity = arity};
+                    array_push(def->sigs, tsig);
+                }
+
+                str_map_set_ptr(&self->traits, name_str, def);
+            }
+        }
+
         else if (ast_node_is_utd(node)) {
             str        name_str = ast_node_str(node->user_type_def.name);
             ast_node **p        = str_map_get(self->toplevels, name_str);
 
-            if (p) {
+            if (p || str_map_get_ptr(self->traits, name_str)) {
                 array_push(self->errors, ((tl_infer_error){.tag = tl_err_type_exists, .node = node}));
             } else {
                 create_type_constructor_from_user_type(self, node);
@@ -328,7 +369,6 @@ void load_toplevel(tl_infer *self, ast_node_sized nodes) {
         }
     }
 
-    arena_reset(self->transient);
 }
 
 // ============================================================================
@@ -2172,6 +2212,7 @@ int traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, traverse_cb 
     case ast_symbol:
     case ast_u64:
     case ast_u64_zu:
+    case ast_trait_definition:
     case ast_type_alias:
     case ast_type_predicate:
     case ast_user_type_definition:
@@ -2791,6 +2832,7 @@ int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_node *node
 
     case ast_tuple:                return infer_tuple(self, node);
 
+    case ast_trait_definition:     break;
     case ast_user_type_definition: break;
 
     case ast_assignment:           return infer_assignment(self, traverse_ctx, node);

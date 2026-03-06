@@ -578,6 +578,7 @@ TL_TESTS =					\
 	tagged_union_scoped_variant_as_union	\
 	tagged_union_unscoped			\
 	tail_call				\
+	trait_declaration			\
 	type_alias_generic			\
 	type_alias_local			\
 	type_alias_module_chained		\
@@ -685,6 +686,8 @@ TL_FAIL_TESTS =					\
 	fail_tagged_union_existing_type	\
 	fail_tagged_union_missing_case		\
 	fail_tagged_union_unknown_variant	\
+	fail_trait_circular			\
+	fail_trait_duplicate			\
 	fail_type_alias_partial_specialization	\
 	fail_try_non_union			\
 	fail_ufcs_not_found			\

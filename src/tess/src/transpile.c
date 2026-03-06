@@ -2345,6 +2345,7 @@ static str generate_expr(transpile *self, tl_monotype *type, ast_node const *nod
     case ast_arrow:
     case ast_ellipsis:
     case ast_eof:
+    case ast_trait_definition:
     case ast_user_type_definition:
     case ast_lambda_function:
     case ast_let:

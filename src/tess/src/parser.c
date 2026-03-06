@@ -3319,6 +3319,112 @@ static int finalize_type_definition(parser *self, ast_node *type_ident, ast_node
     return result_ast_node(self, r);
 }
 
+// Parse a single trait function signature: name(param: Type, ...) -> RetType
+static int a_trait_signature(parser *self) {
+    if (a_try(self, a_attributed_identifier)) return 1;
+    ast_node *sig_name = self->result;
+
+    if (a_try(self, a_type_arrow)) return 1;
+    ast_node *arrow = self->result;
+
+    sig_name->symbol.annotation = arrow;
+    return result_ast_node(self, sig_name);
+}
+
+static int toplevel_trait(parser *self) {
+    // Parse trait declarations:
+    //   Name[T] : { sig(a: T) -> T }
+    //   Name[T] : Parent[T] { sig(a: T) -> T }
+    //   Name[T] : Parent1[T], Parent2[T] { }
+
+    if (a_try(self, a_type_identifier)) return 1;
+    ast_node *type_ident = self->result;
+
+    // Traits require type arguments — e.g. Eq[T]. Plain names are structs.
+    if (!ast_node_is_nfa(type_ident)) return 1;
+    if (type_ident->named_application.n_type_arguments == 0) return 1;
+
+    if (a_try(self, a_colon)) return 1;
+
+    if (is_reserved_type_name(type_ident)) return ERROR_STOP;
+
+    // Determine parents vs body
+    ast_node_array parents = {.alloc = self->ast_arena};
+
+    // If next is not '{', parse parent trait list
+    if (0 != a_try(self, a_open_curly)) {
+        // Must be parent list: Name : Parent1[T], Parent2[T] { ... }
+        if (a_try(self, a_type_identifier)) return 1;
+        array_push(parents, self->result);
+
+        while (0 == a_try(self, a_comma)) {
+            if (a_try(self, a_type_identifier)) return ERROR_STOP;
+            array_push(parents, self->result);
+        }
+
+        // Now expect '{'
+        if (a_try(self, a_open_curly)) return ERROR_STOP;
+    }
+
+    // Parse signatures inside { ... }
+    ast_node_array sigs = {.alloc = self->ast_arena};
+
+    // Try to parse first signature to disambiguate from struct
+    if (0 != a_try(self, a_close_curly)) {
+        // Body is not empty — try to parse a signature
+        if (a_try(self, a_trait_signature)) {
+            // Not a trait signature — backtrack so struct parser can try
+            if (!parents.size) return 1;
+            // With parents but body doesn't parse — error
+            return ERROR_STOP;
+        }
+        array_push(sigs, self->result);
+
+        // Parse remaining signatures
+        while (0 != a_try(self, a_close_curly)) {
+            if (a_try(self, a_trait_signature)) return ERROR_STOP;
+            array_push(sigs, self->result);
+        }
+    } else {
+        // Empty body — only valid with parents (combined trait)
+        if (!parents.size) return 1; // Empty body without parents → struct
+    }
+
+    // Extract name and type args
+    ast_node  *name        = null;
+    u8         n_type_args = 0;
+    ast_node **type_args   = null;
+
+    if (ast_node_is_symbol(type_ident)) {
+        name = type_ident;
+    } else if (ast_node_is_nfa(type_ident)) {
+        name        = type_ident->named_application.name;
+        n_type_args = type_ident->named_application.n_type_arguments;
+        type_args   = type_ident->named_application.type_arguments;
+    } else return 1;
+
+    // Create trait definition node
+    ast_node *r            = ast_node_create(self->ast_arena, ast_trait_definition);
+    r->trait_def.name             = name;
+    r->trait_def.n_type_arguments = n_type_args;
+    r->trait_def.type_arguments   = type_args;
+
+    array_shrink(sigs);
+    r->trait_def.n_signatures = sigs.size;
+    r->trait_def.signatures   = sigs.v;
+
+    array_shrink(parents);
+    r->trait_def.n_parents = parents.size;
+    r->trait_def.parents   = parents.v;
+
+    set_node_file(self, r);
+
+    add_module_symbol(self, type_ident);
+    mangle_name(self, type_ident);
+
+    return result_ast_node(self, r);
+}
+
 static int toplevel_struct(parser *self) {
 
     if (a_try(self, a_type_identifier)) return 1; // a_type_identifer mangles name
@@ -3978,6 +4084,9 @@ static int toplevel(parser *self) {
         else if (ERROR_STOP == res) goto error;
 
         if (0 == (res = a_try(self, toplevel_enum))) goto success;
+        else if (ERROR_STOP == res) goto error;
+
+        if (0 == (res = a_try(self, toplevel_trait))) goto success;
         else if (ERROR_STOP == res) goto error;
 
         if (0 == (res = a_try(self, toplevel_struct))) goto success;

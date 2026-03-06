@@ -655,7 +655,7 @@ Extend slice 1:
 - Derived comparisons (`<`, `<=`, `>`, `>=`): rewrite via `cmp` returning `CInt`
 - Test: `test_operator_overload_compound.tl`
 
-### Slice 3: Trait Declarations + Registry
+### Slice 3 (DONE): Trait Declarations + Registry
 
 Parse trait syntax, register in Phase 2. No runtime effect yet:
 

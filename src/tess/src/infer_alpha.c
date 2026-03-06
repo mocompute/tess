@@ -272,6 +272,22 @@ void rename_variables(tl_infer *self, ast_node *node, rename_variables_ctx *ctx,
 
     } break;
 
+    case ast_trait_definition: {
+        // type arguments
+        u32        argc = node->trait_def.n_type_arguments;
+        ast_node **argv = node->trait_def.type_arguments;
+        for (u32 i = 0; i < argc; i++) rename_variables(self, argv[i], ctx, level + 1);
+
+        // traverse into signatures
+        for (u32 i = 0; i < node->trait_def.n_signatures; i++)
+            rename_variables(self, node->trait_def.signatures[i], ctx, level + 1);
+
+        // traverse into parent references
+        for (u32 i = 0; i < node->trait_def.n_parents; i++)
+            rename_variables(self, node->trait_def.parents[i], ctx, level + 1);
+
+    } break;
+
     case ast_user_type_definition: {
         // type arguments
         u32        argc = node->user_type_def.n_type_arguments;

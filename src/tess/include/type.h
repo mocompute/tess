@@ -50,6 +50,22 @@ typedef struct {
     str       module;                 // module name (e.g., "Math"), empty for main module
 } tl_type_constructor_def;
 
+// Trait function signature (stored in trait registry)
+typedef struct {
+    str name;  // function name (e.g., "eq")
+    u8  arity; // parameter count
+} tl_trait_sig;
+
+defarray(tl_trait_sig_array, tl_trait_sig);
+
+// Trait definition (stored in trait registry)
+typedef struct {
+    str                name;       // module-mangled trait name (e.g., Math__Sortable)
+    str                generic_name; // unmangled name (Sortable)
+    str_array          parents;    // parent trait names (module-mangled)
+    tl_trait_sig_array sigs;       // function signatures
+} tl_trait_def;
+
 typedef struct {
     tl_type_constructor_def *def;
     tl_monotype_sized        args;

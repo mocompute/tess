@@ -170,6 +170,16 @@ typedef struct ast_node {
             struct ast_node *body;
         } let_in;
 
+        struct ast_trait_def {
+            struct ast_node  *name;
+            struct ast_node **type_arguments;
+            struct ast_node **signatures;    // each is a symbol with arrow annotation
+            struct ast_node **parents;       // parent trait references (symbols or NFAs)
+            u8                n_type_arguments;
+            u8                n_signatures;
+            u8                n_parents;
+        } trait_def;
+
         struct ast_user_type_def {
             struct ast_node  *name;
             struct ast_node **type_arguments;
@@ -353,6 +363,7 @@ int            ast_node_is_try(ast_node const *);
 int            ast_node_is_tuple(ast_node const *);
 int            ast_node_is_type_alias(ast_node const *);
 int            ast_node_is_type_predicate(ast_node const *);
+int            ast_node_is_trait_def(ast_node const *);
 int            ast_node_is_utd(ast_node const *);
 int            ast_node_is_enum_def(ast_node const *);
 int            ast_node_is_unary_op(ast_node const *);
