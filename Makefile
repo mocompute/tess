@@ -513,10 +513,13 @@ TL_TESTS =					\
 	nested_type_cross_module_conflict	\
 	number_formats				\
 	operator_overload			\
+	operator_overload_bitwise		\
 	operator_overload_chain			\
 	operator_overload_compound		\
+	operator_overload_div_mod		\
 	operator_overload_eq_only		\
 	operator_overload_multi			\
+	operator_overload_unary			\
 	pack					\
 	pointer_array				\
 	pointer_cast				\
@@ -586,6 +589,7 @@ TL_TESTS =					\
 	trait_bounds_multi_inst			\
 	trait_conditional			\
 	trait_declaration			\
+	trait_inheritance_conformance		\
 	type_alias_generic			\
 	type_alias_local			\
 	type_alias_module_chained		\
@@ -693,6 +697,7 @@ TL_FAIL_TESTS =					\
 	fail_tagged_union_existing_type	\
 	fail_tagged_union_missing_case		\
 	fail_tagged_union_unknown_variant	\
+	fail_operator_no_overload		\
 	fail_trait_bound_combined		\
 	fail_trait_bound_not_satisfied		\
 	fail_trait_conditional_not_satisfied	\
@@ -700,6 +705,7 @@ TL_FAIL_TESTS =					\
 	fail_trait_bound_second_param		\
 	fail_trait_circular			\
 	fail_trait_duplicate			\
+	fail_trait_reserved_name		\
 	fail_type_alias_partial_specialization	\
 	fail_try_non_union			\
 	fail_ufcs_not_found			\
@@ -726,7 +732,10 @@ TL_KNOWN_FAIL_FAILURES = \
 
 # Tests that should work but currently fail due to compiler bugs
 TL_KNOWN_FAILURES = \
-	operator_overload_in_function
+	operator_overload_eq_from_cmp		\
+	operator_overload_in_function		\
+	operator_overload_tagged_union		\
+	trait_diamond_inheritance
 
 
 # Total test count across all suites
