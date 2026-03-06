@@ -895,6 +895,22 @@ call site, giving clearer errors, but are less flexible (no arbitrary expression
 - **No higher-kinded traits.** Cannot express `Functor`, `Monad`, or similar abstractions
   over type constructors.
 
+### Operator dispatch vs trait conformance for `eq`/`cmp`
+
+There is an asymmetry between operator dispatch and trait conformance for comparison
+operators. Operator dispatch derives `==`/`!=` from `cmp` when `eq` is absent, but trait
+conformance does not: `Ord` inherits from `Eq`, so a type with only `cmp` satisfies neither
+`Eq` nor `Ord`. This means a type can use `==` via operators but fail an `Eq` bound.
+
+This feels like an incomplete design. One option is to allow `Ord` conformance to
+exceptionally satisfy `Eq` even when `eq` is not explicitly defined — deriving `eq` from
+`cmp` at the trait level, mirroring what operator dispatch already does. More broadly, this
+may point to a missing trait feature: **default implementations** or **derived functions**,
+where a parent trait's requirements can be satisfied by a child trait's functions. This
+would generalize the `eq`-from-`cmp` derivation rather than special-casing it.
+
+Revisit this when considering default implementations or trait-level function derivation.
+
 ### Built-in types cannot be extended
 
 Operator overloading only applies to user-defined types (structs and tagged unions).
