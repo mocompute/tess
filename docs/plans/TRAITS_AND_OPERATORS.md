@@ -627,6 +627,72 @@ Compiler-provided traits are pre-populated. User traits are added during Phase 2
 | `src/tess/include/type.h` | Trait definition struct, `module` field on type constructor def |
 | `src/tess/src/transpile.c` | No changes expected |
 
+## Implementation Order
+
+Implement in vertical slices — each slice delivers working, testable functionality
+end-to-end. Do not build horizontal layers (all parsing, then all type checking, etc.).
+
+For each slice: write the TL integration test first (add to known failures), implement,
+remove from known failures, run `make -j test`.
+
+### Slice 1: Operator Overloading (No Traits)
+
+The highest-value, simplest slice. No trait declarations, no bounds, no conformance
+checking. Just the Phase 5 operator-to-function rewrite:
+
+- Add `module` field to `tl_type_constructor_def`, populate in Phase 2
+- In Phase 5 (`post_specialize`), when `ast_binary_op`/`ast_unary_op` has a user-defined
+  type operand, look up `Module__add__2` (etc.) in the toplevel map and rewrite to NFA
+- Test: `test_operator_overload.tl` — define `Vec3` with `add`, `neg`, `eq`, use `+`,
+  `-` (unary), `==`, `!=` in expressions
+
+### Slice 2: Compound Assignment + Comparison Derivation
+
+Extend slice 1:
+
+- Compound assignment (`+=` etc.): rewrite `ast_reassignment_op` to `ast_reassignment`
+  with NFA value
+- Derived comparisons (`<`, `<=`, `>`, `>=`): rewrite via `cmp` returning `CInt`
+- Test: `test_operator_overload_compound.tl`
+
+### Slice 3: Trait Declarations + Registry
+
+Parse trait syntax, register in Phase 2. No runtime effect yet:
+
+- New `ast_trait_definition` AST tag
+- `toplevel_trait()` parser function with disambiguation logic
+- Trait registry in `tl_infer`, pre-populate compiler-provided traits
+- Parent chain flattening, circular inheritance detection
+- Test: `test_trait_declaration.tl` (traits parse without error),
+  `test_fail_trait_circular.tl`, `test_fail_trait_duplicate.tl`
+
+### Slice 4: Trait Bounds + Conformance Checking
+
+Parse `[T: Ord]` bounds, verify conformance in `specialize_arrow`:
+
+- Extend `maybe_type_arguments` to parse bounds into `annotation` field
+- In `specialize_arrow`, read bounds from type parameter annotations
+- Conformance check: look up trait functions in type's module by arity-mangled name
+- Test: `test_trait_bounds.tl` (bounded generic functions work),
+  `test_fail_trait_bound_not_satisfied.tl`
+
+### Slice 5: Conditional Conformance
+
+Recursive bound checking when a conforming function has its own bounds:
+
+- When conformance check finds a matching function with bounds on its type parameters,
+  recursively verify those bounds against the substituted types
+- Test: `test_trait_conditional.tl` — `Array[T]: Eq` when `T: Eq`
+
+### Slice 6: Trait Inheritance
+
+Full parent trait support in conformance checking:
+
+- Conformance check walks parent traits, verifying all inherited functions
+- Diamond inheritance deduplication
+- Test: `test_trait_inheritance.tl` — `Ord : Eq` requires both `eq` and `cmp`,
+  combined traits like `Numeric : Add, Sub, Mul, Div`
+
 ## Edge Cases
 
 - **Tagged unions**: `Option.eq(a, b)` works for `opt1 == opt2`. Same module lookup rules.
