@@ -1191,6 +1191,12 @@ static int check_trait_bound_(tl_infer *self, ast_node *toplevel, tl_monotype *c
         }
     }
 
+    // Check parent traits (trait inheritance)
+    forall(i, trait->parents) {
+        if (check_trait_bound_(self, toplevel, concrete_type, trait->parents.v[i], depth + 1))
+            return 1;
+    }
+
     return 0;
 }
 

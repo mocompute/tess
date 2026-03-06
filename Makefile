@@ -707,6 +707,7 @@ TL_FAIL_TESTS =					\
 	fail_trait_conditional_not_satisfied	\
 	fail_trait_conditional_transitive	\
 	fail_trait_bound_second_param		\
+	fail_trait_bound_ord_missing_eq		\
 	fail_trait_circular			\
 	fail_trait_duplicate			\
 	fail_trait_reserved_name		\
@@ -731,8 +732,7 @@ TL_FAIL_RUNTIME_TESTS =			\
 	fail_runtime_integer_bounds_cross_family
 
 # Expected-failure tests that the compiler doesn't reject yet
-TL_KNOWN_FAIL_FAILURES = \
-	fail_trait_bound_ord_missing_eq
+TL_KNOWN_FAIL_FAILURES =
 
 # Tests that should work but currently fail due to compiler bugs
 TL_KNOWN_FAILURES = \

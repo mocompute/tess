@@ -584,6 +584,7 @@ tl_create_build_fail_test(fail_trait_bound_not_satisfied)
 tl_create_build_fail_test(fail_trait_conditional_not_satisfied)
 tl_create_build_fail_test(fail_trait_conditional_transitive)
 tl_create_build_fail_test(fail_trait_bound_second_param)
+tl_create_build_fail_test(fail_trait_bound_ord_missing_eq)
 tl_create_build_fail_test(fail_trait_circular)
 tl_create_build_fail_test(fail_trait_duplicate)
 tl_create_build_fail_test(fail_trait_reserved_name)
@@ -634,7 +635,6 @@ tl_create_runtime_fail_test(fail_runtime_integer_bounds)
 tl_create_runtime_fail_test(fail_runtime_integer_bounds_cross_family)
 
 # Known fail failures: compiler should reject but doesn't yet
-tl_create_known_fail_failure(fail_trait_bound_ord_missing_eq)
 
 # Known failures: these should work but a compiler bug makes them fail
 tl_create_known_failure(tagged_union_bail_nested)
