@@ -561,6 +561,7 @@ TL_TESTS =					\
 	struct_generic_function_signature	\
 	tagged_union				\
 	tagged_union_bail			\
+	tagged_union_bail_nested		\
 	tagged_union_carray			\
 	tagged_union_case_annotation		\
 	tagged_union_cross_module_positional	\
@@ -735,8 +736,7 @@ TL_FAIL_RUNTIME_TESTS =			\
 TL_KNOWN_FAIL_FAILURES =
 
 # Tests that should work but currently fail due to compiler bugs
-TL_KNOWN_FAILURES = \
-	tagged_union_bail_nested
+TL_KNOWN_FAILURES =
 
 
 # Total test count across all suites

@@ -433,6 +433,7 @@ tl_create_test(struct_generic)
 tl_create_test(struct_generic_function_signature)
 tl_create_test(tagged_union)
 tl_create_test(tagged_union_bail)
+tl_create_test(tagged_union_bail_nested)
 tl_create_test(tagged_union_case_annotation)
 tl_create_test(tagged_union_carray)
 tl_create_test(tagged_union_cross_module_positional)
@@ -637,4 +638,4 @@ tl_create_runtime_fail_test(fail_runtime_integer_bounds_cross_family)
 # Known fail failures: compiler should reject but doesn't yet
 
 # Known failures: these should work but a compiler bug makes them fail
-tl_create_known_failure(tagged_union_bail_nested)
+
