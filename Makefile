@@ -513,7 +513,10 @@ TL_TESTS =					\
 	nested_type_cross_module_conflict	\
 	number_formats				\
 	operator_overload			\
+	operator_overload_chain			\
 	operator_overload_compound		\
+	operator_overload_eq_only		\
+	operator_overload_multi			\
 	pack					\
 	pointer_array				\
 	pointer_cast				\
@@ -578,6 +581,9 @@ TL_TESTS =					\
 	tagged_union_scoped_variant_as_union	\
 	tagged_union_unscoped			\
 	tail_call				\
+	trait_bounds				\
+	trait_bounds_inherited			\
+	trait_bounds_multi_inst			\
 	trait_declaration			\
 	type_alias_generic			\
 	type_alias_local			\
@@ -686,6 +692,9 @@ TL_FAIL_TESTS =					\
 	fail_tagged_union_existing_type	\
 	fail_tagged_union_missing_case		\
 	fail_tagged_union_unknown_variant	\
+	fail_trait_bound_combined		\
+	fail_trait_bound_not_satisfied		\
+	fail_trait_bound_second_param		\
 	fail_trait_circular			\
 	fail_trait_duplicate			\
 	fail_type_alias_partial_specialization	\
@@ -709,7 +718,8 @@ TL_FAIL_RUNTIME_TESTS =			\
 	fail_runtime_integer_bounds_cross_family
 
 # Expected-failure tests that the compiler doesn't reject yet
-TL_KNOWN_FAIL_FAILURES =
+TL_KNOWN_FAIL_FAILURES = \
+	fail_trait_bound_ord_missing_eq
 
 # Tests that should work but currently fail due to compiler bugs
 TL_KNOWN_FAILURES =
