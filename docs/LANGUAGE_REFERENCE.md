@@ -706,7 +706,9 @@ main() {
 
 Both operands must be the same type. The compiler resolves the overload by looking up the
 function in the left operand's module. Built-in types use intrinsics directly and cannot
-receive new operator overloads.
+receive new operator overloads, but they conform to the compiler-provided traits matching
+their intrinsic operators — `Int` satisfies `Add`, `Eq`, `Ord`, etc., so trait-bounded
+generic functions like `double[T: Add](x: T)` work with built-in types.
 
 Compound assignment desugars to the corresponding operator: `a += b` becomes `a = add(a, b)`.
 

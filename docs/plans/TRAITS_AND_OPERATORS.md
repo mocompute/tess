@@ -296,7 +296,9 @@ BitNot[T] : { bit_not(a: T) -> T }
 3. Is `a` a user-defined type? → check if it conforms to `Add` → call `add`
 4. Neither? → error
 
-Built-in types use intrinsics directly — no synthesized trait conformance.
+Built-in types use intrinsics for operator dispatch, but they conform to the
+compiler-provided traits matching their intrinsic operators. This means `Int` satisfies
+`Add`, `Eq`, `Ord`, etc., and trait-bounded generic functions work with built-in types.
 
 ### Comparison Operators
 
@@ -914,3 +916,9 @@ be generalized.
 Operator overloading only applies to user-defined types (structs and tagged unions).
 Built-in types like `CString`, `Int`, `Float` cannot receive new operator overloads. A
 user-defined wrapper type (e.g., `Str`) in a standard library module can get overloads.
+
+However, built-in types do conform to the compiler-provided traits matching their
+intrinsic operators. For example, `Int` satisfies `Add`, `Sub`, `Mul`, `Div`, `Mod`,
+`Eq`, `Ord`, `Neg`, and the bitwise traits. This means trait-bounded generic functions
+like `double[T: Add](x: T)` work with `double(7)` — the compiler recognizes that `Int`
+supports `+` and satisfies the `Add` bound.

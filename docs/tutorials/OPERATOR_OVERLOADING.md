@@ -294,9 +294,10 @@ with the right signature. It satisfies `Ord` because it has `cmp` (and `Eq` is d
 from `cmp` automatically). The compiler checks this at the call site — if you try to call
 `double` with a type that has no `add`, you get a compile-time error.
 
-> **Note:** Trait bounds work with user-defined types (structs and tagged unions).
-> Built-in types like `Int` and `Float` use compiler intrinsics for their operators and
-> do not participate in trait conformance.
+These generic functions work with built-in types too. `Int` satisfies `Add` (it has `+`),
+`Float` satisfies `Eq` (it has `==`), and so on — the compiler recognizes that built-in
+types conform to the traits matching their intrinsic operators. So `double(7)` and
+`smallest(3, 8)` work just as you'd expect.
 
 ## 6. Defining Your Own Traits
 
