@@ -4,7 +4,7 @@
 // Test that different integer types produce distinct generic specializations.
 // Array[CInt] and Array[Int] should be separate types.
 
-wrap(x: T) -> T { x }
+wrap[T](x: T) -> T { x }
 
 test_distinct_specializations() {
     error := 0
@@ -37,7 +37,7 @@ test_distinct_specializations() {
 }
 
 // Generic pair that preserves both types
-pair_first(x: T, y: U) -> T { x }
+pair_first[T, U](x: T, y: U) -> T { x }
 
 test_generic_pair() {
     error := 0

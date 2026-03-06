@@ -1,22 +1,14 @@
 #module main
-// This test exercises the Union type PtrOrNull so we don't include stdlib.tl
+// This test exercises malloc, free, and null comparison.
 
 #include <stdlib.h>
 
-PtrOrNull = Union[Ptr[a], Void]
-c_malloc (count: Int) -> PtrOrNull
-c_free (ptr: Ptr) -> Void
-
-is_null (p: PtrOrNull) -> Bool
-
-is_null(p) {
-    if p == null { true } else { false }
-}
-
+c_malloc (count: Int) -> Ptr[Void]
+c_free[T] (ptr: Ptr[T]) -> Void
 
 main() {
     p: Ptr[Void] := c_malloc(16)
-    res          := if is_null(p) { 1 } else { 0 }
+    res          := if p == null { 1 } else { 0 }
     c_free(p)
     res
 }

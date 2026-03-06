@@ -52,7 +52,7 @@ test_unsigned_fixed_width_context() {
 }
 
 // Test: two weak literals merging in a generic call
-first(x: T, y: T) -> T { x }
+first[T](x: T, y: T) -> T { x }
 
 test_weak_literal_merging() {
     error := 0

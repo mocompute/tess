@@ -14,7 +14,7 @@ int_doubler := Processor(process = double/1)
 int_tripler := Processor(process = triple/1)
 
 // Helper to apply processor
-apply(p: Processor[a], x: a) -> a {
+apply[a](p: Processor[a], x: a) -> a {
     p.process(x)
 }
 
