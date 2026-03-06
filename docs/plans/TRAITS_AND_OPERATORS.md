@@ -635,7 +635,7 @@ end-to-end. Do not build horizontal layers (all parsing, then all type checking,
 For each slice: write the TL integration test first (add to known failures), implement,
 remove from known failures, run `make -j test`.
 
-### Slice 1: Operator Overloading (No Traits)
+### Slice 1 (DONE): Operator Overloading (No Traits)
 
 The highest-value, simplest slice. No trait declarations, no bounds, no conformance
 checking. Just the Phase 5 operator-to-function rewrite:
@@ -646,7 +646,7 @@ checking. Just the Phase 5 operator-to-function rewrite:
 - Test: `test_operator_overload.tl` — define `Vec3` with `add`, `neg`, `eq`, use `+`,
   `-` (unary), `==`, `!=` in expressions
 
-### Slice 2: Compound Assignment + Comparison Derivation
+### Slice 2 (DONE): Compound Assignment + Comparison Derivation
 
 Extend slice 1:
 

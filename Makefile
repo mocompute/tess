@@ -513,6 +513,7 @@ TL_TESTS =					\
 	nested_type_cross_module_conflict	\
 	number_formats				\
 	operator_overload			\
+	operator_overload_compound		\
 	pack					\
 	pointer_array				\
 	pointer_cast				\

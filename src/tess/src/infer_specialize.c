@@ -853,7 +853,22 @@ static char const *binary_op_to_func_name(char const *op) {
     if (0 == strcmp(op, ">>")) return "shr";
     if (0 == strcmp(op, "==")) return "eq";
     if (0 == strcmp(op, "!=")) return "eq"; // negated after call
+    if (0 == strcmp(op, "<"))  return "cmp";
+    if (0 == strcmp(op, "<=")) return "cmp";
+    if (0 == strcmp(op, ">"))  return "cmp";
+    if (0 == strcmp(op, ">=")) return "cmp";
     return null;
+}
+
+// Map compound assignment operator (e.g. "+=") to the trait function name
+// by stripping the trailing '=' and delegating to binary_op_to_func_name.
+static char const *compound_op_to_func_name(char const *op) {
+    size_t len = strlen(op);
+    if (len < 2 || op[len - 1] != '=') return null;
+    char base[4];
+    memcpy(base, op, len - 1);
+    base[len - 1] = '\0';
+    return binary_op_to_func_name(base);
 }
 
 // Map unary operator string to the trait function name. Returns null if not overloadable.
@@ -946,9 +961,61 @@ static void rewrite_operator_overloads(void *ctx, ast_node *node) {
             node->unary_op.operand = eq_call;
             node->unary_op.op = ast_node_create_sym_c(self->arena, "!");
             node->type = type;
+        } else if (0 == strcmp(func_name, "cmp")) {
+            // a < b  →  cmp(a, b) < 0  (built-in CInt comparison)
+            tl_monotype *cint = tl_type_registry_instantiate(self->registry, S("CInt"));
+            tl_polytype *cint_poly = tl_polytype_absorb_mono(self->arena, cint);
+
+            ast_node *cmp_call = ast_node_create_nfa(
+                self->arena, ast_node_create_sym(self->arena, full_name),
+                (ast_node_sized){0}, (ast_node_sized){.v = args, .size = 2});
+            cmp_call->type = cint_poly;
+
+            ast_node *zero = ast_node_create_i64(self->arena, 0);
+            zero->type = cint_poly;
+
+            tl_polytype *type = node->type;
+            node->tag = ast_binary_op;
+            node->binary_op.left = cmp_call;
+            node->binary_op.right = zero;
+            node->binary_op.op = ast_node_create_sym_c(self->arena, op);
+            node->type = type;
         } else {
             rewrite_op_to_nfa(self, node, full_name, args, 2);
         }
+
+    } else if (node->tag == ast_reassignment_op) {
+        ast_node *lhs = node->assignment.name;
+        if (!lhs->type) return;
+
+        tl_monotype *lhs_type = lhs->type->type;
+        if (!is_user_defined_type(lhs_type)) return;
+
+        char const *op = str_cstr(&node->assignment.op->symbol.name);
+        char const *func_name = compound_op_to_func_name(op);
+        if (!func_name) return;
+
+        str full_name = find_overload_func(self, lhs_type, func_name, 2);
+        if (str_is_empty(full_name)) return;
+
+        // Capture fields before overwriting the union.
+        ast_node *value = node->assignment.value;
+        ast_node **args = alloc_malloc(self->arena, 2 * sizeof(ast_node *));
+        args[0] = lhs;
+        args[1] = value;
+
+        // Build NFA: func(lhs, value) — result type matches LHS
+        ast_node *call = ast_node_create_nfa(
+            self->arena, ast_node_create_sym(self->arena, full_name),
+            (ast_node_sized){0}, (ast_node_sized){.v = args, .size = 2});
+        call->type = lhs->type;
+
+        // Rewrite: ast_reassignment_op → ast_reassignment with value = func(lhs, value)
+        node->tag = ast_reassignment;
+        node->assignment.name = lhs;
+        node->assignment.value = call;
+        node->assignment.op = null;
+        node->assignment.is_field_name = 0;
 
     } else if (node->tag == ast_unary_op) {
         ast_node *operand = node->unary_op.operand;
