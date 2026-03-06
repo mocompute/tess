@@ -2,16 +2,27 @@
 
 #module Opt
 
-OptInt: | Some { v: Int } | None
+OptInt: | Val { v: Int } | Empty
 
 eq(a: OptInt, b: OptInt) -> Bool {
-    a :: Some && b :: Some && a.Some.v == b.Some.v ||
-    a :: None && b :: None
+    when a {
+        sa: Val {
+            sb: Val := b else { return false }
+            sa.v == sb.v
+        }
+        na: Empty {
+            when b {
+                nb: Empty { true }
+                else { false }
+            }
+        }
+    }
 }
 
 add(a: OptInt, b: OptInt) -> OptInt {
-    if a :: Some && b :: Some { OptInt.Some(v = a.Some.v + b.Some.v) }
-    else { OptInt.None }
+    sa: Val := a else { return OptInt.Empty }
+    sb: Val := b else { return OptInt.Empty }
+    OptInt.Val(v = sa.v + sb.v)
 }
 
 #module main
@@ -19,9 +30,9 @@ add(a: OptInt, b: OptInt) -> OptInt {
 main() {
     error := 0
 
-    a := Opt.OptInt.Some(v = 10)
-    b := Opt.OptInt.Some(v = 20)
-    n := Opt.OptInt.None
+    a := Opt.OptInt.Val(v = 10)
+    b := Opt.OptInt.Val(v = 20)
+    n := Opt.OptInt.Empty
 
     // == on tagged union
     error += if a == a {0} else {1}
@@ -35,7 +46,7 @@ main() {
 
     // + on tagged union
     c := a + b
-    error += if c == Opt.OptInt.Some(v = 30) {0} else {1}
+    error += if c == Opt.OptInt.Val(v = 30) {0} else {1}
 
     // + with None propagates
     d := a + n
