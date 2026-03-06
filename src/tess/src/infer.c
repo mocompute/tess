@@ -269,6 +269,10 @@ static int run_check_free_variables(tl_infer *self) {
 static int run_specialize(tl_infer *self, ast_node_sized nodes, ast_node *main) {
     dbg(self, "-- specialize phase");
 
+    // Rewrite binary/unary operators on user-defined types to function calls.
+    // Types are concrete after Phase 4, so we can identify user-defined operands.
+    rewrite_operator_overloads_all(self);
+
     traverse_ctx *traverse = traverse_ctx_create(self->transient);
 
     if (main) {

@@ -75,7 +75,11 @@ static void create_type_constructor_from_user_type(tl_infer *self, ast_node *nod
 
     // Auto-collapse: if type is Module__Module (e.g. Array__Array), register
     // bare module name as alias so clients can write Array[T] instead of Array.Array[T].
+    // Also store the module name in the type constructor def for operator overload dispatch.
     ast_node *type_name_node = node->user_type_def.name;
+    if (tl_monotype_is_inst(poly->type) && ast_node_is_symbol(type_name_node)) {
+        poly->type->cons_inst->def->module = type_name_node->symbol.module;
+    }
     if (ast_node_is_symbol(type_name_node) && type_name_node->symbol.is_mangled) {
         str module   = type_name_node->symbol.module;
         str original = type_name_node->symbol.original;

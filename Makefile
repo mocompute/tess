@@ -512,6 +512,7 @@ TL_TESTS =					\
 	nested_struct_access			\
 	nested_type_cross_module_conflict	\
 	number_formats				\
+	operator_overload			\
 	pack					\
 	pointer_array				\
 	pointer_cast				\

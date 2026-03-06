@@ -191,6 +191,7 @@ str  next_instantiation(tl_infer *, str);
 void cancel_last_instantiation(tl_infer *);
 void do_apply_subs(void *, ast_node *);
 void apply_subs_to_ast_node(tl_infer *, ast_node *);
+void rewrite_operator_overloads_all(tl_infer *);
 
 // ============================================================================
 // Internal API: infer_constraint.c (Phases 2-4)

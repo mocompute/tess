@@ -835,6 +835,151 @@ void apply_subs_to_ast_node(tl_infer *self, ast_node *node) {
     ast_node_dfs(self, node, do_apply_subs);
 }
 
+// ============================================================================
+// Operator overloading — rewrite binary/unary ops on user-defined types to NFAs
+// ============================================================================
+
+// Map binary operator string to the trait function name. Returns null if not overloadable.
+static char const *binary_op_to_func_name(char const *op) {
+    if (0 == strcmp(op, "+"))  return "add";
+    if (0 == strcmp(op, "-"))  return "sub";
+    if (0 == strcmp(op, "*"))  return "mul";
+    if (0 == strcmp(op, "/"))  return "div";
+    if (0 == strcmp(op, "%"))  return "mod";
+    if (0 == strcmp(op, "&"))  return "bit_and";
+    if (0 == strcmp(op, "|"))  return "bit_or";
+    if (0 == strcmp(op, "^"))  return "bit_xor";
+    if (0 == strcmp(op, "<<")) return "shl";
+    if (0 == strcmp(op, ">>")) return "shr";
+    if (0 == strcmp(op, "==")) return "eq";
+    if (0 == strcmp(op, "!=")) return "eq"; // negated after call
+    return null;
+}
+
+// Map unary operator string to the trait function name. Returns null if not overloadable.
+static char const *unary_op_to_func_name(char const *op) {
+    if (0 == strcmp(op, "-")) return "neg";
+    if (0 == strcmp(op, "!")) return "not";
+    if (0 == strcmp(op, "~")) return "bit_not";
+    return null;
+}
+
+// Check if a substituted monotype is a user-defined type (not a builtin).
+static int is_user_defined_type(tl_monotype *mono) {
+    if (!mono) return 0;
+    if (!tl_monotype_is_inst(mono)) return 0;
+    return str_is_empty(mono->cons_inst->def->c_type_name);
+}
+
+// Build the arity-mangled + module-mangled function name for operator dispatch.
+// E.g., for module "Vec", function "add", arity 2: "Vec__add__2"
+static str build_overload_func_name(allocator *alloc, str module, char const *func_name, u8 arity) {
+    str base = str_init(alloc, func_name);
+    str mangled = mangle_str_for_arity(alloc, base, arity);
+    if (!str_is_empty(module)) {
+        return str_fmt(alloc, "%s__%s", str_cstr(&module), str_cstr(&mangled));
+    }
+    return mangled;
+}
+
+// Rewrite an operator node in-place to an NFA calling the overload function.
+static void rewrite_op_to_nfa(tl_infer *self, ast_node *node, str func_name,
+                               ast_node **args, u8 n_args) {
+    tl_polytype *type = node->type;
+    node->tag = ast_named_function_application;
+    node->named_application.name                  = ast_node_create_sym(self->arena, func_name);
+    node->named_application.arguments             = args;
+    node->named_application.n_arguments           = n_args;
+    node->named_application.type_arguments        = null;
+    node->named_application.n_type_arguments      = 0;
+    node->named_application.is_specialized        = 0;
+    node->named_application.is_type_constructor   = 0;
+    node->named_application.is_function_reference = 0;
+    node->type = type;
+}
+
+// Look up an overload function by operator name and arity. Returns the function name on
+// success (allocated on self->arena), or empty string if not found.
+static str find_overload_func(tl_infer *self, tl_monotype *type, char const *func_name, u8 arity) {
+    str module = type->cons_inst->def->module;
+    // Use transient arena for the lookup key to avoid leaking on miss.
+    str lookup = build_overload_func_name(self->transient, module, func_name, arity);
+    if (!ast_node_str_map_get(self->toplevels, lookup)) return str_empty();
+    // Found — copy to permanent arena for the rewritten AST.
+    return str_copy(self->arena, lookup);
+}
+
+// DFS callback: rewrite operator nodes for user-defined types to function calls.
+static void rewrite_operator_overloads(void *ctx, ast_node *node) {
+    tl_infer *self = ctx;
+
+    if (node->tag == ast_binary_op) {
+        ast_node *left = node->binary_op.left;
+        if (!left->type) return;
+
+        tl_monotype *left_type = left->type->type;
+        if (!is_user_defined_type(left_type)) return;
+
+        char const *op = str_cstr(&node->binary_op.op->symbol.name);
+        int is_neq = (0 == strcmp(op, "!="));
+        char const *func_name = is_neq ? "eq" : binary_op_to_func_name(op);
+        if (!func_name) return;
+
+        str full_name = find_overload_func(self, left_type, func_name, 2);
+        if (str_is_empty(full_name)) return;
+
+        // Capture operands before overwriting the union.
+        ast_node *right = node->binary_op.right;
+        ast_node **args = alloc_malloc(self->arena, 2 * sizeof(ast_node *));
+        args[0] = left;
+        args[1] = right;
+
+        if (is_neq) {
+            // a != b  →  !(eq(a, b))
+            ast_node *eq_call = ast_node_create_nfa(
+                self->arena, ast_node_create_sym(self->arena, full_name),
+                (ast_node_sized){0}, (ast_node_sized){.v = args, .size = 2});
+            eq_call->type = node->type;
+
+            tl_polytype *type = node->type;
+            node->tag = ast_unary_op;
+            node->unary_op.operand = eq_call;
+            node->unary_op.op = ast_node_create_sym_c(self->arena, "!");
+            node->type = type;
+        } else {
+            rewrite_op_to_nfa(self, node, full_name, args, 2);
+        }
+
+    } else if (node->tag == ast_unary_op) {
+        ast_node *operand = node->unary_op.operand;
+        if (!operand->type) return;
+
+        tl_monotype *operand_type = operand->type->type;
+        if (!is_user_defined_type(operand_type)) return;
+
+        char const *op = str_cstr(&node->unary_op.op->symbol.name);
+        char const *func_name = unary_op_to_func_name(op);
+        if (!func_name) return;
+
+        str full_name = find_overload_func(self, operand_type, func_name, 1);
+        if (str_is_empty(full_name)) return;
+
+        ast_node **args = alloc_malloc(self->arena, sizeof(ast_node *));
+        args[0] = operand;
+        rewrite_op_to_nfa(self, node, full_name, args, 1);
+    }
+}
+
+// Rewrite operator overloads in all toplevel definitions.
+// Called between Phase 4 (subs applied, types concrete) and Phase 5 (specialization).
+void rewrite_operator_overloads_all(tl_infer *self) {
+    hashmap_iterator iter = {0};
+    ast_node        *node;
+    while ((node = ast_node_str_map_iter(self->toplevels, &iter))) {
+        ast_node_dfs(self, node, rewrite_operator_overloads);
+    }
+}
+
 int post_specialize(tl_infer *self, traverse_ctx *traverse_ctx, ast_node *special, tl_monotype *callsite) {
     // Do this after creating a specialised function
     ast_node *infer_target = get_infer_target(special);
@@ -874,6 +1019,11 @@ int post_specialize(tl_infer *self, traverse_ctx *traverse_ctx, ast_node *specia
             hires_timer_stop(&st);
             self->counters.specialize_subs_ms += hires_timer_elapsed_sec(&st) * 1000.0;
         }
+
+        // Rewrite operator nodes on user-defined types to function calls (NFAs).
+        // Must happen after subs are applied (types are concrete) and before
+        // specialize_applications_cb (which processes the new NFA nodes).
+        ast_node_dfs(self, infer_target, rewrite_operator_overloads);
 
         if (stats) self->counters.traverse_specialize_calls++;
         if (stats) hires_timer_start(&st);

@@ -47,6 +47,7 @@ typedef struct {
     i64       integer_min_value;      // minimum value for compile-time range checking
     u64       integer_max_value;      // maximum value for compile-time range checking (u64 for unsigned)
     int       has_integer_range;      // non-zero if integer_min_value/max_value are valid
+    str       module;                 // module name (e.g., "Math"), empty for main module
 } tl_type_constructor_def;
 
 typedef struct {
