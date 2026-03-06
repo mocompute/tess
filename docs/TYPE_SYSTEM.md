@@ -98,6 +98,21 @@ arr := empty[Int]()
 floats := with_capacity[Float](16)
 ```
 
+### Trait Bounds
+
+Type parameters can be constrained with trait bounds, restricting them to types that satisfy
+a given trait:
+
+```tl
+sort[T: Ord](arr: Array[T]) { ... }
+double[T: Add](x: T) -> T { x + x }
+```
+
+Bounds are checked at call sites during specialization. A type satisfies a trait through
+structural conformance — if its module contains functions matching all of the trait's
+signatures, it conforms. See the [Language Reference](LANGUAGE_REFERENCE.md#traits) for full
+details on the trait system.
+
 ## Monomorphization (Specialization)
 
 Tess compiles generic code by **monomorphization**: creating specialized versions for each concrete type used.

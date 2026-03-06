@@ -564,6 +564,16 @@ ctx.callback()       // Call through struct field
 map[a, b](f: (a) -> b, arr: Arr[a]) -> Arr[b]
 ```
 
+Type parameters can have trait bounds that constrain them to types satisfying a trait:
+
+```tl
+sort[T: Ord](arr: Array[T]) { ... }
+double[T: Add](x: T) -> T { x + x }
+convert[A, B: Add](a: A, b: B) -> B { ... }   // only B is bounded
+```
+
+See [Traits](#traits) for details on trait declarations, conformance, and bounds.
+
 ### Function Overloading by Arity
 
 Functions with the same name can be defined with different numbers of parameters. The compiler resolves calls based on the number of arguments provided:
@@ -651,6 +661,66 @@ v.veclib.scale(2)            // calls veclib.scale(v, 2)
 **Logical:** `&&`, `||`, `!`
 
 **Bitwise:** `&`, `|`, `~`, `^`, `<<`, `>>`
+
+**Compound assignment:** `+=`, `-=`, `*=`, `/=`, `%=`, `&=`, `|=`, `^=`, `<<=`, `>>=`
+
+### Operator Overloading
+
+Arithmetic, comparison, and bitwise operators can be overloaded for user-defined types (structs
+and tagged unions). Define a function with the corresponding name in the type's module:
+
+| Operator | Function | Operator | Function |
+|----------|----------|----------|----------|
+| `+` | `add(a: T, b: T) -> T` | `==` | `eq(a: T, b: T) -> Bool` |
+| `-` | `sub(a: T, b: T) -> T` | `!=` | derived from `eq` |
+| `*` | `mul(a: T, b: T) -> T` | `<` `<=` `>` `>=` | derived from `cmp(a: T, b: T) -> CInt` |
+| `/` | `div(a: T, b: T) -> T` | `-` (unary) | `neg(a: T) -> T` |
+| `%` | `mod(a: T, b: T) -> T` | `!` (unary) | `not(a: T) -> Bool` |
+| `&` | `bit_and(a: T, b: T) -> T` | `~` (unary) | `bit_not(a: T) -> T` |
+| `\|` | `bit_or(a: T, b: T) -> T` | `<<` | `shl(a: T, b: T) -> T` |
+| `^` | `bit_xor(a: T, b: T) -> T` | `>>` | `shr(a: T, b: T) -> T` |
+
+```tl
+#module Vec
+
+Vec3 : { x: Int, y: Int, z: Int }
+
+add(a: Vec3, b: Vec3) -> Vec3 {
+    Vec3(x = a.x + b.x, y = a.y + b.y, z = a.z + b.z)
+}
+
+eq(a: Vec3, b: Vec3) -> Bool {
+    a.x == b.x && a.y == b.y && a.z == b.z
+}
+
+#module main
+
+main() {
+    a := Vec.Vec3(x = 1, y = 2, z = 3)
+    b := Vec.Vec3(x = 4, y = 5, z = 6)
+    c := a + b       // calls Vec.add(a, b)
+    d := a == b       // calls Vec.eq(a, b)
+    e := a != b       // calls !Vec.eq(a, b)
+}
+```
+
+Both operands must be the same type. The compiler resolves the overload by looking up the
+function in the left operand's module. Built-in types use intrinsics directly and cannot
+receive new operator overloads.
+
+Compound assignment desugars to the corresponding operator: `a += b` becomes `a = add(a, b)`.
+
+For `==` and `!=`, the compiler first looks for `eq`. If absent, it falls back to deriving
+from `cmp` (i.e., `cmp(a, b) == 0`). The ordering operators (`<`, `<=`, `>`, `>=`) are
+derived from `cmp` returning `CInt` (negative, zero, or positive).
+
+**Note:** The `eq`-from-`cmp` fallback is purely an operator dispatch convenience. It does
+not affect trait conformance. A type with only `cmp` can use `==` and `!=` operators, but
+it does not satisfy `Eq` (which requires an `eq` function) or `Ord` (which inherits `Eq`).
+See [Traits](#traits) for the conformance rules.
+
+**Not overloadable:** `&&`, `||` (short-circuit semantics), `.`, `->` (struct access),
+`&` (address-of), `*` (dereference), `=` (assignment), `::` (type predicate), `[]` (indexing).
 
 ### Literals
 
@@ -1326,6 +1396,160 @@ when val {
     else { fallback }
 }
 ```
+
+## Traits
+
+Traits are compile-time type constraints that describe a set of functions a type must provide.
+They use structural conformance — no `impl` blocks or explicit declarations are needed. A type
+conforms to a trait if its module contains functions matching all of the trait's signatures.
+
+### Trait Declaration
+
+Traits are declared with a type parameter in square brackets. The body contains function
+signatures (not implementations):
+
+```tl
+Eq[T] : {
+    eq(a: T, b: T) -> Bool
+}
+
+Printable[T] : {
+    to_string(a: T) -> CString
+    print(a: T) -> CInt
+}
+```
+
+The parser disambiguates traits from structs by the body content: `identifier(` signals
+a function signature (trait), while `identifier:` signals a field (struct).
+
+### Structural Conformance
+
+A type conforms to a trait if its module has functions matching all signatures:
+
+```tl
+#module Vec
+
+Vec3 : { x: Float, y: Float, z: Float }
+
+eq(a: Vec3, b: Vec3) -> Bool {
+    a.x == b.x && a.y == b.y && a.z == b.z
+}
+
+// Vec3 now structurally conforms to Eq — no declaration needed.
+```
+
+Conformance does not require importing the trait. The trait only needs to be visible where
+it is used as a bound.
+
+### Trait Bounds
+
+Trait bounds constrain generic type parameters:
+
+```tl
+sort[T: Ord](arr: Array[T]) { ... }
+are_equal[T: Eq](a: T, b: T) -> Bool { a == b }
+double[T: Add](x: T) -> T { x + x }
+```
+
+`T: Ord` means "T must satisfy the `Ord` trait." Bounds are checked when the generic
+function is called with a concrete type — not at the definition site.
+
+Multiple type parameters can have independent bounds:
+
+```tl
+compare_second[A, B: Eq](a: A, x: B, y: B) -> Bool { x == y }
+```
+
+**Bounds apply to functions, not type definitions.** Structs and tagged unions cannot have
+bounded type parameters:
+
+```tl
+// NOT allowed:
+SortedList[T: Ord] : { items: Array[T] }
+
+// Instead, bound the functions:
+SortedList[T] : { items: Array[T] }
+insert[T: Ord](list: Ptr[SortedList[T]], item: T) { ... }
+```
+
+### Trait Inheritance
+
+Traits can inherit from other traits. A type must satisfy all parent traits:
+
+```tl
+Ord[T] : Eq[T] {
+    cmp(a: T, b: T) -> CInt
+}
+// A type satisfying Ord must have both eq and cmp.
+```
+
+Combined traits with no additional functions use empty braces:
+
+```tl
+Numeric[T] : Add[T], Sub[T], Mul[T], Div[T] { }
+```
+
+Circular inheritance is rejected. Diamond inheritance is allowed — the compiler deduplicates
+requirements.
+
+Ad-hoc multi-bounds (`T: Add + Eq`) are not supported. Define a named combined trait instead:
+
+```tl
+Summable[T] : Add[T], Eq[T] { }
+sum[T: Summable](arr: Array[T], zero: T) -> T { ... }
+```
+
+### Conditional Conformance
+
+A generic type conditionally conforms to a trait when its conformance depends on its type
+parameter. This is expressed through trait bounds on the implementing function:
+
+```tl
+#module Wrapper
+
+Pair[A] : { fst: A, snd: A }
+
+// Pair[T] satisfies Eq when T satisfies Eq
+eq[T: Eq](a: Pair[T], b: Pair[T]) -> Bool {
+    a.fst == b.fst && a.snd == b.snd
+}
+```
+
+The compiler verifies conditional conformance transitively: `Pair[Int]` satisfies `Eq`
+because `Int` satisfies `Eq`. `Pair[SomeType]` does not unless `SomeType` also satisfies `Eq`.
+
+### Compiler-Provided Traits
+
+The compiler provides built-in traits for operator overloading. These are always visible and
+do not need to be imported. User code cannot define types or traits with these names.
+
+| Trait | Function signature | Operator | Notes |
+|-------|--------------------|----------|-------|
+| `Add[T]` | `add(a: T, b: T) -> T` | `+`, `+=` | |
+| `Sub[T]` | `sub(a: T, b: T) -> T` | `-`, `-=` | |
+| `Mul[T]` | `mul(a: T, b: T) -> T` | `*`, `*=` | |
+| `Div[T]` | `div(a: T, b: T) -> T` | `/`, `/=` | |
+| `Mod[T]` | `mod(a: T, b: T) -> T` | `%`, `%=` | |
+| `BitAnd[T]` | `bit_and(a: T, b: T) -> T` | `&`, `&=` | Bitwise AND |
+| `BitOr[T]` | `bit_or(a: T, b: T) -> T` | `\|`, `\|=` | Bitwise OR |
+| `BitXor[T]` | `bit_xor(a: T, b: T) -> T` | `^`, `^=` | Bitwise XOR |
+| `Shl[T]` | `shl(a: T, b: T) -> T` | `<<`, `<<=` | Shift left |
+| `Shr[T]` | `shr(a: T, b: T) -> T` | `>>`, `>>=` | Shift right |
+| `Eq[T]` | `eq(a: T, b: T) -> Bool` | `==`, `!=` | `!=` is `!eq(a, b)` |
+| `Ord[T]` | `cmp(a: T, b: T) -> CInt` | `<`, `<=`, `>`, `>=` | Inherits from `Eq` (requires both `eq` and `cmp`) |
+| `Neg[T]` | `neg(a: T) -> T` | `-` (unary) | |
+| `Not[T]` | `not(a: T) -> Bool` | `!` (unary) | |
+| `BitNot[T]` | `bit_not(a: T) -> T` | `~` (unary) | |
+
+### Limitations
+
+- **No dynamic dispatch.** Traits are purely compile-time constraints. There are no trait
+  objects or vtables. Use tagged unions for runtime polymorphism.
+- **No default implementations.** Trait bodies contain only signatures.
+- **Single type parameter.** Traits have exactly one type parameter.
+- **No ad-hoc multi-bounds.** `T: A + B` is not supported; define a named combined trait.
+- **No associated types.** Use explicit type parameters instead.
+- **Same-type operators only.** Both operands must be the same type `T`.
 
 ## Pointers
 

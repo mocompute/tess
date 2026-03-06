@@ -303,7 +303,9 @@ Built-in types use intrinsics directly — no synthesized trait conformance.
 - **`cmp(a: T, b: T) -> CInt`** — handles `<`, `<=`, `>`, `>=`
 
 For `==` and `!=`: the compiler first checks for `eq`. If absent, falls back to deriving
-from `cmp` (i.e., `cmp(a, b) == 0`).
+from `cmp` (i.e., `cmp(a, b) == 0`). This fallback is purely an operator dispatch
+convenience — it does not affect trait conformance. A type with only `cmp` (no `eq`) can
+use `==` and `!=` operators, but does not satisfy `Eq` or `Ord`.
 
 `Ord` inherits from `Eq`, so a type satisfying `Ord` must have both `eq` and `cmp`.
 A type that only supports equality (not ordering) defines only `eq` and satisfies `Eq`
@@ -684,7 +686,7 @@ Recursive bound checking when a conforming function has its own bounds:
   recursively verify those bounds against the substituted types
 - Test: `test_trait_conditional.tl` — `Array[T]: Eq` when `T: Eq`
 
-### Slice 6: Trait Inheritance
+### Slice 6 (DONE): Trait Inheritance
 
 Full parent trait support in conformance checking:
 
