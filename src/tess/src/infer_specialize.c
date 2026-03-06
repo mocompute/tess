@@ -1132,6 +1132,21 @@ static str trait_name_from_bound(ast_node *bound) {
 
 #define TRAIT_BOUND_MAX_DEPTH 16
 
+// Emit a trait-bound-not-satisfied error. Returns 1 (failure).
+static int emit_trait_bound_error(tl_infer *self, ast_node *toplevel, tl_monotype *concrete_type,
+                                  str trait_name, str fn_name, u32 arity) {
+    str type_str = tl_monotype_to_string(self->transient, concrete_type);
+    str msg = str_fmt(self->arena,
+                      "type %s does not satisfy trait %s: missing function '%s' with arity %u",
+                      str_cstr(&type_str), str_cstr(&trait_name),
+                      str_cstr(&fn_name), (unsigned)arity);
+    array_push(self->errors,
+               ((tl_infer_error){.tag = tl_err_trait_bound_not_satisfied,
+                                 .node = toplevel,
+                                 .message = msg}));
+    return 1;
+}
+
 // Check that a concrete type satisfies a trait bound. Returns 0 on success, 1 on failure.
 // On failure, pushes an error to self->errors.
 static int check_trait_bound_(tl_infer *self, ast_node *toplevel, tl_monotype *concrete_type,
@@ -1144,54 +1159,71 @@ static int check_trait_bound_(tl_infer *self, ast_node *toplevel, tl_monotype *c
 
     if (!tl_monotype_is_inst(concrete_type)) return 0; // Not a concrete inst type — skip
 
-    // Check each signature in the trait
-    tl_monotype_sized type_args = concrete_type->cons_inst->args;
-    for (u32 i = 0; i < trait->sigs.size; i++) {
-        tl_trait_sig *sig = &trait->sigs.v[i];
-        str func_name = find_overload_func(self, concrete_type, str_cstr(&sig->name), sig->arity);
-        // eq is derivable from cmp: Ord inherits Eq, so a type with only cmp
-        // needs this fallback to satisfy the Eq parent-trait check.
-        if (str_is_empty(func_name) && str_eq(sig->name, S("eq")) && sig->arity == 2)
-            func_name = find_overload_func(self, concrete_type, "cmp", 2);
-        if (str_is_empty(func_name)) {
-            str type_str = tl_monotype_to_string(self->transient, concrete_type);
-            str msg = str_fmt(self->arena,
-                              "type %s does not satisfy trait %s: missing function '%s' with arity %u",
-                              str_cstr(&type_str), str_cstr(&trait_name),
-                              str_cstr(&sig->name), (unsigned)sig->arity);
-            array_push(self->errors,
-                       ((tl_infer_error){.tag = tl_err_trait_bound_not_satisfied,
-                                         .node = toplevel,
-                                         .message = msg}));
-            return 1;
+    // Built-in types have no module functions — check intrinsic support per signature.
+    if (!is_user_defined_type(concrete_type)) {
+        int is_integer = tl_monotype_is_integer_convertible(concrete_type);
+        int is_float = tl_monotype_is_float_convertible(concrete_type);
+        int is_numeric = is_integer || is_float;
+        int is_bool = str_eq(concrete_type->cons_inst->def->name, S("Bool"));
+        for (u32 i = 0; i < trait->sigs.size; i++) {
+            str fn = trait->sigs.v[i].name;
+            int ok = 0;
+            // Arithmetic: add, sub, mul, div, neg — numeric types; mod — integer only
+            if (str_eq(fn, S("add")) || str_eq(fn, S("sub")) || str_eq(fn, S("mul")) ||
+                str_eq(fn, S("div")) || str_eq(fn, S("neg")))
+                ok = is_numeric;
+            else if (str_eq(fn, S("mod")))
+                ok = is_integer;
+            // Bitwise: bit_and, bit_or, bit_xor, shl, shr, bit_not — integer types
+            else if (str_eq(fn, S("bit_and")) || str_eq(fn, S("bit_or")) || str_eq(fn, S("bit_xor")) ||
+                     str_eq(fn, S("shl")) || str_eq(fn, S("shr")) || str_eq(fn, S("bit_not")))
+                ok = is_integer;
+            // Comparison: eq, cmp — numeric types and Bool
+            else if (str_eq(fn, S("eq")) || str_eq(fn, S("cmp")))
+                ok = is_numeric || is_bool;
+            // Logical: not — Bool
+            else if (str_eq(fn, S("not")))
+                ok = is_bool;
+            if (!ok)
+                return emit_trait_bound_error(self, toplevel, concrete_type, trait_name, fn, trait->sigs.v[i].arity);
         }
+    } else {
+        // User-defined types: check each signature in the trait
+        tl_monotype_sized type_args = concrete_type->cons_inst->args;
+        for (u32 i = 0; i < trait->sigs.size; i++) {
+            tl_trait_sig *sig = &trait->sigs.v[i];
+            str func_name = find_overload_func(self, concrete_type, str_cstr(&sig->name), sig->arity);
+            // eq is derivable from cmp: Ord inherits Eq, so a type with only cmp
+            // needs this fallback to satisfy the Eq parent-trait check.
+            if (str_is_empty(func_name) && str_eq(sig->name, S("eq")) && sig->arity == 2)
+                func_name = find_overload_func(self, concrete_type, "cmp", 2);
+            if (str_is_empty(func_name))
+                return emit_trait_bound_error(self, toplevel, concrete_type, trait_name, sig->name, sig->arity);
 
-        // Conditional conformance: if the conforming function has bounded type parameters,
-        // verify those bounds recursively using the concrete type's type arguments.
-        ast_node *func_top = toplevel_get(self, func_name);
-        if (!func_top || !ast_node_is_let(func_top)) continue;
-        u32 n_tp = func_top->let.n_type_parameters;
-        if (n_tp == 0) continue;
+            // Conditional conformance: if the conforming function has bounded type parameters,
+            // verify those bounds recursively using the concrete type's type arguments.
+            ast_node *func_top = toplevel_get(self, func_name);
+            if (!func_top || !ast_node_is_let(func_top)) continue;
+            u32 n_tp = func_top->let.n_type_parameters;
+            if (n_tp == 0) continue;
 
-        for (u32 j = 0; j < n_tp; j++) {
-            ast_node *tp = func_top->let.type_parameters[j];
-            if (!ast_node_is_symbol(tp)) continue;
-            ast_node *bound = tp->symbol.annotation;
-            if (!bound) continue;
+            for (u32 j = 0; j < n_tp; j++) {
+                ast_node *tp = func_top->let.type_parameters[j];
+                if (!ast_node_is_symbol(tp)) continue;
+                ast_node *bound = tp->symbol.annotation;
+                if (!bound) continue;
 
-            // Map the function's j-th type parameter to the concrete type's j-th type argument
-            if (j >= type_args.size) continue;
-            tl_monotype *inner_concrete = type_args.v[j];
-            if (!inner_concrete || !tl_monotype_is_inst(inner_concrete)) continue;
+                // Map the function's j-th type parameter to the concrete type's j-th type argument
+                if (j >= type_args.size) continue;
+                tl_monotype *inner_concrete = type_args.v[j];
+                if (!inner_concrete || !tl_monotype_is_inst(inner_concrete)) continue;
 
-            // Built-in types implicitly satisfy all compiler-provided traits (via intrinsics)
-            if (!is_user_defined_type(inner_concrete)) continue;
+                str inner_trait = trait_name_from_bound(bound);
+                if (str_is_empty(inner_trait)) continue;
 
-            str inner_trait = trait_name_from_bound(bound);
-            if (str_is_empty(inner_trait)) continue;
-
-            if (check_trait_bound_(self, toplevel, inner_concrete, inner_trait, depth + 1))
-                return 1;
+                if (check_trait_bound_(self, toplevel, inner_concrete, inner_trait, depth + 1))
+                    return 1;
+            }
         }
     }
 

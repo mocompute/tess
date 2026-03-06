@@ -589,6 +589,7 @@ TL_TESTS =					\
 	tagged_union_unscoped			\
 	tail_call				\
 	trait_bounds				\
+	trait_bounds_builtin			\
 	trait_bounds_inherited			\
 	trait_bounds_multi_inst			\
 	trait_conditional			\
@@ -705,6 +706,8 @@ TL_FAIL_TESTS =					\
 	fail_tagged_union_unknown_variant	\
 	fail_operator_no_overload		\
 	fail_trait_bound_combined		\
+	fail_trait_bound_builtin_user_trait	\
+	fail_trait_bound_builtin_mod_float	\
 	fail_trait_bound_not_satisfied		\
 	fail_trait_conditional_not_satisfied	\
 	fail_trait_conditional_transitive	\
