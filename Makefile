@@ -595,6 +595,7 @@ TL_TESTS =					\
 	trait_declaration			\
 	trait_diamond_inheritance		\
 	trait_inheritance_conformance		\
+	trait_ord_derives_eq			\
 	type_alias_generic			\
 	type_alias_local			\
 	type_alias_module_chained		\
@@ -708,7 +709,8 @@ TL_FAIL_TESTS =					\
 	fail_trait_conditional_not_satisfied	\
 	fail_trait_conditional_transitive	\
 	fail_trait_bound_second_param		\
-	fail_trait_bound_ord_missing_eq		\
+	fail_trait_bound_eq_no_eq_no_cmp	\
+	fail_trait_bound_ord_missing_cmp	\
 	fail_trait_circular			\
 	fail_trait_duplicate			\
 	fail_trait_reserved_name		\

@@ -714,10 +714,10 @@ For `==` and `!=`, the compiler first looks for `eq`. If absent, it falls back t
 from `cmp` (i.e., `cmp(a, b) == 0`). The ordering operators (`<`, `<=`, `>`, `>=`) are
 derived from `cmp` returning `CInt` (negative, zero, or positive).
 
-**Note:** The `eq`-from-`cmp` fallback is purely an operator dispatch convenience. It does
-not affect trait conformance. A type with only `cmp` can use `==` and `!=` operators, but
-it does not satisfy `Eq` (which requires an `eq` function) or `Ord` (which inherits `Eq`).
-See [Traits](#traits) for the conformance rules.
+The `eq`-from-`cmp` fallback applies to both operator dispatch and trait conformance. A type
+with only `cmp` can use `==` and `!=` operators, and also satisfies `Eq` and `Ord` trait
+bounds — the compiler derives `eq` from `cmp` in both contexts. See [Traits](#traits) for
+the conformance rules.
 
 **Not overloadable:** `&&`, `||` (short-circuit semantics), `.`, `->` (struct access),
 `&` (address-of), `*` (dereference), `=` (assignment), `::` (type predicate), `[]` (indexing).
@@ -1480,7 +1480,7 @@ Traits can inherit from other traits. A type must satisfy all parent traits:
 Ord[T] : Eq[T] {
     cmp(a: T, b: T) -> CInt
 }
-// A type satisfying Ord must have both eq and cmp.
+// A type satisfying Ord must have cmp. eq is derived from cmp if absent.
 ```
 
 Combined traits with no additional functions use empty braces:
@@ -1536,7 +1536,7 @@ do not need to be imported. User code cannot define types or traits with these n
 | `Shl[T]` | `shl(a: T, b: T) -> T` | `<<`, `<<=` | Shift left |
 | `Shr[T]` | `shr(a: T, b: T) -> T` | `>>`, `>>=` | Shift right |
 | `Eq[T]` | `eq(a: T, b: T) -> Bool` | `==`, `!=` | `!=` is `!eq(a, b)` |
-| `Ord[T]` | `cmp(a: T, b: T) -> CInt` | `<`, `<=`, `>`, `>=` | Inherits from `Eq` (requires both `eq` and `cmp`) |
+| `Ord[T]` | `cmp(a: T, b: T) -> CInt` | `<`, `<=`, `>`, `>=` | Inherits from `Eq`; `eq` derived from `cmp` if absent |
 | `Neg[T]` | `neg(a: T) -> T` | `-` (unary) | |
 | `Not[T]` | `not(a: T) -> Bool` | `!` (unary) | |
 | `BitNot[T]` | `bit_not(a: T) -> T` | `~` (unary) | |
@@ -1545,7 +1545,8 @@ do not need to be imported. User code cannot define types or traits with these n
 
 - **No dynamic dispatch.** Traits are purely compile-time constraints. There are no trait
   objects or vtables. Use tagged unions for runtime polymorphism.
-- **No default implementations.** Trait bodies contain only signatures.
+- **No default implementations.** Trait bodies contain only signatures. The one exception
+  is `eq`, which the compiler derives from `cmp` during conformance checking.
 - **Single type parameter.** Traits have exactly one type parameter.
 - **No ad-hoc multi-bounds.** `T: A + B` is not supported; define a named combined trait.
 - **No associated types.** Use explicit type parameters instead.

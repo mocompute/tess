@@ -53,7 +53,8 @@ Ord[T] : Eq[T] {
 }
 ```
 
-A type satisfying `Ord` must have both `cmp` and `eq`.
+A type satisfying `Ord` must have `cmp`. If `eq` is absent, the compiler derives
+it from `cmp` during conformance checking (see below).
 
 Combined traits with no additional functions use empty braces. Here `:` introduces the
 parent list and the body is empty:
@@ -303,11 +304,12 @@ Built-in types use intrinsics directly — no synthesized trait conformance.
 - **`cmp(a: T, b: T) -> CInt`** — handles `<`, `<=`, `>`, `>=`
 
 For `==` and `!=`: the compiler first checks for `eq`. If absent, falls back to deriving
-from `cmp` (i.e., `cmp(a, b) == 0`). This fallback is purely an operator dispatch
-convenience — it does not affect trait conformance. A type with only `cmp` (no `eq`) can
-use `==` and `!=` operators, but does not satisfy `Eq` or `Ord`.
+from `cmp` (i.e., `cmp(a, b) == 0`). This fallback applies to both operator dispatch and
+trait conformance — a type with only `cmp` (no `eq`) can use `==` and `!=` operators, and
+also satisfies `Eq` and `Ord` trait bounds.
 
-`Ord` inherits from `Eq`, so a type satisfying `Ord` must have both `eq` and `cmp`.
+`Ord` inherits from `Eq`, so a type satisfying `Ord` must have `cmp`. If the type also
+defines `eq`, that function is used directly; otherwise, `eq` is derived from `cmp`.
 A type that only supports equality (not ordering) defines only `eq` and satisfies `Eq`
 but not `Ord`.
 
@@ -497,8 +499,10 @@ cloning (between steps 2a and 3 in the current code):
    those recursively
 
 The conformance check itself: look up each trait function (by arity-mangled name) in the
-type's module, unify the trait signature against the found function's type. For conditional
-conformance, recursively verify any bounds on the found function's own type parameters.
+type's module, unify the trait signature against the found function's type. **Special case:**
+when looking up `eq` with arity 2, if not found, fall back to `cmp` with arity 2 — equality
+is derivable from ordering. For conditional conformance, recursively verify any bounds on the
+found function's own type parameters.
 
 No conformance cache is needed for the initial implementation. The specialization instance
 cache (`instance_lookup_arrow`) already prevents redundant specializations of the same
@@ -692,8 +696,8 @@ Full parent trait support in conformance checking:
 
 - Conformance check walks parent traits, verifying all inherited functions
 - Diamond inheritance deduplication
-- Test: `test_trait_inheritance.tl` — `Ord : Eq` requires both `eq` and `cmp`,
-  combined traits like `Numeric : Add, Sub, Mul, Div`
+- Test: `test_trait_inheritance.tl` — `Ord : Eq` requires `cmp` (with `eq` derived
+  from `cmp` if absent), combined traits like `Numeric : Add, Sub, Mul, Div`
 
 ## Edge Cases
 
@@ -734,8 +738,8 @@ objects or vtables. Heterogeneous collections should use tagged unions instead.
 ### No default implementations
 
 Trait bodies contain only function signatures, not default implementations. Compiler-
-derived operators (`!=` from `eq`, ordering from `cmp`) are the only defaults, and they
-are hardcoded in the compiler.
+derived functions (`!=` from `eq`, ordering from `cmp`, `eq` from `cmp` for conformance)
+are the only defaults, and they are hardcoded in the compiler.
 
 ### No multi-parameter traits
 
@@ -785,9 +789,9 @@ and have known size. This is consistent with Tess's preference for predictable, 
 code generation.
 
 **Tradeoff: no default methods.** Rust traits can provide default implementations that
-conforming types inherit. Tess requires each type to provide all functions explicitly
-(except compiler-derived operators like `!=`). This is simpler but means more boilerplate
-for trait hierarchies — e.g., every `Ord` type must define both `eq` and `cmp` separately.
+conforming types inherit. Tess requires each type to provide all functions explicitly,
+with a special case: `eq` is derived from `cmp` during conformance checking, so `Ord`
+types only need to define `cmp`. Beyond this, there are no default implementations.
 
 ### Haskell — Type Classes
 
@@ -886,30 +890,24 @@ call site, giving clearer errors, but are less flexible (no arbitrary expression
   Tagged unions fill this role but require enumerating variants upfront.
 - **No mixed-type operators.** `vec * scalar` requires explicit function calls. Less
   ergonomic for mathematical code.
-- **No default methods.** Every conforming type must provide all functions. Trait hierarchies
-  like `Ord : Eq` require implementing both `eq` and `cmp` even though `eq` could be
-  derived from `cmp`.
+- **No default methods.** Every conforming type must provide all functions explicitly,
+  except for the special case where `eq` is derived from `cmp` during conformance checking.
 - **Accidental conformance.** A type with a function named `eq` taking two arguments of its
   type and returning `Bool` conforms to `Eq` whether intended or not. In practice, the
   specificity of trait function names makes this unlikely to cause problems.
 - **No higher-kinded traits.** Cannot express `Functor`, `Monad`, or similar abstractions
   over type constructors.
 
-### Operator dispatch vs trait conformance for `eq`/`cmp`
+### `eq` derived from `cmp` in conformance checking
 
-There is an asymmetry between operator dispatch and trait conformance for comparison
-operators. Operator dispatch derives `==`/`!=` from `cmp` when `eq` is absent, but trait
-conformance does not: `Ord` inherits from `Eq`, so a type with only `cmp` satisfies neither
-`Eq` nor `Ord`. This means a type can use `==` via operators but fail an `Eq` bound.
+Conformance checking derives `eq` from `cmp`: when checking if a type satisfies `Eq` (either
+directly or via `Ord` inheritance), if `eq` is not found, the compiler falls back to `cmp`.
+This mirrors operator dispatch, where `==`/`!=` fall back to `cmp` when `eq` is absent.
 
-This feels like an incomplete design. One option is to allow `Ord` conformance to
-exceptionally satisfy `Eq` even when `eq` is not explicitly defined — deriving `eq` from
-`cmp` at the trait level, mirroring what operator dispatch already does. More broadly, this
-may point to a missing trait feature: **default implementations** or **derived functions**,
-where a parent trait's requirements can be satisfied by a child trait's functions. This
-would generalize the `eq`-from-`cmp` derivation rather than special-casing it.
-
-Revisit this when considering default implementations or trait-level function derivation.
+A type with only `cmp` satisfies both `Eq` and `Ord`. A type with neither `eq` nor `cmp`
+satisfies neither. This is a special case in the conformance checker — not a general default
+implementation mechanism. If default implementations are added later, this special case could
+be generalized.
 
 ### Built-in types cannot be extended
 

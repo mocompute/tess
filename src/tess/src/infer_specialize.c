@@ -1149,6 +1149,10 @@ static int check_trait_bound_(tl_infer *self, ast_node *toplevel, tl_monotype *c
     for (u32 i = 0; i < trait->sigs.size; i++) {
         tl_trait_sig *sig = &trait->sigs.v[i];
         str func_name = find_overload_func(self, concrete_type, str_cstr(&sig->name), sig->arity);
+        // eq is derivable from cmp: Ord inherits Eq, so a type with only cmp
+        // needs this fallback to satisfy the Eq parent-trait check.
+        if (str_is_empty(func_name) && str_eq(sig->name, S("eq")) && sig->arity == 2)
+            func_name = find_overload_func(self, concrete_type, "cmp", 2);
         if (str_is_empty(func_name)) {
             str type_str = tl_monotype_to_string(self->transient, concrete_type);
             str msg = str_fmt(self->arena,
