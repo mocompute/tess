@@ -937,10 +937,18 @@ static void rewrite_operator_overloads(void *ctx, ast_node *node) {
 
         char const *op = str_cstr(&node->binary_op.op->symbol.name);
         int is_neq = (0 == strcmp(op, "!="));
-        char const *func_name = is_neq ? "eq" : binary_op_to_func_name(op);
+        int is_eq = (0 == strcmp(op, "=="));
+        char const *func_name = binary_op_to_func_name(op);
         if (!func_name) return;
 
         str full_name = find_overload_func(self, left_type, func_name, 2);
+
+        // For == and !=: fall back to cmp if eq is not found.
+        if (str_is_empty(full_name) && (is_eq || is_neq)) {
+            func_name = "cmp";
+            full_name = find_overload_func(self, left_type, func_name, 2);
+        }
+
         if (str_is_empty(full_name)) return;
 
         // Capture operands before overwriting the union.
@@ -949,7 +957,7 @@ static void rewrite_operator_overloads(void *ctx, ast_node *node) {
         args[0] = left;
         args[1] = right;
 
-        if (is_neq) {
+        if (is_neq && 0 != strcmp(func_name, "cmp")) {
             // a != b  →  !(eq(a, b))
             ast_node *eq_call = ast_node_create_nfa(
                 self->arena, ast_node_create_sym(self->arena, full_name),
@@ -962,7 +970,8 @@ static void rewrite_operator_overloads(void *ctx, ast_node *node) {
             node->unary_op.op = ast_node_create_sym_c(self->arena, "!");
             node->type = type;
         } else if (0 == strcmp(func_name, "cmp")) {
-            // a < b  →  cmp(a, b) < 0  (built-in CInt comparison)
+            // a < b  →  cmp(a, b) < 0;  == via cmp: cmp(a, b) == 0
+            char const *cmp_op = is_eq ? "==" : is_neq ? "!=" : op;
             tl_monotype *cint = tl_type_registry_instantiate(self->registry, S("CInt"));
             tl_polytype *cint_poly = tl_polytype_absorb_mono(self->arena, cint);
 
@@ -975,10 +984,9 @@ static void rewrite_operator_overloads(void *ctx, ast_node *node) {
             zero->type = cint_poly;
 
             tl_polytype *type = node->type;
-            node->tag = ast_binary_op;
             node->binary_op.left = cmp_call;
             node->binary_op.right = zero;
-            node->binary_op.op = ast_node_create_sym_c(self->arena, op);
+            node->binary_op.op = ast_node_create_sym_c(self->arena, cmp_op);
             node->type = type;
         } else {
             rewrite_op_to_nfa(self, node, full_name, args, 2);
