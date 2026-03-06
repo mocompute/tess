@@ -4,23 +4,23 @@
 
 #module Num
 
-Number : { val: Int }
-eq(a: Number, b: Number) -> Bool { a.val == b.val }
+Number:                             { val: Int                    }
+eq(a: Number, b: Number) -> Bool    { a.val == b.val              }
 add(a: Number, b: Number) -> Number { Number(val = a.val + b.val) }
 
 #module main
 
-test_eq() -> Int {
-    a := Num.Number(val = 1)
-    b := Num.Number(val = 1)
-    c := Num.Number(val = 2)
+test_eq() {
+    a     := Num.Number(val = 1)
+    b     := Num.Number(val = 1)
+    c     := Num.Number(val = 2)
     error := 0
     error += if a == b { 0 } else { 1 }
     error += if a == c { 1 } else { 0 }
     error
 }
 
-test_add() -> Int {
+test_add() {
     a := Num.Number(val = 3)
     b := Num.Number(val = 4)
     c := a + b

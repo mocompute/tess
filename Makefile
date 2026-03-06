@@ -520,6 +520,7 @@ TL_TESTS =					\
 	operator_overload_eq_from_cmp		\
 	operator_overload_eq_only		\
 	operator_overload_multi			\
+	operator_overload_in_function		\
 	operator_overload_unary			\
 	pack					\
 	pointer_array				\
@@ -733,7 +734,6 @@ TL_KNOWN_FAIL_FAILURES = \
 
 # Tests that should work but currently fail due to compiler bugs
 TL_KNOWN_FAILURES = \
-	operator_overload_in_function		\
 	operator_overload_tagged_union		\
 	trait_diamond_inheritance
 
