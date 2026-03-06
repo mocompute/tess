@@ -592,6 +592,7 @@ TL_TESTS =					\
 	trait_bounds_multi_inst			\
 	trait_conditional			\
 	trait_declaration			\
+	trait_diamond_inheritance		\
 	trait_inheritance_conformance		\
 	type_alias_generic			\
 	type_alias_local			\
@@ -735,8 +736,7 @@ TL_KNOWN_FAIL_FAILURES = \
 
 # Tests that should work but currently fail due to compiler bugs
 TL_KNOWN_FAILURES = \
-	tagged_union_bail_nested		\
-	trait_diamond_inheritance
+	tagged_union_bail_nested
 
 
 # Total test count across all suites

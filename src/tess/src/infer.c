@@ -244,18 +244,22 @@ static void check_trait_circular_inheritance(tl_infer *self, ast_node_sized node
         str_array work = {.alloc = self->transient};
         forall(i, def->parents) {
             str p = def->parents.v[i];
-            if (str_hset_contains(visited, p)) { circular = 1; break; }
-            str_hset_insert(&visited, p);
-            array_push(work, p);
+            if (str_eq(p, def->name)) { circular = 1; break; }
+            if (!str_hset_contains(visited, p)) {
+                str_hset_insert(&visited, p);
+                array_push(work, p);
+            }
         }
         for (u32 w = 0; !circular && w < work.size; w++) {
             tl_trait_def *parent_def = str_map_get_ptr(self->traits, work.v[w]);
             if (parent_def) {
                 forall(j, parent_def->parents) {
                     str pp = parent_def->parents.v[j];
-                    if (str_hset_contains(visited, pp)) { circular = 1; break; }
-                    str_hset_insert(&visited, pp);
-                    array_push(work, pp);
+                    if (str_eq(pp, def->name)) { circular = 1; break; }
+                    if (!str_hset_contains(visited, pp)) {
+                        str_hset_insert(&visited, pp);
+                        array_push(work, pp);
+                    }
                 }
             }
         }

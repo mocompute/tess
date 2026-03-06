@@ -512,6 +512,7 @@ tl_create_test(trait_bounds_inherited)
 tl_create_test(trait_bounds_multi_inst)
 tl_create_test(trait_conditional)
 tl_create_test(trait_declaration)
+tl_create_test(trait_diamond_inheritance)
 tl_create_test(trait_inheritance_conformance)
 
 # Special test for import_relative_dotdot (needs different working directory)
@@ -637,4 +638,3 @@ tl_create_known_fail_failure(fail_trait_bound_ord_missing_eq)
 
 # Known failures: these should work but a compiler bug makes them fail
 tl_create_known_failure(tagged_union_bail_nested)
-tl_create_known_failure(trait_diamond_inheritance)
