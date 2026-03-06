@@ -58,6 +58,11 @@ That's it. When the compiler sees `a + b` and `a` is a user-defined type, it loo
 a function named `add` in that type's module. Both operands must be the same type, and the
 return type must also match.
 
+> **Convention: one module, one type.** Overloads are resolved by function name and arity
+> within a module, so each type that defines operators should live in its own module. If you
+> need two types with `+`, put them in separate modules. See the
+> [Language Reference](../LANGUAGE_REFERENCE.md#one-module-one-type) for details.
+
 Here is the full mapping from operator to function name:
 
 | Operator | Function | Operator | Function |

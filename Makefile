@@ -592,6 +592,7 @@ TL_TESTS =					\
 	trait_bounds_builtin			\
 	trait_bounds_inherited			\
 	trait_bounds_multi_inst			\
+	trait_bounds_multi_type			\
 	trait_conditional			\
 	trait_declaration			\
 	trait_diamond_inheritance		\

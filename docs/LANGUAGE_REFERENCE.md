@@ -52,6 +52,23 @@ The entry point is the `main` function in the `main` module.
 
 Access module members with dot notation: `ModuleName.function()` or `ModuleName.Type`
 
+### One Module, One Type
+
+A module is the natural organisational unit for a single type and its associated functions. Operator overloads are resolved by looking up a function name and arity in the operand's module (e.g., `add` with arity 2 for `+`). Because function identity within a module is determined by name and arity — not parameter types — defining two types with same-signature operator overloads in the same module would create a name conflict. Instead, give each type its own module:
+
+```tl
+// Good: separate modules for separate types
+#module Vec2
+T : { x: Int, y: Int }
+add(a: T, b: T) -> T { T(x = a.x + b.x, y = a.y + b.y) }
+
+#module Vec3
+T : { x: Int, y: Int, z: Int }
+add(a: T, b: T) -> T { T(x = a.x + b.x, y = a.y + b.y, z = a.z + b.z) }
+```
+
+This convention also makes [auto-collapse](#auto-collapse-for-same-name-types) work naturally: naming the type `T` (or the same as the module) lets users write `Vec2.T(...)` or just `Vec2(...)`.
+
 ### Packages
 
 Modules can be distributed as `.tlib` packages. When a package is declared as a dependency via `depend()` in `package.tl`, all its modules are loaded automatically -- no `#import` needed. Consumer code accesses package modules with the same qualified syntax: `Module.function()`.
