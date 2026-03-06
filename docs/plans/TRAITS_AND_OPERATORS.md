@@ -1,8 +1,8 @@
 # Traits and Operator Overloading
 
 A structural trait system for compile-time type constraints. Traits are keyword-free,
-use structural conformance (no `impl` blocks), and support trait inheritance, associated
-types, and conditional conformance. Operator overloading is built on top of traits:
+use structural conformance (no `impl` blocks), and support trait inheritance and
+conditional conformance. Operator overloading is built on top of traits:
 the compiler provides standard traits like `Add` and `Eq`, and dispatches operators
 through trait conformance for user-defined types (built-in types use intrinsics).
 
@@ -29,7 +29,7 @@ Traits, structs, and tagged unions all use `:` before their body:
 |------|---------|---------------|
 | `Name : { x: T, y: T }` | Struct | Body has `identifier: Type` (fields) |
 | `Name : { eq(a: T, b: T) -> Bool }` | Trait | Body has `identifier(...)` (signatures) |
-| `Name : { Item }` | Trait | Body has bare `identifier` (associated type) |
+| `Name : { }` | Struct | Empty body defaults to struct |
 | `Name : \| V1 \| V2` | Tagged union | `:` followed by `\|` |
 | `Name : Parent { ... }` | Trait with inheritance | `:` followed by identifier |
 
@@ -37,7 +37,7 @@ The parser distinguishes structs from traits by peeking at the body content afte
 
 - `identifier(` → function signature → trait
 - `identifier:` → field declaration → struct
-- `identifier` followed by `,` or newline (no parens, no colon) → associated type → trait
+- empty body `}` → struct (empty traits are not supported without a parent list)
 
 When `:` is followed by an identifier (not `{` or `|`), it is trait inheritance — the
 parent trait list, with the body in braces after the last parent.
@@ -79,31 +79,19 @@ Summable[T] : Add[T], Eq[T] { }
 sum[T: Summable](arr: Array[T]) -> T { ... }
 ```
 
-### Associated Types
+### Associated Types (Deferred)
 
-Bare identifiers in a trait body (no parentheses) declare associated types:
+Associated types (e.g., `Iterator[It] : { Item; next(it: Ptr[It]) -> Option[Item] }`)
+are deferred to a future extension. They require projection types (`It.Item`) in the
+type system — a significant addition that is not needed for the initial trait system.
 
-```tl
-Iterator[It] : {
-    Item                                     // associated type
-    next(it: Ptr[It]) -> Option[Item]
-}
-```
-
-Associated types are accessed via dot notation on the type parameter:
+The initial implementation covers bounds, structural conformance, operator overloading,
+and trait inheritance. Patterns that would use associated types can use explicit type
+parameters instead:
 
 ```tl
-collect[It: Iterator](it: Ptr[It]) -> Array[It.Item] { ... }
+collect[It, Item](it: Ptr[It], next: (Ptr[It]) -> Option[Item]) -> Array[Item] { ... }
 ```
-
-**Constraint:** every associated type must appear in at least one function signature.
-Unused associated types are meaningless — there is nothing to infer their binding from.
-
-**Dot notation resolution:** `It.Item` in a type position resolves to the associated
-type of the trait bound on `It`. The compiler distinguishes this from struct field access
-(value position) and module-qualified names (resolved during parsing) by context — `It`
-must be a bounded type parameter, and the lookup happens in the type system, not the
-module system.
 
 ### Bounds
 
@@ -231,8 +219,7 @@ When the compiler encounters a trait bound, it checks structural conformance:
    trait's type parameter for the concrete type
 4. If the matching function has trait bounds on its own type parameters, verify those
    bounds are satisfied (conditional conformance — see transitive checking above)
-5. Resolve associated type bindings from the unification
-6. All functions must match for conformance
+5. All functions must match for conformance
 
 This check only runs when a trait bound is actually used — not eagerly for every
 type/trait combination.
@@ -417,26 +404,6 @@ add[T: Add](a: Pair[T], b: Pair[T]) -> Pair[T] {
 `SomeType` also satisfies `Add`. The compiler resolves this through the same conditional
 conformance machinery.
 
-### Associated Types
-
-```tl
-Iterator[It] : {
-    Item
-    next(it: Ptr[It]) -> Option[Item]
-}
-
-collect[It: Iterator](it: Ptr[It]) -> Array[It.Item] {
-    result := Array.empty[It.Item]()
-    while true {
-        case next(it) {
-            Some(v) { Array.push(result.&, v) }
-            None    { return result }
-        }
-    }
-    result
-}
-```
-
 ## Implementation Sketch
 
 This section maps the design onto the existing compiler pipeline, identifies where new
@@ -467,81 +434,73 @@ Currently, Phase 2 scans all top-level definitions and calls
 - Parse `ast_trait_definition` nodes (new AST tag)
 - Register traits in a **trait registry** (new data structure alongside the type registry)
 - Each trait entry stores: name, type parameter, function signatures (name + arity +
-  parameter types + return type), associated types, parent trait list
+  parameter types + return type), parent trait list
 - Trait inheritance is resolved here: flatten parent chains, detect cycles
 - Reserved compiler-provided traits (`Add`, `Eq`, etc.) are pre-registered at `tl_infer_create`
+- `create_type_constructor_from_user_type` is extended to copy the module name from the
+  AST symbol's `module` field into a new `module` field on `tl_type_constructor_def`
 
 The trait registry is keyed by module-mangled name (e.g., `Math__Sortable`). Compiler-
 provided traits have no module prefix and are always visible.
 
-### Phase 3 — Generic Inference: Operator Overload + Bound Checking
+### Phase 3 — Generic Inference: No Changes
 
-This is where constraint generation happens. Two changes:
+Phase 3 (`infer_binary_op`, `infer_unary_op`) generates constraints for operators as
+today. For arithmetic/bitwise operators, the existing constraints (`node->type = left->type`,
+`left->type = right->type`) already produce the correct type relationships for same-type
+operator overloads. No operator rewriting or trait checking happens here.
 
-**Operator overload (Stage A).** In `infer_binary_op` and `infer_unary_op`, after resolving
-operand types:
+Weak integer literals cannot unify with user-defined types (the unifier rejects them
+because user-defined types lack integer flags), so expressions like `vec + 0` correctly
+produce type errors during constraint generation without any trait-specific logic.
 
-1. Substitute to check if the left operand's type is concrete
+### Phase 5 — Specialization: Operator Rewrite + Bound Verification
+
+All operator rewriting and trait bound checking happens in Phase 5, when types are
+concrete after specialization. This avoids splitting logic across phases.
+
+Specialization (`specialize_applications_cb` in `infer_specialize.c`) already walks the
+AST and rewrites generic calls to specialized versions. Two additions:
+
+**Operator rewrite.** In `post_specialize`, after re-inference makes operand types
+concrete, a new callback checks `ast_binary_op`/`ast_unary_op` nodes:
+
+1. Substitute to get the left operand's concrete type
 2. If it's a user-defined type (`tl_monotype_is_inst` and not built-in):
-   - Extract the type's module from its mangled name
-   - Look up the trait function (e.g., `add__2`) in the toplevel map
-   - If found: rewrite the `ast_binary_op` node to an `ast_named_function_application`
-     (NFA) calling that function, then constrain as a normal function call
+   - Read the type's module from `cons_inst->def->module`
+   - Look up the trait function (e.g., `Module__add__2`) in the toplevel map
+   - If found: rewrite the operator node to an NFA calling that function
    - If not found: emit error ("no overload for operator '+' on type Vec3")
-3. If the type is still a variable: generate standard constraints (unchanged).
-   The operator will be resolved in Phase 5
+3. If the type is built-in: leave unchanged (existing intrinsic path)
 
 For comparison operators, the lookup chain is: `eq__2` first, fall back to `cmp__2`.
 For derived operators (`!=`, `<`, `<=`, `>`, `>=`): wrap the rewritten NFA in additional
 AST nodes (negation, comparison against 0).
 
-For compound assignment (`infer_reassignment`): extract the base operator, look up the
-overload function, rewrite `a += b` to `a = Module__add__2(a, b)`.
+For compound assignment (`ast_reassignment_op`): rewrite the `value` to an NFA calling
+the overload function with both operands (e.g., `add(a, b)`), change the tag to
+`ast_reassignment`, and clear the `op` field. The existing lvalue and field-assignment
+codegen handles the rest, including `a.field += b`.
 
-**Trait bound checking.** When a function with trait bounds is called (e.g.,
-`sort[T: Ord](...)`), the compiler must verify the concrete type satisfies the bound.
-This check can trigger during Phase 3 if the type argument is already concrete, but
-typically triggers during Phase 5 when types become concrete through specialization.
+The rewritten NFA nodes are then specialized by the existing `specialize_applications_cb`
+machinery in the recursive pass that already follows re-inference in `post_specialize`.
 
-The check itself is: look up each trait function (by arity-mangled name) in the type's
-module, unify the trait signature against the found function's type. For conditional
-conformance, recursively verify any bounds on the found function's own type parameters.
+**Bound verification.** In `specialize_arrow`, after resolving type arguments but before
+cloning (between steps 2a and 3 in the current code):
 
-### Phase 5 — Specialization: Deferred Operator Rewrite + Bound Verification
-
-Specialization (`specialize_applications_cb` in `infer_specialize.c`) already walks the
-AST and rewrites generic calls to specialized versions. Two additions:
-
-**Deferred operator rewrite (Stage B).** For `ast_binary_op`/`ast_unary_op` nodes that
-survived Phase 3 with type variables (inside generic functions), the operand types are
-now concrete after specialization. The same overload lookup from Phase 3 runs here:
-
-- In `specialize_applications_cb` or a sibling callback, check for remaining operator
-  nodes with user-defined-type operands
-- Rewrite to NFA nodes calling the overload function
-- The NFA then gets specialized by the existing machinery
-
-This handles code like:
-```tl
-double(v: Vec3) -> Vec3 { v + v }   // + can't resolve in Phase 3 (v is generic T)
-                                      // resolves in Phase 5 when T = Vec3
-```
-
-**Bound verification.** In `specialize_arrow`, before creating a new specialization:
-
-1. Resolve the function's trait bounds against the concrete type arguments
+1. Read the function's trait bounds from the type parameter annotations
 2. For each bound `T: Trait`, run conformance checking on the concrete type
 3. If conformance fails, emit error ("type Vec3 does not satisfy trait Ord")
 4. If the conforming function has its own bounds (conditional conformance), verify
    those recursively
 
-This happens naturally in the specialization flow: `specialize_arrow` already resolves
-type arguments and creates concrete instances. Bound checking is an additional gate
-before the clone-and-re-infer step.
+The conformance check itself: look up each trait function (by arity-mangled name) in the
+type's module, unify the trait signature against the found function's type. For conditional
+conformance, recursively verify any bounds on the found function's own type parameters.
 
-In `post_specialize`, after re-inference of a specialized function body, any new operator
-nodes or trait-bounded calls that appear are handled by the recursive
-`specialize_applications_cb` call that already exists.
+No conformance cache is needed for the initial implementation. The specialization instance
+cache (`instance_lookup_arrow`) already prevents redundant specializations of the same
+function with the same type arguments, which avoids re-checking the same bounds.
 
 ### Parsing: Trait Declarations
 
@@ -549,7 +508,8 @@ In `parser.c`, a new `toplevel_trait()` function handles trait syntax. It runs d
 both parsing passes:
 
 **Pass 1 (symbol collection):** Register the trait name via `add_module_symbol()`, just
-like structs. This makes the name available for forward references.
+like structs. Pass 1 does not need to distinguish traits from structs — both register
+the name identically for forward references.
 
 **Pass 2 (full parse):** Parse the complete trait declaration:
 
@@ -557,14 +517,34 @@ like structs. This makes the name available for forward references.
 2. If `:` followed by identifier (not `{` or `|`): parse parent trait list
 3. Parse `{` body `}`:
    - Peek at first token after `{` to disambiguate from struct
-   - `identifier(` → function signature (trait)
-   - `identifier:` → field (struct — backtrack, not a trait)
-   - bare `identifier` → associated type (trait)
+   - `identifier(` → function signature → trait
+   - `identifier:` → field declaration → struct (backtrack)
+   - `}` (empty body) → struct (empty traits without parents are not supported)
 4. Produce `ast_trait_definition` node
+
+Combined traits with parents and empty braces (`Numeric[T] : Add[T], Sub[T] { }`) are
+unambiguous — the parent list before `{` signals a trait declaration.
 
 The `toplevel_trait()` function runs before `toplevel_struct()` in the dispatch chain.
 Since both start with `Name :`, the peek-ahead on body content resolves the ambiguity.
 The speculative arena pattern (try, backtrack on failure, clone on success) applies.
+
+### Parsing: Trait Bounds
+
+Trait bounds on type parameters (`[T: Ord]`) reuse the existing `annotation` field on
+`ast_symbol`. The parser already handles `name: Type` as a symbol with annotation for
+value parameters; type parameter bounds use the same representation.
+
+In `maybe_type_arguments`, when parsing a type parameter, if `:` follows the identifier,
+parse the bound as a symbol (or NFA for module-qualified bounds like `Math.Sortable`).
+Store it in `type_param->symbol.annotation`.
+
+During alpha conversion, the type parameter name `T` is renamed (e.g., `tl_T_v4`), but
+the bound name `Ord` is **not** alpha-converted — it is a type/trait reference resolved
+through the module system, matching how type annotations on value parameters work.
+
+In Phase 5, `specialize_arrow` reads bounds from `let->let.type_parameters[i]->symbol.annotation`
+to determine which trait constraints to verify for each concrete type argument.
 
 ### AST Rewrite Strategy
 
@@ -598,12 +578,22 @@ The outer `<` is now a built-in integer comparison (CInt < 0), handled by existi
 
 ### Module Extraction
 
-The type constructor's `name` is module-mangled (e.g., `Math__Vec3`). The `generic_name`
-field holds the unmangled name (`Vec3`). The module prefix is derived by stripping
-`generic_name` and the `__` separator from `name`. For types in the main module (no
-prefix), the function name is just `add__2`.
+The type constructor's module is stored directly in `cons_inst->def->module` (a new `str`
+field on `tl_type_constructor_def`, populated during Phase 2 from the AST symbol's
+`module` field). For types in the main module, `module` is empty and the function name
+is just `add__2`. For cross-module types, the function name is `Module__add__2`.
 
 ### Data Structures
+
+**Type constructor def** (extended, in `type.h`):
+
+```
+tl_type_constructor_def:
+    ...existing fields...
+    module           — module name (e.g., "Math"), empty for main module
+```
+
+Populated during Phase 2 from the AST symbol's `module` field.
 
 **Trait definition** (new, in `type.h` or a new `trait.h`):
 
@@ -613,7 +603,6 @@ trait_def:
     generic_name     — unmangled name (Sortable)
     type_param       — the trait's type parameter name (alpha-converted)
     functions[]      — array of { name, arity, param_types, return_type }
-    associated_types[] — array of associated type names
     parents[]        — array of parent trait names (module-mangled)
 ```
 
@@ -626,25 +615,16 @@ trait_registry:
 
 Compiler-provided traits are pre-populated. User traits are added during Phase 2.
 
-**Conformance cache** (new, in `tl_infer` struct):
-
-```
-conformance_cache:
-    checked          — map: (type_name, trait_name) → bool
-```
-
-Avoids re-checking the same type/trait pair. Populated lazily during Phase 3 and 5.
-
 ### Key Files
 
 | File | Role |
 |------|------|
-| `src/tess/src/infer_constraint.c` | Operator overload lookup + AST rewrite (Phase 3) |
-| `src/tess/src/infer_specialize.c` | Deferred operator rewrite + bound verification (Phase 5) |
+| `src/tess/src/infer_specialize.c` | Operator rewrite + bound verification (Phase 5) |
+| `src/tess/src/infer_constraint.c` | Trait registration (Phase 2) |
 | `src/tess/src/infer.c` | Trait registry initialization, conformance checking |
-| `src/tess/src/parser.c` | Trait declaration parsing |
+| `src/tess/src/parser.c` | Trait declaration + bound parsing |
 | `src/tess/include/ast.h` | New `ast_trait_definition` node type |
-| `src/tess/include/type.h` | Trait definition struct, conformance types |
+| `src/tess/include/type.h` | Trait definition struct, `module` field on type constructor def |
 | `src/tess/src/transpile.c` | No changes expected |
 
 ## Edge Cases
@@ -660,8 +640,9 @@ Avoids re-checking the same type/trait pair. Populated lazily during Phase 3 and
   type signature. A module cannot have two `eq` functions with the same arity (e.g., both
   a concrete and a generic version). This means trait conformance lookup always finds at
   most one candidate per function name and arity — no ambiguity resolution needed.
-- **Empty traits**: `Marker[T] : { }` is syntactically valid but semantically vacuous —
-  every type trivially conforms since there are no required functions.
+- **Empty traits**: `Marker[T] : { }` is not supported — empty braces without a parent
+  list parse as a struct. Combined traits with parents and no additional functions
+  (`Numeric[T] : Add[T], Sub[T] { }`) are supported; the parent list disambiguates.
 
 ## Limitations
 
@@ -716,7 +697,7 @@ Rust traits are the closest relative. Key differences:
 | Dispatch | Static (monomorphized) + dynamic (`dyn Trait`) | Static only (no dynamic dispatch) |
 | Orphan rule | Cannot impl foreign trait for foreign type | No restriction — structural conformance |
 | Default methods | Supported in trait body | Not supported |
-| Associated types | Yes, with `type Item = ...` in impl | Yes, inferred from function signatures |
+| Associated types | Yes, with `type Item = ...` in impl | Deferred |
 | Multi-parameter | Yes (`trait Add<Rhs>`) | No — single type parameter only |
 | Ad-hoc bounds | `T: A + B` | Must name the combination |
 | `Self` keyword | Yes | No — explicit type parameter `T` |
@@ -773,7 +754,7 @@ Go interfaces are structurally typed like Tess traits:
 | Dispatch | Dynamic (interface values have vtables) | Static (monomorphized) |
 | Generics | Type constraints (Go 1.18+) | Trait bounds on type parameters |
 | Methods vs functions | Methods (receiver syntax) | Module-scoped functions |
-| Associated types | No | Yes |
+| Associated types | No | Deferred |
 | Inheritance | Embedding | Named trait inheritance |
 
 **Key similarity: structural conformance.** Both Go and Tess check conformance by matching
@@ -791,7 +772,7 @@ type.
 | Aspect | Swift | Tess |
 |--------|-------|------|
 | Conformance | Explicit (`: Protocol` on type or extension) | Structural |
-| Associated types | Yes, with `associatedtype` keyword | Yes, bare identifiers |
+| Associated types | Yes, with `associatedtype` keyword | Deferred |
 | Conditional conformance | Yes (`extension Array: Eq where Element: Eq`) | Yes, via bounded generic functions |
 | Default implementations | Yes (in protocol extensions) | No |
 | Dynamic dispatch | Yes (existentials, `any Protocol`) | No |
