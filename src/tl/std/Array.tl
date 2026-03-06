@@ -46,8 +46,8 @@ reserve[T](self: Ptr[Array[T]], alloc: Ptr[Allocator], count: UInt) -> Void
 reserve[T](self: Ptr[Array[T]], count: UInt)                        -> Void
 
 // Deallocate array buffer.
-free(self: Ptr[Array[T]], alloc: Ptr[Allocator]) -> Void
-free(self: Ptr[Array[T]])                        -> Void
+free[T](self: Ptr[Array[T]], alloc: Ptr[Allocator]) -> Void
+free[T](self: Ptr[Array[T]])                        -> Void
 
 // Element access (bounds-checked).
 get[T]  (arr: Array[T], index: UInt) -> T

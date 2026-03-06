@@ -35,9 +35,9 @@ c_srand        (seed: CUnsignedInt)                  -> Void
 c_aligned_alloc(alignment: CSize, size: CSize)       -> Ptr[any]
 c_aligned_free (ptr: Ptr[any])                       -> Void
 c_calloc       (num: CSize, size_each: CSize)        -> Ptr[any]
-c_free         (ptr: Ptr[T])                         -> Void
+c_free[T]      (ptr: Ptr[T])                         -> Void
 c_malloc       (size: CSize)                         -> Ptr[any]
-c_realloc      (ptr: Ptr[T], size: CSize)            -> Ptr[any]
+c_realloc[T]   (ptr: Ptr[T], size: CSize)            -> Ptr[any]
 c_exit         (status: CInt)                        -> Void
 c_abort        ()                                    -> Void
 

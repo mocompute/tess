@@ -31,7 +31,7 @@ Result[T, U]: | Ok { v: T }
               | Err { v: U }
 
 // Unwrap: extract the value from an Option or Result, or return a default.
-unwrap[T](opt_or_res, default: T) -> T {
+unwrap[T, U](opt_or_res, default: T) -> T {
     if opt_or_res :: Option[T] {
         case opt_or_res: Option[T] {
             s: Some { s.v }
