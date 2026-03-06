@@ -584,6 +584,7 @@ TL_TESTS =					\
 	trait_bounds				\
 	trait_bounds_inherited			\
 	trait_bounds_multi_inst			\
+	trait_conditional			\
 	trait_declaration			\
 	type_alias_generic			\
 	type_alias_local			\
@@ -694,6 +695,8 @@ TL_FAIL_TESTS =					\
 	fail_tagged_union_unknown_variant	\
 	fail_trait_bound_combined		\
 	fail_trait_bound_not_satisfied		\
+	fail_trait_conditional_not_satisfied	\
+	fail_trait_conditional_transitive	\
 	fail_trait_bound_second_param		\
 	fail_trait_circular			\
 	fail_trait_duplicate			\
@@ -722,7 +725,8 @@ TL_KNOWN_FAIL_FAILURES = \
 	fail_trait_bound_ord_missing_eq
 
 # Tests that should work but currently fail due to compiler bugs
-TL_KNOWN_FAILURES =
+TL_KNOWN_FAILURES = \
+	operator_overload_in_function
 
 
 # Total test count across all suites

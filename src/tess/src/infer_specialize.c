@@ -1112,6 +1112,148 @@ int post_specialize(tl_infer *self, traverse_ctx *traverse_ctx, ast_node *specia
 }
 
 // ============================================================================
+// Trait bound conformance checking
+// ============================================================================
+
+// Extract a trait name from a bound AST node (symbol or named function application).
+static str trait_name_from_bound(ast_node *bound) {
+    if (ast_node_is_symbol(bound)) return bound->symbol.name;
+    if (ast_node_is_nfa(bound)) return ast_node_str(bound->named_application.name);
+    return str_empty();
+}
+
+#define TRAIT_BOUND_MAX_DEPTH 16
+
+// Check that a concrete type satisfies a trait bound. Returns 0 on success, 1 on failure.
+// On failure, pushes an error to self->errors.
+static int check_trait_bound_(tl_infer *self, ast_node *toplevel, tl_monotype *concrete_type,
+                              str trait_name, int depth) {
+
+    if (depth >= TRAIT_BOUND_MAX_DEPTH) return 0;
+
+    tl_trait_def *trait = str_map_get_ptr(self->traits, trait_name);
+    if (!trait) return 0; // Unknown trait — skip (may be a type, not a trait)
+
+    if (!tl_monotype_is_inst(concrete_type)) return 0; // Not a concrete inst type — skip
+
+    // Check each signature in the trait
+    tl_monotype_sized type_args = concrete_type->cons_inst->args;
+    for (u32 i = 0; i < trait->sigs.size; i++) {
+        tl_trait_sig *sig = &trait->sigs.v[i];
+        str func_name = find_overload_func(self, concrete_type, str_cstr(&sig->name), sig->arity);
+        if (str_is_empty(func_name)) {
+            str type_str = tl_monotype_to_string(self->transient, concrete_type);
+            str msg = str_fmt(self->arena,
+                              "type %s does not satisfy trait %s: missing function '%s' with arity %u",
+                              str_cstr(&type_str), str_cstr(&trait_name),
+                              str_cstr(&sig->name), (unsigned)sig->arity);
+            array_push(self->errors,
+                       ((tl_infer_error){.tag = tl_err_trait_bound_not_satisfied,
+                                         .node = toplevel,
+                                         .message = msg}));
+            return 1;
+        }
+
+        // Conditional conformance: if the conforming function has bounded type parameters,
+        // verify those bounds recursively using the concrete type's type arguments.
+        ast_node *func_top = toplevel_get(self, func_name);
+        if (!func_top || !ast_node_is_let(func_top)) continue;
+        u32 n_tp = func_top->let.n_type_parameters;
+        if (n_tp == 0) continue;
+
+        for (u32 j = 0; j < n_tp; j++) {
+            ast_node *tp = func_top->let.type_parameters[j];
+            if (!ast_node_is_symbol(tp)) continue;
+            ast_node *bound = tp->symbol.annotation;
+            if (!bound) continue;
+
+            // Map the function's j-th type parameter to the concrete type's j-th type argument
+            if (j >= type_args.size) continue;
+            tl_monotype *inner_concrete = type_args.v[j];
+            if (!inner_concrete || !tl_monotype_is_inst(inner_concrete)) continue;
+
+            // Built-in types implicitly satisfy all compiler-provided traits (via intrinsics)
+            if (!is_user_defined_type(inner_concrete)) continue;
+
+            str inner_trait = trait_name_from_bound(bound);
+            if (str_is_empty(inner_trait)) continue;
+
+            if (check_trait_bound_(self, toplevel, inner_concrete, inner_trait, depth + 1))
+                return 1;
+        }
+    }
+
+    return 0;
+}
+
+static int check_trait_bound(tl_infer *self, ast_node *toplevel, tl_monotype *concrete_type,
+                             str trait_name) {
+    return check_trait_bound_(self, toplevel, concrete_type, trait_name, 0);
+}
+
+// Resolve the concrete type for the i-th type parameter from the arrow or resolved_type_args.
+static tl_monotype *resolve_type_param_concrete(tl_infer *self, ast_node *toplevel,
+                                                 tl_monotype *arrow, tl_monotype_sized resolved_type_args,
+                                                 u32 i) {
+    // First try resolved_type_args (explicit type arguments at call site)
+    if (i < resolved_type_args.size && resolved_type_args.v[i]) {
+        tl_monotype *m = resolved_type_args.v[i];
+        if (!tl_monotype_is_concrete(m)) {
+            m = tl_monotype_clone(self->transient, m);
+            tl_monotype_substitute(self->transient, m, self->subs, null);
+        }
+        if (tl_monotype_is_concrete(m)) return m;
+    }
+
+    // Fall back: match the type parameter against the arrow's parameter types.
+    // The type parameter appears in the function's value parameters. Find the first
+    // value parameter whose original annotation references this type parameter,
+    // and read the corresponding concrete type from the arrow.
+    if (!tl_monotype_is_arrow(arrow)) return null;
+    tl_monotype_sized arrow_args = arrow->list.xs.v[0]->list.xs;
+    ast_node *tp = toplevel->let.type_parameters[i];
+    str tp_name = tp->symbol.name;
+
+    u32 n_params = toplevel->let.n_parameters;
+    for (u32 j = 0; j < n_params && j < arrow_args.size; j++) {
+        ast_node *param = toplevel->let.parameters[j];
+        if (!ast_node_is_symbol(param)) continue;
+        // Check if this parameter's annotation references the type parameter
+        ast_node *ann = param->symbol.annotation;
+        if (ann && ast_node_is_symbol(ann) && str_eq(ann->symbol.name, tp_name)) {
+            return arrow_args.v[j];
+        }
+    }
+    return null;
+}
+
+// Verify trait bounds on a generic function's type parameters against resolved concrete types.
+// Returns 0 on success, 1 if any bound is not satisfied.
+static int verify_trait_bounds(tl_infer *self, ast_node *toplevel,
+                               tl_monotype *arrow, tl_monotype_sized resolved_type_args) {
+    if (!ast_node_is_let(toplevel)) return 0;
+    u32 n_tp = toplevel->let.n_type_parameters;
+    if (n_tp == 0) return 0;
+
+    for (u32 i = 0; i < n_tp; i++) {
+        ast_node *tp = toplevel->let.type_parameters[i];
+        if (!ast_node_is_symbol(tp)) continue;
+        ast_node *bound = tp->symbol.annotation;
+        if (!bound) continue;
+
+        tl_monotype *concrete = resolve_type_param_concrete(self, toplevel, arrow, resolved_type_args, i);
+        if (!concrete) continue;
+
+        str trait_name = trait_name_from_bound(bound);
+        if (str_is_empty(trait_name)) continue;
+
+        if (check_trait_bound(self, toplevel, concrete, trait_name))
+            return 1;
+    }
+    return 0;
+}
+
+// ============================================================================
 // Arrow specialization
 // ============================================================================
 
@@ -1138,6 +1280,10 @@ str specialize_arrow(tl_infer *self, traverse_ctx *traverse_ctx, str name, tl_mo
     // 2a. Check that name is valid
     ast_node *toplevel = toplevel_get(self, name);
     if (!toplevel) return str_empty();
+
+    // 2b. Verify trait bounds on type parameters
+    if (verify_trait_bounds(self, toplevel, arrow, resolved_type_args))
+        return str_empty();
 
     // 3. Create unique instance name(e.g., "identity_0")
     name_and_type key = make_instance_key(self, name, arrow, resolved_type_args);

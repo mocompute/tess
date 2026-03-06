@@ -2717,6 +2717,19 @@ static ast_node *create_body_fallback(parser *self, ast_node_array exprs, ast_no
     return create_body(self, exprs, defers);
 }
 
+// Parse an optional trait bound on a type parameter: T: Trait
+// Expects self->result to be the type parameter identifier.
+// On success, self->result is still the type parameter (with annotation set if bound present).
+static int maybe_trait_bound(parser *self) {
+    ast_node *type_param = self->result;
+    if (0 == a_try(self, a_colon)) {
+        if (a_try(self, a_type_identifier)) return 1;
+        type_param->symbol.annotation = self->result;
+    }
+    self->result = type_param;
+    return 0;
+}
+
 static int toplevel_defun(parser *self) {
     if (a_try(self, a_attributed_identifier)) return 1;
     ast_node      *name        = self->result;
@@ -2726,12 +2739,14 @@ static int toplevel_defun(parser *self) {
     if (0 == a_try(self, a_open_square)) {
         if (0 == a_try(self, a_close_square)) goto type_params_done;
         if (a_try(self, a_identifier)) return 1;
+        if (maybe_trait_bound(self)) return 1;
         array_push(type_params, self->result);
 
         while (1) {
             if (0 == a_try(self, a_close_square)) goto type_params_done;
             if (a_try(self, a_comma)) return 1;
             if (a_try(self, a_identifier)) return 1;
+            if (maybe_trait_bound(self)) return 1;
             array_push(type_params, self->result);
         }
     }

@@ -666,7 +666,7 @@ Parse trait syntax, register in Phase 2. No runtime effect yet:
 - Test: `test_trait_declaration.tl` (traits parse without error),
   `test_fail_trait_circular.tl`, `test_fail_trait_duplicate.tl`
 
-### Slice 4: Trait Bounds + Conformance Checking
+### Slice 4 (DONE): Trait Bounds + Conformance Checking
 
 Parse `[T: Ord]` bounds, verify conformance in `specialize_arrow`:
 
@@ -676,7 +676,7 @@ Parse `[T: Ord]` bounds, verify conformance in `specialize_arrow`:
 - Test: `test_trait_bounds.tl` (bounded generic functions work),
   `test_fail_trait_bound_not_satisfied.tl`
 
-### Slice 5: Conditional Conformance
+### Slice 5 (DONE): Conditional Conformance
 
 Recursive bound checking when a conforming function has its own bounds:
 
