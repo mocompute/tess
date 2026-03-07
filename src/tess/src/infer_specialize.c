@@ -1931,7 +1931,7 @@ int add_generic(tl_infer *self, ast_node *node) {
     }
 
     // ensure provisional type is not quantified. If it is, instantiate it
-    if (tl_polytype_is_scheme(provisional)) {
+    if (provisional && tl_polytype_is_scheme(provisional)) {
         provisional = tl_polytype_absorb_mono(
           self->arena, tl_polytype_instantiate(self->arena, provisional, self->subs));
     }
