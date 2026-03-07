@@ -356,6 +356,7 @@ void load_toplevel(tl_infer *self, ast_node_sized nodes) {
                 def->generic_name = str_copy(self->arena, node->trait_def.name->symbol.original);
                 def->parents      = (str_array){.alloc = self->arena};
                 def->sigs         = (tl_trait_sig_array){.alloc = self->arena};
+                def->source_node  = node;
 
                 // Collect parent trait names
                 for (u32 i = 0; i < node->trait_def.n_parents; i++) {

@@ -7,7 +7,8 @@
 #include "nodiscard.h"
 #include "str.h"
 
-typedef u32 tl_type_variable; // t0, t1, etc
+typedef struct ast_node ast_node; // forward declaration for tl_trait_def
+typedef u32 tl_type_variable;     // t0, t1, etc
 
 defarray(tl_type_variable_array, tl_type_variable);
 defsized(tl_type_variable_sized, tl_type_variable);
@@ -60,10 +61,11 @@ defarray(tl_trait_sig_array, tl_trait_sig);
 
 // Trait definition (stored in trait registry)
 typedef struct {
-    str                name;       // module-mangled trait name (e.g., Math__Sortable)
+    str                name;         // module-mangled trait name (e.g., Math__Sortable)
     str                generic_name; // unmangled name (Sortable)
-    str_array          parents;    // parent trait names (module-mangled)
-    tl_trait_sig_array sigs;       // function signatures
+    str_array          parents;      // parent trait names (module-mangled)
+    tl_trait_sig_array sigs;         // function signatures
+    ast_node          *source_node;  // AST node for error reporting (null for builtins)
 } tl_trait_def;
 
 typedef struct {

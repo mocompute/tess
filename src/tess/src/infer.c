@@ -60,21 +60,24 @@ tl_infer *tl_infer_create(allocator *alloc, tl_infer_opts const *opts) {
 
     // Pre-populate compiler-provided traits
     {
-        struct { char const *name; char const *func; u8 arity; } builtins[] = {
-            {"Add",    "add",     2}, {"Sub",    "sub",     2}, {"Mul",    "mul",     2},
-            {"Div",    "div",     2}, {"Mod",    "mod",     2},
-            {"BitAnd", "bit_and", 2}, {"BitOr",  "bit_or",  2}, {"BitXor", "bit_xor", 2},
-            {"Shl",    "shl",     2}, {"Shr",    "shr",     2},
-            {"Eq",     "eq",      2}, {"Neg",    "neg",     1}, {"Not",    "not",     1},
-            {"BitNot", "bit_not", 1},
+        struct {
+            char const *name;
+            char const *func;
+            u8          arity;
+        } builtins[] = {
+          {"Add", "add", 2}, {"Sub", "sub", 2},        {"Mul", "mul", 2},      {"Div", "div", 2},
+          {"Mod", "mod", 2}, {"BitAnd", "bit_and", 2}, {"BitOr", "bit_or", 2}, {"BitXor", "bit_xor", 2},
+          {"Shl", "shl", 2}, {"Shr", "shr", 2},        {"Eq", "eq", 2},        {"Neg", "neg", 1},
+          {"Not", "not", 1}, {"BitNot", "bit_not", 1},
         };
         for (u32 i = 0; i < sizeof(builtins) / sizeof(builtins[0]); i++) {
-            tl_trait_def *def  = new(self->arena, tl_trait_def);
-            def->name          = str_init(self->arena, builtins[i].name);
-            def->generic_name  = str_init(self->arena, builtins[i].name);
-            def->parents       = (str_array){.alloc = self->arena};
-            def->sigs          = (tl_trait_sig_array){.alloc = self->arena};
-            tl_trait_sig sig   = {.name = str_init(self->arena, builtins[i].func), .arity = builtins[i].arity};
+            tl_trait_def *def = new(self->arena, tl_trait_def);
+            def->name         = str_init(self->arena, builtins[i].name);
+            def->generic_name = str_init(self->arena, builtins[i].name);
+            def->parents      = (str_array){.alloc = self->arena};
+            def->sigs         = (tl_trait_sig_array){.alloc = self->arena};
+            tl_trait_sig sig  = {.name  = str_init(self->arena, builtins[i].func),
+                                 .arity = builtins[i].arity};
             array_push(def->sigs, sig);
             str_map_set_ptr(&self->traits, def->name, def);
         }
@@ -87,7 +90,7 @@ tl_infer *tl_infer_create(allocator *alloc, tl_infer_opts const *opts) {
             def->sigs         = (tl_trait_sig_array){.alloc = self->arena};
             str parent        = str_init(self->arena, "Eq");
             array_push(def->parents, parent);
-            tl_trait_sig sig  = {.name = str_init(self->arena, "cmp"), .arity = 2};
+            tl_trait_sig sig = {.name = str_init(self->arena, "cmp"), .arity = 2};
             array_push(def->sigs, sig);
             str_map_set_ptr(&self->traits, def->name, def);
         }
@@ -111,13 +114,11 @@ void hot_parse_ctx_reinit(tl_infer *self, hashmap *outer_type_arguments) {
 // type variables (e.g., K -> Int).  Falls back to node->type when fresh parse
 // fails (e.g., after type_literal_specialize renamed the node).
 // Returns null if neither path produces a result.
-tl_monotype *parse_type_arg(tl_infer *self, hashmap *type_arguments,
-                            ast_node *node) {
+tl_monotype *parse_type_arg(tl_infer *self, hashmap *type_arguments, ast_node *node) {
     tl_monotype *parsed;
     if (type_arguments) {
         hot_parse_ctx_reinit(self, type_arguments);
-        parsed = tl_type_registry_parse_type_with_ctx(
-            self->registry, node, &self->hot_parse_ctx);
+        parsed = tl_type_registry_parse_type_with_ctx(self->registry, node, &self->hot_parse_ctx);
         self->hot_parse_ctx_guard = 0;
     } else {
         parsed = tl_type_registry_parse_type(self->registry, node);
@@ -232,7 +233,7 @@ static int run_alpha_conversion(tl_infer *self, ast_node_sized nodes) {
 }
 
 // Phase 2: Load top-level definitions.
-static void check_trait_circular_inheritance(tl_infer *self, ast_node_sized nodes) {
+static void check_trait_circular_inheritance(tl_infer *self) {
     hashmap_iterator iter = {0};
     while (map_iter(self->traits, &iter)) {
         tl_trait_def *def = *(tl_trait_def **)iter.data;
@@ -241,12 +242,15 @@ static void check_trait_circular_inheritance(tl_infer *self, ast_node_sized node
         // Walk the parent chain with a visited set to detect cycles
         hashmap *visited = hset_create(self->transient, 16);
         str_hset_insert(&visited, def->name);
-        int circular = 0;
+        int       circular = 0;
 
-        str_array work = {.alloc = self->transient};
+        str_array work     = {.alloc = self->transient};
         forall(i, def->parents) {
             str p = def->parents.v[i];
-            if (str_eq(p, def->name)) { circular = 1; break; }
+            if (str_eq(p, def->name)) {
+                circular = 1;
+                break;
+            }
             if (!str_hset_contains(visited, p)) {
                 str_hset_insert(&visited, p);
                 array_push(work, p);
@@ -257,7 +261,10 @@ static void check_trait_circular_inheritance(tl_infer *self, ast_node_sized node
             if (parent_def) {
                 forall(j, parent_def->parents) {
                     str pp = parent_def->parents.v[j];
-                    if (str_eq(pp, def->name)) { circular = 1; break; }
+                    if (str_eq(pp, def->name)) {
+                        circular = 1;
+                        break;
+                    }
                     if (!str_hset_contains(visited, pp)) {
                         str_hset_insert(&visited, pp);
                         array_push(work, pp);
@@ -267,15 +274,8 @@ static void check_trait_circular_inheritance(tl_infer *self, ast_node_sized node
         }
 
         if (circular) {
-            forall(i, nodes) {
-                if (ast_node_is_trait_def(nodes.v[i]) &&
-                    str_eq(ast_node_str(nodes.v[i]->trait_def.name), def->name)) {
-                    array_push(self->errors,
-                               ((tl_infer_error){.tag  = tl_err_trait_circular_inheritance,
-                                                 .node = nodes.v[i]}));
-                    break;
-                }
-            }
+            array_push(self->errors, ((tl_infer_error){.tag  = tl_err_trait_circular_inheritance,
+                                                       .node = def->source_node}));
         }
     }
 }
@@ -284,7 +284,7 @@ static int run_load_toplevels(tl_infer *self, ast_node_sized nodes) {
     self->toplevels = ast_node_str_map_create(self->arena, 1024);
     load_toplevel(self, nodes);
     arena_reset(self->transient);
-    check_trait_circular_inheritance(self, nodes);
+    check_trait_circular_inheritance(self);
     arena_reset(self->transient);
     if (self->errors.size) return 1;
 
