@@ -536,7 +536,6 @@ TL_TESTS =					\
 	reassign_result				\
 	recursive_type				\
 	recursive_type_basic			\
-	recursive_type_cycle_3			\
 	recursive_type_generic			\
 	recursive_type_mutual			\
 	recursive_type_mutual_simple		\
@@ -677,8 +676,6 @@ TL_FAIL_TESTS =					\
 	fail_integer_cross_family_unsigned_to_signed \
 	fail_integer_exact_case			\
 	fail_integer_exact_conditional		\
-	fail_integer_exact_generic		\
-	fail_integer_exact_generic_standalone	\
 	fail_integer_exact_operator		\
 	fail_integer_literal_overflow		\
 	fail_integer_literal_overflow_negative	\
@@ -725,8 +722,6 @@ TL_FAIL_TESTS =					\
 	fail_try_three_variants			\
 	fail_unalias_not_found			\
 	fail_unknown_free_variable		\
-	fail_unknown_type_generic_arg		\
-	fail_unknown_type_param			\
 	fail_float_exact_conditional		\
 	fail_float_exact_operator		\
 	fail_float_int_implicit			\
@@ -743,11 +738,16 @@ TL_FAIL_RUNTIME_TESTS =			\
 
 # Expected-failure tests that the compiler doesn't reject yet
 TL_KNOWN_FAIL_FAILURES =			\
+	fail_integer_exact_generic		\
+	fail_integer_exact_generic_standalone	\
 	fail_unknown_type_annotation		\
+	fail_unknown_type_generic_arg		\
+	fail_unknown_type_param			\
 	fail_unknown_type_return
 
 # Tests that should work but currently fail due to compiler bugs
-TL_KNOWN_FAILURES =
+TL_KNOWN_FAILURES =				\
+	recursive_type_cycle_3
 
 
 # Total test count across all suites

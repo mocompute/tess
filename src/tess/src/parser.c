@@ -3708,9 +3708,8 @@ static ast_node *create_variant_constructor(parser *self,
                                             ast_node **type_args, // type param nodes (unused, for future)
                                             ast_node_array var_fields) // variant fields
 {
-    (void)n_type_args; // Type parameters are inferred, not passed explicitly
-    (void)type_args;
-    allocator *arena = self->ast_arena;
+    allocator     *arena       = self->ast_arena;
+    ast_node_sized type_params = {.size = n_type_args, .v = type_args};
 
     // 1. Create function name: unscoped at module level (e.g., "Circle")
     str       func_name_str = var_name_str;
@@ -3750,7 +3749,7 @@ static ast_node *create_variant_constructor(parser *self,
     // 4. Build the arrow annotation for function type: (params) -> ReturnType
     ast_node *param_tuple = ast_node_create_tuple(arena, (ast_node_sized)array_sized(params));
     set_node_file(self, param_tuple);
-    ast_node *arrow = ast_node_create_arrow(arena, param_tuple, return_type, (ast_node_sized){0});
+    ast_node *arrow = ast_node_create_arrow(arena, param_tuple, return_type, type_params);
     set_node_file(self, arrow);
     func_name->symbol.annotation = arrow;
 

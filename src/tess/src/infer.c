@@ -56,6 +56,8 @@ tl_infer *tl_infer_create(allocator *alloc, tl_infer_opts const *opts) {
     self->hot_parse_ctx_own_ta = self->hot_parse_ctx.type_arguments;
     self->hot_parse_ctx_guard  = 0;
 
+    self->load_type_arguments  = null;
+
     // Pre-populate compiler-provided traits
     {
         struct { char const *name; char const *func; u8 arity; } builtins[] = {

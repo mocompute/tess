@@ -108,6 +108,7 @@ static void rename_case_variables(tl_infer *self, ast_node *node, rename_variabl
 
     rename_variables(self, node->case_.expression, ctx, level + 1);
     rename_variables(self, node->case_.binary_predicate, ctx, level + 1);
+    rename_variables(self, node->case_.union_annotation, ctx, level + 1);
     if (node->case_.conditions.size != node->case_.arms.size) fatal("runtime error");
     forall(i, node->case_.conditions) {
         hashmap *save = null;

@@ -130,6 +130,57 @@ static int toplevel_hash_command(tl_infer *self, ast_node *node) {
     }
 }
 
+// Populate load_type_arguments from explicit type parameters so that
+// parse_type_annotation can resolve them during Phase 2 (where ctx is null).
+static void load_toplevel_type_params_raw(tl_infer *self, ast_node **type_parameters, u32 n) {
+    hashmap *ta               = map_new(self->transient, str, tl_monotype *, 16);
+    self->load_type_arguments = ta;
+    for (u32 i = 0; i < n; i++) {
+        tl_type_registry_add_fresh_type_argument(self->registry, type_parameters[i]->symbol.name,
+                                                 &self->load_type_arguments);
+    }
+}
+
+static void load_toplevel_type_params(tl_infer *self, ast_node *node) {
+    ast_node **tp = node->let.type_parameters;
+    u32        n  = node->let.n_type_parameters;
+
+    // Variant constructors (from UTD expansion) have type params on the arrow, not the let.
+    if (!n && node->let.name->symbol.annotation) {
+        ast_node *ann = node->let.name->symbol.annotation;
+        if (ast_node_is_arrow(ann) && ann->arrow.n_type_parameters > 0) {
+            tp = ann->arrow.type_parameters;
+            n  = ann->arrow.n_type_parameters;
+        }
+    }
+
+    load_toplevel_type_params_raw(self, tp, n);
+}
+
+// For forward declarations: symbol with arrow annotation — type params are on the arrow.
+static void load_fwd_decl_type_params(tl_infer *self, ast_node *sym) {
+    ast_node *ann = sym->symbol.annotation;
+    if (ann && ast_node_is_arrow(ann) && ann->arrow.n_type_parameters > 0) {
+        load_toplevel_type_params_raw(self, ann->arrow.type_parameters, ann->arrow.n_type_parameters);
+    } else {
+        self->load_type_arguments = null;
+    }
+}
+
+// Resolve a toplevel let node's annotation with its type parameters in scope.
+static void resolve_toplevel_with_type_params(tl_infer *self, ast_node *node, ast_node *resolve_target) {
+    load_toplevel_type_params(self, node);
+    resolve_node(self, resolve_target, null, npos_toplevel);
+    self->load_type_arguments = null;
+}
+
+// Resolve a forward declaration's annotation with its type parameters in scope.
+static void resolve_fwd_decl_with_type_params(tl_infer *self, ast_node *sym, ast_node *resolve_target) {
+    load_fwd_decl_type_params(self, sym);
+    resolve_node(self, resolve_target, null, npos_toplevel);
+    self->load_type_arguments = null;
+}
+
 // Handle a let node during toplevel loading: merge forward declarations, copy annotations/attributes.
 static void load_toplevel_let(tl_infer *self, ast_node *node) {
     str        name_str = ast_node_str(node->let.name);
@@ -146,7 +197,7 @@ static void load_toplevel_let(tl_infer *self, ast_node *node) {
         // declaration overrides
 
         if (node->let.name->symbol.annotation) {
-            resolve_node(self, node->let.name, null, npos_toplevel);
+            resolve_toplevel_with_type_params(self, node, node->let.name);
         } else {
             // otherwise merge in the prior annotation
             node->let.name->symbol.annotation      = (*p)->symbol.annotation;
@@ -208,7 +259,7 @@ static void load_toplevel_let(tl_infer *self, ast_node *node) {
         *p = node;
     } else {
         str_map_set(&self->toplevels, name_str, &node);
-        resolve_node(self, node->let.name, null, npos_toplevel);
+        resolve_toplevel_with_type_params(self, node, node->let.name);
     }
 }
 
@@ -241,13 +292,13 @@ void load_toplevel(tl_infer *self, ast_node_sized nodes) {
 
                 if (node->symbol.annotation) {
                     (*p)->let.name->symbol.annotation = node->symbol.annotation;
-                    resolve_node(self, (*p)->let.name, null, npos_toplevel);
+                    resolve_fwd_decl_with_type_params(self, node, (*p)->let.name);
                 }
             } else {
                 // don't bother saving top level unannotated symbol node.
                 if (node->symbol.annotation) {
                     str_map_set(&self->toplevels, name_str, &node);
-                    resolve_node(self, node, null, npos_toplevel);
+                    resolve_fwd_decl_with_type_params(self, node, node);
                 }
             }
         }
@@ -309,17 +360,16 @@ void load_toplevel(tl_infer *self, ast_node_sized nodes) {
                 // Collect parent trait names
                 for (u32 i = 0; i < node->trait_def.n_parents; i++) {
                     ast_node *parent = node->trait_def.parents[i];
-                    str raw_name = ast_node_is_nfa(parent)
-                                     ? ast_node_str(parent->named_application.name)
-                                     : ast_node_str(parent);
+                    str raw_name    = ast_node_is_nfa(parent) ? ast_node_str(parent->named_application.name)
+                                                              : ast_node_str(parent);
                     str parent_name = str_copy(self->arena, raw_name);
                     array_push(def->parents, parent_name);
                 }
 
                 // Collect signatures (name + arity)
                 for (u32 i = 0; i < node->trait_def.n_signatures; i++) {
-                    ast_node *sig = node->trait_def.signatures[i];
-                    u8  arity     = 0;
+                    ast_node *sig   = node->trait_def.signatures[i];
+                    u8        arity = 0;
                     if (sig->symbol.annotation && ast_node_is_arrow(sig->symbol.annotation)) {
                         ast_node_sized params =
                           ast_node_sized_from_ast_array_const(sig->symbol.annotation->arrow.left);
@@ -369,7 +419,6 @@ void load_toplevel(tl_infer *self, ast_node_sized nodes) {
             continue;
         }
     }
-
 }
 
 // ============================================================================
@@ -453,9 +502,8 @@ void traverse_ctx_load_type_arguments(tl_infer *self, traverse_ctx *ctx, ast_nod
 
 int traverse_ctx_assign_type_arguments(tl_infer *self, traverse_ctx *ctx, ast_node const *node) {
     if (ast_node_is_nfa(node)) {
-        if (!node->named_application.is_specialized
-            && !node->named_application.is_function_reference
-            && !node->named_application.is_type_constructor)
+        if (!node->named_application.is_specialized && !node->named_application.is_function_reference &&
+            !node->named_application.is_type_constructor)
             return 0;
 
         u32 argc = node->named_application.n_type_arguments;
@@ -658,10 +706,9 @@ int constrain_mono(tl_infer *self, tl_monotype *left, tl_monotype *right, ast_no
     // (excluding integer-compatible pairs). If this fires, a type variable was already
     // bound to the wrong type upstream. Exception: for type predicates, a constrain failure is not an
     // error (is_constrain_ignore_error is set during check_type_predicate).
-    if (!self->is_constrain_ignore_error &&
-        tl_monotype_is_inst(left) && tl_monotype_is_concrete(left) && tl_monotype_is_inst(right) &&
-        tl_monotype_is_concrete(right) && !tl_monotype_is_integer_convertible(left) &&
-        !tl_monotype_is_integer_convertible(right)) {
+    if (!self->is_constrain_ignore_error && tl_monotype_is_inst(left) && tl_monotype_is_concrete(left) &&
+        tl_monotype_is_inst(right) && tl_monotype_is_concrete(right) &&
+        !tl_monotype_is_integer_convertible(left) && !tl_monotype_is_integer_convertible(right)) {
         if (!str_eq(left->cons_inst->def->name, right->cons_inst->def->name) &&
             !str_eq(left->cons_inst->def->generic_name, right->cons_inst->def->generic_name)) {
             char detail[512];
@@ -774,7 +821,8 @@ annotation_parse_result parse_type_annotation(tl_infer *self, traverse_ctx *ctx,
 
     tl_type_registry_parse_type_ctx parse_ctx;
     tl_monotype                    *parsed = tl_type_registry_parse_type_out_ctx(
-      self->registry, annotation_node, self->transient, ctx ? ctx->type_arguments : null, &parse_ctx);
+      self->registry, annotation_node, self->transient,
+      ctx ? ctx->type_arguments : self->load_type_arguments, &parse_ctx);
 
     return (annotation_parse_result){.parsed = parsed, .type_arguments = parse_ctx.type_arguments};
 }
@@ -1363,23 +1411,18 @@ static int infer_tagged_union_case(tl_infer *self, traverse_ctx *ctx, ast_node *
     tl_monotype *wrapper_type = expr_type->type;
     tl_monotype_substitute(self->arena, wrapper_type, self->subs, null); // needed
 
-    // If there is an explicit type annotation (e.g., "case x: Option(T)"), always parse and
-    // use it as the wrapper type. This is essential for generic functions with type-predicate
-    // branching (e.g., `if x :: Option { case x: Option(T) { ... } } else if x :: Result ...`)
-    // where different branches constrain the same variable to different tagged union types.
-    // Without this, the first branch's constraint would permanently unify the variable's type,
-    // making subsequent branches fail. The constraint is non-fatal here because after
-    // specialization, only the matching branch will be valid.
+    // If there is an explicit type annotation (e.g., "case x: Option[T]"), always parse and
+    // use it as the wrapper type for variant lookup.
     if (node->case_.union_annotation) {
         annotation_parse_result result = parse_type_annotation(self, ctx, node->case_.union_annotation);
         if (result.parsed && tl_monotype_is_inst(result.parsed)) {
             wrapper_type = result.parsed;
-            // Constrain expression type to match annotation (non-fatal: in generic functions,
-            // a prior branch may have already constrained to a different type)
-            int save                        = self->is_constrain_ignore_error;
-            self->is_constrain_ignore_error = 1;
-            constrain_pm(self, expr_type, wrapper_type, node->case_.expression, TL_UNIFY_SYMMETRIC);
-            self->is_constrain_ignore_error = save;
+            // Do NOT constrain expr_type against wrapper_type here. In generic functions with
+            // type-predicate branching (e.g., `if x :: Option { case x: Option[T] { ... } }
+            // else if x :: Result { case x: Result[T, U] { ... } }`), the first branch's
+            // constraint would permanently bind the expression's type variable in self->subs,
+            // making subsequent branches fail. The annotation provides the correct wrapper_type
+            // for variant lookup; the expression's type stays polymorphic until specialization.
             tl_monotype_substitute(self->arena, wrapper_type, self->subs, null);
         }
     }
@@ -1844,11 +1887,8 @@ static void prepare_tagged_union_bindings(tl_infer *self, traverse_ctx *ctx, ast
     if (node->case_.union_annotation) {
         annotation_parse_result result = parse_type_annotation(self, ctx, node->case_.union_annotation);
         if (result.parsed && tl_monotype_is_inst(result.parsed)) {
-            wrapper_type                    = result.parsed;
-            int save                        = self->is_constrain_ignore_error;
-            self->is_constrain_ignore_error = 1;
-            constrain_pm(self, expr_type, wrapper_type, node->case_.expression, TL_UNIFY_SYMMETRIC);
-            self->is_constrain_ignore_error = save;
+            wrapper_type = result.parsed;
+            // Do NOT constrain expr_type here — see comment in infer_tagged_union_case.
             tl_monotype_substitute(self->arena, wrapper_type, self->subs, null);
         }
     }
@@ -2470,12 +2510,12 @@ static int infer_struct_access(tl_infer *self, traverse_ctx *ctx, ast_node *node
 
                 // Rewrite node in place from binary_op to NFA
                 ast_node_name_replace(nfa->named_application.name, ufcs_name);
-                node->tag                                   = nfa->tag;
-                node->named_application.name                = nfa->named_application.name;
-                node->named_application.arguments           = new_args;
-                node->named_application.n_arguments         = ufcs_arity;
-                node->named_application.type_arguments      = null;
-                node->named_application.n_type_arguments    = 0;
+                node->tag                                     = nfa->tag;
+                node->named_application.name                  = nfa->named_application.name;
+                node->named_application.arguments             = new_args;
+                node->named_application.n_arguments           = ufcs_arity;
+                node->named_application.type_arguments        = null;
+                node->named_application.n_type_arguments      = 0;
                 node->named_application.is_specialized        = 0;
                 node->named_application.is_type_constructor   = 0;
                 node->named_application.is_function_reference = 0;
@@ -2706,10 +2746,10 @@ int check_type_predicate(tl_infer *self, traverse_ctx *traverse_ctx, ast_node *n
 
         if (lhs_type_arg) {
             // LHS is a type argument - handle it specially
-            tl_monotype *rhs_type = parse_type_arg(self, traverse_ctx->type_arguments,
-                                                    node->type_predicate.rhs);
+            tl_monotype *rhs_type =
+              parse_type_arg(self, traverse_ctx->type_arguments, node->type_predicate.rhs);
 
-            tl_monotype *lhs_mono     = lhs_type_arg;
+            tl_monotype *lhs_mono = lhs_type_arg;
 
             if (!tl_monotype_is_concrete(lhs_mono)) {
                 tl_monotype_substitute(self->arena, lhs_mono, self->subs, null);
@@ -2737,8 +2777,7 @@ int check_type_predicate(tl_infer *self, traverse_ctx *traverse_ctx, ast_node *n
     }
     // Fall through to existing expression handling...
 
-    tl_monotype *type = parse_type_arg(self, traverse_ctx->type_arguments,
-                                       node->type_predicate.rhs);
+    tl_monotype *type = parse_type_arg(self, traverse_ctx->type_arguments, node->type_predicate.rhs);
 
     if (resolve_node(self, node->type_predicate.lhs, traverse_ctx, npos_operand)) {
         dbg(self, "assert resolve node failed");

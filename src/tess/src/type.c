@@ -694,12 +694,6 @@ static tl_monotype *parse_type_specials(tl_type_registry *self, tl_type_registry
     return mono;
 }
 
-static tl_monotype *type_variable_sugar(tl_type_registry *self, tl_type_registry_parse_type_ctx *ctx,
-                                        ast_node const *node) {
-    str          ta     = ast_node_str(node);
-    tl_monotype *result = add_type_argument(self, ctx, ta);
-    return result;
-}
 
 static tl_monotype *defer_parse(tl_type_registry *self, tl_type_registry_parse_type_ctx *ctx, str name,
                                 tl_monotype_sized type_args) {
@@ -876,10 +870,7 @@ static tl_monotype *parse_type_nfa(tl_type_registry *self, tl_type_registry_pars
         // is sugar for a type variable, e.g a function in stdlib.tl which returns a `Ptr(T)`.
         if (ast_node_is_symbol(target)) {
             if (!str_hset_contains(ctx->in_progress, target_name_str)) {
-                tl_monotype *parsed = tl_type_registry_parse_type_(self, ctx, target);
-                if (!parsed) {
-                    (void)type_variable_sugar(self, ctx, target);
-                }
+                (void)tl_type_registry_parse_type_(self, ctx, target);
             } else {
                 // If target name is an in_progress utd, we must defer the parse.
 #if DEBUG_RECURSIVE_TYPES
@@ -896,7 +887,7 @@ static tl_monotype *parse_type_nfa(tl_type_registry *self, tl_type_registry_pars
             for (u32 j = 0; j < target->named_application.n_type_arguments; j++) {
                 tl_monotype *arg =
                   tl_type_registry_parse_type_(self, ctx, target->named_application.type_arguments[j]);
-                if (!arg) arg = type_variable_sugar(self, ctx, target->named_application.type_arguments[j]);
+                if (!arg) return null;
                 array_push(deferred_args, arg);
             }
             result = defer_parse(self, ctx, target_name_str, (tl_monotype_sized)array_sized(deferred_args));
@@ -926,12 +917,7 @@ static tl_monotype *parse_type_nfa(tl_type_registry *self, tl_type_registry_pars
         // If the type constructor argument produces nothing, and it's a symbol, it's sugar for a type
         // variable - not a type argument. Otherwise, it's an error
         if (!mono) {
-            if (ast_node_is_symbol(nodes.v[i])) {
-                assert(ctx);
-                mono = type_variable_sugar(self, ctx, nodes.v[i]);
-            } else {
-                return null;
-            }
+            return null;
         }
         // clang-format off
         { tl_monotype *_t = mono; array_push(args, _t); }
@@ -1082,14 +1068,6 @@ static tl_monotype *tl_type_registry_parse_type_(tl_type_registry               
             ctx->annotation_target = node;
             result                 = tl_type_registry_parse_type_(self, ctx, node->symbol.annotation);
             ctx->annotation_target = save;
-
-            // If the annotation is an unresolved symbol (e.g. a type variable like `a` in `v: a`),
-            // treat it as type variable sugar so the name `a` is registered in type_arguments.
-            // Without this, the arrow fallback would register the parameter name `v` instead,
-            // causing the parameter and return type to get disconnected type variables.
-            if (!result && ast_node_is_symbol(node->symbol.annotation)) {
-                result = type_variable_sugar(self, ctx, node->symbol.annotation);
-            }
         }
 
         goto top_success;
@@ -1109,18 +1087,22 @@ static tl_monotype *tl_type_registry_parse_type_(tl_type_registry               
         // any type. Example: "(T: Type, count: Int) -> Ptr(T)" => forall t0. (t0, Int) -> Ptr(t0)
         assert(ast_node_is_tuple(node->arrow.left));
 
+        // Register explicit type parameters on the arrow (e.g. [T] in `[T](v: T) -> Option[T]`).
+        // These are set by create_variant_constructor when the UTD has type params.
+        // Skip any already registered (e.g. loaded via load_toplevel_type_params in Phase 2).
+        for (u32 tp = 0; tp < node->arrow.n_type_parameters; tp++) {
+            assert(ast_node_is_symbol(node->arrow.type_parameters[tp]));
+            str tp_name = ast_node_str(node->arrow.type_parameters[tp]);
+            if (!is_type_argument(ctx, tp_name)) add_type_argument(self, ctx, tp_name);
+        }
+
         tl_monotype_array args  = {.alloc = self->alloc};
         ast_node_sized    nodes = ast_node_sized_from_ast_array_const(node->arrow.left);
         forall(i, nodes) {
             tl_monotype *mono = tl_type_registry_parse_type_(self, ctx, nodes.v[i]);
             if (!mono) {
-                assert(ctx);
-                if (ast_node_is_symbol(nodes.v[i])) {
-                    mono = type_variable_sugar(self, ctx, nodes.v[i]);
-                } else {
-                    result = null;
-                    goto top_success;
-                }
+                result = null;
+                goto top_success;
             }
             // clang-format off
             { tl_monotype *_t = mono; array_push(args, _t); }
@@ -1131,12 +1113,8 @@ static tl_monotype *tl_type_registry_parse_type_(tl_type_registry               
 
         tl_monotype *right_mono = tl_type_registry_parse_type_(self, ctx, node->arrow.right);
         if (!right_mono) {
-            if (ast_node_is_symbol(node->arrow.right)) {
-                right_mono = type_variable_sugar(self, ctx, node->arrow.right);
-            } else {
-                result = null;
-                goto top_success;
-            }
+            result = null;
+            goto top_success;
         }
         tl_monotype *arrow = tl_type_registry_create_arrow(self, left_mono, right_mono);
         result             = arrow;

@@ -104,6 +104,8 @@ struct tl_infer {
     hashmap                        *hot_parse_ctx_own_ta; // saved own type_arguments ptr
     int                             hot_parse_ctx_guard;  // reentrancy detector: 1 while in use
 
+    hashmap *load_type_arguments; // Phase 2: type params for current toplevel annotation parse
+
     u32                             next_var_name;
     u32                             next_instantiation;
 
