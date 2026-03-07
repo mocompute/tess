@@ -2510,15 +2510,7 @@ static int infer_struct_access(tl_infer *self, traverse_ctx *ctx, ast_node *node
 
                 // Rewrite node in place from binary_op to NFA
                 ast_node_name_replace(nfa->named_application.name, ufcs_name);
-                node->tag                                     = nfa->tag;
-                node->named_application.name                  = nfa->named_application.name;
-                node->named_application.arguments             = new_args;
-                node->named_application.n_arguments           = ufcs_arity;
-                node->named_application.type_arguments        = null;
-                node->named_application.n_type_arguments      = 0;
-                node->named_application.is_specialized        = 0;
-                node->named_application.is_type_constructor   = 0;
-                node->named_application.is_function_reference = 0;
+                ast_node_rewrite_to_nfa(node, nfa->named_application.name, new_args, ufcs_arity);
 
                 return infer_named_function_application(self, ctx, node);
             } else {

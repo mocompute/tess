@@ -296,6 +296,7 @@ void                ast_node_move(ast_node *dst, ast_node *src);
 str                 ast_node_str(ast_node const *);
 str                 ast_node_name_original(ast_node const *);
 void                ast_node_name_replace(ast_node *, str);
+void                ast_node_rewrite_to_nfa(ast_node *node, ast_node *name, ast_node **args, u8 n_args);
 ast_node           *ast_node_lvalue(ast_node *);
 ast_node           *ast_node_op_rightmost(ast_node *);
 void                ast_node_type_set(ast_node *, tl_polytype *);

@@ -889,28 +889,17 @@ static int is_user_defined_type(tl_monotype *mono) {
 // Build the arity-mangled + module-mangled function name for operator dispatch.
 // E.g., for module "Vec", function "add", arity 2: "Vec__add__2"
 static str build_overload_func_name(allocator *alloc, str module, char const *func_name, u8 arity) {
-    str base = str_init(alloc, func_name);
-    str mangled = mangle_str_for_arity(alloc, base, arity);
     if (!str_is_empty(module)) {
-        return str_fmt(alloc, "%s__%s", str_cstr(&module), str_cstr(&mangled));
+        str safe_module = str_replace_char_str(alloc, module, '.', S("__"));
+        return str_fmt(alloc, "%s__%s__%i", str_cstr(&safe_module), func_name, (int)arity);
     }
-    return mangled;
+    return str_fmt(alloc, "%s__%i", func_name, (int)arity);
 }
 
 // Rewrite an operator node in-place to an NFA calling the overload function.
 static void rewrite_op_to_nfa(tl_infer *self, ast_node *node, str func_name,
                                ast_node **args, u8 n_args) {
-    tl_polytype *type = node->type;
-    node->tag = ast_named_function_application;
-    node->named_application.name                  = ast_node_create_sym(self->arena, func_name);
-    node->named_application.arguments             = args;
-    node->named_application.n_arguments           = n_args;
-    node->named_application.type_arguments        = null;
-    node->named_application.n_type_arguments      = 0;
-    node->named_application.is_specialized        = 0;
-    node->named_application.is_type_constructor   = 0;
-    node->named_application.is_function_reference = 0;
-    node->type = type;
+    ast_node_rewrite_to_nfa(node, ast_node_create_sym(self->arena, func_name), args, n_args);
 }
 
 // Look up an overload function by operator name and arity. Returns the function name on
@@ -1051,6 +1040,10 @@ void rewrite_operator_overloads_all(tl_infer *self) {
     hashmap_iterator iter = {0};
     ast_node        *node;
     while ((node = ast_node_str_map_iter(self->toplevels, &iter))) {
+        // Skip generic templates — their operators are rewritten in post_specialize
+        // after type substitution makes operand types concrete.
+        if (ast_node_is_let(node) && node->let.n_type_parameters > 0)
+            continue;
         ast_node_dfs(self, node, rewrite_operator_overloads);
     }
 }

@@ -566,6 +566,20 @@ void ast_node_name_replace(ast_node *node, str replace) {
     node->symbol.name = replace;
 }
 
+void ast_node_rewrite_to_nfa(ast_node *node, ast_node *name, ast_node **args, u8 n_args) {
+    tl_polytype *type = node->type;
+    node->tag = ast_named_function_application;
+    node->named_application.name                  = name;
+    node->named_application.arguments             = args;
+    node->named_application.n_arguments           = n_args;
+    node->named_application.type_arguments        = null;
+    node->named_application.n_type_arguments      = 0;
+    node->named_application.is_specialized        = 0;
+    node->named_application.is_type_constructor   = 0;
+    node->named_application.is_function_reference = 0;
+    node->type = type;
+}
+
 ast_node *ast_node_lvalue(ast_node *self) {
     if (ast_node_is_symbol(self)) return self;
     else if (ast_binary_op == self->tag) return ast_node_lvalue(self->binary_op.right);
