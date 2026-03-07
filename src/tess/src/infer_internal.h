@@ -106,16 +106,16 @@ struct tl_infer {
 
     hashmap *load_type_arguments; // Phase 2: type params for current toplevel annotation parse
 
-    u32                             next_var_name;
-    u32                             next_instantiation;
+    u32      next_var_name;
+    u32      next_instantiation;
 
-    int                             verbose;
-    int                             verbose_ast;
-    int                             indent_level;
+    int      verbose;
+    int      verbose_ast;
+    int      indent_level;
 
-    int is_constrain_ignore_error; // non-zero if no error should be reported during unification
+    int      is_constrain_ignore_error; // non-zero if no error should be reported during unification
 
-    int report_stats;
+    int      report_stats;
 
     tl_infer_phase_stats phase_stats;
     tl_infer_counters    counters;
@@ -178,23 +178,23 @@ ast_node *toplevel_get(tl_infer *, str);
 ast_node *toplevel_iter(tl_infer *, hashmap_iterator *);
 void      tl_infer_dbg(tl_infer const *, char const *restrict, ...);
 #define dbg tl_infer_dbg
-void log_toplevels(tl_infer const *);
-void log_env(tl_infer const *);
-void log_subs(tl_infer *);
-void log_constraint(tl_infer *, tl_polytype *, tl_polytype *, ast_node const *);
-void log_type_error(tl_infer *, tl_polytype *, tl_polytype *, ast_node const *);
-void log_type_error_mm(tl_infer *, tl_monotype *, tl_monotype *, ast_node const *);
+void         log_toplevels(tl_infer const *);
+void         log_env(tl_infer const *);
+void         log_subs(tl_infer *);
+void         log_constraint(tl_infer *, tl_polytype *, tl_polytype *, ast_node const *);
+void         log_type_error(tl_infer *, tl_polytype *, tl_polytype *, ast_node const *);
+void         log_type_error_mm(tl_infer *, tl_monotype *, tl_monotype *, ast_node const *);
 
-void tl_infer_set_attributes(tl_infer *, ast_node const *);
-void hot_parse_ctx_reinit(tl_infer *, hashmap *);
+void         tl_infer_set_attributes(tl_infer *, ast_node const *);
+void         hot_parse_ctx_reinit(tl_infer *, hashmap *);
 tl_monotype *parse_type_arg(tl_infer *, hashmap *, ast_node *);
-void apply_subs_to_ast(tl_infer *);
-str  next_variable_name(tl_infer *, str);
-str  next_instantiation(tl_infer *, str);
-void cancel_last_instantiation(tl_infer *);
-void do_apply_subs(void *, ast_node *);
-void apply_subs_to_ast_node(tl_infer *, ast_node *);
-void rewrite_operator_overloads_all(tl_infer *);
+void         apply_subs_to_ast(tl_infer *);
+str          next_variable_name(tl_infer *, str);
+str          next_instantiation(tl_infer *, str);
+void         cancel_last_instantiation(tl_infer *);
+void         do_apply_subs(void *, ast_node *);
+void         apply_subs_to_ast_node(tl_infer *, ast_node *);
+void         rewrite_operator_overloads_all(tl_infer *);
 
 // ============================================================================
 // Internal API: infer_constraint.c (Phases 2-4)

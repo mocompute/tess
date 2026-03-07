@@ -94,6 +94,9 @@ static hashmap *rename_function_params(tl_infer *self, ast_node *node, rename_va
     ast_arguments_iter iter = ast_node_arguments_iter(node);
     ast_node          *param;
     while ((param = ast_arguments_next(&iter))) {
+#if DEBUG_RENAME
+        fprintf(stderr, "rename function param %s\n", str_cstr(&param->symbol.name));
+#endif
         rename_one_function_param(self, param, ctx, level);
     }
 
@@ -240,9 +243,18 @@ void rename_variables(tl_infer *self, ast_node *node, rename_variables_ctx *ctx,
     } break;
 
     case ast_let: {
+#if DEBUG_RENAME
+        fprintf(stderr, "rename let %s\n", str_cstr(&node->let.name->symbol.name));
+#endif
         hashmap *save = rename_function_params(self, node, ctx, level);
         rename_variables(self, node->let.body, ctx, level + 1);
         ast_node_type_set(node->let.name, null);
+        node->let.name->symbol.annotation_type = null;
+        // Traverse the let name's annotation (e.g. the arrow in `f(x) -> T { ... }`)
+        // so that parameter references get alpha-converted. The let's function params
+        // are already in ctx->lex from rename_function_params above, so symbols like
+        // `x` in `f(x) -> CSize { ... }` will be found and renamed.
+        rename_variables(self, node->let.name->symbol.annotation, ctx, level + 1);
         map_destroy(&ctx->lex);
         ctx->lex = save;
     } break;
@@ -373,9 +385,8 @@ void rename_variables(tl_infer *self, ast_node *node, rename_variables_ctx *ctx,
     case ast_string:
     case ast_char:
     case ast_nil:
-    case ast_void:
-        break;
-    case ast_arrow: {
+    case ast_void:          break;
+    case ast_arrow:         {
         // Recurse into arrow annotations (e.g. `f: (T) -> U`) so that type
         // parameter references in parameter/return types get alpha-converted.
         // First, register any type parameters declared on the arrow itself
@@ -402,7 +413,7 @@ void rename_variables(tl_infer *self, ast_node *node, rename_variables_ctx *ctx,
     case ast_i64_z:
     case ast_u64:
     case ast_u64_zu:
-    case ast_type_alias:    break;
+    case ast_type_alias: break;
     }
 }
 
