@@ -1779,6 +1779,20 @@ ast_node_sized ast_node_sized_from_ast_array_const(ast_node const *node) {
     return (ast_node_sized){.size = node->array.n, .v = node->array.nodes};
 }
 
+ast_node_sized ast_let_type_params(ast_node const *node) {
+    assert(ast_node_is_let(node));
+    ast_node **tp = node->let.type_parameters;
+    u32        n  = node->let.n_type_parameters;
+    if (!n && node->let.name->symbol.annotation) {
+        ast_node *ann = node->let.name->symbol.annotation;
+        if (ast_node_is_arrow(ann) && ann->arrow.n_type_parameters > 0) {
+            tp = ann->arrow.type_parameters;
+            n  = ann->arrow.n_type_parameters;
+        }
+    }
+    return (ast_node_sized){.size = n, .v = tp};
+}
+
 //
 
 hashmap *ast_node_str_map_create(allocator *alloc, u32 n) {

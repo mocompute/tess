@@ -9,6 +9,7 @@
 // Also contains: traverse_ast (the main AST walker), resolve_node, all the
 // infer_* type inference handlers, constraint functions, and error reporting.
 
+#include "ast.h"
 #include "infer_internal.h"
 
 // ============================================================================
@@ -142,19 +143,8 @@ static void load_toplevel_type_params_raw(tl_infer *self, ast_node **type_parame
 }
 
 static void load_toplevel_type_params(tl_infer *self, ast_node *node) {
-    ast_node **tp = node->let.type_parameters;
-    u32        n  = node->let.n_type_parameters;
-
-    // Variant constructors (from UTD expansion) have type params on the arrow, not the let.
-    if (!n && node->let.name->symbol.annotation) {
-        ast_node *ann = node->let.name->symbol.annotation;
-        if (ast_node_is_arrow(ann) && ann->arrow.n_type_parameters > 0) {
-            tp = ann->arrow.type_parameters;
-            n  = ann->arrow.n_type_parameters;
-        }
-    }
-
-    load_toplevel_type_params_raw(self, tp, n);
+    ast_node_sized tp = ast_let_type_params(node);
+    load_toplevel_type_params_raw(self, tp.v, tp.size);
 }
 
 // For forward declarations: symbol with arrow annotation — type params are on the arrow.
@@ -246,7 +236,9 @@ static void load_toplevel_let(tl_infer *self, ast_node *node) {
                 // Do not overwrite let node's annotated parameters
                 if (arg->symbol.annotation) goto next;
 
-                arg->symbol.annotation = ast_param_tuple->tuple.elements[j];
+                ast_node *fwd_param = ast_param_tuple->tuple.elements[j];
+                arg->symbol.annotation =
+                  ast_node_is_symbol(fwd_param) ? fwd_param->symbol.annotation : fwd_param;
                 arg->symbol.annotation_type =
                   tl_polytype_absorb_mono(self->arena, param_tuple->list.xs.v[j]);
 
@@ -443,8 +435,9 @@ traverse_ctx *traverse_ctx_create(allocator *transient) {
 void traverse_ctx_load_type_arguments(tl_infer *self, traverse_ctx *ctx, ast_node const *node) {
     // read type arguments out of ast node
     if (ast_node_is_let(node)) {
-        for (u32 i = 0; i < node->let.n_type_parameters; i++) {
-            ast_node *type_param = node->let.type_parameters[i];
+        ast_node_sized tp = ast_let_type_params(node);
+        for (u32 i = 0; i < tp.size; i++) {
+            ast_node *type_param = tp.v[i];
             assert(ast_node_is_symbol(type_param));
 
 #if DEBUG_INVARIANTS
@@ -842,7 +835,24 @@ int process_annotation(tl_infer *self, traverse_ctx *ctx, ast_node *node, annota
     // parse_type_annotation knows how to look a symbol node's annotation
     annotation_parse_result result = parse_type_annotation(self, ctx, node);
 
-    if (!result.parsed) return 0;
+    if (!result.parsed) {
+        if (ast_node_is_symbol(node) && node->symbol.annotation
+            && ast_node_is_symbol(node->symbol.annotation)) {
+            ast_node *ann     = node->symbol.annotation;
+            str       ann_name = ast_node_str(ann);
+            int       was_alpha_converted = !str_is_empty(ann->symbol.original);
+            if (!was_alpha_converted) {
+                fprintf(stderr,
+                        "[INSTRUMENTATION] UNKNOWN TYPE: annotation '%s' on node '%s' "
+                        "(file=%s, line=%u)\n",
+                        str_cstr(&ann_name), str_cstr(&node->symbol.name),
+                        node->file ? node->file : "?", node->line);
+                expected_type(self, ann);
+                return 1;
+            }
+        }
+        return 0;
+    }
 
     tl_monotype *mono = result.parsed;
 

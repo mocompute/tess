@@ -85,10 +85,9 @@ static hashmap *rename_function_params(tl_infer *self, ast_node *node, rename_va
 
     // alpha conversion of type arguments
     if (ast_node_is_let(node)) {
-        u32        argc = node->let.n_type_parameters;
-        ast_node **argv = node->let.type_parameters;
-        for (u32 i = 0; i < argc; i++) {
-            rename_one_function_param(self, argv[i], ctx, level);
+        ast_node_sized tp = ast_let_type_params(node);
+        for (u32 i = 0; i < tp.size; i++) {
+            rename_one_function_param(self, tp.v[i], ctx, level);
         }
     }
 

@@ -377,6 +377,10 @@ void           ast_node_set_is_specialized(ast_node *);
 ast_node_sized ast_node_sized_from_ast_array(ast_node *);
 ast_node_sized ast_node_sized_from_ast_array_const(ast_node const *);
 
+// Return type parameters from a let node. Variant constructors (from UTD expansion)
+// store type params on the arrow annotation rather than the let node itself.
+ast_node_sized ast_let_type_params(ast_node const *);
+
 // -- hashmap: str => ast_node* --
 
 nodiscard hashmap *ast_node_str_map_create(allocator *, u32) mallocfun;
