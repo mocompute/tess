@@ -536,6 +536,7 @@ TL_TESTS =					\
 	reassign_result				\
 	recursive_type				\
 	recursive_type_basic			\
+	recursive_type_cycle_3			\
 	recursive_type_generic			\
 	recursive_type_mutual			\
 	recursive_type_mutual_simple		\
@@ -746,8 +747,7 @@ TL_KNOWN_FAIL_FAILURES =			\
 	fail_unknown_type_return
 
 # Tests that should work but currently fail due to compiler bugs
-TL_KNOWN_FAILURES =				\
-	recursive_type_cycle_3
+TL_KNOWN_FAILURES =
 
 
 # Total test count across all suites

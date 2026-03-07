@@ -869,10 +869,8 @@ static tl_monotype *parse_type_nfa(tl_type_registry *self, tl_type_registry_pars
         // If the target is a symbol and not a utd in_progress, it must either be a nullary type or it
         // is sugar for a type variable, e.g a function in stdlib.tl which returns a `Ptr(T)`.
         if (ast_node_is_symbol(target)) {
-            if (!str_hset_contains(ctx->in_progress, target_name_str)) {
-                (void)tl_type_registry_parse_type_(self, ctx, target);
-            } else {
-                // If target name is an in_progress utd, we must defer the parse.
+            if (str_hset_contains(ctx->in_progress, target_name_str)) {
+                // Self-referential: target is currently being parsed, must defer.
 #if DEBUG_RECURSIVE_TYPES
                 fprintf(stderr,
                         "[DEBUG_RECURSIVE_TYPES] parse_type_: unary '%s' target '%s' is in_progress, "
@@ -880,6 +878,16 @@ static tl_monotype *parse_type_nfa(tl_type_registry *self, tl_type_registry_pars
                         str_cstr(&name), str_cstr(&target_name_str));
 #endif
                 result = defer_parse(self, ctx, target_name_str, (tl_monotype_sized){0});
+            } else {
+                // Try to parse normally (handles specials like `any`, nullary types, type args).
+                // If that fails, the target may be a forward reference in a multi-type recursion
+                // cycle (e.g. A->B->C->A when parsing A and B isn't registered yet) — defer it.
+                tl_monotype *parsed = tl_type_registry_parse_type_(self, ctx, target);
+                if (!parsed && map_size(ctx->in_progress)) {
+                    // Inside a UTD parse and target is unknown — forward reference in a
+                    // multi-type recursion cycle (e.g. A->B->C->A, parsing A, B not yet registered).
+                    result = defer_parse(self, ctx, target_name_str, (tl_monotype_sized){0});
+                }
             }
         } else {
             // Maybe defer non-symbol target: parse type args in caller's context before deferring
