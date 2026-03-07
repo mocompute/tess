@@ -434,6 +434,15 @@ static str specialize_type_constructor_(tl_infer *self, str name, tl_monotype_si
         if (utd && ast_node_is_enum_def(utd)) return str_empty();
     }
 
+    // Normalize type alias names to their canonical generic_name so that auto-collapsed aliases
+    // (e.g. "Point" aliasing "Point__T") use the same cache key as the original name.
+    if (tl_type_registry_is_type_alias(self->registry, name)) {
+        tl_polytype *alias_poly = tl_type_registry_get(self->registry, name);
+        if (alias_poly && tl_monotype_is_inst(alias_poly->type)) {
+            name = alias_poly->type->cons_inst->def->generic_name;
+        }
+    }
+
     {
         name_and_type key = {.name_hash = str_hash64(name), .type_hash = tl_monotype_sized_hash64(0, args)};
         if (hset_contains(*seen, &key, sizeof key)) {
