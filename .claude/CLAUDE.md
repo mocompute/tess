@@ -31,7 +31,7 @@ Full debug test run:
 
 Single test:
 ```bash
-./tess run src/tess/tl/test_<name>.tl
+./tess run src/tess/tl/test/pass/test_<name>.tl
 ```
 
 Compiler usage:
@@ -58,17 +58,21 @@ Common flags: `-v` (verbose), `--no-line-directive`, `--no-standard-includes`, `
 
 - **MOS tests** (`src/mos/src/test_*.c`) - Data structure unit tests
 - **Tess tests** (`src/tess/src/test_*.c`) - Compiler unit tests
-- **TL tests** (`src/tess/tl/test_*.tl`) - Language integration tests
-  - `test_fail_*` - Expected failures (compiler should reject these)
-  - **Known failures** (`TL_KNOWN_FAILURES` / `tl_create_known_failure()`) - Tests that should pass but don't yet
-  - **Known fail-failures** (`TL_KNOWN_FAIL_FAILURES` / `tl_create_known_fail_failure()`) - `test_fail_*` tests the compiler doesn't reject yet
+- **TL tests** (`src/tess/tl/test/`) - Language integration tests, auto-discovered by directory:
+  - `test/pass/` - Expected to compile and run successfully
+  - `test/pass_optimized/` - Need compiler optimization (e.g. tail calls)
+  - `test/fail/` - Expected compile-time failures (compiler must reject)
+  - `test/fail_runtime/` - Expected runtime failures (compile OK, must fail at runtime)
+  - `test/known_failures/` - Tests that should pass but don't yet
+  - `test/known_fail_failures/` - `test_fail_*` tests the compiler doesn't reject yet
 
 ### Testing Requirements
 
 **Always take a test-first approach.** Write tests BEFORE implementation:
 - Write a test for the desired behavior, verify it fails (or add to known failures), then implement
 - Run `make -j test` to verify all tests pass before committing
-- **Bug workflow**: Write a minimal failing test case and add it to known failures in **both** build systems before any fix work
+- **Bug workflow**: Write a minimal failing test case in `test/known_failures/` before any fix work
+- **Adding tests**: Just drop a `test_<name>.tl` file in the appropriate `src/tess/tl/test/` subdirectory — both Makefile and CMake auto-discover tests
 
 ## Build System
 
@@ -76,4 +80,4 @@ Common flags: `-v` (verbose), `--no-line-directive`, `--no-standard-includes`, `
 - **Makefile** (`Makefile`) - Primary for Linux/macOS
 - **CMake** (`CMakeLists.txt`, `src/*/CMakeLists.txt`) - Primary for Windows (see `docs/WINDOWS_BUILD.md`)
 
-This includes: adding tests, source files, build flags, and known failures.
+This includes: source files, build flags, and build configuration. TL tests are auto-discovered from `src/tess/tl/test/` subdirectories.

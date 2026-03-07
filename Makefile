@@ -375,387 +375,33 @@ build-vendor-tests: $(VENDOR_TEST_EXES)
 test-vendor: build-vendor-tests
 	$(call run_test_suite,vendor,$(VENDOR_TEST_EXES),$(words $(VENDOR_TESTS)))
 
+
 # ------------------------------------------------------------------------------
 # Tesslang (.tl) Tests
 # ------------------------------------------------------------------------------
 
-TL_TESTS =					\
-	_Exit					\
-	address_of				\
-	alias_basic				\
-	alias_deep_dotted			\
-	alias_dotted				\
-	alias_file_boundary			\
-	alias_funcptr				\
-	alias_nested_type			\
-	alias_unalias				\
-	alignof					\
-	alloc_align				\
-	alloc_allocators			\
-	anon_lambda				\
-	apply_generic				\
-	apply_generic_through_pointer		\
-	apply_lambda				\
-	arity_overload				\
-	array_api				\
-	array_comprehensive			\
-	array_index_binary_op			\
-	array_sort				\
-	atexit					\
-	attributes				\
-	binop					\
-	bitwise_compound_assign			\
-	bitwise_operators			\
-	block_expression			\
-	builtin_option				\
-	builtin_result				\
-	c_div					\
-	c_export				\
-	c_keywords				\
-	c_struct				\
-	c_symbol_annotation			\
-	c_timespec				\
-	carray					\
-	carray_struct_field			\
-	case_basic_else				\
-	case_pred_ident				\
-	case_pred_lambda			\
-	char_literal				\
-	closure_fun_ptr				\
-	closure_in_named_function		\
-	compound_assignment			\
-	conditional_compile_auto_define		\
-	conditional_compile_define		\
-	conditional_compile_import		\
-	conditional_compile_nested		\
-	const					\
-	defer					\
-	defun_inline_type			\
-	deref_then_addr				\
-	dynamic_array				\
-	embed_c					\
-	enum_module				\
-	enum_no_module				\
-	escape_sequences			\
-	factorial				\
-	fatal_intrinsic				\
-	float_same_type				\
-	float_weak_literal			\
-	float_cast				\
-	float_widening				\
-	for_break				\
-	for_continue				\
-	for_statement_basic			\
-	for_statement_module			\
-	forward_decl_not_needed			\
-	function_pointer_argument		\
-	function_pointer_array			\
-	function_pointer_in_struct		\
-	function_pointer_in_struct_direct	\
-	function_pointer_in_struct_direct_2	\
-	function_pointer_mutable		\
-	function_pointer_pointer		\
-	function_pointer_recursive_type		\
-	function_pointer_higher_order_return	\
-	function_pointer_value			\
-	generic_fn_ref_explicit_type_args	\
-	generic_lambda				\
-	generic_nested_sizeof			\
-	generic_null_field			\
-	generic_struct_fn_ptr_field		\
-	generic_struct_null_fn_ptr_field	\
-	global_variables			\
-	hashmap					\
-	hello					\
-	if_basic				\
-	if_expression				\
-	import_relative				\
-	import_relative_dotdot			\
-	integer_bounds_check			\
-	integer_cast_annotation			\
-	integer_compound_assign			\
-	integer_families			\
-	integer_generic_type_args		\
-	integer_narrowing_let_cast		\
-	integer_same_type			\
-	integer_standalone_cchar		\
-	integer_widening			\
-	integer_widening_reassign		\
-	lambda_apply				\
-	lambda_arg_annotated			\
-	lambda_arg_unused			\
-	lambda_basic				\
-	lambda_capture_mutate			\
-	lambda_immediate			\
-	let_in_basic				\
-	let_in_expression			\
-	logical_and				\
-	logical_or				\
-	malloc_free				\
-	malloc_free_is_null			\
-	malloc_struct_basic			\
-	map_option_cross_type			\
-	mapper_basic				\
-	mapper_lambda				\
-	module_auto_collapse			\
-	module_auto_collapse_hashmap		\
-	module_auto_collapse_T			\
-	module_basic				\
-	module_init				\
-	module_nested				\
-	module_prelude				\
-	mutual_recursion			\
-	mutual_recursion_both_referenced	\
-	mutual_recursion_module			\
-	mutual_recursion_module_apply		\
-	nested_lambda_context			\
-	nested_struct				\
-	nested_struct_access			\
-	nested_type_cross_module_conflict	\
-	number_formats				\
-	operator_overload			\
-	operator_overload_bitwise		\
-	operator_overload_chain			\
-	operator_overload_compound		\
-	operator_overload_div_mod		\
-	operator_overload_eq_from_cmp		\
-	operator_overload_eq_only		\
-	operator_overload_multi			\
-	operator_overload_in_function		\
-	operator_overload_tagged_union		\
-	operator_overload_unary			\
-	pack					\
-	pointer_array				\
-	pointer_cast				\
-	pointer_cast_struct			\
-	pointer_compare_null			\
-	pointer_deref				\
-	pointer_deref_double			\
-	printf					\
-	reassign_into_stack_lambda		\
-	reassign_result				\
-	recursive_type				\
-	recursive_type_basic			\
-	recursive_type_cycle_3			\
-	recursive_type_generic			\
-	recursive_type_mutual			\
-	recursive_type_mutual_simple		\
-	regress_type_cons			\
-	return_null				\
-	return_statement			\
-	scope_shadow				\
-	sizeof					\
-	sizeof_type_literal			\
-	static_init				\
-	static_init_struct			\
-	static_init_generic_function_pointer	\
-	static_init_struct_fun_ptr		\
-	str					\
-	strcmp					\
-	struct_concrete				\
-	struct_construction			\
-	struct_empty				\
-	struct_field_ptr_cast			\
-	struct_field_ptr_cast_inline		\
-	struct_field_ptr_cast_multi		\
-	struct_generic				\
-	struct_generic_function_signature	\
-	tagged_union				\
-	tagged_union_bail			\
-	tagged_union_bail_nested		\
-	tagged_union_carray			\
-	tagged_union_case_annotation		\
-	tagged_union_cross_module_positional	\
-	tagged_union_function_pointer		\
-	tagged_union_generic_basic		\
-	tagged_union_generic_case		\
-	tagged_union_generic_func		\
-	tagged_union_generic_function_pointer	\
-	tagged_union_generic_multi		\
-	tagged_union_generic_nested		\
-	tagged_union_generic_param		\
-	tagged_union_generic_return		\
-	tagged_union_generic_scoped		\
-	tagged_union_many_variants		\
-	tagged_union_multi_same_module		\
-	tagged_union_mutable_case		\
-	tagged_union_nested_when		\
-	tagged_union_option			\
-	tagged_union_pointer_field		\
-	tagged_union_recursive_type		\
-	tagged_union_scoped_bare_cross_module	\
-	tagged_union_scoped_construction	\
-	tagged_union_scoped_variant		\
-	tagged_union_scoped_variant_as_union	\
-	tagged_union_unscoped			\
-	tail_call				\
-	trait_bounds				\
-	trait_bounds_builtin			\
-	trait_bounds_inherited			\
-	trait_bounds_multi_inst			\
-	trait_bounds_multi_type			\
-	trait_conditional			\
-	trait_declaration			\
-	trait_diamond_inheritance		\
-	trait_inheritance_conformance		\
-	trait_ord_derives_eq			\
-	type_alias_generic			\
-	type_alias_local			\
-	type_alias_module_chained		\
-	type_alias_module_enum			\
-	type_alias_module_multi_arg		\
-	type_alias_module_multi_arg_direct_compatible	\
-	type_alias_module_simple		\
-	type_argument_field_annotation		\
-	type_arguments_annotations		\
-	type_literal_generic			\
-	type_predicate				\
-	type_predicate_branch			\
-	type_predicate_field			\
-	type_predicate_generic			\
-	type_predicate_generic_type		\
-	type_predicate_type_arg			\
-	types_integer_cast			\
-	try					\
-	types_float				\
-	types_integer				\
-	ufcs					\
-	ufcs_module				\
-	uninitialized_fields			\
-	union_basic				\
-	union_module_intermediate		\
-	union_module_second_variant		\
-	stress_closures				\
-	stress_control_flow			\
-	stress_deep_nesting			\
-	stress_expression_position		\
-	stress_generic_types			\
-	stress_scope_shadow			\
-	stress_type_features			\
-	stress_when_combinations		\
-	while_break				\
-	while_continue				\
-	while_empty_body			\
-	while_statement				\
-	while_update_statement			\
-	weak_int_literals			\
-	weak_int_module_const			\
-	weak_int_to_standalone			\
-	weak_int_unsigned_update		\
-	z_literals
+# Auto-discover tests from subdirectories
+TL_DIR_PASS        = $(TL_TEST_DIR)/test/pass
+TL_DIR_PASS_OPT    = $(TL_TEST_DIR)/test/pass_optimized
+TL_DIR_FAIL        = $(TL_TEST_DIR)/test/fail
+TL_DIR_FAIL_RT     = $(TL_TEST_DIR)/test/fail_runtime
+TL_DIR_KNOWN       = $(TL_TEST_DIR)/test/known_failures
+TL_DIR_KNOWN_FF    = $(TL_TEST_DIR)/test/known_fail_failures
 
-TL_FAIL_TESTS =					\
-	fail_alias_chain			\
-	fail_alias_double_underscore		\
-	fail_alias_duplicate			\
-	fail_alias_main				\
-	fail_alias_reserved_c			\
-	fail_alias_reserved_tl			\
-	fail_alias_self				\
-	fail_alias_shadows_module		\
-	fail_alias_source_not_found		\
-	fail_case_float				\
-	fail_c_export_tess_type			\
-	fail_concrete_fun_mismatch		\
-	fail_const_field_mutation		\
-	fail_const_index_mutation		\
-	fail_const_lambda_mutation		\
-	fail_const_mutation			\
-	fail_const_strip			\
-	fail_const_strip_lambda			\
-	fail_const_strip_nested			\
-	fail_double_underscore			\
-	fail_double_underscore_module		\
-	fail_generic_unused_type_param		\
-	fail_import_absolute			\
-	fail_import_missing_quotes		\
-	fail_integer_compound_assign_mixed	\
-	fail_integer_cross_chain		\
-	fail_integer_cross_family_arithmetic	\
-	fail_integer_cross_family_assignment	\
-	fail_integer_cross_family_comparison	\
-	fail_integer_cross_family_unsigned_to_signed \
-	fail_integer_exact_case			\
-	fail_integer_exact_conditional		\
-	fail_integer_exact_generic		\
-	fail_integer_exact_generic_standalone	\
-	fail_integer_exact_operator		\
-	fail_integer_literal_overflow		\
-	fail_integer_literal_overflow_negative	\
-	fail_integer_literal_overflow_unsigned	\
-	fail_integer_narrowing_funcall		\
-	fail_integer_narrowing_reassign		\
-	fail_integer_narrowing_return		\
-	fail_lambda_implicit_return		\
-	fail_lambda_return			\
-	fail_monkey_patch			\
-	fail_nested_module_no_immediate_parent	\
-	fail_nested_module_no_parent		\
-	fail_nested_type_cross_module_conflict	\
-	fail_reserved_type_alias		\
-	fail_reserved_type_annotation		\
-	fail_reserved_type_assign		\
-	fail_reserved_type_enum			\
-	fail_reserved_type_forward		\
-	fail_reserved_type_fun			\
-	fail_reserved_type_struct		\
-	fail_reserved_type_tu			\
-	fail_reserved_type_union		\
-	fail_tagged_union_bail_not_diverging	\
-	fail_tagged_union_duplicate_variant	\
-	fail_tagged_union_existing_type	\
-	fail_tagged_union_missing_case		\
-	fail_tagged_union_unknown_variant	\
-	fail_operator_no_overload		\
-	fail_trait_bound_combined		\
-	fail_trait_bound_builtin_user_trait	\
-	fail_trait_bound_builtin_mod_float	\
-	fail_trait_bound_not_satisfied		\
-	fail_trait_conditional_not_satisfied	\
-	fail_trait_conditional_transitive	\
-	fail_trait_bound_second_param		\
-	fail_trait_bound_eq_no_eq_no_cmp	\
-	fail_trait_bound_ord_missing_cmp	\
-	fail_trait_circular			\
-	fail_trait_duplicate			\
-	fail_trait_reserved_name		\
-	fail_type_alias_partial_specialization	\
-	fail_try_non_union			\
-	fail_ufcs_not_found			\
-	fail_try_three_variants			\
-	fail_unalias_not_found			\
-	fail_unknown_free_variable		\
-	fail_float_exact_conditional		\
-	fail_float_exact_operator		\
-	fail_float_int_implicit			\
-	fail_float_narrowing_funcall		\
-	fail_float_narrowing_return		\
-	fail_weak_int_cross_family
-
-# Expected runtime failure tests (must compile, must fail at runtime with --bounds-check)
-TL_FAIL_RUNTIME_TESTS =			\
-	fail_runtime_float_narrowing		\
-	fail_runtime_float_to_int		\
-	fail_runtime_integer_bounds		\
-	fail_runtime_integer_bounds_cross_family
-
-# Expected-failure tests that the compiler doesn't reject yet
-TL_KNOWN_FAIL_FAILURES =			\
-	fail_unknown_type_annotation		\
-	fail_unknown_type_generic_arg		\
-	fail_unknown_type_param			\
-	fail_unknown_type_return
-
-# Tests that should work but currently fail due to compiler bugs
-TL_KNOWN_FAILURES =
-
+TL_TESTS              = $(patsubst $(TL_DIR_PASS)/test_%.tl,%,$(wildcard $(TL_DIR_PASS)/test_*.tl)) import_relative_dotdot
+TL_TESTS_OPTIMIZED    = $(patsubst $(TL_DIR_PASS_OPT)/test_%.tl,%,$(wildcard $(TL_DIR_PASS_OPT)/test_*.tl))
+TL_FAIL_TESTS         = $(patsubst $(TL_DIR_FAIL)/test_%.tl,%,$(wildcard $(TL_DIR_FAIL)/test_*.tl))
+TL_FAIL_RUNTIME_TESTS = $(patsubst $(TL_DIR_FAIL_RT)/test_%.tl,%,$(wildcard $(TL_DIR_FAIL_RT)/test_*.tl))
+TL_KNOWN_FAILURES     = $(patsubst $(TL_DIR_KNOWN)/test_%.tl,%,$(wildcard $(TL_DIR_KNOWN)/test_*.tl))
+TL_KNOWN_FAIL_FAILURES = $(patsubst $(TL_DIR_KNOWN_FF)/test_%.tl,%,$(wildcard $(TL_DIR_KNOWN_FF)/test_*.tl))
 
 # Total test count across all suites
 TOTAL_TESTS = $(words $(MOS_TESTS) $(TESS_TESTS) $(VENDOR_TESTS) \
-	$(TL_TESTS) $(TL_FAIL_TESTS) $(TL_FAIL_RUNTIME_TESTS) \
+	$(TL_TESTS) $(TL_TESTS_OPTIMIZED) $(TL_FAIL_TESTS) $(TL_FAIL_RUNTIME_TESTS) \
 	$(TL_KNOWN_FAIL_FAILURES) $(TL_KNOWN_FAILURES))
 
 TL_TEST_EXES = $(patsubst %,$(TL_BUILD_DIR)/test_%,$(TL_TESTS))
+TL_TEST_OPT_EXES = $(patsubst %,$(TL_BUILD_DIR)/test_opt_%,$(TL_TESTS_OPTIMIZED))
 
 # Special rule for test_import_relative_dotdot (needs to run from fixtures directory)
 $(TL_BUILD_DIR)/test_import_relative_dotdot: $(TL_TEST_DIR)/fixtures/test_import_relative_dotdot.tl $(TESS_EXE) $(TL_STD_SOURCES)
@@ -768,7 +414,8 @@ $(TL_BUILD_DIR)/test_import_relative_dotdot: $(TL_TEST_DIR)/fixtures/test_import
 		$(MSG_FAIL) $@; \
 	fi
 
-$(TL_BUILD_DIR)/test_%: $(TL_TEST_DIR)/test_%.tl $(TESS_EXE) $(TL_STD_SOURCES)
+# Pass tests (from test/pass/)
+$(TL_BUILD_DIR)/test_%: $(TL_DIR_PASS)/test_%.tl $(TESS_EXE) $(TL_STD_SOURCES)
 	@mkdir -p $(dir $@)
 	$(MSG_GEN) $@
 	@export ASAN_OPTIONS=$(ASAN_OPTIONS); \
@@ -777,7 +424,17 @@ $(TL_BUILD_DIR)/test_%: $(TL_TEST_DIR)/test_%.tl $(TESS_EXE) $(TL_STD_SOURCES)
 		$(MSG_FAIL) $@; \
 	fi
 
-build-tl-tests: $(TL_TEST_EXES)
+# Optimized pass tests (from test/pass_optimized/, need default -O2 optimization)
+$(TL_BUILD_DIR)/test_opt_%: $(TL_DIR_PASS_OPT)/test_%.tl $(TESS_EXE) $(TL_STD_SOURCES)
+	@mkdir -p $(dir $@)
+	$(MSG_GEN) $@
+	@export ASAN_OPTIONS=$(ASAN_OPTIONS); \
+	if ! ./$(TESS_EXE) exe --no-standard-includes -S $(TL_STD_DIR) -o $@ $< ; then \
+		rm -f $@; \
+		$(MSG_FAIL) $@; \
+	fi
+
+build-tl-tests: $(TL_TEST_EXES) $(TL_TEST_OPT_EXES)
 
 test-tl: build-tl-tests
 	@failed=0; \
@@ -794,10 +451,19 @@ test-tl: build-tl-tests
 		fi; \
 		count_pass=$$((count_pass + 1)); \
 	done; \
+	for test in $(TL_TEST_OPT_EXES); do \
+		name=$$(basename $$test); \
+		$(MSG_TEST) $$name; \
+		if ! $$test $(STDERR); then \
+			$(MSG_FAIL) $$name; \
+			failed=$$((failed + 1)); \
+		fi; \
+		count_pass=$$((count_pass + 1)); \
+	done; \
 	printf "  \033[1;36m[COUNT]\033[0m $$count_pass expected passing tests\n\n"; \
 	for name in $(TL_FAIL_TESTS); do \
 		$(MSG_TEST) $$name; \
-		if ./$(TESS_EXE) exe --no-standard-includes -S $(TL_STD_DIR) -o /dev/null $(TL_TEST_DIR)/test_$$name.tl 2>/dev/null; then \
+		if ./$(TESS_EXE) exe --no-standard-includes -S $(TL_STD_DIR) -o /dev/null $(TL_DIR_FAIL)/test_$$name.tl 2>/dev/null; then \
 			$(MSG_FAIL2) $$name; \
 			failed=$$((failed + 1)); \
 		fi; \
@@ -807,7 +473,7 @@ test-tl: build-tl-tests
 	count_fail_rt=0; \
 	for name in $(TL_FAIL_RUNTIME_TESTS); do \
 		$(MSG_TEST) $$name; \
-		if ./$(TESS_EXE) exe --no-standard-includes --bounds-check -S $(TL_STD_DIR) -o /tmp/tl_test_$$name $(TL_TEST_DIR)/test_$$name.tl 2>/dev/null; then \
+		if ./$(TESS_EXE) exe --no-standard-includes --bounds-check -S $(TL_STD_DIR) -o /tmp/tl_test_$$name $(TL_DIR_FAIL_RT)/test_$$name.tl 2>/dev/null; then \
 			if /tmp/tl_test_$$name 2>/dev/null; then \
 				$(MSG_FAIL2) $$name; \
 				failed=$$((failed + 1)); \
@@ -822,7 +488,7 @@ test-tl: build-tl-tests
 	count_known_fail=0; \
 	known_fail=0; \
 	for name in $(TL_KNOWN_FAIL_FAILURES); do \
-		if ! ./$(TESS_EXE) exe --no-standard-includes -S $(TL_STD_DIR) -o /dev/null $(TL_TEST_DIR)/test_$$name.tl 2>/dev/null; then \
+		if ! ./$(TESS_EXE) exe --no-standard-includes -S $(TL_STD_DIR) -o /dev/null $(TL_DIR_KNOWN_FF)/test_$$name.tl 2>/dev/null; then \
 			printf "  \033[1;32m[FIXED]\033[0m  test_$$name (remove from TL_KNOWN_FAIL_FAILURES)\n"; \
 		else \
 			printf "  \033[1;33m[KNOWN]\033[0m  test_$$name\n"; \
@@ -833,7 +499,7 @@ test-tl: build-tl-tests
 	printf "  \033[1;36m[COUNT]\033[0m $$count_known_fail known fail-failure tests\n\n"; \
 	known=0; \
 	for name in $(TL_KNOWN_FAILURES); do \
-		if ./$(TESS_EXE) exe --no-standard-includes -S $(TL_STD_DIR) -o /tmp/tl_test_$$name $(TL_TEST_DIR)/test_$$name.tl 2>/dev/null && /tmp/tl_test_$$name 2>/dev/null; then \
+		if ./$(TESS_EXE) exe --no-standard-includes -S $(TL_STD_DIR) -o /tmp/tl_test_$$name $(TL_DIR_KNOWN)/test_$$name.tl 2>/dev/null && /tmp/tl_test_$$name 2>/dev/null; then \
 			printf "  \033[1;32m[FIXED]\033[0m  test_$$name (remove from TL_KNOWN_FAILURES)\n"; \
 		else \
 			printf "  \033[1;33m[KNOWN]\033[0m  test_$$name\n"; \
