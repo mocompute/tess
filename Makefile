@@ -676,6 +676,8 @@ TL_FAIL_TESTS =					\
 	fail_integer_cross_family_unsigned_to_signed \
 	fail_integer_exact_case			\
 	fail_integer_exact_conditional		\
+	fail_integer_exact_generic		\
+	fail_integer_exact_generic_standalone	\
 	fail_integer_exact_operator		\
 	fail_integer_literal_overflow		\
 	fail_integer_literal_overflow_negative	\
@@ -738,8 +740,6 @@ TL_FAIL_RUNTIME_TESTS =			\
 
 # Expected-failure tests that the compiler doesn't reject yet
 TL_KNOWN_FAIL_FAILURES =			\
-	fail_integer_exact_generic		\
-	fail_integer_exact_generic_standalone	\
 	fail_unknown_type_annotation		\
 	fail_unknown_type_generic_arg		\
 	fail_unknown_type_param			\

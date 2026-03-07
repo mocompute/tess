@@ -630,8 +630,8 @@ tl_create_build_fail_test(fail_try_three_variants)
 
 tl_create_build_fail_test(fail_integer_exact_case)
 tl_create_build_fail_test(fail_integer_exact_conditional)
-tl_create_known_fail_failure(fail_integer_exact_generic)
-tl_create_known_fail_failure(fail_integer_exact_generic_standalone)
+tl_create_build_fail_test(fail_integer_exact_generic)
+tl_create_build_fail_test(fail_integer_exact_generic_standalone)
 tl_create_build_fail_test(fail_integer_exact_operator)
 tl_create_build_fail_test(fail_integer_literal_overflow)
 tl_create_build_fail_test(fail_integer_literal_overflow_negative)
@@ -649,4 +649,3 @@ tl_create_runtime_fail_test(fail_runtime_integer_bounds_cross_family)
 # Known fail failures: compiler should reject but doesn't yet
 
 # Known failures: these should work but a compiler bug makes them fail
-
