@@ -237,9 +237,6 @@ static void load_toplevel_let(tl_infer *self, ast_node *node) {
                 // Do not overwrite let node's annotated parameters
                 if (arg->symbol.annotation) goto next;
 
-                // ast_node *fwd_param = ast_param_tuple->tuple.elements[j];
-                // arg->symbol.annotation =
-                //   ast_node_is_symbol(fwd_param) ? fwd_param->symbol.annotation : fwd_param;
                 arg->symbol.annotation_type =
                   tl_polytype_absorb_mono(self->arena, param_tuple->list.xs.v[j]);
 
@@ -824,11 +821,21 @@ annotation_parse_result parse_type_annotation(tl_infer *self, traverse_ctx *ctx,
 
 static int infer_struct_access(tl_infer *, traverse_ctx *, ast_node *);
 
+// Check whether `type_params` (an array of symbol nodes) contains a type parameter
+// whose original (pre-alpha) name matches `name`.
+static int type_params_contain(ast_node **type_params, u32 n, str name) {
+    for (u32 i = 0; i < n; i++) {
+        str orig = type_params[i]->symbol.original;
+        if (!str_is_empty(orig) && str_eq(orig, name)) return 1;
+    }
+    return 0;
+}
+
 // Recursively walk an annotation subtree looking for unknown type names.
 // Returns 1 if an unknown type was found (and reports the error), 0 otherwise.
-// `node` is the owning let/symbol node (for type param lookup); `arrow_ann` tracks
-// the nearest enclosing arrow (for its declared type params).
-static int check_unknown_type_ann(tl_infer *self, traverse_ctx *ctx, ast_node *node, ast_node *ann,
+// `let_tp` are the owning let node's type params (hoisted to avoid recomputation);
+// `arrow_ann` tracks the nearest enclosing arrow (for its declared type params).
+static int check_unknown_type_ann(tl_infer *self, traverse_ctx *ctx, ast_node_sized let_tp, ast_node *ann,
                                   ast_node *arrow_ann) {
     if (!ann) return 0;
 
@@ -843,21 +850,10 @@ static int check_unknown_type_ann(tl_infer *self, traverse_ctx *ctx, ast_node *n
         tl_monotype *in_ta = ta ? str_map_get_ptr(ta, name) : null;
         if (in_ta) return 0;
 
-        // Check arrow's own type params by original (pre-alpha) name
-        if (arrow_ann) {
-            for (u32 i = 0; i < arrow_ann->arrow.n_type_parameters; i++) {
-                str orig = arrow_ann->arrow.type_parameters[i]->symbol.original;
-                if (!str_is_empty(orig) && str_eq(orig, name)) return 0;
-            }
-        }
-        // Check the let node's own type params
-        if (ast_node_is_let(node)) {
-            ast_node_sized ltp = ast_let_type_params(node);
-            for (u32 i = 0; i < ltp.size; i++) {
-                str orig = ltp.v[i]->symbol.original;
-                if (!str_is_empty(orig) && str_eq(orig, name)) return 0;
-            }
-        }
+        if (arrow_ann &&
+            type_params_contain(arrow_ann->arrow.type_parameters, arrow_ann->arrow.n_type_parameters, name))
+            return 0;
+        if (type_params_contain(let_tp.v, let_tp.size, name)) return 0;
 
         expected_type(self, ann);
         return 1;
@@ -867,34 +863,28 @@ static int check_unknown_type_ann(tl_infer *self, traverse_ctx *ctx, ast_node *n
         // Check the return type only; parameter types in arrow annotations are
         // ambiguous (could be value param names or type references) and need
         // more context to distinguish — handled separately.
-        if (check_unknown_type_ann(self, ctx, node, ann->arrow.left, ann)) return 1;
-        if (check_unknown_type_ann(self, ctx, node, ann->arrow.right, ann)) return 1;
-    }
-
-    if (ast_node_is_nfa(ann)) {
+        if (check_unknown_type_ann(self, ctx, let_tp, ann->arrow.left, ann)) return 1;
+        if (check_unknown_type_ann(self, ctx, let_tp, ann->arrow.right, ann)) return 1;
+    } else if (ast_node_is_nfa(ann)) {
         for (u32 i = 0; i < ann->named_application.n_type_arguments; i++) {
-            if (check_unknown_type_ann(self, ctx, node, ann->named_application.type_arguments[i],
+            if (check_unknown_type_ann(self, ctx, let_tp, ann->named_application.type_arguments[i],
                                        arrow_ann))
                 return 1;
         }
-    }
-
-    if (ast_node_is_tuple(ann)) {
+    } else if (ast_node_is_tuple(ann)) {
         for (u32 i = 0; i < ann->tuple.n_elements; i++) {
-            if (check_unknown_type_ann(self, ctx, node, ann->tuple.elements[i], arrow_ann))
-                return 1;
+            if (check_unknown_type_ann(self, ctx, let_tp, ann->tuple.elements[i], arrow_ann)) return 1;
         }
     }
 
     return 0;
 }
 
-// Returns: 0 = no annotation, 1 = annotation processed, -1 = error
-
 // ============================================================================
 // Inference handlers
 // ============================================================================
 
+// Returns: 0 = no annotation, 1 = annotation processed, -1 = error
 int process_annotation(tl_infer *self, traverse_ctx *ctx, ast_node *node, annotation_opts opts) {
     if (!node) return 0;
 
@@ -903,7 +893,8 @@ int process_annotation(tl_infer *self, traverse_ctx *ctx, ast_node *node, annota
 
     if (!result.parsed) {
         if (ast_node_is_symbol(node) && node->symbol.annotation) {
-            if (check_unknown_type_ann(self, ctx, node, node->symbol.annotation, null)) return 1;
+            ast_node_sized let_tp = {0};
+            if (check_unknown_type_ann(self, ctx, let_tp, node->symbol.annotation, null)) return -1;
         }
         return 0;
     }
