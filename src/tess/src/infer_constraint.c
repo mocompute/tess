@@ -823,6 +823,62 @@ annotation_parse_result parse_type_annotation(tl_infer *self, traverse_ctx *ctx,
 
 static int infer_struct_access(tl_infer *, traverse_ctx *, ast_node *);
 
+// Recursively walk an annotation subtree looking for unknown type names.
+// Returns 1 if an unknown type was found (and reports the error), 0 otherwise.
+// `node` is the owning let/symbol node (for type param lookup); `arrow_ann` tracks
+// the nearest enclosing arrow (for its declared type params).
+static int check_unknown_type_ann(tl_infer *self, traverse_ctx *ctx, ast_node *node,
+                                  ast_node *ann, ast_node *arrow_ann) {
+    if (!ann) return 0;
+
+    if (ast_node_is_symbol(ann)) {
+        if (!str_is_empty(ann->symbol.original)) return 0; // alpha-converted = known type param
+
+        str          name   = ast_node_str(ann);
+        tl_polytype *in_reg = tl_type_registry_get_nullary(self->registry, name);
+        if (in_reg) return 0;
+
+        hashmap     *ta    = ctx ? ctx->type_arguments : self->load_type_arguments;
+        tl_monotype *in_ta = ta ? str_map_get_ptr(ta, name) : null;
+        if (in_ta) return 0;
+
+        // Check arrow's own type params by original (pre-alpha) name
+        if (arrow_ann) {
+            for (u32 i = 0; i < arrow_ann->arrow.n_type_parameters; i++) {
+                str orig = arrow_ann->arrow.type_parameters[i]->symbol.original;
+                if (!str_is_empty(orig) && str_eq(orig, name)) return 0;
+            }
+        }
+        // Check the let node's own type params
+        if (ast_node_is_let(node)) {
+            ast_node_sized ltp = ast_let_type_params(node);
+            for (u32 i = 0; i < ltp.size; i++) {
+                str orig = ltp.v[i]->symbol.original;
+                if (!str_is_empty(orig) && str_eq(orig, name)) return 0;
+            }
+        }
+
+        expected_type(self, ann);
+        return 1;
+    }
+
+    if (ast_node_is_arrow(ann)) {
+        // Check the return type only; parameter types in arrow annotations are
+        // ambiguous (could be value param names or type references) and need
+        // more context to distinguish — handled separately.
+        return check_unknown_type_ann(self, ctx, node, ann->arrow.right, ann);
+    }
+
+    if (ast_node_is_nfa(ann)) {
+        for (u32 i = 0; i < ann->named_application.n_type_arguments; i++) {
+            if (check_unknown_type_ann(self, ctx, node, ann->named_application.type_arguments[i], arrow_ann))
+                return 1;
+        }
+    }
+
+    return 0;
+}
+
 // Returns: 0 = no annotation, 1 = annotation processed, -1 = error
 
 // ============================================================================
@@ -837,53 +893,8 @@ int process_annotation(tl_infer *self, traverse_ctx *ctx, ast_node *node, annota
 
     if (!result.parsed) {
         if (ast_node_is_symbol(node) && node->symbol.annotation) {
-            ast_node *ann = node->symbol.annotation;
-
-            // Case 1: bare symbol annotation (e.g. `x: Quux`)
-            if (ast_node_is_symbol(ann) && str_is_empty(ann->symbol.original)) {
-                expected_type(self, ann);
+            if (check_unknown_type_ann(self, ctx, node, node->symbol.annotation, null))
                 return 1;
-            }
-
-            // Case 2: arrow annotation with unknown return type (e.g. `make() -> Quux`)
-            if (ast_node_is_arrow(ann)) {
-                ast_node *rhs = ann->arrow.right;
-                if (ast_node_is_symbol(rhs) && !rhs->symbol.annotation
-                    && str_is_empty(rhs->symbol.original)) {
-                    str          rhs_name = ast_node_str(rhs);
-                    tl_polytype *in_reg   = tl_type_registry_get_nullary(self->registry, rhs_name);
-                    hashmap     *ta       = ctx ? ctx->type_arguments : self->load_type_arguments;
-                    tl_monotype *in_ta    = ta ? str_map_get_ptr(ta, rhs_name) : null;
-                    // The arrow's own type params (e.g. [T,U]) use pre-alpha names
-                    // in the return type but alpha-converted names as map keys.
-                    // Check declared type params by original name.
-                    int is_declared_type_param = 0;
-                    if (!in_ta) {
-                        for (u32 tp = 0; tp < ann->arrow.n_type_parameters; tp++) {
-                            str orig = ann->arrow.type_parameters[tp]->symbol.original;
-                            if (!str_is_empty(orig) && str_eq(orig, rhs_name)) {
-                                is_declared_type_param = 1;
-                                break;
-                            }
-                        }
-                        // Also check the let node's own type params
-                        if (!is_declared_type_param && ast_node_is_let(node)) {
-                            ast_node_sized ltp = ast_let_type_params(node);
-                            for (u32 i = 0; i < ltp.size; i++) {
-                                str orig = ltp.v[i]->symbol.original;
-                                if (!str_is_empty(orig) && str_eq(orig, rhs_name)) {
-                                    is_declared_type_param = 1;
-                                    break;
-                                }
-                            }
-                        }
-                    }
-                    if (!in_reg && !in_ta && !is_declared_type_param) {
-                        expected_type(self, rhs);
-                        return 1;
-                    }
-                }
-            }
         }
         return 0;
     }
