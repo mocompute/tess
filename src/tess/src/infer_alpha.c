@@ -186,6 +186,12 @@ void rename_variables(tl_infer *self, ast_node *node, rename_variables_ctx *ctx,
             str_map_set(&ctx->lex, name, &newvar);
 
             rename_variables(self, node->let_in.name, ctx, level + 1);
+        } else {
+            // Toplevel: name already renamed by rename_let_in.  Delegate to
+            // rename_variables so the ast_symbol path erases types and traverses
+            // the annotation.  The renamed name (tl_x_v0) is not in ctx->lex
+            // (which maps original names), so no re-rename occurs.
+            rename_variables(self, node->let_in.name, ctx, level + 1);
         }
 
         rename_variables(self, node->let_in.body, ctx, level + 1);

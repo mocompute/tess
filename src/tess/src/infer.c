@@ -184,26 +184,13 @@ tl_infer_counters const *tl_infer_get_counters(tl_infer const *self) {
 // ============================================================================
 
 str next_variable_name(tl_infer *self, str name) {
-    char buf[64];
-    if (0 == str_cmp_nc(name, "tl_", 3))
-        snprintf(buf, sizeof buf, "%s_v%u", str_cstr(&name), self->next_var_name++);
-    else snprintf(buf, sizeof buf, "tl_%s_v%u", str_cstr(&name), self->next_var_name++);
-    return str_init(self->arena, buf);
+    int         has_prefix = (0 == str_cmp_nc(name, "tl_", 3));
+    char const *fmt        = has_prefix ? "%.*s_v%u" : "tl_%.*s_v%u";
+    return str_fmt(self->arena, fmt, str_ilen(name), str_buf(&name), self->next_var_name++);
 }
 
 str next_instantiation(tl_infer *self, str name) {
-    if (str_len(name) < 128 - 24) {
-        char buf[128];
-        snprintf(buf, sizeof buf, "%.*s_%u", str_ilen(name), str_buf(&name), self->next_instantiation++);
-        return str_init(self->arena, buf);
-    } else {
-        size_t len = str_len(name) + 24;
-        char  *buf = alloc_malloc(self->transient, len);
-        snprintf(buf, len, "%.*s_%u", str_ilen(name), str_buf(&name), self->next_instantiation++);
-        str out = str_init(self->arena, buf);
-        alloc_free(self->transient, buf);
-        return out;
-    }
+    return str_fmt(self->arena, "%.*s_%u", str_ilen(name), str_buf(&name), self->next_instantiation++);
 }
 
 void cancel_last_instantiation(tl_infer *self) {
