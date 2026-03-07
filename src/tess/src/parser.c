@@ -55,6 +55,7 @@ struct parser {
     hashmap            *nested_type_parents;          // str hset: types that have nested types
     hashmap            *tagged_union_variant_parents; // str hset: type names that are tagged union parents
     hashmap            *module_aliases;               // map str -> str: alias name -> original module name
+    hashmap            *nullary_variant_parents;       // map str -> str: mangled variant name -> TU parent name
 
     ast_node           *result;
     token_array         tokens;
@@ -197,6 +198,7 @@ parser *parser_create(allocator *alloc, parser_opts const *opts) {
     self->nested_type_parents          = hset_create(self->parent_alloc, 1024);
     self->tagged_union_variant_parents = hset_create(self->parent_alloc, 256);
     self->module_aliases               = map_new(self->parent_alloc, str, str, 32);
+    self->nullary_variant_parents       = map_new(self->parent_alloc, str, str, 16);
     self->result                       = null;
     self->tokens                       = (token_array){0};
     self->error                        = (struct parser_error){0};
@@ -239,6 +241,7 @@ void parser_destroy(parser **self) {
     hset_destroy(&(*self)->current_module_symbols);
     hset_destroy(&(*self)->nested_type_parents);
     hset_destroy(&(*self)->tagged_union_variant_parents);
+    map_destroy(&(*self)->nullary_variant_parents);
     hset_destroy(&(*self)->module_preludes_seen);
     hset_destroy(&(*self)->modules_seen);
     arena_destroy(&(*self)->transient);
@@ -1470,8 +1473,8 @@ static int a_value(parser *self) {
             r->named_application.is_function_reference = is_fn_ref;
             return result_ast_node(self, r);
         } else {
-            // Special case: syntax sugar: promote naked None symbol to funcall None(), a type constructor
-            if (is_none) {
+            // Syntax sugar: promote naked None or nullary tagged union variant to zero-arg call
+            if (is_none || str_map_contains(self->nullary_variant_parents, ident->symbol.name)) {
                 ast_node *r =
                   ast_node_create_nfa_tc(self->ast_arena, ident, (ast_node_sized){0}, (ast_node_sized){0});
                 return result_ast_node(self, r);
@@ -1804,10 +1807,10 @@ static ast_node *parse_when_expr(parser *self) {
 
 static int maybe_mangle_binop(parser *self, ast_node *op, ast_node **inout, ast_node *right) {
     // Module alias resolution: replace leftmost alias with original module name
-    if ((0 == str_cmp_c(op->symbol.name, ".")) && ast_node_is_symbol(*inout) &&
-        str_map_contains(self->module_aliases, (*inout)->symbol.name)) {
-        str *original         = str_map_get(self->module_aliases, (*inout)->symbol.name);
-        (*inout)->symbol.name = *original;
+    if ((0 == str_cmp_c(op->symbol.name, ".")) && ast_node_is_symbol(*inout)) {
+        str *original = str_map_get(self->module_aliases, (*inout)->symbol.name);
+        if (original)
+            (*inout)->symbol.name = *original;
     }
 
     // Nested module resolution: if left is a module and "left.right" is also a module,
@@ -1843,6 +1846,24 @@ static int maybe_mangle_binop(parser *self, ast_node *op, ast_node **inout, ast_
                 to_mangle->symbol.name = mangled_name;
             }
             mangle_name_for_module(self, to_mangle, target_module);
+
+            // Auto-invoke nullary tagged union variants: Opt.Empty → value, not fn ref
+            if (to_mangle == right) { // bare symbol, not NFA
+                str *parent = str_map_get(self->nullary_variant_parents, to_mangle->symbol.name);
+                if (parent) {
+                    // Build scoped variant struct name: parent__variant (e.g., T__Empty)
+                    str       scoped = str_cat_3(self->ast_arena, *parent, S("__"), original_name);
+                    ast_node *var_sym = ast_node_create_sym(self->ast_arena, scoped);
+                    mangle_name_for_module(self, var_sym, target_module);
+                    ast_node *inner_call = ast_node_create_nfa_tc(
+                      self->ast_arena, var_sym, (ast_node_sized){0}, (ast_node_sized){0});
+                    set_node_file(self, inner_call);
+                    *inout = build_tagged_union_wrapping(self, *parent, original_name,
+                                                         target_module, inner_call);
+                    return 1;
+                }
+            }
+
             *inout = right;
             return 1;
         }
@@ -2139,7 +2160,6 @@ static int symbol_is_module_function(parser *self, ast_node *name, u8 arity) {
     }
 
     // For cross-module references, look up the module's symbol table
-    if (!str_map_contains(self->module_symbols, module_name)) return 0;
     hashmap *module_syms = str_map_get_ptr(self->module_symbols, module_name);
     if (!module_syms) return 0;
 
@@ -4076,6 +4096,15 @@ static int toplevel_tagged_union(parser *self) {
         ast_node *ctor = create_variant_constructor(self, tu_name_str, v->name->symbol.name, n_type_args,
                                                     type_args, v->fields);
         array_push(result_nodes, ctor);
+
+        // Record nullary variants for auto-invocation (bare B or cross-module Opt.Empty)
+        if (v->fields.size == 0) {
+            str key = !str_is_empty(self->current_module)
+                        ? str_copy(self->parent_alloc,
+                                   mangle_str_for_module(self, v->name->symbol.name, self->current_module))
+                        : str_copy(self->parent_alloc, v->name->symbol.name);
+            str_map_set(&self->nullary_variant_parents, key, &tu_name_str);
+        }
     }
 
     array_shrink(result_nodes);

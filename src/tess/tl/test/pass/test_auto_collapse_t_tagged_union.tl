@@ -19,7 +19,7 @@ main() {
 
     // Use auto-collapsed alias "Opt" for "Opt.T"
     a := Opt.Has(42)
-    b: Opt[Int] := Opt.T.Empty
+    b: Opt[Int] := Opt.Empty
 
     // Call generic function on auto-collapsed type
     error += if Opt.my_unwrap(a, 0) == 42 { 0 } else { 1 }
