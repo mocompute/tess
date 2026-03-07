@@ -15,7 +15,7 @@ Arr[a]: {
 map[a, b](f: (a) -> b, arr: Arr[a]) -> Arr[b]
 
 // Argument type annotations are not required.
-map(f, arr) {
+map[a, b](f, arr) {
 
     // Because of the `c_` prefix, `c_malloc` is compiled to a direct call to the C function `malloc`.
     // Because `malloc` returns `void*`, the `: Ptr[b]` type annotation is required.
@@ -81,6 +81,6 @@ main() {
     }
 
     error += Unsafe.float_to_int(sum - 10.0)
-    result : CInt := error
+    result: CInt := error
     result
 }

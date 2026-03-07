@@ -374,7 +374,26 @@ void rename_variables(tl_infer *self, ast_node *node, rename_variables_ctx *ctx,
     case ast_char:
     case ast_nil:
     case ast_void:
-    case ast_arrow:
+        break;
+    case ast_arrow: {
+        // Recurse into arrow annotations (e.g. `f: (T) -> U`) so that type
+        // parameter references in parameter/return types get alpha-converted.
+        // First, register any type parameters declared on the arrow itself
+        // (e.g. [a, b] in a forward declaration `map[a, b](f: (a) -> b, ...)`).
+        hashmap *save = null;
+        if (node->arrow.n_type_parameters > 0) {
+            save = map_copy(ctx->lex);
+            for (u32 tp = 0; tp < node->arrow.n_type_parameters; tp++) {
+                rename_one_function_param(self, node->arrow.type_parameters[tp], ctx, level);
+            }
+        }
+        rename_variables(self, node->arrow.left, ctx, level + 1);
+        rename_variables(self, node->arrow.right, ctx, level + 1);
+        if (save) {
+            map_destroy(&ctx->lex);
+            ctx->lex = save;
+        }
+    } break;
     case ast_bool:
     case ast_ellipsis:
     case ast_eof:
