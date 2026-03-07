@@ -1507,12 +1507,15 @@ static void replace_tv_mono(tl_monotype *self, tl_type_subs *subs, hashmap **map
     case tl_weak_int_unsigned:
     case tl_weak_float:        {
         // Every weak tv gets a fresh tv on instantiation.
-        tl_type_variable *replace = map_get(*map, &self->var, sizeof self->var);
-        if (replace) self->var = *replace;
+        // The map stores tl_monotype* values, so we must work with pointers.
+        tl_monotype **replace = map_get(*map, &self->var, sizeof self->var);
+        if (replace) self->var = (*replace)->var;
         else {
-            tl_type_variable fresh = tl_type_subs_fresh(subs);
-            map_set(map, &self->var, sizeof self->var, &fresh);
-            self->var = fresh;
+            tl_type_variable fresh_tv = tl_type_subs_fresh(subs);
+            tl_monotype *fresh_mono = alloc_malloc(subs->data.alloc, sizeof *fresh_mono);
+            *fresh_mono = (tl_monotype){.tag = self->tag, .var = fresh_tv};
+            map_set(map, &self->var, sizeof self->var, &fresh_mono);
+            self->var = fresh_tv;
         }
     } break;
 
