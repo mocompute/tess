@@ -15,6 +15,8 @@ Float   = CDouble
 Byte    = CUnsignedChar
 CString = Ptr[CChar]
 
+_tl_fatal_ (s: CString) -> any
+
 sizeof[T] ()  -> CSize { _tl_sizeof_[T]()  }
 sizeof    (x) -> CSize { _tl_sizeof_(x)    }
 alignof[T]()  -> CSize { _tl_alignof_[T]() }

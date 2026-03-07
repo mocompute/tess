@@ -7,6 +7,8 @@
 #import <stdio.tl>
 #import <fatal.tl>
 
+Allocator = Alloc.Allocator
+
 // Small string optimization: strings of 14 bytes or fewer are stored inline (no heap allocation).
 // The Str type is a 16-byte union of _Big (len + pointer) and _Small (15-byte buffer + tag/len byte).
 // The 15-byte buffer holds up to 14 bytes of data + 1 byte for a null terminator (written lazily by cstr).

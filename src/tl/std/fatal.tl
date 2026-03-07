@@ -4,4 +4,4 @@
 #include <stdio.h>              // for fprintf
 #include <stdlib.h>             // for exit
 
-_tl_fatal_ (s: CString) -> any
+// Forward declaration moved to builtin.tl (after CString alias)

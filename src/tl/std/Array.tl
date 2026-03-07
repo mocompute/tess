@@ -8,6 +8,8 @@
 #import <fatal.tl>
 #import <string.tl>
 
+Allocator = Alloc.Allocator
+
 // The Array struct.
 Array[T]: {
     v:        Ptr[T],
@@ -51,8 +53,8 @@ free[T](self: Ptr[Array[T]])                        -> Void
 
 // Element access (bounds-checked).
 get[T]  (arr: Array[T], index: UInt) -> T
-front[T](arr: Array[T])             -> T
-back[T] (arr: Array[T])             -> T
+front[T](arr: Array[T])              -> T
+back[T] (arr: Array[T])              -> T
 
 // Removal / mutation.
 pop[T]        (self: Ptr[Array[T]])                                             -> T
@@ -70,10 +72,10 @@ shrink_to_fit[T](self: Ptr[Array[T]])                                           
 truncate[T]     (self: Ptr[Array[T]], count: UInt)                                -> Void
 
 // Bulk operations.
-append[T](self: Ptr[Array[T]], alloc: Ptr[Allocator], other: Array[T]) -> Void
-append[T](self: Ptr[Array[T]], other: Array[T])                        -> Void
-clone[T] (alloc: Ptr[Allocator], arr: Array[T])                        -> Array[T]
-clone[T] (arr: Array[T])                                               -> Array[T]
+append[T](self: Ptr[Array[T]], alloc: Ptr[Allocator], other: Array[T])  -> Void
+append[T](self: Ptr[Array[T]], other: Array[T])                         -> Void
+clone[T] (alloc: Ptr[Allocator], arr: Array[T])                         -> Array[T]
+clone[T] (arr: Array[T])                                                -> Array[T]
 slice[T] (alloc: Ptr[Allocator], arr: Array[T], start: UInt, end: UInt) -> Array[T]
 slice[T] (arr: Array[T], start: UInt, end: UInt)                        -> Array[T]
 
@@ -89,8 +91,8 @@ sorted[T](alloc: Ptr[Allocator], tmp_alloc: Ptr[Allocator], arr: Array[T], cmp: 
 sorted[T](arr: Array[T], cmp: (T, T) -> Int)                                                   -> Array[T]
 
 // Reordering.
-reverse[T](self: Ptr[Array[T]])                     -> Void
-swap[T]   (self: Ptr[Array[T]], i: UInt, j: UInt)    -> Void
+reverse[T](self: Ptr[Array[T]])                   -> Void
+swap[T]   (self: Ptr[Array[T]], i: UInt, j: UInt) -> Void
 
 // Construction.
 from_ptr[T](alloc: Ptr[Allocator], ptr: Ptr[T], len: UInt) -> Array[T]
@@ -418,7 +420,7 @@ map[T, U](arr: Array[T], f: (T) -> U) -> Array[U] {
 }
 
 filter[T](alloc, arr: Array[T], f: (T) -> Bool) -> Array[T] {
-    result := empty[T]()
+    result  := empty[T]()
     i: UInt := 0u
     while i < arr.size, i += 1u {
         if f(arr.v.[i]) { push(result.&, alloc, arr.v.[i]) }
@@ -431,7 +433,7 @@ filter[T](arr: Array[T], f: (T) -> Bool) -> Array[T] {
 }
 
 reduce[T, U](arr: Array[T], init: U, f: (U, T) -> U) -> U {
-    acc := init
+    acc     := init
     i: UInt := 0u
     while i < arr.size, i += 1u {
         acc = f(acc, arr.v.[i])
