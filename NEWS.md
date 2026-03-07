@@ -5,6 +5,46 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased] - 2026-03-04 to 2026-03-07 (eeee2aa4..c5101ccd)
+
+### Highlights
+
+- Operator overloading for user-defined types with automatic derivation of `!=`, comparisons, and compound assignments
+- Traits system with declarations, bounds checking, inheritance (including diamond), and built-in type conformance
+- Unknown type name detection in annotations, catching previously-silent errors in nested generics and return types
+- Test infrastructure overhaul: ~350 test files reorganized into auto-discovered subdirectories, removing ~660 lines of manual test lists
+- Unsuffixed integer literals (`42`) are now family-agnostic, unifying with any integer type
+
+### Added
+
+- **Operator Overloading**: Binary operators (`+`, `-`, `*`, `/`, `%`, `&`, `|`, `^`, `<<`, `>>`, `==`, `!=`) and unary operators (`-`, `!`, `~`) on user-defined types are rewritten to function calls (e.g., `a + b` becomes `Module__add__2(a, b)`). The `!=` operator is automatically derived from `eq`, and comparison operators (`<`, `<=`, `>`, `>=`) are derived from `cmp`. Compound assignments like `+=` work with overloaded operators.
+- **Traits System**: New syntax for declaring traits (`Name[T] : { sig(a: T) -> T }`) with trait inheritance, diamond inheritance support, and circular inheritance detection. Type parameters can be bounded with `[T: Trait]`, verified at specialization time with recursive conformance checking. Built-in types (Int, UInt, Float, Bool, etc.) are verified against built-in operator traits (Add, Sub, Eq, Ord, etc.).
+- **Unknown Type Name Detection**: The compiler now rejects undefined type names in all annotation positions — simple variable annotations (`x: Quux`), arrow return types (`make() -> Quux`), and nested generics (`Ptr[Ptr[Quux]]`). Previously these silently created fresh type variables.
+- **Module Type Auto-Collapse for `T`**: A module type named `T` (e.g., `Vec2.T`) is now automatically aliased to the bare module name (`Vec2`), extending the existing same-name collapse behavior.
+- **Unsuffixed Integer Literal Polymorphism**: Unsuffixed integer literals like `1` and `42` are now family-agnostic — they can unify with any integer type (signed, unsigned, or standalone like CSize, CPtrDiff, CChar), fixing cases like `i += 1` when `i` is `UInt` or `CSize`.
+
+### Changed
+
+- **Test Auto-Discovery**: ~350 test files moved from a flat directory into categorized subdirectories (`pass/`, `pass_optimized/`, `fail/`, `fail_runtime/`, `known_failures/`, `known_fail_failures/`). Both Makefile and CMakeLists.txt rewritten to use wildcard auto-discovery, removing ~660 lines of manual test lists. Adding a test now requires only dropping a file in the right subdirectory.
+- **`#alias` Operand Order Swap** *(breaking)*: `#alias` now uses LHS = RHS convention (`#alias NewName Source` instead of `#alias Source NewName`). All existing usage updated.
+- **Explicit Type Parameters Required** *(breaking)*: The implicit `type_variable_sugar` fallback that silently created fresh type variables for unknown symbols in annotations was removed. Generic functions now require explicit type parameter brackets (e.g., `free[T](...)` instead of `free(... Ptr[T])`).
+- **Standard Library Updates**: `unwrap` changed from `unwrap[T]` to `unwrap[T, U]` for proper `Result[T, U]` handling. `HashMap.tl` updated to use unsuffixed integer literals. `_tl_fatal_` forward declaration moved to `builtin.tl`.
+- **Trait Internals**: `tl_trait_def` now stores a `source_node` pointer, eliminating an O(N) linear scan for trait source locations.
+
+### Removed
+
+- **`type_variable_sugar`**: The implicit type variable creation fallback and all its call sites were removed entirely.
+- **Manual Test Lists**: ~660 lines of explicit test file listings removed from Makefile and CMakeLists.txt, replaced by auto-discovery.
+
+### Fixed
+
+- Fixed stack-buffer-overflow in `replace_tv_mono` where a 4-byte type variable was stored into a hashmap expecting an 8-byte monotype pointer, causing out-of-bounds reads during memcpy.
+- Fixed multi-type recursive type cycles (`A -> B -> C -> A`) by correctly deferring forward references during UTD parsing.
+- Fixed nested tagged union divergence analysis so `case`/`when` nodes check whether all arms diverge, enabling nested let-else patterns inside case arms.
+- Fixed false positives in unknown type detection by alpha-converting let-name annotations.
+- Fixed diamond inheritance being incorrectly flagged as circular in trait inheritance checking.
+- Fixed an integer narrowing issue with narrow integer types.
+
 ## [Unreleased] - 2026-02-28 to 2026-03-04 (c98a9048..eeee2aa4)
 
 ### Highlights
