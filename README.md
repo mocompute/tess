@@ -74,6 +74,17 @@ An ML-flavoured systems language that transpiles to C.
   }
   ```
 
+- **Lambdas and closures** - Anonymous functions that capture variables from the enclosing scope by reference. Closures are stack-based (no heap allocation), so they cannot be returned from functions. Captured mutations are visible in both directions:
+  ```tl
+  counter := 0
+  increment := () { counter = counter + 1 }
+  increment()        // counter is now 1
+  increment()        // counter is now 2
+
+  apply(f, x) { f(x) }
+  apply((x) { x + 1 }, 5)   // returns 6
+  ```
+
 - **Uniform function call syntax** - Call any function with dot syntax on its first argument. `v.length_sq()` calls `length_sq(v)`. Struct fields take priority. Works with `->`, chaining, generics, and cross-module calls (`v.Mod.foo()`).
 
 - **Expression-based** - Almost everything is an expression. Functions implicitly return their last expression—no `return` keyword needed. Control flow constructs like `if` and `case` produce values. No semicolons. Postfix pointer operators (`.&`, `.*`, `->`) read left-to-right like field access.
