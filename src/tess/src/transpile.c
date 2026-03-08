@@ -66,6 +66,9 @@ typedef struct {
     // which can be used as an lvalue for the expression.
     int want_lvalue;
 
+    // emit arrow-typed symbols as raw C function pointers, not tl_Closure (for C FFI args)
+    int want_raw_fn_ptr;
+
     // the type of the expression just evaluated is effectively void, regardless of its declared type. For
     // example, _tl_fatal_ is -> any, but when it appears it should never be assigned to a result variable.
     int          is_effective_void;
@@ -97,6 +100,7 @@ static void        generate_toplevel_values(transpile *);
 static void        generate_toplevels(transpile *);
 static void        generate_assign_lhs(transpile *, str);
 static void        generate_assign(transpile *, str, str);
+static str         generate_context(transpile *, str_sized, eval_ctx *);
 static void        generate_assign_field(transpile *, str, str, str);
 
 static void        cat(transpile *, str);
@@ -169,31 +173,14 @@ static str escape_c_keyword(allocator *alloc, str name) {
 // Outputs directly to the transpile buffer.
 static void generate_function_signature(transpile *self, str name, tl_polytype *type,
                                         str_sized param_names) {
-    tl_monotype *arrow    = type->type;
-    tl_monotype *ret_type = arrow->list.xs.v[1];
-
-    if (tl_monotype_is_arrow(ret_type)) {
-        // Function returning function pointer: ret (*name(params))(fp_params)
-        str_build sig = str_build_init(self->transient, 64);
-        str_build_cat(&sig, mangle_fun(self, name));
-        str_build_cat(&sig, S("("));
-        str_build_cat(&sig, arrow_to_c_params(self, type, param_names));
-        str_build_cat(&sig, S(")"));
-        str       func_sig = str_build_finish(&sig);
-
-        str_build b        = str_build_init(self->transient, 80);
-        build_arrow_to_c(self, &b, ret_type, func_sig);
-        cat(self, str_build_finish(&b));
-    } else {
-        // Normal return type: ret name(params)
-        str ret = arrow_rhs_to_c(self, type);
-        cat(self, ret);
-        cat_sp(self);
-        cat(self, mangle_fun(self, name));
-        cat_open_round(self);
-        cat(self, arrow_to_c_params(self, type, param_names));
-        cat_close_round(self);
-    }
+    // Arrow return types are now tl_Closure, so no special wrapping needed
+    str ret = arrow_rhs_to_c(self, type);
+    cat(self, ret);
+    cat_sp(self);
+    cat(self, mangle_fun(self, name));
+    cat_open_round(self);
+    cat(self, arrow_to_c_params(self, type, param_names));
+    cat_close_round(self);
 }
 
 static void generate_prototypes(transpile *self, int decl_static) {
@@ -561,7 +548,8 @@ static str generate_expr_symbol(transpile *self, tl_monotype *type, str symbol_n
                                 eval_ctx *ctx) {
     str name = symbol_name;
 
-    if (tl_monotype_is_arrow(type)) name = mangle_fun(self, name);
+    int is_arrow = tl_monotype_is_arrow(type);
+    if (is_arrow) name = mangle_fun(self, name);
 
     // c_ prefixed symbols are always emitted literally
     if (is_c_symbol(name)) {
@@ -575,13 +563,31 @@ static str generate_expr_symbol(transpile *self, tl_monotype *type, str symbol_n
     {
         // generate reference through context
         return str_cat_4(self->transient, S("("), S("*tl_ctx->"), name, S(")"));
-    } else {
-        if (useful_name(original_name, name)) {
-            // TODO: put this behind an option
-            return str_cat_4(self->transient, S(" /*"), original_name, S("*/ "), name);
-        } else {
+    }
+
+    // Arrow-typed symbols that are toplevel functions: wrap in tl_Closure (unless C FFI context)
+    if (is_arrow && str_map_contains(self->toplevels, symbol_name)) {
+        if (ctx && ctx->want_raw_fn_ptr) {
+            // C FFI context: emit raw function pointer
             return name;
         }
+        if (ctx) {
+            tl_polytype *poly = tl_type_env_lookup(self->env, symbol_name);
+            if (poly && poly->type->list.fvs.size) {
+                // Capturing lambda reference: construct context and embed in closure
+                str ctx_var = generate_context(self, poly->type->list.fvs, ctx);
+                return str_cat_5(self->transient, S("(tl_Closure){ .fn = (void*)"), name,
+                                 S(", .ctx = (void*)&"), ctx_var, S(" }"));
+            }
+        }
+        return str_cat_3(self->transient, S("(tl_Closure){ .fn = (void*)"), name, S(", .ctx = NULL }"));
+    }
+
+    if (useful_name(original_name, name)) {
+        // TODO: put this behind an option
+        return str_cat_4(self->transient, S(" /*"), original_name, S("*/ "), name);
+    } else {
+        return name;
     }
 }
 
@@ -687,9 +693,7 @@ static void generate_toplevel_values(transpile *self) {
             str name = ast_node_str(node->let.name);
             if (is_module_init(name)) {
                 cat(self, mangle_fun(self, name));
-                cat_open_round(self);
-                cat_close_round(self);
-                cat_semicolonln(self);
+                cat(self, S("(NULL);\n"));
             }
         }
     }
@@ -752,6 +756,18 @@ static void generate_toplevels(transpile *self) {
         cat_open_curlyln(self); // body
 
         assert(tl_monotype_is_list(poly->type));
+
+        // Unified closure: cast void* tl_ctx_raw to typed context pointer, or suppress unused warning
+        if (poly->type->list.fvs.size) {
+            str ctx_name = context_name(self, poly->type->list.fvs);
+            cat(self, ctx_name);
+            cat(self, S("* tl_ctx = ("));
+            cat(self, ctx_name);
+            cat(self, S("*)tl_ctx_raw;\n"));
+        } else {
+            cat(self, S("(void)tl_ctx_raw;\n"));
+        }
+
         eval_ctx ctx      = {.free_variables = poly->type->list.fvs};
         str      body_res = generate_expr(self, return_type, body, &ctx);
         if (!res_is_void && !str_is_empty(body_res) && !ctx.is_effective_void) {
@@ -780,11 +796,11 @@ static void generate_main(transpile *self) {
     }
 
     if (!type || !args.size) {
-        cat(self, S("int main(void) { tl_init(); return tl_fun_main(); }\n"));
+        cat(self, S("int main(void) { tl_init(); return tl_fun_main(NULL); }\n"));
     } else if (1 == args.size) {
-        cat(self, S("int main(int argc) { tl_init(); return tl_fun_main(argc); }\n"));
+        cat(self, S("int main(int argc) { tl_init(); return tl_fun_main(NULL, argc); }\n"));
     } else if (2 == args.size) {
-        cat(self, S("int main(int argc, char* argv[]) { tl_init(); return tl_fun_main(argc, argv); }\n"));
+        cat(self, S("int main(int argc, char* argv[]) { tl_init(); return tl_fun_main(NULL, argc, argv); }\n"));
     }
 }
 
@@ -825,20 +841,20 @@ static void generate_funcall_head_ext(transpile *self, str name, str ctx_var, u3
     else cat(self, name);
     cat_open_round(self);
 
+    // Unified closure convention: always pass context as first arg
     if (!str_is_empty(ctx_var)) {
-        cat_ampersand(self);
+        cat(self, S("(void*)&"));
         cat(self, ctx_var);
-        if (n_args) cat_commasp(self);
+    } else {
+        cat(self, S("NULL"));
     }
+    if (n_args) cat_commasp(self);
 }
 
 static void generate_funcall_head(transpile *self, str name, str ctx_var, u32 n_args) {
     generate_funcall_head_ext(self, name, ctx_var, n_args, 1);
 }
 
-static void generate_funcall_head_no_mangle(transpile *self, str name, str ctx_var, u32 n_args) {
-    generate_funcall_head_ext(self, name, ctx_var, n_args, 0);
-}
 
 static str_array generate_args(transpile *self, ast_node_sized args, tl_monotype *arrow, eval_ctx *ctx) {
     // generate args to match arrow type or type constructor
@@ -995,8 +1011,12 @@ static str generate_funcall_c(transpile *self, ast_node const *node, eval_ctx *c
     str_array      args_res = {.alloc = self->transient};
     array_reserve(args_res, args.size);
 
+    // C FFI: emit raw function pointers, not tl_Closure
+    eval_ctx c_ctx = ctx ? *ctx : (eval_ctx){0};
+    c_ctx.want_raw_fn_ptr = 1;
+
     forall(i, args) {
-        str res = generate_expr(self, null, args.v[i], ctx);
+        str res = generate_expr(self, null, args.v[i], &c_ctx);
         array_push(args_res, res);
     }
 
@@ -1025,9 +1045,10 @@ static str generate_funcall_c(transpile *self, ast_node const *node, eval_ctx *c
         res = generate_funcall_result(self, type);
     }
 
-    // function call
+    // function call (C FFI — no tl_ctx parameter)
     if (!str_is_empty(res)) generate_assign_lhs(self, res);
-    generate_funcall_head_no_mangle(self, name, str_empty(), args_res.size);
+    cat(self, name);
+    cat_open_round(self);
 
     // args list
     str_build b = str_build_init(self->transient, 128);
@@ -1037,6 +1058,37 @@ static str generate_funcall_c(transpile *self, ast_node const *node, eval_ctx *c
     cat_semicolonln(self);
 
     return res;
+}
+
+static void generate_indirect_closure_call(transpile *self, str closure_name, tl_monotype *type,
+                                           str_array args_res) {
+    // Indirect call through tl_Closure: ((ret(*)(void*, params...))name.fn)(name.ctx, args...)
+    tl_monotype *ret_mono = tl_monotype_sized_last(type->list.xs);
+    str          ret_c    = type_to_c_mono(self, ret_mono);
+    tl_monotype_sized params = tl_monotype_arrow_get_args(type);
+
+    cat(self, S("(("));
+    cat(self, ret_c);
+    cat(self, S("(*)(void*"));
+    for (u32 pi = 0; pi < params.size; pi++) {
+        cat_commasp(self);
+        if (tl_monotype_is_arrow(params.v[pi])) {
+            cat(self, S("tl_Closure"));
+        } else {
+            cat(self, type_to_c_mono(self, params.v[pi]));
+        }
+    }
+    cat(self, S("))"));
+    cat(self, closure_name);
+    cat(self, S(".fn)("));
+    cat(self, closure_name);
+    cat(self, S(".ctx"));
+
+    for (u32 ai = 0; ai < args_res.size; ai++) {
+        cat_commasp(self);
+        cat(self, args_res.v[ai]);
+    }
+    cat_close_round(self);
 }
 
 static str generate_funcall_with_args(transpile *self, ast_node const *node, eval_ctx *ctx,
@@ -1049,21 +1101,35 @@ static str generate_funcall_with_args(transpile *self, ast_node const *node, eva
     str res = generate_funcall_result(self, type);
 
     assert(tl_monotype_is_list(type));
-    str ctx_var = str_empty();
-    if (type->list.fvs.size) {
-        ctx_var = generate_context(self, type->list.fvs, ctx);
+
+    // Check if this is a direct call to a known toplevel function or an indirect call through a closure
+    int is_direct = str_map_contains(self->toplevels, name);
+
+    if (is_direct) {
+        str ctx_var = str_empty();
+        if (type->list.fvs.size) {
+            ctx_var = generate_context(self, type->list.fvs, ctx);
+        }
+
+        // Direct call: tl_fun_name(NULL or (void*)&ctx, args...)
+        if (!str_is_empty(res)) generate_assign_lhs(self, res);
+        generate_funcall_head(self, name, ctx_var, args_res.size);
+
+        str_build b = str_build_init(self->transient, 128);
+        str_build_join_array(&b, S(", "), args_res);
+        cat(self, str_build_finish(&b));
+        cat_close_round(self);
+        cat_semicolonln(self);
+    } else {
+        // Indirect call through tl_Closure variable
+        // Resolve the variable name (may be through context, keyword-escaped, etc.)
+        str closure_name = generate_expr_symbol(self, type, name,
+                                                ast_node_name_original(node->named_application.name), ctx);
+
+        if (!str_is_empty(res)) generate_assign_lhs(self, res);
+        generate_indirect_closure_call(self, closure_name, type, args_res);
+        cat_semicolonln(self);
     }
-
-    // function call
-    if (!str_is_empty(res)) generate_assign_lhs(self, res);
-    generate_funcall_head(self, name, ctx_var, args_res.size);
-
-    // args list
-    str_build b = str_build_init(self->transient, 128);
-    str_build_join_array(&b, S(", "), args_res);
-    cat(self, str_build_finish(&b));
-    cat_close_round(self);
-    cat_semicolonln(self);
 
     return res;
 }
@@ -1958,20 +2024,10 @@ static str generate_binary_op(transpile *self, tl_monotype *type, ast_node const
             str res = generate_funcall_result(self, type);
 
             assert(tl_monotype_is_list(type));
-            str ctx_var = str_empty();
-            if (type->list.fvs.size) {
-                ctx_var = generate_context(self, type->list.fvs, ctx);
-            }
 
-            // function call
+            // Indirect call through tl_Closure: cast fn and pass ctx
             if (!str_is_empty(res) && !is_nil_result(type)) generate_assign_lhs(self, res);
-            generate_funcall_head(self, name, ctx_var, args_res.size);
-
-            // args list
-            str_build b = str_build_init(self->transient, 128);
-            str_build_join_array(&b, S(", "), args_res);
-            cat(self, str_build_finish(&b));
-            cat_close_round(self);
+            generate_indirect_closure_call(self, name, type, args_res);
             cat_semicolonln(self);
 
             return res;
@@ -1994,10 +2050,18 @@ static str generate_binary_op(transpile *self, tl_monotype *type, ast_node const
                          tl_monotype_is_ptr(node->binary_op.left->type->type) &&
                          tl_monotype_is_ptr(node->binary_op.right->type->type);
 
+        // Closure-null comparison: compare .fn field to NULL
+        int left_is_arrow  = node->binary_op.left->type && tl_monotype_is_arrow(node->binary_op.left->type->type);
+        int right_is_nil   = ast_nil == node->binary_op.right->tag;
+        int left_is_nil    = ast_nil == node->binary_op.left->tag;
+        int right_is_arrow = node->binary_op.right->type && tl_monotype_is_arrow(node->binary_op.right->type->type);
+        int closure_null_cmp = (left_is_arrow && right_is_nil) || (left_is_nil && right_is_arrow);
+
         if (is_ptr_cmp) {
             cat(self, S("(void*)"));
         }
         cat(self, left);
+        if (closure_null_cmp && left_is_arrow) cat(self, S(".fn"));
 
         if (is_index) {
             cat(self, S("["));
@@ -2009,6 +2073,7 @@ static str generate_binary_op(transpile *self, tl_monotype *type, ast_node const
                 cat(self, S("(void*)"));
             }
             cat(self, right);
+            if (closure_null_cmp && right_is_arrow) cat(self, S(".fn"));
         }
         cat_semicolonln(self);
         return res;
@@ -2326,7 +2391,9 @@ static str generate_expr(transpile *self, tl_monotype *type, ast_node const *nod
     case ast_while:           return generate_while(self, type, node, ctx);
     case ast_continue:        return generate_continue(self, type, node, ctx);
 
-    case ast_nil:             return S("NULL");
+    case ast_nil:
+        if (type && tl_monotype_is_arrow(type)) return S("(tl_Closure){0}");
+        return S("NULL");
     case ast_void:            return str_empty();
 
     case ast_tuple:           return generate_tuple(self, type, node, ctx);
@@ -2499,11 +2566,9 @@ static void generate_decl(transpile *self, str name, tl_monotype *type) {
 static void generate_decl_pointer(transpile *self, str name, tl_monotype *type) {
     name = escape_c_keyword(self->transient, name);
     if (tl_arrow == type->tag) {
-        // arrow
-
-        str_build b = str_build_init(self->transient, 80);
-        build_arrow_to_c(self, &b, type, name);
-        cat(self, str_build_finish(&b));
+        // arrow — pointer to tl_Closure
+        cat(self, S("tl_Closure* "));
+        cat(self, name);
         cat_semicolonln(self);
 
     }
@@ -2544,6 +2609,8 @@ int transpile_compile(transpile *self, str_build *out_build) {
     cat_nl(self);
 
     generate_hash_includes(self);
+
+    cat(self, S("typedef struct tl_Closure { void* fn; void* ctx; } tl_Closure;\n\n"));
 
     generate_user_types(self);
     generate_structs(self);
@@ -2889,41 +2956,14 @@ static str arrow_rhs_to_c(transpile *self, tl_polytype *type) {
 }
 
 static void build_arrow_to_c(transpile *self, str_build *b, tl_monotype *type, str name) {
+    (void)self;
     if (!tl_monotype_is_arrow(type)) fatal("logic error");
 
-    if (!tl_monotype_is_arrow(type)) fatal("expected arrow");
-    assert(type->list.xs.size == 2);
-    tl_monotype *right = type->list.xs.v[1];
-    str_build_cat(b, type_to_c_mono(self, right));
-    str_build_cat(b, S(" (*"));
-    str_build_cat(b, name);
-    str_build_cat(b, S(") ("));
-
-    assert(tl_tuple == type->list.xs.v[0]->tag);
-
-    tl_monotype_sized params = type->list.xs.v[0]->list.xs;
-
-    // if no params or context, exit early
-    if (!params.size && !type->list.fvs.size) {
-        str_build_cat(b, S("void"));
-        goto done;
+    str_build_cat(b, S("tl_Closure"));
+    if (!str_is_empty(name)) {
+        str_build_cat(b, S(" "));
+        str_build_cat(b, name);
     }
-
-    // generate lambda context argument for free variables
-    if (type->list.fvs.size) {
-        str ctx_name = context_name(self, type->list.fvs);
-        str_build_cat(b, ctx_name);
-        str_build_cat(b, S("*"));
-        if (params.size) str_build_cat(b, S(", "));
-    }
-
-    for (u32 i = 0, n = params.size; i < n; ++i) {
-        str_build_cat(b, type_to_c_mono(self, params.v[i]));
-        if (i + 1 < n) str_build_cat(b, S(", "));
-    }
-
-done:
-    str_build_cat(b, S(")"));
 }
 
 static str arrow_to_c_params(transpile *self, tl_polytype *type, str_sized param_names) {
@@ -2940,23 +2980,13 @@ static str arrow_to_c_params(transpile *self, tl_polytype *type, str_sized param
     tl_monotype_sized params = arrow->list.xs.v[0]->list.xs;
     assert(!param_names.size || param_names.size == params.size);
 
-    // if no params or context, exit early
-    if (!params.size && !arrow->list.fvs.size) {
-        str_build_cat(&b, S("void"));
+    // All Tess functions get void* tl_ctx as first parameter (unified closure convention)
+    cat(self, S("void* tl_ctx_raw"));
+    if (params.size) cat_commasp(self);
+
+    // if no regular params, we already emitted the ctx param
+    if (!params.size) {
         return str_build_finish(&b);
-    }
-
-    // generate lambda context argument for free variables
-    if (arrow->list.fvs.size) {
-        str ctx_name = context_name(self, arrow->list.fvs);
-        cat(self, ctx_name);
-        cat_star(self);
-
-        // always output a name for the context parameter, because we might be in a function definition.
-        cat_sp(self);
-        cat(self, S("tl_ctx"));
-
-        if (params.size) cat_commasp(self);
     }
 
     for (u32 i = 0, n = params.size; i < n; ++i) {
@@ -3352,15 +3382,16 @@ static void generate_c_exports(transpile *self) {
         cat_sp(self);
         cat_open_curlyln(self);
 
-        // Body: return mangled_name(tl_p0, tl_p1, ...);
+        // Body: return mangled_name(NULL, tl_p0, tl_p1, ...);
         if (!res_is_void) cat(self, S("return "));
         cat(self, mangle_fun(self, name));
         cat_open_round(self);
+        cat(self, S("NULL"));
         for (u32 j = 0; j < params.size; j++) {
+            cat_commasp(self);
             char pbuf[32];
             snprintf(pbuf, sizeof pbuf, "tl_p%u", j);
             cat(self, str_init_small(pbuf));
-            if (j + 1 < params.size) cat_commasp(self);
         }
         cat_close_round(self);
         cat_semicolonln(self);
