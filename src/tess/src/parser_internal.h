@@ -129,5 +129,9 @@ u8        collect_used_type_params(parser *, u8 n_type_args, ast_node **type_arg
 int       toplevel_tagged_union(parser *);
 ast_node *build_tagged_union_wrapping(parser *, str tu_name, str var_name, str module,
                                       ast_node *inner_call);
+ast_node *maybe_auto_invoke_nullary_variant(parser *, ast_node *symbol, str original_name,
+                                            str target_module);
+ast_node *maybe_wrap_variant_in_tagged_union(parser *, str parent_name, str child_name, str module,
+                                             ast_node *right);
 
 #endif // TESS_PARSER_INTERNAL_H

@@ -1,5 +1,39 @@
 #include "parser_internal.h"
 
+// Auto-invoke a nullary tagged union variant accessed cross-module (e.g. Opt.Empty → value).
+// Returns the wrapped AST node, or null if the symbol is not a nullary variant.
+ast_node *maybe_auto_invoke_nullary_variant(parser *self, ast_node *symbol, str original_name,
+                                            str target_module) {
+    str *parent = str_map_get(self->nullary_variant_parents, symbol->symbol.name);
+    if (!parent) return null;
+
+    // Build scoped variant struct name: parent__variant (e.g., T__Empty)
+    str       scoped    = str_qualify(self->ast_arena, *parent, original_name);
+    ast_node *var_sym   = ast_node_create_sym(self->ast_arena, scoped);
+    mangle_name_for_module(self, var_sym, target_module);
+    ast_node *inner_call =
+      ast_node_create_nfa_tc(self->ast_arena, var_sym, (ast_node_sized){0}, (ast_node_sized){0});
+    set_node_file(self, inner_call);
+    return build_tagged_union_wrapping(self, *parent, original_name, target_module, inner_call);
+}
+
+// If parent_name is a tagged union, wrap the variant construction so it returns
+// the tagged union type instead of the bare variant struct.
+// For bare symbols (zero-field variants), promotes to a zero-arg NFA_TC first.
+// Returns the wrapped node, or null if parent_name is not a tagged union.
+ast_node *maybe_wrap_variant_in_tagged_union(parser *self, str parent_name, str child_name, str module,
+                                             ast_node *right) {
+    if (!str_hset_contains(self->tagged_union_variant_parents, parent_name)) return null;
+
+    if (!ast_node_is_nfa(right)) {
+        // Bare symbol case: Op.A (zero-field variant, no parentheses)
+        // Promote to zero-arg NFA_TC then wrap (same pattern as None sugar)
+        right = ast_node_create_nfa_tc(self->ast_arena, right, (ast_node_sized){0}, (ast_node_sized){0});
+        set_node_file(self, right);
+    }
+    return build_tagged_union_wrapping(self, parent_name, child_name, module, right);
+}
+
 // Build the wrapping AST for a tagged union variant construction:
 //   inner_call -> __Shape__Union_(Circle = inner_call)
 //              -> __Shape__Tag_.Circle
@@ -132,7 +166,7 @@ static ast_node *create_variant_constructor(parser *self,
     array_shrink(inner_args);
 
     // Inner call constructs the scoped variant struct (e.g., Shape__Circle)
-    str       var_struct_str  = str_cat_3(arena, tu_name_str, S("__"), var_name_str);
+    str       var_struct_str  = str_qualify(arena, tu_name_str, var_name_str);
     ast_node *inner_call_name = ast_node_create_sym(arena, var_struct_str);
     mangle_name(self, inner_call_name);
     // VALUE CONSTRUCTION NFA: Shape__Circle(radius = radius) — field assignments are value args.
@@ -302,7 +336,7 @@ int toplevel_tagged_union(parser *self) {
     forall(i, variants) {
         variant  *v            = &variants.v[i];
 
-        str       var_name_str = str_cat_3(self->ast_arena, tu_name_str, S("__"), v->name->symbol.name);
+        str       var_name_str = str_qualify(self->ast_arena, tu_name_str, v->name->symbol.name);
         ast_node *var_name     = ast_node_create_sym(self->ast_arena, var_name_str);
 
         // For generics, determine which type params are actually used by this variant's fields
@@ -335,7 +369,7 @@ int toplevel_tagged_union(parser *self) {
             u8         n_used_type_args =
               collect_used_type_params(self, n_type_args, type_args, v->fields, &used_type_args);
 
-            str var_struct_name = str_cat_3(self->ast_arena, tu_name_str, S("__"), v->name->symbol.name);
+            str var_struct_name = str_qualify(self->ast_arena, tu_name_str, v->name->symbol.name);
 
             ast_node *field_ann = null;
             if (n_used_type_args) {

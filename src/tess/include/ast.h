@@ -20,6 +20,12 @@ defslice(ast_node_slice, struct ast_node *);
 #define AST_TAGGED_UNION_TAG_FIELD   "tag"
 #define AST_TAGGED_UNION_UNION_FIELD "u"
 
+// Qualify a name by a parent scope, e.g. ("Shape", "Circle") → "Shape__Circle".
+// Used for module-prefixed names, nested types, tagged union variants, and enum values.
+static inline str str_qualify(allocator *alloc, str parent, str child) {
+    return str_cat_3(alloc, parent, S("__"), child);
+}
+
 typedef struct ast_node {
     union {
         struct ast_symbol {

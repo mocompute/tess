@@ -1770,17 +1770,10 @@ static int maybe_mangle_binop(parser *self, ast_node *op, ast_node **inout, ast_
 
             // Auto-invoke nullary tagged union variants: Opt.Empty → value, not fn ref
             if (to_mangle == right) { // bare symbol, not NFA
-                str *parent = str_map_get(self->nullary_variant_parents, to_mangle->symbol.name);
-                if (parent) {
-                    // Build scoped variant struct name: parent__variant (e.g., T__Empty)
-                    str       scoped = str_cat_3(self->ast_arena, *parent, S("__"), original_name);
-                    ast_node *var_sym = ast_node_create_sym(self->ast_arena, scoped);
-                    mangle_name_for_module(self, var_sym, target_module);
-                    ast_node *inner_call = ast_node_create_nfa_tc(
-                      self->ast_arena, var_sym, (ast_node_sized){0}, (ast_node_sized){0});
-                    set_node_file(self, inner_call);
-                    *inout = build_tagged_union_wrapping(self, *parent, original_name,
-                                                         target_module, inner_call);
+                ast_node *wrapped =
+                  maybe_auto_invoke_nullary_variant(self, to_mangle, original_name, target_module);
+                if (wrapped) {
+                    *inout = wrapped;
                     return 1;
                 }
             }
@@ -1821,7 +1814,7 @@ static int maybe_mangle_binop(parser *self, ast_node *op, ast_node **inout, ast_
                 str child_name = to_mangle->symbol.is_mangled && !str_is_empty(to_mangle->symbol.original)
                                    ? to_mangle->symbol.original
                                    : to_mangle->symbol.name;
-                str candidate_name = str_cat_3(self->ast_arena, parent_name, S("__"), child_name);
+                str candidate_name = str_qualify(self->ast_arena, parent_name, child_name);
 
                 // Look up in the appropriate module's symbol table
                 hashmap *syms = null;
@@ -1843,23 +1836,9 @@ static int maybe_mangle_binop(parser *self, ast_node *op, ast_node **inout, ast_
 
                     // Auto-wrap: if parent is a tagged union, wrap the result so it
                     // returns the tagged union instead of the bare variant struct.
-                    if (str_hset_contains(self->tagged_union_variant_parents, parent_name)) {
-                        if (ast_node_is_nfa(right)) {
-                            // NFA case: Circle(2.0) or Circle(radius = 2.0) — already a call
-                            *inout =
-                              build_tagged_union_wrapping(self, parent_name, child_name, module, right);
-                        } else {
-                            // Bare symbol case: Op.A (zero-field variant, no parentheses)
-                            // Promote to zero-arg NFA_TC then wrap (same pattern as None sugar)
-                            ast_node *inner_call = ast_node_create_nfa_tc(
-                              self->ast_arena, right, (ast_node_sized){0}, (ast_node_sized){0});
-                            set_node_file(self, inner_call);
-                            *inout = build_tagged_union_wrapping(self, parent_name, child_name, module,
-                                                                 inner_call);
-                        }
-                    } else {
-                        *inout = right;
-                    }
+                    ast_node *wrapped =
+                      maybe_wrap_variant_in_tagged_union(self, parent_name, child_name, module, right);
+                    *inout = wrapped ? wrapped : right;
                     return 1;
                 }
             }
@@ -2090,7 +2069,7 @@ static int symbol_is_module_function(parser *self, ast_node *name, u8 arity) {
 
 str mangle_str_for_module(parser *self, str name, str module) {
     str safe_module = str_replace_char_str(self->ast_arena, module, '.', S("__"));
-    return str_cat_3(self->ast_arena, safe_module, S("__"), name);
+    return str_qualify(self->ast_arena, safe_module, name);
 }
 
 str mangle_str_for_arity(allocator *alloc, str name, u8 arity) {
@@ -3140,7 +3119,7 @@ static int parse_struct_fields(parser *self, str parent_prefix, u8 parent_n_type
             // a_nested_struct_header consumed identifier, ':', and '{'
             // Now parse the nested struct body (fields until '}')
             str nested_bare_name = nested_ident->symbol.name;
-            str prefixed_name    = str_cat_3(self->ast_arena, parent_prefix, S("__"), nested_bare_name);
+            str prefixed_name    = str_qualify(self->ast_arena, parent_prefix, nested_bare_name);
 
             // Recursively parse nested struct fields
             ast_node_array nested_fields = {.alloc = self->ast_arena};
