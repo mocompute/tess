@@ -498,6 +498,76 @@ void check_unresolved_types(tl_infer *self) {
 }
 
 // ============================================================================
+// Closure escape checking
+// ============================================================================
+
+// Check whether a monotype is a capturing arrow (has free variables).
+static int is_capturing_arrow(tl_monotype *type) {
+    return tl_monotype_is_arrow(type) && type->list.fvs.size > 0;
+}
+
+// Check if an expression node has a type that is a capturing arrow.
+// Called after update_specialized_types, so node->type->type is authoritative.
+static int node_is_capturing_closure(ast_node const *node) {
+    if (!node || !node->type || !node->type->type) return 0;
+    return is_capturing_arrow(node->type->type);
+}
+
+static void closure_escape_error(tl_infer *self, ast_node const *node) {
+    array_push(self->errors,
+               ((tl_infer_error){.tag  = tl_err_closure_escape,
+                                 .node = node}));
+}
+
+static int check_closure_escape_cb(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
+    (void)ctx;
+
+    // Check struct construction: NFA with is_type_constructor flag
+    if (ast_node_is_nfa(node) && node->named_application.is_type_constructor) {
+        ast_arguments_iter iter = ast_node_arguments_iter(node);
+        ast_node          *arg;
+        while ((arg = ast_arguments_next(&iter))) {
+            if (ast_node_is_assignment(arg) && node_is_capturing_closure(arg->assignment.value))
+                closure_escape_error(self, arg->assignment.value);
+        }
+    }
+
+    // Check explicit return of capturing closure
+    if (node->tag == ast_return && node->return_.value) {
+        if (node_is_capturing_closure(node->return_.value))
+            closure_escape_error(self, node->return_.value);
+    }
+
+    return 0;
+}
+
+// Get the body's last expression (implicit return value) for a toplevel function.
+static ast_node *toplevel_implicit_return(ast_node *node) {
+    ast_node *body = ast_node_body(node);
+    if (!body || !ast_node_is_body(body)) return null;
+    if (!body->body.expressions.size) return null;
+    return body->body.expressions.v[body->body.expressions.size - 1];
+}
+
+void check_closure_escape(tl_infer *self) {
+    traverse_ctx    *traverse = traverse_ctx_create(self->transient);
+    hashmap_iterator iter     = {0};
+    ast_node        *node;
+    while ((node = toplevel_iter(self, &iter))) {
+        if (ast_node_is_utd(node)) continue;
+
+        // Check implicit return: top-level function's body last expression.
+        // Skip ast_return nodes — those are caught by the traversal callback.
+        ast_node *last = toplevel_implicit_return(node);
+        if (last && last->tag != ast_return && node_is_capturing_closure(last))
+            closure_escape_error(self, last);
+
+        // Traverse for struct field assignments and explicit returns
+        traverse_ast(self, traverse, node, check_closure_escape_cb);
+    }
+}
+
+// ============================================================================
 // Invariant checking (debug-only)
 // ============================================================================
 
