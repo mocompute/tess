@@ -547,7 +547,31 @@ int can_be_free_variable(tl_infer *self, traverse_ctx *traverse_ctx, ast_node co
     return 1;
 }
 
+static void collect_transitive_fvs(tl_infer *self, traverse_ctx *traverse_ctx,
+                                   collect_free_variables_ctx *ctx, str name) {
+    tl_polytype *type     = tl_type_env_lookup(self->env, name);
+    int          is_arrow = type && tl_monotype_is_arrow(type->type);
+
+    if (is_arrow && !tl_polytype_is_scheme(type)) {
+        str_sized type_fvs = tl_monotype_fvs(type->type);
+        forall(i, type_fvs) {
+            if (!traverse_ctx_is_param(traverse_ctx, type_fvs.v[i]))
+                str_array_set_insert(&ctx->fvs, type_fvs.v[i]);
+        }
+    }
+}
+
 int collect_free_variables_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_node *node) {
+    // For named function applications, collect transitive free variables from the callee.
+    // The traversal only visits arguments, not the function name itself, so we must handle
+    // the function name here to propagate captures from called closures.
+    if (node->tag == ast_named_function_application) {
+        collect_free_variables_ctx *ctx = traverse_ctx->user;
+        str name = ast_node_str(node->named_application.name);
+        collect_transitive_fvs(self, traverse_ctx, ctx, name);
+        return 0;
+    }
+
     if (ast_node_is_binary_op(node)) node = node->binary_op.left;
     if (!can_be_free_variable(self, traverse_ctx, node)) return 0;
 
@@ -573,13 +597,7 @@ int collect_free_variables_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_no
     }
 
     // if symbol has a type which carries fvs, we also collect those.
-    if (is_arrow && !tl_polytype_is_scheme(type)) {
-        str_sized type_fvs = tl_monotype_fvs(type->type);
-        forall(i, type_fvs) {
-            if (!traverse_ctx_is_param(traverse_ctx, type_fvs.v[i]))
-                str_array_set_insert(&ctx->fvs, type_fvs.v[i]);
-        }
-    }
+    collect_transitive_fvs(self, traverse_ctx, ctx, name);
 
     return 0;
 }
@@ -600,6 +618,7 @@ void add_free_variables_to_arrow(tl_infer *self, ast_node *node, tl_polytype *ar
 
     traverse_ctx *traverse_ctx = traverse_ctx_create(self->transient);
     traverse_ctx->user         = &ctx;
+
     int res                    = traverse_ast(self, traverse_ctx, node, collect_free_variables_cb);
     if (res) fatal("runtime error");
 
