@@ -14,8 +14,8 @@ defarray(ast_node_array, struct ast_node *);
 defsized(ast_node_sized, struct ast_node *);
 defslice(ast_node_slice, struct ast_node *);
 
-#define AST_TAGGED_UNION_VALUE   1
-#define AST_TAGGED_UNION_MUTABLE 2
+#define AST_TAGGED_UNION_VALUE       1
+#define AST_TAGGED_UNION_MUTABLE     2
 
 #define AST_TAGGED_UNION_TAG_FIELD   "tag"
 #define AST_TAGGED_UNION_UNION_FIELD "u"
@@ -91,6 +91,7 @@ typedef struct ast_node {
             struct ast_node **parameters;
             u8                n_parameters;
             struct ast_node  *body;
+            struct ast_node  *attributes; // may be null
         } lambda_function;
 
         struct ast_let {
@@ -179,8 +180,8 @@ typedef struct ast_node {
         struct ast_trait_def {
             struct ast_node  *name;
             struct ast_node **type_arguments;
-            struct ast_node **signatures;    // each is a symbol with arrow annotation
-            struct ast_node **parents;       // parent trait references (symbols or NFAs)
+            struct ast_node **signatures; // each is a symbol with arrow annotation
+            struct ast_node **parents;    // parent trait references (symbols or NFAs)
             u8                n_type_arguments;
             u8                n_signatures;
             u8                n_parents;

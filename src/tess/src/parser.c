@@ -120,7 +120,7 @@ parser *parser_create(allocator *alloc, parser_opts const *opts) {
     self->nested_type_parents          = hset_create(self->parent_alloc, 1024);
     self->tagged_union_variant_parents = hset_create(self->parent_alloc, 256);
     self->module_aliases               = map_new(self->parent_alloc, str, str, 32);
-    self->nullary_variant_parents       = map_new(self->parent_alloc, str, str, 16);
+    self->nullary_variant_parents      = map_new(self->parent_alloc, str, str, 16);
     self->result                       = null;
     self->tokens                       = (token_array){0};
     self->error                        = (struct parser_error){0};
@@ -795,7 +795,7 @@ static int a_attribute_set(parser *self) {
     while (1) {
         if (0 == a_try(self, a_double_close_square)) break;
         if (a_try(self, a_comma)) return 1;
-        if (0 == a_try(self, a_identifier) || 0 == a_try(self, a_funcall)) {
+        if (0 == a_try(self, a_funcall) || 0 == a_try(self, a_identifier)) {
             array_push(items, self->result);
         }
     }
@@ -1155,8 +1155,8 @@ int a_param(parser *self) {
 
     if (type_args.size) {
         mangle_name(self, ident);
-        ast_node *r = ast_node_create_nfa(
-          self->ast_arena, ident, (ast_node_sized)sized_all(type_args), (ast_node_sized){0});
+        ast_node *r = ast_node_create_nfa(self->ast_arena, ident, (ast_node_sized)sized_all(type_args),
+                                          (ast_node_sized){0});
         return result_ast_node(self, r);
     }
 
@@ -1283,7 +1283,12 @@ done:
 }
 
 static int a_lambda_function(parser *self) {
-    ast_node_array params = {.alloc = self->ast_arena};
+    ast_node_array params     = {.alloc = self->ast_arena};
+
+    ast_node      *attributes = null;
+    if (0 == a_try(self, a_attribute_set)) {
+        attributes = self->result;
+    }
 
     if (a_try(self, a_open_round)) return 1;
     if (0 == a_try(self, a_close_round)) goto decl_done;
@@ -1314,7 +1319,8 @@ decl_done:
 
     ast_node *l = ast_node_create(self->ast_arena, ast_lambda_function);
     set_node_parameters(self, l, &params);
-    l->lambda_function.body = body;
+    l->lambda_function.body       = body;
+    l->lambda_function.attributes = attributes;
     return result_ast_node(self, l);
 }
 
@@ -1352,7 +1358,7 @@ static int a_arity_qualifier(parser *self) {
 
     // Arities are plain non-negative integers only (no suffixes, no floats)
     char *end;
-    errno = 0;
+    errno  = 0;
     long n = strtol(self->token.s, &end, 10);
     if (errno || end == self->token.s || *end != '\0' || n < 0 || n > 255) return 1;
     return result_ast_i64(self, (i64)n);
@@ -1385,7 +1391,8 @@ static int a_value(parser *self) {
             int is_fn_ref = 0;
             if (0 == a_try(self, a_arity_qualifier)) {
                 u8 arity = (u8)self->result->i64.val;
-                ast_node_name_replace(ident, mangle_str_for_arity(self->ast_arena, ident->symbol.name, arity));
+                ast_node_name_replace(ident,
+                                      mangle_str_for_arity(self->ast_arena, ident->symbol.name, arity));
                 is_fn_ref = 1;
             }
             mangle_name(self, ident);
@@ -1730,8 +1737,7 @@ static int maybe_mangle_binop(parser *self, ast_node *op, ast_node **inout, ast_
     // Module alias resolution: replace leftmost alias with original module name
     if ((0 == str_cmp_c(op->symbol.name, ".")) && ast_node_is_symbol(*inout)) {
         str *original = str_map_get(self->module_aliases, (*inout)->symbol.name);
-        if (original)
-            (*inout)->symbol.name = *original;
+        if (original) (*inout)->symbol.name = *original;
     }
 
     // Nested module resolution: if left is a module and "left.right" is also a module,
@@ -1783,13 +1789,11 @@ static int maybe_mangle_binop(parser *self, ast_node *op, ast_node **inout, ast_
         }
     }
     // UFCS cross-module: (x.Mod).foo(a, b) → binary_op(".", x, nfa("Mod__foo", [a, b]))
-    if ((0 == str_cmp_c(op->symbol.name, ".")) &&
-        ast_node_is_binary_op_struct_access(*inout) && ast_node_is_nfa(right) &&
-        ast_node_is_symbol((*inout)->binary_op.right) &&
+    if ((0 == str_cmp_c(op->symbol.name, ".")) && ast_node_is_binary_op_struct_access(*inout) &&
+        ast_node_is_nfa(right) && ast_node_is_symbol((*inout)->binary_op.right) &&
         str_hset_contains(self->modules_seen, (*inout)->binary_op.right->symbol.name)) {
         unmangle_name(self, right->named_application.name);
-        mangle_name_for_module(self, right->named_application.name,
-                               (*inout)->binary_op.right->symbol.name);
+        mangle_name_for_module(self, right->named_application.name, (*inout)->binary_op.right->symbol.name);
         *inout = ast_node_create_binary_op(self->ast_arena, op, (*inout)->binary_op.left, right);
         set_node_file(self, *inout);
         return 1;
@@ -3264,7 +3268,7 @@ static int a_trait_signature(parser *self) {
     ast_node *sig_name = self->result;
 
     if (a_try(self, a_type_arrow)) return 1;
-    ast_node *arrow = self->result;
+    ast_node *arrow             = self->result;
 
     sig_name->symbol.annotation = arrow;
     return result_ast_node(self, sig_name);
@@ -3343,7 +3347,7 @@ static int toplevel_trait(parser *self) {
     } else return 1;
 
     // Create trait definition node
-    ast_node *r            = ast_node_create(self->ast_arena, ast_trait_definition);
+    ast_node *r                   = ast_node_create(self->ast_arena, ast_trait_definition);
     r->trait_def.name             = name;
     r->trait_def.n_type_arguments = n_type_args;
     r->trait_def.type_arguments   = type_args;
@@ -3460,8 +3464,8 @@ static int annotation_uses_type_param(ast_node *node, str param_name) {
 
 // Helper to collect type params used by a variant's fields
 // Returns the number of used type params and fills used_type_args with the used params
-u8 collect_used_type_params(parser *self, u8 n_type_args, ast_node **type_args,
-                            ast_node_array fields, ast_node ***out_used_type_args) {
+u8 collect_used_type_params(parser *self, u8 n_type_args, ast_node **type_args, ast_node_array fields,
+                            ast_node ***out_used_type_args) {
     if (!n_type_args || !fields.size) {
         *out_used_type_args = null;
         return 0;

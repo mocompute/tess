@@ -2742,6 +2742,20 @@ int resolve_node(tl_infer *self, ast_node *node, traverse_ctx *ctx, node_positio
 // Type predicate checking
 // ============================================================================
 
+// Returns 1 if attribute_set contains an attribute matching want_hash.
+// Supports general match of NFA names, e.g. `[[nfa(123)]] foo := 1  foo :: [[nfa]]`
+static int attribute_set_contains(ast_node *set, u64 want_hash) {
+    if (!set || ast_attribute_set != set->tag) return 0;
+    for (u8 j = 0; j < set->attribute_set.n; j++) {
+        ast_node *one           = set->attribute_set.nodes[j];
+        u64       has_hash      = ast_node_hash(one);
+        u64       let_name_hash = 0;
+        if (ast_node_is_nfa(one)) let_name_hash = ast_node_hash(one->let.name);
+        if (has_hash == want_hash || let_name_hash == want_hash) return 1;
+    }
+    return 0;
+}
+
 int check_type_predicate(tl_infer *self, traverse_ctx *traverse_ctx, ast_node *node) {
 
     // Note: special case: using type predicate operator `::` as an attribute predicate
@@ -2750,7 +2764,14 @@ int check_type_predicate(tl_infer *self, traverse_ctx *traverse_ctx, ast_node *n
             return expected_symbol(self, node->type_predicate.lhs);
         }
         // lookup symbol attributes in type environment
-        ast_node *sym_attributes = str_map_get_ptr(self->attributes, node->type_predicate.lhs->symbol.name);
+        str       name           = node->type_predicate.lhs->symbol.name;
+        ast_node *sym_attributes = str_map_get_ptr(self->attributes, name);
+
+        // if the symbol is bound to a lambda, also check the lambda's own attributes
+        ast_node *lambda_attributes = null;
+        ast_node *toplevel          = toplevel_get(self, name);
+        if (toplevel && ast_node_is_let_in_lambda(toplevel))
+            lambda_attributes = toplevel->let_in.value->lambda_function.attributes;
 
         ast_node **want_attributes   = node->type_predicate.rhs->attribute_set.nodes;
         u8         want_attributes_n = node->type_predicate.rhs->attribute_set.n;
@@ -2761,22 +2782,9 @@ int check_type_predicate(tl_infer *self, traverse_ctx *traverse_ctx, ast_node *n
             u64       want_hash = ast_node_hash(want);
             if (0 == want_hash) fatal("runtime error"); // 0 hash illegal and breaks logic here
 
-            int found_one = 0;
-            if (sym_attributes && ast_attribute_set == sym_attributes->tag) {
-                for (u8 j = 0; j < sym_attributes->attribute_set.n; j++) {
-                    ast_node *one           = sym_attributes->attribute_set.nodes[j];
-                    u64       has_hash      = ast_node_hash(one);
-                    u64       let_name_hash = 0;
+            int found_one = attribute_set_contains(sym_attributes, want_hash)
+                         || attribute_set_contains(lambda_attributes, want_hash);
 
-                    // also support general match of NFA names, e.g. `[[nfa(123)]] foo := 1 foo :: [[nfa]]`
-                    if (ast_node_is_nfa(one)) let_name_hash = ast_node_hash(one->let.name);
-
-                    if (has_hash == want_hash || (let_name_hash == want_hash)) {
-                        found_one = 1;
-                        break;
-                    }
-                }
-            }
             if (!found_one) {
                 found_all = 0;
                 break;

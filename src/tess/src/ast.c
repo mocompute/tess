@@ -61,12 +61,12 @@ ast_node *ast_node_create_f64(allocator *alloc, f64 x) {
 }
 ast_node *ast_node_create_nfa(allocator *alloc, ast_node *name, ast_node_sized type_args,
                               ast_node_sized args) {
-    ast_node *self                              = ast_node_create(alloc, ast_named_function_application);
-    self->named_application.name                = name;
-    self->named_application.n_type_arguments    = type_args.size;
-    self->named_application.type_arguments      = type_args.v;
-    self->named_application.n_arguments         = args.size;
-    self->named_application.arguments           = args.v;
+    ast_node *self                                = ast_node_create(alloc, ast_named_function_application);
+    self->named_application.name                  = name;
+    self->named_application.n_type_arguments      = type_args.size;
+    self->named_application.type_arguments        = type_args.v;
+    self->named_application.n_arguments           = args.size;
+    self->named_application.arguments             = args.v;
     self->named_application.is_specialized        = 0;
     self->named_application.is_type_constructor   = 0;
     self->named_application.is_function_reference = 0;
@@ -389,7 +389,8 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
 
     case ast_lambda_function: {
         struct ast_lambda_function *vclone = ast_node_lf(clone), *vorig = ast_node_lf((ast_node *)orig);
-        vclone->body = ast_node_clone(alloc, vorig->body);
+        vclone->body       = ast_node_clone(alloc, vorig->body);
+        vclone->attributes = ast_node_clone(alloc, vorig->attributes);
     } break;
 
     case ast_lambda_function_application: {
@@ -409,15 +410,13 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
         for (u32 i = 0; i < vclone->n_type_arguments; ++i)
             vclone->type_arguments[i] = ast_node_clone(alloc, vorig->type_arguments[i]);
 
-        vclone->name                = ast_node_clone(alloc, vorig->name);
+        vclone->name                  = ast_node_clone(alloc, vorig->name);
         vclone->is_specialized        = vorig->is_specialized;
         vclone->is_type_constructor   = vorig->is_type_constructor;
         vclone->is_function_reference = vorig->is_function_reference;
     } break;
 
-    case ast_try:
-        clone->try_.operand = ast_node_clone(alloc, orig->try_.operand);
-        break;
+    case ast_try:        clone->try_.operand = ast_node_clone(alloc, orig->try_.operand); break;
 
     case ast_type_alias: {
         clone->type_alias.name   = ast_node_clone(alloc, orig->type_alias.name);
@@ -450,7 +449,7 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
         vclone->n_signatures     = vorig->n_signatures;
         vclone->n_parents        = vorig->n_parents;
 
-        vclone->type_arguments = alloc_malloc(alloc, vclone->n_type_arguments * sizeof(ast_node *));
+        vclone->type_arguments   = alloc_malloc(alloc, vclone->n_type_arguments * sizeof(ast_node *));
         for (u32 i = 0; i < vclone->n_type_arguments; ++i)
             vclone->type_arguments[i] = ast_node_clone(alloc, vorig->type_arguments[i]);
 
@@ -567,8 +566,8 @@ void ast_node_name_replace(ast_node *node, str replace) {
 }
 
 void ast_node_rewrite_to_nfa(ast_node *node, ast_node *name, ast_node **args, u8 n_args) {
-    tl_polytype *type = node->type;
-    node->tag = ast_named_function_application;
+    tl_polytype *type                             = node->type;
+    node->tag                                     = ast_named_function_application;
     node->named_application.name                  = name;
     node->named_application.arguments             = args;
     node->named_application.n_arguments           = n_args;
@@ -577,7 +576,7 @@ void ast_node_rewrite_to_nfa(ast_node *node, ast_node *name, ast_node **args, u8
     node->named_application.is_specialized        = 0;
     node->named_application.is_type_constructor   = 0;
     node->named_application.is_function_reference = 0;
-    node->type = type;
+    node->type                                    = type;
 }
 
 ast_node *ast_node_lvalue(ast_node *self) {
@@ -609,8 +608,9 @@ void ast_node_type_set(ast_node *self, tl_polytype *type) {
 }
 
 void ast_node_set_attributes(ast_node *self, ast_node *attribute_set) {
-    if (!ast_node_is_symbol(self)) fatal("runtime error");
-    self->symbol.attributes = attribute_set;
+    if (ast_node_is_symbol(self)) self->symbol.attributes = attribute_set;
+    else if (ast_node_is_lambda_function(self)) self->lambda_function.attributes = attribute_set;
+    else fatal("runtime error");
 }
 
 //
@@ -1030,11 +1030,13 @@ str v2_ast_node_to_string(allocator *alloc, ast_node const *node) {
         snprintf(buf, sizeof buf, "(%" PRIi64 " : %s)", node->i64.val, str_cstr(&ty_str));
         return str_init(alloc, buf);
 
-    case ast_u64:      snprintf(buf, sizeof buf, "%" PRIu64, node->u64.val); return str_init(alloc, buf);
+    case ast_u64: snprintf(buf, sizeof buf, "%" PRIu64, node->u64.val); return str_init(alloc, buf);
     case ast_i64_z:
         snprintf(buf, sizeof buf, "(%" PRIi64 "z : %s)", node->i64_z.val, str_cstr(&ty_str));
         return str_init(alloc, buf);
-    case ast_u64_zu:   snprintf(buf, sizeof buf, "%" PRIu64 "zu", node->u64_zu.val); return str_init(alloc, buf);
+    case ast_u64_zu:
+        snprintf(buf, sizeof buf, "%" PRIu64 "zu", node->u64_zu.val);
+        return str_init(alloc, buf);
     case ast_string:   return str_cat_3(alloc, S("\""), node->symbol.name, S("\""));
     case ast_char:     return str_cat_3(alloc, S("'"), node->symbol.name, S("'"));
     case ast_bool:     return node->bool_.val ? str_copy(alloc, S("true")) : str_copy(alloc, S("false"));
@@ -1048,8 +1050,7 @@ str v2_ast_node_to_string(allocator *alloc, ast_node const *node) {
             return str_cat(alloc, S("return "), v2_ast_node_to_string(alloc, node->return_.value));
         else return str_cat(alloc, S("break "), v2_ast_node_to_string(alloc, node->return_.value));
 
-    case ast_try:
-        return str_cat(alloc, S("try "), v2_ast_node_to_string(alloc, node->try_.operand));
+    case ast_try: return str_cat(alloc, S("try "), v2_ast_node_to_string(alloc, node->try_.operand));
 
     case ast_while:
         //
@@ -1491,13 +1492,16 @@ u64 ast_node_hash(ast_node const *self) {
 
     switch (self->tag) {
     case ast_attribute_set:
+        for (u32 i = 0; i < self->attribute_set.n; i++) combine_node(self->attribute_set.nodes[i]);
+        break;
+
     case ast_continue:
     case ast_nil:
     case ast_void:
     case ast_ellipsis:
-    case ast_eof:           break;
+    case ast_eof:      break;
 
-    case ast_arrow:         {
+    case ast_arrow:    {
         //
         combine_node(self->arrow.left);
         combine_node(self->arrow.right);
@@ -1548,6 +1552,7 @@ u64 ast_node_hash(ast_node const *self) {
     case ast_symbol:
     case ast_char:   {
         hash = str_hash64_combine(hash, self->symbol.name);
+        combine_node(self->symbol.attributes);
     } break;
 
     case ast_hash_command: hash = str_hash64_combine_sized(hash, self->hash_command.words); break;
@@ -1592,6 +1597,7 @@ u64 ast_node_hash(ast_node const *self) {
     case ast_lambda_function:
         //
         combine_node(self->lambda_function.body);
+        combine_node(self->lambda_function.attributes);
         break;
 
     case ast_lambda_function_application: combine_node(self->lambda_application.lambda); break;
