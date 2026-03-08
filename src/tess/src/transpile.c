@@ -68,7 +68,7 @@ typedef struct {
     // which can be used as an lvalue for the expression.
     int want_lvalue;
 
-    // emit arrow-typed symbols as raw C function pointers, not tl_Closure (for C FFI args)
+    // emit arrow-typed symbols as raw C function pointers, not tl_closure (for C FFI args)
     int want_raw_fn_ptr;
 
     // the type of the expression just evaluated is effectively void, regardless of its declared type. For
@@ -175,7 +175,7 @@ static str escape_c_keyword(allocator *alloc, str name) {
 // Outputs directly to the transpile buffer.
 static void generate_function_signature(transpile *self, str name, tl_polytype *type,
                                         str_sized param_names) {
-    // Arrow return types are now tl_Closure, so no special wrapping needed
+    // Arrow return types are now tl_closure, so no special wrapping needed
     str ret = arrow_rhs_to_c(self, type);
     cat(self, ret);
     cat_sp(self);
@@ -578,7 +578,7 @@ static str generate_raw_fn_thunk(transpile *self, tl_monotype *type, str mangled
     }
     for (u32 i = 0; i < params.size; i++) {
         if (tl_monotype_is_arrow(params.v[i])) {
-            str_build_cat(b, S("tl_Closure"));
+            str_build_cat(b, S("tl_closure"));
         } else {
             str_build_cat(b, type_to_c_mono(self, params.v[i]));
         }
@@ -623,7 +623,7 @@ static str generate_expr_symbol(transpile *self, tl_monotype *type, str symbol_n
         return str_cat_4(self->transient, S("("), S("*tl_ctx->"), name, S(")"));
     }
 
-    // Arrow-typed symbols that are toplevel functions: wrap in tl_Closure (unless C FFI context)
+    // Arrow-typed symbols that are toplevel functions: wrap in tl_closure (unless C FFI context)
     if (is_arrow && str_map_contains(self->toplevels, symbol_name)) {
         if (ctx && ctx->want_raw_fn_ptr) {
             // C FFI context: generate a thunk with C-compatible signature (no ctx parameter)
@@ -634,11 +634,11 @@ static str generate_expr_symbol(transpile *self, tl_monotype *type, str symbol_n
             if (poly && poly->type->list.fvs.size) {
                 // Capturing lambda reference: construct context and embed in closure
                 str ctx_var = generate_context(self, poly->type->list.fvs, ctx);
-                return str_cat_5(self->transient, S("(tl_Closure){ .fn = (void*)"), name,
+                return str_cat_5(self->transient, S("(tl_closure){ .fn = (void*)"), name,
                                  S(", .ctx = (void*)&"), ctx_var, S(" }"));
             }
         }
-        return str_cat_3(self->transient, S("(tl_Closure){ .fn = (void*)"), name, S(", .ctx = NULL }"));
+        return str_cat_3(self->transient, S("(tl_closure){ .fn = (void*)"), name, S(", .ctx = NULL }"));
     }
 
     if (useful_name(original_name, name)) {
@@ -1069,7 +1069,7 @@ static str generate_funcall_c(transpile *self, ast_node const *node, eval_ctx *c
     str_array      args_res = {.alloc = self->transient};
     array_reserve(args_res, args.size);
 
-    // C FFI: emit raw function pointers, not tl_Closure
+    // C FFI: emit raw function pointers, not tl_closure
     eval_ctx c_ctx = ctx ? *ctx : (eval_ctx){0};
     c_ctx.want_raw_fn_ptr = 1;
 
@@ -1120,7 +1120,7 @@ static str generate_funcall_c(transpile *self, ast_node const *node, eval_ctx *c
 
 static void generate_indirect_closure_call(transpile *self, str closure_name, tl_monotype *type,
                                            str_array args_res) {
-    // Indirect call through tl_Closure: ((ret(*)(void*, params...))name.fn)(name.ctx, args...)
+    // Indirect call through tl_closure: ((ret(*)(void*, params...))name.fn)(name.ctx, args...)
     tl_monotype *ret_mono = tl_monotype_sized_last(type->list.xs);
     str          ret_c    = type_to_c_mono(self, ret_mono);
     tl_monotype_sized params = tl_monotype_arrow_get_args(type);
@@ -1131,7 +1131,7 @@ static void generate_indirect_closure_call(transpile *self, str closure_name, tl
     for (u32 pi = 0; pi < params.size; pi++) {
         cat_commasp(self);
         if (tl_monotype_is_arrow(params.v[pi])) {
-            cat(self, S("tl_Closure"));
+            cat(self, S("tl_closure"));
         } else {
             cat(self, type_to_c_mono(self, params.v[pi]));
         }
@@ -1179,7 +1179,7 @@ static str generate_funcall_with_args(transpile *self, ast_node const *node, eva
         cat_close_round(self);
         cat_semicolonln(self);
     } else {
-        // Indirect call through tl_Closure variable
+        // Indirect call through tl_closure variable
         // Resolve the variable name (may be through context, keyword-escaped, etc.)
         str closure_name = generate_expr_symbol(self, type, name,
                                                 ast_node_name_original(node->named_application.name), ctx);
@@ -2083,7 +2083,7 @@ static str generate_binary_op(transpile *self, tl_monotype *type, ast_node const
 
             assert(tl_monotype_is_list(type));
 
-            // Indirect call through tl_Closure: cast fn and pass ctx
+            // Indirect call through tl_closure: cast fn and pass ctx
             if (!str_is_empty(res) && !is_nil_result(type)) generate_assign_lhs(self, res);
             generate_indirect_closure_call(self, name, type, args_res);
             cat_semicolonln(self);
@@ -2450,7 +2450,7 @@ static str generate_expr(transpile *self, tl_monotype *type, ast_node const *nod
     case ast_continue:        return generate_continue(self, type, node, ctx);
 
     case ast_nil:
-        if (type && tl_monotype_is_arrow(type)) return S("(tl_Closure){0}");
+        if (type && tl_monotype_is_arrow(type)) return S("(tl_closure){0}");
         return S("NULL");
     case ast_void:            return str_empty();
 
@@ -2624,8 +2624,8 @@ static void generate_decl(transpile *self, str name, tl_monotype *type) {
 static void generate_decl_pointer(transpile *self, str name, tl_monotype *type) {
     name = escape_c_keyword(self->transient, name);
     if (tl_arrow == type->tag) {
-        // arrow — pointer to tl_Closure
-        cat(self, S("tl_Closure* "));
+        // arrow — pointer to tl_closure
+        cat(self, S("tl_closure* "));
         cat(self, name);
         cat_semicolonln(self);
 
@@ -2668,7 +2668,7 @@ int transpile_compile(transpile *self, str_build *out_build) {
 
     generate_hash_includes(self);
 
-    cat(self, S("typedef struct tl_Closure { void* fn; void* ctx; } tl_Closure;\n\n"));
+    cat(self, S("typedef struct tl_closure { void* fn; void* ctx; } tl_closure;\n\n"));
 
     generate_user_types(self);
     generate_structs(self);
@@ -3036,7 +3036,7 @@ static void build_arrow_to_c(transpile *self, str_build *b, tl_monotype *type, s
     (void)self;
     if (!tl_monotype_is_arrow(type)) fatal("logic error");
 
-    str_build_cat(b, S("tl_Closure"));
+    str_build_cat(b, S("tl_closure"));
     if (!str_is_empty(name)) {
         str_build_cat(b, S(" "));
         str_build_cat(b, name);

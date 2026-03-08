@@ -241,7 +241,7 @@ static int tl_closure_<hash>(void* tl_ctx_raw, int tl_x) {
 
 // Context on stack, points to stack variable
 tl_ctx_<hash> ctx = { .tl_n = &tl_n };
-tl_Closure f = { .fn = (void*)tl_closure_<hash>, .ctx = (void*)&ctx };
+tl_closure f = { .fn = (void*)tl_closure_<hash>, .ctx = (void*)&ctx };
 
 // Call site
 ((int (*)(void*, int))f.fn)(f.ctx, 10);
@@ -270,7 +270,7 @@ static int tl_closure_<hash>(void* tl_ctx_raw, int tl_x) {
 // Context on heap, values copied in
 tl_closure_ctx_<hash>* ctx = alloc(sizeof(tl_closure_ctx_<hash>));
 ctx->tl_n = tl_n;
-tl_Closure f = { .fn = (void*)tl_closure_<hash>, .ctx = (void*)ctx };
+tl_closure f = { .fn = (void*)tl_closure_<hash>, .ctx = (void*)ctx };
 
 // Call site — identical to stack closure
 ((int (*)(void*, int))f.fn)(f.ctx, 10);
@@ -360,12 +360,12 @@ result := adder(10)
 
 ### Phase 1: Unified calling convention (DONE)
 
-Migrated all closure codegen to the `tl_Closure` struct. Commit `81df1ebb`.
+Migrated all closure codegen to the `tl_closure` struct. Commit `81df1ebb`.
 
 **What was done:**
 - All Tess functions now receive `void* tl_ctx_raw` as their first parameter
-- `tl_Closure` struct (`typedef struct tl_Closure { void* fn; void* ctx; } tl_Closure;`) emitted in all transpiled output
-- Arrow-typed toplevel functions wrapped as `(tl_Closure){ .fn = (void*)name, .ctx = NULL }`
+- `tl_closure` struct (`typedef struct tl_closure { void* fn; void* ctx; } tl_closure;`) emitted in all transpiled output
+- Arrow-typed toplevel functions wrapped as `(tl_closure){ .fn = (void*)name, .ctx = NULL }`
 - Closure calls go through indirect dispatch: `((ret(*)(void*, params...))f.fn)(f.ctx, args...)`
 - Stack closures still work with by-reference captures (pointer fields in context struct)
 - C FFI integration preserved via `want_raw_fn_ptr` flag (raw function pointers for C calls)
