@@ -57,6 +57,34 @@ static void generalize(tl_monotype *, tl_type_variable_array *, hashmap **);
 static int  tl_type_subs_unity_tv_tv(tl_type_subs *, tl_type_variable, tl_type_variable, type_error_cb_fun,
                                      void *, hashmap **, tl_unify_direction);
 
+// Check if a monotype tree contains a specific type variable (not via subs, just structurally).
+static int monotype_contains_tv_(tl_monotype *self, tl_type_variable tv, hashmap **seen) {
+    if (!self || seen_set_visit(seen, self)) return 0;
+    switch (self->tag) {
+    case tl_var:
+    case tl_weak:
+    case tl_weak_int_signed:
+    case tl_weak_int_unsigned:
+    case tl_weak_float:        return self->var == tv;
+    case tl_integer:
+    case tl_placeholder:
+    case tl_any:
+    case tl_ellipsis:          return 0;
+    case tl_cons_inst:         {
+        forall(i, self->cons_inst->args)
+            if (monotype_contains_tv_(self->cons_inst->args.v[i], tv, seen)) return 1;
+        return 0;
+    }
+    case tl_arrow:
+    case tl_tuple:             {
+        forall(i, self->list.xs)
+            if (monotype_contains_tv_(self->list.xs.v[i], tv, seen)) return 1;
+        return 0;
+    }
+    }
+    return 0;
+}
+
 // Forward declaration for recursive parse_type_ helpers
 static tl_monotype *tl_type_registry_parse_type_(tl_type_registry *, tl_type_registry_parse_type_ctx *,
                                                  ast_node const *);
@@ -831,6 +859,78 @@ static void resolve_deferred_placeholders(tl_type_registry *self, tl_type_regist
                     tl_monotype_substitute(self->alloc, clone, self->subs, null);
                     tl_polytype *new_poly = tl_monotype_generalize(self->alloc, clone);
                     tl_type_registry_insert(self, source_name, new_poly);
+                }
+
+                // E. Fix sibling types that share the resolved placeholder.
+                //
+                // The placeholder was shared (by pointer identity) with other types that
+                // instantiated the source type (e.g. __MyList__Union_ instantiated
+                // MyList__Cons and inherited its Ptr[placeholder]).  After in-place
+                // resolution the placeholder content uses stored_args variables (e.g. t43)
+                // which are NOT quantified in those sibling types.  We need to unify those
+                // stale variables with each sibling's own quantifiers and re-insert.
+                if (stored_args && stored_args->size > 0) {
+                    str_array all_defs = str_map_keys(self->transient, self->definitions);
+                    forall(di, all_defs) {
+                        // Skip the target type and the source type (already handled)
+                        if (str_eq(all_defs.v[di], keys.v[i])) continue;
+                        if (!str_is_empty(source_name) && str_eq(all_defs.v[di], source_name)) continue;
+
+                        tl_polytype *def_poly = str_map_get_ptr(self->definitions, all_defs.v[di]);
+                        if (!def_poly) continue;
+
+                        // Only consider types with the same number of quantifiers as stored_args
+                        // (they share the same type parameter structure).
+                        if (def_poly->quantifiers.size != stored_args->size) continue;
+
+                        // Check if this type contains any stored_args variable as a free variable
+                        int      has_stale = 0;
+                        hashmap *cseen     = hset_create(transient_allocator, 64);
+                        for (u32 j = 0; j < stored_args->size; j++) {
+                            if (!tl_monotype_is_tv(stored_args->v[j])) continue;
+                            // Check if this var is NOT already one of the quantifiers
+                            int is_quantified = 0;
+                            for (u32 q = 0; q < def_poly->quantifiers.size; q++) {
+                                if (def_poly->quantifiers.v[q] == stored_args->v[j]->var) {
+                                    is_quantified = 1;
+                                    break;
+                                }
+                            }
+                            if (is_quantified) continue;
+
+                            hset_reset(cseen);
+                            if (monotype_contains_tv_(def_poly->type, stored_args->v[j]->var, &cseen)) {
+                                has_stale = 1;
+                                break;
+                            }
+                        }
+                        if (!has_stale) continue;
+
+                        // Unify stale stored_args variables with this type's quantifiers
+                        hashmap *useen = hset_create(transient_allocator, 64);
+                        for (u32 j = 0; j < stored_args->size && j < def_poly->quantifiers.size; j++) {
+                            if (tl_monotype_is_tv(stored_args->v[j])) {
+                                hset_reset(useen);
+                                tl_type_subs_unity_tv_tv(self->subs, stored_args->v[j]->var,
+                                                         def_poly->quantifiers.v[j], null, null, &useen,
+                                                         TL_UNIFY_SYMMETRIC);
+                            }
+                        }
+
+                        // Clone + substitute + re-generalize + re-insert
+                        tl_monotype *dclone = tl_monotype_clone(self->alloc, def_poly->type);
+                        tl_monotype_substitute(self->alloc, dclone, self->subs, null);
+                        tl_polytype *new_def = tl_monotype_generalize(self->alloc, dclone);
+                        tl_type_registry_insert(self, all_defs.v[di], new_def);
+#if DEBUG_RECURSIVE_TYPES
+                        {
+                            str tmp = tl_polytype_to_string(self->transient, new_def);
+                            fprintf(stderr,
+                                    "[DEBUG_RECURSIVE_TYPES] step E: re-inserted '%s': %s\n",
+                                    str_cstr(&all_defs.v[di]), str_cstr(&tmp));
+                        }
+#endif
+                    }
                 }
             }
         } else {
