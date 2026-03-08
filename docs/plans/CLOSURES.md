@@ -356,22 +356,79 @@ result := adder(10)
 
 ---
 
+## Implementation Status
+
+### Phase 1: Unified calling convention (DONE)
+
+Migrated all closure codegen to the `tl_Closure` struct. Commit `81df1ebb`.
+
+**What was done:**
+- All Tess functions now receive `void* tl_ctx_raw` as their first parameter
+- `tl_Closure` struct (`typedef struct tl_Closure { void* fn; void* ctx; } tl_Closure;`) emitted in all transpiled output
+- Arrow-typed toplevel functions wrapped as `(tl_Closure){ .fn = (void*)name, .ctx = NULL }`
+- Closure calls go through indirect dispatch: `((ret(*)(void*, params...))f.fn)(f.ctx, args...)`
+- Stack closures still work with by-reference captures (pointer fields in context struct)
+- C FFI integration preserved via `want_raw_fn_ptr` flag (raw function pointers for C calls)
+- Closure-to-nil comparison extracts `.fn` field
+- Generic closures, HOF passing all work
+
+**Files changed:** `src/tess/src/transpile.c`
+
+### Phase 2: Parser and AST (TODO)
+
+Parse `[[alloc]]` and `[[capture(...)]]` attributes on lambda expressions.
+
+**Tasks:**
+- Add attribute fields to `ast_lambda_function` in `ast.h`
+- New grammar rule: `[[...]] (params) { body }` parsed as attributed lambda
+- `capture(...)` and `alloc(...)` parse naturally since `a_attribute_set` already handles funcall-like syntax
+- `maybe_wrap_lambda_function_in_let_in` must preserve attributes through wrapping
+- `ast_node_clone` must handle new attribute fields (for generic specialization)
+
+**Files:** `src/tess/include/ast.h`, `src/tess/src/parser.c`, `src/tess/src/ast.c`
+
+### Phase 3: Type inference and validation (TODO)
+
+Enforce capture list rules and escape analysis.
+
+**Tasks:**
+- Validate `[[alloc]]` without `[[capture(...)]]` only if body has no free variables
+- Error if body references variable not in `capture(...)` and not a parameter
+- Error for `[[capture(...)]]` without `[[alloc]]`
+- Allow returning allocated closures (currently all closure returns are rejected)
+- Validate allocator expression has type `Ptr[Allocator]`
+
+**Files:** `src/tess/src/infer.c`, `src/tess/src/infer_constraint.c`
+
+### Phase 4: Transpiler — allocated closure codegen (TODO)
+
+Two-mode context struct generation and heap allocation.
+
+**Tasks:**
+- Allocated closure context structs: **value fields** (`int tl_n`) with **direct access** (`tl_ctx->tl_n`)
+- Stack closure context structs: unchanged (**pointer fields** with dereference access)
+- Heap allocation of context at closure creation (`alloc(sizeof(...))`)
+- Copy captured values into heap context
+- Support `[[alloc(expr)]]` for explicit allocator
+- Support `[[alloc]]` for default allocator (`Alloc.context`)
+- Context struct hash must incorporate closure kind to avoid collisions
+
+**Files:** `src/tess/src/transpile.c`
+
+### Phase 5: Standard library (TODO)
+
+Tess-level `Closure[F]` type and allocator integration.
+
+**Tasks:**
+- `Closure` type definition in std lib (phantom-typed struct)
+- Integration with `Alloc` for default allocator
+- `Closure.free` API (design TBD)
+
+**Files:** `src/tl/std/`
+
+---
+
 ## Implementation Concerns
-
-### Parser: `[[...]]` on lambdas requires a new grammar production
-
-The existing `[[attribute]]` syntax attaches to identifiers only (`a_attributed_identifier`). Lambdas are a separate production in `a_value`. A new grammar rule is needed so that `[[...]] (params) { body }` is parsed as an attributed lambda. The `capture(...)` and `alloc(...)` forms should parse naturally since `a_attribute_set` already handles funcall-like syntax inside `[[...]]`.
-
-### AST: `ast_lambda_function` needs attribute fields
-
-The current `ast_lambda_function` struct has no field for attributes. It needs to be extended to store the attribute set. The `maybe_wrap_lambda_function_in_let_in` transformation must preserve these attributes through the wrapping.
-
-### Transpiler: unified calling convention (migration)
-
-The current stack closure implementation uses direct calls with a known C function name and inlined context passing. Under the unified model, all closures go through the `{ fn, ctx }` indirection. This requires modifying the existing stack closure code generation to:
-- Emit `tl_Closure` structs instead of raw context + direct calls
-- Use indirect calls at all closure call sites
-- Cast function pointers through `void*`
 
 ### Transpiler: two context struct modes
 
@@ -403,18 +460,3 @@ Shared ownership via reference counting (`capture(x.rc)`). Deferred until there 
 ### Closure.free API
 
 The exact mechanism for individually freeing a closure's context needs to be designed. Options include a compiler-recognized `Closure.free(f)`, exposing `f.ctx` directly, or relying on arenas for all lifetime management.
-
----
-
-## Files That Would Need Changes
-
-| File | Changes |
-|------|---------|
-| `src/tess/src/parser.c` | Parse `[[alloc]]` and `[[capture(...)]]` attributes on lambdas |
-| `src/tess/include/ast.h` | Add attribute fields to `ast_lambda_function` node |
-| `src/tess/src/infer.c` | Produce `Closure[F]` for all closures (unified type) |
-| `src/tess/src/infer_constraint.c` | Allow returning allocated closures, enforce capture list rules |
-| `src/tess/src/type.c` | Add `Closure` type constructor |
-| `src/tess/src/transpile.c` | Unified calling convention, heap allocation, value copies, two context struct modes |
-| `src/tl/std/` | `Closure` type definition, integration with `Alloc` |
-| `docs/LANGUAGE_REFERENCE.md` | Document allocated closures |
