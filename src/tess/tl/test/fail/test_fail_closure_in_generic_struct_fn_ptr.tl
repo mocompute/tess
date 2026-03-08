@@ -1,10 +1,8 @@
 #module main
 
-// Bug: storing a closure/lambda in a generic struct's fn ptr field
-// produces incorrect specializations and missing closure context types.
-// Compiler errors:
-//   - unknown type name 'tl_ctx_...' (closure context struct not generated)
-//   - 'Processor_N' has no member named 'run' (wrong specialization)
+// Closure escape detected: storing a capturing closure in a struct field
+// is rejected because the closure context lives on the stack and would
+// dangle once the creating function returns.
 
 Processor[T]: { run: (T) -> T }
 
