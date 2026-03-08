@@ -1,5 +1,4 @@
 #module main
-#import <stdlib.tl>
 
 // Test passing a capturing closure to a higher-order function.
 // This was impossible before the unified tl_closure convention:
@@ -10,26 +9,23 @@ apply (f, x) { f(x) }
 apply0(f)    { f()  }
 
 main() {
+    error  := 0
     offset := 10
 
     // Capturing lambda passed to a HOF
     add_offset := (x) { x + offset }
-    result     := apply(add_offset, 32)
-    c_assert(result == 42)
+    error += if apply(add_offset, 32) == 42 {0} else {1}
 
     // Zero-capture lambda passed to a HOF
-    double  := (x) { x + x }
-    result2 := apply(double, 21)
-    c_assert(result2 == 42)
+    double := (x) { x + x }
+    error += if apply(double, 21) == 42 {0} else {1}
 
     // Nullary capturing closure passed to a HOF
     get_offset := () { offset }
-    result3    := apply0(get_offset)
-    c_assert(result3 == 10)
+    error += if apply0(get_offset) == 10 {0} else {1}
 
     // Named (non-lambda) function passed to a HOF
-    result4 := apply(add_offset, -10 + offset)
-    c_assert(result4 == 10)
+    error += if apply(add_offset, -10 + offset) == 10 {0} else {1}
 
-    0
+    error
 }
