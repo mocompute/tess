@@ -36,6 +36,8 @@ struct transpile {
     hashmap          *toplevels;         // str => ast_node*
     hashmap          *structs;           // u64 set
     hashmap          *context_generated; // str set
+    hashmap          *thunks_generated;  // str set — C FFI thunks already emitted
+    str_build         thunks_build;      // deferred buffer for C FFI thunk definitions
 
     str_array         toplevels_sorted;
 
@@ -544,6 +546,62 @@ static int useful_name(str original, str name) {
 
 static str remove_c_prefix(allocator *alloc, str name);
 
+// Generate a C FFI thunk for a Tess function that needs to be passed as a raw C function pointer.
+// The thunk strips the void* tl_ctx_raw parameter and calls the real function with NULL.
+// Returns the thunk name.
+static str generate_raw_fn_thunk(transpile *self, tl_monotype *type, str mangled_name) {
+    // Build thunk name: prepend tl_cffi_ to the mangled name
+    str thunk_name = str_cat(self->arena, S("tl_cffi_"), mangled_name);
+
+    // Check if already generated
+    if (str_hset_contains(self->thunks_generated, thunk_name)) return thunk_name;
+    str_hset_insert(&self->thunks_generated, thunk_name);
+
+    // Extract arrow components
+    assert(tl_monotype_is_arrow(type));
+    assert(type->list.xs.size == 2);
+    tl_monotype      *ret_mono = tl_monotype_sized_last(type->list.xs);
+    tl_monotype_sized params   = type->list.xs.v[0]->list.xs;
+
+    str_build *b       = &self->thunks_build;
+    int        is_void = tl_monotype_is_void(ret_mono) || tl_monotype_is_any(ret_mono);
+
+    // static ret thunk_name(params...) { [return] real_name(NULL, params...); }
+    str_build_cat(b, S("static "));
+    str_build_cat(b, is_void ? S("void") : type_to_c_mono(self, ret_mono));
+    str_build_cat(b, S(" "));
+    str_build_cat(b, thunk_name);
+    str_build_cat(b, S("("));
+
+    if (!params.size) {
+        str_build_cat(b, S("void"));
+    }
+    for (u32 i = 0; i < params.size; i++) {
+        if (tl_monotype_is_arrow(params.v[i])) {
+            str_build_cat(b, S("tl_Closure"));
+        } else {
+            str_build_cat(b, type_to_c_mono(self, params.v[i]));
+        }
+        char pbuf[32];
+        snprintf(pbuf, sizeof pbuf, " tl_p%u", i);
+        str_build_cat(b, str_init_small(pbuf));
+        if (i + 1 < params.size) str_build_cat(b, S(", "));
+    }
+
+    str_build_cat(b, S(") { "));
+    if (!is_void) str_build_cat(b, S("return "));
+    str_build_cat(b, mangled_name);
+    str_build_cat(b, S("(NULL"));
+    for (u32 i = 0; i < params.size; i++) {
+        char pbuf[32];
+        snprintf(pbuf, sizeof pbuf, ", tl_p%u", i);
+        str_build_cat(b, str_init_small(pbuf));
+    }
+    str_build_cat(b, S("); }\n"));
+
+    return thunk_name;
+}
+
 static str generate_expr_symbol(transpile *self, tl_monotype *type, str symbol_name, str original_name,
                                 eval_ctx *ctx) {
     str name = symbol_name;
@@ -568,8 +626,8 @@ static str generate_expr_symbol(transpile *self, tl_monotype *type, str symbol_n
     // Arrow-typed symbols that are toplevel functions: wrap in tl_Closure (unless C FFI context)
     if (is_arrow && str_map_contains(self->toplevels, symbol_name)) {
         if (ctx && ctx->want_raw_fn_ptr) {
-            // C FFI context: emit raw function pointer
-            return name;
+            // C FFI context: generate a thunk with C-compatible signature (no ctx parameter)
+            return generate_raw_fn_thunk(self, type, name);
         }
         if (ctx) {
             tl_polytype *poly = tl_type_env_lookup(self->env, symbol_name);
@@ -2620,11 +2678,28 @@ int transpile_compile(transpile *self, str_build *out_build) {
     generate_prototypes(self, 1);
     cat_nl(self);
 
+    // Generate toplevel values and functions into a temporary buffer so that
+    // C FFI thunks (discovered lazily during codegen) can be emitted before them.
+    str_build saved_build = self->build;
+    self->build = str_build_init(self->parent, TRANSPILE_BUILD_SIZE);
+
     generate_toplevel_values(self);
     cat_nl(self);
 
     generate_toplevels(self);
     cat_nl(self);
+
+    // Assemble: thunks first (they reference prototypes above), then toplevel code
+    str_build toplevels_build = self->build;
+    self->build = saved_build;
+
+    str thunks_str = str_build_str(self->transient, self->thunks_build);
+    if (!str_is_empty(thunks_str)) {
+        cat(self, thunks_str);
+        cat_nl(self);
+    }
+
+    str_build_cat_n(&self->build, toplevels_build.v, toplevels_build.size);
 
     validate_c_exports(self);
 
@@ -2673,6 +2748,8 @@ transpile *transpile_create(allocator *alloc, transpile_opts const *opts) {
 
     self->structs           = hset_create(self->arena, 64);
     self->context_generated = hset_create(self->arena, 64);
+    self->thunks_generated  = hset_create(self->arena, 64);
+    self->thunks_build      = str_build_init(self->arena, 256);
 
     self->next_res          = 0;
     self->next_block        = 0;
