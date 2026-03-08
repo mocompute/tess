@@ -54,7 +54,7 @@ static int                       integer_value_fits(tl_type_constructor_def *, i
 
 // Forward declarations for post-resolution fixup
 static void generalize(tl_monotype *, tl_type_variable_array *, hashmap **);
-static int  tl_type_subs_unity_tv_tv(tl_type_subs *, tl_type_variable, tl_type_variable, type_error_cb_fun,
+static int  tl_type_subs_unify_tv_tv(tl_type_subs *, tl_type_variable, tl_type_variable, type_error_cb_fun,
                                      void *, hashmap **, tl_unify_direction);
 
 // Check if a monotype tree contains a specific type variable (not via subs, just structurally).
@@ -71,14 +71,13 @@ static int monotype_contains_tv_(tl_monotype *self, tl_type_variable tv, hashmap
     case tl_any:
     case tl_ellipsis:          return 0;
     case tl_cons_inst:         {
-        forall(i, self->cons_inst->args)
-            if (monotype_contains_tv_(self->cons_inst->args.v[i], tv, seen)) return 1;
+        forall(i, self->cons_inst->args) if (monotype_contains_tv_(self->cons_inst->args.v[i], tv,
+                                                                   seen)) return 1;
         return 0;
     }
     case tl_arrow:
-    case tl_tuple:             {
-        forall(i, self->list.xs)
-            if (monotype_contains_tv_(self->list.xs.v[i], tv, seen)) return 1;
+    case tl_tuple: {
+        forall(i, self->list.xs) if (monotype_contains_tv_(self->list.xs.v[i], tv, seen)) return 1;
         return 0;
     }
     }
@@ -722,7 +721,6 @@ static tl_monotype *parse_type_specials(tl_type_registry *self, tl_type_registry
     return mono;
 }
 
-
 static tl_monotype *defer_parse(tl_type_registry *self, tl_type_registry_parse_type_ctx *ctx, str name,
                                 tl_monotype_sized type_args) {
     if (str_hset_contains(ctx->in_progress, name) || str_map_contains(ctx->deferred_parse, name) ||
@@ -820,7 +818,7 @@ static void resolve_deferred_placeholders(tl_type_registry *self, tl_type_regist
                     for (u32 j = 0; j < stored_args->size && j < poly->quantifiers.size; j++) {
                         if (tl_monotype_is_tv(stored_args->v[j])) {
                             hset_reset(useen);
-                            tl_type_subs_unity_tv_tv(self->subs, stored_args->v[j]->var,
+                            tl_type_subs_unify_tv_tv(self->subs, stored_args->v[j]->var,
                                                      poly->quantifiers.v[j], null, null, &useen,
                                                      TL_UNIFY_SYMMETRIC);
                         }
@@ -839,7 +837,7 @@ static void resolve_deferred_placeholders(tl_type_registry *self, tl_type_regist
                     hashmap *useen = hset_create(transient_allocator, 64);
                     for (u32 j = 0; j < source_q->size && j < source_poly->quantifiers.size; j++) {
                         hset_reset(useen);
-                        tl_type_subs_unity_tv_tv(self->subs, source_q->v[j], source_poly->quantifiers.v[j],
+                        tl_type_subs_unify_tv_tv(self->subs, source_q->v[j], source_poly->quantifiers.v[j],
                                                  null, null, &useen, TL_UNIFY_SYMMETRIC);
                     }
                 }
@@ -911,7 +909,7 @@ static void resolve_deferred_placeholders(tl_type_registry *self, tl_type_regist
                         for (u32 j = 0; j < stored_args->size && j < def_poly->quantifiers.size; j++) {
                             if (tl_monotype_is_tv(stored_args->v[j])) {
                                 hset_reset(useen);
-                                tl_type_subs_unity_tv_tv(self->subs, stored_args->v[j]->var,
+                                tl_type_subs_unify_tv_tv(self->subs, stored_args->v[j]->var,
                                                          def_poly->quantifiers.v[j], null, null, &useen,
                                                          TL_UNIFY_SYMMETRIC);
                             }
@@ -925,8 +923,7 @@ static void resolve_deferred_placeholders(tl_type_registry *self, tl_type_regist
 #if DEBUG_RECURSIVE_TYPES
                         {
                             str tmp = tl_polytype_to_string(self->transient, new_def);
-                            fprintf(stderr,
-                                    "[DEBUG_RECURSIVE_TYPES] step E: re-inserted '%s': %s\n",
+                            fprintf(stderr, "[DEBUG_RECURSIVE_TYPES] step E: re-inserted '%s': %s\n",
                                     str_cstr(&all_defs.v[di]), str_cstr(&tmp));
                         }
 #endif
@@ -1611,9 +1608,9 @@ static void replace_tv_mono(tl_monotype *self, tl_type_subs *subs, hashmap **map
         tl_monotype **replace = map_get(*map, &self->var, sizeof self->var);
         if (replace) self->var = (*replace)->var;
         else {
-            tl_type_variable fresh_tv = tl_type_subs_fresh(subs);
-            tl_monotype *fresh_mono = alloc_malloc(subs->data.alloc, sizeof *fresh_mono);
-            *fresh_mono = (tl_monotype){.tag = self->tag, .var = fresh_tv};
+            tl_type_variable fresh_tv   = tl_type_subs_fresh(subs);
+            tl_monotype     *fresh_mono = alloc_malloc(subs->data.alloc, sizeof *fresh_mono);
+            *fresh_mono                 = (tl_monotype){.tag = self->tag, .var = fresh_tv};
             map_set(map, &self->var, sizeof self->var, &fresh_mono);
             self->var = fresh_tv;
         }
@@ -2540,37 +2537,37 @@ str tl_monotype_to_string_(allocator *alloc, tl_monotype *self, hashmap **map) {
 
     case tl_integer: {
         char buf[64];
-        int n = snprintf(buf, sizeof buf, "i%i", self->integer);
+        int  n = snprintf(buf, sizeof buf, "i%i", self->integer);
         str_build_cat_n(&b, buf, (u32)n);
     } break;
 
     case tl_var: {
         char buf[64];
-        int n = snprintf(buf, sizeof buf, "t%u", self->var);
+        int  n = snprintf(buf, sizeof buf, "t%u", self->var);
         str_build_cat_n(&b, buf, (u32)n);
     } break;
 
     case tl_weak: {
         char buf[64];
-        int n = snprintf(buf, sizeof buf, "w%u", self->var);
+        int  n = snprintf(buf, sizeof buf, "w%u", self->var);
         str_build_cat_n(&b, buf, (u32)n);
     } break;
 
     case tl_weak_int_signed: {
         char buf[64];
-        int n = snprintf(buf, sizeof buf, "ws%u", self->var);
+        int  n = snprintf(buf, sizeof buf, "ws%u", self->var);
         str_build_cat_n(&b, buf, (u32)n);
     } break;
 
     case tl_weak_int_unsigned: {
         char buf[64];
-        int n = snprintf(buf, sizeof buf, "wu%u", self->var);
+        int  n = snprintf(buf, sizeof buf, "wu%u", self->var);
         str_build_cat_n(&b, buf, (u32)n);
     } break;
 
     case tl_weak_float: {
         char buf[64];
-        int n = snprintf(buf, sizeof buf, "wf%u", self->var);
+        int  n = snprintf(buf, sizeof buf, "wf%u", self->var);
         str_build_cat_n(&b, buf, (u32)n);
     } break;
 
@@ -2633,7 +2630,7 @@ str tl_polytype_to_string(allocator *alloc, tl_polytype *self) {
         str_build_cat(&b, S("forall"));
         forall(i, self->quantifiers) {
             char buf[64];
-            int n = snprintf(buf, sizeof buf, "t%u", self->quantifiers.v[i]);
+            int  n = snprintf(buf, sizeof buf, "t%u", self->quantifiers.v[i]);
             str_build_cat(&b, S(" "));
             str_build_cat_n(&b, buf, (u32)n);
         }
@@ -2721,7 +2718,7 @@ static int unify_list(tl_type_subs *subs, tl_monotype_sized left, tl_monotype_si
 static int unify_tuple(tl_type_subs *subs, tl_monotype_sized left, tl_monotype_sized right,
                        tl_monotype *lhs, tl_monotype *rhs, type_error_cb_fun cb, void *user, hashmap **seen,
                        tl_unify_direction dir);
-static int tl_type_subs_unity_tv_tv(tl_type_subs *, tl_type_variable, tl_type_variable, type_error_cb_fun,
+static int tl_type_subs_unify_tv_tv(tl_type_subs *, tl_type_variable, tl_type_variable, type_error_cb_fun,
                                     void *, hashmap **seen, tl_unify_direction);
 static int tl_type_subs_unify_tv_weak(tl_type_subs *, tl_type_variable, tl_monotype *, type_error_cb_fun,
                                       void *, hashmap **seen);
@@ -2869,8 +2866,8 @@ static int unify_var_other(tl_type_subs *subs, tl_type_variable tv, tl_monotype 
     case tl_integer:     return 1;
     case tl_var:
         // Preserve left/right ordering for directional unification
-        if (tv_is_left) return tl_type_subs_unity_tv_tv(subs, tv, other->var, cb, user, seen, dir);
-        else return tl_type_subs_unity_tv_tv(subs, other->var, tv, cb, user, seen, dir);
+        if (tv_is_left) return tl_type_subs_unify_tv_tv(subs, tv, other->var, cb, user, seen, dir);
+        else return tl_type_subs_unify_tv_tv(subs, other->var, tv, cb, user, seen, dir);
     case tl_weak:              return tl_type_subs_unify_tv_weak(subs, tv, other, cb, user, seen);
     case tl_weak_int_signed:
     case tl_weak_int_unsigned: return tl_type_subs_unify_tv_weak_int(subs, tv, other, cb, user, seen);
@@ -2892,7 +2889,7 @@ static int unify_weak_other(tl_type_subs *subs, tl_monotype *weak, tl_monotype *
     case tl_integer:     return 1;
     case tl_var:         return tl_type_subs_unify_tv_weak(subs, other->var, weak, cb, user, seen);
     case tl_weak:
-        return tl_type_subs_unity_tv_tv(subs, weak->var, other->var, cb, user, seen, TL_UNIFY_SYMMETRIC);
+        return tl_type_subs_unify_tv_tv(subs, weak->var, other->var, cb, user, seen, TL_UNIFY_SYMMETRIC);
     case tl_weak_int_signed:
     case tl_weak_int_unsigned:
     case tl_weak_float:        return 1; // error: pointer-weak meets integer/float-weak
@@ -3145,7 +3142,7 @@ int tl_type_subs_monotype_occurs(tl_type_subs *self, tl_type_variable tv, tl_mon
     return res;
 }
 
-static int tl_type_subs_unity_tv_tv(tl_type_subs *self, tl_type_variable left, tl_type_variable right,
+static int tl_type_subs_unify_tv_tv(tl_type_subs *self, tl_type_variable left, tl_type_variable right,
                                     type_error_cb_fun cb, void *user, hashmap **seen,
                                     tl_unify_direction dir) {
     if (left == right) return 0;
@@ -3316,7 +3313,7 @@ static int unify_weak_int_other(tl_type_subs *subs, tl_monotype *weak_int, tl_mo
     case tl_weak_int_unsigned:
         // same family? merge via tv_tv; different family? error
         if (weak_int->tag == other->tag)
-            return tl_type_subs_unity_tv_tv(subs, weak_int->var, other->var, cb, user, seen,
+            return tl_type_subs_unify_tv_tv(subs, weak_int->var, other->var, cb, user, seen,
                                             TL_UNIFY_SYMMETRIC);
         if (cb) cb(user, weak_int, other);
         return 1;
@@ -3393,7 +3390,7 @@ static int unify_weak_float_other(tl_type_subs *subs, tl_monotype *weak_float, t
         return 1;
     case tl_weak_float:
         // merge: both weak floats resolve together
-        return tl_type_subs_unity_tv_tv(subs, weak_float->var, other->var, cb, user, seen,
+        return tl_type_subs_unify_tv_tv(subs, weak_float->var, other->var, cb, user, seen,
                                         TL_UNIFY_SYMMETRIC);
     case tl_cons_inst:
         return tl_type_subs_unify_weak_float_concrete(subs, weak_float, other, cb, user, seen);
@@ -3422,7 +3419,7 @@ int tl_type_subs_unify_tv_mono(tl_type_subs *self, tl_type_variable tv, tl_monot
 
     case tl_var:
         // case 1: both are tvs
-        return tl_type_subs_unity_tv_tv(self, tv, mono->var, cb, user, seen, TL_UNIFY_SYMMETRIC);
+        return tl_type_subs_unify_tv_tv(self, tv, mono->var, cb, user, seen, TL_UNIFY_SYMMETRIC);
     case tl_weak:
         // case 2: one is weak type variable
         return tl_type_subs_unify_tv_weak(self, tv, mono, cb, user, seen);
