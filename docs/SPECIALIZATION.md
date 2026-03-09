@@ -5,10 +5,16 @@ This document provides a comprehensive analysis of the generic specialization fl
 ## Table of Contents
 
 1. [Overview](#overview)
-2. [The Specialization Pipeline](#the-specialization-pipeline)
-3. [Function Specialization](#function-specialization)
-4. [Type Constructor Specialization](#type-constructor-specialization)
-5. [Key Functions Reference](#key-functions-reference)
+2. [The Inference Pipeline](#the-inference-pipeline)
+3. [Specialization Phase in Detail](#specialization-phase-in-detail)
+4. [Function Specialization](#function-specialization)
+5. [Type Constructor Specialization](#type-constructor-specialization)
+6. [Clone and Rename Process](#clone-and-rename-process)
+7. [Instance Cache and Naming](#instance-cache-and-naming)
+8. [Closures and Lambdas](#closures-and-lambdas)
+9. [Edge Cases and Special Handling](#edge-cases-and-special-handling)
+10. [Key Data Structures](#key-data-structures)
+11. [Key Functions Reference](#key-functions-reference)
 
 ---
 
@@ -26,120 +32,155 @@ main() {
 }
 ```
 
-The specialization happens during type inference in `src/tess/src/infer.c`.
+Specialization is implemented across several files:
+- **`infer.c`** — Orchestration: runs the 7-phase inference pipeline
+- **`infer_specialize.c`** — Core specialization logic (all `specialize_*` functions)
+- **`infer_alpha.c`** — Cloning, renaming, free variable collection
+- **`infer_constraint.c`** — Type constraint collection and unification
+- **`infer_update.c`** — Phase 7 type finalization and validation
+- **`infer_internal.h`** — Data structures (`tl_infer`, `traverse_ctx`, etc.)
 
 ---
 
-## The Specialization Pipeline
+## The Inference Pipeline
 
-Specialization is integrated into the type inference phase. The key entry point is `specialize_applications_cb()`, which is invoked during AST traversal.
-
-### High-Level Flow
+Specialization is Phase 5 of a 7-phase pipeline orchestrated in `infer.c`. Understanding the full pipeline is important because specialization depends on earlier phases and feeds into later ones.
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                         Type Inference Phase                                │
+│                    Inference Pipeline (infer.c)                             │
 ├─────────────────────────────────────────────────────────────────────────────┤
-│  1. Parse AST                                                               │
-│  2. Rename variables (alpha-conversion for unique names)                    │
-│     See ALPHA_CONVERSION.md for details                                     │
-│  3. Assign type variables to symbols                                        │
-│  4. Collect constraints                                                     │
-│  5. Satisfy constraints via unification                                     │
-│  6. ══════════════════════════════════════════════════════════════════════  │
-│  │  SPECIALIZATION PASS                                                     │
-│  │  traverse_ast(... specialize_applications_cb ...)                        │
-│  │    ├── For each function call: specialize_arrow()                        │
-│  │    ├── For each type constructor: specialize_user_type()                 │
-│  │    └── Recursively specialize nested calls in specialized functions      │
-│  ════════════════════════════════════════════════════════════════════════   │
-│  7. Update types with specialization results                                │
+│                                                                             │
+│  Phase 1: run_alpha_conversion()                                           │
+│    Renames all bound variables to globally unique names (x → x_v3).        │
+│    Eliminates shadowing. See ALPHA_CONVERSION.md.                          │
+│                                                                             │
+│  Phase 2: run_load_toplevels()                                             │
+│    Loads all toplevel definitions (functions, types, traits) into the       │
+│    toplevels hashmap.                                                       │
+│                                                                             │
+│  Phase 3: run_generic_inference()                                          │
+│    Infers types for all generic functions via add_generic(), creating       │
+│    provisional arrow types for polymorphic recursion.                       │
+│                                                                             │
+│  Phase 4: run_check_free_variables()                                       │
+│    Checks for unresolved free variable references. Applies substitutions   │
+│    to make types concrete.                                                  │
+│                                                                             │
+│  Phase 5: run_specialize()                     ◄── THIS DOCUMENT          │
+│    a. Rewrites operator overloads on user-defined types to function calls  │
+│    b. Defaults weak integer literals for stable instance cache keys        │
+│    c. Traverses AST starting from main() (or all toplevels for libraries) │
+│    d. Specializes module init functions                                     │
+│    e. Applies second substitution pass (for weak ints from post_specialize)│
+│    f. Removes original generic toplevels (they've been cloned)             │
+│                                                                             │
+│  Phase 6: run_tree_shake()                                                 │
+│    Removes unused toplevels to reduce code size.                           │
+│                                                                             │
+│  Phase 7: run_update_types()                                               │
+│    Finalizes specialized type signatures. Validates all types resolved.    │
+│    Checks closure escaping rules. Validates allocator expressions.         │
+│                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
+## Specialization Phase in Detail
+
+### Entry Point: `run_specialize()` in `infer.c`
+
+The specialization phase starts by traversing the AST from `main()` (or all toplevels for library builds), calling `specialize_applications_cb()` for every node.
+
+### The Traversal Callback: `specialize_applications_cb()`
+
+Located in `infer_specialize.c`. This DFS callback handles multiple node types:
+
+**Symbols (nullary references):**
+- Skipped if it's a formal parameter (prevents premature specialization)
+- Otherwise calls `specialize_operand()` to look up specialized function versions
+
+**Let-in nodes:**
+- Calls `specialize_let_in()`
+- For let-in lambdas: looks up specialization created at call sites (two-pass approach)
+- For other let-ins: specializes function pointer RHS
+
+**Assignments:**
+- Calls `specialize_reassignment()` to specialize function pointers being assigned
+
+**Case statements (pattern matching):**
+- Calls `specialize_case()`
+- For tagged unions: specializes variant types in conditions
+- For binary predicates: creates and specializes predicate arrow
+
+**Named Function Applications (NFAs) — the main case:**
+1. Skip if already specialized (`ast_node_is_specialized()` check)
+2. Construct callsite arrow type via `make_arrow_with()`
+3. Call `specialize_arrow_with_name()` to create specialized instance
+4. Call `specialize_arguments()` for function pointer parameters
+5. Call `specialize_user_type()` for type constructor arguments
+
+**Lambda applications:**
+- Constructs arrow from actual arguments
+- Calls `concretize_params()` to assign concrete types to parameters
+- Calls `post_specialize()` for the lambda body
+
+---
+
 ## Function Specialization
 
-### Entry Point: `specialize_applications_cb()`
+### Arrow Construction: `make_arrow_with()`
 
-When traversing the AST and encountering a named function application (NFA), this callback:
+Before specializing, the callback constructs a **concrete arrow type** representing the call site:
 
-1. **Checks if function needs specialization:**
-   - Already specialized? Skip.
-   - Intrinsic call? Skip.
-   - Not yet in toplevel? Skip (too early, will be handled later).
+1. Resolves each argument node to get its concrete monotype
+2. Applies substitutions to make types concrete
+3. Creates arrow `(arg_types...) -> result_type`
+4. Copies free variables from the generic function type to the arrow (critical for closures)
 
-2. **Creates a callsite arrow type:**
-   ```c
-   callsite = make_arrow_with(self, traverse_ctx, node, type);
-   ```
-   This constructs the concrete function type based on argument types at this call site.
+### Core: `specialize_arrow()`
 
-3. **Specializes the function:**
-   ```c
-   specialize_arrow_with_name(self, ctx, traverse_ctx, node->named_application.name, callsite->type);
-   ```
-
-4. **Specializes function arguments** (in case any are function pointers):
-   ```c
-   specialize_arguments(self, ctx, traverse_ctx, node, callsite->type);
-   ```
-
-### Core Specialization: `specialize_arrow()`
-
-This function creates a specialized version of a generic function:
-
-```c
-static str specialize_arrow(tl_infer *self, traverse_ctx *traverse_ctx, str name, tl_monotype *arrow) {
-    // 1. Check if already specialized
-    if (instance_name_exists(self, name)) return name;
-
-    // 2. Check cache for this name+type combination
-    str *found = instance_lookup_arrow(self, name, arrow);
-    if (found) return *found;
-
-    // 3. Create unique instance name (e.g., "identity_0")
-    str inst_name = next_instantiation(self, name);
-    instance_add(self, &key, inst_name);
-
-    // 4. Clone the generic function's AST
-    ast_node *generic_node = clone_generic_for_arrow(self, toplevel_get(self, name), arrow, inst_name);
-
-    // 5. Add to environment and toplevel
-    specialized_add_to_env(self, inst_name, arrow);
-    toplevel_add(self, inst_name, generic_node);
-
-    // 6. CRITICAL: Process the specialized function body
-    post_specialize(self, traverse_ctx, special, arrow);
-
-    return inst_name;
-}
 ```
+specialize_arrow(self, traverse_ctx, name, arrow, resolved_type_args)
+    │
+    ├── 1. instance_name_exists(name)?  → return name (already an instance)
+    ├── 2. instance_lookup_arrow(name, arrow, type_args)?  → return cached name
+    ├── 3. toplevel_get(name) exists?  → error if not found
+    ├── 4. verify_trait_bounds()  → check type parameter constraints
+    ├── 5. next_instantiation(name)  → generate "identity_0", "identity_1", etc.
+    ├── 6. instance_add(key, inst_name)  → cache for future lookups
+    ├── 7. clone_generic_for_arrow()  → clone AST + erase types + concretize params
+    ├── 8. specialized_add_to_env() + toplevel_add()  → register in environment
+    └── 9. post_specialize()  → re-infer and recursively specialize body
+```
+
+### `specialize_arrow_with_name()` — Wrapper
+
+Called from `specialize_applications_cb()`. Calls `specialize_arrow()` then updates the function name node at the call site to reference the specialized version.
 
 ### Post-Specialization: `post_specialize()`
 
-After creating a specialized function, its body must be analyzed to specialize any nested generic calls:
+After creating a specialized function, its body must be processed. This is where **recursive specialization** happens:
 
-```c
-static int post_specialize(tl_infer *self, traverse_ctx *traverse_ctx, ast_node *special,
-                           tl_monotype *callsite) {
-    ast_node *infer_target = get_infer_target(special);
-    if (infer_target) {
-        // 1. Re-run type inference on the specialized function body
-        traverse_ast(self, traverse_ctx, infer_target, infer_traverse_cb);
-
-        // 2. Apply substitutions to make types concrete
-        apply_subs_to_ast_node(self, infer_target);
-
-        // 3. Recursively specialize any generic calls in the body
-        traverse_ast(self, traverse_ctx, infer_target, specialize_applications_cb);
-    }
-    return 0;
-}
+```
+post_specialize(self, traverse_ctx, special, callsite)
+    │
+    ├── 1. get_infer_target(special)  → extract body from function/lambda
+    ├── 2. Set traverse_ctx->result_type to expected return type
+    ├── 3. traverse_ast(..., infer_traverse_cb)  → RE-RUN TYPE INFERENCE on body
+    │      (with concrete parameter types, fresh type vars for generics)
+    ├── 4. apply_subs_to_ast_node()  → make all types concrete
+    ├── 5. rewrite_operator_overloads  → convert operators on UDTs to function calls
+    └── 6. traverse_ast(..., specialize_applications_cb)  → RECURSIVELY SPECIALIZE
+           (any nested generic calls in the now-concrete body)
 ```
 
-This recursive step is crucial: when specializing a tagged union constructor like `Some(v: Int)`, the body contains nested calls like `__Option__Union_(Some = ...)` that must also be specialized.
+This recursive step is crucial: when specializing `Some(v: Int)`, the body contains nested calls like `__Option__Union_(Some = ...)` that must also be specialized.
+
+### Specializing Arguments: `specialize_arguments()`
+
+When a function takes function pointer arguments, those must also be specialized. For each argument that is a function reference (not a literal value), `specialize_arguments()` specializes it based on the expected parameter type from the arrow.
 
 ---
 
@@ -147,95 +188,197 @@ This recursive step is crucial: when specializing a tagged union constructor lik
 
 ### Entry Point: `specialize_user_type()`
 
-When a type constructor is applied (e.g., `Array[Int]` or `Point[Float]`), this function handles specialization:
+Called when encountering type constructors like `Array[Int]` or `Point[Float]`. Located in `infer_specialize.c`.
+
+**Special handling for union structs:**
+- Non-generic unions are skipped entirely
+- Generic unions: extract variant types from the expression's *inferred type* (not AST arguments) for correct concrete types
+
+### Core: `specialize_type_constructor_()`
+
+Recursive helper with cycle detection via a `seen` hashset:
+
+```
+specialize_type_constructor_(self, name, args, out_type, seen)
+    │
+    ├── 1. Skip enums (they don't need specialization)
+    ├── 2. Normalize type aliases to canonical generic_name
+    ├── 3. Cycle detection: if (name, args) in seen → return empty
+    ├── 4. Recurse on nested type arguments first
+    │      (e.g., Array[Option[Int]] specializes Option[Int] first)
+    ├── 5. instance_lookup() → return cached name if exists
+    ├── 6. next_instantiation() → generate instance name
+    ├── 7. tl_type_registry_specialize_begin() → create specialized monotype
+    ├── 8. Clone UTD, rename to instance name
+    ├── 9. toplevel_add() + add to environment
+    ├── 10. Fixup recursive self-references
+    ├── 11. tl_type_registry_specialize_commit()
+    └── 12. rename_variables() → erase types on cloned UTD
+```
+
+---
+
+## Clone and Rename Process
+
+### `clone_generic_for_arrow()` in `infer_alpha.c`
+
+This is the heart of monomorphization — creating a concrete copy of a generic function:
+
+1. **Clone AST** — `ast_node_clone()` performs a deep copy of the entire function AST
+2. **Clear annotations** — Removes any existing type annotations from the clone
+3. **Erase all types** — `rename_variables()` erases ALL type information and alpha-converts bound variables with fresh names. This ensures no "type pollution" from the original generic leaks into the specialization
+4. **Recalculate free variables** — `add_free_variables_to_arrow()` re-collects free variables with the new renamed symbols
+5. **Concretize parameters** — `concretize_params()` maps parameter symbols to their concrete callsite types, inserting them into the environment with resolved types and setting the result type on the function body
+6. **Replace toplevel name** — Changes function name to the instance name (e.g., `identity` → `identity_0`)
+
+**Invariant** (checked with `DEBUG_INVARIANTS`): After clone + rename, ALL types in the cloned AST must be null — no residual type information from the generic.
+
+---
+
+## Instance Cache and Naming
+
+### Naming Scheme: `next_instantiation()`
 
 ```c
-static int specialize_user_type(tl_infer *self, ast_node *node) {
-    // 1. Must be an NFA (named function application)
-    if (!ast_node_is_nfa(node)) return 0;
-
-    str name = node->named_application.name->symbol.name;
-
-    // 2. Check if it's a union (special handling required)
-    if (is_union_struct(self, name)) {
-        // Only skip non-generic unions; generic unions need specialization
-        ...
-    }
-
-    // 3. Collect argument types
-    tl_monotype_array arr = {.alloc = self->transient};
-    // ... iterate arguments and collect concrete types ...
-
-    // 4. Specialize the type constructor
-    str name_inst = specialize_type_constructor(self, name, arr_sized, &special_type);
-
-    // 5. Update the callsite to use the specialized name
-    ast_node_name_replace(node->named_application.name, name_inst);
+str next_instantiation(tl_infer *self, str name) {
+    return str_fmt(self->arena, "%.*s_%u", str_ilen(name), str_buf(&name),
+                   self->next_instantiation++);
 }
 ```
 
-### Core Type Specialization: `specialize_type_constructor_()`
+Generates globally unique names: `identity_0`, `identity_1`, `Option_2`, `Some_3`, etc. The counter is global across all specializations and never reuses numbers (except via `cancel_last_instantiation()` on failure).
 
-This creates a specialized type definition:
+### Cache Key: `name_and_type`
 
 ```c
-static str specialize_type_constructor_(tl_infer *self, str name, tl_monotype_sized args,
-                                        tl_polytype **out_type, hashmap **seen) {
-    // 1. Skip enums (they don't need specialization)
-    ast_node *utd = toplevel_get(self, name);
-    if (utd && ast_node_is_enum_def(utd)) return str_empty();
-
-    // 2. Avoid infinite recursion
-    if (hset_contains(*seen, &key, sizeof key)) return str_empty();
-
-    // 3. Specialize nested type arguments first
-    forall(i, args) {
-        if (tl_monotype_is_inst(args.v[i])) {
-            specialize_type_constructor_(self, generic_name, args.v[i]->cons_inst->args, &poly, seen);
-        }
-    }
-
-    // 4. Check if this specialization already exists
-    str *existing = instance_lookup(self, &key);
-    if (existing) return *existing;
-
-    // 5. Clone the type definition and give it a unique name
-    ast_node *utd = ast_node_clone(self->arena, utd);
-    ast_node_name_replace(utd->user_type_def.name, name_inst);
-
-    // 6. Register the specialized type
-    toplevel_add(self, name_inst, utd);
-    tl_type_registry_specialize_commit(self->registry, inst_ctx);
-
-    return name_inst;
-}
+typedef struct {
+    u64 name_hash;        // Hash of generic function/type name
+    u64 type_hash;        // Hash of arrow or instantiation type
+    u64 type_args_hash;   // Hash of explicit type arguments [T, U, ...]
+} name_and_type;
 ```
+
+### Instance Functions
+
+- **`instance_lookup_arrow(name, arrow, type_args)`** — Requires concrete arrow type. Returns cached specialized name or NULL.
+- **`instance_lookup(key)`** — Low-level lookup in `instances` map by `name_and_type` key.
+- **`instance_add(key, inst_name)`** — Inserts into `instances` map and `instance_names` set.
+- **`instance_name_exists(name)`** — O(1) check if a name is already a specialized instance.
+
+### Pre-defaulting Weak Integers
+
+Before specialization begins, `run_specialize()` defaults weak integer literals. This ensures stable cache keys — without it, the same logical call could produce different hash keys depending on whether a weak int was resolved yet.
+
+A second defaulting pass runs after specialization to handle weak ints created during `post_specialize()` re-inference.
+
+---
+
+## Closures and Lambdas
+
+### Let-in Lambda Specialization
+
+For let-in lambdas like `f := (x) { x + n }`:
+
+1. **First pass**: When call sites in the body are specialized (e.g., `f(42)`), `specialize_arrow()` creates a specialized instance of the lambda
+2. **Second pass**: `specialize_let_in()` looks up the specialization created at call sites via `instance_lookup_arrow()` and renames the binding to point to the specialized lambda name
+
+This two-pass approach handles the fact that the lambda binding must be resolved after its call sites are processed.
+
+### Allocated Closures
+
+For allocated closures with `[[alloc, capture(...)]]` attributes:
+
+- Alpha conversion synthesizes `Alloc__context.default` for bare `[[alloc]]` attributes
+- Free variable collection skips `alloc_expr` nodes (via `skip_alloc_expr` flag in `traverse_ctx`)
+- Closure attributes are preserved during AST cloning
+- Context struct generation uses different naming prefixes:
+  - **Stack closures**: `tl_ctx_<hash>` (pointer fields)
+  - **Allocated closures**: `tl_alloc_ctx_<hash>` (value fields, copied by value)
+
+---
+
+## Edge Cases and Special Handling
+
+| Case | Handling |
+|------|----------|
+| **Intrinsics** (`_tl_*` names) | Skipped entirely by `is_intrinsic()` check |
+| **Already specialized** | `ast_node_is_specialized()` prevents re-specialization |
+| **Type aliases** | Normalized to canonical `generic_name` before specialization |
+| **Enums** | Skipped in `specialize_type_constructor_()` — they don't need specialization |
+| **Non-generic unions** | Skipped in `specialize_user_type()` |
+| **Generic unions** | Use inferred type (not AST arguments) for correct concrete types |
+| **Function pointers** | Specialized via `specialize_operand()` or `specialize_arguments()` |
+| **Type predicates** (`::`) | Handled by `check_type_predicate()` |
+| **Trait bounds** | Verified via `verify_trait_bounds()` before specialization |
+| **Mutual recursion** | Handled by provisional arrow types from Phase 3, updated after specialization |
+| **Formal parameters** | Guarded from premature specialization in symbol handling |
+| **Explicit type args** (`map[Int, String](...)`) | Extracted from NFA, parsed via `parse_type_arg()`, passed to `specialize_arrow()` |
+
+---
+
+## Key Data Structures
+
+### `tl_infer` (in `infer_internal.h`)
+
+The main inference context. Specialization-relevant fields:
+
+| Field | Type | Purpose |
+|-------|------|---------|
+| `instances` | `hashmap*` | Maps `name_and_type` → specialized name (instance cache) |
+| `instance_names` | `hashmap*` | Set of all generated instance names (for dedup) |
+| `next_instantiation` | `u32` | Counter for `_0`, `_1`, `_2`... naming |
+| `toplevels` | `hashmap*` | `str` → `ast_node*` — all definitions including specialized ones |
+| `env` | `tl_type_env*` | Type environment mapping names to polytypes |
+| `subs` | `tl_type_subs*` | Substitution table for type variables |
+| `registry` | `tl_type_registry*` | Type constructor definitions |
+
+### `traverse_ctx` (in `infer_internal.h`)
+
+Passed through AST traversal. Specialization-relevant fields:
+
+| Field | Type | Purpose |
+|-------|------|---------|
+| `lexical_names` | `hashmap*` | Set of bound variable names in scope |
+| `type_arguments` | `hashmap*` | Map `str` → `tl_monotype*` (type param bindings) |
+| `free_variables` | `str_sized` | Captured variables (for closures) |
+| `result_type` | `tl_monotype*` | Expected result type for current function |
+| `skip_alloc_expr` | `int` | Skip alloc_expr during FV collection |
 
 ---
 
 ## Key Functions Reference
 
-| Function | Location | Purpose |
-|----------|----------|---------|
-| `specialize_applications_cb` | infer.c | Main traversal callback for specialization |
-| `specialize_arrow` | infer.c | Creates specialized function instances |
-| `specialize_arrow_with_name` | infer.c | Wrapper that handles name lookup and specialization |
-| `post_specialize` | infer.c | Processes body of specialized functions |
-| `specialize_user_type` | infer.c | Entry point for type constructor specialization |
-| `specialize_type_constructor` | infer.c | Creates specialized type definitions |
-| `specialize_type_constructor_` | infer.c | Recursive helper with cycle detection |
-| `specialize_arguments` | infer.c | Specializes function pointer arguments |
-| `is_union_struct` | infer.c | Checks if a name refers to a union type |
-| `toplevel_tagged_union` | parser.c | Desugars tagged union syntax |
-| `create_variant_constructor` | parser.c | Generates constructor functions for variants |
+| Function | File | Purpose |
+|----------|------|---------|
+| `run_specialize` | `infer.c` | Phase 5 orchestration |
+| `specialize_applications_cb` | `infer_specialize.c` | Main DFS traversal callback |
+| `specialize_arrow` | `infer_specialize.c` | Creates specialized function instances |
+| `specialize_arrow_with_name` | `infer_specialize.c` | Wrapper: specialize + update call site name |
+| `post_specialize` | `infer_specialize.c` | Re-infer body + recursively specialize nested calls |
+| `make_arrow_with` | `infer_specialize.c` | Constructs concrete arrow type from call site |
+| `specialize_arguments` | `infer_specialize.c` | Specializes function pointer arguments |
+| `specialize_let_in` | `infer_specialize.c` | Handles let-in lambda specialization |
+| `specialize_reassignment` | `infer_specialize.c` | Handles function pointer reassignment |
+| `specialize_case` | `infer_specialize.c` | Handles pattern matching specialization |
+| `specialize_operand` | `infer_specialize.c` | Specializes symbol references to functions |
+| `specialize_user_type` | `infer_specialize.c` | Entry point for type constructor specialization |
+| `specialize_type_constructor` | `infer_specialize.c` | Wrapper with cycle detection setup |
+| `specialize_type_constructor_` | `infer_specialize.c` | Recursive type specialization with seen set |
+| `clone_generic_for_arrow` | `infer_alpha.c` | Clone AST + erase types + concretize params |
+| `rename_variables` | `infer_alpha.c` | Alpha-convert + erase all types in cloned AST |
+| `concretize_params` | `infer_alpha.c` | Assign concrete types to cloned parameters |
+| `add_free_variables_to_arrow` | `infer_alpha.c` | Recalculate FVs after renaming |
+| `next_instantiation` | `infer.c` | Generate `name_N` instance names |
+| `instance_lookup_arrow` | `infer_specialize.c` | Cache lookup by (name, arrow, type_args) |
+| `instance_add` | `infer_specialize.c` | Add to instance cache + names set |
+| `instance_name_exists` | `infer_specialize.c` | Check if name is already an instance |
+| `toplevel_tagged_union` | `parser.c` | Desugars tagged union syntax |
+| `create_variant_constructor` | `parser.c` | Generates constructor functions for variants |
 
-### Instance Tracking
+### Debug Aids
 
-The specialization system uses several data structures for caching and cycle detection:
-
-- **Instance cache**: Maps (name, type) -> specialized name to avoid duplicate specializations
-- **Seen set**: Tracks types currently being specialized to prevent infinite recursion
-- **Toplevel map**: Stores all function and type definitions, including specialized ones
+- **`DEBUG_INVARIANTS`** — Enables post-clone invariant checking (all types null after erase)
+- **`DEBUG_INSTANCE_CACHE`** — Logs all instance cache operations (lookups, hits, misses, adds)
 
 ---
 
@@ -243,3 +386,4 @@ The specialization system uses several data structures for caching and cycle det
 
 - [ALPHA_CONVERSION.md](ALPHA_CONVERSION.md) - Variable renaming system that ensures type safety across specializations
 - [NAME_MANGLING.md](NAME_MANGLING.md) - Name mangling for arity, modules, and instantiation naming
+- [CLOSURES.md](plans/CLOSURES.md) - Closure implementation including allocated closures
