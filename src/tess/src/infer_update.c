@@ -536,11 +536,11 @@ static int is_allocated_closure(tl_infer *self, ast_node *node, hashmap *binding
     if (node->tag == ast_lambda_function)
         return lambda_has_alloc(self, node);
 
-    // Symbol — look up its binding in the let_in map
+    // Symbol — look up its binding in the let_in map and follow alias chains
     if (ast_node_is_symbol(node) && bindings) {
         ast_node *value = ast_node_str_map_get(bindings, ast_node_str(node));
-        if (value && value->tag == ast_lambda_function)
-            return lambda_has_alloc(self, value);
+        if (value)
+            return is_allocated_closure(self, value, bindings);
     }
 
     // let_in — record the binding and trace into the body.
@@ -644,8 +644,9 @@ static str_array collect_lambda_fvs(tl_infer *self, ast_node *node) {
     collect_free_variables_ctx fv_ctx;
     fv_ctx.fvs = (str_array){.alloc = self->transient};
 
-    traverse_ctx *inner = traverse_ctx_create(self->transient);
-    inner->user         = &fv_ctx;
+    traverse_ctx *inner    = traverse_ctx_create(self->transient);
+    inner->user            = &fv_ctx;
+    inner->skip_alloc_expr = 1; // alloc_expr is not part of the closure body
 
     for (u8 i = 0; i < node->lambda_function.n_parameters; i++)
         str_hset_insert(&inner->lexical_names, ast_node_str(node->lambda_function.parameters[i]));
