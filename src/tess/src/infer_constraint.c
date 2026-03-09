@@ -2139,6 +2139,15 @@ int traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, traverse_cb 
 
     case ast_lambda_function: {
 
+        // Infer alloc_expr in the enclosing scope (before entering lambda body scope).
+        if (node->lambda_function.attributes) {
+            lambda_closure_attrs attrs = lambda_get_closure_attrs(self->transient, node->lambda_function.attributes);
+            if (attrs.alloc_expr) {
+                ctx->node_pos = npos_operand;
+                if (traverse_ast(self, ctx, attrs.alloc_expr, cb)) return 1;
+            }
+        }
+
         hashmap *save = map_copy(ctx->lexical_names);
 
         if (traverse_ast_node_params(self, ctx, node, cb)) return 1;

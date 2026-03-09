@@ -134,7 +134,8 @@
     X(tl_err_alloc_missing_capture, "alloc_missing_capture")                                             \
     X(tl_err_capture_unlisted_var, "capture_unlisted_variable")                                           \
     X(tl_err_capture_unused_var, "capture_unused_variable")                                           \
-    X(tl_err_capture_not_in_scope, "capture_not_in_scope")
+    X(tl_err_capture_not_in_scope, "capture_not_in_scope")                                               \
+    X(tl_err_alloc_expr_type_mismatch, "alloc_expr_type_mismatch")
 
 typedef enum tl_error_tag { TESS_ERROR_TAG_LIST(MOS_TAG_NAME) } tl_error_tag;
 

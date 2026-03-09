@@ -487,9 +487,14 @@ Then modify:
 
 **Files:** `src/tess/src/infer_update.c`
 
-#### 3F: Allocator expression type validation (DEFER to Phase 4)
+#### 3F: Allocator expression type validation (DONE)
 
-Validating that `[[alloc(expr)]]` has type `Ptr[Allocator]` requires the allocator expression to be type-inferred. Since the expression is in the attribute (not in the normal expression tree), this needs special handling. Defer to Phase 4 when the transpiler processes the allocator expression — at that point types are fully resolved.
+Validates that `[[alloc(expr)]]` has type `Ptr[Allocator]`. Three-step approach:
+1. **Alpha conversion** (`infer_alpha.c`): `alloc_expr` is alpha-converted in the enclosing scope before entering the lambda body scope.
+2. **Constraint generation** (`infer_constraint.c`): `alloc_expr` is traversed in the `ast_lambda_function` case before the lexical scope save, so it's inferred in the enclosing scope.
+3. **Phase 7 validation** (`infer_update.c`): `check_closure_attrs_cb` substitutes and checks that the resolved type is `Ptr[Alloc.Allocator]`, reporting `tl_err_alloc_expr_type_mismatch` on failure.
+
+**Files:** `src/tess/src/infer_update.c`, `src/tess/include/error.h`
 
 #### Test plan
 

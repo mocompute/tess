@@ -242,6 +242,12 @@ void rename_variables(tl_infer *self, ast_node *node, rename_variables_ctx *ctx,
     } break;
 
     case ast_lambda_function: {
+        // Alpha-convert alloc_expr in the enclosing scope (before entering lambda body scope).
+        if (node->lambda_function.attributes) {
+            lambda_closure_attrs attrs = lambda_get_closure_attrs(self->transient, node->lambda_function.attributes);
+            if (attrs.alloc_expr) rename_variables(self, attrs.alloc_expr, ctx, level + 1);
+        }
+
         hashmap *save = rename_function_params(self, node, ctx, level);
         rename_variables(self, node->lambda_function.body, ctx, level + 1);
         map_destroy(&ctx->lex);
