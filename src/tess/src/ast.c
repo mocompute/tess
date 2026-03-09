@@ -1799,6 +1799,43 @@ ast_node_sized ast_let_type_params(ast_node const *node) {
     return (ast_node_sized){.size = n, .v = tp};
 }
 
+// -- lambda closure attributes --
+
+lambda_closure_attrs lambda_get_closure_attrs(allocator *alloc, ast_node *attributes) {
+    lambda_closure_attrs out = {0};
+    if (!attributes) return out;
+
+    assert(attributes->tag == ast_attribute_set);
+    struct ast_attribute_set *attrs = &attributes->attribute_set;
+
+    for (u32 i = 0; i < attrs->n; ++i) {
+        ast_node *node = attrs->nodes[i];
+        str       name = ast_node_is_nfa(node) ? ast_node_str(node->named_application.name)
+                                               : ast_node_str(node);
+
+        if (str_eq(name, S("alloc"))) {
+            out.has_alloc = 1;
+            if (ast_node_is_nfa(node) && node->named_application.n_arguments > 0) {
+                out.alloc_expr = node->named_application.arguments[0];
+            }
+        } else if (str_eq(name, S("capture"))) {
+            out.has_capture = 1;
+            if (ast_node_is_nfa(node)) {
+                u8 n = node->named_application.n_arguments;
+                if (n > 0) {
+                    out.capture_names   = alloc_malloc(alloc, n * sizeof(str));
+                    out.n_capture_names = n;
+                    for (u8 j = 0; j < n; ++j) {
+                        out.capture_names[j] = ast_node_str(node->named_application.arguments[j]);
+                    }
+                }
+            }
+        }
+    }
+
+    return out;
+}
+
 //
 
 hashmap *ast_node_str_map_create(allocator *alloc, u32 n) {

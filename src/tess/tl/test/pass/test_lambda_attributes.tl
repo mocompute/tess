@@ -16,7 +16,7 @@ main() {
 
     // parameterized attribute on lambda
     n := 10
-    h := [[alloc, capture(n)]] (x) { x }
+    h := [[alloc, capture(n)]] (x) { x + n }
     error += if h :: [[alloc]] {0} else {1}
     error += if h :: [[capture(n)]] {0} else {1}
     error += if h :: [[capture]] {0} else {1}

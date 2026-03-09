@@ -129,7 +129,12 @@
     X(tl_err_try_requires_two_variant_union, "try_requires_two_variant_union")                     \
     X(tl_err_try_requires_single_field_variant, "try_requires_single_field_variant")                     \
     X(tl_err_trait_bound_not_satisfied, "trait_bound_not_satisfied")                                     \
-    X(tl_err_closure_escape, "closure_escape")
+    X(tl_err_closure_escape, "closure_escape")                                                           \
+    X(tl_err_capture_without_alloc, "capture_without_alloc")                                               \
+    X(tl_err_alloc_missing_capture, "alloc_missing_capture")                                             \
+    X(tl_err_capture_unlisted_var, "capture_unlisted_variable")                                           \
+    X(tl_err_capture_unused_var, "capture_unused_variable")                                           \
+    X(tl_err_capture_not_in_scope, "capture_not_in_scope")
 
 typedef enum tl_error_tag { TESS_ERROR_TAG_LIST(MOS_TAG_NAME) } tl_error_tag;
 

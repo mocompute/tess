@@ -374,31 +374,164 @@ Migrated all closure codegen to the `tl_closure` struct. Commit `81df1ebb`.
 
 **Files changed:** `src/tess/src/transpile.c`
 
-### Phase 2: Parser and AST (TODO)
+### Phase 2: Parser and AST (DONE)
 
-Parse `[[alloc]]` and `[[capture(...)]]` attributes on lambda expressions.
+Parse `[[alloc]]` and `[[capture(...)]]` attributes on lambda expressions. Commit `d92a35b6`.
 
-**Tasks:**
-- Add attribute fields to `ast_lambda_function` in `ast.h`
-- New grammar rule: `[[...]] (params) { body }` parsed as attributed lambda
+**What was done:**
+- Added `attributes` field to `ast_lambda_function` in `ast.h`
+- Grammar rule: `[[...]] (params) { body }` parsed as attributed lambda
 - `capture(...)` and `alloc(...)` parse naturally since `a_attribute_set` already handles funcall-like syntax
-- `maybe_wrap_lambda_function_in_let_in` must preserve attributes through wrapping
-- `ast_node_clone` must handle new attribute fields (for generic specialization)
+- `maybe_wrap_lambda_function_in_let_in` preserves attributes through wrapping
+- `ast_node_clone` handles attribute fields (for generic specialization)
+- Type predicate `::` operator works with lambda attributes for runtime attribute checking
 
-**Files:** `src/tess/include/ast.h`, `src/tess/src/parser.c`, `src/tess/src/ast.c`
+**Files changed:** `src/tess/include/ast.h`, `src/tess/src/parser.c`, `src/tess/src/ast.c`, `src/tess/src/infer_constraint.c`
 
-### Phase 3: Type inference and validation (TODO)
+### Phase 3: Type inference and validation (IN PROGRESS)
 
-Enforce capture list rules and escape analysis.
+Enforce capture list rules and modify escape analysis to allow allocated closures.
 
-**Tasks:**
-- Validate `[[alloc]]` without `[[capture(...)]]` only if body has no free variables
-- Error if body references variable not in `capture(...)` and not a parameter
-- Error for `[[capture(...)]]` without `[[alloc]]`
-- Allow returning allocated closures (currently all closure returns are rejected)
-- Validate allocator expression has type `Ptr[Allocator]`
+#### Overview
 
-**Files:** `src/tess/src/infer.c`, `src/tess/src/infer_constraint.c`
+The key insight: the existing free variable collection (`collect_free_variables_cb` in `infer_alpha.c`) already detects which variables a closure captures. Phase 3 leverages this to validate `[[capture(...)]]` lists and conditionally relaxes escape checking for `[[alloc]]` closures.
+
+#### 3A: Helper — extract alloc/capture attributes from lambda AST (DONE)
+
+Add a utility function to extract structured information from lambda attributes:
+
+```c
+// In a new or existing header/source
+typedef struct {
+    int  has_alloc;          // [[alloc]] or [[alloc(expr)]] present
+    int  has_capture;        // [[capture(...)]] present
+    ast_node *alloc_expr;    // allocator expression (NULL for default allocator)
+    str *capture_names;      // array of captured variable names
+    u8   n_capture_names;    // count
+} lambda_closure_attrs;
+
+// Parse attributes from ast_lambda_function.attributes
+lambda_closure_attrs lambda_get_closure_attrs(allocator *alloc, ast_node *attributes);
+```
+
+This walks the `attribute_set` nodes looking for NFA nodes named `alloc` and `capture`. The attribute parser already produces funcall-like AST nodes for `alloc(expr)` and `capture(a, b)`, so this is straightforward extraction.
+
+**Location:** `src/tess/src/infer_constraint.c` (static helper, used in validation and later in transpile)
+— or `src/tess/src/ast.c` if it's useful across files.
+
+#### 3B: Validate capture list against free variables (DONE)
+
+After `add_free_variables_to_arrow()` runs (Phase 3 of inference, in `infer_alpha.c`), the arrow type's `fvs` field contains the detected free variables. For lambdas with `[[capture(...)]]`:
+
+1. **Every name in `capture(...)` must be a detected free variable** — error if a listed name is not actually used in the body (prevents dead captures, catches typos).
+
+2. **Every detected free variable must be listed in `capture(...)`** — error if the body references a variable not in the capture list and not a parameter. This is the core safety check.
+
+**Implementation approach:**
+- In `add_free_variables_to_arrow()` or a new post-pass, check if the lambda node has `[[capture(...)]]` attributes
+- Compare the `capture(...)` names against the collected `fvs` set
+- New error codes: `tl_err_capture_missing_variable` (free var not listed), `tl_err_capture_unused_variable` (listed but not free)
+
+**Files:** `src/tess/src/infer_alpha.c`, `src/tess/include/error.h`
+
+#### 3C: Validate alloc/capture attribute combinations (DONE)
+
+Add a validation pass (can run during constraint generation or as a separate post-pass):
+
+| Condition | Result |
+|-----------|--------|
+| `[[alloc]]` without `[[capture(...)]]` | OK only if body has no free variables (fvs empty) |
+| `[[alloc, capture(...)]]` | OK (normal allocated closure) |
+| `[[capture(...)]]` without `[[alloc]]` | Error: `tl_err_capture_without_alloc` |
+| `[[alloc]]` with free variables but no `[[capture(...)]]` | Error: `tl_err_alloc_missing_capture` |
+
+**Implementation approach:**
+- During `infer_lambda_function()` in `infer_constraint.c`, after making the arrow type, extract closure attrs and validate combinations
+- Alternatively, validate in a dedicated pass after free variable collection
+
+**Files:** `src/tess/src/infer_constraint.c`, `src/tess/include/error.h`
+
+#### 3D: Validate captured variables are in scope (DONE)
+
+Checks that every name in `[[capture(...)]]` is actually defined in the enclosing lexical scope. Implemented as `check_capture_scope_walk()` in `infer_update.c`, using a custom recursive walk that tracks source-level (pre-alpha-conversion) names.
+
+**Error code:** `tl_err_capture_not_in_scope`
+**Test:** `test/fail/test_fail_capture_not_in_scope.tl`
+**Files:** `src/tess/src/infer_update.c`, `src/tess/include/error.h`
+
+#### 3E: Modify escape analysis for allocated closures (DONE)
+
+Current behavior in `check_closure_escape()` (`infer_update.c` lines 522-568):
+- Rejects returning any capturing closure (explicit `return` or implicit last expression)
+- Rejects storing a capturing closure in a struct field
+
+**New behavior:** Skip escape rejection if the closure has `[[alloc]]`:
+- An allocated closure's context is on the heap, so it can safely escape
+- Need to trace from the escape point back to the originating lambda to check for `[[alloc]]`
+
+**Implementation challenge:** At the escape check points, we have an expression node (e.g., a symbol referencing the closure), not the original lambda AST. We need to find the lambda's attributes from the expression:
+
+1. **For let-in-lambda bindings** (`f := [[alloc, capture(n)]] (x) { ... }`): The symbol `f` resolves to a `let_in` whose value is the lambda — attributes are on `let_in.value->lambda_function.attributes`
+2. **For inline lambdas in returns** (`return [[alloc, capture(n)]] (x) { ... }`): The return value IS the lambda node — attributes directly available
+3. **For struct fields**: Same tracing — find the originating lambda through its binding
+
+**Approach:** Add a helper `is_allocated_closure(tl_infer *self, ast_node *node)` that:
+- If node is a symbol, looks up the toplevel binding and checks for `[[alloc]]` on the lambda
+- If node is a lambda directly, checks its attributes
+- Returns 1 if `[[alloc]]` is present
+
+Then modify:
+- `check_closure_escape_cb()` (line 522): skip error for struct fields if allocated
+- Explicit return check (line 536): skip error if allocated
+- Implicit return check (line 562): skip error if allocated
+
+**Files:** `src/tess/src/infer_update.c`
+
+#### 3F: Allocator expression type validation (DEFER to Phase 4)
+
+Validating that `[[alloc(expr)]]` has type `Ptr[Allocator]` requires the allocator expression to be type-inferred. Since the expression is in the attribute (not in the normal expression tree), this needs special handling. Defer to Phase 4 when the transpiler processes the allocator expression — at that point types are fully resolved.
+
+#### Test plan
+
+**New pass tests** (in `test/pass/`):
+- `test_alloc_closure_return.tl` — return `[[alloc, capture(n)]]` closure from function (currently rejected, should pass)
+- `test_alloc_closure_struct.tl` — store `[[alloc, capture(n)]]` closure in struct field (currently rejected, should pass)
+- `test_alloc_closure_no_capture.tl` — `[[alloc]]` closure with no free variables (should pass)
+
+**New fail tests** (in `test/fail/`):
+- `test_fail_capture_without_alloc.tl` — `[[capture(n)]]` without `[[alloc]]`
+- `test_fail_alloc_missing_capture.tl` — `[[alloc]]` on closure that has free vars but no `[[capture(...)]]`
+- `test_fail_capture_missing_var.tl` — body uses `n` but `capture(...)` doesn't list it
+- `test_fail_capture_unused_var.tl` — `capture(n)` but body doesn't use `n` (optional — may defer)
+
+**Existing tests that must still pass:**
+- `test_fail_closure_escape_return.tl` — stack closure return still rejected
+- `test_fail_closure_escape_struct.tl` — stack closure in struct still rejected
+- `test_lambda_attributes.tl` — attribute parsing and predicate checks
+- All existing closure tests (`test_transitive_closure_capture.tl`, `test_closure_hof_capture.tl`, etc.)
+
+#### New error codes needed
+
+```c
+// In error.h
+X(tl_err_capture_without_alloc, "capture_without_alloc")       // [[capture(...)]] without [[alloc]]
+X(tl_err_alloc_missing_capture, "alloc_missing_capture")       // [[alloc]] with free vars, no capture list
+X(tl_err_capture_unlisted_var, "capture_unlisted_variable")    // body uses var not in capture list
+// Optional:
+X(tl_err_capture_unused_var, "capture_unused_variable")        // capture list names var not used in body
+```
+
+#### Suggested implementation order
+
+1. **3A** — attribute extraction helper (foundational, used by everything else)
+2. **Write fail tests first** — `test_fail_capture_without_alloc.tl`, etc. → put in `known_fail_failures/` initially
+3. **3C** — alloc/capture combination validation (simplest validation)
+4. **3B** — capture list vs free variable validation
+5. **3D** — escape analysis modification (the key payoff — allocated closures can escape)
+6. **Write pass tests** — `test_alloc_closure_return.tl`, etc. → initially in `known_failures/`
+7. Move tests to final directories as each feature works
+
+**Files:** `src/tess/src/infer_update.c`, `src/tess/src/infer_alpha.c`, `src/tess/src/infer_constraint.c`, `src/tess/include/error.h`
 
 ### Phase 4: Transpiler — allocated closure codegen (TODO)
 

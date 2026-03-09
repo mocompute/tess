@@ -1206,6 +1206,18 @@ static int infer_lambda_function_application(tl_infer *self, traverse_ctx *ctx, 
 static int infer_lambda_function(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
     ensure_tv(self, &node->type);
 
+    // Validate closure attribute combinations (Phase 3C).
+    // [[capture(...)]] without [[alloc]] is always invalid — capture lists only make sense for
+    // heap-allocated closures.
+    if (node->lambda_function.attributes) {
+        lambda_closure_attrs attrs = lambda_get_closure_attrs(self->transient, node->lambda_function.attributes);
+        if (attrs.has_capture && !attrs.has_alloc) {
+            array_push(self->errors,
+                       ((tl_infer_error){.tag = tl_err_capture_without_alloc, .node = node}));
+            return 1;
+        }
+    }
+
     tl_polytype *arrow =
       make_arrow(self, ctx, ast_node_sized_from_ast_array(node), node->lambda_function.body, 1);
     if (!arrow) return 1;

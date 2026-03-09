@@ -388,6 +388,20 @@ ast_node_sized ast_node_sized_from_ast_array_const(ast_node const *);
 // store type params on the arrow annotation rather than the let node itself.
 ast_node_sized ast_let_type_params(ast_node const *);
 
+// -- lambda closure attributes --
+
+typedef struct {
+    int       has_alloc;       // [[alloc]] or [[alloc(expr)]] present
+    int       has_capture;     // [[capture(...)]] present
+    ast_node *alloc_expr;      // allocator expression (NULL for default allocator)
+    str      *capture_names;   // array of captured variable names
+    u8        n_capture_names; // count
+} lambda_closure_attrs;
+
+// Parse [[alloc]], [[alloc(expr)]], and [[capture(a, b, ...)]] from an attribute_set node.
+// Returns a zero-initialized struct if attributes is NULL.
+lambda_closure_attrs lambda_get_closure_attrs(allocator *alloc, ast_node *attributes);
+
 // -- hashmap: str => ast_node* --
 
 nodiscard hashmap *ast_node_str_map_create(allocator *, u32) mallocfun;
