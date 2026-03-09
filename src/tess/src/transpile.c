@@ -73,7 +73,10 @@ typedef struct {
 
     // the type of the expression just evaluated is effectively void, regardless of its declared type. For
     // example, _tl_fatal_ is -> any, but when it appears it should never be assigned to a result variable.
-    int          is_effective_void;
+    int is_effective_void;
+
+    // allocated closure: context fields are values (not pointers), access is direct (not dereference)
+    int          is_allocated_closure;
 
     defer_scope *defers;              // innermost defer scope (linked list head)
     defer_scope *loop_defer_boundary; // snapshot at loop entry; break/continue stop here
@@ -102,7 +105,8 @@ static void        generate_toplevel_values(transpile *);
 static void        generate_toplevels(transpile *);
 static void        generate_assign_lhs(transpile *, str);
 static void        generate_assign(transpile *, str, str);
-static str         generate_context(transpile *, str_sized, eval_ctx *);
+static str         generate_context(transpile *, str_sized, eval_ctx *, int, ast_node *);
+static lambda_closure_attrs toplevel_closure_attrs(transpile *, str);
 static void        generate_assign_field(transpile *, str, str, str);
 
 static void        cat(transpile *, str);
@@ -492,16 +496,16 @@ static void generate_user_types(transpile *self) {
     cat_nl(self);
 }
 
-static str context_name(transpile *self, str_sized fvs) {
+static str context_name(transpile *self, str_sized fvs, int is_alloc) {
     // generate struct name using hash of fvs
     u64  hash = str_array_hash64(0, fvs);
     char buf[64];
-    snprintf(buf, sizeof buf, "tl_ctx_%" PRIu64, hash);
+    snprintf(buf, sizeof buf, is_alloc ? "tl_alloc_ctx_%" PRIu64 : "tl_ctx_%" PRIu64, hash);
     return str_init(self->transient, buf);
 }
 
-static void generate_context_struct(transpile *self, str_sized fvs) {
-    str name = context_name(self, fvs);
+static void generate_context_struct(transpile *self, str_sized fvs, int is_alloc) {
+    str name = context_name(self, fvs, is_alloc);
     if (str_hset_contains(self->context_generated, name)) return;
     str_hset_insert(&self->context_generated, name);
 
@@ -521,7 +525,20 @@ static void generate_context_struct(transpile *self, str_sized fvs) {
     forall(i, fvs) {
         str          field      = fvs.v[i];
         tl_polytype *field_type = tl_type_env_lookup(self->env, field);
-        generate_decl_pointer(self, field, field_type->type);
+        if (is_alloc) {
+            // Allocated closure: value fields (copy of captured value)
+            if (tl_arrow == field_type->type->tag) {
+                // Arrow-typed capture → store as tl_closure (value, not pointer)
+                cat(self, S("tl_closure "));
+                cat(self, escape_c_keyword(self->transient, field));
+                cat_semicolonln(self);
+            } else {
+                generate_decl(self, field, field_type->type);
+            }
+        } else {
+            // Stack closure: pointer fields (reference to stack variable)
+            generate_decl_pointer(self, field, field_type->type);
+        }
         if (i + 1 < fvs.size) cat_nl(self);
     }
 
@@ -563,8 +580,8 @@ static str generate_raw_fn_thunk(transpile *self, tl_monotype *type, str mangled
     tl_monotype      *ret_mono = tl_monotype_sized_last(type->list.xs);
     tl_monotype_sized params   = type->list.xs.v[0]->list.xs;
 
-    str_build *b       = &self->thunks_build;
-    int        is_void = tl_monotype_is_void(ret_mono) || tl_monotype_is_any(ret_mono);
+    str_build        *b        = &self->thunks_build;
+    int               is_void  = tl_monotype_is_void(ret_mono) || tl_monotype_is_any(ret_mono);
 
     // static ret thunk_name(params...) { [return] real_name(NULL, params...); }
     str_build_cat(b, S("static "));
@@ -604,7 +621,7 @@ static str generate_raw_fn_thunk(transpile *self, tl_monotype *type, str mangled
 
 static str generate_expr_symbol(transpile *self, tl_monotype *type, str symbol_name, str original_name,
                                 eval_ctx *ctx) {
-    str name = symbol_name;
+    str name     = symbol_name;
 
     int is_arrow = tl_monotype_is_arrow(type);
     if (is_arrow) name = mangle_fun(self, name);
@@ -619,7 +636,11 @@ static str generate_expr_symbol(transpile *self, tl_monotype *type, str symbol_n
 
     if (ctx && str_array_contains_one(ctx->free_variables, symbol_name)) // unmangled name
     {
-        // generate reference through context
+        if (ctx->is_allocated_closure) {
+            // Allocated closure: direct access (value fields, not pointers)
+            return str_cat(self->transient, S("tl_ctx->"), name);
+        }
+        // Stack closure: dereference pointer field
         return str_cat_4(self->transient, S("("), S("*tl_ctx->"), name, S(")"));
     }
 
@@ -629,11 +650,17 @@ static str generate_expr_symbol(transpile *self, tl_monotype *type, str symbol_n
             // C FFI context: generate a thunk with C-compatible signature (no ctx parameter)
             return generate_raw_fn_thunk(self, type, name);
         }
+
+        // Allocated closures: the tl_closure local variable was created at the let-in binding site.
+        if (toplevel_closure_attrs(self, symbol_name).has_alloc) {
+            return str_cat(self->transient, S("tl_cls_"), symbol_name);
+        }
+
         if (ctx) {
             tl_polytype *poly = tl_type_env_lookup(self->env, symbol_name);
             if (poly && poly->type->list.fvs.size) {
-                // Capturing lambda reference: construct context and embed in closure
-                str ctx_var = generate_context(self, poly->type->list.fvs, ctx);
+                // Stack closure: construct context and embed in closure
+                str ctx_var = generate_context(self, poly->type->list.fvs, ctx, 0, null);
                 return str_cat_5(self->transient, S("(tl_closure){ .fn = (void*)"), name,
                                  S(", .ctx = (void*)&"), ctx_var, S(" }"));
             }
@@ -649,10 +676,65 @@ static str generate_expr_symbol(transpile *self, tl_monotype *type, str symbol_n
     }
 }
 
-static str generate_context(transpile *self, str_sized fvs, eval_ctx *ctx) {
+static str generate_context(transpile *self, str_sized fvs, eval_ctx *ctx, int is_alloc,
+                            ast_node *alloc_expr) {
     if (!fvs.size) return str_empty();
-    str name = context_name(self, fvs);
+    str name = context_name(self, fvs, is_alloc);
 
+    if (is_alloc) {
+        // Allocated closure: heap-allocate context struct via allocator->malloc closure.
+        // The alloc_expr has type Ptr[Allocator]. We call its malloc closure field:
+        //   ((void*(*)(void*, AllocType*, size_t))alloc->malloc.fn)(alloc->malloc.ctx, alloc, sizeof(...))
+        assert(alloc_expr);
+
+        str allocator_c = generate_expr(self, null, alloc_expr, ctx);
+
+        // Get the C type name for the Allocator struct from the alloc_expr's type
+        tl_polytype *alloc_poly   = alloc_expr->type;
+        str          alloc_type_c = S("void"); // fallback
+        if (alloc_poly && tl_monotype_is_inst(alloc_poly->type) && alloc_poly->type->cons_inst->args.size) {
+            alloc_type_c = type_to_c_mono(self, alloc_poly->type->cons_inst->args.v[0]);
+        }
+
+        cat(self, name);
+        cat(self, S("* "));
+        str ctx_var = generate_ctx_var(self);
+        cat(self, S(" = ("));
+        cat(self, name);
+        // Indirect closure call: ((void*(*)(void*, AllocType*, unsigned long long))alloc->malloc.fn)
+        //                        (alloc->malloc.ctx, alloc, sizeof(ctx_struct))
+        cat(self, S("*)((/*any*/void*(*)(void*, "));
+        cat(self, alloc_type_c);
+        cat(self, S("*, unsigned long long))"));
+        cat(self, allocator_c);
+        cat(self, S("->malloc.fn)("));
+        cat(self, allocator_c);
+        cat(self, S("->malloc.ctx, "));
+        cat(self, allocator_c);
+        cat(self, S(", sizeof("));
+        cat(self, name);
+        cat(self, S("));\n"));
+
+        // Copy each captured value into the heap struct
+        forall(i, fvs) {
+            cat(self, ctx_var);
+            cat(self, S("->"));
+            cat(self, escape_c_keyword(self->transient, fvs.v[i]));
+            cat_assign(self);
+
+            str          field_name = fvs.v[i];
+            tl_polytype *type       = tl_type_env_lookup(self->env, field_name);
+            if (!type) fatal("runtime error");
+            field_name = generate_expr_symbol(self, type->type, field_name, str_empty(), ctx);
+            cat(self, field_name);
+
+            cat_semicolonln(self);
+        }
+
+        return ctx_var;
+    }
+
+    // Stack closure: declare context on stack with address-of for each field
     cat(self, name);
     cat_sp(self);
     str ctx_var = generate_ctx_var(self);
@@ -666,11 +748,11 @@ static str generate_context(transpile *self, str_sized fvs, eval_ctx *ctx) {
         cat_ampersand(self);
         cat_open_round(self);
 
-        str          name = fvs.v[i];
-        tl_polytype *type = tl_type_env_lookup(self->env, name);
+        str          fname = fvs.v[i];
+        tl_polytype *type  = tl_type_env_lookup(self->env, fname);
         if (!type) fatal("runtime error");
-        name = generate_expr_symbol(self, type->type, name, str_empty(), ctx);
-        cat(self, name);
+        fname = generate_expr_symbol(self, type->type, fname, str_empty(), ctx);
+        cat(self, fname);
 
         cat_close_round(self);
 
@@ -683,6 +765,14 @@ static str generate_context(transpile *self, str_sized fvs, eval_ctx *ctx) {
     return ctx_var;
 }
 
+// Look up closure attributes for a toplevel let-in lambda binding.
+// Returns a zero-initialized struct if the name is not a let-in lambda.
+static lambda_closure_attrs toplevel_closure_attrs(transpile *self, str name) {
+    ast_node *node = ast_node_str_map_get(self->toplevels, name);
+    if (!node || !ast_node_is_let_in_lambda(node)) return (lambda_closure_attrs){0};
+    return lambda_get_closure_attrs(self->transient, node->let_in.value->lambda_function.attributes);
+}
+
 static void generate_toplevel_contexts(transpile *self) {
 
     hashmap_iterator iter = {0};
@@ -690,7 +780,9 @@ static void generate_toplevel_contexts(transpile *self) {
         tl_polytype *type = *(tl_polytype **)iter.data;
 
         if (type->type->tag == tl_arrow && type->type->list.fvs.size) {
-            generate_context_struct(self, type->type->list.fvs);
+            str name     = str_init_n(self->transient, iter.key_ptr, iter.key_size);
+            int is_alloc = toplevel_closure_attrs(self, name).has_alloc;
+            generate_context_struct(self, type->type->list.fvs, is_alloc);
         }
     }
     cat_nl(self);
@@ -815,9 +907,12 @@ static void generate_toplevels(transpile *self) {
 
         assert(tl_monotype_is_list(poly->type));
 
+        // Detect allocated closure via [[alloc]] attribute
+        int is_alloc = toplevel_closure_attrs(self, name).has_alloc;
+
         // Unified closure: cast void* tl_ctx_raw to typed context pointer, or suppress unused warning
         if (poly->type->list.fvs.size) {
-            str ctx_name = context_name(self, poly->type->list.fvs);
+            str ctx_name = context_name(self, poly->type->list.fvs, is_alloc);
             cat(self, ctx_name);
             cat(self, S("* tl_ctx = ("));
             cat(self, ctx_name);
@@ -826,7 +921,7 @@ static void generate_toplevels(transpile *self) {
             cat(self, S("(void)tl_ctx_raw;\n"));
         }
 
-        eval_ctx ctx      = {.free_variables = poly->type->list.fvs};
+        eval_ctx ctx      = {.free_variables = poly->type->list.fvs, .is_allocated_closure = is_alloc};
         str      body_res = generate_expr(self, return_type, body, &ctx);
         if (!res_is_void && !str_is_empty(body_res) && !ctx.is_effective_void) {
             generate_decl(self, res, return_type);
@@ -858,7 +953,8 @@ static void generate_main(transpile *self) {
     } else if (1 == args.size) {
         cat(self, S("int main(int argc) { tl_init(); return tl_fun_main(NULL, argc); }\n"));
     } else if (2 == args.size) {
-        cat(self, S("int main(int argc, char* argv[]) { tl_init(); return tl_fun_main(NULL, argc, argv); }\n"));
+        cat(self,
+            S("int main(int argc, char* argv[]) { tl_init(); return tl_fun_main(NULL, argc, argv); }\n"));
     }
 }
 
@@ -893,10 +989,9 @@ static void generate_assign_field(transpile *self, str lhs, str field, str rhs) 
     cat_semicolonln(self);
 }
 
-static void generate_funcall_head_ext(transpile *self, str name, str ctx_var, u32 n_args, int do_mangle) {
+static void generate_funcall_head(transpile *self, str name, str ctx_var, u32 n_args) {
 
-    if (do_mangle) cat(self, mangle_fun(self, name));
-    else cat(self, name);
+    cat(self, mangle_fun(self, name));
     cat_open_round(self);
 
     // Unified closure convention: always pass context as first arg
@@ -908,11 +1003,6 @@ static void generate_funcall_head_ext(transpile *self, str name, str ctx_var, u3
     }
     if (n_args) cat_commasp(self);
 }
-
-static void generate_funcall_head(transpile *self, str name, str ctx_var, u32 n_args) {
-    generate_funcall_head_ext(self, name, ctx_var, n_args, 1);
-}
-
 
 static str_array generate_args(transpile *self, ast_node_sized args, tl_monotype *arrow, eval_ctx *ctx) {
     // generate args to match arrow type or type constructor
@@ -1070,7 +1160,7 @@ static str generate_funcall_c(transpile *self, ast_node const *node, eval_ctx *c
     array_reserve(args_res, args.size);
 
     // C FFI: emit raw function pointers, not tl_closure
-    eval_ctx c_ctx = ctx ? *ctx : (eval_ctx){0};
+    eval_ctx c_ctx        = ctx ? *ctx : (eval_ctx){0};
     c_ctx.want_raw_fn_ptr = 1;
 
     forall(i, args) {
@@ -1121,9 +1211,9 @@ static str generate_funcall_c(transpile *self, ast_node const *node, eval_ctx *c
 static void generate_indirect_closure_call(transpile *self, str closure_name, tl_monotype *type,
                                            str_array args_res) {
     // Indirect call through tl_closure: ((ret(*)(void*, params...))name.fn)(name.ctx, args...)
-    tl_monotype *ret_mono = tl_monotype_sized_last(type->list.xs);
-    str          ret_c    = type_to_c_mono(self, ret_mono);
-    tl_monotype_sized params = tl_monotype_arrow_get_args(type);
+    tl_monotype      *ret_mono = tl_monotype_sized_last(type->list.xs);
+    str               ret_c    = type_to_c_mono(self, ret_mono);
+    tl_monotype_sized params   = tl_monotype_arrow_get_args(type);
 
     cat(self, S("(("));
     cat(self, ret_c);
@@ -1160,13 +1250,17 @@ static str generate_funcall_with_args(transpile *self, ast_node const *node, eva
 
     assert(tl_monotype_is_list(type));
 
-    // Check if this is a direct call to a known toplevel function or an indirect call through a closure
+    // Check if this is a direct call to a known toplevel function or an indirect call through a closure.
+    // Allocated closures use indirect calls — their context is created once at the binding site,
+    // not fresh at each call site.
     int is_direct = str_map_contains(self->toplevels, name);
+    int is_alloc  = is_direct && toplevel_closure_attrs(self, name).has_alloc;
+    is_direct     = is_direct && !is_alloc;
 
     if (is_direct) {
         str ctx_var = str_empty();
         if (type->list.fvs.size) {
-            ctx_var = generate_context(self, type->list.fvs, ctx);
+            ctx_var = generate_context(self, type->list.fvs, ctx, 0, null);
         }
 
         // Direct call: tl_fun_name(NULL or (void*)&ctx, args...)
@@ -1181,8 +1275,8 @@ static str generate_funcall_with_args(transpile *self, ast_node const *node, eva
     } else {
         // Indirect call through tl_closure variable
         // Resolve the variable name (may be through context, keyword-escaped, etc.)
-        str closure_name = generate_expr_symbol(self, type, name,
-                                                ast_node_name_original(node->named_application.name), ctx);
+        str closure_name =
+          generate_expr_symbol(self, type, name, ast_node_name_original(node->named_application.name), ctx);
 
         if (!str_is_empty(res)) generate_assign_lhs(self, res);
         generate_indirect_closure_call(self, closure_name, type, args_res);
@@ -1241,8 +1335,7 @@ static tl_monotype *let_in_val_type(transpile *self, ast_node const *node) {
 }
 
 // Emit the common trailing arguments for bounds-check macros: "source", "target", file, line
-static void emit_bounds_check_tail(transpile *self, str source_c, str target_c,
-                                   ast_node const *node) {
+static void emit_bounds_check_tail(transpile *self, str source_c, str target_c, ast_node const *node) {
     char const *file = node->file ? node->file : "<unknown>";
     u32         line = node->line;
     cat(self, S(", \""));
@@ -1340,8 +1433,8 @@ static void emit_float_to_int_bounds_check(transpile *self, tl_monotype *target,
     char const *c_max = tl_monotype_integer_c_max(target);
     if (!c_max) return;
 
-    str source_c = val_type ? type_to_c_mono(self, val_type) : S("(unknown)");
-    str target_c = type_to_c_mono(self, target);
+    str         source_c           = val_type ? type_to_c_mono(self, val_type) : S("(unknown)");
+    str         target_c           = type_to_c_mono(self, target);
 
     int         target_is_unsigned = tl_monotype_is_unsigned_family(target);
     char const *c_min              = target_is_unsigned ? "0" : tl_monotype_integer_c_min(target);
@@ -1359,6 +1452,32 @@ static void emit_float_to_int_bounds_check(transpile *self, tl_monotype *target,
 
 static str generate_let_in_lambda(transpile *self, tl_monotype *result_type, ast_node const *node,
                                   eval_ctx *ctx) {
+
+    // For allocated closures: create a local tl_closure variable with heap-allocated context.
+    // The closure struct is created once here; calls use indirect dispatch through it.
+    str                  name       = ast_node_str(node->let_in.name);
+    lambda_closure_attrs alloc_attrs = toplevel_closure_attrs(self, name);
+    if (alloc_attrs.has_alloc) {
+        tl_polytype *poly    = tl_type_env_lookup(self->env, name);
+        str          fn_name = mangle_fun(self, name);
+        str cls_name = str_cat(self->transient, S("tl_cls_"), name);
+
+        str ctx_var = str_empty();
+        if (poly && poly->type->list.fvs.size)
+            ctx_var = generate_context(self, poly->type->list.fvs, ctx, 1, alloc_attrs.alloc_expr);
+
+        cat(self, S("tl_closure "));
+        cat(self, cls_name);
+        cat(self, S(" = (tl_closure){ .fn = (void*)"));
+        cat(self, fn_name);
+        if (!str_is_empty(ctx_var)) {
+            cat(self, S(", .ctx = (void*)"));
+            cat(self, ctx_var);
+        } else {
+            cat(self, S(", .ctx = NULL"));
+        }
+        cat(self, S(" };\n"));
+    }
 
     // don't declare or assign to name, because it is hoisted to a toplevel.
 
@@ -1421,8 +1540,8 @@ static str generate_let_in(transpile *self, tl_monotype *result_type, ast_node c
 
                             cat(self, value);
                             cat_semicolonln(self);
-                        } else if (tl_monotype_is_integer_convertible(type)
-                                   || tl_monotype_is_float_convertible(type)) {
+                        } else if (tl_monotype_is_integer_convertible(type) ||
+                                   tl_monotype_is_float_convertible(type)) {
                             // Numeric cast: emit (target_type)value for all numeric let-in bindings.
                             // Silences -Wconversion for narrowing and makes casts explicit.
                             tl_monotype *val_type = let_in_val_type(self, node);
@@ -2109,10 +2228,12 @@ static str generate_binary_op(transpile *self, tl_monotype *type, ast_node const
                          tl_monotype_is_ptr(node->binary_op.right->type->type);
 
         // Closure-null comparison: compare .fn field to NULL
-        int left_is_arrow  = node->binary_op.left->type && tl_monotype_is_arrow(node->binary_op.left->type->type);
-        int right_is_nil   = ast_nil == node->binary_op.right->tag;
-        int left_is_nil    = ast_nil == node->binary_op.left->tag;
-        int right_is_arrow = node->binary_op.right->type && tl_monotype_is_arrow(node->binary_op.right->type->type);
+        int left_is_arrow =
+          node->binary_op.left->type && tl_monotype_is_arrow(node->binary_op.left->type->type);
+        int right_is_nil = ast_nil == node->binary_op.right->tag;
+        int left_is_nil  = ast_nil == node->binary_op.left->tag;
+        int right_is_arrow =
+          node->binary_op.right->type && tl_monotype_is_arrow(node->binary_op.right->type->type);
         int closure_null_cmp = (left_is_arrow && right_is_nil) || (left_is_nil && right_is_arrow);
 
         if (is_ptr_cmp) {
@@ -2442,12 +2563,12 @@ static str generate_expr(transpile *self, tl_monotype *type, ast_node const *nod
         return generate_expr_symbol(self, type, name, ast_node_name_original(node), ctx);
     }
 
-    case ast_if_then_else:    return generate_if_then_else(self, node, ctx);
+    case ast_if_then_else: return generate_if_then_else(self, node, ctx);
 
-    case ast_return:          return generate_return(self, type, node, ctx);
-    case ast_try:             return generate_try(self, type, node, ctx);
-    case ast_while:           return generate_while(self, type, node, ctx);
-    case ast_continue:        return generate_continue(self, type, node, ctx);
+    case ast_return:       return generate_return(self, type, node, ctx);
+    case ast_try:          return generate_try(self, type, node, ctx);
+    case ast_while:        return generate_while(self, type, node, ctx);
+    case ast_continue:     return generate_continue(self, type, node, ctx);
 
     case ast_nil:
         if (type && tl_monotype_is_arrow(type)) return S("(tl_closure){0}");
@@ -2681,7 +2802,7 @@ int transpile_compile(transpile *self, str_build *out_build) {
     // Generate toplevel values and functions into a temporary buffer so that
     // C FFI thunks (discovered lazily during codegen) can be emitted before them.
     str_build saved_build = self->build;
-    self->build = str_build_init(self->parent, TRANSPILE_BUILD_SIZE);
+    self->build           = str_build_init(self->parent, TRANSPILE_BUILD_SIZE);
 
     generate_toplevel_values(self);
     cat_nl(self);
@@ -2691,9 +2812,9 @@ int transpile_compile(transpile *self, str_build *out_build) {
 
     // Assemble: thunks first (they reference prototypes above), then toplevel code
     str_build toplevels_build = self->build;
-    self->build = saved_build;
+    self->build               = saved_build;
 
-    str thunks_str = str_build_str(self->transient, self->thunks_build);
+    str thunks_str            = str_build_str(self->transient, self->thunks_build);
     if (!str_is_empty(thunks_str)) {
         cat(self, thunks_str);
         cat_nl(self);

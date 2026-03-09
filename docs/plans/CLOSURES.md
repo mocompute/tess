@@ -202,7 +202,7 @@ Alloc.arena_destroy(arena)   // frees all context allocations at once
 f := [[alloc, capture(x)]] (y) { x + y }
 ```
 
-The context can be freed individually. The exact API is TBD — it may be a compiler-recognized `Closure.free(f)` that emits `free(f.ctx)`, or it may use the existing `Alloc` interfaces on `f.ctx` directly.
+Context lifetime is managed by the allocator — e.g., freed when the arena is reset, or individually via the allocator's free function.
 
 ### Explicit allocator
 
@@ -351,12 +351,20 @@ make_adder(n: Int) -> Closure[(Int) -> Int] {
 // Usage
 adder := make_adder(5)
 result := adder(10)
-// freed via arena or Closure.free(adder)
+// context freed when allocator/arena is reset
 ```
 
 ---
 
 ## Implementation Status
+
+| Phase | Description | Status |
+|-------|-------------|--------|
+| 1 | Unified calling convention (`tl_closure` struct) | DONE |
+| 2 | Parser and AST (`[[alloc]]`, `[[capture(...)]]`) | DONE |
+| 3 | Type inference and validation (capture rules, escape analysis, alloc_expr type checking) | DONE |
+| 4 | Transpiler — allocated closure codegen (heap context, value fields, indirect dispatch) | DONE |
+**Current state:** Phases 1–4 are complete. Allocated closures with `[[alloc]]` / `[[alloc(expr)]]` and `[[capture(...)]]` compile and run end-to-end. One known failure remains: generic struct captures (`test_alloc_closure_generic_struct`). `Closure[F]` is a phantom type — `F` exists only in the type system, and the runtime representation is the existing `tl_closure` struct — so no standard library definition is needed.
 
 ### Phase 1: Unified calling convention (DONE)
 
@@ -388,7 +396,7 @@ Parse `[[alloc]]` and `[[capture(...)]]` attributes on lambda expressions. Commi
 
 **Files changed:** `src/tess/include/ast.h`, `src/tess/src/parser.c`, `src/tess/src/ast.c`, `src/tess/src/infer_constraint.c`
 
-### Phase 3: Type inference and validation (IN PROGRESS)
+### Phase 3: Type inference and validation (DONE)
 
 Enforce capture list rules and modify escape analysis to allow allocated closures.
 
@@ -538,31 +546,217 @@ X(tl_err_capture_unused_var, "capture_unused_variable")        // capture list n
 
 **Files:** `src/tess/src/infer_update.c`, `src/tess/src/infer_alpha.c`, `src/tess/src/infer_constraint.c`, `src/tess/include/error.h`
 
-### Phase 4: Transpiler — allocated closure codegen (TODO)
+### Phase 4: Transpiler — allocated closure codegen (DONE)
 
 Two-mode context struct generation and heap allocation.
 
-**Tasks:**
-- Allocated closure context structs: **value fields** (`int tl_n`) with **direct access** (`tl_ctx->tl_n`)
-- Stack closure context structs: unchanged (**pointer fields** with dereference access)
-- Heap allocation of context at closure creation (`alloc(sizeof(...))`)
-- Copy captured values into heap context
-- Support `[[alloc(expr)]]` for explicit allocator
-- Support `[[alloc]]` for default allocator (`Alloc.context`)
-- Context struct hash must incorporate closure kind to avoid collisions
+#### Overview
+
+The transpiler currently generates one kind of closure context: stack-allocated structs with **pointer fields** that reference variables in the enclosing scope. Allocated closures need a second mode: heap-allocated structs with **value fields** that copy captured values. Both modes share the same `tl_closure` struct and calling convention — the difference is entirely in context struct layout, initialization, and field access.
+
+#### Key insight: threading allocation info
+
+The transpiler needs to know whether a given closure is allocated at three points:
+
+1. **Context struct generation** (`generate_context_struct`) — value fields vs pointer fields
+2. **Context initialization** (`generate_context`) — heap alloc + value copy vs stack alloc + address-of
+3. **Function body access** (`generate_expr_symbol`) — direct access vs dereference
+
+The `eval_ctx` struct already threads `free_variables` through codegen. Add an `is_allocated_closure` flag to `eval_ctx`:
+
+```c
+typedef struct {
+    str_sized free_variables;
+    int is_allocated_closure;    // NEW: 1 if [[alloc]] closure
+    // ... existing fields ...
+} eval_ctx;
+```
+
+Set this flag in `generate_toplevels` by checking `node->let_in.value->lambda_function.attributes` via `lambda_get_closure_attrs()`.
+
+#### 4A: Context struct naming — avoid collisions (DONE)
+
+A stack closure capturing `n: Int` generates `int* tl_n;` while an allocated closure generates `int tl_n;`. These must produce different struct names. Use a different prefix:
+
+- Stack: `tl_ctx_<hash>` (unchanged)
+- Allocated: `tl_alloc_ctx_<hash>`
+
+**Implementation:** Add a `context_name_alloc()` variant (or add an `int is_alloc` parameter to `context_name`). The hash itself can remain the same (hashing the fv name array) since the prefix differentiates.
+
+**Function:** `context_name()` (transpile.c:495)
+
+#### 4B: Context struct generation — value fields (DONE)
+
+Add `generate_context_struct_alloc()` (or add a mode parameter to `generate_context_struct`):
+
+```c
+// Stack closure (existing):
+typedef struct tl_ctx_<hash> {
+    int* tl_n;          // pointer field
+} tl_ctx_<hash>;
+
+// Allocated closure (new):
+typedef struct tl_alloc_ctx_<hash> {
+    int tl_n;           // value field
+} tl_alloc_ctx_<hash>;
+```
+
+For allocated closures, use `generate_decl()` instead of `generate_decl_pointer()` for each field. The arrow-typed capture case: a captured `Closure` is stored as `tl_closure` (value, not `tl_closure*`).
+
+**Where called:** `generate_toplevel_contexts()` (transpile.c:686) iterates the type env and calls `generate_context_struct`. It needs to also know which arrows are allocated closures. Two options:
+1. **Lazy generation**: defer context struct emission to `generate_toplevels`, where the AST is available. Emit the struct typedef just before the function body that uses it. This avoids changing `generate_toplevel_contexts`.
+2. **Pre-scan**: in `generate_toplevel_contexts`, look up the toplevel AST node for each arrow and check attributes. This keeps the existing emission order.
+
+**Recommended: option 2** (pre-scan) to maintain the current ordering where all context structs appear before all function bodies.
+
+**Functions:** `generate_context_struct()` (transpile.c:503), `generate_toplevel_contexts()` (transpile.c:686)
+
+#### 4C: Context initialization — heap allocation and value copy (DONE)
+
+Currently `generate_context()` (transpile.c:652) emits:
+```c
+tl_ctx_<hash> tl_ctx_var_3 = { .tl_n = &(tl_n) };
+```
+
+For allocated closures, emit:
+```c
+tl_alloc_ctx_<hash>* tl_ctx_var_3 = (tl_alloc_ctx_<hash>*)allocator->malloc(allocator, sizeof(tl_alloc_ctx_<hash>));
+tl_ctx_var_3->tl_n = tl_n;
+```
+
+**Two allocation modes:**
+
+1. **`[[alloc(expr)]]`** — explicit allocator. The `alloc_expr` AST has already been alpha-converted and type-checked as `Ptr[Allocator]`. Generate the expression, then call `->malloc(...)` on it:
+   ```c
+   // alloc_expr generates to e.g. tl_my_arena
+   tl_alloc_ctx_<hash>* ctx = (tl_alloc_ctx_<hash>*)tl_my_arena->malloc(tl_my_arena, sizeof(tl_alloc_ctx_<hash>));
+   ```
+
+2. **`[[alloc]]`** — default allocator. Use `Alloc.context.default`:
+   ```c
+   tl_alloc_ctx_<hash>* ctx = (tl_alloc_ctx_<hash>*)tl_Alloc__context.tl_default->malloc(tl_Alloc__context.tl_default, sizeof(tl_alloc_ctx_<hash>));
+   ```
+   The exact C name for `Alloc.context.default` depends on how it's mangled — check the transpiled output of existing code that uses `Alloc.context.default`.
+
+**Field initialization:** Instead of `&(var)`, emit direct value copy:
+```c
+ctx->tl_n = tl_n;                    // primitive
+ctx->tl_f = tl_f;                    // closure (copies fn+ctx pair)
+```
+
+For arrow-typed captures (closures), this copies the `tl_closure` struct by value (function pointer + context pointer).
+
+**Return value:** `generate_context` currently returns a `str` (the ctx var name). For stack closures, this is used as `&ctx_var`. For allocated closures, the ctx var is already a pointer, so callers use it directly (no `&`).
+
+**Functions:** `generate_context()` (transpile.c:652), `generate_expr_symbol()` (transpile.c:605)
+
+#### 4D: Function body access — direct vs dereference (DONE)
+
+Currently `generate_expr_symbol()` (transpile.c:620-623) generates `(*tl_ctx->field)` for free variables. For allocated closures, generate `tl_ctx->field` (no dereference, since fields are values not pointers).
+
+```c
+// Stack closure (existing):
+(*tl_ctx->tl_n)
+
+// Allocated closure (new):
+tl_ctx->tl_n
+```
+
+**Implementation:** Check `ctx->is_allocated_closure` in the free-variable branch of `generate_expr_symbol`:
+```c
+if (ctx && str_array_contains_one(ctx->free_variables, symbol_name)) {
+    if (ctx->is_allocated_closure) {
+        return str_cat_3(self->transient, S("tl_ctx->"), name, S(""));
+    }
+    return str_cat_4(self->transient, S("("), S("*tl_ctx->"), name, S(")"));
+}
+```
+
+The context cast at function entry (`generate_toplevels`, transpile.c:818-824) also needs to use the correct struct name (`tl_alloc_ctx_<hash>` vs `tl_ctx_<hash>`). Thread the `is_allocated_closure` flag by checking lambda attributes before the body generation.
+
+**Functions:** `generate_expr_symbol()` (transpile.c:620), `generate_toplevels()` (transpile.c:818)
+
+#### 4E: Closure struct creation — pointer semantics (DONE)
+
+Currently `generate_expr_symbol()` (transpile.c:636-638) emits:
+```c
+(tl_closure){ .fn = (void*)name, .ctx = (void*)&ctx_var }
+```
+
+For allocated closures, `ctx_var` is already a pointer (from heap allocation), so drop the `&`:
+```c
+(tl_closure){ .fn = (void*)name, .ctx = (void*)ctx_var }
+```
+
+**Function:** `generate_expr_symbol()` (transpile.c:636-641)
+
+#### 4F: Determine allocator C expression (DONE)
+
+Implemented via AST synthesis in alpha conversion: bare `[[alloc]]` is rewritten to `[[alloc(Alloc.context.default)]]`, so all allocated closures have an explicit `alloc_expr`. The transpiler generates the allocator expression and calls `->malloc` on it via indirect closure dispatch. Need a helper to generate the C expression for the allocator:
+
+```c
+// Returns C expression string for the allocator to use
+static str generate_alloc_expr(transpile *self, lambda_closure_attrs *attrs, eval_ctx *ctx) {
+    if (attrs->alloc_expr) {
+        // [[alloc(expr)]] — generate the expression
+        return generate_expr(self, /* Ptr[Allocator] type */, attrs->alloc_expr, ctx);
+    }
+    // [[alloc]] — default allocator: Alloc.context.default
+    return S("tl_Alloc__context.tl_default");  // verify mangled name
+}
+```
+
+The `alloc_expr` AST node was alpha-converted in the enclosing scope (Phase 3F), so it can be generated using `generate_expr` in the enclosing `eval_ctx`.
+
+#### 4G: Accessing lambda attributes from the transpiler (DONE)
+
+The transpiler accesses toplevel nodes via `self->toplevels` (str → ast_node* map). Each entry is typically a `let_in` node wrapping a `lambda_function`. To get attributes:
+
+```c
+ast_node *toplevel = str_map_get_ptr(self->toplevels, name);
+ast_node *lambda   = toplevel->let_in.value;  // the lambda_function node
+lambda_closure_attrs attrs = lambda_get_closure_attrs(self->transient, lambda->lambda_function.attributes);
+```
+
+`lambda_get_closure_attrs` is already defined in `ast.c:1804` and declared in `ast.h:404`. It returns `has_alloc`, `has_capture`, `alloc_expr`, `capture_names`, etc.
+
+#### Summary of changes per function
+
+| Function | Change |
+|----------|--------|
+| `eval_ctx` struct | Add `is_allocated_closure` field |
+| `context_name()` | Add `is_alloc` parameter; use `tl_alloc_ctx_` prefix |
+| `generate_context_struct()` | Add `is_alloc` parameter; use `generate_decl` for value fields |
+| `generate_toplevel_contexts()` | Look up AST to determine stack vs alloc for each arrow |
+| `generate_context()` | Add `is_alloc` + allocator expr; emit heap alloc + value copy |
+| `generate_expr_symbol()` | Check `is_allocated_closure` — direct access vs dereference |
+| `generate_toplevels()` | Detect `[[alloc]]`; set `eval_ctx.is_allocated_closure`; use alloc context name |
+
+#### Test plan
+
+**End-to-end tests** (in `test/pass/`):
+- `test_alloc_closure_basic.tl` — create and call an `[[alloc, capture(n)]]` closure
+- `test_alloc_closure_return.tl` — return an allocated closure from a function (move from known_failures if already exists)
+- `test_alloc_closure_struct.tl` — store an allocated closure in a struct field (move from known_failures if already exists)
+- `test_alloc_closure_no_capture.tl` — `[[alloc]]` closure with no free variables
+- `test_alloc_closure_multi_capture.tl` — capture multiple variables of different types
+- `test_alloc_closure_capture_closure.tl` — capture another closure by value
+- `test_alloc_closure_explicit_allocator.tl` — `[[alloc(arena), capture(n)]]` with an arena allocator
+
+**Verification strategy:** Use `./tess c <file.tl>` to inspect generated C code during development. The generated C should compile cleanly with the system C compiler (tested automatically by `./tess run`).
+
+#### Suggested implementation order
+
+1. **4A** — context naming with alloc prefix (small, foundational)
+2. **4B** — context struct generation with value fields
+3. **4G** — attribute access helper pattern (needed by subsequent steps)
+4. **4D** — function body direct access (can test with manual struct setup)
+5. **4C** — heap allocation and value-copy initialization (the core change)
+6. **4E** — closure struct creation without `&`
+7. **4F** — allocator expression codegen (default first, then explicit)
+8. Write and run end-to-end tests, move any known_failures tests to pass
 
 **Files:** `src/tess/src/transpile.c`
-
-### Phase 5: Standard library (TODO)
-
-Tess-level `Closure[F]` type and allocator integration.
-
-**Tasks:**
-- `Closure` type definition in std lib (phantom-typed struct)
-- Integration with `Alloc` for default allocator
-- `Closure.free` API (design TBD)
-
-**Files:** `src/tl/std/`
 
 ---
 
@@ -587,14 +781,3 @@ A closure inside a generic function may capture a value of generic type `T`. The
 
 Self-referential structs where closures capture a pointer to their containing struct — essentially objects with methods and state. The allocated closure foundation supports this pattern (see CounterOps example), but dedicated syntax for construction could be explored later.
 
-### Capture-by-reference for allocated closures
-
-Currently not supported. All allocated captures are by value. If needed, the user can capture a pointer (which is copied by value) to achieve reference semantics. A `.&` capture mode could be added later but introduces lifetime concerns.
-
-### Rc captures
-
-Shared ownership via reference counting (`capture(x.rc)`). Deferred until there is clear demand — requires Rc infrastructure.
-
-### Closure.free API
-
-The exact mechanism for individually freeing a closure's context needs to be designed. Options include a compiler-recognized `Closure.free(f)`, exposing `f.ctx` directly, or relying on arenas for all lifetime management.

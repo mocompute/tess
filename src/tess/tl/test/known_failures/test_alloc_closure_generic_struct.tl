@@ -1,7 +1,8 @@
 #module main
+#import <Alloc.tl>
 
-// Storing an allocated closure in a struct field should be allowed
-// because the context is heap-allocated and won't dangle.
+// Storing an allocated closure in a generic struct field should work.
+// Currently fails: Processor[Int] generates as unspecialized "Processor" in some C codegen paths.
 
 Processor[T]: { run: (T) -> T }
 

@@ -16,10 +16,10 @@ main() {
 
     // parameterized attribute on lambda
     n := 10
-    h := [[alloc, capture(n)]] (x) { x + n }
-    error += if h :: [[alloc]] {0} else {1}
-    error += if h :: [[capture(n)]] {0} else {1}
-    error += if h :: [[capture]] {0} else {1}
+    h := [[heap, grab(n)]] (x) { x + n }
+    error += if h :: [[heap]] {0} else {1}
+    error += if h :: [[grab(n)]] {0} else {1}
+    error += if h :: [[grab]] {0} else {1}
 
     // lambda attribute combined with parameter attribute
     k := [[my_attr]] ([[param_attr]] x) { x :: [[param_attr]] }

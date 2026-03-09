@@ -418,14 +418,15 @@ void load_toplevel(tl_infer *self, ast_node_sized nodes) {
 
 traverse_ctx *traverse_ctx_create(allocator *transient) {
     // Use a transient allocator because the destroy function leaks the maps.
-    traverse_ctx *out   = new(transient, traverse_ctx);
-    out->lexical_names  = hset_create(transient, 64);
-    out->type_arguments = map_create_ptr(transient, 64);
-    out->user           = null;
-    out->result_type    = null;
-    out->node_pos       = npos_operand;
-    out->is_field_name  = 0;
-    out->is_annotation  = 0;
+    traverse_ctx *out    = new(transient, traverse_ctx);
+    out->lexical_names   = hset_create(transient, 64);
+    out->type_arguments  = map_create_ptr(transient, 64);
+    out->user            = null;
+    out->result_type     = null;
+    out->node_pos        = npos_operand;
+    out->is_field_name   = 0;
+    out->is_annotation   = 0;
+    out->skip_alloc_expr = 0;
 
     return out;
 }
@@ -2140,7 +2141,9 @@ int traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, traverse_cb 
     case ast_lambda_function: {
 
         // Infer alloc_expr in the enclosing scope (before entering lambda body scope).
-        if (node->lambda_function.attributes) {
+        // Skip during free variable collection — alloc_expr is evaluated at the creation site,
+        // not inside the closure body.
+        if (node->lambda_function.attributes && !ctx->skip_alloc_expr) {
             lambda_closure_attrs attrs = lambda_get_closure_attrs(self->transient, node->lambda_function.attributes);
             if (attrs.alloc_expr) {
                 ctx->node_pos = npos_operand;

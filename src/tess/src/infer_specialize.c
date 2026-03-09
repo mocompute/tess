@@ -218,7 +218,7 @@ int type_literal_specialize(tl_infer *self, ast_node *node, hashmap *type_argume
     // specialization including field type resolution and value argument handling.
     if (ast_node_is_nfa(node) && node->named_application.is_type_constructor) {
         ast_arguments_iter check = ast_node_arguments_iter((ast_node *)node);
-        ast_node *a;
+        ast_node          *a;
         while ((a = ast_arguments_next(&check))) {
             if (ast_node_is_assignment(a)) return 1;
         }
@@ -339,10 +339,10 @@ name_and_type make_instance_key(tl_infer *self, str generic_name, tl_monotype *a
         // different and hash differently, so the cache correctly distinguishes them.
     }
 
-    name_and_type key         = {
-              .name_hash               = str_hash64(generic_name),
-              .type_hash               = tl_monotype_hash64(arrow),
-              .type_args_hash          = tl_monotype_sized_hash64(hash64("args", 4), resolved_type_args),
+    name_and_type key = {
+      .name_hash      = str_hash64(generic_name),
+      .type_hash      = tl_monotype_hash64(arrow),
+      .type_args_hash = tl_monotype_sized_hash64(hash64("args", 4), resolved_type_args),
     };
 
 #if DEBUG_INSTANCE_CACHE
@@ -374,7 +374,7 @@ str *instance_lookup_arrow(tl_infer *self, str generic_name, tl_monotype *arrow,
 
     // de-duplicate instances: hashes give us structural equality (barring hash collisions), which we need
     // because types are frequently cloned.
-    name_and_type key = make_instance_key(self, generic_name, arrow, resolved_type_args);
+    name_and_type key    = make_instance_key(self, generic_name, arrow, resolved_type_args);
 
     str          *result = instance_lookup(self, &key);
 
@@ -850,21 +850,21 @@ void apply_subs_to_ast_node(tl_infer *self, ast_node *node) {
 
 // Map binary operator string to the trait function name. Returns null if not overloadable.
 static char const *binary_op_to_func_name(char const *op) {
-    if (0 == strcmp(op, "+"))  return "add";
-    if (0 == strcmp(op, "-"))  return "sub";
-    if (0 == strcmp(op, "*"))  return "mul";
-    if (0 == strcmp(op, "/"))  return "div";
-    if (0 == strcmp(op, "%"))  return "mod";
-    if (0 == strcmp(op, "&"))  return "bit_and";
-    if (0 == strcmp(op, "|"))  return "bit_or";
-    if (0 == strcmp(op, "^"))  return "bit_xor";
+    if (0 == strcmp(op, "+")) return "add";
+    if (0 == strcmp(op, "-")) return "sub";
+    if (0 == strcmp(op, "*")) return "mul";
+    if (0 == strcmp(op, "/")) return "div";
+    if (0 == strcmp(op, "%")) return "mod";
+    if (0 == strcmp(op, "&")) return "bit_and";
+    if (0 == strcmp(op, "|")) return "bit_or";
+    if (0 == strcmp(op, "^")) return "bit_xor";
     if (0 == strcmp(op, "<<")) return "shl";
     if (0 == strcmp(op, ">>")) return "shr";
     if (0 == strcmp(op, "==")) return "eq";
     if (0 == strcmp(op, "!=")) return "eq"; // negated after call
-    if (0 == strcmp(op, "<"))  return "cmp";
+    if (0 == strcmp(op, "<")) return "cmp";
     if (0 == strcmp(op, "<=")) return "cmp";
-    if (0 == strcmp(op, ">"))  return "cmp";
+    if (0 == strcmp(op, ">")) return "cmp";
     if (0 == strcmp(op, ">=")) return "cmp";
     return null;
 }
@@ -906,8 +906,7 @@ static str build_overload_func_name(allocator *alloc, str module, char const *fu
 }
 
 // Rewrite an operator node in-place to an NFA calling the overload function.
-static void rewrite_op_to_nfa(tl_infer *self, ast_node *node, str func_name,
-                               ast_node **args, u8 n_args) {
+static void rewrite_op_to_nfa(tl_infer *self, ast_node *node, str func_name, ast_node **args, u8 n_args) {
     ast_node_rewrite_to_nfa(node, ast_node_create_sym(self->arena, func_name), args, n_args);
 }
 
@@ -933,9 +932,9 @@ static void rewrite_operator_overloads(void *ctx, ast_node *node) {
         tl_monotype *left_type = left->type->type;
         if (!is_user_defined_type(left_type)) return;
 
-        char const *op = str_cstr(&node->binary_op.op->symbol.name);
-        int is_neq = (0 == strcmp(op, "!="));
-        int is_eq = (0 == strcmp(op, "=="));
+        char const *op        = str_cstr(&node->binary_op.op->symbol.name);
+        int         is_neq    = (0 == strcmp(op, "!="));
+        int         is_eq     = (0 == strcmp(op, "=="));
         char const *func_name = binary_op_to_func_name(op);
         if (!func_name) return;
 
@@ -950,42 +949,42 @@ static void rewrite_operator_overloads(void *ctx, ast_node *node) {
         if (str_is_empty(full_name)) return;
 
         // Capture operands before overwriting the union.
-        ast_node *right = node->binary_op.right;
-        ast_node **args = alloc_malloc(self->arena, 2 * sizeof(ast_node *));
-        args[0] = left;
-        args[1] = right;
+        ast_node  *right = node->binary_op.right;
+        ast_node **args  = alloc_malloc(self->arena, 2 * sizeof(ast_node *));
+        args[0]          = left;
+        args[1]          = right;
 
         if (is_neq && 0 != strcmp(func_name, "cmp")) {
             // a != b  →  !(eq(a, b))
-            ast_node *eq_call = ast_node_create_nfa(
-                self->arena, ast_node_create_sym(self->arena, full_name),
-                (ast_node_sized){0}, (ast_node_sized){.v = args, .size = 2});
-            eq_call->type = node->type;
+            ast_node *eq_call =
+              ast_node_create_nfa(self->arena, ast_node_create_sym(self->arena, full_name),
+                                  (ast_node_sized){0}, (ast_node_sized){.v = args, .size = 2});
+            eq_call->type          = node->type;
 
-            tl_polytype *type = node->type;
-            node->tag = ast_unary_op;
+            tl_polytype *type      = node->type;
+            node->tag              = ast_unary_op;
             node->unary_op.operand = eq_call;
-            node->unary_op.op = ast_node_create_sym_c(self->arena, "!");
-            node->type = type;
+            node->unary_op.op      = ast_node_create_sym_c(self->arena, "!");
+            node->type             = type;
         } else if (0 == strcmp(func_name, "cmp")) {
             // a < b  →  cmp(a, b) < 0;  == via cmp: cmp(a, b) == 0
-            char const *cmp_op = is_eq ? "==" : is_neq ? "!=" : op;
-            tl_monotype *cint = tl_type_registry_instantiate(self->registry, S("CInt"));
+            char const  *cmp_op    = is_eq ? "==" : is_neq ? "!=" : op;
+            tl_monotype *cint      = tl_type_registry_instantiate(self->registry, S("CInt"));
             tl_polytype *cint_poly = tl_polytype_absorb_mono(self->arena, cint);
 
-            ast_node *cmp_call = ast_node_create_nfa(
-                self->arena, ast_node_create_sym(self->arena, full_name),
-                (ast_node_sized){0}, (ast_node_sized){.v = args, .size = 2});
-            cmp_call->type = cint_poly;
+            ast_node    *cmp_call =
+              ast_node_create_nfa(self->arena, ast_node_create_sym(self->arena, full_name),
+                                  (ast_node_sized){0}, (ast_node_sized){.v = args, .size = 2});
+            cmp_call->type        = cint_poly;
 
-            ast_node *zero = ast_node_create_i64(self->arena, 0);
-            zero->type = cint_poly;
+            ast_node *zero        = ast_node_create_i64(self->arena, 0);
+            zero->type            = cint_poly;
 
-            tl_polytype *type = node->type;
-            node->binary_op.left = cmp_call;
+            tl_polytype *type     = node->type;
+            node->binary_op.left  = cmp_call;
             node->binary_op.right = zero;
-            node->binary_op.op = ast_node_create_sym_c(self->arena, cmp_op);
-            node->type = type;
+            node->binary_op.op    = ast_node_create_sym_c(self->arena, cmp_op);
+            node->type            = type;
         } else {
             rewrite_op_to_nfa(self, node, full_name, args, 2);
         }
@@ -997,7 +996,7 @@ static void rewrite_operator_overloads(void *ctx, ast_node *node) {
         tl_monotype *lhs_type = lhs->type->type;
         if (!is_user_defined_type(lhs_type)) return;
 
-        char const *op = str_cstr(&node->assignment.op->symbol.name);
+        char const *op        = str_cstr(&node->assignment.op->symbol.name);
         char const *func_name = compound_op_to_func_name(op);
         if (!func_name) return;
 
@@ -1005,22 +1004,21 @@ static void rewrite_operator_overloads(void *ctx, ast_node *node) {
         if (str_is_empty(full_name)) return;
 
         // Capture fields before overwriting the union.
-        ast_node *value = node->assignment.value;
-        ast_node **args = alloc_malloc(self->arena, 2 * sizeof(ast_node *));
-        args[0] = lhs;
-        args[1] = value;
+        ast_node  *value = node->assignment.value;
+        ast_node **args  = alloc_malloc(self->arena, 2 * sizeof(ast_node *));
+        args[0]          = lhs;
+        args[1]          = value;
 
         // Build NFA: func(lhs, value) — result type matches LHS
-        ast_node *call = ast_node_create_nfa(
-            self->arena, ast_node_create_sym(self->arena, full_name),
-            (ast_node_sized){0}, (ast_node_sized){.v = args, .size = 2});
-        call->type = lhs->type;
+        ast_node *call = ast_node_create_nfa(self->arena, ast_node_create_sym(self->arena, full_name),
+                                             (ast_node_sized){0}, (ast_node_sized){.v = args, .size = 2});
+        call->type     = lhs->type;
 
         // Rewrite: ast_reassignment_op → ast_reassignment with value = func(lhs, value)
-        node->tag = ast_reassignment;
-        node->assignment.name = lhs;
-        node->assignment.value = call;
-        node->assignment.op = null;
+        node->tag                      = ast_reassignment;
+        node->assignment.name          = lhs;
+        node->assignment.value         = call;
+        node->assignment.op            = null;
         node->assignment.is_field_name = 0;
 
     } else if (node->tag == ast_unary_op) {
@@ -1030,7 +1028,7 @@ static void rewrite_operator_overloads(void *ctx, ast_node *node) {
         tl_monotype *operand_type = operand->type->type;
         if (!is_user_defined_type(operand_type)) return;
 
-        char const *op = str_cstr(&node->unary_op.op->symbol.name);
+        char const *op        = str_cstr(&node->unary_op.op->symbol.name);
         char const *func_name = unary_op_to_func_name(op);
         if (!func_name) return;
 
@@ -1038,7 +1036,7 @@ static void rewrite_operator_overloads(void *ctx, ast_node *node) {
         if (str_is_empty(full_name)) return;
 
         ast_node **args = alloc_malloc(self->arena, sizeof(ast_node *));
-        args[0] = operand;
+        args[0]         = operand;
         rewrite_op_to_nfa(self, node, full_name, args, 1);
     }
 }
@@ -1051,8 +1049,7 @@ void rewrite_operator_overloads_all(tl_infer *self) {
     while ((node = ast_node_str_map_iter(self->toplevels, &iter))) {
         // Skip generic templates — their operators are rewritten in post_specialize
         // after type substitution makes operand types concrete.
-        if (ast_node_is_let(node) && node->let.n_type_parameters > 0)
-            continue;
+        if (ast_node_is_let(node) && node->let.n_type_parameters > 0) continue;
         ast_node_dfs(self, node, rewrite_operator_overloads);
     }
 }
@@ -1138,14 +1135,10 @@ static str trait_name_from_bound(ast_node *bound) {
 static int emit_trait_bound_error(tl_infer *self, ast_node *toplevel, tl_monotype *concrete_type,
                                   str trait_name, str fn_name, u32 arity) {
     str type_str = tl_monotype_to_string(self->transient, concrete_type);
-    str msg = str_fmt(self->arena,
-                      "type %s does not satisfy trait %s: missing function '%s' with arity %u",
-                      str_cstr(&type_str), str_cstr(&trait_name),
-                      str_cstr(&fn_name), (unsigned)arity);
-    array_push(self->errors,
-               ((tl_infer_error){.tag = tl_err_trait_bound_not_satisfied,
-                                 .node = toplevel,
-                                 .message = msg}));
+    str msg = str_fmt(self->arena, "type %s does not satisfy trait %s: missing function '%s' with arity %u",
+                      str_cstr(&type_str), str_cstr(&trait_name), str_cstr(&fn_name), (unsigned)arity);
+    array_push(self->errors, ((tl_infer_error){
+                               .tag = tl_err_trait_bound_not_satisfied, .node = toplevel, .message = msg}));
     return 1;
 }
 
@@ -1164,9 +1157,9 @@ static int check_trait_bound_(tl_infer *self, ast_node *toplevel, tl_monotype *c
     // Built-in types have no module functions — check intrinsic support per signature.
     if (!is_user_defined_type(concrete_type)) {
         int is_integer = tl_monotype_is_integer_convertible(concrete_type);
-        int is_float = tl_monotype_is_float_convertible(concrete_type);
+        int is_float   = tl_monotype_is_float_convertible(concrete_type);
         int is_numeric = is_integer || is_float;
-        int is_bool = str_eq(concrete_type->cons_inst->def->name, S("Bool"));
+        int is_bool    = str_eq(concrete_type->cons_inst->def->name, S("Bool"));
         for (u32 i = 0; i < trait->sigs.size; i++) {
             str fn = trait->sigs.v[i].name;
             int ok = 0;
@@ -1174,33 +1167,32 @@ static int check_trait_bound_(tl_infer *self, ast_node *toplevel, tl_monotype *c
             if (str_eq(fn, S("add")) || str_eq(fn, S("sub")) || str_eq(fn, S("mul")) ||
                 str_eq(fn, S("div")) || str_eq(fn, S("neg")))
                 ok = is_numeric;
-            else if (str_eq(fn, S("mod")))
-                ok = is_integer;
+            else if (str_eq(fn, S("mod"))) ok = is_integer;
             // Bitwise: bit_and, bit_or, bit_xor, shl, shr, bit_not — integer types
             else if (str_eq(fn, S("bit_and")) || str_eq(fn, S("bit_or")) || str_eq(fn, S("bit_xor")) ||
                      str_eq(fn, S("shl")) || str_eq(fn, S("shr")) || str_eq(fn, S("bit_not")))
                 ok = is_integer;
             // Comparison: eq, cmp — numeric types and Bool
-            else if (str_eq(fn, S("eq")) || str_eq(fn, S("cmp")))
-                ok = is_numeric || is_bool;
+            else if (str_eq(fn, S("eq")) || str_eq(fn, S("cmp"))) ok = is_numeric || is_bool;
             // Logical: not — Bool
-            else if (str_eq(fn, S("not")))
-                ok = is_bool;
+            else if (str_eq(fn, S("not"))) ok = is_bool;
             if (!ok)
-                return emit_trait_bound_error(self, toplevel, concrete_type, trait_name, fn, trait->sigs.v[i].arity);
+                return emit_trait_bound_error(self, toplevel, concrete_type, trait_name, fn,
+                                              trait->sigs.v[i].arity);
         }
     } else {
         // User-defined types: check each signature in the trait
         tl_monotype_sized type_args = concrete_type->cons_inst->args;
         for (u32 i = 0; i < trait->sigs.size; i++) {
             tl_trait_sig *sig = &trait->sigs.v[i];
-            str func_name = find_overload_func(self, concrete_type, str_cstr(&sig->name), sig->arity);
+            str func_name     = find_overload_func(self, concrete_type, str_cstr(&sig->name), sig->arity);
             // eq is derivable from cmp: Ord inherits Eq, so a type with only cmp
             // needs this fallback to satisfy the Eq parent-trait check.
             if (str_is_empty(func_name) && str_eq(sig->name, S("eq")) && sig->arity == 2)
                 func_name = find_overload_func(self, concrete_type, "cmp", 2);
             if (str_is_empty(func_name))
-                return emit_trait_bound_error(self, toplevel, concrete_type, trait_name, sig->name, sig->arity);
+                return emit_trait_bound_error(self, toplevel, concrete_type, trait_name, sig->name,
+                                              sig->arity);
 
             // Conditional conformance: if the conforming function has bounded type parameters,
             // verify those bounds recursively using the concrete type's type arguments.
@@ -1223,16 +1215,14 @@ static int check_trait_bound_(tl_infer *self, ast_node *toplevel, tl_monotype *c
                 str inner_trait = trait_name_from_bound(bound);
                 if (str_is_empty(inner_trait)) continue;
 
-                if (check_trait_bound_(self, toplevel, inner_concrete, inner_trait, depth + 1))
-                    return 1;
+                if (check_trait_bound_(self, toplevel, inner_concrete, inner_trait, depth + 1)) return 1;
             }
         }
     }
 
     // Check parent traits (trait inheritance)
     forall(i, trait->parents) {
-        if (check_trait_bound_(self, toplevel, concrete_type, trait->parents.v[i], depth + 1))
-            return 1;
+        if (check_trait_bound_(self, toplevel, concrete_type, trait->parents.v[i], depth + 1)) return 1;
     }
 
     return 0;
@@ -1244,9 +1234,8 @@ static int check_trait_bound(tl_infer *self, ast_node *toplevel, tl_monotype *co
 }
 
 // Resolve the concrete type for the i-th type parameter from the arrow or resolved_type_args.
-static tl_monotype *resolve_type_param_concrete(tl_infer *self, ast_node *toplevel,
-                                                 tl_monotype *arrow, tl_monotype_sized resolved_type_args,
-                                                 u32 i) {
+static tl_monotype *resolve_type_param_concrete(tl_infer *self, ast_node *toplevel, tl_monotype *arrow,
+                                                tl_monotype_sized resolved_type_args, u32 i) {
     // First try resolved_type_args (explicit type arguments at call site)
     if (i < resolved_type_args.size && resolved_type_args.v[i]) {
         tl_monotype *m = resolved_type_args.v[i];
@@ -1263,10 +1252,10 @@ static tl_monotype *resolve_type_param_concrete(tl_infer *self, ast_node *toplev
     // and read the corresponding concrete type from the arrow.
     if (!tl_monotype_is_arrow(arrow)) return null;
     tl_monotype_sized arrow_args = arrow->list.xs.v[0]->list.xs;
-    ast_node *tp = toplevel->let.type_parameters[i];
-    str tp_name = tp->symbol.name;
+    ast_node         *tp         = toplevel->let.type_parameters[i];
+    str               tp_name    = tp->symbol.name;
 
-    u32 n_params = toplevel->let.n_parameters;
+    u32               n_params   = toplevel->let.n_parameters;
     for (u32 j = 0; j < n_params && j < arrow_args.size; j++) {
         ast_node *param = toplevel->let.parameters[j];
         if (!ast_node_is_symbol(param)) continue;
@@ -1281,8 +1270,8 @@ static tl_monotype *resolve_type_param_concrete(tl_infer *self, ast_node *toplev
 
 // Verify trait bounds on a generic function's type parameters against resolved concrete types.
 // Returns 0 on success, 1 if any bound is not satisfied.
-static int verify_trait_bounds(tl_infer *self, ast_node *toplevel,
-                               tl_monotype *arrow, tl_monotype_sized resolved_type_args) {
+static int verify_trait_bounds(tl_infer *self, ast_node *toplevel, tl_monotype *arrow,
+                               tl_monotype_sized resolved_type_args) {
     if (!ast_node_is_let(toplevel)) return 0;
     u32 n_tp = toplevel->let.n_type_parameters;
     if (n_tp == 0) return 0;
@@ -1299,8 +1288,7 @@ static int verify_trait_bounds(tl_infer *self, ast_node *toplevel,
         str trait_name = trait_name_from_bound(bound);
         if (str_is_empty(trait_name)) continue;
 
-        if (check_trait_bound(self, toplevel, concrete, trait_name))
-            return 1;
+        if (check_trait_bound(self, toplevel, concrete, trait_name)) return 1;
     }
     return 0;
 }
@@ -1314,7 +1302,6 @@ str specialize_arrow(tl_infer *self, traverse_ctx *traverse_ctx, str name, tl_mo
 
     if (!tl_monotype_is_concrete_no_weak(arrow))
         tl_monotype_substitute(self->arena, arrow, self->subs, null);
-
 
     // 1. Check if already specialized
     if (instance_name_exists(self, name)) {
@@ -1334,11 +1321,10 @@ str specialize_arrow(tl_infer *self, traverse_ctx *traverse_ctx, str name, tl_mo
     if (!toplevel) return str_empty();
 
     // 2b. Verify trait bounds on type parameters
-    if (verify_trait_bounds(self, toplevel, arrow, resolved_type_args))
-        return str_empty();
+    if (verify_trait_bounds(self, toplevel, arrow, resolved_type_args)) return str_empty();
 
     // 3. Create unique instance name(e.g., "identity_0")
-    name_and_type key = make_instance_key(self, name, arrow, resolved_type_args);
+    name_and_type key       = make_instance_key(self, name, arrow, resolved_type_args);
     str           inst_name = next_instantiation(self, name);
     instance_add(self, &key, inst_name);
     if (self->report_stats) self->counters.specialize_created++;
@@ -1399,7 +1385,8 @@ static int specialize_operand(tl_infer *self, traverse_ctx *traverse_ctx, ast_no
 
     str value_name = ast_node_str(node);
     // TODO: function pointers with callsite type arguments
-    str inst_name = specialize_arrow(self, traverse_ctx, value_name, value_type->type, (tl_monotype_sized){0});
+    str inst_name =
+      specialize_arrow(self, traverse_ctx, value_name, value_type->type, (tl_monotype_sized){0});
     if (str_is_empty(inst_name)) return 0; // FIXME: ignores error
     ast_node_name_replace(node, inst_name);
     return 0;
@@ -1411,6 +1398,25 @@ static int specialize_let_in(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
     tl_polytype *name_type = node->let_in.name->type;
 
     if (!name_type || !tl_polytype_is_concrete(name_type)) return 0;
+
+    // For let-in lambdas: the value is a lambda (not a symbol), so specialize_operand
+    // can't handle it directly.  Instead, look up the specialization that was created
+    // when the body's call sites were processed and rename the binding to match.
+    // This callback is invoked twice on let_in nodes (before and after child traversal);
+    // the lookup succeeds on the second call, after call sites have been specialized.
+    if (ast_node_is_let_in_lambda(node) && tl_monotype_is_arrow(name_type->type)) {
+        tl_monotype *arrow = name_type->type;
+        str          name  = ast_node_str(node->let_in.name);
+
+        // Resolve any remaining weak ints so the hash matches the call-site specialization
+        if (!tl_monotype_is_concrete_no_weak(arrow))
+            tl_monotype_substitute(self->arena, arrow, self->subs, null);
+
+        str *found = instance_lookup_arrow(self, name, arrow, (tl_monotype_sized){0});
+        if (found) ast_node_name_replace(node->let_in.name, *found);
+        return 0;
+    }
+
     return specialize_operand(self, traverse_ctx, node->let_in.value);
 }
 
@@ -1600,7 +1606,8 @@ static int specialize_value_arguments(tl_infer *self, traverse_ctx *traverse_ctx
         if (!ast_node_is_symbol(arg)) goto next;
         if (!is_toplevel_function_name(self, arg)) goto next;
         if (i >= expected_types.size) fatal("runtime error");
-        if (specialize_arrow_with_name(self, traverse_ctx, arg, expected_types.v[i], (tl_monotype_sized){0}))
+        if (specialize_arrow_with_name(self, traverse_ctx, arg, expected_types.v[i],
+                                       (tl_monotype_sized){0}))
             return 1;
 
     next:
@@ -1643,8 +1650,13 @@ int specialize_applications_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_n
         return 1;
     }
 
-    // check for nullary type constructors
-    if (ast_node_is_symbol(node)) return specialize_operand(self, traverse_ctx, node);
+    // check for nullary type constructors — but not formal parameters (let-in names are handled
+    // by specialize_let_in after child traversal, when call sites have established concrete types)
+    if (ast_node_is_symbol(node)) {
+        if (traverse_ctx->node_pos != npos_formal_parameter)
+            return specialize_operand(self, traverse_ctx, node);
+        return 0;
+    }
     // check for let_in nodes and assignments
     if (ast_node_is_let_in(node)) return specialize_let_in(self, traverse_ctx, node);
     if (ast_node_is_assignment(node)) return specialize_reassignment(self, traverse_ctx, node);
@@ -1721,8 +1733,8 @@ int specialize_applications_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_n
                     tl_monotype_substitute(self->arena, node->type->type, self->subs, null);
                 callsite = node->type;
             } else {
-                // Important: use _with variant to copy free variables info to the arrow, which is added to the
-                // environment further down.
+                // Important: use _with variant to copy free variables info to the arrow, which is added to
+                // the environment further down.
                 callsite = make_arrow_with(self, traverse_ctx, node, type);
                 if (!callsite) {
                     return 1;
@@ -1773,14 +1785,14 @@ int specialize_applications_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_n
         }
 
         // try to specialize — resolve AST type args to monotypes
-        ast_node_sized callsite_type_args = {.size = node->named_application.n_type_arguments,
-                                             .v    = node->named_application.type_arguments};
-        hashmap *outer_type_args = traverse_ctx ? traverse_ctx->type_arguments : null;
+        ast_node_sized    callsite_type_args = {.size = node->named_application.n_type_arguments,
+                                                .v    = node->named_application.type_arguments};
+        hashmap          *outer_type_args    = traverse_ctx ? traverse_ctx->type_arguments : null;
         tl_monotype_sized resolved_type_args = {
-            .size = callsite_type_args.size,
-            .v    = callsite_type_args.size
-                      ? alloc_malloc(self->transient, callsite_type_args.size * sizeof(tl_monotype *))
-                      : null,
+          .size = callsite_type_args.size,
+          .v    = callsite_type_args.size
+                    ? alloc_malloc(self->transient, callsite_type_args.size * sizeof(tl_monotype *))
+                    : null,
         };
         forall(i, callsite_type_args) {
             resolved_type_args.v[i] = parse_type_arg(self, outer_type_args, callsite_type_args.v[i]);

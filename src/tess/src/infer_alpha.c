@@ -244,7 +244,36 @@ void rename_variables(tl_infer *self, ast_node *node, rename_variables_ctx *ctx,
     case ast_lambda_function: {
         // Alpha-convert alloc_expr in the enclosing scope (before entering lambda body scope).
         if (node->lambda_function.attributes) {
-            lambda_closure_attrs attrs = lambda_get_closure_attrs(self->transient, node->lambda_function.attributes);
+            lambda_closure_attrs attrs =
+              lambda_get_closure_attrs(self->transient, node->lambda_function.attributes);
+            if (attrs.has_alloc && !attrs.alloc_expr) {
+                // [[alloc]] without expression: synthesize Alloc__context.default as the alloc_expr.
+                // This lets the rest of the pipeline (alpha conversion, type checking, transpilation)
+                // handle it uniformly with the explicit [[alloc(expr)]] case.
+                //
+                // TODO: generate an error if Alloc is not in scope (the user forgot to #import <Alloc.tl>
+                ast_node *ctx_sym = ast_node_create_sym_c(self->arena, "Alloc__context");
+                ast_node *dot_op  = ast_node_create_sym_c(self->arena, ".");
+                ast_node *field   = ast_node_create_sym_c(self->arena, "default");
+                ast_node *access  = ast_node_create_binary_op(self->arena, dot_op, ctx_sym, field);
+
+                // Replace the bare [[alloc]] symbol in the attribute_set with [[alloc(access)]]
+                struct ast_attribute_set *attr_set = &node->lambda_function.attributes->attribute_set;
+                for (u32 ai = 0; ai < attr_set->n; ++ai) {
+                    ast_node *anode = attr_set->nodes[ai];
+                    if (ast_node_is_symbol(anode) && str_eq(ast_node_str(anode), S("alloc"))) {
+                        ast_node  *alloc_name = anode; // reuse the "alloc" symbol as NFA name
+                        ast_node **arg_arr    = alloc_malloc(self->arena, sizeof(ast_node *));
+                        arg_arr[0]            = access;
+                        attr_set->nodes[ai] =
+                          ast_node_create_nfa(self->arena, alloc_name, (ast_node_sized){0},
+                                              (ast_node_sized){.v = arg_arr, .size = 1});
+                        break;
+                    }
+                }
+                // Re-read attrs after mutation
+                attrs = lambda_get_closure_attrs(self->transient, node->lambda_function.attributes);
+            }
             if (attrs.alloc_expr) rename_variables(self, attrs.alloc_expr, ctx, level + 1);
         }
 
@@ -408,8 +437,8 @@ void rename_variables(tl_infer *self, ast_node *node, rename_variables_ctx *ctx,
     case ast_string:
     case ast_char:
     case ast_nil:
-    case ast_void:          break;
-    case ast_arrow:         {
+    case ast_void:         break;
+    case ast_arrow:        {
         // Recurse into arrow annotations (e.g. `f: (T) -> U`) so that type
         // parameter references in parameter/return types get alpha-converted.
         // First, register any type parameters declared on the arrow itself
@@ -583,8 +612,8 @@ int collect_free_variables_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_no
     // The traversal only visits arguments, not the function name itself, so we must handle
     // the function name here to propagate captures from called closures.
     if (node->tag == ast_named_function_application) {
-        collect_free_variables_ctx *ctx = traverse_ctx->user;
-        str name = ast_node_str(node->named_application.name);
+        collect_free_variables_ctx *ctx  = traverse_ctx->user;
+        str                         name = ast_node_str(node->named_application.name);
         collect_transitive_fvs(self, traverse_ctx, ctx, name);
         return 0;
     }
@@ -631,12 +660,13 @@ void add_free_variables_to_arrow(tl_infer *self, ast_node *node, tl_polytype *ar
     // collect free variables from infer target and add to the generic's arrow type
 
     collect_free_variables_ctx ctx;
-    ctx.fvs                    = (str_array){.alloc = self->arena};
+    ctx.fvs                       = (str_array){.alloc = self->arena};
 
-    traverse_ctx *traverse_ctx = traverse_ctx_create(self->transient);
-    traverse_ctx->user         = &ctx;
+    traverse_ctx *traverse_ctx    = traverse_ctx_create(self->transient);
+    traverse_ctx->user            = &ctx;
+    traverse_ctx->skip_alloc_expr = 1; // alloc_expr is not part of the closure body
 
-    int res                    = traverse_ast(self, traverse_ctx, node, collect_free_variables_cb);
+    int res                       = traverse_ast(self, traverse_ctx, node, collect_free_variables_cb);
     if (res) fatal("runtime error");
 
     array_shrink(ctx.fvs);

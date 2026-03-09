@@ -146,6 +146,7 @@ typedef struct {
     node_position node_pos;    // set by traverse_ast based on parent node
     int           is_field_name;
     int           is_annotation;
+    int           skip_alloc_expr; // skip alloc_expr traversal in lambda (for FV collection)
 } traverse_ctx;
 
 typedef int (*traverse_cb)(tl_infer *, traverse_ctx *, ast_node *);

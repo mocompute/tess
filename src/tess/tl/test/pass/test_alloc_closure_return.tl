@@ -1,4 +1,5 @@
 #module main
+#import <Alloc.tl>
 
 // Returning an allocated closure from a function should be allowed
 // because the context is heap-allocated and won't dangle.
