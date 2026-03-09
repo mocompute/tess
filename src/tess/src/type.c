@@ -3590,6 +3590,43 @@ void tl_type_subs_default_weak_ints(tl_type_subs *subs, tl_monotype *int_type, t
     }
 }
 
+// Default weak int/float nodes in-place within a monotype tree.
+// Unlike tl_type_subs_default_weak_ints (which walks the subs map), this walks the monotype
+// structure directly, replacing any weak_int_signed/unsigned/float nodes with their concrete
+// defaults.  Used when weak int TVs are not registered in the subs map.
+static void tl_monotype_default_weak_ints_(tl_monotype *self, tl_monotype *int_type,
+                                           tl_monotype *uint_type, tl_monotype *float_type, u32 gen) {
+    if (!self) return;
+    if (self->visited_gen == gen) return;
+    self->visited_gen = gen;
+    switch (self->tag) {
+    case tl_weak_int_signed:   *self = *int_type; self->visited_gen = gen; return;
+    case tl_weak_int_unsigned: *self = *uint_type; self->visited_gen = gen; return;
+    case tl_weak_float:        *self = *float_type; self->visited_gen = gen; return;
+    case tl_cons_inst:
+    case tl_arrow:
+    case tl_tuple: {
+        tl_monotype_sized children = tl_monotype_children(self);
+        forall(i, children) {
+            tl_monotype_default_weak_ints_(children.v[i], int_type, uint_type, float_type, gen);
+        }
+    } break;
+    case tl_any:
+    case tl_ellipsis:
+    case tl_integer:
+    case tl_var:
+    case tl_weak:
+    case tl_placeholder: break;
+    }
+}
+
+void tl_monotype_default_weak_ints(tl_monotype *self, tl_monotype *int_type, tl_monotype *uint_type,
+                                   tl_monotype *float_type) {
+    u32 gen = substitute_gen++;
+    if (gen == 0) gen = substitute_gen++; // skip 0 on wraparound (0 means "never visited")
+    tl_monotype_default_weak_ints_(self, int_type, uint_type, float_type, gen);
+}
+
 // ============================================================================
 // Debug logging and utilities
 // ============================================================================

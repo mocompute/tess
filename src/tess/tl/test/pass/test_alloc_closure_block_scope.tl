@@ -2,8 +2,6 @@
 #import <Alloc.tl>
 
 // Allocated closure created inside a block expression.
-// Currently fails: codegen produces undeclared identifier for the closure
-// function pointer when the alloc closure is inside a ({ ... }) block.
 
 main() {
     error: CInt := 0

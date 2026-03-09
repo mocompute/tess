@@ -175,6 +175,8 @@ nodiscard tl_monotype *tl_monotype_clone(allocator *, tl_monotype *) mallocfun;
 nodiscard tl_polytype *tl_monotype_generalize(allocator *, tl_monotype *) mallocfun;
 
 void                   tl_monotype_substitute(allocator *, tl_monotype *, tl_type_subs *, hashmap *);
+void                   tl_monotype_default_weak_ints(tl_monotype *, tl_monotype *int_type,
+                                                     tl_monotype *uint_type, tl_monotype *float_type);
 void                   tl_monotype_sort_fvs(tl_monotype *);
 str_sized              tl_monotype_fvs(tl_monotype *);
 void                   tl_monotype_absorb_fvs(tl_monotype *, str_sized);

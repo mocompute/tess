@@ -1408,9 +1408,15 @@ static int specialize_let_in(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
         tl_monotype *arrow = name_type->type;
         str          name  = ast_node_str(node->let_in.name);
 
-        // Resolve any remaining weak ints so the hash matches the call-site specialization
+        // Resolve any remaining weak ints so the hash matches the call-site specialization.
+        // First apply substitutions, then default any weak ints that weren't resolved by
+        // substitution (their TVs may not have been registered in the subs map).
         if (!tl_monotype_is_concrete_no_weak(arrow))
             tl_monotype_substitute(self->arena, arrow, self->subs, null);
+        if (!tl_monotype_is_concrete_no_weak(arrow))
+            tl_monotype_default_weak_ints(arrow, tl_type_registry_int(self->registry),
+                                          tl_type_registry_uint(self->registry),
+                                          tl_type_registry_float(self->registry));
 
         str *found = instance_lookup_arrow(self, name, arrow, (tl_monotype_sized){0});
         if (found) ast_node_name_replace(node->let_in.name, *found);
