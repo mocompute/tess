@@ -705,6 +705,7 @@ void ast_node_each_node(void *ctx, ast_node_each_node_fun fun, ast_node *node) {
     case ast_lambda_function:
         //
         fun(ctx, node->lambda_function.body);
+        fun(ctx, node->lambda_function.attributes);
         break;
 
     case ast_lambda_function_application:
