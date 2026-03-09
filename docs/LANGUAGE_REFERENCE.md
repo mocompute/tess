@@ -2,6 +2,8 @@
 
 Tess is a statically-typed, compiled programming language that transpiles to C. It features type inference (Hindley-Milner style), generic types and functions, lambdas, closures, and C interoperability.
 
+> For the conceptual foundations behind the syntax — let-in expressions, scoping, closures, and pattern matching — see the [Language Model](LANGUAGE_MODEL.md).
+
 ## Key Language Characteristics
 
 **Expression-based:** Nearly everything in Tess is an expression that produces a value. Control flow constructs like `if`, `case`, and `when` can be used anywhere an expression is expected. Functions implicitly return the value of their final expression—no `return` keyword needed (though early `return` is supported). Note: assignment with `=` is a statement, not an expression, and has no value.
@@ -413,6 +415,8 @@ foo() -> Ptr[any] { return null }     // Required - null has no type
 
 ## Variables and Assignment
 
+> See [Language Model: Bindings](LANGUAGE_MODEL.md#bindings-the-let-in-expression) for the conceptual foundation of let-in expressions and scoping.
+
 Tess distinguishes between **binding** (`:=`) and **mutation** (`=`):
 
 ### Binding with `:=`
@@ -504,6 +508,8 @@ update(v) { value = v }                // No void needed - assignment has no val
 The last expression in the function body is the return value. Use `void` as the final expression when the last statement is an expression (like a function call) but the function should return nothing. If the function ends with an assignment (`=`), no `void` is needed.
 
 ### Lambdas
+
+> See [Language Model: Closures and Capture](LANGUAGE_MODEL.md#closures-and-capture) for the conceptual model of capture semantics, stack vs. allocated closures, and the escape restriction.
 
 ```tl
 f := (x) { x + 1 }           // Lambda expression
@@ -1315,6 +1321,8 @@ s := Foo.Shape.Circle(radius = 2.0)  // also returns Foo.Shape
 
 ### Pattern Matching (When Expression)
 
+> See [Language Model: Pattern Matching and Scope](LANGUAGE_MODEL.md#pattern-matching-and-scope) for how arm scoping relates to let-in expressions.
+
 The `when` keyword provides tagged union pattern matching with type inference. The tagged union type is inferred from the scrutinee — no type annotation needed:
 
 ```tl
@@ -1383,6 +1391,8 @@ when s.& {
 Use the `.&` suffix on the scrutinee to get pointers to each variant. This is the same syntax used to access mutable iterators with the `for` statement.
 
 ### Let-else
+
+> See [Language Model: Let-Else](LANGUAGE_MODEL.md#let-else) for why let-else exists and how it connects to let-in scoping.
 
 When you need a single variant's value for the rest of a scope, use let-else to unwrap it or exit early:
 

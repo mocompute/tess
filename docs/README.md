@@ -6,6 +6,7 @@ This directory contains technical documentation for the Tess programming languag
 
 | Document | Description |
 |----------|-------------|
+| [LANGUAGE_MODEL.md](LANGUAGE_MODEL.md) | Conceptual foundations: let-in expressions, bindings vs mutation, scoping, shadowing, and let-else |
 | [LANGUAGE_REFERENCE.md](LANGUAGE_REFERENCE.md) | Language syntax reference covering modules, types, variables, functions, control flow, traits, operator overloading, and C interoperability |
 | [TYPE_SYSTEM.md](TYPE_SYSTEM.md) | Conceptual overview of the Hindley-Milner type system, type inference, and generics |
 | [SPECIALIZATION.md](SPECIALIZATION.md) | Deep dive into generic specialization (monomorphization) in the compiler |
@@ -19,10 +20,11 @@ This directory contains technical documentation for the Tess programming languag
 ## Suggested Reading Order
 
 **For language users:**
-1. [LANGUAGE_REFERENCE.md](LANGUAGE_REFERENCE.md) - Learn the language syntax
-2. [TYPE_SYSTEM.md](TYPE_SYSTEM.md) - Understand how types work
-3. [STANDARD_LIBRARY.md](STANDARD_LIBRARY.md) - Standard library API reference
-4. [PACKAGES.md](PACKAGES.md) - Creating and consuming reusable libraries
+1. [LANGUAGE_MODEL.md](LANGUAGE_MODEL.md) - Understand the core concepts (let-in, scoping, shadowing)
+2. [LANGUAGE_REFERENCE.md](LANGUAGE_REFERENCE.md) - Learn the language syntax
+3. [TYPE_SYSTEM.md](TYPE_SYSTEM.md) - Understand how types work
+4. [STANDARD_LIBRARY.md](STANDARD_LIBRARY.md) - Standard library API reference
+5. [PACKAGES.md](PACKAGES.md) - Creating and consuming reusable libraries
 
 **For compiler contributors:**
 1. [TYPE_SYSTEM.md](TYPE_SYSTEM.md) - Understand the type system concepts
