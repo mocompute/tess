@@ -249,6 +249,11 @@ void rename_variables(tl_infer *self, ast_node *node, rename_variables_ctx *ctx,
         }
 
         hashmap *save = rename_function_params(self, node, ctx, level);
+
+        // Alpha-convert symbols inside attributes (e.g. capture(n) → capture(tl_n_v36)).
+        // This is done via the general ast_attribute_set recursion path.
+        rename_variables(self, node->lambda_function.attributes, ctx, level + 1);
+
         rename_variables(self, node->lambda_function.body, ctx, level + 1);
         map_destroy(&ctx->lex);
         ctx->lex = save;
@@ -392,6 +397,12 @@ void rename_variables(tl_infer *self, ast_node *node, rename_variables_ctx *ctx,
         break;
 
     case ast_attribute_set:
+        // Recurse into attribute children so that symbols inside parameterized attributes
+        // (e.g. capture(n)) get alpha-converted.
+        for (u8 i = 0; i < node->attribute_set.n; i++)
+            rename_variables(self, node->attribute_set.nodes[i], ctx, level + 1);
+        break;
+
     case ast_hash_command:
     case ast_continue:
     case ast_string:

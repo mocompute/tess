@@ -633,181 +633,14 @@ void check_closure_escape(tl_infer *self) {
 // Closure alloc/capture attribute validation
 // ============================================================================
 
-// -- Capture scope validation --
-//
-// Verify that each name in a [[capture(...)]] list refers to a variable that is actually
-// in scope at the lambda definition site.  This catches typos like capture(nonexistent)
-// where "nonexistent" was never defined.
-//
-// We walk the AST recursively, tracking source-level (original) variable names.  At each
-// lambda with [[capture(...)]], we check each capture name against the tracked set.
-//
-// TODO: consider if implementation would be simpler if captures were alpha-converted, like the source AST.
-
-typedef struct {
-    tl_infer *self;
-    hashmap  *source_names; // hset of source-level names in scope
-} capture_scope_ctx;
-
-// Forward declaration
-static void check_capture_scope_walk(capture_scope_ctx *ctx, ast_node *node);
-
-static void check_capture_scope_walk(capture_scope_ctx *ctx, ast_node *node) {
-    if (!node) return;
-
-#ifndef _MSC_VER
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wswitch-enum"
-#endif
-    switch (node->tag) {
-
-    case ast_let_in: {
-        // Recurse into value first (the name is not yet in scope for the value expression).
-        check_capture_scope_walk(ctx, node->let_in.value);
-
-        // Add the let-in name's source name to scope, then recurse into body.
-        hashmap *save = map_copy(ctx->source_names);
-        str      name = ast_node_name_original(node->let_in.name);
-        str_hset_insert(&ctx->source_names, name);
-        check_capture_scope_walk(ctx, node->let_in.body);
-        map_destroy(&ctx->source_names);
-        ctx->source_names = save;
-    } break;
-
-    case ast_lambda_function: {
-        // Check capture list names against current scope.
-        if (node->lambda_function.attributes) {
-            lambda_closure_attrs attrs =
-              lambda_get_closure_attrs(ctx->self->transient, node->lambda_function.attributes);
-            if (attrs.has_capture) {
-                for (u8 i = 0; i < attrs.n_capture_names; i++) {
-                    if (!str_hset_contains(ctx->source_names, attrs.capture_names[i])) {
-                        array_push(ctx->self->errors,
-                                   ((tl_infer_error){.tag  = tl_err_capture_not_in_scope,
-                                                     .node = node,
-                                                     .message = attrs.capture_names[i]}));
-                        return; // report once per lambda
-                    }
-                }
-            }
-        }
-
-        // Add lambda parameters to scope and recurse into body.
-        hashmap *save = map_copy(ctx->source_names);
-        for (u8 i = 0; i < node->lambda_function.n_parameters; i++) {
-            str name = ast_node_name_original(node->lambda_function.parameters[i]);
-            str_hset_insert(&ctx->source_names, name);
-        }
-        check_capture_scope_walk(ctx, node->lambda_function.body);
-        map_destroy(&ctx->source_names);
-        ctx->source_names = save;
-    } break;
-
-    case ast_if_then_else:
-        check_capture_scope_walk(ctx, node->if_then_else.condition);
-        check_capture_scope_walk(ctx, node->if_then_else.yes);
-        check_capture_scope_walk(ctx, node->if_then_else.no);
-        break;
-
-    case ast_body:
-        for (u32 i = 0; i < node->body.expressions.size; i++)
-            check_capture_scope_walk(ctx, node->body.expressions.v[i]);
-        break;
-
-    case ast_binary_op:
-        check_capture_scope_walk(ctx, node->binary_op.left);
-        check_capture_scope_walk(ctx, node->binary_op.right);
-        break;
-
-    case ast_unary_op:
-        check_capture_scope_walk(ctx, node->unary_op.operand);
-        break;
-
-    case ast_named_function_application: {
-        ast_arguments_iter iter = ast_node_arguments_iter(node);
-        ast_node          *arg;
-        while ((arg = ast_arguments_next(&iter)))
-            check_capture_scope_walk(ctx, arg);
-    } break;
-
-    case ast_lambda_function_application:
-        check_capture_scope_walk(ctx, node->lambda_application.lambda);
-        for (u8 i = 0; i < node->lambda_application.n_arguments; i++)
-            check_capture_scope_walk(ctx, node->lambda_application.arguments[i]);
-        break;
-
-    case ast_return:
-        check_capture_scope_walk(ctx, node->return_.value);
-        break;
-
-    case ast_assignment:
-        check_capture_scope_walk(ctx, node->assignment.name);
-        check_capture_scope_walk(ctx, node->assignment.value);
-        break;
-
-    case ast_reassignment:
-    case ast_reassignment_op:
-        check_capture_scope_walk(ctx, node->assignment.name);
-        check_capture_scope_walk(ctx, node->assignment.value);
-        break;
-
-    case ast_while:
-        check_capture_scope_walk(ctx, node->while_.condition);
-        check_capture_scope_walk(ctx, node->while_.body);
-        break;
-
-    case ast_case:
-        check_capture_scope_walk(ctx, node->case_.expression);
-        for (u32 i = 0; i < node->case_.arms.size; i++)
-            check_capture_scope_walk(ctx, node->case_.arms.v[i]);
-        break;
-
-    case ast_tuple:
-        for (u8 i = 0; i < node->tuple.n_elements; i++)
-            check_capture_scope_walk(ctx, node->tuple.elements[i]);
-        break;
-
-    case ast_try:
-        check_capture_scope_walk(ctx, node->try_.operand);
-        break;
-
-    default:
-        // Leaf nodes (symbols, literals, etc.) — nothing to recurse into.
-        break;
-    }
-#ifndef _MSC_VER
-#pragma GCC diagnostic pop
-#endif
-}
-
-// Check capture scope for all toplevel functions.
-static void check_capture_scope(tl_infer *self) {
-    hashmap_iterator iter = {0};
-    ast_node        *node;
-    while ((node = toplevel_iter(self, &iter))) {
-        if (ast_node_is_utd(node)) continue;
-        if (!ast_node_is_let(node)) continue;
-
-        capture_scope_ctx ctx = {
-          .self         = self,
-          .source_names = hset_create(self->transient, 32),
-        };
-
-        // Add toplevel function parameters to scope.
-        for (u8 i = 0; i < node->let.n_parameters; i++) {
-            str name = ast_node_name_original(node->let.parameters[i]);
-            str_hset_insert(&ctx.source_names, name);
-        }
-
-        check_capture_scope_walk(&ctx, node->let.body);
-        map_destroy(&ctx.source_names);
-    }
-}
+// Capture names are alpha-converted during Phase 1 (infer_alpha.c).  Names that were in
+// lexical scope get renamed (e.g. n → tl_n_v36); names NOT in scope are left unchanged
+// (their symbol.original remains empty).  This lets us detect not-in-scope errors here
+// by checking whether a capture symbol was alpha-converted.
 
 // Collect free variables from a lambda body into a str_array, registering lambda parameters
-// as lexical names so they are excluded.  The caller provides the traverse callback (which
-// determines whether alpha-converted or original names are stored).
-static str_array collect_lambda_fvs(tl_infer *self, ast_node *node, traverse_cb cb) {
+// as lexical names so they are excluded.
+static str_array collect_lambda_fvs(tl_infer *self, ast_node *node) {
     collect_free_variables_ctx fv_ctx;
     fv_ctx.fvs = (str_array){.alloc = self->transient};
 
@@ -817,42 +650,15 @@ static str_array collect_lambda_fvs(tl_infer *self, ast_node *node, traverse_cb 
     for (u8 i = 0; i < node->lambda_function.n_parameters; i++)
         str_hset_insert(&inner->lexical_names, ast_node_str(node->lambda_function.parameters[i]));
 
-    traverse_ast(self, inner, node->lambda_function.body, cb);
+    traverse_ast(self, inner, node->lambda_function.body, collect_free_variables_cb);
     return fv_ctx.fvs;
-}
-
-// Callback that collects original (source) names of free variables.  Works like
-// collect_free_variables_cb but stores the symbol's original name (pre-alpha-conversion)
-// so the result can be compared against capture(...) attribute names which are also
-// un-converted source names.
-static int collect_free_variable_originals_cb(tl_infer *self, traverse_ctx *traverse_ctx,
-                                              ast_node *node) {
-    if (node->tag == ast_named_function_application) return 0; // skip transitive fvs for this check
-
-    if (ast_node_is_binary_op(node)) node = node->binary_op.left;
-    if (!can_be_free_variable(self, traverse_ctx, node)) return 0;
-
-    str name = ast_node_str(node);
-    if (resolve_node(self, node, traverse_ctx, traverse_ctx->node_pos)) return 1;
-
-    tl_polytype *type     = tl_type_env_lookup(self->env, name);
-    int          is_arrow = type && tl_monotype_is_arrow(type->type);
-
-    if (is_arrow || traverse_ctx_is_param(traverse_ctx, name)) return 0;
-
-    // Use the original (source) name if available, otherwise fall back to current name.
-    str orig = node->symbol.original;
-    if (str_is_empty(orig)) orig = name;
-
-    collect_free_variables_ctx *ctx = traverse_ctx->user;
-    str_array_set_insert(&ctx->fvs, orig);
-
-    return 0;
 }
 
 // Combined traversal callback: validates alloc/capture attribute combinations on lambdas.
 // For [[alloc]] without [[capture(...)]]: reports alloc_missing_capture if free vars exist.
 // For [[alloc, capture(...)]]: validates capture list matches detected free variables exactly.
+// Capture names are alpha-converted (Phase 1), so they can be compared directly against
+// alpha-converted free variable names from collect_free_variables_cb.
 static int check_closure_attrs_cb(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
     (void)ctx;
     if (node->tag != ast_lambda_function) return 0;
@@ -875,15 +681,29 @@ static int check_closure_attrs_cb(tl_infer *self, traverse_ctx *ctx, ast_node *n
 
     // [[alloc]] without [[capture(...)]]: check whether the body has free variables.
     if (!attrs.has_capture) {
-        str_array fvs = collect_lambda_fvs(self, node, collect_free_variables_cb);
+        str_array fvs = collect_lambda_fvs(self, node);
         if (fvs.size)
             array_push(self->errors,
                        ((tl_infer_error){.tag = tl_err_alloc_missing_capture, .node = node}));
         return 0;
     }
 
-    // [[alloc, capture(...)]]: validate capture list matches free variables.
-    str_array fvs = collect_lambda_fvs(self, node, collect_free_variable_originals_cb);
+    // [[alloc, capture(...)]]: first check that all capture names are in scope.
+    // A capture name that was NOT alpha-converted (symbol.original is empty) was not
+    // found in lexical scope during Phase 1.
+    for (u8 j = 0; j < attrs.n_capture_names; j++) {
+        ast_node *cap = attrs.capture_nodes[j];
+        if (ast_node_is_symbol(cap) && str_is_empty(cap->symbol.original)) {
+            array_push(self->errors,
+                       ((tl_infer_error){.tag     = tl_err_capture_not_in_scope,
+                                         .node    = node,
+                                         .message = cap->symbol.name}));
+            return 0;
+        }
+    }
+
+    // Validate capture list matches free variables exactly.
+    str_array fvs = collect_lambda_fvs(self, node);
 
     // Check that every detected free variable is listed in capture(...).
     forall(i, fvs) {
@@ -923,19 +743,13 @@ static int check_closure_attrs_cb(tl_infer *self, traverse_ctx *ctx, ast_node *n
 }
 
 void check_closure_alloc_capture(tl_infer *self) {
-    // First pass: validate that capture list names are in scope at the lambda definition site.
-    // This runs before free-variable checks so that "not in scope" errors take priority over
-    // "unused capture" errors, providing more specific diagnostics for typos.
-    check_capture_scope(self);
-    if (self->errors.size) return;
-
-    // Second pass: validate alloc/capture combinations and capture list contents.
     traverse_ctx    *traverse = traverse_ctx_create(self->transient);
     hashmap_iterator iter     = {0};
     ast_node        *node;
     while ((node = toplevel_iter(self, &iter))) {
         if (ast_node_is_utd(node)) continue;
         traverse_ast(self, traverse, node, check_closure_attrs_cb);
+        if (self->errors.size) return; // stop after first error
     }
 }
 

@@ -394,7 +394,8 @@ typedef struct {
     int       has_alloc;       // [[alloc]] or [[alloc(expr)]] present
     int       has_capture;     // [[capture(...)]] present
     ast_node *alloc_expr;      // allocator expression (NULL for default allocator)
-    str      *capture_names;   // array of captured variable names
+    str      *capture_names;   // array of captured variable names (alpha-converted)
+    ast_node **capture_nodes;  // parallel array: raw AST nodes for each capture name
     u8        n_capture_names; // count
 } lambda_closure_attrs;
 

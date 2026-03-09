@@ -1824,9 +1824,11 @@ lambda_closure_attrs lambda_get_closure_attrs(allocator *alloc, ast_node *attrib
                 u8 n = node->named_application.n_arguments;
                 if (n > 0) {
                     out.capture_names   = alloc_malloc(alloc, n * sizeof(str));
+                    out.capture_nodes   = alloc_malloc(alloc, n * sizeof(ast_node *));
                     out.n_capture_names = n;
                     for (u8 j = 0; j < n; ++j) {
-                        out.capture_names[j] = ast_node_str(node->named_application.arguments[j]);
+                        out.capture_nodes[j] = node->named_application.arguments[j];
+                        out.capture_names[j] = ast_node_str(out.capture_nodes[j]);
                     }
                 }
             }
