@@ -1,10 +1,10 @@
 #module Num
 
-Number : { val: Int }
+Number: { val: Int }
 
 add(a: Number, b: Number) -> Number { Number(val = a.val + b.val) }
 sub(a: Number, b: Number) -> Number { Number(val = a.val - b.val) }
-eq(a: Number, b: Number) -> Bool { a.val == b.val }
+eq (a: Number, b: Number) -> Bool   { a.val == b.val              }
 
 cmp(a: Number, b: Number) -> CInt {
     if a.val < b.val { -1 }
@@ -16,7 +16,7 @@ cmp(a: Number, b: Number) -> CInt {
 #module main
 
 // User-defined combined trait requiring both Add and Eq
-AddEq[T] : Add[T], Eq[T] { }
+AddEq[T]: Add[T], Eq[T] { }
 
 // Function using the combined trait
 add_if_different[T: AddEq](a: T, b: T) -> T {
@@ -44,8 +44,8 @@ pick_lesser[T: Ord, U: Eq](a: T, b: T, x: U, y: U) -> T {
 main() {
     error := 0
 
-    a := Num.Number(val = 3)
-    b := Num.Number(val = 7)
+    a    := Num.Number(val = 3)
+    b    := Num.Number(val = 7)
     same := Num.Number(val = 3)
 
     // add_if_different: different values -> adds them

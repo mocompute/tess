@@ -20,10 +20,10 @@ _alloc_inner[K, V](alloc: Ptr[Alloc.Allocator], n: UInt) -> Ptr[Inner[K, V]] {
 }
 
 make[K, V]() -> Ptr[Outer[K, V]] {
-    alloc := Alloc.context.default
+    alloc               := Alloc.context.default
     m: Ptr[Outer[K, V]] := alloc->malloc(alloc, sizeof[Outer[K, V]]())
     m->items = _alloc_inner[K, V](alloc, 16u)
-    m->size = 0u
+    m->size  = 0u
     m
 }
 

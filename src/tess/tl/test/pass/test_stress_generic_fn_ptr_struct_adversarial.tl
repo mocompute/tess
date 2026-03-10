@@ -12,7 +12,7 @@ Processor[T]: { run: (T) -> T }
 
 Maker[T]: { make: (T) -> Box[T] }
 
-wrap_int(x: Int) -> Box[Int] { Box(value = x) }
+wrap_int (x: Int)  -> Box[Int]  { Box(value = x) }
 wrap_bool(x: Bool) -> Box[Bool] { Box(value = x) }
 
 // --- Test 2: Generic struct with fn ptr inside tagged union ---
@@ -20,11 +20,11 @@ wrap_bool(x: Bool) -> Box[Bool] { Box(value = x) }
 MaybeProcessor[T]: | Active { proc: Processor[T] }
                    | Inactive
 
-double_int(x: Int) -> Int { x * 2 }
-triple_int(x: Int) -> Int { x * 3 }
-negate_int(x: Int) -> Int { 0 - x }
-not_bool(x: Bool) -> Bool { !x }
-id_bool(x: Bool) -> Bool { x }
+double_int(x: Int)  -> Int  { x * 2 }
+triple_int(x: Int)  -> Int  { x * 3 }
+negate_int(x: Int)  -> Int  { 0 - x }
+not_bool  (x: Bool) -> Bool { !x    }
+id_bool   (x: Bool) -> Bool { x     }
 
 try_process[T](mp: MaybeProcessor[T], val: T, fallback: T) -> T {
     when mp {
@@ -87,26 +87,26 @@ main() {
     error += if b3.value == 99 { 0 } else { 1 }
 
     // Test 2a: Tagged union Active with Processor[Int] inside
-    p_int := Processor(run = double_int/1)
+    p_int      := Processor(run = double_int/1)
     active_int := Active(proc = p_int)
-    r1 := try_process(active_int, 20, 0)
+    r1         := try_process(active_int, 20, 0)
     error += if r1 == 40 { 0 } else { 1 }
 
     // Test 2b: Tagged union Inactive
     inactive: MaybeProcessor[Int] := Inactive()
-    r2 := try_process(inactive, 20, -1)
+    r2                            := try_process(inactive, 20, -1)
     error += if r2 == -1 { 0 } else { 1 }
 
     // Test 2c: Tagged union Active with Processor[Bool]
-    p_bool := Processor(run = not_bool/1)
+    p_bool      := Processor(run = not_bool/1)
     active_bool := Active(proc = p_bool)
-    r3 := try_process(active_bool, false, false)
+    r3          := try_process(active_bool, false, false)
     error += if r3 == true { 0 } else { 1 }
 
     // Test 2d: Tagged union with different processor in same type
-    p_int2 := Processor(run = negate_int/1)
+    p_int2     := Processor(run = negate_int/1)
     active_neg := Active(proc = p_int2)
-    r4 := try_process(active_neg, 7, 0)
+    r4         := try_process(active_neg, 7, 0)
     error += if r4 == -7 { 0 } else { 1 }
 
     // Test 3: Chain - fn ptr returns struct whose fn ptr is then called
@@ -139,7 +139,7 @@ main() {
     error += if r9 == 15 { 0 } else { 1 }
 
     // Test 5: Outer[Int] - two-level nesting
-    o1 := Outer(get_inner = make_processor_from_int/1)
+    o1  := Outer(get_inner = make_processor_from_int/1)
     r10 := outer_chain(o1, 10)
     // make_processor_from_int(10) returns Processor with run=triple_int
     // then run(10) = 30

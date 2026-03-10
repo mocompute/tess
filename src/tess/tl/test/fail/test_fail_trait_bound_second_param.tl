@@ -1,6 +1,6 @@
 #module Foo
 
-Thing : { x: Int }
+Thing: { x: Int }
 
 // Thing has no eq -- does not satisfy Eq
 

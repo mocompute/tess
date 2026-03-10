@@ -6,7 +6,7 @@
 
 main() {
     n: Int := 10
-    f      :=[[alloc, capture(n)]](x) { x + n }
+    f      := [[alloc, capture(n)]] (x) { x + n }
 
     error: CInt := 0
     error += if f(5) == 15 { 0 } else { 1 }

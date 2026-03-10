@@ -14,10 +14,10 @@ test_when_as_argument() {
     s := Circle(5)
 
     result := pick_value(when s {
-        c: Circle { c.radius * 2 }
-        sq: Square { sq.length }
-        n: MyNone { 0 }
-    })
+                         c:  Circle { c.radius * 2 }
+                         sq: Square { sq.length }
+                         n:  MyNone { 0 }
+                         })
     if result == 10 {0} else {1}
 }
 
@@ -29,12 +29,12 @@ test_when_inside_when() {
     result := when s {
         ci: Circle {
             when c {
-                r: Red  { ci.radius + r.intensity }
+                r: Red { ci.radius + r.intensity }
                 b: Blue { ci.radius + b.intensity }
             }
         }
         sq: Square { 0 }
-        n: MyNone { 0 }
+        n:  MyNone { 0 }
     }
     if result == 13 {0} else {1}
 }
@@ -46,15 +46,15 @@ test_when_in_while() {
     shapes.[1] = Square(2)
     shapes.[2] = Circle(3)
 
-    sum := 0
-    i := 0
+    sum             := 0
+    i               := 0
     ptr: Ptr[Shape] := shapes
     while i < 3, i = i + 1 {
         elem := ptr.[i]
         sum = sum + when elem {
-            c: Circle { c.radius }
+            c:  Circle { c.radius }
             sq: Square { sq.length }
-            n: MyNone { 0 }
+            n:  MyNone { 0 }
         }
     }
     // 1 + 2 + 3 = 6
@@ -86,7 +86,7 @@ test_mutable_nested_in_immutable() {
             // Mutable when on inner
             when inner.& {
                 sq: Square { sq->length = 42
-                             sq->length }
+                    sq->length }
                 else { 0 }
             }
         }

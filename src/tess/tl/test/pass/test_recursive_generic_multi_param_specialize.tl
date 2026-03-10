@@ -7,11 +7,11 @@ KVList[K, V]: | Entry { key: K, val: V, next: Ptr[KVList[K, V]] }
 main() {
     // Specialization 1: KVList[Int, Bool]
     a_end: KVList[Int, Bool] := End()
-    a := Entry(key = 1, val = true, next = a_end.&)
+    a                        := Entry(key = 1, val = true, next = a_end.&)
 
     // Specialization 2: KVList[Bool, Int]
     b_end: KVList[Bool, Int] := End()
-    b := Entry(key = true, val = 42, next = b_end.&)
+    b                        := Entry(key = true, val = 42, next = b_end.&)
 
     error := 0
 

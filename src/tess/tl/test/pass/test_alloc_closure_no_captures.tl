@@ -11,9 +11,9 @@ make_doubler() -> (Int) -> Int {
 }
 
 main() {
-    f := make_doubler()
+    f     := make_doubler()
     error := 0
     error += if f(21) == 42 { 0 } else { 1 }
-    error += if f(0)  == 0  { 0 } else { 1 }
+    error += if f(0) == 0 { 0 } else { 1 }
     error
 }

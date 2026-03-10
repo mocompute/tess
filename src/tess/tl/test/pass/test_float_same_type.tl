@@ -8,12 +8,12 @@ main() {
     // Same-type arithmetic
     a: CFloat := 1.5
     b: CFloat := 2.5
-    c := a + b
+    c         := a + b
     error += if c == 4.0 {0} else {1}
 
     d: CDouble := 10.0
     e: CDouble := 3.0
-    f := d - e
+    f          := d - e
     error += if f == 7.0 {0} else {1}
 
     // Same-type comparison

@@ -50,7 +50,7 @@ main() {
 
     // Test 7: Decay array to pointer and invoke
     ptr: Ptr[FnHolder] := fns
-    result7 := ptr.[1].fn(4)             // triple(4) = 12
+    result7            := ptr.[1].fn(4) // triple(4) = 12
     error += if result7 == 12 {0} else {1}
 
     error

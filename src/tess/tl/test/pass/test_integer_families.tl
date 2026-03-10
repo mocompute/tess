@@ -120,7 +120,7 @@ test_narrow_signed() {
     error := 0
 
     x: CInt8 := 42
-    y: Int   := x    // narrow signed -> canonical signed: same family, OK
+    y: Int   := x                       // narrow signed -> canonical signed: same family, OK
     error += if y == 42 {0} else {1}
 
     // CInt8 preserves its size (1 byte) despite unifying with Int
@@ -138,7 +138,7 @@ test_narrow_unsigned() {
     error := 0
 
     x: CUInt8 := 200u
-    y: UInt   := x    // narrow unsigned -> canonical unsigned: same family, OK
+    y: UInt   := x                      // narrow unsigned -> canonical unsigned: same family, OK
     error += if y == 200u {0} else {1}
 
     error += if sizeof[CUInt8]() == 1zu {0} else {1}

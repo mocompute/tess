@@ -9,7 +9,7 @@ mutate_indirect(pp: Ptr[Ptr[Int]]) {
 
 // Passing Ptr[Ptr[Const[Int]]] where Ptr[Ptr[Int]] is expected should fail
 pass_nested_const(pp: Ptr[Ptr[Const[Int]]]) {
-    mutate_indirect(pp)    // error: cannot strip const
+    mutate_indirect(pp)                 // error: cannot strip const
 }
 
 main() {

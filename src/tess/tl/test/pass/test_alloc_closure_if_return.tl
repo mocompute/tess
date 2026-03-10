@@ -16,8 +16,8 @@ pick(use_add: Bool, n: Int) -> (Int) -> Int {
 }
 
 main() {
-    add5 := pick(true, 5)
-    mul5 := pick(false, 5)
+    add5        := pick(true, 5)
+    mul5        := pick(false, 5)
     error: CInt := 0
     error += if add5(10) == 15 { 0 } else { 1 }
     error += if mul5(10) == 50 { 0 } else { 1 }

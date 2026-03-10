@@ -3,9 +3,9 @@
 
 #module Num
 
-Number : { val: Int }
+Number: { val: Int }
 
-eq(a: Number, b: Number) -> Bool { a.val == b.val }
+eq (a: Number, b: Number) -> Bool   { a.val == b.val              }
 add(a: Number, b: Number) -> Number { Number(val = a.val + b.val) }
 
 cmp(a: Number, b: Number) -> CInt {
@@ -19,14 +19,14 @@ cmp(a: Number, b: Number) -> CInt {
 // A is the base trait
 // B and C both inherit from Eq
 // D inherits from both B and C — diamond pattern
-B[T] : Eq[T] {
+B[T]: Eq[T] {
     foo(a: T) -> T
 }
 
-C[T] : Eq[T] {
+C[T]: Eq[T] {
     bar(a: T) -> T
 }
 
-D[T] : B[T], C[T] { }
+D[T]: B[T], C[T] { }
 
 main() { 0 }

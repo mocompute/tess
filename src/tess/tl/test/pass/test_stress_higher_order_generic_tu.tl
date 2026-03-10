@@ -7,7 +7,7 @@ Opt[T]: | Val { v: T }
 // --- map: apply function to value inside tagged union ---
 opt_map[T, U](o: Opt[T], f) -> Opt[U] {
     when o {
-        s: Val  { Val(f(s.v)) }
+        s: Val { Val(f(s.v)) }
         n: Nope { Nope() }
     }
 }
@@ -15,7 +15,7 @@ opt_map[T, U](o: Opt[T], f) -> Opt[U] {
 // --- flatmap / monadic bind ---
 opt_flatmap[T, U](o: Opt[T], f) -> Opt[U] {
     when o {
-        s: Val  { f(s.v) }
+        s: Val { f(s.v) }
         n: Nope { Nope() }
     }
 }
@@ -23,17 +23,19 @@ opt_flatmap[T, U](o: Opt[T], f) -> Opt[U] {
 // --- unwrap with default ---
 opt_unwrap[T](o: Opt[T], def: T) -> T {
     when o {
-        s: Val  { s.v }
+        s: Val { s.v }
         n: Nope { def }
     }
 }
 
 // --- concrete helper functions ---
-double_int(x: Int) -> Int { x * 2 }
-add_ten(x: Int) -> Int { x + 10 }
+double_int(x: Int) -> Int { x * 2  }
+add_ten   (x: Int) -> Int { x + 10 }
+
 safe_div(x: Int) -> Opt[Int] {
     if x == 0 { Nope() } else { Val(100 / x) }
 }
+
 int_to_positive(x: Int) -> Opt[Int] {
     if x > 0 { Val(x) } else { Nope() }
 }
@@ -42,7 +44,7 @@ int_to_positive(x: Int) -> Opt[Int] {
 call_and_unwrap(f, arg: Int, def: Int) -> Int {
     result: Opt[Int] := f(arg)
     when result {
-        s: Val  { s.v }
+        s: Val { s.v }
         n: Nope { def }
     }
 }
@@ -62,7 +64,7 @@ main() {
 
     // Test 2: map over Nope
     n1: Opt[Int] := Nope()
-    r2 := opt_map(n1, double_int/1)
+    r2           := opt_map(n1, double_int/1)
     error += if opt_unwrap(r2, 0) == 0 {0} else {1}
 
     // Test 3: flatmap with success
@@ -100,20 +102,20 @@ main() {
     error += if opt_unwrap(r11, 0) == 16 {0} else {1}
 
     // Test 10: multiple map calls chained
-    v6 := Val(1)
+    v6  := Val(1)
     r12 := opt_map(v6, double_int/1)
     r13 := opt_map(r12, double_int/1)
     r14 := opt_map(r13, add_ten/1)
     error += if opt_unwrap(r14, 0) == 14 {0} else {1}
 
     // Test 11: flatmap chain (monadic pipeline)
-    v7 := Val(2)
+    v7  := Val(2)
     r15 := opt_flatmap(v7, safe_div/1)
     r16 := opt_flatmap(r15, int_to_positive/1)
     error += if opt_unwrap(r16, 0) == 50 {0} else {1}
 
     // Test 12: map with lambda
-    v8 := Val(7)
+    v8  := Val(7)
     r17 := opt_map(v8, (x: Int) { x * x })
     error += if opt_unwrap(r17, 0) == 49 {0} else {1}
 

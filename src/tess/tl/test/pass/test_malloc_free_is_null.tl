@@ -3,8 +3,8 @@
 
 #include <stdlib.h>
 
-c_malloc (count: Int) -> Ptr[Void]
-c_free[T] (ptr: Ptr[T]) -> Void
+c_malloc (count: Int)  -> Ptr[Void]
+c_free[T](ptr: Ptr[T]) -> Void
 
 main() {
     p: Ptr[Void] := c_malloc(16)

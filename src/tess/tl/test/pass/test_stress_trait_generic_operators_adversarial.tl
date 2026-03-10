@@ -5,10 +5,11 @@
 // --- Module P: a pair type with Add, Eq, Ord ---
 #module Pair
 
-T : { x: Int, y: Int }
+T: { x: Int, y: Int }
 
-add(a: T, b: T) -> T { T(x = a.x + b.x, y = a.y + b.y) }
-eq(a: T, b: T) -> Bool { a.x == b.x && a.y == b.y }
+add(a: T, b: T) -> T    { T(x = a.x + b.x, y = a.y + b.y) }
+eq (a: T, b: T) -> Bool { a.x == b.x && a.y == b.y        }
+
 cmp(a: T, b: T) -> CInt {
     if a.x < b.x { -1 }
     else if a.x > b.x { 1 }
@@ -20,10 +21,11 @@ cmp(a: T, b: T) -> CInt {
 // --- Module W: a weight type with Add, Eq, Ord ---
 #module Weight
 
-T : { grams: Int }
+T: { grams: Int }
 
-add(a: T, b: T) -> T { T(grams = a.grams + b.grams) }
-eq(a: T, b: T) -> Bool { a.grams == b.grams }
+add(a: T, b: T) -> T    { T(grams = a.grams + b.grams) }
+eq (a: T, b: T) -> Bool { a.grams == b.grams           }
+
 cmp(a: T, b: T) -> CInt {
     if a.grams < b.grams { -1 }
     else if a.grams > b.grams { 1 }
@@ -33,11 +35,12 @@ cmp(a: T, b: T) -> CInt {
 // --- Module S: a score type with Add, Eq, Ord, Sub ---
 #module Score
 
-T : { points: Int }
+T: { points: Int }
 
-add(a: T, b: T) -> T { T(points = a.points + b.points) }
-sub(a: T, b: T) -> T { T(points = a.points - b.points) }
-eq(a: T, b: T) -> Bool { a.points == b.points }
+add(a: T, b: T) -> T    { T(points = a.points + b.points) }
+sub(a: T, b: T) -> T    { T(points = a.points - b.points) }
+eq (a: T, b: T) -> Bool { a.points == b.points            }
+
 cmp(a: T, b: T) -> CInt {
     if a.points < b.points { -1 }
     else if a.points > b.points { 1 }
@@ -69,8 +72,8 @@ full_ord_test[T: Ord](a: T, b: T) -> Int {
 }
 
 // --- 3. Combined traits ---
-AddEq[T] : Add[T], Eq[T] { }
-AddSub[T] : Add[T], Sub[T] { }
+AddEq[T]:  Add[T], Eq[T]  { }
+AddSub[T]: Add[T], Sub[T] { }
 
 // Uses both + and == in one function
 add_if_different[T: AddEq](a: T, b: T) -> T {
@@ -84,8 +87,8 @@ add_then_sub[T: AddSub](a: T, b: T, c: T) -> T {
 }
 
 // --- 4. Nested generic calls at different trait levels ---
-inner_sum[T: Add](a: T, b: T) -> T { a + b }
-outer_check[T: Eq](a: T, b: T) -> Bool { a == b }
+inner_sum[T:   Add](a: T, b: T) -> T    { a + b  }
+outer_check[T: Eq] (a: T, b: T) -> Bool { a == b }
 
 nested_sum_then_check[T: AddEq](a: T, b: T, expected: T) -> Bool {
     result := inner_sum(a, b)
@@ -116,7 +119,7 @@ clamp_val[T: Ord](val: T, lo: T, hi: T) -> T {
 
 // --- 7. Trait bounds with conditional logic across operators ---
 // Given three values, return the sum of the two smallest (requires Ord + Add)
-AddOrd[T] : Add[T], Ord[T] { }
+AddOrd[T]: Add[T], Ord[T] { }
 
 sum_two_smallest[T: AddOrd](a: T, b: T, c: T) -> T {
     if a >= b && a >= c { b + c }
@@ -202,19 +205,19 @@ main() {
 
     // --- Test 5: Chained adds through multiple generic calls ---
     r_chain := chain_four_adds(
-        Weight(grams = 10),
-        Weight(grams = 20),
-        Weight(grams = 30),
-        Weight(grams = 40)
-    )
+                               Weight(grams = 10),
+                               Weight(grams = 20),
+                               Weight(grams = 30),
+                               Weight(grams = 40)
+                               )
     error += if r_chain.grams == 100 { 0 } else { 1 }
 
     r_chain_p := chain_four_adds(
-        Pair(x = 1, y = 0),
-        Pair(x = 0, y = 1),
-        Pair(x = 2, y = 0),
-        Pair(x = 0, y = 2)
-    )
+                                 Pair(x = 1, y = 0),
+                                 Pair(x = 0, y = 1),
+                                 Pair(x = 2, y = 0),
+                                 Pair(x = 0, y = 2)
+                                 )
     error += if r_chain_p.x == 3 && r_chain_p.y == 3 { 0 } else { 1 }
 
     // --- Test 6: Clamp via Ord ---

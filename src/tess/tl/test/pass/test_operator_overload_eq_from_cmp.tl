@@ -4,7 +4,7 @@
 
 #module Val
 
-Value : { n: Int }
+Value: { n: Int }
 
 // Only cmp — no eq function
 cmp(a: Value, b: Value) -> CInt {

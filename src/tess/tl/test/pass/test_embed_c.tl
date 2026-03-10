@@ -10,6 +10,6 @@ int add(int a, int b) { return a + b; }
 c_add(a: Int, b: Int) -> Int
 
 main() {
-    result : CInt := c_add(-1, 1)
+    result: CInt := c_add(-1, 1)
     result
 }

@@ -6,7 +6,7 @@
 
 test_create_destroy() {
     error := 0
-    m := HashMap.create[Int, Int]()
+    m     := HashMap.create[Int, Int]()
     if HashMap.size(m) != 0u { error += 1 }
     if !HashMap.is_empty(m) { error += 1 }
     HashMap.destroy(m)
@@ -15,7 +15,7 @@ test_create_destroy() {
 
 test_set_get() {
     error := 0
-    m := HashMap.create[Int, Int]()
+    m     := HashMap.create[Int, Int]()
 
     HashMap.set(m, 1, 100)
     HashMap.set(m, 2, 200)
@@ -45,7 +45,7 @@ test_set_get() {
 
 test_get_copy() {
     error := 0
-    m := HashMap.create[Int, Int]()
+    m     := HashMap.create[Int, Int]()
     HashMap.set(m, 42, 84)
 
     opt := HashMap.get_copy(m, 42)
@@ -66,13 +66,13 @@ test_get_copy() {
 
 test_contains() {
     error := 0
-    m := HashMap.create[Int, Int]()
+    m     := HashMap.create[Int, Int]()
     HashMap.set(m, 10, 1)
     HashMap.set(m, 20, 2)
 
     if !HashMap.contains(m, 10) { error += 1 }
     if !HashMap.contains(m, 20) { error += 1 }
-    if HashMap.contains(m, 30)  { error += 1 }
+    if HashMap.contains(m, 30) { error += 1 }
 
     HashMap.destroy(m)
     error
@@ -80,7 +80,7 @@ test_contains() {
 
 test_overwrite() {
     error := 0
-    m := HashMap.create[Int, Int]()
+    m     := HashMap.create[Int, Int]()
 
     HashMap.set(m, 1, 100)
     if HashMap.size(m) != 1u { error += 1 }
@@ -98,7 +98,7 @@ test_overwrite() {
 
 test_remove() {
     error := 0
-    m := HashMap.create[Int, Int]()
+    m     := HashMap.create[Int, Int]()
 
     HashMap.set(m, 1, 10)
     HashMap.set(m, 2, 20)
@@ -131,7 +131,7 @@ test_remove() {
 
 test_grow() {
     error := 0
-    m := HashMap.create[Int, Int]()
+    m     := HashMap.create[Int, Int]()
 
     // Insert enough entries to trigger multiple resizes (default cap = 16, grows at 85%)
     n := 200
@@ -156,7 +156,7 @@ test_grow() {
 
 test_clear() {
     error := 0
-    m := HashMap.create[Int, Int]()
+    m     := HashMap.create[Int, Int]()
 
     HashMap.set(m, 1, 10)
     HashMap.set(m, 2, 20)
@@ -164,7 +164,7 @@ test_clear() {
 
     HashMap.clear(m)
     if HashMap.size(m) != 0u { error += 1 }
-    if !HashMap.is_empty(m)  { error += 1 }
+    if !HashMap.is_empty(m) { error += 1 }
     if HashMap.contains(m, 1) { error += 1 }
 
     // Can still insert after clear
@@ -180,7 +180,7 @@ test_clear() {
 
 test_keys_values() {
     error := 0
-    m := HashMap.create[Int, Int]()
+    m     := HashMap.create[Int, Int]()
 
     HashMap.set(m, 1, 10)
     HashMap.set(m, 2, 20)
@@ -227,13 +227,13 @@ test_keys_values() {
 
 test_empty_map() {
     error := 0
-    m := HashMap.create[Int, Int]()
+    m     := HashMap.create[Int, Int]()
 
     if HashMap.get(m, 1) != null { error += 1 }
-    if HashMap.contains(m, 1)     { error += 1 }
-    if HashMap.remove(m, 1)       { error += 1 }
-    if HashMap.size(m) != 0u      { error += 1 }
-    if !HashMap.is_empty(m)       { error += 1 }
+    if HashMap.contains(m, 1) { error += 1 }
+    if HashMap.remove(m, 1) { error += 1 }
+    if HashMap.size(m) != 0u { error += 1 }
+    if !HashMap.is_empty(m) { error += 1 }
 
     opt := HashMap.get_copy(m, 1)
     when opt {
@@ -264,8 +264,8 @@ _custom_eq(a: Ptr[Int], b: Ptr[Int]) -> Bool {
 
 test_custom_hash_eq() {
     error := 0
-    opts := HashMap.HashMapOpts[Int](hash = _custom_hash/1, eq = _custom_eq/2, capacity = 8u)
-    m := HashMap.create[Int, Int](Alloc.context.default, opts)
+    opts  := HashMap.HashMapOpts[Int](hash = _custom_hash/1, eq = _custom_eq/2, capacity = 8u)
+    m     := HashMap.create[Int, Int](Alloc.context.default, opts)
 
     HashMap.set(m, 5, 50)
     HashMap.set(m, 10, 100)
@@ -288,7 +288,7 @@ Point: { x: Int, y: Int }
 
 test_struct_keys() {
     error := 0
-    m := HashMap.create[Point, Int]()
+    m     := HashMap.create[Point, Int]()
 
     p1 := Point(x = 1, y = 2)
     p2 := Point(x = 3, y = 4)
@@ -318,7 +318,7 @@ test_struct_keys() {
 
 test_remove_and_reinsert() {
     error := 0
-    m := HashMap.create[Int, Int]()
+    m     := HashMap.create[Int, Int]()
 
     HashMap.set(m, 1, 10)
     HashMap.set(m, 2, 20)
@@ -345,8 +345,8 @@ _colliding_hash(key: Ptr[Int]) -> UInt {
 
 test_collision_stress() {
     error := 0
-    opts := HashMap.HashMapOpts[Int](hash = _colliding_hash/1, eq = _custom_eq/2, capacity = 8u)
-    m := HashMap.create[Int, Int](Alloc.context.default, opts)
+    opts  := HashMap.HashMapOpts[Int](hash = _colliding_hash/1, eq = _custom_eq/2, capacity = 8u)
+    m     := HashMap.create[Int, Int](Alloc.context.default, opts)
 
     // Insert 32 entries — all land in buckets 0-3, forces Robin Hood swaps
     n := 32
@@ -398,7 +398,7 @@ test_collision_stress() {
 
 test_large_remove() {
     error := 0
-    m := HashMap.create[Int, Int]()
+    m     := HashMap.create[Int, Int]()
 
     // Insert 200, remove all, verify empty
     n := 200
@@ -434,7 +434,7 @@ test_large_remove() {
 
 test_zero_and_negative_keys() {
     error := 0
-    m := HashMap.create[Int, Int]()
+    m     := HashMap.create[Int, Int]()
 
     HashMap.set(m, 0, 100)
     HashMap.set(m, -1, 200)
@@ -465,7 +465,7 @@ test_zero_and_negative_keys() {
 
 test_struct_values() {
     error := 0
-    m := HashMap.create[Int, Point]()
+    m     := HashMap.create[Int, Point]()
 
     HashMap.set(m, 1, Point(x = 10, y = 20))
     HashMap.set(m, 2, Point(x = 30, y = 40))
@@ -494,7 +494,7 @@ test_struct_values() {
 
 test_create_with_alloc() {
     error := 0
-    m := HashMap.create[Int, Int](Alloc.context.default)
+    m     := HashMap.create[Int, Int](Alloc.context.default)
 
     HashMap.set(m, 1, 10)
     HashMap.set(m, 2, 20)
@@ -510,14 +510,14 @@ test_create_with_alloc() {
 
 test_keys_values_with_alloc() {
     error := 0
-    m := HashMap.create[Int, Int]()
+    m     := HashMap.create[Int, Int]()
 
     HashMap.set(m, 1, 10)
     HashMap.set(m, 2, 20)
 
     alloc := Alloc.context.default
-    ks := HashMap.keys(m, alloc)
-    vs := HashMap.values(m, alloc)
+    ks    := HashMap.keys(m, alloc)
+    vs    := HashMap.values(m, alloc)
 
     if ks.size != 2u { error += 1 }
     if vs.size != 2u { error += 1 }
@@ -550,7 +550,7 @@ test_keys_values_with_alloc() {
 
 test_remove_then_grow() {
     error := 0
-    m := HashMap.create[Int, Int]()
+    m     := HashMap.create[Int, Int]()
 
     // Fill up, remove half, then insert enough to trigger growth
     i := 0
@@ -631,7 +631,7 @@ test_default_eq() {
     // Structs with any different field must not match
     if HashMap.get(m2, Point(x = 10, y = 21)) != null { error += 1 }
     if HashMap.get(m2, Point(x = 11, y = 20)) != null { error += 1 }
-    if HashMap.get(m2, Point(x = 0, y = 0))   != null { error += 1 }
+    if HashMap.get(m2, Point(x = 0, y = 0)) != null { error += 1 }
 
     HashMap.destroy(m)
     HashMap.destroy(m2)

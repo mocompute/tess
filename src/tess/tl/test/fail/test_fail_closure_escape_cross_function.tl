@@ -7,7 +7,7 @@
 
 a() -> Int {
     n := 1
-    f :=[[alloc, capture(n)]](x) { x + n }
+    f := [[alloc, capture(n)]] (x) { x + n }
     f(1)
 }
 

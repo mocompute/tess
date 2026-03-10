@@ -10,7 +10,7 @@ make_adder(n: Int) -> (Int) -> Int {
 }
 
 main() {
-    add5 := make_adder(5)
+    add5        := make_adder(5)
     error: CInt := 0
     error += if add5(10) == 15 { 0 } else { 1 }
     error

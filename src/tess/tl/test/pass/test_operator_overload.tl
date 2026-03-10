@@ -1,6 +1,6 @@
 #module Vec
 
-Vec3 : { x: Int, y: Int, z: Int }
+Vec3: { x: Int, y: Int, z: Int }
 
 add(a: Vec3, b: Vec3) -> Vec3 {
     Vec3(x = a.x + b.x, y = a.y + b.y, z = a.z + b.z)

@@ -16,11 +16,11 @@ count[T](p: Ptr[Tree[T]]) -> Int {
 main() {
     // Tree[Int]
     leaf_i: Tree[Int] := Leaf()
-    node_i := Node(val = 42, left = leaf_i.&, right = leaf_i.&)
+    node_i            := Node(val = 42, left = leaf_i.&, right = leaf_i.&)
 
     // Tree[Bool]
     leaf_b: Tree[Bool] := Leaf()
-    node_b := Node(val = true, left = leaf_b.&, right = leaf_b.&)
+    node_b             := Node(val = true, left = leaf_b.&, right = leaf_b.&)
 
     error := 0
     error += if count(node_i.&) == 1 { 0 } else { 1 }

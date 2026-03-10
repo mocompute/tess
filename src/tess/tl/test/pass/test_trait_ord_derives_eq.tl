@@ -3,7 +3,7 @@
 
 #module Foo
 
-Thing : { val: Int }
+Thing: { val: Int }
 
 cmp(a: Thing, b: Thing) -> CInt {
     if a.val < b.val { -1 }

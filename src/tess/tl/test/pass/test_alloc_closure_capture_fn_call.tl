@@ -14,8 +14,8 @@ add_layer(base: (Int) -> Int, extra: Int) -> (Int) -> Int {
 }
 
 main() {
-    base := make_base(10)
-    l1   := add_layer(base, 5)
+    base        := make_base(10)
+    l1          := add_layer(base, 5)
     error: CInt := 0
     error += if l1(0) == 15 { 0 } else { 1 }
     error

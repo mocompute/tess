@@ -1,7 +1,7 @@
 #module Wrapper
 
 // A simple generic wrapper type
-Pair[A] : { fst: A, snd: A }
+Pair[A]: { fst: A, snd: A }
 
 // Conditional conformance: Pair[T] satisfies Eq when T satisfies Eq
 eq[T: Eq](a: Pair[T], b: Pair[T]) -> Bool {
@@ -17,7 +17,7 @@ add[T: Add](a: Pair[T], b: Pair[T]) -> Pair[T] {
 #module Container
 
 // A second generic wrapper — enables transitive conditional conformance
-Box[A] : { inner: A }
+Box[A]: { inner: A }
 
 eq[T: Eq](a: Box[T], b: Box[T]) -> Bool {
     a.inner == b.inner
@@ -30,9 +30,9 @@ add[T: Add](a: Box[T], b: Box[T]) -> Box[T] {
 
 #module Num
 
-Number : { val: Int }
+Number: { val: Int }
 
-eq(a: Number, b: Number) -> Bool { a.val == b.val }
+eq (a: Number, b: Number) -> Bool   { a.val == b.val              }
 add(a: Number, b: Number) -> Number { Number(val = a.val + b.val) }
 
 

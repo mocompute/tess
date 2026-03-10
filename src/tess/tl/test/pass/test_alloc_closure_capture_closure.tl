@@ -10,7 +10,7 @@ make_adder(n: Int) -> (Int) -> Int {
 
 apply_twice(f: (Int) -> Int, x: Int) -> (Int) -> Int {
     result := f(f(x))
-    g := [[alloc, capture(result)]] (y) { result + y }
+    g      := [[alloc, capture(result)]] (y) { result + y }
     g
 }
 

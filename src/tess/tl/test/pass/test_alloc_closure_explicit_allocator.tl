@@ -10,7 +10,7 @@ make_adder(n: Int, a: Ptr[Alloc.Allocator]) -> (Int) -> Int {
 
 main() {
     // Use the default allocator explicitly
-    a := Alloc.context.default
+    a     := Alloc.context.default
     add10 := make_adder(10, a)
 
     error := 0

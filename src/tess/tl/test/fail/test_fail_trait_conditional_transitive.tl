@@ -1,6 +1,6 @@
 #module Wrapper
 
-Pair[A] : { fst: A, snd: A }
+Pair[A]: { fst: A, snd: A }
 
 eq[T: Eq](a: Pair[T], b: Pair[T]) -> Bool {
     a.fst == b.fst && a.snd == b.snd
@@ -9,7 +9,7 @@ eq[T: Eq](a: Pair[T], b: Pair[T]) -> Bool {
 
 #module Container
 
-Box[A] : { inner: A }
+Box[A]: { inner: A }
 
 eq[T: Eq](a: Box[T], b: Box[T]) -> Bool {
     a.inner == b.inner
@@ -19,7 +19,7 @@ eq[T: Eq](a: Box[T], b: Box[T]) -> Bool {
 #module NoEq
 
 // A type with NO eq function
-Thing : { x: Int }
+Thing: { x: Int }
 
 
 #module main

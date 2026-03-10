@@ -5,18 +5,18 @@
 
 // --- Generic helpers ---
 
-identity[T](x: T) -> T { x }
-wrap[T](x: T) -> T { x }
-double[T](x: T) -> T { x + x }
+identity[T](x: T) -> T { x     }
+wrap[T]    (x: T) -> T { x     }
+double[T]  (x: T) -> T { x + x }
 
-Pair[T]: { first: T, second: T }
+Pair[T]:                            { first: T, second: T         }
 make_pair[T](a: T, b: T) -> Pair[T] { Pair(first = a, second = b) }
 
-Box[T]: { v: T }
+Box[T]:                     { v: T       }
 make_box[T](x: T) -> Box[T] { Box(v = x) }
 
 MyOpt[T]: | MySome { v: T }
-           | MyNone
+          | MyNone
 
 // --- 1. Generic function called with weak int literals ---
 test_generic_with_weak_literal() {
@@ -48,7 +48,7 @@ test_nested_generic_calls() {
 // --- 3. Store weak int in generic struct ---
 test_weak_int_in_generic_struct() {
     error := 0
-    b := make_box(42)
+    b     := make_box(42)
     error += if b.v == 42 {0} else {1}
     b2 := make_box(77u)
     error += if b2.v == 77u {0} else {1}
@@ -58,7 +58,7 @@ test_weak_int_in_generic_struct() {
 // --- 4. Multiple weak int literals that must unify in a generic call ---
 test_pair_weak_ints() {
     error := 0
-    p := make_pair(1, 2)
+    p     := make_pair(1, 2)
     error += if p.first == 1 {0} else {1}
     error += if p.second == 2 {0} else {1}
     // Unsigned pair
@@ -71,7 +71,7 @@ test_pair_weak_ints() {
 // --- 5. Weak unsigned literals through generics ---
 test_unsigned_through_generics() {
     error := 0
-    r := double(5u)
+    r     := double(5u)
     error += if r == 10u {0} else {1}
     r2 := identity(wrap(255u))
     error += if r2 == 255u {0} else {1}
@@ -131,9 +131,9 @@ test_generic_calls_generic() {
 // --- 8. Chain of 3+ generic calls, each passing weak int through ---
 
 step1[T](x: T) -> T { identity(x) }
-step2[T](x: T) -> T { step1(x) }
-step3[T](x: T) -> T { step2(x) }
-step4[T](x: T) -> T { step3(x) }
+step2[T](x: T) -> T { step1(x)    }
+step3[T](x: T) -> T { step2(x)    }
+step4[T](x: T) -> T { step3(x)    }
 
 test_deep_generic_chain() {
     error := 0

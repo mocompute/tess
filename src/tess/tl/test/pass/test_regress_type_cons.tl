@@ -2,7 +2,7 @@
 
 #module Foo
 
-Span[T] : { v: Ptr[T], sz: CSize }
+Span[T]: { v: Ptr[T], sz: CSize }
 
 #module main
 

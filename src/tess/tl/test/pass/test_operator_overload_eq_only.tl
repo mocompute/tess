@@ -1,6 +1,6 @@
 #module Pair
 
-Pair : { first: Int, second: Int }
+Pair: { first: Int, second: Int }
 
 eq(a: Pair, b: Pair) -> Bool {
     a.first == b.first && a.second == b.second

@@ -100,7 +100,7 @@ main() {
 
     // === Pattern matching on module-scoped generic tagged unions ===
 
-    val := A.Good(100)
+    val     := A.Good(100)
     matched := when val {
         g: Good { g.v }
         b: Bad { b.code }
@@ -109,7 +109,7 @@ main() {
     error += if matched == 100 { 0 } else { 1 }
 
     val2: A.Outcome[Int] := A.Bad(code = 500)
-    matched2 := when val2 {
+    matched2             := when val2 {
         g: Good { g.v }
         b: Bad { b.code }
         n: Vacant { -1 }

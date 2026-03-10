@@ -18,7 +18,7 @@ main() {
     error := 0
 
     // Use auto-collapsed alias "Opt" for "Opt.T"
-    a := Opt.Has(42)
+    a           := Opt.Has(42)
     b: Opt[Int] := Opt.Empty
 
     // Call generic function on auto-collapsed type

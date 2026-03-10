@@ -1,7 +1,7 @@
 #module main
 #import <stdlib.tl>
 
-Foo[T] : {v: Ptr[T]}
+Foo[T]: {v: Ptr[T]}
 
 main() {
     foo := Foo(v: Ptr[Int] = c_malloc(sizeof[Int]() * 4zu))

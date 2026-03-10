@@ -11,6 +11,6 @@ main() {
     m  := App.StringIntMap(keys = null, values = null, size = 0)
     m2 := Collections.Map(keys: Ptr[CString] = null, values: Ptr[Int] = null, size = 0)
     m = m2
-    result : CInt := m.size
+    result: CInt := m.size
     result
 }

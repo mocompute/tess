@@ -4,7 +4,7 @@
 // Tests that placeholder resolution handles cross-type deferred references
 // when both types are multi-specialized.
 
-Tree[T]:   { value: T, children: Ptr[Forest[T]] }
+Tree[T]:   { value: T, children: Ptr[Forest[T]]       }
 Forest[T]: { head: Ptr[Tree[T]], rest: Ptr[Forest[T]] }
 
 tree_value[T](p: Ptr[Tree[T]]) -> T {

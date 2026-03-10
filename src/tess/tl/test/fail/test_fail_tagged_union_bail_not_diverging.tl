@@ -6,7 +6,7 @@ T[a]: | MySome { v: a }
 #module main
 
 main() {
-    val := MyOption.MySome(42)
+    val       := MyOption.MySome(42)
     s: MySome := val else { 0 }
     s.v
 }

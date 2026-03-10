@@ -7,11 +7,11 @@
 
 identity[T](x: T) -> T { x }
 
-Wrapper[T]: { v: T }
+Wrapper[T]:                         { v: T           }
 make_wrapper[T](x: T) -> Wrapper[T] { Wrapper(v = x) }
 
 MyOpt[T]: | MySome { v: T }
-           | MyNone
+          | MyNone
 
 // --- 1. Same generic specialized with BOTH signed and unsigned weak ints ---
 // Must produce two distinct specializations (Int vs UInt).
@@ -84,13 +84,13 @@ test_higher_order_weak_int() {
 // level3 calls level2 calls level1 calls identity, all generic
 
 level1[T](x: T) -> T { identity(x) }
-level2[T](x: T) -> T { level1(x) }
-level3[T](x: T) -> T { level2(x) }
+level2[T](x: T) -> T { level1(x)   }
+level3[T](x: T) -> T { level2(x)   }
 
 // Plus a version that wraps in a struct at the bottom
 level1_box[T](x: T) -> Wrapper[T] { make_wrapper(x) }
-level2_box[T](x: T) -> Wrapper[T] { level1_box(x) }
-level3_box[T](x: T) -> Wrapper[T] { level2_box(x) }
+level2_box[T](x: T) -> Wrapper[T] { level1_box(x)   }
+level3_box[T](x: T) -> Wrapper[T] { level2_box(x)   }
 
 test_deep_indirection() {
     error := 0
@@ -147,7 +147,7 @@ test_weak_int_nested_option() {
         outer: Some {
             when outer.v {
                 inner: Some { if inner.v == 42 {0} else {1} }
-                n: None { 1 }
+                n:     None { 1 }
             }
         }
         n: None { 1 }
@@ -189,7 +189,7 @@ test_generic_returning_tagged_union() {
 
 // --- 8. Stress: call chain where each level uses a different generic container ---
 
-chain_id_to_box[T](x: T) -> Wrapper[T] { make_wrapper(identity(x)) }
+chain_id_to_box[T] (x: T) -> Wrapper[T]        { make_wrapper(identity(x))  }
 chain_box_to_opt[T](x: T) -> MyOpt[Wrapper[T]] { MySome(chain_id_to_box(x)) }
 
 test_mixed_container_chain() {

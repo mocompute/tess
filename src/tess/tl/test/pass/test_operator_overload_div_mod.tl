@@ -2,11 +2,11 @@
 
 #module Num
 
-Number : { val: Int }
+Number: { val: Int }
 
 div(a: Number, b: Number) -> Number { Number(val = a.val / b.val) }
 mod(a: Number, b: Number) -> Number { Number(val = a.val % b.val) }
-eq(a: Number, b: Number) -> Bool { a.val == b.val }
+eq (a: Number, b: Number) -> Bool   { a.val == b.val              }
 
 #module main
 

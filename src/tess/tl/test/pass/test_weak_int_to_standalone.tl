@@ -1,7 +1,7 @@
 // Unsuffixed integer literals are family-agnostic and can unify with standalone types.
 #module main
 
-take_size(x: CSize) -> CSize { x }
+take_size   (x: CSize)    -> CSize    { x }
 take_ptrdiff(x: CPtrDiff) -> CPtrDiff { x }
 
 main() {

@@ -4,10 +4,11 @@
 // --- Module A: a 2D vector type with Add, Eq, Ord ---
 #module VecA
 
-Vec2 : { x: Int, y: Int }
+Vec2: { x: Int, y: Int }
 
 add(a: Vec2, b: Vec2) -> Vec2 { Vec2(x = a.x + b.x, y = a.y + b.y) }
-eq(a: Vec2, b: Vec2) -> Bool { a.x == b.x && a.y == b.y }
+eq (a: Vec2, b: Vec2) -> Bool { a.x == b.x && a.y == b.y           }
+
 cmp(a: Vec2, b: Vec2) -> CInt {
     if a.x < b.x { -1 }
     else if a.x > b.x { 1 }
@@ -19,10 +20,11 @@ cmp(a: Vec2, b: Vec2) -> CInt {
 // --- Module B: a wrapped-int type with Add, Eq, Ord ---
 #module NumB
 
-Num : { val: Int }
+Num: { val: Int }
 
-add(a: Num, b: Num) -> Num { Num(val = a.val + b.val) }
-eq(a: Num, b: Num) -> Bool { a.val == b.val }
+add(a: Num, b: Num) -> Num  { Num(val = a.val + b.val) }
+eq (a: Num, b: Num) -> Bool { a.val == b.val           }
+
 cmp(a: Num, b: Num) -> CInt {
     if a.val < b.val { -1 }
     else if a.val > b.val { 1 }
@@ -32,10 +34,11 @@ cmp(a: Num, b: Num) -> CInt {
 // --- Module C: a 3-field type with Add, Eq, Ord ---
 #module TriC
 
-Tri : { a: Int, b: Int, c: Int }
+Tri: { a: Int, b: Int, c: Int }
 
-add(x: Tri, y: Tri) -> Tri { Tri(a = x.a + y.a, b = x.b + y.b, c = x.c + y.c) }
-eq(x: Tri, y: Tri) -> Bool { x.a == y.a && x.b == y.b && x.c == y.c }
+add(x: Tri, y: Tri) -> Tri  { Tri(a = x.a + y.a, b = x.b + y.b, c = x.c + y.c) }
+eq (x: Tri, y: Tri) -> Bool { x.a == y.a && x.b == y.b && x.c == y.c           }
+
 cmp(x: Tri, y: Tri) -> CInt {
     if x.a < y.a { -1 }
     else if x.a > y.a { 1 }
@@ -55,10 +58,10 @@ Wrapped[a]: | Has { v: a } | Empty
 #module main
 
 // Combined trait: Add + Eq
-AddEq[T] : Add[T], Eq[T] { }
+AddEq[T]: Add[T], Eq[T] { }
 
 // Combined trait: Add + Eq + Ord (Ord inherits Eq, but explicit for coverage)
-AddOrd[T] : Add[T], Ord[T] { }
+AddOrd[T]: Add[T], Ord[T] { }
 
 // 1. Simple trait-bounded generic: Add
 double[T: Add](x: T) -> T { x + x }
@@ -136,7 +139,7 @@ main() {
     error += if double_then_compare(va1, va2) { 1 } else { 0 }
 
     // wrap_sum (tagged union + trait bound)
-    ws_va := wrap_sum(va1, va2)
+    ws_va        := wrap_sum(va1, va2)
     sv: Wrap.Has := ws_va else { return 99 }
     error += if sv.v.x == 4 && sv.v.y == 6 { 0 } else { 1 }
 
@@ -172,7 +175,7 @@ main() {
     error += if double_then_compare(nb1, nb1) { 0 } else { 1 }
 
     // wrap_sum
-    ws_nb := wrap_sum(nb1, nb2)
+    ws_nb         := wrap_sum(nb1, nb2)
     snb: Wrap.Has := ws_nb else { return 99 }
     error += if snb.v.val == 30 { 0 } else { 1 }
 
@@ -185,7 +188,7 @@ main() {
     error += if d_tc.a == 2 && d_tc.b == 4 && d_tc.c == 6 { 0 } else { 1 }
 
     // triple_add
-    tc3 := TriC.Tri(a = 7, b = 8, c = 9)
+    tc3  := TriC.Tri(a = 7, b = 8, c = 9)
     t_tc := triple_add(tc1, tc2, tc3)
     error += if t_tc.a == 12 && t_tc.b == 15 && t_tc.c == 18 { 0 } else { 1 }
 

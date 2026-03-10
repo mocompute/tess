@@ -23,7 +23,7 @@ main() {
 
     // lambda attribute combined with parameter attribute
     k := [[my_attr]] ([[param_attr]] x) { x :: [[param_attr]] }
-    error += if k :: [[my_attr]] {0} else {1}
+    error += if k ::                           [[my_attr]] {0} else {1}
     error += if k(42) {0} else {1}
 
     result: CInt := error

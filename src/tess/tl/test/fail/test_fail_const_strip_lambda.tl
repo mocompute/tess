@@ -6,6 +6,6 @@ mutate(p: Ptr[Int]) {
 }
 
 main() {
-    f := (p: Ptr[Const[Int]]) { mutate(p) }    // error: cannot strip const
+    f := (p: Ptr[Const[Int]]) { mutate(p) } // error: cannot strip const
     0
 }

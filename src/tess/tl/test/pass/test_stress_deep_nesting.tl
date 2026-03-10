@@ -49,9 +49,9 @@ test_nested_when_different_types() {
                         ib: IB { 0 }
                     }
                     when c {
-                        r: Red   { val + 1 }
+                        r: Red { val + 1 }
                         g: Green { val + 2 }
-                        b: Blue  { val + 3 }
+                        b: Blue { val + 3 }
                     }
                 }
                 mb: MB { 0 }
@@ -90,18 +90,18 @@ test_deep_if_else() {
 
 // Nested block expressions 4+ levels deep
 test_nested_blocks() {
-    result := ({
-        a := ({
-            b := ({
-                c := ({
-                    10 + 20
-                })
-                c + 5
-            })
-            b * 2
-        })
-        a - 70
-    })
+    result := ( {
+               a := ( {
+               b := ( {
+               c := ( {
+               10 + 20
+               })
+               c + 5
+               })
+               b * 2
+               })
+               a - 70
+               })
     if result == 0 {0} else {1}
 }
 
@@ -109,10 +109,10 @@ test_nested_blocks() {
 test_nested_let_in() {
     result := (a := 1
                (b := a + 1
-                (c := b + 1
-                 (d := c + 1
-                  (e := d + 1
-                   a + b + c + d + e)))))
+               (c := b + 1
+               (d := c + 1
+               (e := d + 1
+               a + b + c + d + e)))))
     // 1 + 2 + 3 + 4 + 5 = 15
     if result == 15 {0} else {1}
 }
@@ -124,21 +124,21 @@ test_mixed_deep_nesting() {
     result := when x {
         oa: OA {
             if 1 == 1 {
-                ({
-                    when oa.inner {
-                        ma: MA {
-                            if 2 == 2 {
-                                ({
-                                    when ma.inner {
-                                        ia: IA { ia.value * 3 }
-                                        ib: IB { 0 }
-                                    }
-                                })
-                            } else { 0 }
-                        }
-                        mb: MB { 0 }
-                    }
-                })
+                ( {
+                 when oa.inner {
+                 ma: MA {
+                 if 2 == 2 {
+                 ( {
+                 when ma.inner {
+                 ia: IA { ia.value * 3 }
+                 ib: IB { 0 }
+                 }
+                 })
+                 } else { 0 }
+                 }
+                 mb: MB { 0 }
+                 }
+                 })
             } else { 0 }
         }
         ob: OB { 0 }

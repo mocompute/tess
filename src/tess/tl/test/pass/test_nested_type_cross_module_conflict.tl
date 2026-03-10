@@ -6,10 +6,10 @@ Shape: | Circle { radius: Float }
 
 #module B
 
-       // B defines "Shape" as a plain struct — NOT a nested type parent.
-       // But because A's Shape registered "Shape" in the global
-       // nested_type_parents set, B.Shape.Circle would be misinterpreted
-       // if someone tried it (even though B.Shape has no Circle child).
+// B defines "Shape" as a plain struct — NOT a nested type parent.
+// But because A's Shape registered "Shape" in the global
+// nested_type_parents set, B.Shape.Circle would be misinterpreted
+// if someone tried it (even though B.Shape has no Circle child).
 Shape: { x: Int, y: Int }
 
 #module main

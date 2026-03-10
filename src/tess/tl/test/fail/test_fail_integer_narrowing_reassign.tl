@@ -4,7 +4,7 @@
 
 main() {
     x: CInt := 0
-    a: Int := 42
+    a: Int  := 42
     x = a
     0
 }

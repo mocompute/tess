@@ -3,7 +3,7 @@
 
 #module Foo
 
-Thing : { val: Int }
+Thing: { val: Int }
 
 add(a: Thing, b: Thing) -> Thing { Thing(val = a.val + b.val) }
 

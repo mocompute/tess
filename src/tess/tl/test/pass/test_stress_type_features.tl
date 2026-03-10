@@ -7,7 +7,7 @@ Shape: | Circle { radius: Int }
 
 // Type predicate on a tagged union variant
 test_type_predicate_variant() {
-    s := Circle(5)
+    s      := Circle(5)
     result := when s {
         c: Circle {
             v := c.radius
@@ -20,14 +20,14 @@ test_type_predicate_variant() {
 
 // Pointer to a tagged union, dereferenced and matched with when
 test_pointer_to_union() {
-    s := Circle(8)
-    p := s.&
+    s    := Circle(8)
+    p    := s.&
     elem := p.*
 
     result := when elem {
-        c: Circle { c.radius }
+        c:  Circle { c.radius }
         sq: Square { sq.length }
-        n: MyNone { 0 }
+        n:  MyNone { 0 }
     }
     if result == 8 {0} else {1}
 }
@@ -40,15 +40,15 @@ test_carray_of_unions() {
     arr.[2] = Circle(3)
     arr.[3] = MyNone()
 
-    sum := 0
+    sum             := 0
     ptr: Ptr[Shape] := arr
-    i := 0
+    i               := 0
     while i < 4, i = i + 1 {
         elem := ptr.[i]
         sum = sum + when elem {
-            c: Circle { c.radius }
+            c:  Circle { c.radius }
             sq: Square { sq.length }
-            n: MyNone { 0 }
+            n:  MyNone { 0 }
         }
     }
     // 1 + 2 + 3 + 0 = 6
@@ -61,7 +61,7 @@ Container: | Holds { ptr: Ptr[Int], len: Int }
 
 test_variant_with_ptr_to_carray() {
     arr: CArray[Int, 4] := void
-    p: Ptr[Int] := arr
+    p:   Ptr[Int]       := arr
     p.[0] = 10
     p.[1] = 20
     p.[2] = 30
@@ -71,7 +71,7 @@ test_variant_with_ptr_to_carray() {
     result := when c {
         h: Holds {
             sum := 0
-            j := 0
+            j   := 0
             while j < h.len, j = j + 1 {
                 sum = sum + h.ptr.[j]
             }
@@ -97,12 +97,12 @@ sum_list(list: IntList) -> Int {
 }
 
 test_recursive_union_deep() {
-    nil: IntList  := Nil()
-    n1 := Cons(1, nil.&)
-    n2 := Cons(2, n1.&)
-    n3 := Cons(3, n2.&)
-    n4 := Cons(4, n3.&)
-    n5 := Cons(5, n4.&)
+    nil: IntList := Nil()
+    n1           := Cons(1, nil.&)
+    n2           := Cons(2, n1.&)
+    n3           := Cons(3, n2.&)
+    n4           := Cons(4, n3.&)
+    n5           := Cons(5, n4.&)
 
     result := sum_list(n5)
     // 5 + 4 + 3 + 2 + 1 = 15
@@ -120,8 +120,8 @@ test_mutable_when_via_ptr() {
     }
 
     // Read back through pointer dereference
-    p := s.&
-    elem := p.*
+    p      := s.&
+    elem   := p.*
     result := when elem {
         c: Circle { c.radius }
         else { 0 }

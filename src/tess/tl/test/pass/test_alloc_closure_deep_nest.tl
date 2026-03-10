@@ -10,7 +10,7 @@ level0(n: Int) -> (Int) -> Int {
 }
 
 level1(n: Int) -> (Int) -> Int {
-    f := level0(n)
+    f   := level0(n)
     val := f(n)
     // val = n + n = 2n
     g := [[alloc, capture(val)]] (x) { x + val }
@@ -18,7 +18,7 @@ level1(n: Int) -> (Int) -> Int {
 }
 
 level2(n: Int) -> (Int) -> Int {
-    f := level1(n)
+    f   := level1(n)
     val := f(n)
     // val = n + 2n = 3n
     g := [[alloc, capture(val)]] (x) { x + val }
@@ -26,7 +26,7 @@ level2(n: Int) -> (Int) -> Int {
 }
 
 level3(n: Int) -> (Int) -> Int {
-    f := level2(n)
+    f   := level2(n)
     val := f(n)
     // val = n + 3n = 4n
     g := [[alloc, capture(val)]] (x) { x + val }
@@ -35,7 +35,7 @@ level3(n: Int) -> (Int) -> Int {
 
 main() {
     error := 0
-    f := level3(10)
+    f     := level3(10)
     // level3(10): val = 10 + 30 = 40, so f(0) = 40
     error += if f(0) == 40 { 0 } else { 1 }
     // f(5) = 5 + 40 = 45

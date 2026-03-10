@@ -19,7 +19,7 @@ main() {
 
     // Call the closure many times
     sum := 0
-    i := 0
+    i   := 0
     while i < 100 {
         sum += add10(i)
         i += 1

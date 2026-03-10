@@ -30,7 +30,7 @@ main() {
     error += r3
 
     // Case with variable
-    n := 5
+    n  := 5
     r4 := case n {
         4 { 10 }
         5 { 20 }

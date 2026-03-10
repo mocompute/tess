@@ -7,10 +7,10 @@
 // in a single function scope.
 
 test() -> CInt {
-    n := 10
-    f := [[alloc, capture(n)]] (x) { x + n }
-    m := 20
-    g := [[alloc, capture(m)]] (x) { x + m }
+    n           := 10
+    f           := [[alloc, capture(n)]] (x) { x + n }
+    m           := 20
+    g           := [[alloc, capture(m)]] (x) { x + m }
     error: CInt := 0
     error += if f(1) == 11 { 0 } else { 1 }
     error += if g(1) == 21 { 0 } else { 1 }

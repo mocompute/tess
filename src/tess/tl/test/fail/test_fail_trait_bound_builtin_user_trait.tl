@@ -3,7 +3,7 @@
 
 #module main
 
-Printable[T] : {
+Printable[T]: {
     print(a: T) -> CInt
 }
 

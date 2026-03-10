@@ -3,25 +3,25 @@
 // 5+ levels of shadowing with := across nested blocks
 test_deep_shadowing() {
     x := 1
-    x := x + 1    // x = 2
-    x := x + 1    // x = 3
-    x := x + 1    // x = 4
-    x := x + 1    // x = 5
-    x := x + 1    // x = 6
+    x := x + 1                          // x = 2
+    x := x + 1                          // x = 3
+    x := x + 1                          // x = 4
+    x := x + 1                          // x = 5
+    x := x + 1                          // x = 6
     if x == 6 {0} else {1}
 }
 
 // Shadowing inside nested blocks
 test_block_shadowing() {
-    x := 10
-    result := ({
-        x := 20
-        inner := ({
-            x := 30
-            x
-        })
-        x + inner
-    })
+    x      := 10
+    result := ( {
+               x     := 20
+               inner := ( {
+               x     := 30
+               x
+               })
+               x + inner
+               })
     // result = 20 + 30 = 50, outer x still 10
     error := 0
     error += if result == 50 {0} else {1}
@@ -67,14 +67,14 @@ test_if_else_shadowing() {
 
     error := 0
     error += if result == 200 {0} else {1}
-    error += if x == 100 {0} else {1}  // outer x unchanged
+    error += if x == 100 {0} else {1}   // outer x unchanged
     error
 }
 
 // Rebinding loop counter-like variable inside loop body
 test_loop_rebind() {
     sum := 0
-    i := 0
+    i   := 0
     while i < 5, i = i + 1 {
         // Shadow i inside the loop body
         i := i * 10
@@ -98,28 +98,28 @@ main() {
 
     // Test: Shadowing inside lambda captures, then mutating the outer
     // (closures must be defined in main)
-    ({
-        x := 10
-        f := () { x }
-        x := 20  // shadow x (new binding)
-        g := () { x }
-        error += if f() == 10 {0} else {1}
-        error += if g() == 20 {0} else {1}
-        void
-    })
+    ( {
+     x := 10
+     f := () { x }
+     x := 20                            // shadow x (new binding)
+     g := () { x }
+     error += if f() == 10 {0} else {1}
+     error += if g() == 20 {0} else {1}
+     void
+     })
 
     // Test: Multiple shadows in nested function calls
-    ({
-        x := 1
-        f := () {
-            x := 2
-            x
-        }
-        result := apply(f)
-        error += if result == 2 {0} else {1}
-        error += if x == 1 {0} else {1}  // outer unchanged
-        void
-    })
+    ( {
+     x := 1
+     f := () {
+     x := 2
+     x
+     }
+     result := apply(f)
+     error += if result == 2 {0} else {1}
+     error += if x == 1 {0} else {1}    // outer unchanged
+     void
+     })
 
     error
 }

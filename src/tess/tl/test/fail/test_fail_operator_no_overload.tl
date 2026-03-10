@@ -2,7 +2,7 @@
 
 #module Foo
 
-Thing : { x: Int }
+Thing: { x: Int }
 
 #module main
 

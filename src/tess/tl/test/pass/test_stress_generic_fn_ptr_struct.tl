@@ -6,18 +6,18 @@
 
 Handler[T]: { process: (T) -> T, tag: Int }
 
-double_int(x: Int) -> Int { x * 2 }
-negate_int(x: Int) -> Int { 0 - x }
-not_bool(x: Bool) -> Bool { !x }
+double_int(x: Int)  -> Int  { x * 2 }
+negate_int(x: Int)  -> Int  { 0 - x }
+not_bool  (x: Bool) -> Bool { !x    }
 
 // --- Test 2: Generic struct with TWO fn ptr fields of different signatures ---
 
 DualHandler[T]: { transform: (T) -> T, predicate: (T) -> Bool }
 
-is_positive(x: Int) -> Bool { x > 0 }
-is_true(x: Bool) -> Bool { x }
-add_ten(x: Int) -> Int { x + 10 }
-flip(x: Bool) -> Bool { !x }
+is_positive(x: Int)  -> Bool { x > 0  }
+is_true    (x: Bool) -> Bool { x      }
+add_ten    (x: Int)  -> Int  { x + 10 }
+flip       (x: Bool) -> Bool { !x     }
 
 // --- Test 3: Generic struct with fn ptr that takes/returns same generic as another field ---
 
@@ -57,14 +57,14 @@ main() {
 
     // Test 2a: DualHandler[Int]
     dh1 := DualHandler(transform = add_ten/1, predicate = is_positive/1)
-    r4 := dh1.transform(5)
+    r4  := dh1.transform(5)
     error += if r4 == 15 { 0 } else { 1 }
     r5 := dh1.predicate(r4)
     error += if r5 == true { 0 } else { 1 }
 
     // Test 2b: DualHandler[Bool]
     dh2 := DualHandler(transform = flip/1, predicate = is_true/1)
-    r6 := dh2.transform(false)
+    r6  := dh2.transform(false)
     error += if r6 == true { 0 } else { 1 }
     r7 := dh2.predicate(r6)
     error += if r7 == true { 0 } else { 1 }

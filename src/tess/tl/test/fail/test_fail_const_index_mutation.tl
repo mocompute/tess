@@ -2,7 +2,7 @@
 #import <stdlib.tl>
 
 mutate_index(p: Ptr[Const[Int]]) {
-    p.[0] = 10    // error: const violation
+    p.[0] = 10                          // error: const violation
     0
 }
 

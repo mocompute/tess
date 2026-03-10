@@ -11,7 +11,7 @@ make_array() -> Array[Int] {
 
 test_return_type() -> CInt {
     error: CInt := 0
-    a := make_array()
+    a           := make_array()
     if a.size != 2u { error += 1 }
     if a.v.[0] != 1 { error += 1 }
     if a.v.[1] != 2 { error += 1 }
@@ -22,14 +22,14 @@ test_return_type() -> CInt {
 // Test: bare Array[T] in function parameter type
 sum_array(a: Array[Int]) -> Int {
     total := 0
-    i := 0u
+    i     := 0u
     while i < a.size, i += 1u { total += a.v.[i] }
     total
 }
 
 test_param_type() -> CInt {
     error: CInt := 0
-    a := Array.empty[Int]()
+    a           := Array.empty[Int]()
     Array.push(a.&, 10)
     Array.push(a.&, 20)
     Array.push(a.&, 30)
@@ -43,7 +43,7 @@ identity_array(a: Array.Array[Int]) -> Array.Array[Int] { a }
 
 test_explicit_qualified() -> CInt {
     error: CInt := 0
-    a := Array.empty[Int]()
+    a           := Array.empty[Int]()
     Array.push(a.&, 99)
     b := identity_array(a)
     if b.v.[0] != 99 { error += 1 }
@@ -56,7 +56,7 @@ convert(a: Array[Int]) -> Array.Array[Int] { a }
 
 test_interchangeable() -> CInt {
     error: CInt := 0
-    a := Array.empty[Int]()
+    a           := Array.empty[Int]()
     Array.push(a.&, 7)
     b := convert(a)
     if b.v.[0] != 7 { error += 1 }

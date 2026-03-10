@@ -7,8 +7,9 @@
 
 T: { x: Int, y: Int }
 
-add(a: T, b: T) -> T { T(x = a.x + b.x, y = a.y + b.y) }
-eq(a: T, b: T) -> Bool { a.x == b.x && a.y == b.y }
+add(a: T, b: T) -> T    { T(x = a.x + b.x, y = a.y + b.y) }
+eq (a: T, b: T) -> Bool { a.x == b.x && a.y == b.y        }
+
 cmp(a: T, b: T) -> Int {
     if a.x < b.x { -1 }
     else if a.x > b.x { 1 }
@@ -21,8 +22,9 @@ cmp(a: T, b: T) -> Int {
 
 T: { x: Int, y: Int, z: Int }
 
-add(a: T, b: T) -> T { T(x = a.x + b.x, y = a.y + b.y, z = a.z + b.z) }
-eq(a: T, b: T) -> Bool { a.x == b.x && a.y == b.y && a.z == b.z }
+add(a: T, b: T) -> T    { T(x = a.x + b.x, y = a.y + b.y, z = a.z + b.z) }
+eq (a: T, b: T) -> Bool { a.x == b.x && a.y == b.y && a.z == b.z         }
+
 cmp(a: T, b: T) -> Int {
     if a.x < b.x { -1 }
     else if a.x > b.x { 1 }
@@ -35,9 +37,9 @@ cmp(a: T, b: T) -> Int {
 
 #module main
 
-double[T: Add](x: T) -> T { x + x }
-smallest[T: Ord](a: T, b: T) -> T { if a < b { a } else { b } }
-are_equal[T: Eq](a: T, b: T) -> Bool { a == b }
+double[T:    Add](x: T)       -> T    { x + x                     }
+smallest[T:  Ord](a: T, b: T) -> T    { if a < b { a } else { b } }
+are_equal[T: Eq] (a: T, b: T) -> Bool { a == b                    }
 
 main() {
     error := 0

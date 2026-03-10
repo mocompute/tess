@@ -5,9 +5,9 @@ Point: { x: Int, y: Int }
 
 test_block_as_field_init() {
     p := Point(
-        x = ({ 1 + 2 }),
-        y = ({ 3 + 4 })
-    )
+               x = ( { 1 + 2 }),
+               y = ( { 3 + 4 })
+               )
     error := 0
     error += if p.x == 3 {0} else {1}
     error += if p.y == 7 {0} else {1}
@@ -19,9 +19,9 @@ add(a: Int, b: Int) -> Int { a + b }
 
 test_if_as_argument() {
     result := add(
-        if 1 == 1 { 10 } else { 0 },
-        if 2 == 2 { 20 } else { 0 }
-    )
+                  if 1 == 1 { 10 } else { 0 },
+                  if 2 == 2 { 20 } else { 0 }
+                  )
     if result == 30 {0} else {1}
 }
 
@@ -40,16 +40,16 @@ test_nested_if_both_branches() {
 
 // Block expression as addition operand
 test_block_in_arithmetic() {
-    result := ({
-        a := 10
-        a
-    }) + ({
-        b := 20
-        b
-    }) + ({
-        c := 30
-        c
-    })
+    result := ( {
+               a := 10
+               a
+               }) + ( {
+               b := 20
+               b
+               }) + ( {
+               c := 30
+               c
+               })
     if result == 60 {0} else {1}
 }
 
@@ -59,7 +59,7 @@ test_let_in_as_loop_bound() {
               y := x + 2
               y)
     sum := 0
-    i := 0
+    i   := 0
     while i < limit, i = i + 1 {
         sum = sum + i
     }
@@ -69,11 +69,11 @@ test_let_in_as_loop_bound() {
 
 // if expression inside a block expression inside arithmetic
 test_deeply_nested_expression() {
-    result := 1 + ({
-        x := if 1 == 1 { 10 } else { 0 }
-        y := if 2 == 2 { 20 } else { 0 }
-        x + y
-    })
+    result := 1 + ( {
+                   x := if 1 == 1 { 10 } else { 0 }
+                   y := if 2 == 2 { 20 } else { 0 }
+                   x + y
+                   })
     if result == 31 {0} else {1}
 }
 
@@ -82,9 +82,9 @@ Shape: | Circle { radius: Int }
 
 // when as case scrutinee value
 test_when_then_case() {
-    s := Circle(2)
+    s   := Circle(2)
     val := when s {
-        c: Circle { c.radius }
+        c:  Circle { c.radius }
         sq: Square { sq.length }
     }
     result := case val {
@@ -99,14 +99,14 @@ test_when_then_case() {
 // Block expression as pointer index
 test_block_as_index() {
     arr: CArray[Int, 5] := void
-    ptr: Ptr[Int] := arr
+    ptr: Ptr[Int]       := arr
     ptr.[0] = 10
     ptr.[1] = 20
     ptr.[2] = 30
     ptr.[3] = 40
     ptr.[4] = 50
 
-    idx := ({ 1 + 1 })
+    idx    := ( { 1 + 1 })
     result := ptr.[idx]
     if result == 30 {0} else {1}
 }

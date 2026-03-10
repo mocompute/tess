@@ -2,15 +2,15 @@
 
 #module Bits
 
-Mask : { val: Int }
+Mask: { val: Int }
 
-bit_and(a: Mask, b: Mask) -> Mask { Mask(val = a.val & b.val) }
-bit_or(a: Mask, b: Mask) -> Mask { Mask(val = a.val | b.val) }
-bit_xor(a: Mask, b: Mask) -> Mask { Mask(val = a.val ^ b.val) }
-shl(a: Mask, b: Mask) -> Mask { Mask(val = a.val << b.val) }
-shr(a: Mask, b: Mask) -> Mask { Mask(val = a.val >> b.val) }
-bit_not(v: Mask) -> Mask { Mask(val = ~v.val) }
-eq(a: Mask, b: Mask) -> Bool { a.val == b.val }
+bit_and(a: Mask, b: Mask) -> Mask { Mask(val = a.val & b.val)  }
+bit_or (a: Mask, b: Mask) -> Mask { Mask(val = a.val | b.val)  }
+bit_xor(a: Mask, b: Mask) -> Mask { Mask(val = a.val ^ b.val)  }
+shl    (a: Mask, b: Mask) -> Mask { Mask(val = a.val << b.val) }
+shr    (a: Mask, b: Mask) -> Mask { Mask(val = a.val >> b.val) }
+bit_not(v: Mask)          -> Mask { Mask(val = ~v.val)         }
+eq     (a: Mask, b: Mask) -> Bool { a.val == b.val             }
 
 #module main
 
@@ -33,19 +33,19 @@ main() {
     error += if e.val == 0xF0 {0} else {1}
 
     // << dispatches to Bits.shl
-    one := Bits.Mask(val = 1)
+    one  := Bits.Mask(val = 1)
     four := Bits.Mask(val = 4)
-    f := one << four
+    f    := one << four
     error += if f.val == 16 {0} else {1}
 
     // >> dispatches to Bits.shr
     sixteen := Bits.Mask(val = 16)
-    g := sixteen >> four
+    g       := sixteen >> four
     error += if g.val == 1 {0} else {1}
 
     // ~ dispatches to Bits.bit_not
     zero := Bits.Mask(val = 0)
-    h := ~zero
+    h    := ~zero
     error += if h.val == ~0 {0} else {1}
 
     // Compound assignment &=

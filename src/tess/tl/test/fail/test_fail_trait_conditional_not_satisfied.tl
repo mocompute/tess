@@ -1,6 +1,6 @@
 #module Wrapper
 
-Pair[A] : { fst: A, snd: A }
+Pair[A]: { fst: A, snd: A }
 
 // Pair[T] satisfies Eq only when T satisfies Eq
 eq[T: Eq](a: Pair[T], b: Pair[T]) -> Bool {
@@ -11,7 +11,7 @@ eq[T: Eq](a: Pair[T], b: Pair[T]) -> Bool {
 #module NoEq
 
 // A type with NO eq function — does not satisfy Eq
-Thing : { x: Int }
+Thing: { x: Int }
 
 
 #module main

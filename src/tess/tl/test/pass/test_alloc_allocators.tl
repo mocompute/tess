@@ -200,8 +200,8 @@ test_bump_stats() {
     bump->malloc(bump, 64u)
     stats := Alloc.bump_get_stats(bump)
 
-    if stats.allocated == 0u    { error += 1 }
-    if stats.capacity == 0u     { error += 1 }
+    if stats.allocated == 0u { error += 1 }
+    if stats.capacity == 0u { error += 1 }
     if stats.bucket_count != 1u { error += 1 }
 
     Alloc.bump_destroy(bump)

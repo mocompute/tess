@@ -37,9 +37,9 @@ main() {
     error += if r2 == -1.0 {0} else {1}
 
     // Sum all radii using a loop over decayed pointer
-    sum := 0.0
+    sum             := 0.0
     ptr: Ptr[Shape] := shapes
-    i := 0
+    i               := 0
     while i < 4, i = i + 1 {
         elem := ptr.[i]
         sum = sum + when elem {

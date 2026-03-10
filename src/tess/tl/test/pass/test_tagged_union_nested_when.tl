@@ -13,7 +13,7 @@ main() {
             inner := s.v
             when inner {
                 s2: MySome { s2.v }
-                n: MyNone { 0 }
+                n:  MyNone { 0 }
             }
         }
         n: MyNone { 0 }

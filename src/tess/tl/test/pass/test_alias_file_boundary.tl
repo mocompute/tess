@@ -17,6 +17,7 @@ use_alias() { F.value() }
 use_bar() { F.other() }
 
 #module main
+
 main() {
     x := FileOne.use_alias()
     y := FileTwo.use_bar()

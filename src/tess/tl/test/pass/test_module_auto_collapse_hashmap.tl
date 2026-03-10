@@ -23,7 +23,7 @@ convert_map(m: Ptr[HashMap[Int, Int]]) -> Ptr[HashMap.HashMap[Int, Int]] { m }
 
 main() -> CInt {
     error: CInt := 0
-    m := make_map()
+    m           := make_map()
     if map_size(m) != 1u { error += 1 }
     if map_size_qualified(m) != 1u { error += 1 }
     if map_size(convert_map(m)) != 1u { error += 1 }

@@ -6,7 +6,7 @@ Triple[T]: | A { v: T } | B { v: T } | C { v: T }
 
 test() -> M.Triple[Int] {
     val := M.A(1)
-    s := try val
+    s   := try val
     M.A(s.v)
 }
 

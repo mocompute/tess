@@ -89,7 +89,7 @@ main() {
     // === Nested: variant containing another module's generic tagged union ===
 
     inner_status := M1.Ready(100)
-    wrapped := Nest.Inner(payload = inner_status)
+    wrapped      := Nest.Inner(payload = inner_status)
     error += if Nest.get_inner(wrapped, 0) == 100 { 0 } else { 1 }
 
     leaf := Nest.Leaf(55)
@@ -99,7 +99,7 @@ main() {
     error += if Nest.get_inner(nil_val, -1) == -1 { 0 } else { 1 }
 
     // Nested with Bool specialization
-    inner_bool := M1.Ready(true)
+    inner_bool   := M1.Ready(true)
     wrapped_bool := Nest.Inner(payload = inner_bool)
     error += if Nest.get_inner(wrapped_bool, false) { 0 } else { 1 }
 
@@ -118,7 +118,7 @@ main() {
 
     // === Pattern matching on cross-module values ===
 
-    pm1 := M1.Done(v = 200)
+    pm1     := M1.Done(v = 200)
     result1 := when pm1 {
         r: Ready { r.v }
         w: Waiting { -1 }
@@ -126,7 +126,7 @@ main() {
     }
     error += if result1 == 200 { 0 } else { 1 }
 
-    pm2 := M2.Status.Done(300)
+    pm2     := M2.Status.Done(300)
     result2 := when pm2 {
         r: Ready { r.v }
         w: Waiting { -1 }
@@ -135,7 +135,7 @@ main() {
     error += if result2 == 300 { 0 } else { 1 }
 
     // Nested: pattern match on Wrap, then inner pattern match on Status
-    deep := Nest.Inner(payload = M1.Done(999))
+    deep    := Nest.Inner(payload = M1.Done(999))
     result3 := when deep {
         i: Inner {
             when i.payload {

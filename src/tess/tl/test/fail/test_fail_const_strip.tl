@@ -8,7 +8,7 @@ mutate(p: Ptr[Int]) {
 
 // Passing Ptr[Const[Int]] where Ptr[Int] is expected should fail
 pass_const(p: Ptr[Const[Int]]) {
-    mutate(p)    // error: cannot strip const
+    mutate(p)                           // error: cannot strip const
 }
 
 main() {

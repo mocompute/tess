@@ -5,8 +5,8 @@
 // must abort (negative values cannot be represented as unsigned).
 
 main() {
-    a: Int := -1
-    b: UInt := a
+    a:      Int  := -1
+    b:      UInt := a
     result: CInt := b
     result
 }

@@ -43,7 +43,7 @@ f_return_while() {
 // continue with defer in a counted loop
 f_continue() {
     sum := 0
-    i := 0
+    i   := 0
     while i < 3, i = i + 1 {
         defer sum = sum + 1
         continue

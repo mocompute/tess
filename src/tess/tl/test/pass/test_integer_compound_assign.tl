@@ -8,7 +8,7 @@ test_cint_compound() {
     error := 0
 
     a: CInt := 10
-    a += 5       // 5 is weak literal -> resolves to CInt
+    a += 5                              // 5 is weak literal -> resolves to CInt
     error += if a == 15 {0} else {1}
 
     a -= 3

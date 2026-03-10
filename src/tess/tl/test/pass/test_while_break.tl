@@ -24,7 +24,7 @@ main() {
     error += if j == 3 {0} else {1}
 
     // Break in nested loop: only inner loop breaks
-    outer := 0
+    outer       := 0
     inner_total := 0
     while outer < 3 {
         k := 0
@@ -35,7 +35,7 @@ main() {
             k = k + 1
         }
         inner_total = inner_total + k
-        outer = outer + 1
+        outer       = outer + 1
     }
     error += if outer == 3 {0} else {1}
     error += if inner_total == 6 {0} else {1}

@@ -44,11 +44,11 @@ length_list(list: List[Int]) -> Int {
 // Test 1: Build a list, use foreach with a closure that captures a mutable accumulator
 test_foreach_closure() {
     nil: List[Int] := Nil()
-    n3 := Cons(30, nil.&)
-    n2 := Cons(20, n3.&)
-    n1 := Cons(10, n2.&)
+    n3             := Cons(30, nil.&)
+    n2             := Cons(20, n3.&)
+    n1             := Cons(10, n2.&)
 
-    total := 0
+    total        := 0
     add_to_total := (x: Int) {
         total = total + x
         0
@@ -61,9 +61,9 @@ test_foreach_closure() {
 // Test 2: sum_list on a generic list specialized at Int
 test_sum_list() {
     nil: List[Int] := Nil()
-    n3 := Cons(3, nil.&)
-    n2 := Cons(2, n3.&)
-    n1 := Cons(1, n2.&)
+    n3             := Cons(3, nil.&)
+    n2             := Cons(2, n3.&)
+    n1             := Cons(1, n2.&)
 
     result := sum_list(n1)
     // 1 + 2 + 3 = 6
@@ -73,9 +73,9 @@ test_sum_list() {
 // Test 3: Closure that captures a pointer to a recursive generic type
 test_closure_captures_list_ptr() {
     nil: List[Int] := Nil()
-    n3 := Cons(15, nil.&)
-    n2 := Cons(10, n3.&)
-    n1 := Cons(5, n2.&)
+    n3             := Cons(15, nil.&)
+    n2             := Cons(10, n3.&)
+    n1             := Cons(5, n2.&)
 
     // Closure captures n1 (a List[Int]) and calls sum_list on it
     get_sum := () { sum_list(n1) }
@@ -87,10 +87,10 @@ test_closure_captures_list_ptr() {
 // Test 4: Length of a list with a closure
 test_length_with_closure() {
     nil: List[Int] := Nil()
-    n4 := Cons(40, nil.&)
-    n3 := Cons(30, n4.&)
-    n2 := Cons(20, n3.&)
-    n1 := Cons(10, n2.&)
+    n4             := Cons(40, nil.&)
+    n3             := Cons(30, n4.&)
+    n2             := Cons(20, n3.&)
+    n1             := Cons(10, n2.&)
 
     get_len := () { length_list(n1) }
 
@@ -100,12 +100,12 @@ test_length_with_closure() {
 // Test 5: foreach with a closure that multiplies each element
 test_foreach_multiply() {
     nil: List[Int] := Nil()
-    n3 := Cons(3, nil.&)
-    n2 := Cons(2, n3.&)
-    n1 := Cons(1, n2.&)
+    n3             := Cons(3, nil.&)
+    n2             := Cons(2, n3.&)
+    n1             := Cons(1, n2.&)
 
-    total := 0
-    factor := 10
+    total      := 0
+    factor     := 10
     add_scaled := (x: Int) {
         total = total + x * factor
         0
@@ -119,11 +119,11 @@ test_foreach_multiply() {
 // Test 6: Closure that sums list, called after modifications to captured variables
 test_closure_sees_mutations() {
     nil: List[Int] := Nil()
-    n3 := Cons(3, nil.&)
-    n2 := Cons(2, n3.&)
-    n1 := Cons(1, n2.&)
+    n3             := Cons(3, nil.&)
+    n2             := Cons(2, n3.&)
+    n1             := Cons(1, n2.&)
 
-    offset := 0
+    offset  := 0
     compute := () { sum_list(n1) + offset }
 
     // Before mutation
@@ -133,7 +133,7 @@ test_closure_sees_mutations() {
     r2 := compute()
 
     error := 0
-    error += if r1 == 6  {0} else {1}
+    error += if r1 == 6 {0} else {1}
     error += if r2 == 106 {0} else {1}
     error
 }
@@ -141,15 +141,15 @@ test_closure_sees_mutations() {
 // Test 7: Multiple closures capturing the same recursive list
 test_multiple_closures_same_list() {
     nil: List[Int] := Nil()
-    n3 := Cons(3, nil.&)
-    n2 := Cons(2, n3.&)
-    n1 := Cons(1, n2.&)
+    n3             := Cons(3, nil.&)
+    n2             := Cons(2, n3.&)
+    n1             := Cons(1, n2.&)
 
     get_sum    := () { sum_list(n1) }
     get_length := () { length_list(n1) }
 
     error := 0
-    error += if get_sum() == 6    {0} else {1}
+    error += if get_sum() == 6 {0} else {1}
     error += if get_length() == 3 {0} else {1}
     error
 }

@@ -35,15 +35,15 @@ main() {
 
     // Test chained operations
     f := 0xFF
-    f &= 0x3F   // 0x3F
-    f |= 0x80   // 0xBF
-    f ^= 0x0F   // 0xB0
+    f &= 0x3F                           // 0x3F
+    f |= 0x80                           // 0xBF
+    f ^= 0x0F                           // 0xB0
     error += if f == 0xB0 {0} else {1}
 
     // Test shift chaining
     g := 1
-    g <<= 8     // 256
-    g >>= 4     // 16
+    g <<= 8                             // 256
+    g >>= 4                             // 16
     error += if g == 16 {0} else {1}
 
     error

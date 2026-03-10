@@ -16,9 +16,9 @@ add(a: Point, b: Point) -> Point {
 #module main
 
 main() {
-    a := Foo.make_point(1, 2)
-    b := Foo.make_point(3, 4)
-    c := Foo.add(a, b)
-    result : CInt := c.x + c.y - 10
+    a            := Foo.make_point(1, 2)
+    b            := Foo.make_point(3, 4)
+    c            := Foo.add(a, b)
+    result: CInt := c.x + c.y - 10
     result
 }

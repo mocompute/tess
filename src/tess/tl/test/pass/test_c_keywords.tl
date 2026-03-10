@@ -9,7 +9,7 @@ Point: { default: Int, register: Int }
 Mode: { auto, register, default }
 
 // Tagged union with keyword variant names
-Value: | auto    { x: Int }
+Value: | auto { x: Int }
        | default { x: Int }
 
 add(default: Int, register: Int) { default + register }
@@ -34,9 +34,9 @@ main() {
     error += if m == Kw.Mode.auto { 0 } else { 1 }
 
     // 4. Tagged union with keyword variant names
-    v := Kw.auto(7)
+    v      := Kw.auto(7)
     result := when v {
-        a: auto    { a.x }
+        a: auto { a.x }
         d: default { d.x }
     }
     error += if result == 7 { 0 } else { 1 }

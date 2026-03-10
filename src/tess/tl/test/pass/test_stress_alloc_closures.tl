@@ -22,16 +22,16 @@ make_multiplier(n: Int) -> (Int) -> Int {
 // Compose: evaluate f(g(x)) eagerly and capture the result
 compose_at(f: (Int) -> Int, g: (Int) -> Int, x: Int) -> (Int) -> Int {
     val := f(g(x))
-    h := [[alloc, capture(val)]] (y) { val + y }
+    h   := [[alloc, capture(val)]] (y) { val + y }
     h
 }
 
 // Test shadowed variable capture
 test_shadow() -> CInt {
-    n := 10
-    f := [[alloc, capture(n)]] (x) { x + n }
-    n := 99
-    g := [[alloc, capture(n)]] (x) { x + n }
+    n           := 10
+    f           := [[alloc, capture(n)]] (x) { x + n }
+    n           := 99
+    g           := [[alloc, capture(n)]] (x) { x + n }
     error: CInt := 0
     error += if f(1) == 11 { 0 } else { 1 }
     error += if g(1) == 100 { 0 } else { 1 }
@@ -41,11 +41,11 @@ test_shadow() -> CInt {
 // Test allocated closure with Bool capture and branching
 test_bool_capture() -> CInt {
     flag := true
-    f := [[alloc, capture(flag)]] (x) {
+    f    := [[alloc, capture(flag)]] (x) {
         if flag { x } else { 0 - x }
     }
     flag2 := false
-    g := [[alloc, capture(flag2)]] (x) {
+    g     := [[alloc, capture(flag2)]] (x) {
         if flag2 { x } else { 0 - x }
     }
     error: CInt := 0
@@ -75,7 +75,7 @@ test_deep_nest() -> CInt {
 // Test alloc closure created inside a loop
 test_loop_creation() -> CInt {
     sum := 0
-    i := 0
+    i   := 0
     while i < 5 {
         f := [[alloc, capture(i)]] (x) { x + i }
         sum += f(10)
@@ -87,9 +87,9 @@ test_loop_creation() -> CInt {
 
 // Test explicit allocator in helper function
 test_explicit_allocator() -> CInt {
-    arena := Alloc.bump_create(Alloc.context.default, 4096u)
-    n := 7
-    f := [[alloc(arena), capture(n)]] (x) { x + n }
+    arena       := Alloc.bump_create(Alloc.context.default, 4096u)
+    n           := 7
+    f           := [[alloc(arena), capture(n)]] (x) { x + n }
     error: CInt := 0
     error += if f(3) == 10 { 0 } else { 1 }
 

@@ -25,7 +25,7 @@ outer(n: Int) -> (Int) -> Int {
 }
 
 main() {
-    add := outer(10)
+    add   := outer(10)
     error := 0
     error += if add(5) == 20 { 0 } else { 1 }
     error += if add(0) == 10 { 0 } else { 1 }

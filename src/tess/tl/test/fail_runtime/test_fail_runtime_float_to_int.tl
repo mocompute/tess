@@ -7,6 +7,6 @@
 
 main() {
     f: Float := 9999999999.0
-    i: CInt := f
+    i: CInt  := f
     i
 }

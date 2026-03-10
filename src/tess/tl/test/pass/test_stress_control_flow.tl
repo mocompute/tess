@@ -17,8 +17,8 @@ test_break_from_when() {
     shapes.[2] = Circle(10)
     shapes.[3] = Square(4)
 
-    found := 0
-    i := 0
+    found           := 0
+    i               := 0
     ptr: Ptr[Shape] := shapes
     while i < 4, i = i + 1 {
         elem := ptr.[i]
@@ -43,8 +43,8 @@ test_continue_from_when() {
     shapes.[2] = Circle(3)
     shapes.[3] = MyNone()
 
-    sum := 0
-    i := 0
+    sum             := 0
+    i               := 0
     ptr: Ptr[Shape] := shapes
     while i < 4, i = i + 1 {
         elem := ptr.[i]
@@ -53,7 +53,7 @@ test_continue_from_when() {
             else { }
         }
         sum = sum + when elem {
-            c: Circle { c.radius }
+            c:  Circle { c.radius }
             sq: Square { sq.length }
             else { 0 }
         }
@@ -76,7 +76,7 @@ deep_return(s: Shape, flag: Int) -> Int {
             }
         }
         sq: Square { sq.length }
-        n: MyNone { -1 }
+        n:  MyNone { -1 }
     }
 }
 
@@ -110,9 +110,9 @@ test_tail_call_from_when() {
 // Bail (unwrap-or-bail) inside a loop with break
 test_bail_in_loop_break() {
     result := 0
-    i := 0
+    i      := 0
     while i < 5, i = i + 1 {
-        val := if i == 3 { MyOption.MySome(42) } else { MyOption.MyNone() }
+        val       := if i == 3 { MyOption.MySome(42) } else { MyOption.MyNone() }
         s: MySome := val else { continue }
         result = s.v
         break
@@ -122,7 +122,7 @@ test_bail_in_loop_break() {
 
 // Bail (unwrap-or-bail) with return
 test_bail_with_return() -> Int {
-    val := MyOption.MySome(77)
+    val       := MyOption.MySome(77)
     s: MySome := val else { return 1 }
     if s.v == 77 {0} else {1}
 }
@@ -135,6 +135,6 @@ main() {
     error += test_tail_call_from_when()
     error += test_bail_in_loop_break()
     error += test_bail_with_return()
-    result : CInt := error
+    result: CInt := error
     result
 }

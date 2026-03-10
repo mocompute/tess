@@ -2,7 +2,7 @@
 
 #module main
 
-Add[T] : {
+Add[T]: {
     add(a: T, b: T) -> T
 }
 

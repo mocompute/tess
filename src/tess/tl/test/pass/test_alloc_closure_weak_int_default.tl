@@ -15,7 +15,7 @@ main() {
 
     // Unsigned weak int (literal is used in unsigned context)
     size: CUnsignedLongLong := 10
-    g := [[alloc, capture(size)]] (x: CUnsignedLongLong) { x + size }
+    g                       := [[alloc, capture(size)]] (x: CUnsignedLongLong) { x + size }
     error += if g(5) == 15 { 0 } else { 1 }
 
     // Multiple weak int params

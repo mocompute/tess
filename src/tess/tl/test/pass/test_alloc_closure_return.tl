@@ -10,7 +10,7 @@ outer(n: Int) -> (Int) -> Int {
 }
 
 main() {
-    g := outer(10)
+    g     := outer(10)
     error := 0
     error += if g(5) == 15 { 0 } else { 1 }
     error

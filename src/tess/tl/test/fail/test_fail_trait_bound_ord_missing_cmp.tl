@@ -3,7 +3,7 @@
 
 #module Foo
 
-Thing : { val: Int }
+Thing: { val: Int }
 
 eq(a: Thing, b: Thing) -> Bool {
     a.val == b.val

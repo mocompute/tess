@@ -18,7 +18,7 @@ main() {
     error += if r2 == 20 {0} else {1}
 
     // Chained else-if expression
-    y := 2
+    y  := 2
     r3 := if y == 1 {10} else if y == 2 {20} else {30}
     error += if r3 == 20 {0} else {1}
 

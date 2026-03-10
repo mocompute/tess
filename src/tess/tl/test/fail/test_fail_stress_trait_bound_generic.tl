@@ -4,7 +4,7 @@
 #module NoEq
 
 // Widget has no eq function -- does not satisfy Eq
-Widget : { id: Int, name: Int }
+Widget: { id: Int, name: Int }
 
 // Only has add, no eq
 add(a: Widget, b: Widget) -> Widget { Widget(id = a.id + b.id, name = a.name) }
@@ -13,7 +13,7 @@ add(a: Widget, b: Widget) -> Widget { Widget(id = a.id + b.id, name = a.name) }
 #module main
 
 // Combined trait requiring both Add and Eq
-AddEq[T] : Add[T], Eq[T] { }
+AddEq[T]: Add[T], Eq[T] { }
 
 // This function requires Eq
 check_equal[T: Eq](a: T, b: T) -> Bool {

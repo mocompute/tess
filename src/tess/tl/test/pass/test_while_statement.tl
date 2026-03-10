@@ -26,12 +26,12 @@ main() {
 
     // Nested while loops
     sum := 0
-    a := 0
+    a   := 0
     while a < 3 {
         b := 0
         while b < 3 {
             sum = sum + 1
-            b = b + 1
+            b   = b + 1
         }
         a = a + 1
     }

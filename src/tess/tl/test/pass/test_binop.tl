@@ -12,7 +12,7 @@ main() {
 
     error += if 2 + 3 == 5 {0} else {1}
     error += if 0 + 0 == 0 {0} else {1}
-    error += if -1 + 1 == 0 {0} else {1}
+    error += if - 1 + 1 == 0 {0} else {1}
     a := 10
     b := 20
     error += if a + b == 30 {0} else {1}
@@ -27,17 +27,17 @@ main() {
     // ── Arithmetic: * ──
 
     error += if 3 * 4 == 12 {0} else {1}
-    error += if -3 * 4 == -12 {0} else {1}
+    error += if - 3 * 4 == -12 {0} else {1}
     error += if 0 * 999 == 0 {0} else {1}
     error += if a * b == 200 {0} else {1}
 
     // ── Arithmetic: / ──
 
     error += if 10 / 2 == 5 {0} else {1}
-    error += if 7 / 2 == 3 {0} else {1}   // integer truncation
-    error += if -10 / 2 == -5 {0} else {1}
-    error += if a / b == 0 {0} else {1}    // 10 / 20 = 0
-    error += if b / a == 2 {0} else {1}    // 20 / 10 = 2
+    error += if 7 / 2 == 3 {0} else {1} // integer truncation
+    error += if - 10 / 2 == -5 {0} else {1}
+    error += if a / b == 0 {0} else {1} // 10 / 20 = 0
+    error += if b / a == 2 {0} else {1} // 20 / 10 = 2
 
     // division with variables (regression: div comment bug)
     x := 100
@@ -49,7 +49,7 @@ main() {
     error += if 10 % 3 == 1 {0} else {1}
     error += if 10 % 5 == 0 {0} else {1}
     error += if 7 % 4 == 3 {0} else {1}
-    error += if a % 3 == 1 {0} else {1}   // 10 % 3 = 1
+    error += if a % 3 == 1 {0} else {1} // 10 % 3 = 1
 
     // ── Arithmetic: precedence ──
 
@@ -88,10 +88,10 @@ main() {
 
     // ── Relational: with negative numbers ──
 
-    error += if -1 < 0 {0} else {1}
-    error += if -5 <= -5 {0} else {1}
+    error += if - 1 < 0 {0} else {1}
+    error += if - 5 <= -5 {0} else {1}
     error += if 0 > -1 {0} else {1}
-    error += if -3 >= -3 {0} else {1}
+    error += if - 3 >= -3 {0} else {1}
 
     // ── Logical: && ──
 
@@ -110,11 +110,11 @@ main() {
     // ── Logical: short-circuit ──
 
     sc := 0
-    r1 := false && ({sc = 1 true})
+    r1 := false && ( {sc = 1 true})
     error += if sc == 0 {0} else {1}    // must not evaluate RHS
 
     sc2 := 0
-    r2 := true || ({sc2 = 1 true})
+    r2  := true || ( {sc2 = 1 true})
     error += if sc2 == 0 {0} else {1}   // must not evaluate RHS
 
     // ── Logical: combined ──
@@ -129,9 +129,9 @@ main() {
     error += if (0xFF & 0x0F) == 0x0F {0} else {1}
     error += if (0xF0 | 0x0F) == 0xFF {0} else {1}
     error += if (0xFF ^ 0xFF) == 0 {0} else {1}
-    error += if (12 & 10) == 8 {0} else {1}     // 1100 & 1010 = 1000
-    error += if (12 | 10) == 14 {0} else {1}    // 1100 | 1010 = 1110
-    error += if (12 ^ 10) == 6 {0} else {1}     // 1100 ^ 1010 = 0110
+    error += if (12 & 10) == 8 {0} else {1}  // 1100 & 1010 = 1000
+    error += if (12 | 10) == 14 {0} else {1} // 1100 | 1010 = 1110
+    error += if (12 ^ 10) == 6 {0} else {1}  // 1100 ^ 1010 = 0110
 
     // ── Bitwise: << >> ──
 

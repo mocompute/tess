@@ -62,8 +62,8 @@ main() {
 
     // --- Test 1: Multiple aliases to the same specialization ---
     // IntRes1 and IntRes2 both alias A.Res[Int] -- must share one C struct
-    v1: B.IntRes1 := A.ROk(10)
-    v2: B.IntRes2 := A.ROk(20)
+    v1: B.IntRes1  := A.ROk(10)
+    v2: B.IntRes2  := A.ROk(20)
     v3: A.Res[Int] := A.ROk(30)
 
     error += if unwrap_res(v1, 0) == 10 { 0 } else { 1 }
@@ -75,7 +75,7 @@ main() {
     error += if unwrap_res(v4, 0) == 40 { 0 } else { 1 }
 
     // --- Test 3: Two-param generic tagged union with alias ---
-    e1: D.IntStrEither := D.Left(v = 100)
+    e1: D.IntStrEither     := D.Left(v = 100)
     e2: D.Either[Int, Int] := D.Right(v = 200)
 
     r1 := when e1 {
@@ -97,7 +97,7 @@ main() {
     // --- Test 4: Cross-module usage (define in A, alias in B, use in main) ---
     cross1: B.IntRes1 := A.RErr(code = 5)
     cross2: B.IntRes2 := A.RErr(code = 6)
-    cross3: C.IR := A.RErr(code = 7)
+    cross3: C.IR      := A.RErr(code = 7)
 
     m1 := when cross1 { o: ROk { o.v } e: RErr { e.code } }
     m2 := when cross2 { o: ROk { o.v } e: RErr { e.code } }
@@ -108,8 +108,8 @@ main() {
     error += if m3 == 7 { 0 } else { 1 }
 
     // --- Test 5: Auto-collapse + alias interaction ---
-    w1 := Wrapper.Wrap(42)
-    w2: F.IntWrap := Wrapper.Wrap(99)
+    w1               := Wrapper.Wrap(42)
+    w2: F.IntWrap    := Wrapper.Wrap(99)
     w3: Wrapper[Int] := Wrapper.WrapEmpty
 
     r3 := when w1 { w: Wrap { w.inner } e: WrapEmpty { 0 } }

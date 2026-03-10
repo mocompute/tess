@@ -8,8 +8,8 @@ MyList[T]: | Cons { head: T, tail: Ptr[MyList[T]] }
 map_list[T, U](list: MyList[T], f: (T) -> U) -> Ptr[MyList[U]] {
     when list {
         c: Cons {
-            next := c.tail.*
-            rest := map_list(next, f)
+            next                   := c.tail.*
+            rest                   := map_list(next, f)
             result: Ptr[MyList[U]] := c_malloc(64zu)
             result.* = Cons(head = f(c.head), tail = rest)
             result
@@ -31,12 +31,12 @@ sum(list: MyList[Int]) -> Int {
 
 main() {
     nil: MyList[Int] := Nil()
-    l3 := Cons(head = 3, tail = nil.&)
-    l2 := Cons(head = 2, tail = l3.&)
-    l1 := Cons(head = 1, tail = l2.&)
+    l3               := Cons(head = 3, tail = nil.&)
+    l2               := Cons(head = 2, tail = l3.&)
+    l1               := Cons(head = 1, tail = l2.&)
 
     // Map Int -> Int (double each element)
-    double := (x: Int) { x * 2 }
+    double  := (x: Int) { x * 2 }
     doubled := map_list(l1, double)
 
     error := 0

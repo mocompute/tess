@@ -1,6 +1,6 @@
 #module Foo
-value() { 42 }
-add(a, b) { a + b }
+value()     { 42    }
+add  (a, b) { a + b }
 
 #module main
 #alias F Foo

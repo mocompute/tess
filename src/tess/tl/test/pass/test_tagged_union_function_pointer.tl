@@ -18,7 +18,7 @@ Callback: | Handler { ctx: FnCtx }
           | Value { n: Int }
           | MyNone
 
-          // Helper to apply callback safely
+// Helper to apply callback safely
 apply_handler(ctx: FnCtx, x: Int) -> Int {
     ctx.fn(x)
 }

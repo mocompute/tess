@@ -44,7 +44,7 @@ wrap[a](v: a) -> Inner[a] {
 }
 
 test_generic_func_returning_union() {
-    x := wrap(99)
+    x      := wrap(99)
     result := when x {
         ih: IHas { ih.value }
         ie: IEmpty { 0 }
@@ -53,23 +53,23 @@ test_generic_func_returning_union() {
 }
 
 // Multiple type parameters with constraints through usage
-Either[a, b]: | Left  { v: a }
+Either[a, b]: | Left { v: a }
               | Right { v: b }
 
 swap_either[a, b](e: Either[a, b]) -> Either[b, a] {
     when e {
-        l: Left  { Right(l.v) }
+        l: Left { Right(l.v) }
         r: Right { Left(r.v) }
     }
 }
 
 test_multi_type_params() {
     x: Either[Int, Float] := Left(10)
-    y := swap_either(x)
+    y                     := swap_either(x)
 
     result := when y {
-        l: Left { 0 }   // Float
-        r: Right { r.v } // Int
+        l: Left { 0 }                   // Float
+        r: Right { r.v }                // Int
     }
     if result == 10 {0} else {1}
 }
@@ -83,7 +83,7 @@ my_unwrap[a](opt: Inner[a], default: a) -> a {
 }
 
 test_generic_unwrap_chain() {
-    a := wrap(100)
+    a             := wrap(100)
     b: Inner[Int] := IEmpty()
 
     r1 := my_unwrap(a, 0)
@@ -104,7 +104,7 @@ test_type_param_is_union() {
         outer: IHas {
             when outer.value {
                 inner: IHas { inner.value }
-                ie: IEmpty { 0 }
+                ie:    IEmpty { 0 }
             }
         }
         oe: IEmpty { 0 }

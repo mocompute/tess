@@ -2,7 +2,7 @@
 #import <Alloc.tl>
 
 make_id[T]() -> (T) -> T {
-    f :=[[alloc]](x) { x }
+    f := [[alloc]] (x) { x }
     f
 }
 
