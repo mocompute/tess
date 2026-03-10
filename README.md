@@ -74,15 +74,19 @@ An ML-flavoured systems language that transpiles to C.
   }
   ```
 
-- **Lambdas and closures** - Anonymous functions that capture variables from the enclosing scope by reference. Closures are stack-based (no heap allocation), so they cannot be returned from functions. Captured mutations are visible in both directions:
+- **Lambdas and closures** - Anonymous functions that capture variables from the enclosing scope. **Stack closures** capture by reference and are allocated on the stack — fast but cannot escape the enclosing function. **Allocated closures** use `[[alloc, capture(...)]]` to copy captured values onto the heap, allowing them to be returned, stored in structs, and outlive their original scope:
   ```tl
+  // Stack closure — captures by reference
   counter := 0
   increment := () { counter = counter + 1 }
   increment()        // counter is now 1
-  increment()        // counter is now 2
 
-  apply(f, x) { f(x) }
-  apply((x) { x + 1 }, 5)   // returns 6
+  // Allocated closure — captures by value, can be returned
+  make_adder(n: Int) {
+    [[alloc, capture(n)]] (x) { x + n }
+  }
+  add5 := make_adder(5)
+  add5(10)           // 15
   ```
 
 - **Uniform function call syntax** - Call any function with dot syntax on its first argument. `v.length_sq()` calls `length_sq(v)`. Struct fields take priority. Works with `->`, chaining, generics, and cross-module calls (`v.Mod.foo()`).
@@ -210,10 +214,11 @@ This is a research project exploring what a minimal, C-like language might look 
 
 ## Documentation
 
+- **[Language Model](docs/LANGUAGE_MODEL.md)** - Conceptual foundations: let-in expressions, bindings, scoping, closures
 - **[Language Reference](docs/LANGUAGE_REFERENCE.md)** - Complete syntax guide
-- **[Packages](docs/PACKAGES.md)** - Creating and consuming reusable `.tlib` libraries
 - **[Type System](docs/TYPE_SYSTEM.md)** - Integer sub-chains, conversions, and type inference details
 - **[Standard Library Reference](docs/STANDARD_LIBRARY.md)** - API reference for Array, Alloc, and other modules
+- **[Packages](docs/PACKAGES.md)** - Creating and consuming reusable `.tlib` libraries
 - **[All Documentation](docs/)** - Specialization, name mangling, and compiler internals
 
 ## Standard Library

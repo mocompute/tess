@@ -545,19 +545,60 @@ increment()        // counter is now 2
 
 **Lambdas do not support explicit type parameters:** Lambdas can be generic through type inference (un-annotated parameters are inferred from usage), but cannot declare explicit type parameters with `[T]` syntax. If you need explicit type parameters, use a named function instead.
 
-**Lambdas cannot be returned from functions:** Because lambdas capture variables by reference, returning a lambda from a function would create dangling pointers to stack variables that no longer exist. The compiler prohibits this:
+**Stack closures cannot be returned from functions:** Because stack closures capture variables by reference, returning one would create dangling pointers to stack variables that no longer exist. The compiler prohibits this:
 
 ```tl
 // ERROR: Cannot return lambda from function
 make_adder(n) { (x) { x + n } }
 ```
 
-If you need to return a callable, use a named function instead:
+If you need to return a callable without captures, use a named function:
 
 ```tl
 add1(x) { x + 1 }
 get_adder() { add1 }     // OK: returns function pointer, not lambda
 ```
+
+#### Allocated Closures
+
+To return a closure from a function or store it in a struct, use an **allocated closure**. The `[[alloc]]` attribute allocates the captured state on the heap, and `[[capture(...)]]` explicitly lists which variables to capture by value:
+
+```tl
+make_adder(n: Int) {
+  [[alloc, capture(n)]] (x) { x + n }
+}
+
+add5 := make_adder(5)
+add5(10)   // 15
+```
+
+Because captures are by value, mutations after closure creation are not visible inside the closure:
+
+```tl
+n := 5
+f := [[alloc, capture(n)]] (x) { x + n }
+n = 10
+f(1)       // 6, not 11 — n was copied at creation
+```
+
+The capture list must exactly match the free variables in the body — missing or unused captures are compile errors:
+
+```tl
+// ERROR: body uses 'y' but it's not in the capture list
+f := [[alloc, capture(x)]] () { x + y }
+
+// ERROR: 'z' is listed but not used in the body
+g := [[alloc, capture(x, z)]] () { x + 1 }
+```
+
+**Allocator control:** `[[alloc]]` uses the default allocator. Pass an explicit allocator with `[[alloc(expr)]]`:
+
+```tl
+f := [[alloc(my_arena), capture(x)]] (y) { x + y }
+// context freed when arena is destroyed
+```
+
+Both stack and allocated closures share the `Closure[F]` type and calling convention, so higher-order functions accept either kind interchangeably.
 
 ### Function Pointers
 
