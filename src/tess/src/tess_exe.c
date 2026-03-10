@@ -20,6 +20,8 @@
 #include <stdnoreturn.h>
 #include <string.h>
 
+static char const *const STDIN_PATH = "<stdin>";
+
 // -- embed externs --
 extern char const *embed_prelude_tl;
 
@@ -67,6 +69,10 @@ typedef struct {
 
     int               dashdash_at; // index in words where '--' args begin; -1 if not set
 
+    // Stdin data (when compiling from stdin via '-')
+    char             *stdin_data;
+    u32               stdin_size;
+
     // Temp directories created during package extraction (cleaned up in state_deinit)
     c_string_carray temp_dirs;
 
@@ -92,11 +98,11 @@ typedef struct {
 noreturn void usage(int status, char const *argv0) {
     char const *progname = file_basename(argv0);
 
-    printf("Usage: %s [-hvVi] <command> [-o outpath] [path1 path2 ... pathn] \n", progname);
+    printf("Usage: %s [-hvVi] <command> [-o outpath] [path1 path2 ... pathn | -] \n", progname);
     printf("\nCommands:\n");
-    printf("    c                      transpile input files to C\n");
-    printf("    exe                    compile and create executable (-o or package.tl required)\n");
-    printf("    run                    compile and run (replaces process; use -- to pass args)\n");
+    printf("    c                      transpile input files to C (use - for stdin)\n");
+    printf("    exe                    compile and create executable (use - for stdin)\n");
+    printf("    run                    compile and run (use - for stdin; -- to pass args)\n");
     printf("    fmt                    format source file (reads stdin if no file given)\n");
     printf("    init                   create a package.tl in the current directory\n");
     printf("    lib                    compile and create library (-o or package.tl required)\n");
@@ -167,6 +173,8 @@ void state_init(state *self) {
     self->is_static_library    = 0;
     self->is_executable        = 0;
     self->dashdash_at          = -1;
+    self->stdin_data           = null;
+    self->stdin_size           = 0;
     self->temp_dirs            = (c_string_carray){.alloc = self->arena};
 }
 
@@ -223,7 +231,7 @@ void state_gather_options(state *self, int argc, char *argv[]) {
 
     // Flags -o, -I, -D accept values with or without a space (e.g. -ofoo or -o foo).
     for (int i = 1; i < argc; ++i) {
-        if ('-' == argv[i][0]) {
+        if ('-' == argv[i][0] && argv[i][1] != '\0') {
 
             if (0 == strncmp("-o", argv[i], 2)) {
                 self->out_path = argv[i][2] ? argv[i] + 2 : argv[++i];
@@ -388,7 +396,12 @@ static void scan_file_directives(state *self, str path, str_array *resolved_path
     char *data;
     u32   size;
 
-    file_read(self->arena, str_cstr(&path), &data, &size);
+    if (self->stdin_data && 0 == strcmp(str_cstr(&path), STDIN_PATH)) {
+        data = self->stdin_data;
+        size = self->stdin_size;
+    } else {
+        file_read(self->arena, str_cstr(&path), &data, &size);
+    }
 
     str_array file_imports = {.alloc = self->arena};
     scan_directives(self, path, (char_csized){.size = size, .v = data}, &file_imports);
@@ -849,6 +862,37 @@ static void print_stats_row_no_mem(char const *phase, double time_ms, size_t inp
     fprintf(stderr, "%-20s %12.3f %12s %12s\n", phase, time_ms, "-", size_buf);
 }
 
+static int read_stdin(state *self) {
+    u32  capacity = 64 * 1024;
+    char *data    = alloc_malloc(self->arena, capacity);
+    u32   size    = 0;
+
+    for (;;) {
+        size_t n = fread(data + size, 1, capacity - size, stdin);
+        size += (u32)n;
+        if (n == 0) {
+            if (ferror(stdin)) {
+                perror("error reading stdin");
+                return 1;
+            }
+            break;
+        }
+        if (size == capacity) {
+            if (capacity > UINT32_MAX / 2) {
+                fprintf(stderr, "error: stdin input too large\n");
+                return 1;
+            }
+            u32 new_cap = capacity * 2;
+            data        = alloc_realloc(self->arena, data, new_cap);
+            capacity    = new_cap;
+        }
+    }
+
+    self->stdin_data = data;
+    self->stdin_size = size;
+    return 0;
+}
+
 static void print_stats_footer(double total_ms, size_t total_peak) {
     char peak_buf[32];
     format_memory(peak_buf, sizeof peak_buf, total_peak);
@@ -870,7 +914,16 @@ int compile(state *self) {
     c_string_csized paths;
     int             used_source_entries = 0;
 
-    if (self->words.size >= 2) {
+    char const *stdin_path = STDIN_PATH;
+    if (self->words.size >= 2 && 0 == strcmp(self->words.v[1], "-")) {
+        // Reading from stdin
+        if (self->words.size > 2) {
+            fprintf(stderr, "error: cannot combine stdin (-) with other input files\n");
+            return 1;
+        }
+        if (read_stdin(self)) return 1;
+        paths = (c_string_csized){.v = &stdin_path, .size = 1};
+    } else if (self->words.size >= 2) {
         // CLI files provided
         paths = (c_string_csized){.v = &self->words.v[1], .size = self->words.size - 1};
     } else {
@@ -909,10 +962,13 @@ int compile(state *self) {
     tl_infer     *infer       = tl_infer_create(self->arena, &infer_opts);
 
     parser_opts   parser_opts = {
-        .registry = tl_infer_get_registry(infer),
-        .files    = files_in_order(self, paths, (str_sized)array_sized(pkg_files)),
-        .prelude  = embed_prelude_tl,
-        .defines  = self->defines,
+        .registry       = tl_infer_get_registry(infer),
+        .files          = files_in_order(self, paths, (str_sized)array_sized(pkg_files)),
+        .prelude        = embed_prelude_tl,
+        .defines        = self->defines,
+        .preloaded_path = self->stdin_data ? STDIN_PATH : null,
+        .preloaded_data = self->stdin_data,
+        .preloaded_size = self->stdin_size,
       // The parser validates nested modules (#module Foo.Bar) by checking that the
       // parent (Foo) exists. Without this, cross-file nested modules fail when import
       // resolution orders the child before the parent (the parser hasn't seen Foo yet).
@@ -1656,7 +1712,7 @@ cleanup:
 static int format_file(state *self) {
     char       *data;
     u32         size;
-    char const *filename = "<stdin>";
+    char const *filename = STDIN_PATH;
 
     if (self->in_place && self->words.size <= 1) {
         fprintf(stderr, "error: cannot use --in-place with stdin\n");
@@ -1668,31 +1724,9 @@ static int format_file(state *self) {
         file_read(self->arena, filename, &data, &size);
         if (!data) return 1;
     } else {
-        // Read all of stdin
-        u32 capacity = 64 * 1024;
-        data         = alloc_malloc(self->arena, capacity);
-        size         = 0;
-        for (;;) {
-            size_t n = fread(data + size, 1, capacity - size, stdin);
-            size += (u32)n;
-            if (n == 0) {
-                if (ferror(stdin)) {
-                    perror("error reading stdin");
-                    return 1;
-                }
-                break;
-            }
-
-            if (size == capacity) {
-                if (capacity > UINT32_MAX / 2) {
-                    fprintf(stderr, "error: input too large\n");
-                    return 1;
-                }
-                u32 new_cap = capacity * 2;
-                data        = alloc_realloc(self->arena, data, new_cap);
-                capacity    = new_cap;
-            }
-        }
+        if (read_stdin(self)) return 1;
+        data = self->stdin_data;
+        size = self->stdin_size;
     }
 
     str    result = tl_format(self->arena, data, size, filename);

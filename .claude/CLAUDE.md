@@ -43,6 +43,7 @@ Compiler usage:
 ./tess lib <file.tl> -o <output.so>  # Compile to shared library
 ./tess lib --static <file.tl> -o <output.a>  # Compile to static library
 ./tess c --stats <file.tl>           # Per-phase memory and time statistics
+echo '...' | ./tess c -             # Read source from stdin (c, exe, run)
 ```
 
 Common flags: `-v` (verbose), `--no-line-directive`, `--no-standard-includes`, `-I <path>`, `--time`.

@@ -3716,8 +3716,22 @@ int parser_next(parser *self) {
                 file_str = str_replace_char(self->parent_alloc, file_str, '\\', '/');
 #endif
                 char const *file = str_cstr(&file_str);
-                file_read(self->file_arena, file, (char **)&self->current_file_data.v,
-                          &self->current_file_data.size);
+
+                if (self->opts.preloaded_path && 0 == strcmp(file, self->opts.preloaded_path)) {
+                    // Use pre-loaded data (e.g. stdin); copy into file_arena so
+                    // the normal free path works when moving to the next file.
+                    if (self->opts.preloaded_size > 0) {
+                        char *buf = alloc_malloc(self->file_arena, self->opts.preloaded_size);
+                        memcpy(buf, self->opts.preloaded_data, self->opts.preloaded_size);
+                        self->current_file_data =
+                          (char_csized){.v = buf, .size = self->opts.preloaded_size};
+                    } else {
+                        self->current_file_data = (char_csized){.v = null, .size = 0};
+                    }
+                } else {
+                    file_read(self->file_arena, file, (char **)&self->current_file_data.v,
+                              &self->current_file_data.size);
+                }
 
                 tok_opts.input      = self->current_file_data;
                 tok_opts.file       = file;
