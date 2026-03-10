@@ -7,7 +7,6 @@
 #import <Unsafe.tl>
 #import <stdlib.tl>
 #import <stdio.tl>
-#import <fatal.tl>
 #import <string.tl>
 
 // -- Aliases --

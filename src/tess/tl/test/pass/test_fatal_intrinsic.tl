@@ -1,5 +1,4 @@
 #module main
-#import <fatal.tl>
 
 // Test that _tl_fatal_ compiles and can be used in conditional code
 // Note: We don't actually call it since it terminates the program

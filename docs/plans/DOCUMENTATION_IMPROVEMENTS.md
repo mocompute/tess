@@ -14,7 +14,6 @@ Actionable improvements for the README and docs/ directory, based on a review of
 | **HashMap** | `src/tl/std/HashMap.tl` | Robin Hood hash map — essential data structure |
 | **Unsafe** | `src/tl/std/Unsafe.tl` | Cross-family integer conversions |
 | **stdint** | `src/tl/std/stdint.tl` | Fixed-width integer types |
-| **fatal** | `src/tl/std/fatal.tl` | Fatal error handling |
 
 The documented modules (builtin, Array, Alloc) are also incomplete — Alloc is partially documented.
 

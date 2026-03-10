@@ -5,7 +5,6 @@
 #import <Alloc.tl>
 #import <stdlib.tl>
 #import <stdio.tl>
-#import <fatal.tl>
 #import <string.tl>
 
 Allocator = Alloc.Allocator

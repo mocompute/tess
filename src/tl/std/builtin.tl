@@ -1,5 +1,9 @@
 #module builtin
-#import <fatal.tl>
+
+// invoking _tl_fatal_ requires fprintf() and exit()
+#include <stdio.h>              // for fprintf
+#include <stdlib.h>             // for exit
+
 #include <stddef.h>
 
 // Symbols in the builtin module are available without qualification.
