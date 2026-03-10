@@ -1,11 +1,11 @@
-#module Test
+#module main
 
-f() {
+testfun() {
     () { 42 }
 }
 
-#module main
-
 main() {
-    0
+    // Should error, because f() is illegally returning a stack lambda
+    r: CInt := testfun()
+    r - 42
 }

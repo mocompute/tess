@@ -2,9 +2,8 @@
 #import <Alloc.tl>
 
 // Shorthand return of an allocated closure (last expression without binding).
-// Currently fails: escape checker requires explicit `f := ...; f` binding
-// pattern to recognize allocated closures; shorthand is treated as a
-// stack closure return and rejected with cannot_return_lambda.
+// Type checker accepts this, but transpiler doesn't handle a direct lambda
+// as an implicit return value (emits FIXME_generate_expr).
 
 make_adder(n: Int) -> (Int) -> Int {
     [[alloc, capture(n)]] (x) { x + n }

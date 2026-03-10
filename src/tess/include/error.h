@@ -121,7 +121,6 @@
     X(tl_err_tagged_union_unknown_variant, "tagged_union_unknown_variant")                                 \
     X(tl_err_tagged_union_expected_tagged_union, "tagged_union_expected_tagged_union")                     \
     X(tl_err_tagged_union_case_syntax_error, "tagged_union_case_syntax_error")                             \
-    X(tl_err_cannot_return_lambda, "cannot_return_lambda")                                                 \
     X(tl_err_unused_type_parameter, "unused_type_parameter")                                               \
     X(tl_err_nested_module_parent_not_found, "nested_module_parent_not_found")                             \
     X(tl_err_const_violation, "const_violation")                                                           \
