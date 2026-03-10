@@ -2639,6 +2639,10 @@ static int a_body_element(parser *self) {
 }
 
 static ast_node *create_body(parser *self, ast_node_array exprs, ast_node_array defers) {
+    // Wrap bare lambdas in let-in bindings so they get named and hoisted.
+    forall(i, exprs) {
+        exprs.v[i] = maybe_wrap_lambda_function_in_let_in(self, exprs.v[i]);
+    }
     array_shrink(exprs);
     ast_node *body    = ast_node_create_body(self->ast_arena, (ast_node_sized)sized_all(exprs));
     body->body.defers = (ast_node_sized)sized_all(defers);
