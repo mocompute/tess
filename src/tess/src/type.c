@@ -485,9 +485,36 @@ tl_monotype *tl_type_registry_instantiate_carray(tl_type_registry *self, tl_mono
     return inst;
 }
 
+// Compute args hash for the specialization cache, ignoring free variable annotations on arrow types.
+// Arrow fvs are a closure implementation detail, not part of structural type identity. Without this,
+// the same type constructor (e.g. Processor[(Int)->Int]) can't be found in the cache when referenced
+// from contexts with different fvs annotations (function return type vs struct construction site).
+static u64 registry_args_hash(tl_monotype_sized args) {
+    // Temporarily strip fvs from arrow args before hashing.
+    str_sized saved_fvs[16];
+    int       n_saved = 0;
+    forall(i, args) {
+        if (tl_monotype_is_arrow(args.v[i]) && args.v[i]->list.fvs.size > 0 && n_saved < 16) {
+            saved_fvs[n_saved++] = args.v[i]->list.fvs;
+            args.v[i]->list.fvs  = (str_sized){0};
+            args.v[i]->hash_gen  = 0; // Invalidate cached hash so it gets recomputed without fvs
+        }
+    }
+    u64 hash = tl_monotype_sized_hash64(0, args);
+    // Restore fvs
+    int ri = 0;
+    forall(i, args) {
+        if (tl_monotype_is_arrow(args.v[i]) && ri < n_saved && saved_fvs[ri].size > 0) {
+            args.v[i]->list.fvs = saved_fvs[ri++];
+            args.v[i]->hash_gen = 0; // Invalidate again so normal hash recomputes with fvs
+        }
+    }
+    return hash;
+}
+
 tl_monotype *tl_type_registry_get_cached_specialization(tl_type_registry *self, str name,
                                                         tl_monotype_sized args) {
-    registry_key key = {.name_hash = str_hash64(name), .args_hash = tl_monotype_sized_hash64(0, args)};
+    registry_key key = {.name_hash = str_hash64(name), .args_hash = registry_args_hash(args)};
     tl_monotype *out = map_get_ptr(self->specialized, &key, sizeof key);
     return out;
 }
@@ -539,7 +566,7 @@ tl_type_registry_specialize_ctx tl_type_registry_specialize_begin(tl_type_regist
     if (!args.size) return (tl_type_registry_specialize_ctx){.specialized = null};
 
     tl_monotype *type = null;
-    registry_key key  = {.name_hash = str_hash64(name), .args_hash = tl_monotype_sized_hash64(0, args)};
+    registry_key key  = {.name_hash = str_hash64(name), .args_hash = registry_args_hash(args)};
     if ((type = map_get_ptr(self->specialized, &key, sizeof key)))
         return (tl_type_registry_specialize_ctx){.specialized = type, .is_existing = 1};
 

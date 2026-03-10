@@ -3104,6 +3104,11 @@ static str type_to_c(transpile *self, tl_polytype *type) {
             // environment, and use the name of the found type. tl_infer's canonicalize_types ensures
             // that user types are canonicalized.
             str name = mono->cons_inst->special_name;
+            if (str_is_empty(name) && mono->cons_inst->args.size > 0) {
+                tl_monotype *updated = tl_infer_update_specialized_type(self->infer, mono);
+                if (updated && tl_monotype_is_inst(updated) && !str_is_empty(updated->cons_inst->special_name))
+                    name = updated->cons_inst->special_name;
+            }
             if (str_is_empty(name)) name = cons_name;
 
             tl_monotype *found = env_lookup(self, name);

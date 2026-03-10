@@ -318,6 +318,32 @@ partial(f: Closure[(Int, Int) -> Int], x: Int) -> Closure[(Int) -> Int] {
 }
 ```
 
+### Generic closures
+
+A generic function can return an allocated closure. Each call site must specify or infer a single concrete type — the returned closure is a monomorphic runtime value:
+
+```tl
+make_id[T]() -> (T) -> T {
+    f := [[alloc]] (x) { x }
+    f
+}
+
+// Correct: separate specializations
+f_int  := make_id[Int]()    // (Int) -> Int
+f_bool := make_id[Bool]()   // (Bool) -> Bool
+```
+
+Note that binding the result to a single variable and calling it with different types is **unsound**:
+
+```tl
+// WRONG: f is a monomorphic tl_closure struct at runtime
+f := make_id()
+f(42)     // infers f as (Int) -> Int
+f(true)   // type error: f is already (Int) -> Int
+```
+
+This is the standard HM monomorphism restriction: a runtime value (the `tl_closure` struct) can only have one concrete type.
+
 ---
 
 ## Comparison: Before and After
