@@ -288,6 +288,14 @@ void         check_closure_escape(tl_infer *);
 void         check_closure_alloc_capture(tl_infer *);
 tl_monotype *tl_infer_update_specialized_type_(tl_infer *, tl_monotype *, hashmap **);
 
+// Check whether a lambda node has [[alloc]] in its attributes.
+static inline int lambda_has_alloc(tl_infer *self, ast_node *lambda) {
+    if (!lambda || lambda->tag != ast_lambda_function) return 0;
+    if (!lambda->lambda_function.attributes) return 0;
+    lambda_closure_attrs attrs = lambda_get_closure_attrs(self->transient, lambda->lambda_function.attributes);
+    return attrs.has_alloc;
+}
+
 #if DEBUG_INVARIANTS
 void report_invariant_failure(tl_infer *, char const *phase, char const *invariant, char const *detail,
                               ast_node const *);

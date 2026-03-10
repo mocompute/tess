@@ -1063,14 +1063,9 @@ static int infer_body(tl_infer *self, ast_node *node) {
         ast_node *last = node->body.expressions.v[sz - 1];
         ensure_tv(self, &last->type);
 
-        if (ast_node_is_lambda_function(last)) {
-            lambda_closure_attrs attrs =
-                lambda_get_closure_attrs(self->transient, last->lambda_function.attributes);
-            if (!attrs.has_alloc) {
-                array_push(self->errors,
-                           ((tl_infer_error){.tag = tl_err_closure_escape, .node = last}));
-                return 1;
-            }
+        if (ast_node_is_lambda_function(last) && !lambda_has_alloc(self, last)) {
+            array_push(self->errors, ((tl_infer_error){.tag = tl_err_closure_escape, .node = last}));
+            return 1;
         }
 
         return constrain(self, node->type, last->type, node, TL_UNIFY_SYMMETRIC);
@@ -1109,14 +1104,10 @@ static int infer_continue(tl_infer *self, ast_node *node) {
 static int infer_return(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
     if (resolve_node(self, node->return_.value, ctx, npos_operand)) return 1;
 
-    if (node->return_.value && ast_node_is_lambda_function(node->return_.value)) {
-        lambda_closure_attrs attrs =
-            lambda_get_closure_attrs(self->transient, node->return_.value->lambda_function.attributes);
-        if (!attrs.has_alloc) {
-            array_push(self->errors,
-                       ((tl_infer_error){.tag = tl_err_closure_escape, .node = node}));
-            return 1;
-        }
+    if (node->return_.value && ast_node_is_lambda_function(node->return_.value)
+        && !lambda_has_alloc(self, node->return_.value)) {
+        array_push(self->errors, ((tl_infer_error){.tag = tl_err_closure_escape, .node = node}));
+        return 1;
     }
 
     ensure_tv(self, &node->type);

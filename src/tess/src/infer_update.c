@@ -519,13 +519,7 @@ static void closure_escape_error(tl_infer *self, ast_node const *node) {
                                  .node = node}));
 }
 
-// Check whether a lambda node has [[alloc]] in its attributes.
-static int lambda_has_alloc(tl_infer *self, ast_node *lambda) {
-    if (!lambda || lambda->tag != ast_lambda_function) return 0;
-    if (!lambda->lambda_function.attributes) return 0;
-    lambda_closure_attrs attrs = lambda_get_closure_attrs(self->transient, lambda->lambda_function.attributes);
-    return attrs.has_alloc;
-}
+
 
 // Check whether a node (at an escape point) is an allocated closure.
 // Traces symbols back through let_in bindings to find the originating lambda.

@@ -107,6 +107,7 @@ static inline tl_monotype_sized tl_monotype_children(tl_monotype *self) {
 static THREAD_LOCAL allocator *transient_allocator; // initialized by tl_type_registry_create
 static THREAD_LOCAL u32        substitute_gen = 1;  // generation counter for substitute cycle detection
 static THREAD_LOCAL u32        hash_gen       = 1;  // generation counter for hash memoization
+static THREAD_LOCAL int        hash_ignore_fvs = 0; // when set, arrow hashing skips fvs
 static THREAD_LOCAL tl_type_constructor_inst
   *canonical_signed; // canonical signed integer cons_inst (CLongLong)
 static THREAD_LOCAL tl_type_constructor_inst
@@ -485,30 +486,14 @@ tl_monotype *tl_type_registry_instantiate_carray(tl_type_registry *self, tl_mono
     return inst;
 }
 
-// Compute args hash for the specialization cache, ignoring free variable annotations on arrow types.
-// Arrow fvs are a closure implementation detail, not part of structural type identity. Without this,
-// the same type constructor (e.g. Processor[(Int)->Int]) can't be found in the cache when referenced
-// from contexts with different fvs annotations (function return type vs struct construction site).
+// Compute args hash for the specialization cache, ignoring free variable annotations on arrow types
+// at any nesting depth. Arrow fvs are a closure implementation detail, not part of structural type
+// identity. Without this, the same type constructor (e.g. Processor[(Int)->Int]) can't be found in
+// the cache when referenced from contexts with different fvs annotations.
 static u64 registry_args_hash(tl_monotype_sized args) {
-    // Temporarily strip fvs from arrow args before hashing.
-    str_sized saved_fvs[16];
-    int       n_saved = 0;
-    forall(i, args) {
-        if (tl_monotype_is_arrow(args.v[i]) && args.v[i]->list.fvs.size > 0 && n_saved < 16) {
-            saved_fvs[n_saved++] = args.v[i]->list.fvs;
-            args.v[i]->list.fvs  = (str_sized){0};
-            args.v[i]->hash_gen  = 0; // Invalidate cached hash so it gets recomputed without fvs
-        }
-    }
-    u64 hash = tl_monotype_sized_hash64(0, args);
-    // Restore fvs
-    int ri = 0;
-    forall(i, args) {
-        if (tl_monotype_is_arrow(args.v[i]) && ri < n_saved && saved_fvs[ri].size > 0) {
-            args.v[i]->list.fvs = saved_fvs[ri++];
-            args.v[i]->hash_gen = 0; // Invalidate again so normal hash recomputes with fvs
-        }
-    }
+    hash_ignore_fvs = 1;
+    u64 hash        = tl_monotype_sized_hash64(0, args);
+    hash_ignore_fvs = 0;
     return hash;
 }
 
@@ -2520,7 +2505,7 @@ u64 tl_monotype_hash64_(tl_monotype *self, u32 gen, hash_cycle_stack *in_progres
     case tl_arrow:
     case tl_tuple: {
         hash = tl_monotype_sized_hash64_(hash, self->list.xs, gen, in_progress);
-        if (tl_arrow == self->tag) hash = str_array_hash64(hash, self->list.fvs);
+        if (tl_arrow == self->tag && !hash_ignore_fvs) hash = str_array_hash64(hash, self->list.fvs);
     } break;
     }
 
