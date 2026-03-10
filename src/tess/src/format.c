@@ -103,7 +103,7 @@ static char *normalize_ops(allocator *alloc, char const *line) {
     char_array out = {.alloc = alloc};
     array_reserve(out, len + 64);
 
-    int in_str = 0, in_chr = 0;
+    int in_str = 0, in_chr = 0, in_attr = 0, after_attr = 0;
 
     for (int i = 0; i < len; i++) {
         char c = line[i];
@@ -382,21 +382,45 @@ static char *normalize_ops(allocator *alloc, char const *line) {
             continue;
         }
 
-        // Square brackets (type arguments) — attach to preceding identifier
+        // Square brackets — [[ starts attribute syntax, single [ is type argument
         if (c == '[') {
-            while (out.size > 0 && out.v[out.size - 1] == ' ') out.size--;
-            EMIT_CHAR(out, c);
+            if (next == '[' && !in_attr) {
+                // Attribute syntax [[ — preserve space before
+                EMIT_CHAR(out, '[');
+                EMIT_CHAR(out, '[');
+                i++;
+                in_attr = 1;
+            } else {
+                // Type argument — attach to preceding identifier
+                while (out.size > 0 && out.v[out.size - 1] == ' ') out.size--;
+                EMIT_CHAR(out, c);
+            }
+            continue;
+        }
+
+        // Closing ]] — attribute syntax, emit both and ensure space after
+        if (c == ']' && next == ']' && in_attr) {
+            EMIT_CHAR(out, ']');
+            EMIT_CHAR(out, ']');
+            i++;
+            in_attr    = 0;
+            after_attr = 1;
+            EMIT_CHAR(out, ' ');
             continue;
         }
 
         // Open paren after type args — no space: foo[T]( not foo[T] (
+        // But after ]] attribute — keep space
         if (c == '(') {
-            if (out.size > 0 && last_nonspace(&out) == ']') {
+            if (!after_attr && out.size > 0 && last_nonspace(&out) == ']') {
                 while (out.size > 0 && out.v[out.size - 1] == ' ') out.size--;
             }
+            after_attr = 0;
             EMIT_CHAR(out, c);
             continue;
         }
+
+        after_attr = 0;
 
         if (c == '{') {
             if (out.size > 0 && out.v[out.size - 1] != ' ') EMIT_CHAR(out, ' ');

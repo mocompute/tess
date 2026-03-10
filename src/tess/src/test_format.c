@@ -617,6 +617,39 @@ static int test_edge_cases(void) {
 }
 
 // ---------------------------------------------------------------------------
+// 16. Attribute bracket [[ ]] syntax
+// ---------------------------------------------------------------------------
+static int test_attribute_brackets(void) {
+    int        error = 0;
+    allocator *alloc = arena_create(default_allocator(), 4096);
+
+    // Space preserved between := and [[ and between ]] and (
+    error += check(alloc, "alloc closure basic",
+                   "f := [[alloc, capture(n)]](x) { x + n }",
+                   "f := [[alloc, capture(n)]] (x) { x + n }\n");
+
+    // Already formatted — idempotent
+    error += check(alloc, "alloc closure already formatted",
+                   "f := [[alloc, capture(n)]] (x) { x + n }",
+                   "f := [[alloc, capture(n)]] (x) { x + n }\n");
+
+    // Regular type args still attach to identifier (no space)
+    error += check(alloc, "type args still attach",
+                   "foo [T](x) { x }",
+                   "foo[T](x) { x }\n");
+
+    // Attribute with block body
+    error += check(alloc, "alloc closure with block",
+                   "f:=[[alloc,capture(a,b)]](x){\nx+a+b\n}",
+                   "f := [[alloc, capture(a, b)]] (x) {\n"
+                   "    x + a + b\n"
+                   "}\n");
+
+    arena_destroy(&alloc);
+    return error;
+}
+
+// ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
 
@@ -647,6 +680,7 @@ int main(void) {
     T(test_align_comments);
     T(test_idempotency);
     T(test_edge_cases);
+    T(test_attribute_brackets);
 
     return error;
 }
