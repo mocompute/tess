@@ -638,6 +638,7 @@ void check_closure_escape(tl_infer *self) {
 // (their symbol.original remains empty).  This lets us detect not-in-scope errors here
 // by checking whether a capture symbol was alpha-converted.
 
+
 // Collect free variables from a lambda body into a str_array, registering lambda parameters
 // as lexical names so they are excluded.
 static str_array collect_lambda_fvs(tl_infer *self, ast_node *node) {

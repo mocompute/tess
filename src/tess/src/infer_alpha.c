@@ -54,7 +54,8 @@ static void rename_one_function_param(tl_infer *self, ast_node *param, rename_va
                     str_buf(&param->symbol.original), str_ilen(param->symbol.name),
                     str_buf(&param->symbol.name));
 #endif
-        } else if (param->symbol.is_mangled && (found = str_map_get(ctx->lex, param->symbol.original))) {
+        } else if (param->symbol.is_module_mangled &&
+                   (found = str_map_get(ctx->lex, param->symbol.original))) {
             // name was mangled because it conflicts with a toplevel name. But lexical rename is meant
             // to take precedence over mangling to match toplevel names.
             ast_node_name_replace(param, *found);
@@ -215,7 +216,8 @@ void rename_variables(tl_infer *self, ast_node *node, rename_variables_ctx *ctx,
                     str_buf(&node->symbol.original), str_ilen(node->symbol.name),
                     str_buf(&node->symbol.name));
 #endif
-            } else if (node->symbol.is_mangled && (found = str_map_get(ctx->lex, node->symbol.original))) {
+            } else if (node->symbol.is_module_mangled &&
+                       (found = str_map_get(ctx->lex, node->symbol.original))) {
                 // name was mangled because it conflicts with a toplevel name. But lexical rename is meant
                 // to take precedence over mangling to match toplevel names.
                 ast_node_name_replace(node, *found);
@@ -576,16 +578,38 @@ void concretize_params(tl_infer *self, ast_node *node, tl_monotype *callsite, ha
 // Free variable collection
 // ============================================================================
 
+// Check if a name refers to a global definition (module-level function, type constructor, or
+// builtin) rather than a local variable. Used to filter NFA callee names during FV collection:
+// global functions should not be treated as free variables, but local function-typed parameters
+// (e.g., a captured closure being called) should.
+static int is_global_name(tl_infer *self, ast_node const *node, str name) {
+
+    // Module-mangled names (e.g., Alloc___BumpHeader_create__2) are always global.
+    if (ast_node_is_symbol(node) && node->symbol.is_module_mangled) return 1;
+
+    // Names in the toplevels map are module-level function definitions.
+    if (str_map_get(self->toplevels, name)) return 1;
+
+    // symbols that start with c_ are global C symbols
+    if (is_c_symbol(name)) return 1;
+
+    // Type constructor names (e.g., Point) are global.
+    if (tl_type_registry_get(self->registry, name)) return 1;
+
+    // Global functions are registered as polymorphic schemes in the type env.
+    // Local function-typed variables have non-scheme arrow types or no env entry.
+    tl_polytype *type = tl_type_env_lookup(self->env, name);
+    if (type && tl_monotype_is_arrow(type->type) && tl_polytype_is_scheme(type)) return 1;
+
+    return 0;
+}
+
 int can_be_free_variable(tl_infer *self, traverse_ctx *traverse_ctx, ast_node const *node) {
     if (!ast_node_is_symbol(node) || traverse_ctx->is_field_name) return 0;
 
     str name = ast_node_str(node);
 
-    // don't collect symbols which are nullary type literals
-    if (tl_type_registry_is_nullary_type(self->registry, name)) return 0;
-
-    // don't collect symbols that start with c_
-    if (is_c_symbol(name)) return 0;
+    if (is_global_name(self, node, name)) return 0;
 
     // don't collect symbols that are already in lexical scope (e.g., union case bindings)
     if (str_hset_contains(traverse_ctx->lexical_names, name)) return 0;
@@ -612,8 +636,17 @@ int collect_free_variables_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_no
     // The traversal only visits arguments, not the function name itself, so we must handle
     // the function name here to propagate captures from called closures.
     if (node->tag == ast_named_function_application) {
-        collect_free_variables_ctx *ctx  = traverse_ctx->user;
-        str                         name = ast_node_str(node->named_application.name);
+        collect_free_variables_ctx *ctx          = traverse_ctx->user;
+        ast_node                   *fn_name_node = node->named_application.name;
+        str                         name         = ast_node_str(fn_name_node);
+
+        // The function name itself may be a free variable (e.g., a captured function-typed
+        // parameter called inside a closure body).
+        if (can_be_free_variable(self, traverse_ctx, fn_name_node)) {
+            dbg(self, "collect_free_variables_cb: add '%s' (fn call position)", str_cstr(&name));
+            str_array_set_insert(&ctx->fvs, name);
+        }
+
         collect_transitive_fvs(self, traverse_ctx, ctx, name);
         return 0;
     }

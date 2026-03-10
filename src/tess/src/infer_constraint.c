@@ -83,7 +83,7 @@ static void create_type_constructor_from_user_type(tl_infer *self, ast_node *nod
     if (tl_monotype_is_inst(poly->type) && ast_node_is_symbol(type_name_node)) {
         poly->type->cons_inst->def->module = type_name_node->symbol.module;
     }
-    if (ast_node_is_symbol(type_name_node) && type_name_node->symbol.is_mangled) {
+    if (ast_node_is_symbol(type_name_node) && type_name_node->symbol.is_module_mangled) {
         str module   = type_name_node->symbol.module;
         str original = type_name_node->symbol.original;
         if (!str_is_empty(module) && (str_eq(original, module) || str_eq(original, S("T")))) {
@@ -1211,10 +1211,10 @@ static int infer_lambda_function(tl_infer *self, traverse_ctx *ctx, ast_node *no
     // [[capture(...)]] without [[alloc]] is always invalid — capture lists only make sense for
     // heap-allocated closures.
     if (node->lambda_function.attributes) {
-        lambda_closure_attrs attrs = lambda_get_closure_attrs(self->transient, node->lambda_function.attributes);
+        lambda_closure_attrs attrs =
+          lambda_get_closure_attrs(self->transient, node->lambda_function.attributes);
         if (attrs.has_capture && !attrs.has_alloc) {
-            array_push(self->errors,
-                       ((tl_infer_error){.tag = tl_err_capture_without_alloc, .node = node}));
+            array_push(self->errors, ((tl_infer_error){.tag = tl_err_capture_without_alloc, .node = node}));
             return 1;
         }
     }
@@ -2144,7 +2144,8 @@ int traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, traverse_cb 
         // Skip during free variable collection — alloc_expr is evaluated at the creation site,
         // not inside the closure body.
         if (node->lambda_function.attributes && !ctx->skip_alloc_expr) {
-            lambda_closure_attrs attrs = lambda_get_closure_attrs(self->transient, node->lambda_function.attributes);
+            lambda_closure_attrs attrs =
+              lambda_get_closure_attrs(self->transient, node->lambda_function.attributes);
             if (attrs.alloc_expr) {
                 ctx->node_pos = npos_operand;
                 if (traverse_ast(self, ctx, attrs.alloc_expr, cb)) return 1;
@@ -2229,11 +2230,12 @@ int traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, traverse_cb 
         // considered free variables, so signal that in the traverse_ctx. Note that other binary ops like
         // arithmetic should not trigger the field_name case.
         {
-            char const *op               = str_cstr(&node->binary_op.op->symbol.name);
-            int         is_symbol        = ast_node_is_symbol(node->binary_op.right);
-            int         is_struct_access = is_struct_access_operator(op);
-            int         is_field_name    = is_symbol && is_struct_access;
-            int         save             = 0;
+            char const *op = str_cstr(&node->binary_op.op->symbol.name);
+            int         is_symbol_or_nfa =
+              ast_node_is_symbol(node->binary_op.right) || ast_node_is_nfa(node->binary_op.right);
+            int is_struct_access = is_struct_access_operator(op);
+            int is_field_name    = is_symbol_or_nfa && is_struct_access;
+            int save             = 0;
             if (is_field_name) {
                 save               = ctx->is_field_name;
                 ctx->is_field_name = 1;
@@ -2806,8 +2808,8 @@ int check_type_predicate(tl_infer *self, traverse_ctx *traverse_ctx, ast_node *n
             u64       want_hash = ast_node_hash(want);
             if (0 == want_hash) fatal("runtime error"); // 0 hash illegal and breaks logic here
 
-            int found_one = attribute_set_contains(sym_attributes, want_hash)
-                         || attribute_set_contains(lambda_attributes, want_hash);
+            int found_one = attribute_set_contains(sym_attributes, want_hash) ||
+                            attribute_set_contains(lambda_attributes, want_hash);
 
             if (!found_one) {
                 found_all = 0;

@@ -34,8 +34,8 @@ typedef struct ast_node {
             str              module; // by parser when mangling name for module
             struct ast_node *annotation;
             tl_polytype     *annotation_type;
-            struct ast_node *attributes; // may be null
-            int              is_mangled; // by parser for module namespacing
+            struct ast_node *attributes;        // may be null
+            int              is_module_mangled; // by parser for module namespacing
         } symbol;
 
         struct ast_bool {
@@ -391,12 +391,12 @@ ast_node_sized ast_let_type_params(ast_node const *);
 // -- lambda closure attributes --
 
 typedef struct {
-    int       has_alloc;       // [[alloc]] or [[alloc(expr)]] present
-    int       has_capture;     // [[capture(...)]] present
-    ast_node *alloc_expr;      // allocator expression (NULL for default allocator)
-    str      *capture_names;   // array of captured variable names (alpha-converted)
-    ast_node **capture_nodes;  // parallel array: raw AST nodes for each capture name
-    u8        n_capture_names; // count
+    int        has_alloc;       // [[alloc]] or [[alloc(expr)]] present
+    int        has_capture;     // [[capture(...)]] present
+    ast_node  *alloc_expr;      // allocator expression (NULL for default allocator)
+    str       *capture_names;   // array of captured variable names (alpha-converted)
+    ast_node **capture_nodes;   // parallel array: raw AST nodes for each capture name
+    u8         n_capture_names; // count
 } lambda_closure_attrs;
 
 // Parse [[alloc]], [[alloc(expr)]], and [[capture(a, b, ...)]] from an attribute_set node.

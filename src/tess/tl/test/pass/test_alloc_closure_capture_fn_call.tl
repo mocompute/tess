@@ -2,8 +2,6 @@
 #import <Alloc.tl>
 
 // Capturing a function-typed value and calling it inside the closure body.
-// Currently fails: FV analysis does not count application position as a use,
-// so the compiler reports capture_unused_variable for `base`.
 
 make_base(n: Int) -> (Int) -> Int {
     f := [[alloc, capture(n)]] (x) { x + n }

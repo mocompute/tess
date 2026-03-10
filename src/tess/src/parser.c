@@ -198,7 +198,7 @@ void add_module_symbol(parser *self, ast_node *name) {
     // arity.
     if (ast_node_is_symbol(name)) {
         // For safety, don't add symbols which have already been mangled.
-        if (name->symbol.is_mangled) return;
+        if (name->symbol.is_module_mangled) return;
 
         str name_str = ast_node_str(name);
 
@@ -1805,7 +1805,7 @@ static int maybe_mangle_binop(parser *self, ast_node *op, ast_node **inout, ast_
         str module      = (*inout)->symbol.module;
 
         // Cross-module case: use original (unmangled) name
-        if ((*inout)->symbol.is_mangled && !str_is_empty((*inout)->symbol.original))
+        if ((*inout)->symbol.is_module_mangled && !str_is_empty((*inout)->symbol.original))
             parent_name = (*inout)->symbol.original;
 
         if (str_hset_contains(self->nested_type_parents, parent_name)) {
@@ -1815,9 +1815,10 @@ static int maybe_mangle_binop(parser *self, ast_node *op, ast_node **inout, ast_
 
             if (to_mangle) {
                 // Build candidate child name and verify it exists in the correct module's symbols
-                str child_name = to_mangle->symbol.is_mangled && !str_is_empty(to_mangle->symbol.original)
-                                   ? to_mangle->symbol.original
-                                   : to_mangle->symbol.name;
+                str child_name =
+                  to_mangle->symbol.is_module_mangled && !str_is_empty(to_mangle->symbol.original)
+                    ? to_mangle->symbol.original
+                    : to_mangle->symbol.name;
                 str candidate_name = str_qualify(self->ast_arena, parent_name, child_name);
 
                 // Look up in the appropriate module's symbol table
@@ -2026,10 +2027,10 @@ void unmangle_name(parser *self, ast_node *name) {
         return;
     }
     if (!ast_node_is_symbol(name)) return;
-    if (!name->symbol.is_mangled) return;
+    if (!name->symbol.is_module_mangled) return;
     if (str_is_empty(name->symbol.original)) return;
-    name->symbol.name       = name->symbol.original;
-    name->symbol.is_mangled = 0;
+    name->symbol.name              = name->symbol.original;
+    name->symbol.is_module_mangled = 0;
     str_deinit(self->ast_arena, &name->symbol.module);
 }
 
@@ -2083,8 +2084,8 @@ str mangle_str_for_arity(allocator *alloc, str name, u8 arity) {
 void mangle_name_for_module(parser *self, ast_node *name, str module) {
     if (ast_node_is_symbol(name) && !str_is_empty(module)) {
         ast_node_name_replace(name, mangle_str_for_module(self, name->symbol.name, module));
-        name->symbol.is_mangled = 1;
-        name->symbol.module     = str_copy(self->ast_arena, module);
+        name->symbol.is_module_mangled = 1;
+        name->symbol.module            = str_copy(self->ast_arena, module);
         if (0) {
             fprintf(stderr, "parser: mangle '%s' to '%s'\n", str_cstr(&name->symbol.original),
                     str_cstr(&name->symbol.name));
@@ -2122,7 +2123,7 @@ void mangle_name(parser *self, ast_node *name) {
         return;
     }
     if (!ast_node_is_symbol(name)) return;
-    if (name->symbol.is_mangled) return;
+    if (name->symbol.is_module_mangled) return;
     if (is_intrinsic(name->symbol.name)) return;
 
     // Don't mangle names of known types

@@ -244,24 +244,24 @@ ast_node *ast_node_create_arrow(allocator *alloc, ast_node *left, ast_node *righ
 }
 
 ast_node *ast_node_create_sym_c(allocator *alloc, char const *str) {
-    ast_node *self               = ast_node_create(alloc, ast_symbol);
-    self->symbol.name            = str_init(alloc, str);
-    self->symbol.original        = str_empty();
-    self->symbol.annotation      = null;
-    self->symbol.annotation_type = null;
-    self->symbol.is_mangled      = 0;
-    self->symbol.module          = str_empty();
+    ast_node *self                 = ast_node_create(alloc, ast_symbol);
+    self->symbol.name              = str_init(alloc, str);
+    self->symbol.original          = str_empty();
+    self->symbol.annotation        = null;
+    self->symbol.annotation_type   = null;
+    self->symbol.is_module_mangled = 0;
+    self->symbol.module            = str_empty();
     return self;
 }
 
 ast_node *ast_node_create_sym(allocator *alloc, str str) {
-    ast_node *self               = ast_node_create(alloc, ast_symbol);
-    self->symbol.name            = str_copy(alloc, str);
-    self->symbol.original        = str_empty();
-    self->symbol.annotation      = null;
-    self->symbol.annotation_type = null;
-    self->symbol.is_mangled      = 0;
-    self->symbol.module          = str_empty();
+    ast_node *self                 = ast_node_create(alloc, ast_symbol);
+    self->symbol.name              = str_copy(alloc, str);
+    self->symbol.original          = str_empty();
+    self->symbol.annotation        = null;
+    self->symbol.annotation_type   = null;
+    self->symbol.is_module_mangled = 0;
+    self->symbol.module            = str_empty();
     return self;
 }
 
@@ -342,9 +342,9 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
         if (vorig->annotation_type) {
             vclone->annotation_type = tl_polytype_clone(alloc, vorig->annotation_type);
         } else vclone->annotation_type = null;
-        vclone->is_mangled = vorig->is_mangled;
+        vclone->is_module_mangled = vorig->is_module_mangled;
 
-        vclone->attributes = ast_node_clone(alloc, vorig->attributes);
+        vclone->attributes        = ast_node_clone(alloc, vorig->attributes);
     } break;
 
     case ast_hash_command: {
@@ -1811,8 +1811,7 @@ lambda_closure_attrs lambda_get_closure_attrs(allocator *alloc, ast_node *attrib
 
     for (u32 i = 0; i < attrs->n; ++i) {
         ast_node *node = attrs->nodes[i];
-        str       name = ast_node_is_nfa(node) ? ast_node_str(node->named_application.name)
-                                               : ast_node_str(node);
+        str name = ast_node_is_nfa(node) ? ast_node_str(node->named_application.name) : ast_node_str(node);
 
         if (str_eq(name, S("alloc"))) {
             out.has_alloc = 1;
