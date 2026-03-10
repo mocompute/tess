@@ -152,12 +152,12 @@ static char *normalize_ops(allocator *alloc, char const *line) {
         // Three-character operators (order matters: check before single-char)
         if (c == '<' && next == '<' && next2 == '=') {
             emit_spaced_op(&out, "<<=");
-            i++;
+            i += 2;
             continue;
         }
         if (c == '>' && next == '>' && next2 == '=') {
             emit_spaced_op(&out, ">>=");
-            i++;
+            i += 2;
             continue;
         }
 

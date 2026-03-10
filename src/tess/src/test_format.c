@@ -136,6 +136,14 @@ static int test_normalize_ops(void) {
 
     error += check(alloc, "arity after nested type args", "foo[Array[Int]]/2", "foo[Array[Int]]/2\n");
 
+    error += check(alloc, "<<= compound assign", "s <<= four", "s <<= four\n");
+
+    error += check(alloc, ">>= compound assign", "s >>= four", "s >>= four\n");
+
+    error += check(alloc, "<<= no spaces", "s<<=four", "s <<= four\n");
+
+    error += check(alloc, ">>= no spaces", "s>>=four", "s >>= four\n");
+
     arena_destroy(&alloc);
     return error;
 }
