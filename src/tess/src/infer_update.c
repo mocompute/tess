@@ -557,6 +557,12 @@ static int is_allocated_closure(tl_infer *self, ast_node *node, hashmap *binding
         return is_allocated_closure(self, last, bindings);
     }
 
+    // if/else — both branches must be allocated closures
+    if (node->tag == ast_if_then_else) {
+        return is_allocated_closure(self, node->if_then_else.yes, bindings)
+            && is_allocated_closure(self, node->if_then_else.no, bindings);
+    }
+
     return 0;
 }
 
