@@ -107,28 +107,28 @@ static void        generate_assign_lhs(transpile *, str);
 static void        generate_assign(transpile *, str, str);
 static str         generate_context(transpile *, str_sized, eval_ctx *, int, ast_node *);
 static lambda_closure_attrs toplevel_closure_attrs(transpile *, str);
-static void        generate_assign_field(transpile *, str, str, str);
+static void                 generate_assign_field(transpile *, str, str, str);
 
-static void        cat(transpile *, str);
-static void        cat_nl(transpile *);
-static void        cat_sp(transpile *);
-static void        cat_ampersand(transpile *);
-static void        cat_assign(transpile *);
-static void        cat_commasp(transpile *);
-static void        cat_dot(transpile *);
-static void        cat_open_round(transpile *);
-static void        cat_close_round(transpile *);
-static void        cat_open_curly(transpile *);
-static void        cat_open_curlyln(transpile *);
-static void        cat_close_curly(transpile *);
-static void        cat_close_square(transpile *);
-static void        cat_semicolon(transpile *);
-static void        cat_semicolonln(transpile *);
-static void        cat_star(transpile *);
-static void        cat_return(transpile *, str);
-static void        catln(transpile *, str);
-static void        cat_comment(transpile *, str);
-static void        cat_commentln(transpile *, str);
+static void                 cat(transpile *, str);
+static void                 cat_nl(transpile *);
+static void                 cat_sp(transpile *);
+static void                 cat_ampersand(transpile *);
+static void                 cat_assign(transpile *);
+static void                 cat_commasp(transpile *);
+static void                 cat_dot(transpile *);
+static void                 cat_open_round(transpile *);
+static void                 cat_close_round(transpile *);
+static void                 cat_open_curly(transpile *);
+static void                 cat_open_curlyln(transpile *);
+static void                 cat_close_curly(transpile *);
+static void                 cat_close_square(transpile *);
+static void                 cat_semicolon(transpile *);
+static void                 cat_semicolonln(transpile *);
+static void                 cat_star(transpile *);
+static void                 cat_return(transpile *, str);
+static void                 catln(transpile *, str);
+static void                 cat_comment(transpile *, str);
+static void                 cat_commentln(transpile *, str);
 // static void        cat_double_slash(transpile *);
 static void cat_close_curlyln(transpile *);
 // static void        cat_i64(transpile *, i64);
@@ -770,7 +770,9 @@ static str generate_context(transpile *self, str_sized fvs, eval_ctx *ctx, int i
 static lambda_closure_attrs toplevel_closure_attrs(transpile *self, str name) {
     ast_node *node = ast_node_str_map_get(self->toplevels, name);
     if (!node || !ast_node_is_let_in_lambda(node)) return (lambda_closure_attrs){0};
-    return lambda_get_closure_attrs(self->transient, node->let_in.value->lambda_function.attributes);
+    lambda_closure_attrs attrs =
+      lambda_get_closure_attrs(self->transient, node->let_in.value->lambda_function.attributes);
+    return attrs;
 }
 
 static void generate_toplevel_contexts(transpile *self) {
@@ -1455,14 +1457,14 @@ static str generate_let_in_lambda(transpile *self, tl_monotype *result_type, ast
 
     // For allocated closures: create a local tl_closure variable with heap-allocated context.
     // The closure struct is created once here; calls use indirect dispatch through it.
-    str                  name       = ast_node_str(node->let_in.name);
+    str                  name        = ast_node_str(node->let_in.name);
     lambda_closure_attrs alloc_attrs = toplevel_closure_attrs(self, name);
     if (alloc_attrs.has_alloc) {
-        tl_polytype *poly    = tl_type_env_lookup(self->env, name);
-        str          fn_name = mangle_fun(self, name);
-        str cls_name = str_cat(self->transient, S("tl_cls_"), name);
+        tl_polytype *poly     = tl_type_env_lookup(self->env, name);
+        str          fn_name  = mangle_fun(self, name);
+        str          cls_name = str_cat(self->transient, S("tl_cls_"), name);
 
-        str ctx_var = str_empty();
+        str          ctx_var  = str_empty();
         if (poly && poly->type->list.fvs.size)
             ctx_var = generate_context(self, poly->type->list.fvs, ctx, 1, alloc_attrs.alloc_expr);
 

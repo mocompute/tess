@@ -1392,37 +1392,72 @@ static int specialize_operand(tl_infer *self, traverse_ctx *traverse_ctx, ast_no
     return 0;
 }
 
+// For let-in lambdas whose name type is a polymorphic scheme (e.g., [[alloc]] closures
+// returning a generic identity function): add_generic generalizes the name, but the body
+// symbol carries the concrete instantiation after substitution.  Create the specialization
+// from the body type directly.
+static int specialize_let_in_lambda_from_body(tl_infer *self, traverse_ctx *traverse_ctx, ast_node *node) {
+    tl_polytype *body_type = node->let_in.body->type;
+    if (!body_type || !tl_polytype_is_concrete(body_type) || !tl_monotype_is_arrow(body_type->type))
+        return 0;
+
+    tl_monotype *arrow     = body_type->type;
+    str          name      = ast_node_str(node->let_in.name);
+    str          inst_name = specialize_arrow(self, traverse_ctx, name, arrow, (tl_monotype_sized){0});
+
+    if (!str_is_empty(inst_name)) {
+        ast_node_name_replace(node->let_in.name, inst_name);
+        // Also update the body symbol to reference the specialized name.
+        // The body may be a plain symbol or an ast_body wrapping expressions.
+        // FIXME: this is a ridiculous special case that only fixes the test
+        // test_alloc_closure_no_captures.tl
+        ast_node *body_sym = node->let_in.body;
+        if (ast_node_is_body(body_sym) && body_sym->body.expressions.size > 0)
+            body_sym = body_sym->body.expressions.v[body_sym->body.expressions.size - 1];
+        if (ast_node_is_symbol(body_sym)) ast_node_name_replace(body_sym, inst_name);
+    }
+    return 0;
+}
+
+// For let-in lambdas with a concrete name type: look up the specialization that was created
+// when the body's call sites were processed and rename the binding to match.
+static int specialize_let_in_lambda_lookup(tl_infer *self, ast_node *node, tl_polytype *name_type) {
+    tl_monotype *arrow = name_type->type;
+    str          name  = ast_node_str(node->let_in.name);
+
+    // Resolve any remaining weak ints so the hash matches the call-site specialization.
+    // First apply substitutions, then default any weak ints that weren't resolved by
+    // substitution (their TVs may not have been registered in the subs map).
+    if (!tl_monotype_is_concrete_no_weak(arrow))
+        tl_monotype_substitute(self->arena, arrow, self->subs, null);
+    if (!tl_monotype_is_concrete_no_weak(arrow))
+        tl_monotype_default_weak_ints(arrow, tl_type_registry_int(self->registry),
+                                      tl_type_registry_uint(self->registry),
+                                      tl_type_registry_float(self->registry));
+
+    str *found = instance_lookup_arrow(self, name, arrow, (tl_monotype_sized){0});
+    if (found) ast_node_name_replace(node->let_in.name, *found);
+    return 0;
+}
+
 static int specialize_let_in(tl_infer *self, traverse_ctx *traverse_ctx, ast_node *node) {
-    // Here we handle let fptr = id in ... function pointers.
     assert(ast_node_is_let_in(node));
     tl_polytype *name_type = node->let_in.name->type;
+    int          concrete  = name_type && tl_polytype_is_concrete(name_type);
 
-    if (!name_type || !tl_polytype_is_concrete(name_type)) return 0;
-
-    // For let-in lambdas: the value is a lambda (not a symbol), so specialize_operand
-    // can't handle it directly.  Instead, look up the specialization that was created
-    // when the body's call sites were processed and rename the binding to match.
-    // This callback is invoked twice on let_in nodes (before and after child traversal);
-    // the lookup succeeds on the second call, after call sites have been specialized.
-    if (ast_node_is_let_in_lambda(node) && tl_monotype_is_arrow(name_type->type)) {
-        tl_monotype *arrow = name_type->type;
-        str          name  = ast_node_str(node->let_in.name);
-
-        // Resolve any remaining weak ints so the hash matches the call-site specialization.
-        // First apply substitutions, then default any weak ints that weren't resolved by
-        // substitution (their TVs may not have been registered in the subs map).
-        if (!tl_monotype_is_concrete_no_weak(arrow))
-            tl_monotype_substitute(self->arena, arrow, self->subs, null);
-        if (!tl_monotype_is_concrete_no_weak(arrow))
-            tl_monotype_default_weak_ints(arrow, tl_type_registry_int(self->registry),
-                                          tl_type_registry_uint(self->registry),
-                                          tl_type_registry_float(self->registry));
-
-        str *found = instance_lookup_arrow(self, name, arrow, (tl_monotype_sized){0});
-        if (found) ast_node_name_replace(node->let_in.name, *found);
+    // Non-concrete name with body: only lambdas need handling (via body type).
+    // Non-lambda non-concrete let-ins with a body are no-ops.
+    if (!concrete && node->let_in.body) {
+        if (ast_node_is_let_in_lambda(node))
+            return specialize_let_in_lambda_from_body(self, traverse_ctx, node);
         return 0;
     }
 
+    // Let-in lambda with concrete arrow: look up specialization created by call sites.
+    if (ast_node_is_let_in_lambda(node) && tl_monotype_is_arrow(name_type->type))
+        return specialize_let_in_lambda_lookup(self, node, name_type);
+
+    // Non-lambda let-in (or lambda without arrow type): specialize the bound value.
     return specialize_operand(self, traverse_ctx, node->let_in.value);
 }
 
