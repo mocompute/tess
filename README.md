@@ -186,6 +186,16 @@ make -j test         # Run tests
 
 ### Quick Start
 
+Run a single file directly — no project setup needed:
+
+```bash
+echo '#module main
+main() { c_printf("Hello, world!\n") 0 }' > hello.tl
+tess run hello.tl
+```
+
+For a multi-file project, use `tess init`:
+
 ```bash
 mkdir myproject && cd myproject
 tess init                        # creates package.tl, src/main.tl
