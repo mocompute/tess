@@ -7,8 +7,8 @@
 #include "nodiscard.h"
 #include "str.h"
 
-typedef struct ast_node ast_node; // forward declaration for tl_trait_def
-typedef u32 tl_type_variable;     // t0, t1, etc
+typedef struct ast_node ast_node;         // forward declaration for tl_trait_def
+typedef u32             tl_type_variable; // t0, t1, etc
 
 defarray(tl_type_variable_array, tl_type_variable);
 defsized(tl_type_variable_sized, tl_type_variable);
@@ -19,8 +19,10 @@ defarray(tl_polytype_array, struct tl_polytype *);
 defsized(tl_polytype_sized, struct tl_polytype *);
 
 // Integer sub-chain IDs for width ordering
+// clang-format off
 enum {
     TL_INTEGER_SUBCHAIN_NONE            = 0, // not an integer type
+    // the below must be a contiguous range
     TL_INTEGER_SUBCHAIN_C_SIGNED        = 1, // CSignedChar < CShort < CInt < CLong < CLongLong
     TL_INTEGER_SUBCHAIN_C_UNSIGNED      = 2, // CUnsignedChar < CUnsignedShort < CUnsignedInt < CUnsignedLong < CUnsignedLongLong
     TL_INTEGER_SUBCHAIN_FIXED_SIGNED    = 3, // CInt8 < CInt16 < CInt32 < CInt64
@@ -28,27 +30,29 @@ enum {
     TL_INTEGER_SUBCHAIN_CSIZE           = 5, // CSize (standalone)
     TL_INTEGER_SUBCHAIN_CPTRDIFF        = 6, // CPtrDiff (standalone)
     TL_INTEGER_SUBCHAIN_CCHAR           = 7, // CChar (standalone)
+    // the above must be a contiguous range
     TL_INTEGER_SUBCHAIN_FLOAT           = 8, // CFloat < CDouble < CLongDouble
 };
+// clang-format on
 
 typedef struct {
     str       name;
-    str       generic_name;     // used to recover canonical name, eg Ptr_1 -> Ptr
-    str_sized field_names;      // for user types
-    int       is_variable_args; // non-zero if type allows a variable number of arguments, e.g. Union(...)
-    int       is_signed_integer;      // unifies with other signed integers
-    int       is_unsigned_integer;    // unifies with other unsigned integers
-    int       is_narrow_integer;     // same-family unification OK, but preserve C ABI type (no canonicalization)
-    int       is_float_convertible;   // the type is implicitly convertible to any other float type
-    int       integer_subchain;       // 0 = not an integer, 1-7 = sub-chain ID (TL_INTEGER_SUBCHAIN_*)
-    int       integer_width_rank;     // ordering within sub-chain (0 = narrowest), -1 if not integer
-    str       c_type_name;            // C type string, e.g. "long long", empty if not a builtin
-    char const *c_min_macro;          // C MIN macro, e.g. "INT_MIN", NULL if unsigned or non-integer
-    char const *c_max_macro;          // C MAX macro, e.g. "INT_MAX", NULL if non-integer
-    i64       integer_min_value;      // minimum value for compile-time range checking
-    u64       integer_max_value;      // maximum value for compile-time range checking (u64 for unsigned)
-    int       has_integer_range;      // non-zero if integer_min_value/max_value are valid
-    str       module;                 // module name (e.g., "Math"), empty for main module
+    str       generic_name;      // used to recover canonical name, eg Ptr_1 -> Ptr
+    str_sized field_names;       // for user types
+    int       is_variable_args;  // non-zero if type allows a variable number of arguments, e.g. Union(...)
+    int       is_signed_integer; // unifies with other signed integers
+    int       is_unsigned_integer; // unifies with other unsigned integers
+    int is_narrow_integer;    // same-family unification OK, but preserve C ABI type (no canonicalization)
+    int is_float_convertible; // the type is implicitly convertible to any other float type
+    int integer_subchain;     // 0 = not an integer, 1-7 = sub-chain ID (TL_INTEGER_SUBCHAIN_*)
+    int integer_width_rank;   // ordering within sub-chain (0 = narrowest), -1 if not integer
+    str c_type_name;          // C type string, e.g. "long long", empty if not a builtin
+    char const *c_min_macro;  // C MIN macro, e.g. "INT_MIN", NULL if unsigned or non-integer
+    char const *c_max_macro;  // C MAX macro, e.g. "INT_MAX", NULL if non-integer
+    i64         integer_min_value; // minimum value for compile-time range checking
+    u64         integer_max_value; // maximum value for compile-time range checking (u64 for unsigned)
+    int         has_integer_range; // non-zero if integer_min_value/max_value are valid
+    str         module;            // module name (e.g., "Math"), empty for main module
 } tl_type_constructor_def;
 
 // Trait function signature (stored in trait registry)
@@ -175,38 +179,38 @@ nodiscard tl_monotype *tl_monotype_clone(allocator *, tl_monotype *) mallocfun;
 nodiscard tl_polytype *tl_monotype_generalize(allocator *, tl_monotype *) mallocfun;
 
 void                   tl_monotype_substitute(allocator *, tl_monotype *, tl_type_subs *, hashmap *);
-void                   tl_monotype_default_weak_ints(tl_monotype *, tl_monotype *int_type,
-                                                     tl_monotype *uint_type, tl_monotype *float_type);
-void                   tl_monotype_sort_fvs(tl_monotype *);
-str_sized              tl_monotype_fvs(tl_monotype *);
-void                   tl_monotype_absorb_fvs(tl_monotype *, str_sized);
-u64                    tl_monotype_hash64(tl_monotype *);
-tl_monotype           *tl_monotype_arrow_result(tl_monotype *);
+void         tl_monotype_default_weak_ints(tl_monotype *, tl_monotype *int_type, tl_monotype *uint_type,
+                                           tl_monotype *float_type);
+void         tl_monotype_sort_fvs(tl_monotype *);
+str_sized    tl_monotype_fvs(tl_monotype *);
+void         tl_monotype_absorb_fvs(tl_monotype *, str_sized);
+u64          tl_monotype_hash64(tl_monotype *);
+tl_monotype *tl_monotype_arrow_result(tl_monotype *);
 
-str                    tl_monotype_to_string(allocator *, tl_monotype *);
-int                    tl_monotype_is_any(tl_monotype *);
-int                    tl_monotype_is_integer(tl_monotype *);
-int                    tl_monotype_is_void(tl_monotype *);
-int                    tl_monotype_is_list(tl_monotype *);
-int                    tl_monotype_is_inst(tl_monotype *);
-int                    tl_monotype_is_inst_specialized(tl_monotype *);
-int                    tl_monotype_is_inst_of(tl_monotype *, str);
-int                    tl_monotype_is_enum(tl_monotype *);
-int                    tl_monotype_is_tuple(tl_monotype *);
-int                    tl_monotype_is_concrete(tl_monotype *);
-int                    tl_monotype_arrow_is_concrete(tl_monotype *);
-int                    tl_monotype_is_weak(tl_monotype *);
-int                    tl_monotype_is_weak_int(tl_monotype *);
-int                    tl_monotype_is_weak_int_signed(tl_monotype *);
-int                    tl_monotype_is_weak_int_unsigned(tl_monotype *);
-int                    tl_monotype_is_weak_float(tl_monotype *);
-int                    tl_monotype_is_any_weak(tl_monotype *);
-int                    tl_monotype_is_weak_deep(tl_monotype *);
-int                    tl_monotype_sized_is_concrete(tl_monotype_sized);
-int                    tl_monotype_is_concrete_inst(tl_monotype *); // concrete constructor instance (non-arrow, non-var)
-int                    tl_monotype_is_concrete_no_weak(tl_monotype *);
-int                    tl_monotype_sized_is_concrete_no_weak(tl_monotype_sized);
-int                    tl_monotype_is_arrow(tl_monotype *);
+str          tl_monotype_to_string(allocator *, tl_monotype *);
+int          tl_monotype_is_any(tl_monotype *);
+int          tl_monotype_is_integer(tl_monotype *);
+int          tl_monotype_is_void(tl_monotype *);
+int          tl_monotype_is_list(tl_monotype *);
+int          tl_monotype_is_inst(tl_monotype *);
+int          tl_monotype_is_inst_specialized(tl_monotype *);
+int          tl_monotype_is_inst_of(tl_monotype *, str);
+int          tl_monotype_is_enum(tl_monotype *);
+int          tl_monotype_is_tuple(tl_monotype *);
+int          tl_monotype_is_concrete(tl_monotype *);
+int          tl_monotype_arrow_is_concrete(tl_monotype *);
+int          tl_monotype_is_weak(tl_monotype *);
+int          tl_monotype_is_weak_int(tl_monotype *);
+int          tl_monotype_is_weak_int_signed(tl_monotype *);
+int          tl_monotype_is_weak_int_unsigned(tl_monotype *);
+int          tl_monotype_is_weak_float(tl_monotype *);
+int          tl_monotype_is_any_weak(tl_monotype *);
+int          tl_monotype_is_weak_deep(tl_monotype *);
+int          tl_monotype_sized_is_concrete(tl_monotype_sized);
+int tl_monotype_is_concrete_inst(tl_monotype *); // concrete constructor instance (non-arrow, non-var)
+int tl_monotype_is_concrete_no_weak(tl_monotype *);
+int tl_monotype_sized_is_concrete_no_weak(tl_monotype_sized);
+int tl_monotype_is_arrow(tl_monotype *);
 
 // -- Pointer, Const, and CArray type queries --
 //
@@ -218,47 +222,47 @@ int                    tl_monotype_is_arrow(tl_monotype *);
 // has_ptr()     traverses Union variants; is_ptr() does not.
 // ptr_target()  works on Ptr, PtrOrNull, and Union containing Ptr.
 
-int                    tl_monotype_is_ptr(tl_monotype *);
-int                    tl_monotype_is_const(tl_monotype *);
-tl_monotype           *tl_monotype_const_target(tl_monotype *);
-int                    tl_monotype_is_ptr_to_const(tl_monotype *);
-int                    tl_monotype_is_carray(tl_monotype *);
-tl_monotype           *tl_monotype_carray_element(tl_monotype *);
-i32                    tl_monotype_carray_count(tl_monotype *);
-int                    tl_monotype_is_unary(tl_monotype *);
-int                    tl_monotype_arrow_has_arrow(tl_monotype *);
-int                    tl_monotype_has_ptr(tl_monotype *);
-int                    tl_monotype_is_union(tl_monotype *);
-int                    tl_monotype_is_tv(tl_monotype *);
-int                    tl_monotype_is_signed_integer(tl_monotype *);
-int                    tl_monotype_is_unsigned_integer(tl_monotype *);
-int                    tl_monotype_is_integer_convertible(tl_monotype *);
-int                    tl_monotype_is_float_convertible(tl_monotype *);
-void                   tl_monotype_set_signed_integer(tl_monotype *);
-void                   tl_monotype_set_unsigned_integer(tl_monotype *);
-void                   tl_monotype_set_float_convertible(tl_monotype *);
+int          tl_monotype_is_ptr(tl_monotype *);
+int          tl_monotype_is_const(tl_monotype *);
+tl_monotype *tl_monotype_const_target(tl_monotype *);
+int          tl_monotype_is_ptr_to_const(tl_monotype *);
+int          tl_monotype_is_carray(tl_monotype *);
+tl_monotype *tl_monotype_carray_element(tl_monotype *);
+i32          tl_monotype_carray_count(tl_monotype *);
+int          tl_monotype_is_unary(tl_monotype *);
+int          tl_monotype_arrow_has_arrow(tl_monotype *);
+int          tl_monotype_has_ptr(tl_monotype *);
+int          tl_monotype_is_union(tl_monotype *);
+int          tl_monotype_is_tv(tl_monotype *);
+int          tl_monotype_is_signed_integer(tl_monotype *);
+int          tl_monotype_is_unsigned_integer(tl_monotype *);
+int          tl_monotype_is_integer_convertible(tl_monotype *);
+int          tl_monotype_is_float_convertible(tl_monotype *);
+void         tl_monotype_set_signed_integer(tl_monotype *);
+void         tl_monotype_set_unsigned_integer(tl_monotype *);
+void         tl_monotype_set_float_convertible(tl_monotype *);
 
 // Integer sub-chain queries
-int                    tl_monotype_integer_subchain(tl_monotype *);        // returns 0 if not integer
-int                    tl_monotype_integer_width_rank(tl_monotype *);      // returns -1 if not integer
-int                    tl_monotype_compare_integer_width(tl_monotype *left, tl_monotype *right); // -1/0/1/2
-int                    tl_monotype_same_integer_subchain(tl_monotype *left, tl_monotype *right);
-int                    tl_monotype_integer_value_fits(tl_monotype *, i64);
-char const            *tl_monotype_integer_c_min(tl_monotype *);  // e.g. "SHRT_MIN", NULL if unsigned
-char const            *tl_monotype_integer_c_max(tl_monotype *);  // e.g. "SHRT_MAX"
-int                    tl_monotype_is_unsigned_family(tl_monotype *); // unsigned subchains (2, 4, 5=CSize)
-tl_monotype           *tl_monotype_unary_target(tl_monotype *);
-tl_monotype           *tl_monotype_ptr_target(tl_monotype *);
-void                   tl_monotype_ptr_set_target(tl_monotype *, tl_monotype *);
-tl_monotype           *tl_monotype_arrow_args(tl_monotype *);
-tl_monotype_sized      tl_monotype_arrow_get_args(tl_monotype *);
-i32                    tl_monotype_type_constructor_field_index(tl_monotype *, str);
-int                    tl_monotype_is_ptr_to_char(tl_monotype *);
-int                    tl_monotype_is_ptr_to_tv(tl_monotype *);
-i32                    tl_monotype_integer(tl_monotype *);
-tl_type_variable       tl_monotype_tv(tl_monotype *);
+int               tl_monotype_integer_subchain(tl_monotype *);   // returns 0 if not integer
+int               tl_monotype_integer_width_rank(tl_monotype *); // returns -1 if not integer
+int               tl_monotype_compare_integer_width(tl_monotype *left, tl_monotype *right); // -1/0/1/2
+int               tl_monotype_same_integer_subchain(tl_monotype *left, tl_monotype *right);
+int               tl_monotype_integer_value_fits(tl_monotype *, i64);
+char const       *tl_monotype_integer_c_min(tl_monotype *);      // e.g. "SHRT_MIN", NULL if unsigned
+char const       *tl_monotype_integer_c_max(tl_monotype *);      // e.g. "SHRT_MAX"
+int               tl_monotype_is_unsigned_family(tl_monotype *); // unsigned subchains (2, 4, 5=CSize)
+tl_monotype      *tl_monotype_unary_target(tl_monotype *);
+tl_monotype      *tl_monotype_ptr_target(tl_monotype *);
+void              tl_monotype_ptr_set_target(tl_monotype *, tl_monotype *);
+tl_monotype      *tl_monotype_arrow_args(tl_monotype *);
+tl_monotype_sized tl_monotype_arrow_get_args(tl_monotype *);
+i32               tl_monotype_type_constructor_field_index(tl_monotype *, str);
+int               tl_monotype_is_ptr_to_char(tl_monotype *);
+int               tl_monotype_is_ptr_to_tv(tl_monotype *);
+i32               tl_monotype_integer(tl_monotype *);
+tl_type_variable  tl_monotype_tv(tl_monotype *);
 
-u64                    tl_type_constructor_def_hash64(tl_type_constructor_def *);
+u64               tl_type_constructor_def_hash64(tl_type_constructor_def *);
 
 // -- polytype --
 

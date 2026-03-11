@@ -14,10 +14,10 @@ The `Str` type is a 16-byte SSO (Small String Optimization) union:
 |----------------|------------------------------------------------------------------|
 | Construction   | `empty`, `from_cstr`, `from_bytes`, `copy`, `from_int`, `from_float` |
 | Queries        | `len`, `is_empty`, `byte_at`, `cstr`                            |
-| Comparison     | `eq`, `cmp`, `starts_with`, `ends_with`, `contains`, `contains_byte` |
+| Comparison     | `eq`, `cmp`, `starts_with`, `ends_with`, `contains`, `contains_char` |
 | Concatenation  | `cat`, `cat_3`, `cat_4`, `push`                                 |
 | Slicing        | `slice`                                                          |
-| Search         | `index_of_byte`                                                  |
+| Search         | `index_of_char`                                                  |
 | Mutation       | `replace_byte`                                                   |
 | Memory         | `free`                                                           |
 
@@ -39,9 +39,9 @@ These are used constantly in real programs. Without them, users must drop to raw
 
 ### Priority 2: Commonly needed utilities
 
-**`index_of_byte_from(s, b, start) -> Int`** — Byte search starting from an offset. Needed to iterate through all occurrences without re-scanning from the beginning.
+**`index_of_char_from(s, b, start) -> Int`** — Byte search starting from an offset. Needed to iterate through all occurrences without re-scanning from the beginning.
 
-**`last_index_of_byte(s, b) -> Int` / `last_index_of(s, needle) -> Int`** — Reverse search. Common for finding file extensions (`last_index_of_byte(path, '.')`) or directory separators.
+**`last_index_of_char(s, b) -> Int` / `last_index_of(s, needle) -> Int`** — Reverse search. Common for finding file extensions (`last_index_of_char(path, '.')`) or directory separators.
 
 **`repeat(s, count) -> Str`** — Repeat a string N times. Useful for formatting/padding. Every major language has this.
 
@@ -83,5 +83,5 @@ The `cat_3`/`cat_4` naming works around the lack of variadic functions but doesn
 4. `replace` — depends on `index_of`
 5. `to_upper` / `to_lower` — standalone, no dependencies
 6. `join` — complement to `split`
-7. `last_index_of_byte` / `last_index_of` — standalone
+7. `last_index_of_char` / `last_index_of` — standalone
 8. Remaining priority 2 and 3 items as needed

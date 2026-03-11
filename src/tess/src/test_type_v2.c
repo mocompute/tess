@@ -347,6 +347,33 @@ static int test_registry_csize_cptrdiff(void) {
     return error;
 }
 
+// ---------------------------------------------------------------------------
+// Test: CChar is neither signed nor unsigned but is integer-convertible
+// ---------------------------------------------------------------------------
+static int test_cchar_signedness(void) {
+    int               error = 0;
+    tl_type_registry *reg   = test_registry();
+
+    tl_monotype *cchar = lookup(reg, "CChar");
+    error += !cchar;
+    error += !tl_monotype_is_inst(cchar);
+
+    // CChar is neither signed nor unsigned
+    error += tl_monotype_is_signed_integer(cchar)  != 0;
+    error += tl_monotype_is_unsigned_integer(cchar) != 0;
+    error += tl_monotype_is_unsigned_family(cchar)  != 0;
+
+    // But it IS integer-convertible (has a valid subchain)
+    error += tl_monotype_is_integer_convertible(cchar) != 1;
+
+    // Subchain is correct
+    error += tl_monotype_integer_subchain(cchar) != TL_INTEGER_SUBCHAIN_CCHAR;
+
+    allocator *arena = reg->alloc;
+    arena_destroy(&arena);
+    return error;
+}
+
 int main(void) {
     int error      = 0;
     int this_error = 0;
@@ -359,6 +386,7 @@ int main(void) {
     T(test_weak_int_construction);
     T(test_weak_int_predicates);
     T(test_registry_csize_cptrdiff);
+    T(test_cchar_signedness);
 
     return error;
 }

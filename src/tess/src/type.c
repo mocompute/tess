@@ -178,7 +178,7 @@ tl_type_registry *tl_type_registry_create(allocator *alloc, allocator *transient
       //                     name                  signed unsigned narrow float  subchain                          rank  c_type               c_min           c_max            min_val             max_val              has_range
       BUILTIN("Void",                                0,    0,      0,    0,     TL_INTEGER_SUBCHAIN_NONE,           -1,  "void",              NULL,           NULL,            0,                  0,                   0),
       BUILTIN("Bool",                                0,    0,      0,    0,     TL_INTEGER_SUBCHAIN_NONE,           -1,  "/*bool*/int",       NULL,           NULL,            0,                  0,                   0),
-      BUILTIN("CChar",                               0,    1,      1,    0,     TL_INTEGER_SUBCHAIN_CCHAR,           0,  "char",              "CHAR_MIN",     "CHAR_MAX",      -128,               127,                 1),
+      BUILTIN("CChar",                               0,    0,      1,    0,     TL_INTEGER_SUBCHAIN_CCHAR,           0,  "char",              "CHAR_MIN",     "CHAR_MAX",      -128,               127,                 1),
       BUILTIN("CUnsignedChar",                       0,    1,      1,    0,     TL_INTEGER_SUBCHAIN_C_UNSIGNED,      0,  "unsigned char",     NULL,           "UCHAR_MAX",     0,                  255,                 1),
       BUILTIN("CSignedChar",                         1,    0,      1,    0,     TL_INTEGER_SUBCHAIN_C_SIGNED,        0,  "signed char",       "SCHAR_MIN",    "SCHAR_MAX",     -128,               127,                 1),
       BUILTIN("CShort",                              1,    0,      1,    0,     TL_INTEGER_SUBCHAIN_C_SIGNED,        1,  "short",             "SHRT_MIN",     "SHRT_MAX",      -32768,             32767,               1),
@@ -2241,7 +2241,9 @@ int tl_monotype_is_unsigned_integer(tl_monotype *self) {
     return tl_monotype_is_inst(self) && self->cons_inst->def->is_unsigned_integer;
 }
 int tl_monotype_is_integer_convertible(tl_monotype *self) {
-    return tl_monotype_is_signed_integer(self) || tl_monotype_is_unsigned_integer(self);
+    if (!tl_monotype_is_inst(self)) return 0;
+    return self->cons_inst->def->integer_subchain >= TL_INTEGER_SUBCHAIN_C_SIGNED
+        && self->cons_inst->def->integer_subchain <= TL_INTEGER_SUBCHAIN_CCHAR;
 }
 int tl_monotype_is_float_convertible(tl_monotype *self) {
     return tl_monotype_is_inst(self) && self->cons_inst->def->is_float_convertible;
@@ -3260,7 +3262,8 @@ static int tl_type_subs_unify_weak_int_concrete(tl_type_subs *subs, tl_monotype 
             return 1;
         }
     } else {
-        if (!def->is_signed_integer && !def->is_unsigned_integer) {
+        if (!def->is_signed_integer && !def->is_unsigned_integer
+            && def->integer_subchain == TL_INTEGER_SUBCHAIN_NONE) {
             if (cb) cb(user, weak_int, concrete);
             return 1;
         }

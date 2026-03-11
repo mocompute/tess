@@ -8,6 +8,8 @@
 _NONE: UInt := 9999u
 // Null byte sentinel for unwrapping Option[Byte].
 _NUL: Byte := 0u
+// Null char sentinel
+_NUL_CHAR: CChar := '\0'
 
 // -- Construction and basic queries --
 
@@ -236,16 +238,16 @@ test_contains() {
     error
 }
 
-test_contains_byte() {
+test_contains_char() {
     error := 0
     s     := Str.from_cstr("hello")
-    if !Str.contains_byte(s, 104u) { error += 1 } // 'h'
-    if Str.contains_byte(s, 122u) { error += 1 }  // 'z'
+    if !Str.contains_char(s, 'h') { error += 1 }
+    if Str.contains_char(s, 'z') { error += 1 }
     Str.free(s.&)
 
     // Empty string
     e := Str.empty()
-    if Str.contains_byte(e, 'a') { error += 1 }
+    if Str.contains_char(e, 'a') { error += 1 }
 
     error
 }
@@ -358,6 +360,16 @@ test_byte_at() {
     error
 }
 
+test_char_at() {
+    error := 0
+    s     := Str.from_cstr("abc")
+    if unwrap(Str.char_at(s, 0u), _NUL_CHAR) != 'a' { error += 1 }
+    if unwrap(Str.char_at(s, 1u), _NUL_CHAR) != 'b' { error += 1 }
+    if unwrap(Str.char_at(s, 2u), _NUL_CHAR) != 'c' { error += 1 }
+    Str.free(s.&)
+    error
+}
+
 test_slice() {
     error := 0
     s     := Str.from_cstr("hello world")
@@ -390,24 +402,24 @@ test_slice() {
 
 // -- Search --
 
-test_index_of_byte() {
+test_index_of_char() {
     error := 0
     s     := Str.from_cstr("hello")
-    if unwrap(Str.index_of_byte(s, 108u), _NONE) != 2u { error += 1 }    // 'l'
-    if unwrap(Str.index_of_byte(s, 111u), _NONE) != 4u { error += 1 }    // 'o'
-    if unwrap(Str.index_of_byte(s, 122u), _NONE) != _NONE { error += 1 } // 'z' not found
+    if unwrap(Str.index_of_char(s, 'l'), _NONE) != 2u { error += 1 }
+    if unwrap(Str.index_of_char(s, 'o'), _NONE) != 4u { error += 1 }
+    if unwrap(Str.index_of_char(s, 'z'), _NONE) != _NONE { error += 1 }
 
     // First byte
-    if unwrap(Str.index_of_byte(s, 'h'), _NONE) != 0u { error += 1 }
+    if unwrap(Str.index_of_char(s, 'h'), _NONE) != 0u { error += 1 }
 
     // Last byte
-    if unwrap(Str.index_of_byte(s, 'o'), _NONE) != 4u { error += 1 }
+    if unwrap(Str.index_of_char(s, 'o'), _NONE) != 4u { error += 1 }
 
     Str.free(s.&)
 
     // Empty string
     e := Str.empty()
-    if unwrap(Str.index_of_byte(e, 'a'), _NONE) != _NONE { error += 1 }
+    if unwrap(Str.index_of_char(e, 'a'), _NONE) != _NONE { error += 1 }
 
     error
 }
@@ -499,7 +511,7 @@ test_sso_boundary() {
 test_replace_byte() {
     error := 0
     s     := Str.from_cstr("hello")
-    r     := Str.replace_byte(s, 108u, 114u) // 'l' -> 'r'
+    r     := Str.replace_byte(s, 'l', 'r')
     cs    := Str.cstr(r.&)
     if c_strcmp(cs, "herro") != 0 { error += 1 }
     Str.free(r.&)
@@ -587,46 +599,46 @@ test_index_of() {
     error
 }
 
-test_index_of_byte_from() {
+test_index_of_char_from() {
     error := 0
     s     := Str.from_cstr("hello")
 
     // Skip first 'l' at index 2, find second 'l' at index 3
-    if unwrap(Str.index_of_byte_from(s, 108u, 3u), _NONE) != 3u { error += 1 }
+    if unwrap(Str.index_of_char_from(s, 'l', 3u), _NONE) != 3u { error += 1 }
 
     // Start at match position
-    if unwrap(Str.index_of_byte_from(s, 108u, 2u), _NONE) != 2u { error += 1 }
+    if unwrap(Str.index_of_char_from(s, 'l', 2u), _NONE) != 2u { error += 1 }
 
     // Start past all occurrences
-    if unwrap(Str.index_of_byte_from(s, 108u, 4u), _NONE) != _NONE { error += 1 }
+    if unwrap(Str.index_of_char_from(s, 'l', 4u), _NONE) != _NONE { error += 1 }
 
     // Start >= len
-    if unwrap(Str.index_of_byte_from(s, 108u, 5u), _NONE) != _NONE { error += 1 }
-    if unwrap(Str.index_of_byte_from(s, 108u, 100u), _NONE) != _NONE { error += 1 }
+    if unwrap(Str.index_of_char_from(s, 'l', 5u), _NONE) != _NONE { error += 1 }
+    if unwrap(Str.index_of_char_from(s, 'l', 100u), _NONE) != _NONE { error += 1 }
 
     Str.free(s.&)
     error
 }
 
-test_last_index_of_byte() {
+test_last_index_of_char() {
     error := 0
     s     := Str.from_cstr("hello")
 
     // Multiple 'l' - finds last at index 3
-    if unwrap(Str.last_index_of_byte(s, 108u), _NONE) != 3u { error += 1 }
+    if unwrap(Str.last_index_of_char(s, 'l'), _NONE) != 3u { error += 1 }
 
     // Single 'h' at index 0
-    if unwrap(Str.last_index_of_byte(s, 104u), _NONE) != 0u { error += 1 }
+    if unwrap(Str.last_index_of_char(s, 'h'), _NONE) != 0u { error += 1 }
 
     // Single 'o' at end
-    if unwrap(Str.last_index_of_byte(s, 111u), _NONE) != 4u { error += 1 }
+    if unwrap(Str.last_index_of_char(s, 'o'), _NONE) != 4u { error += 1 }
 
     // Not found
-    if unwrap(Str.last_index_of_byte(s, 122u), _NONE) != _NONE { error += 1 }
+    if unwrap(Str.last_index_of_char(s, 'z'), _NONE) != _NONE { error += 1 }
 
     // Empty string
     e := Str.empty()
-    if unwrap(Str.last_index_of_byte(e, 97u), _NONE) != _NONE { error += 1 }
+    if unwrap(Str.last_index_of_char(e, 'a'), _NONE) != _NONE { error += 1 }
 
     Str.free(s.&)
     error
@@ -1462,15 +1474,16 @@ main() {
     error += _check("starts_with", test_starts_with())
     error += _check("ends_with", test_ends_with())
     error += _check("contains", test_contains())
-    error += _check("contains_byte", test_contains_byte())
+    error += _check("contains_char", test_contains_char())
     error += _check("cat_small_small", test_cat_small_small())
     error += _check("cat_to_big", test_cat_to_big())
     error += _check("push", test_push())
     error += _check("cat_3", test_cat_3())
     error += _check("cat_4", test_cat_4())
     error += _check("byte_at", test_byte_at())
+    error += _check("char_at", test_char_at())
     error += _check("slice", test_slice())
-    error += _check("index_of_byte", test_index_of_byte())
+    error += _check("index_of_char", test_index_of_char())
     error += _check("from_int", test_from_int())
     error += _check("from_float", test_from_float())
     error += _check("sso_boundary", test_sso_boundary())
@@ -1478,8 +1491,8 @@ main() {
     error += _check("from_byte", test_from_byte())
     error += _check("eq_cstr", test_eq_cstr())
     error += _check("index_of", test_index_of())
-    error += _check("index_of_byte_from", test_index_of_byte_from())
-    error += _check("last_index_of_byte", test_last_index_of_byte())
+    error += _check("index_of_char_from", test_index_of_char_from())
+    error += _check("last_index_of_char", test_last_index_of_char())
     error += _check("last_index_of", test_last_index_of())
     error += _check("to_upper", test_to_upper())
     error += _check("to_lower", test_to_lower())

@@ -52,6 +52,7 @@ len       (s: Str)              -> UInt
 is_empty  (s: Str)              -> Bool
 _is_small (s: Str)              -> Bool
 byte_at   (s: Str, index: UInt) -> Option[Byte]
+char_at   (s: Str, index: UInt) -> Option[CChar]
 cstr      (s: Ptr[Str])         -> CString
 
 // Comparison.
@@ -60,7 +61,7 @@ cmp          (a: Str, b: Str)             -> Int
 starts_with  (s: Str, prefix: Str)        -> Bool
 ends_with    (s: Str, suffix: Str)        -> Bool
 contains     (haystack: Str, needle: Str) -> Bool
-contains_byte(s: Str, b: Byte)            -> Bool
+contains_char(s: Str, b: CChar)           -> Bool
 eq_cstr      (s: Str, cs: CString)        -> Bool
 
 // Concatenation.
@@ -78,17 +79,17 @@ slice (alloc: Ptr[Allocator], s: Str, start: UInt, end: UInt) -> Str
 slice (s: Str, start: UInt, end: UInt)                        -> Str
 
 // Search.
-index_of_byte     (s: Str, b: Byte)              -> Option[UInt]
-index_of_byte_from(s: Str, b: Byte, start: UInt) -> Option[UInt]
-last_index_of_byte(s: Str, b: Byte)              -> Option[UInt]
-index_of          (s: Str, needle: Str)          -> Option[UInt]
-last_index_of     (s: Str, needle: Str)          -> Option[UInt]
-count_byte        (s: Str, b: Byte)              -> UInt
-count             (s: Str, needle: Str)          -> UInt
+index_of_char     (s: Str, b: CChar)              -> Option[UInt]
+index_of_char_from(s: Str, b: CChar, start: UInt) -> Option[UInt]
+last_index_of_char(s: Str, b: CChar)              -> Option[UInt]
+index_of          (s: Str, needle: Str)           -> Option[UInt]
+last_index_of     (s: Str, needle: Str)           -> Option[UInt]
+count_byte        (s: Str, b: CChar)              -> UInt
+count             (s: Str, needle: Str)           -> UInt
 
 // Mutation.
-replace_byte(alloc: Ptr[Allocator], s: Str, find: Byte, replace: Byte) -> Str
-replace_byte(s: Str, find: Byte, replace: Byte)                        -> Str
+replace_byte(alloc: Ptr[Allocator], s: Str, find: CChar, replace: CChar) -> Str
+replace_byte(s: Str, find: CChar, replace: CChar)                        -> Str
 
 // Transformation.
 to_upper    (alloc: Ptr[Allocator], s: Str)                       -> Str
@@ -144,8 +145,8 @@ _make_tag_len(n: UInt) -> Byte {
     result
 }
 
-_is_whitespace(b: Byte) -> Bool {
-    b == 32u || b == 9u || b == 10u || b == 13u || b == 11u || b == 12u
+_is_whitespace(b: CChar) -> Bool {
+    b == 32 || b == 9 || b == 10 || b == 13 || b == 11 || b == 12
 }
 
 
@@ -271,6 +272,13 @@ byte_at(s: Str, index: UInt) -> Option[Byte] {
     Some(b)
 }
 
+char_at(s: Str, index: UInt) -> Option[CChar] {
+    n := len(s)
+    if index >= n { return None }
+    p := _buf(s.&)
+    Some(p.[index])
+}
+
 cstr(s: Ptr[Str]) -> CString {
     n := len(s.*)
     p := _buf(s)
@@ -334,12 +342,12 @@ contains(haystack: Str, needle: Str) -> Bool {
     false
 }
 
-contains_byte(s: Str, b: Byte) -> Bool {
+contains_char(s: Str, b: CChar) -> Bool {
     n       := len(s)
     sp      := _buf(s.&)
     i: UInt := 0u
     while i < n, i += 1u {
-        ch: Byte := sp.[i]
+        ch: CChar := sp.[i]
         if ch == b { return true }
     }
     false
@@ -468,37 +476,37 @@ slice(s: Str, start: UInt, end: UInt) -> Str {
 
 // -- Search --
 
-index_of_byte(s: Str, b: Byte) -> Option[UInt] {
+index_of_char(s: Str, b: CChar) -> Option[UInt] {
     n       := len(s)
     sp      := _buf(s.&)
     i: UInt := 0u
     while i < n, i += 1u {
-        ch: Byte := sp.[i]
+        ch: CChar := sp.[i]
         if ch == b { return Some(i) }
     }
     None
 }
 
-index_of_byte_from(s: Str, b: Byte, start: UInt) -> Option[UInt] {
+index_of_char_from(s: Str, b: CChar, start: UInt) -> Option[UInt] {
     n := len(s)
     if start >= n { return None }
     sp      := _buf(s.&)
     i: UInt := start
     while i < n, i += 1u {
-        ch: Byte := sp.[i]
+        ch: CChar := sp.[i]
         if ch == b { return Some(i) }
     }
     None
 }
 
-last_index_of_byte(s: Str, b: Byte) -> Option[UInt] {
+last_index_of_char(s: Str, b: CChar) -> Option[UInt] {
     n := len(s)
     if n == 0u { return None }
     sp      := _buf(s.&)
     i: UInt := n
     while i > 0u {
         i = i - 1u
-        ch: Byte := sp.[i]
+        ch: CChar := sp.[i]
         if ch == b { return Some(i) }
     }
     None
@@ -535,13 +543,13 @@ last_index_of(s: Str, needle: Str) -> Option[UInt] {
     None
 }
 
-count_byte(s: Str, b: Byte) -> UInt {
+count_byte(s: Str, b: CChar) -> UInt {
     n       := len(s)
     sp      := _buf(s.&)
     c: UInt := 0u
     i: UInt := 0u
     while i < n, i += 1u {
-        ch: Byte := sp.[i]
+        ch: CChar := sp.[i]
         if ch == b { c = c + 1u }
     }
     c
@@ -571,22 +579,21 @@ count(s: Str, needle: Str) -> UInt {
 
 // -- Mutation --
 
-replace_byte(alloc, s: Str, find: Byte, replace: Byte) -> Str {
+replace_byte(alloc, s: Str, find: CChar, replace: CChar) -> Str {
     result  := copy(alloc, s)
     n       := len(result)
     rp      := _buf(result.&)
     i: UInt := 0u
     while i < n, i += 1u {
-        ch: Byte := rp.[i]
+        ch: CChar := rp.[i]
         if ch == find {
-            r: CChar := replace
-            rp.[i] = r
+            rp.[i] = replace
         }
     }
     result
 }
 
-replace_byte(s: Str, find: Byte, replace: Byte) -> Str {
+replace_byte(s: Str, find: CChar, replace: CChar) -> Str {
     replace_byte(Alloc.context.default, s, find, replace)
 }
 
