@@ -181,6 +181,56 @@ main() -> Int {
 
 ---
 
+## Str
+
+The `Str` type is always available — no import needed.
+
+`Str` is a 16-byte value type with **small string optimization (SSO)**. Strings of 14 bytes or fewer are stored inline (no heap allocation). Longer strings store a length and a pointer to a heap-allocated buffer.
+
+### Value Semantics and Aliasing
+
+Binding with `:=` copies the 16-byte struct, **not** the underlying heap buffer. For small strings (≤14 bytes) this is safe because the data is inline. For big strings (>14 bytes) both copies share the same heap buffer:
+
+```tl
+a := Str.from_cstr("a long string that exceeds 14 bytes")
+b := a          // b and a share the same heap buffer
+Str.free(a.&)   // frees the buffer — b is now dangling
+```
+
+Use `Str.copy` to create an independent deep copy:
+
+```tl
+b := Str.copy(a) // b has its own buffer — safe to free independently
+```
+
+The same aliasing applies to `Array` and any struct containing pointers. See [Value Semantics](LANGUAGE_REFERENCE.md#value-semantics) in the Language Reference.
+
+### The `cstr` function
+
+`Str.cstr` takes `Ptr[Str]` (not `Str` by value) because it may write a null terminator into the buffer:
+
+```tl
+s := Str.from_cstr("hello")
+c_printf("%s\n", Str.cstr(s.&))
+```
+
+### Allocator-aware overloads
+
+Most functions that allocate memory come in two variants: one taking an explicit `Ptr[Allocator]` argument, and one using the default allocator (`Alloc.context.default`). For example:
+
+```tl
+Str.copy(alloc, s)   // explicit allocator
+Str.copy(s)          // uses default allocator
+```
+
+This pattern applies to `from_cstr`, `from_bytes`, `from_int`, `from_float`, `copy`, `cat`, `slice`, `trim`, `replace`, `split`, `join`, `free`, and others.
+
+### API overview
+
+See the synopsis at the top of `src/tl/std/Str.tl` (lines 34–122) for the full function listing, organized by category: construction, queries, comparison, concatenation, slicing, search, transformation, split/join, memory, and iteration.
+
+---
+
 ## Alloc
 
 ```tl

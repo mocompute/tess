@@ -1251,6 +1251,25 @@ buf.size = 0           // Initialize later
 
 This is useful when a field will be set immediately after construction or when working with low-level memory patterns.
 
+### Value Semantics
+
+Structs have C-like value semantics: binding with `:=` performs a **shallow copy** of the struct (equivalent to C struct assignment). Fields that are pointers to heap memory are copied as pointer values — the underlying memory is **not** duplicated.
+
+This means types containing heap pointers — such as `Str` (for strings longer than 14 bytes) or `Array` — share the underlying buffer after a copy. Freeing one copy invalidates the other:
+
+```tl
+a := Str.from_cstr("a string longer than 14 bytes")
+b := a            // shallow copy — a and b share the heap buffer
+Str.free(a.&)     // b is now dangling
+```
+
+To get an independent copy, use the type's copy/clone function:
+
+```tl
+b := Str.copy(a)       // deep copy — independent buffer
+c := Array.clone(arr)   // deep copy of array
+```
+
 ### Nested Structs
 
 Structs can contain nested struct definitions. Nested types are accessed using dot syntax (`Parent.Child`):
