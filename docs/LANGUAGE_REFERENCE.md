@@ -1701,7 +1701,18 @@ pass(p: Ptr[Const[Int]]) {
 }
 ```
 
+This also applies to struct constructor fields and return statements — any implicit context where a mutable pointer is expected will reject a const pointer.
+
 This applies at any pointer nesting level: `Ptr[Ptr[Const[T]]]` cannot be passed where `Ptr[Ptr[T]]` is expected.
+
+**Casting away const:** When necessary, const can be explicitly stripped using an annotated let binding (the language's general cast mechanism):
+
+```tl
+unsafe_strip(p: Ptr[Const[Int]]) -> Ptr[Int] {
+    mp: Ptr[Int] := p            // OK: explicit cast strips const
+    mp
+}
+```
 
 **Limitation:** `Const[T]` cannot be used with generic type parameters. A function like `f(dst: Ptr[T], src: Ptr[Const[T]])` will fail because `T` cannot unify with both `X` and `Const[X]`. Use `Ptr[T]` for both parameters when `T` is generic, and reserve `Const` for concrete types like `Ptr[Const[CChar]]`.
 

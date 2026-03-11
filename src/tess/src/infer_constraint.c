@@ -17,10 +17,11 @@
 // Constraint and error helpers
 // ============================================================================
 
-int constrain(tl_infer *self, tl_polytype *left, tl_polytype *right, ast_node const *node,
-              tl_unify_direction dir);
+int        constrain(tl_infer *self, tl_polytype *left, tl_polytype *right, ast_node const *node,
+                     tl_unify_direction dir);
+static int types_strip_const(tl_monotype *param, tl_monotype *arg);
 
-int env_insert_constrain(tl_infer *self, str name, tl_polytype *type, ast_node const *name_node) {
+int        env_insert_constrain(tl_infer *self, str name, tl_polytype *type, ast_node const *name_node) {
 
     // insert type in the environment, but constrains against existing type, if any.
 
@@ -1104,8 +1105,8 @@ static int infer_continue(tl_infer *self, ast_node *node) {
 static int infer_return(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
     if (resolve_node(self, node->return_.value, ctx, npos_operand)) return 1;
 
-    if (node->return_.value && ast_node_is_lambda_function(node->return_.value)
-        && !lambda_has_alloc(self, node->return_.value)) {
+    if (node->return_.value && ast_node_is_lambda_function(node->return_.value) &&
+        !lambda_has_alloc(self, node->return_.value)) {
         array_push(self->errors, ((tl_infer_error){.tag = tl_err_closure_escape, .node = node}));
         return 1;
     }
@@ -1115,6 +1116,11 @@ static int infer_return(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
         if (constrain(self, node->type, node->return_.value->type, node, TL_UNIFY_SYMMETRIC)) return 1;
 
     if (ctx->result_type && node->return_.value) {
+        if (node->return_.value->type && node->return_.value->type->type &&
+            types_strip_const(ctx->result_type, node->return_.value->type->type)) {
+            array_push(self->errors, ((tl_infer_error){.tag = tl_err_const_violation, .node = node}));
+            return 1;
+        }
         tl_polytype wrap_result = tl_polytype_wrap(ctx->result_type);
         if (constrain(self, &wrap_result, node->return_.value->type, node, TL_UNIFY_DIRECTED)) return 1;
     }
@@ -1355,6 +1361,17 @@ static int infer_reassignment(tl_infer *self, traverse_ctx *ctx, ast_node *node)
     // reassignment nodes have void type
     tl_monotype *nil = tl_type_registry_nil(self->registry);
     if (constrain_pm(self, node->type, nil, node, TL_UNIFY_SYMMETRIC)) return 1;
+
+    // Check for const stripping before unification (which would erase it).
+    // Resolve TVs first — both sides may still be type variables at this point.
+    if (node->assignment.name->type && node->assignment.name->type->type && node->assignment.value->type) {
+        tl_polytype_substitute(self->arena, node->assignment.name->type, self->subs);
+        tl_polytype_substitute(self->arena, node->assignment.value->type, self->subs);
+        if (types_strip_const(node->assignment.name->type->type, node->assignment.value->type->type)) {
+            array_push(self->errors, ((tl_infer_error){.tag = tl_err_const_violation, .node = node}));
+            return 1;
+        }
+    }
 
     // For compound assignment (+=, -=, etc.) the value is an arithmetic operand,
     // so require exact type match — same rule as binary operators.
@@ -1794,6 +1811,12 @@ static int infer_type_constructor_nfa(tl_infer *self, traverse_ctx *ctx, ast_nod
                     fprintf(stderr, "  field type from inst: %s\n", str_cstr(&field_type_str));
                 }
 #endif
+                if (arg->type && arg->type->type &&
+                    types_strip_const(inst->cons_inst->args.v[found], arg->type->type)) {
+                    array_push(self->errors,
+                               ((tl_infer_error){.tag = tl_err_const_violation, .node = node}));
+                    return 1;
+                }
                 if (constrain_pm(self, arg->type, inst->cons_inst->args.v[found], node, TL_UNIFY_SYMMETRIC))
                     return 1;
             }

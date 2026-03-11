@@ -444,6 +444,14 @@ pass(p: Ptr[Const[Int]]) {
 Const stripping is also rejected through nested pointer levels:
 `Ptr[Ptr[Const[T]]]` cannot coerce to `Ptr[Ptr[T]]`.
 
+Const stripping is also rejected in struct constructor fields and return statements.
+
+**Explicit cast:** Const can be stripped using an annotated let binding:
+
+```tl
+mp: Ptr[Int] := const_ptr    // explicit cast, allowed
+```
+
 In the generated C code, `Ptr[Const[T]]` transpiles to `const T*`.
 
 ### Const and Generic Type Parameters
