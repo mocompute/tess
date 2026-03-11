@@ -2931,10 +2931,12 @@ static int check_integer_direction(tl_monotype *expected, tl_monotype *actual, t
             if (cb) cb(user, expected, actual);
             return 1;
         }
-        // EXACT with two narrow integers: reject cross-subchain standalone pairs too.
-        // This catches e.g. CUnsignedChar (subchain 2) vs CSize (subchain 5) through generics.
-        // Non-narrow types (CUnsignedLongLong + CSize in operators) still fall through to SYMMETRIC.
-        if (dir == TL_UNIFY_EXACT && expected->cons_inst->def->is_narrow_integer &&
+        // At this point, at least one side is a standalone type (subchain >= 5:
+        // CSize, CPtrDiff, CChar). When both sides are narrow integers, reject
+        // cross-subchain conversion in both DIRECTED and EXACT modes.
+        // Non-narrow canonicals (CLongLong, CUnsignedLongLong) fall through to
+        // SYMMETRIC to allow e.g. CSize → CUnsignedLongLong.
+        if (expected->cons_inst->def->is_narrow_integer &&
             actual->cons_inst->def->is_narrow_integer) {
             if (cb) cb(user, expected, actual);
             return 1;

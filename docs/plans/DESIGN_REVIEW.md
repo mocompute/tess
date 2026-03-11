@@ -4,8 +4,6 @@
 
   Type System
 
-  3. Cross-subchain directed unification falls through to symmetric (type.c:2924-2940) — Standalone types (CSize, CPtrDiff, CChar) silently convert in TL_UNIFY_DIRECTED mode when they should require explicit annotation.
-
   Parser & AST
 
   5. ast_return is overloaded for break — No dedicated ast_break tag; every consumer must check an is_break_statement flag. Forgetting this check silently mishandles break.
@@ -58,10 +56,9 @@
   DONE
 
   1. CChar has contradictory signedness metadata (type.c:181) — Marked unsigned_int=1 but given range [-128, 127]. The design doc correctly says CChar should be standalone, but the implementation puts it in the unsigned family. u-suffixed literals can bind to CChar incorrectly.
-
   2. Const stripping is incomplete (infer_constraint.c:1265, 1115) — The unifier strips Const symmetrically from both sides (type.c:2965-2967), with safety enforced only by pre-unification guards at function call sites. Struct field assignment and return statements bypass these guards, allowing Ptr[Const[T]] →
   Ptr[T] silently.
-
+  3. Cross-subchain directed unification falls through to symmetric (type.c:2924-2940) — Standalone types (CSize, CPtrDiff, CChar) silently convert in TL_UNIFY_DIRECTED mode when they should require explicit annotation.
   4. for loop uses hardcoded "gen_iter" variable name (parser_expr.c:404) — Every other synthesized name uses the unique-name counter. This one will silently collide with any user binding named gen_iter.
 
   14. hot_parse_ctx reentrancy guard is assert-only (infer.c:106) — Compiled away with -DNDEBUG in release builds. Silent corruption if re-entrancy occurs in production.
