@@ -12,7 +12,7 @@ main() {
     error := 0
     error = error + if type_id(42) == 1 { 0 } else { 1 }
     error = error + if type_id(3.14) == 2 { 0 } else { 1 }
-    error = error + if type_id(c"hey") == 0 { 0 } else { 1 }
+    error = error + if type_id("hey") == 0 { 0 } else { 1 }
     error
 }
 

@@ -21,7 +21,7 @@ test_empty() {
 
 test_from_cstr_small() {
     error := 0
-    s     := Str.from_cstr(c"hello")
+    s     := Str.from_cstr("hello")
     if Str.len(s) != 5u { error += 1 }
     if Str.is_empty(s) { error += 1 }
     Str.free(s.&)

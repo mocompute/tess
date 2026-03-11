@@ -5,7 +5,7 @@
 #import <stdio.tl>
 
 main(argc: Int, argv: Ptr[CString]) {
-    c_printf(c"argc = %i\n", argc)
+    c_printf("argc = %i\n", argc)
 
     i := 0
     while i < argc, i = i + 1 {

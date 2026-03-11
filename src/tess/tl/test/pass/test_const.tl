@@ -24,7 +24,7 @@ main() {
 
     // Implicit coercion: Ptr[Int] -> Ptr[Const[Int]]
     val := read_through_const_ptr(p)
-    c_printf(c"val = %d\n", val)
+    c_printf("val = %d\n", val)
 
     val2 := add_one_through_const(p)
     c_printf(c"val2 = %d\n", val2)

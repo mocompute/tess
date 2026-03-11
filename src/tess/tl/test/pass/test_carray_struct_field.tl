@@ -23,7 +23,7 @@ main() {
     error += if data_ptr.[1] == 'i' {0} else {1}
 
     // Test 2: CArray field decay to pointer (pass to C function)
-    c_strcpy(data_ptr, c"Hello")
+    c_strcpy(data_ptr, "Hello")
     b.len = c_strlen(data_ptr)
     error += if b.len == 5zu {0} else {1}
 

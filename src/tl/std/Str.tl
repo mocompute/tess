@@ -248,8 +248,8 @@ from_byte(b: Byte) -> Str {
 }
 
 from_bool(b: Bool) -> Str {
-    if b { return from_cstr(c"true") }
-    from_cstr(c"false")
+    if b { return from_cstr("true") }
+    from_cstr("false")
 }
 
 
@@ -378,7 +378,7 @@ _cat_impl(alloc: Ptr[Allocator], bufs: Ptr[Ptr[CChar]], lens: Ptr[UInt], count: 
     }
 
     buf: Ptr[CChar] := alloc->malloc(alloc, total + 1u)
-    if buf == null { _tl_fatal_(c"Str: out of memory") }
+    if buf == null { _tl_fatal_("Str: out of memory") }
     off: UInt := 0u
     j:   UInt := 0u
     while j < count, j += 1u {
@@ -453,7 +453,7 @@ push(self: Ptr[Str], other: Str) {
 
 slice(alloc, s: Str, start: UInt, end: UInt) -> Str {
     n := len(s)
-    if start > end || end > n { _tl_fatal_(c"Str.slice: index out of bounds") }
+    if start > end || end > n { _tl_fatal_("Str.slice: index out of bounds") }
     slen := end - start
     if slen == 0u { return empty() }
     sp              := _buf(s.&)
@@ -550,7 +550,7 @@ count_byte(s: Str, b: Byte) -> UInt {
 count(s: Str, needle: Str) -> UInt {
     sn := len(s)
     nn := len(needle)
-    if nn == 0u { _tl_fatal_(c"Str.count: empty needle") }
+    if nn == 0u { _tl_fatal_("Str.count: empty needle") }
     if nn > sn { return 0u }
     sp      := _buf(s.&)
     np      := _buf(needle.&)
@@ -701,7 +701,7 @@ repeat(alloc, s: Str, count: UInt) -> Str {
     }
 
     buf: Ptr[CChar] := alloc->malloc(alloc, total + 1u)
-    if buf == null { _tl_fatal_(c"Str.repeat: out of memory") }
+    if buf == null { _tl_fatal_("Str.repeat: out of memory") }
     off: UInt := 0u
     i:   UInt := 0u
     while i < count, i += 1u {
@@ -719,7 +719,7 @@ repeat(s: Str, count: UInt) -> Str {
 replace(alloc, s: Str, old: Str, new_s: Str) -> Str {
     sn := len(s)
     on := len(old)
-    if on == 0u { _tl_fatal_(c"Str.replace: empty search string") }
+    if on == 0u { _tl_fatal_("Str.replace: empty search string") }
     if on > sn { return copy(alloc, s) }
     nn := len(new_s)
     sp := _buf(s.&)
@@ -744,7 +744,7 @@ replace(alloc, s: Str, old: Str, new_s: Str) -> Str {
 
     // Build result into heap buffer, then decide SSO
     buf: Ptr[CChar] := alloc->malloc(alloc, total + 1u)
-    if buf == null { _tl_fatal_(c"Str.replace: out of memory") }
+    if buf == null { _tl_fatal_("Str.replace: out of memory") }
     off: UInt := 0u
     j:   UInt := 0u
     while j < sn {
@@ -815,7 +815,7 @@ strip_suffix(s: Str, suffix: Str) -> Str {
 
 split(alloc, s: Str, delimiter: Str) -> Array.Array[Str] {
     dn := len(delimiter)
-    if dn == 0u { _tl_fatal_(c"Str.split: empty delimiter") }
+    if dn == 0u { _tl_fatal_("Str.split: empty delimiter") }
     sn     := len(s)
     result := Array.empty[Str]()
 
@@ -900,7 +900,7 @@ join(alloc, sep: Str, arr: Array.Array[Str]) -> Str {
     }
 
     buf: Ptr[CChar] := alloc->malloc(alloc, total + 1u)
-    if buf == null { _tl_fatal_(c"Str.join: out of memory") }
+    if buf == null { _tl_fatal_("Str.join: out of memory") }
     off: UInt := 0u
     j:   UInt := 0u
     while j < arr.size, j += 1u {

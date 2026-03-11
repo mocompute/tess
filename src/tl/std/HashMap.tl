@@ -119,7 +119,7 @@ _entry_width[K, V]() -> UInt { Alloc.align(sizeof[_Entry[K, V]](), alignof[_Entr
 
 _alloc_entries[K, V](alloc, capacity) {
     p: Ptr[_Entry[K, V]] := alloc->calloc(alloc, capacity, _entry_width[K, V]())
-    if p == null { _tl_fatal_(c"HashMap: oom") }
+    if p == null { _tl_fatal_("HashMap: oom") }
     p
 }
 

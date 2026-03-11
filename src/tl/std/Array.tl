@@ -161,7 +161,7 @@ with_capacity_undefined[T](count) {
 reserve[T](self: Ptr[Array[T]], alloc, count: UInt) {
     if self->capacity < count {
         p := alloc->realloc(alloc, self->v, count * _type_width_aligned[T]())
-        if p == null { _tl_fatal_(c"oom") }
+        if p == null { _tl_fatal_("oom") }
         self->v        = p
         self->capacity = count
     }

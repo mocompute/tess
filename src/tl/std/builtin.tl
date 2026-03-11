@@ -50,6 +50,6 @@ unwrap[T, U](opt_or_res, default: T) -> T {
         }
     }
     else {
-        _tl_fatal_(c"unwrap: invalid type")
+        _tl_fatal_("unwrap: invalid type")
     }
 }

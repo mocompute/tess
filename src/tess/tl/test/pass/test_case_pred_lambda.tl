@@ -2,7 +2,7 @@
 #import <string.tl>
 
 main() {
-    s1 := c"hello"
+    s1 := "hello"
     case s1, (a, b) { 0 == c_strcmp(a, b) } {
         c"world" { 1 }
         c"there" { 1 }

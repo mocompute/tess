@@ -49,7 +49,7 @@ main() {
     error += if c10 == '\v' {0} else {1}
 
     // Test escape sequences in strings
-    s   := c"line1\nline2"
+    s   := "line1\nline2"
     len := c_strlen(s)
     error += if len == 11zu {0} else {1}
 
