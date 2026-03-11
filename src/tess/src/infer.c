@@ -473,10 +473,7 @@ static int run_update_types(tl_infer *self) {
     check_unresolved_types(self);
     arena_reset(self->transient);
 
-    check_closure_escape(self);
-    arena_reset(self->transient);
-
-    check_closure_alloc_capture(self);
+    check_closure_checks(self);
     arena_reset(self->transient);
 
     dbg(self, "-- final subs");

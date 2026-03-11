@@ -284,8 +284,7 @@ hashmap     *tree_shake(tl_infer *, ast_node const *);
 void         tree_shake_toplevels(tl_infer *, ast_node const *);
 void         update_specialized_types(tl_infer *);
 void         check_unresolved_types(tl_infer *);
-void         check_closure_escape(tl_infer *);
-void         check_closure_alloc_capture(tl_infer *);
+void         check_closure_checks(tl_infer *);
 tl_monotype *tl_infer_update_specialized_type_(tl_infer *, tl_monotype *, hashmap **);
 
 // Check whether a lambda node has [[alloc]] in its attributes.

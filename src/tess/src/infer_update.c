@@ -602,33 +602,6 @@ static ast_node *toplevel_implicit_return(ast_node *node) {
     return body->body.expressions.v[body->body.expressions.size - 1];
 }
 
-void check_closure_escape(tl_infer *self) {
-    traverse_ctx    *traverse = traverse_ctx_create(self->transient);
-    hashmap_iterator iter     = {0};
-    ast_node        *node;
-
-    closure_escape_walk_ctx esc_ctx = {0};
-    traverse->user = &esc_ctx;
-
-    while ((node = toplevel_iter(self, &iter))) {
-        if (ast_node_is_utd(node)) continue;
-
-        // Reset per-function binding map so bindings from one function don't leak into another.
-        esc_ctx.bindings = ast_node_str_map_create(self->transient, 16);
-
-        // Check implicit return: top-level function's body last expression.
-        // Skip ast_return nodes — those are caught by the traversal callback.
-        ast_node *last = toplevel_implicit_return(node);
-        if (last && last->tag != ast_return && node_is_capturing_closure(last)) {
-            if (!is_allocated_closure(self, last, esc_ctx.bindings))
-                closure_escape_error(self, last);
-        }
-
-        // Traverse for struct field assignments and explicit returns
-        traverse_ast(self, traverse, node, check_closure_escape_cb);
-    }
-}
-
 // ============================================================================
 // Closure alloc/capture attribute validation
 // ============================================================================
@@ -744,14 +717,38 @@ static int check_closure_attrs_cb(tl_infer *self, traverse_ctx *ctx, ast_node *n
     return 0;
 }
 
-void check_closure_alloc_capture(tl_infer *self) {
+// Combined callback: runs both closure escape and alloc/capture checks in a single traversal.
+static int check_closure_checks_cb(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
+    check_closure_escape_cb(self, ctx, node);
+    check_closure_attrs_cb(self, ctx, node);
+    return 0;
+}
+
+void check_closure_checks(tl_infer *self) {
     traverse_ctx    *traverse = traverse_ctx_create(self->transient);
     hashmap_iterator iter     = {0};
     ast_node        *node;
+
+    closure_escape_walk_ctx esc_ctx = {0};
+    traverse->user = &esc_ctx;
+
     while ((node = toplevel_iter(self, &iter))) {
         if (ast_node_is_utd(node)) continue;
-        traverse_ast(self, traverse, node, check_closure_attrs_cb);
-        if (self->errors.size) return; // stop after first error
+
+        // Reset per-function binding map so bindings from one function don't leak into another.
+        esc_ctx.bindings = ast_node_str_map_create(self->transient, 16);
+
+        // Check implicit return: top-level function's body last expression.
+        // Skip ast_return nodes — those are caught by the traversal callback.
+        ast_node *last = toplevel_implicit_return(node);
+        if (last && last->tag != ast_return && node_is_capturing_closure(last)) {
+            if (!is_allocated_closure(self, last, esc_ctx.bindings))
+                closure_escape_error(self, last);
+        }
+
+        // Single traversal for both escape and alloc/capture checks
+        traverse_ast(self, traverse, node, check_closure_checks_cb);
+        if (self->errors.size) return;
     }
 }
 
