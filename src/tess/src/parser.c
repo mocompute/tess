@@ -41,6 +41,7 @@ parser *parser_create(allocator *alloc, parser_opts const *opts) {
     self->tagged_union_variant_parents = hset_create(self->parent_alloc, 256);
     self->module_aliases               = map_new(self->parent_alloc, str, str, 32);
     self->nullary_variant_parents      = map_new(self->parent_alloc, str, str, 16);
+    self->module_pkg_prefixes          = opts->module_pkg_prefixes;
     self->result                       = null;
     self->tokens                       = (token_array){0};
     self->error                        = (struct parser_error){0};
@@ -892,7 +893,15 @@ int symbol_is_module_function(parser *self, ast_node *name, u8 arity) {
 
 str mangle_str_for_module(parser *self, str name, str module) {
     str safe_module = str_replace_char_str(self->ast_arena, module, '.', S("__"));
-    return str_qualify(self->ast_arena, safe_module, name);
+    str result      = str_qualify(self->ast_arena, safe_module, name);
+
+    if (self->module_pkg_prefixes) {
+        str *prefix = str_map_get(self->module_pkg_prefixes, module);
+        if (prefix) {
+            result = str_qualify(self->ast_arena, *prefix, result);
+        }
+    }
+    return result;
 }
 
 str mangle_str_for_arity(allocator *alloc, str name, u8 arity) {

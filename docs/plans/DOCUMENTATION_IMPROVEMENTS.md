@@ -17,7 +17,7 @@ Actionable improvements for the README and docs/ directory, based on a review of
 
 The documented modules (builtin, Array, Alloc) are also incomplete — Alloc is partially documented.
 
-**Suggested order:** Str, HashMap, Alloc (complete), Unsafe, stdint, fatal.
+**Suggested order:** Str, HashMap, Alloc (complete), Unsafe, stdint.
 
 ### 2. Link WINDOWS_BUILD.md from Navigation
 

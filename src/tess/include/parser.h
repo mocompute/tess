@@ -27,6 +27,7 @@ typedef struct {
     char const       *prelude;        // optional: TL source string parsed before files
     str_array         defines;        // -D symbols for conditional compilation
     hashmap          *known_modules;  // optional: pre-scanned module names (str map) for nested module validation
+    hashmap          *module_pkg_prefixes; // optional: module name → "pkg__ver" prefix (str→str map)
     char const       *preloaded_path; // optional: path (e.g. "<stdin>") for pre-loaded file data
     char const       *preloaded_data; // optional: pre-loaded file contents (used instead of file_read)
     u32               preloaded_size; // size of preloaded_data

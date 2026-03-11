@@ -444,6 +444,7 @@ static int parse_dep_string(allocator *alloc, str dep_str, str *out_name, str *o
 // Info about which package exported a module (for duplicate detection).
 typedef struct {
     str pkg_name;
+    str version;
     str tlib_path;
 } module_pkg_info;
 
@@ -467,7 +468,7 @@ static void check_duplicate_modules(tl_tlib_metadata *meta, str tlib_path, dep_r
                     str_cstr(&mod), str_cstr(&meta->name), str_cstr(&tlib_path),
                     str_cstr(&existing->pkg_name), str_cstr(&existing->tlib_path));
         } else {
-            module_pkg_info info = {.pkg_name = meta->name, .tlib_path = tlib_path};
+            module_pkg_info info = {.pkg_name = meta->name, .version = meta->version, .tlib_path = tlib_path};
             str_map_set(&ctx->module_owners, mod, &info);
         }
     }
@@ -581,11 +582,41 @@ static int resolve_dep_recursive(state *self, str dep_name, str dep_version,
     return 0;
 }
 
+// Encode a version string for use in C identifiers: "1.2.0" → "1_2_0".
+static str encode_version(allocator *alloc, str version) {
+    // FIXME: embed.c has a make_c_identifier: extract it to a helper
+    // and use it, because otherwise other typical characters in a
+    // version string might fail.
+    return str_replace_char(alloc, version, '.', '_');
+}
+
+// Build a package prefix: "mylib" + "1.2.0" → "mylib__1_2_0".
+static str build_pkg_prefix(allocator *alloc, str name, str version) {
+    str ver = encode_version(alloc, version);
+    return str_qualify(alloc, name, ver);
+}
+
+// Build module→prefix map from dependency resolution context.
+// Maps module names to "pkg__ver" prefixes for name mangling.
+static hashmap *build_module_prefix_map(allocator *alloc, dep_resolve_ctx *ctx) {
+    hashmap *prefixes = map_new(alloc, str, str, 16);
+    hashmap_iterator iter = {0};
+    while (map_iter(ctx->module_owners, &iter)) {
+        str              mod    = str_init_n(alloc, iter.key_ptr, iter.key_size);
+        module_pkg_info *info   = iter.data;
+        str              prefix = build_pkg_prefix(alloc, info->pkg_name, info->version);
+        str_map_set(&prefixes, mod, &prefix);
+    }
+    return prefixes;
+}
+
 // Load package dependencies from package.tl in CWD.
 // Resolves direct and transitive dependencies recursively.
 // Extracts .tlib archives to temp directories and returns extracted file paths.
+// Optionally builds a module→prefix map for package-versioned name mangling.
 // Returns 0 on success (including no package.tl), 1 on error.
-static int load_package_deps(state *self, str_array *out_pkg_files) {
+static int load_package_deps(state *self, str_array *out_pkg_files, hashmap **out_module_prefixes,
+                             str *out_pkg_name, str *out_pkg_version) {
     str pkg_path = str_init_static("package.tl");
     if (!file_exists(pkg_path)) {
         return 0;
@@ -595,6 +626,10 @@ static int load_package_deps(state *self, str_array *out_pkg_files) {
     if (tl_package_parse_file(self->arena, "package.tl", &pkg)) {
         return 1;
     }
+
+    // Pass back current package identity for prefix map construction
+    if (out_pkg_name)    *out_pkg_name    = pkg.info.name;
+    if (out_pkg_version) *out_pkg_version = pkg.info.version;
 
     if (pkg.dep_count == 0) {
         return 0;
@@ -695,6 +730,10 @@ static int load_package_deps(state *self, str_array *out_pkg_files) {
             fprintf(stderr, "Loaded package: %s=%s from %s (%u files to %s)\n", str_cstr(&dep->name),
                     str_cstr(&dep->version), str_cstr(&tlib_path), archive.entries_count, tmppath.path);
         }
+    }
+
+    if (out_module_prefixes) {
+        *out_module_prefixes = build_module_prefix_map(self->arena, &ctx);
     }
 
     return 0;
@@ -955,20 +994,42 @@ int compile(state *self) {
     }
 
     // Load package dependencies (if package.tl exists with depend() declarations)
-    str_array pkg_files = {.alloc = self->arena};
-    if (load_package_deps(self, &pkg_files)) return 1;
+    str_array  pkg_files       = {.alloc = self->arena};
+    hashmap   *module_prefixes = null;
+    str        cur_pkg_name    = str_empty();
+    str        cur_pkg_version = str_empty();
+    if (load_package_deps(self, &pkg_files, &module_prefixes, &cur_pkg_name, &cur_pkg_version)) return 1;
 
     tl_infer_opts infer_opts  = {.is_library = self->is_library};
     tl_infer     *infer       = tl_infer_create(self->arena, &infer_opts);
 
+    str_sized ordered_files = files_in_order(self, paths, (str_sized)array_sized(pkg_files));
+
+    // Add current package's modules to the prefix map
+    if (!str_is_empty(cur_pkg_name) && !str_is_empty(cur_pkg_version)) {
+        if (!module_prefixes) {
+            module_prefixes = map_new(self->arena, str, str, 16);
+        }
+        str cur_prefix = build_pkg_prefix(self->arena, cur_pkg_name, cur_pkg_version);
+        hashmap_iterator iter = {0};
+        while (map_iter(self->scanner.modules_seen, &iter)) {
+            str mod = str_init_n(self->arena, iter.key_ptr, iter.key_size);
+            if (str_eq(mod, S("builtin")) || str_eq(mod, S("main"))) continue;
+            if (!str_map_contains(module_prefixes, mod)) {
+                str_map_set(&module_prefixes, mod, &cur_prefix);
+            }
+        }
+    }
+
     parser_opts   parser_opts = {
-        .registry       = tl_infer_get_registry(infer),
-        .files          = files_in_order(self, paths, (str_sized)array_sized(pkg_files)),
-        .prelude        = embed_prelude_tl,
-        .defines        = self->defines,
-        .preloaded_path = self->stdin_data ? STDIN_PATH : null,
-        .preloaded_data = self->stdin_data,
-        .preloaded_size = self->stdin_size,
+        .registry              = tl_infer_get_registry(infer),
+        .files                 = ordered_files,
+        .prelude               = embed_prelude_tl,
+        .defines               = self->defines,
+        .preloaded_path        = self->stdin_data ? STDIN_PATH : null,
+        .preloaded_data        = self->stdin_data,
+        .preloaded_size        = self->stdin_size,
+        .module_pkg_prefixes   = module_prefixes,
       // The parser validates nested modules (#module Foo.Bar) by checking that the
       // parent (Foo) exists. Without this, cross-file nested modules fail when import
       // resolution orders the child before the parent (the parser hasn't seen Foo yet).

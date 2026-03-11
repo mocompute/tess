@@ -59,6 +59,7 @@ struct parser {
     hashmap            *tagged_union_variant_parents; // str hset: type names that are tagged union parents
     hashmap            *module_aliases;               // map str -> str: alias name -> original module name
     hashmap            *nullary_variant_parents; // map str -> str: mangled variant name -> TU parent name
+    hashmap            *module_pkg_prefixes;    // optional: module name -> "pkg__ver" prefix (str->str)
 
     ast_node           *result;
     token_array         tokens;

@@ -7,23 +7,25 @@ This document describes the name mangling system in the Tess compiler. Name mang
 1. [Overview](#overview)
 2. [Arity Mangling](#arity-mangling)
 3. [Module Mangling](#module-mangling)
-4. [Module Aliases](#module-aliases)
-5. [Generic Specialization Naming](#generic-specialization-naming)
-6. [Two-Pass Parsing](#two-pass-parsing)
-7. [Key Data Structures](#key-data-structures)
-8. [Examples](#examples)
+4. [Package-Versioned Prefix](#package-versioned-prefix)
+5. [Module Aliases](#module-aliases)
+6. [Generic Specialization Naming](#generic-specialization-naming)
+7. [Two-Pass Parsing](#two-pass-parsing)
+8. [Key Data Structures](#key-data-structures)
+9. [Examples](#examples)
 
 ---
 
 ## Overview
 
-The Tess compiler uses three distinct types of name mangling, applied in sequence:
+The Tess compiler uses up to four types of name mangling, applied in sequence:
 
 | Stage | Purpose | Format | Example |
 |-------|---------|--------|---------|
 | 1. Arity | Function overloading by parameter count | `name__N` | `add__2` |
 | 2. Module | Namespace separation | `Module__name` | `Math__add__2` |
-| 3. Specialization | Unique names for monomorphized generics | `name_N` | `Math__add__2_0` |
+| 3. Package prefix | Package-version namespace (if `package.tl` exists) | `pkg__ver__Module__name` | `mylib__1_2_0__Math__add__2` |
+| 4. Specialization | Unique names for monomorphized generics | `name_N` | `Math__add__2_0` |
 
 ### Order of Operations
 
@@ -39,7 +41,10 @@ Arity:  Math.add__2      (internal arity format)
 Module: Math__add__2     (module prefix applied)
      |
      v
-Specialization: Math__add__2_0   (if generic, specialized instance)
+Package: mylib__1_2_0__Math__add__2   (if in a package with name+version)
+     |
+     v
+Specialization: mylib__1_2_0__Math__add__2_0   (if generic, specialized instance)
 ```
 
 ### What Gets Mangled
@@ -129,9 +134,17 @@ Dotted module names have dots replaced with `__`:
 **`mangle_str_for_module()`** (parser.c)
 
 ```c
-static str mangle_str_for_module(parser *self, str name, str module) {
+str mangle_str_for_module(parser *self, str name, str module) {
     str safe_module = str_replace_char_str(self->ast_arena, module, '.', S("__"));
-    return str_cat_3(self->ast_arena, safe_module, S("__"), name);
+    str result      = str_qualify(self->ast_arena, safe_module, name);
+
+    if (self->module_pkg_prefixes) {
+        str *prefix = str_map_get(self->module_pkg_prefixes, module);
+        if (prefix) {
+            result = str_qualify(self->ast_arena, *prefix, result);
+        }
+    }
+    return result;
 }
 ```
 
@@ -185,6 +198,58 @@ c := Mod.Shape.Circle(radius = 2.0)
 // Step 2: Mod__Shape.Circle → checks "Shape" in nested_type_parents
 //         → builds Shape__Circle → applies module "Mod" → Mod__Shape__Circle
 ```
+
+---
+
+## Package-Versioned Prefix
+
+When code is compiled within a package (i.e., a `package.tl` with `package()` and `version()` declarations exists), all module-mangled symbols receive an additional package-version prefix. This gives each package version its own C namespace, enabling diamond dependencies with different versions.
+
+### Format
+
+```
+pkg__ver__Module__name
+```
+
+Version dots are replaced with underscores: `1.2.0` → `1_2_0`.
+
+### Examples
+
+Given `package.tl`:
+```tl
+format(1)
+package(mylib)
+version("1.2.0")
+export(Math)
+```
+
+And module:
+```tl
+#module Math
+add(x: Int, y: Int) -> Int { x + y }
+```
+
+The mangled name becomes: `mylib__1_2_0__Math__add__2`
+
+### Scope
+
+| Case | Behavior |
+|------|----------|
+| No `package.tl` | No prefix applied — symbols unchanged |
+| `main` module | Not prefixed (`mangle_name()` returns early) |
+| `builtin` module | Not prefixed (excluded from prefix map) |
+| `c_*` symbols | Not prefixed (`mangle_name()` returns early) |
+| `c_export` wrappers | Wrapper keeps clean C name; internal call target gets prefix |
+| `__init` functions | `is_module_init()` checks suffix — prefix prepended, suffix preserved |
+| Dependency modules | Prefixed with the dependency's own package name and version |
+
+### Implementation
+
+The prefix is applied in `mangle_str_for_module()` (parser.c), the single choke point for all module mangling. A `module_pkg_prefixes` hashmap (module name → `"pkg__ver"` string) is built in `tess_exe.c` from:
+1. Dependency metadata returned by `load_package_deps()` (for imported package modules)
+2. The current package's `scanner.modules_seen` (for the package's own modules)
+
+The map is threaded through `parser_opts` → `struct parser` and consulted after the base module mangle.
 
 ---
 

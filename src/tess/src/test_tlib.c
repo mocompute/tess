@@ -3033,6 +3033,203 @@ static int test_e2e_source_cli_override_warning(void) {
     return 0;
 }
 
+// Test: package-versioned name mangling.
+// Transpiled C output must contain "pkg__ver__Module__fn" prefix for module symbols.
+static int test_e2e_pkg_prefix_mangling(void) {
+    char dir[512];
+    make_temp_path(dir, sizeof(dir), "e2e_pkg_prefix/");
+    test_mkdir_p(dir);
+
+    char path[512];
+    snprintf(path, sizeof(path), "%spackage.tl", dir);
+    if (write_file(path, "format(1)\npackage(mylib)\nversion(\"1.2.0\")\nexport(Math)\n")) {
+        fprintf(stderr, "  failed to write package.tl\n");
+        return 1;
+    }
+
+    char src[512];
+    snprintf(src, sizeof(src), "%smath.tl", dir);
+    if (write_file(src, "#module Math\n\nadd(x: Int, y: Int) -> Int { x + y }\n")) {
+        fprintf(stderr, "  failed to write math.tl\n");
+        return 1;
+    }
+
+    char output_log[512];
+    snprintf(output_log, sizeof(output_log), "%sout.c", dir);
+
+    char cmd[2048];
+    snprintf(cmd, sizeof(cmd),
+             CD_CMD " \"%s\" && \"%s\" lib-emit-c --no-standard-includes -S \"%s\""
+                    " --no-line-directive \"%s\" >\"%s\" 2>&1",
+             dir, e2e_tess_exe, e2e_stdlib_dir, src, output_log);
+    if (run_cmd(cmd) != 0) {
+        fprintf(stderr, "  tess lib-emit-c failed\n");
+        return 1;
+    }
+
+    char *output = read_file_contents(output_log, null);
+    if (!output) {
+        fprintf(stderr, "  failed to read output\n");
+        return 1;
+    }
+
+    // Version 1.2.0 → 1_2_0, so mangled name should contain "mylib__1_2_0__Math__add__2"
+    if (!strstr(output, "mylib__1_2_0__Math__add__2")) {
+        fprintf(stderr, "  expected 'mylib__1_2_0__Math__add__2' in transpiled output\n");
+        return 1;
+    }
+
+    return 0;
+}
+
+// Test: cross-module references within a package use matching prefixed names.
+static int test_e2e_pkg_prefix_cross_module(void) {
+    char lib_dir[512];
+    make_temp_path(lib_dir, sizeof(lib_dir), "e2e_pkg_xmod_lib/");
+    test_mkdir_p(lib_dir);
+
+    char path[512];
+    snprintf(path, sizeof(path), "%spackage.tl", lib_dir);
+    if (write_file(path, "format(1)\npackage(Greeter)\nversion(\"2.0.0\")\n"
+                         "export(Greeter)\nexport(Helper)\n")) {
+        fprintf(stderr, "  failed to write lib package.tl\n");
+        return 1;
+    }
+
+    snprintf(path, sizeof(path), "%shelper.tl", lib_dir);
+    if (write_file(path, "#module Helper\n\nfoo() -> Int { 10 }\n")) {
+        fprintf(stderr, "  failed to write helper.tl\n");
+        return 1;
+    }
+
+    snprintf(path, sizeof(path), "%sgreeter.tl", lib_dir);
+    if (write_file(path,
+                   "#module Greeter\n\ngreet() -> Int { Helper.foo() + 32 }\n")) {
+        fprintf(stderr, "  failed to write greeter.tl\n");
+        return 1;
+    }
+
+    // Pack library
+    char tlib_path[512];
+    snprintf(tlib_path, sizeof(tlib_path), "%sGreeter.tlib", lib_dir);
+
+    char cmd[2048];
+    snprintf(cmd, sizeof(cmd),
+             CD_CMD " \"%s\" && \"%s\" pack --no-standard-includes -S \"%s\""
+                    " helper.tl greeter.tl -o Greeter.tlib 2>&1",
+             lib_dir, e2e_tess_exe, e2e_stdlib_dir);
+    if (run_cmd(cmd) != 0) {
+        fprintf(stderr, "  tess pack failed\n");
+        return 1;
+    }
+
+    // Set up consumer
+    char app_dir[512], libs_dir[512];
+    make_temp_path(app_dir, sizeof(app_dir), "e2e_pkg_xmod_app/");
+    snprintf(libs_dir, sizeof(libs_dir), "%slibs" SEP_STR, app_dir);
+    test_mkdir_p(app_dir);
+    test_mkdir_p(libs_dir);
+
+    snprintf(path, sizeof(path), "%spackage.tl", app_dir);
+    if (write_file(path, "format(1)\npackage(App)\nversion(\"0.1.0\")\n"
+                         "depend(Greeter, \"2.0.0\")\ndepend_path(\"./libs\")\n")) {
+        fprintf(stderr, "  failed to write app package.tl\n");
+        return 1;
+    }
+
+    snprintf(path, sizeof(path), "%smain.tl", app_dir);
+    if (write_file(path, "#module main\n\n"
+                         "main() {\n"
+                         "  r := Greeter.greet()\n"
+                         "  if r == 42 { 0 } else { 1 }\n"
+                         "}\n")) {
+        fprintf(stderr, "  failed to write main.tl\n");
+        return 1;
+    }
+
+    // Copy .tlib
+    char dst_tlib[512];
+    snprintf(dst_tlib, sizeof(dst_tlib), "%sGreeter.tlib", libs_dir);
+    if (copy_file(tlib_path, dst_tlib)) {
+        fprintf(stderr, "  failed to copy Greeter.tlib\n");
+        return 1;
+    }
+
+    // Compile and run
+    char out_exe[512];
+    snprintf(out_exe, sizeof(out_exe), "%sapp" EXE_SUFFIX, app_dir);
+    snprintf(cmd, sizeof(cmd),
+             CD_CMD " \"%s\" && \"%s\" exe --no-standard-includes -S \"%s\" -o \"%s\" main.tl 2>&1",
+             app_dir, e2e_tess_exe, e2e_stdlib_dir, out_exe);
+    if (run_cmd(cmd) != 0) {
+        fprintf(stderr, "  tess exe failed\n");
+        return 1;
+    }
+
+    int exit_code = run_exe(out_exe);
+    if (exit_code != 0) {
+        fprintf(stderr, "  expected exit code 0, got %d\n", exit_code);
+        return 1;
+    }
+
+    return 0;
+}
+
+// Test: c_export wrapper keeps clean C name while internal call uses pkg-prefixed name.
+static int test_e2e_pkg_prefix_c_export(void) {
+    char dir[512];
+    make_temp_path(dir, sizeof(dir), "e2e_pkg_cexport/");
+    test_mkdir_p(dir);
+
+    char path[512];
+    snprintf(path, sizeof(path), "%spackage.tl", dir);
+    if (write_file(path, "format(1)\npackage(mylib)\nversion(\"3.0.0\")\nexport(Api)\n")) {
+        fprintf(stderr, "  failed to write package.tl\n");
+        return 1;
+    }
+
+    char src[512];
+    snprintf(src, sizeof(src), "%sapi.tl", dir);
+    if (write_file(src, "#module Api\n"
+                        "[[c_export]] add(x: CInt, y: CInt) -> CInt { x + y }\n")) {
+        fprintf(stderr, "  failed to write api.tl\n");
+        return 1;
+    }
+
+    char output_log[512];
+    snprintf(output_log, sizeof(output_log), "%sout.c", dir);
+
+    char cmd[2048];
+    snprintf(cmd, sizeof(cmd),
+             CD_CMD " \"%s\" && \"%s\" lib-emit-c --no-standard-includes -S \"%s\""
+                    " --no-line-directive \"%s\" >\"%s\" 2>&1",
+             dir, e2e_tess_exe, e2e_stdlib_dir, src, output_log);
+    if (run_cmd(cmd) != 0) {
+        fprintf(stderr, "  tess lib-emit-c failed\n");
+        return 1;
+    }
+
+    char *output = read_file_contents(output_log, null);
+    if (!output) {
+        fprintf(stderr, "  failed to read output\n");
+        return 1;
+    }
+
+    // Internal name should have pkg prefix
+    if (!strstr(output, "mylib__3_0_0__Api__add__2")) {
+        fprintf(stderr, "  expected 'mylib__3_0_0__Api__add__2' in output\n");
+        return 1;
+    }
+
+    // Wrapper function should keep clean name "Api_add"
+    if (!strstr(output, "int Api_add(")) {
+        fprintf(stderr, "  expected 'int Api_add(' wrapper in output\n");
+        return 1;
+    }
+
+    return 0;
+}
+
 int main(void) {
     init_temp_dir();
     init_e2e_paths();
@@ -3085,5 +3282,8 @@ int main(void) {
     T(test_e2e_source_no_files_anywhere)
     T(test_e2e_source_ignores_non_tl)
     T(test_e2e_source_cli_override_warning)
+    T(test_e2e_pkg_prefix_mangling)
+    T(test_e2e_pkg_prefix_cross_module)
+    T(test_e2e_pkg_prefix_c_export)
     return error;
 }
