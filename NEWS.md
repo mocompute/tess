@@ -5,6 +5,62 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased] - 2026-03-07 to 2026-03-11 (c5101ccd..ec70d2ab)
+
+### Highlights
+
+- **Heap-allocated closures** (`[[alloc]]` / `[[alloc(expr)]]`): closures can now safely escape their defining stack frame, with the compiler enforcing escape analysis and rejecting invalid captures
+- **Package-versioned symbol names**: module symbols now embed their package version in the C name, enabling diamond dependency graphs without link-time symbol collisions
+- **Multi-version package coexistence**: different packages can depend on different versions of the same library and coexist at link time
+- **`c"..."` string literal prefix removed** *(breaking)*: plain string literals are now C strings directly; the `c` prefix no longer exists
+- **Parser split into focused files**: `parser.c` refactored into `parser_expr.c`, `parser_types.c`, `parser_tagged_union.c`, and `parser_statements.c`
+
+### Added
+
+- **Heap-Allocated Closures**: Closures annotated with `[[alloc]]` or `[[alloc(expr)]]` have their captured context heap-allocated, allowing them to outlive their defining stack frame. The compiler generates a separate `tl_alloc_ctx_` struct with value-copy fields. `[[alloc(expr)]]` accepts a custom allocator expression with enforced type validation. All Tess functions now receive a `void* tl_ctx_raw` first parameter enabling uniform direct and indirect dispatch via a unified `tl_Closure {fn, ctx}` struct; C FFI thunks are generated for raw function pointer interop.
+- **Closure Escape Analysis**: The compiler now rejects closures that escape their stack frame without `[[alloc]]`. Escape checking, alloc validation, and capture scope validation are unified into a single pass. Transitive capture (outer closure calls inner closure by name) correctly propagates free variables.
+- **Package-Versioned Name Mangling**: Module symbols in packages now receive a `pkg__ver__` prefix in their C names (e.g., `mylib__1_2_0__Math__add__2`), preventing symbol collisions in diamond dependency graphs. Applied at a single chokepoint in `mangle_str_for_module()`; standalone files, `main`, `builtin`, `c_*` symbols, and `c_export` wrappers are unaffected.
+- **Multi-Version Package Coexistence**: Loaded dependencies are now keyed on `"name=version"` rather than bare name. Per-file prefix maps ensure each source file resolves symbols according to its owning package's dependency tree, so two packages depending on different versions of the same library coexist without conflict.
+- **Stdin Compiler Input**: The `c`, `exe`, and `run` commands now accept `-` as a filename to read source from stdin (`echo '...' | tess run -`). Error messages and `#line` directives use `<stdin>` as the virtual filename.
+- **`tl_source_scanner_collect_modules()` API**: Added to the shared source scanner API, replacing a fragile manual `#module` line scanner that incorrectly matched inside string literals and comments.
+- **`platform_make_c_identifier` / `str_make_c_identifier` Helper**: Extracted from `embed.c` into `platform.c`. Fixed: now replaces all non-alnum characters with `_` (previously dropped them silently), adds proper `(unsigned char)` cast, and returns output length.
+- **17 new stress-test integration tests**: Covering generic closures specialized at multiple types, trait-bounded generics with operator overloading, weak int literals through nested generics, generic tagged unions with type aliases, higher-order generic functions returning tagged unions, recursive generic types with closures, and module-scoped generic tagged unions.
+- **New documentation**: `docs/LANGUAGE_MODEL.md` explains let-in expressions, scoping, mutation vs. rebinding, closures, and pattern matching. `docs/SPECIALIZATION.md` rewritten with the 7-phase inference pipeline, clone/rename process, and closure handling.
+- **NixOS clangd config generator**: `tools/gen-clangd-config.sh` discovers the correct clang resource directory and glibc include path from the Nix environment and writes a `.clangd` config file.
+
+### Changed
+
+- **`c"..."` String Literal Syntax Removed** *(breaking)*: The `c"..."` prefix that produced raw C string pointers has been removed from the language. Plain string literals now produce C strings directly. All standard library files, tests, and examples updated; `Str.tl`'s `from_literal` prelude simplified.
+- **Unified Calling Convention**: All transpiled Tess functions now accept `void* tl_ctx_raw` as their first parameter, enabling uniform dispatch whether called directly or through a closure pointer.
+- **Parser Split Into Multiple Files**: `parser.c` (grown very large) was split into `parser_expr.c`, `parser_types.c`, `parser_tagged_union.c`, and `parser_statements.c`, with `parser_internal.h` for shared declarations. Makefile and CMakeLists.txt updated.
+- **`str_qualify` Helper**: Added `str_qualify(alloc, parent, child)` in `ast.h` to replace the recurring `str_cat_3(alloc, lhs, S("__"), rhs)` pattern across 10 call sites in tagged union parsing.
+- **Capture Scope Validation Simplified**: The separate two-pass capture scope checker replaced by a single-pass approach: captured symbols in scope get alpha-renamed; those out of scope keep an empty `symbol.original`, making scope errors detectable via a simple field check. Removed ~170 lines of `check_capture_scope_walk` and related code.
+- **Module Symbol Storage Deduplicated**: `save_current_module_symbols()` previously stored symbols under both versioned and unversioned keys. The unversioned key was unreachable (resolver always prefers versioned), so the redundant `map_copy` and second allocation were removed.
+- **`make_version_key` Helper Extracted**: Deduplicates versioned module symbol key construction (`pkg::ver::Module`) that previously appeared in three places.
+
+### Removed
+
+- **`c"..."` string literal syntax** — removed from tokenizer, parser, and AST; all usages updated to plain string literals.
+- **`fatal.tl`** standard library file — functionality merged into `builtin.tl`; import statements updated.
+- **Manual `#module` line scanner in `tess_exe.c`** — replaced by the comment/string-aware `source_scanner` API.
+- **Redundant `map_copy` in `save_current_module_symbols`** — unreachable dead code removed.
+
+### Fixed
+
+- Fixed type alias names not being normalized before specialization cache lookups, causing duplicate C struct instantiations when an alias like `"Point"` and its canonical form `"Point__T"` produced different cache keys.
+- Fixed null pointer dereference in `add_generic` when a parameter's arrow annotation references an unknown type (`make_arrow` returns NULL; guarded with `tl_polytype_is_scheme` check).
+- Fixed alpha conversion skipping annotations on toplevel let-in names (level 0), now properly traversed.
+- Fixed stale type variables in sibling types at recursive generic multi-specialization boundaries.
+- Fixed `registry_args_hash` ignoring arrow free variables nested inside structs (the old save/restore only stripped FVs from immediate arrow args); fixed with a `hash_ignore_fvs` flag propagated through `tl_monotype_hash64_`.
+- Fixed `#module` false-matching inside string literals and comments in the old manual scanner.
+- Fixed formatter emitting a spurious standalone `=` for 3-character compound assignment operators (`<<=`, `>>=`) — was skipping 1 character instead of 2.
+- Fixed formatter not preserving spaces around `[[...]]` attribute brackets.
+- Fixed codegen for allocating closures whose context returns a struct type.
+- Fixed shorthand return of allocated closure values.
+- Fixed transitive closure capture: outer closures calling inner closures by name now correctly inherit the inner closure's free variables.
+- Fixed closure escape analysis not tracing alloc closures through if/else branches.
+- Fixed free variable collection for named-function-application callee nodes (not just their arguments).
+
 ## [Unreleased] - 2026-03-04 to 2026-03-07 (eeee2aa4..c5101ccd)
 
 ### Highlights
