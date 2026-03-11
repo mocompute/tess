@@ -705,7 +705,7 @@ static str generate_context(transpile *self, str_sized fvs, eval_ctx *ctx, int i
         //                        (alloc->malloc.ctx, alloc, sizeof(ctx_struct))
         cat(self, S("*)((/*any*/void*(*)(void*, "));
         cat(self, alloc_type_c);
-        cat(self, S("*, unsigned long long))"));
+        cat(self, S("*, size_t))"));
         cat(self, allocator_c);
         cat(self, S("->malloc.fn)("));
         cat(self, allocator_c);

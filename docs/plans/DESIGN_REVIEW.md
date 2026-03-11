@@ -17,7 +17,6 @@
 
   Language Semantics & Stdlib
 
-  10. Str value assignment aliases the heap buffer (Str.tl:20-30) — For strings >14 bytes, := copies only the struct; both copies share the heap buffer. Freeing either produces use-after-free on the other. No language-level protection, no documentation warning.
   11. Array.find_value aborts on no match (Array.tl:474-481) — Return type T implies guaranteed success, but it calls _tl_fatal_. Inconsistent with the rest of the search API which returns Option.
   12. STANDARD_LIBRARY.md says Array.size is Int, implementation uses UInt — All documented signatures show Int for indices/counts while the actual code uses UInt.
 
@@ -35,8 +34,6 @@
   │ Type System  │ specialize_arrow cache key computed before weak int defaulting (infer_specialize.c:1300) │ Duplicate specializations           │
   ├──────────────┼──────────────────────────────────────────────────────────────────────────────────────────┼─────────────────────────────────────┤
   │ Type System  │ TV resolved to non-narrow Int accepts narrow CInt in symmetric context                   │ Ordering-dependent inference        │
-  ├──────────────┼──────────────────────────────────────────────────────────────────────────────────────────┼─────────────────────────────────────┤
-  │ Codegen      │ unsigned long long hardcoded where size_t needed (transpile.c:706)                       │ 32-bit ABI mismatch                 │
   ├──────────────┼──────────────────────────────────────────────────────────────────────────────────────────┼─────────────────────────────────────┤
   │ Stdlib       │ HashMap.get returns interior pointer invalidated by _grow                                │ Undocumented dangling pointer       │
   ├──────────────┼──────────────────────────────────────────────────────────────────────────────────────────┼─────────────────────────────────────┤
@@ -61,4 +58,10 @@
   3. Cross-subchain directed unification falls through to symmetric (type.c:2924-2940) — Standalone types (CSize, CPtrDiff, CChar) silently convert in TL_UNIFY_DIRECTED mode when they should require explicit annotation.
   4. for loop uses hardcoded "gen_iter" variable name (parser_expr.c:404) — Every other synthesized name uses the unique-name counter. This one will silently collide with any user binding named gen_iter.
 
+  10. Str value assignment aliases the heap buffer (Str.tl:20-30) — For strings >14 bytes, := copies only the struct; both copies share the heap buffer. Freeing either produces use-after-free on the other. No language-level protection, no documentation warning.
+
   14. hot_parse_ctx reentrancy guard is assert-only (infer.c:106) — Compiled away with -DNDEBUG in release builds. Silent corruption if re-entrancy occurs in production.
+
+
+  │ Codegen      │ unsigned long long hardcoded where size_t needed (transpile.c:706)                       │ 32-bit ABI mismatch                 │
+  ├──────────────┼──────────────────────────────────────────────────────────────────────────────────────────┼─────────────────────────────────────┤
