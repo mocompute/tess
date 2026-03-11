@@ -185,17 +185,17 @@ push(self, x) {
 // -- Element access --
 
 get[T](arr: Array[T], index: UInt) -> T {
-    if index >= arr.size { _tl_fatal_(c"Array.get: index out of bounds") }
+    if index >= arr.size { _tl_fatal_("Array.get: index out of bounds") }
     arr.v.[index]
 }
 
 front[T](arr: Array[T]) -> T {
-    if arr.size == 0u { _tl_fatal_(c"Array.front: empty array") }
+    if arr.size == 0u { _tl_fatal_("Array.front: empty array") }
     arr.v.[0u]
 }
 
 back[T](arr: Array[T]) -> T {
-    if arr.size == 0u { _tl_fatal_(c"Array.back: empty array") }
+    if arr.size == 0u { _tl_fatal_("Array.back: empty array") }
     arr.v.[arr.size - 1u]
 }
 
@@ -203,7 +203,7 @@ back[T](arr: Array[T]) -> T {
 // -- Removal / mutation --
 
 pop[T](self: Ptr[Array[T]]) -> T {
-    if self->size == 0u { _tl_fatal_(c"Array.pop: empty array") }
+    if self->size == 0u { _tl_fatal_("Array.pop: empty array") }
     self->size = self->size - 1u
     self->v.[self->size]
 }
@@ -213,7 +213,7 @@ clear[T](self: Ptr[Array[T]]) -> Void {
 }
 
 insert[T](self: Ptr[Array[T]], alloc, index: UInt, val: T) {
-    if index > self->size { _tl_fatal_(c"Array.insert: index out of bounds") }
+    if index > self->size { _tl_fatal_("Array.insert: index out of bounds") }
     if _is_full(self) { _grow(self, alloc, self->capacity + 1u) }
     if index < self->size {
         width       := _type_width_aligned[T]()
@@ -230,7 +230,7 @@ insert[T](self: Ptr[Array[T]], index: UInt, val: T) {
 }
 
 remove[T](self: Ptr[Array[T]], index: UInt) -> T {
-    if index >= self->size { _tl_fatal_(c"Array.remove: index out of bounds") }
+    if index >= self->size { _tl_fatal_("Array.remove: index out of bounds") }
     val := self->v.[index]
     self->size = self->size - 1u
     if index < self->size {
@@ -243,7 +243,7 @@ remove[T](self: Ptr[Array[T]], index: UInt) -> T {
 }
 
 swap_remove[T](self: Ptr[Array[T]], index: UInt) -> T {
-    if index >= self->size { _tl_fatal_(c"Array.swap_remove: index out of bounds") }
+    if index >= self->size { _tl_fatal_("Array.swap_remove: index out of bounds") }
     val := self->v.[index]
     self->size = self->size - 1u
     if index < self->size {
@@ -301,8 +301,8 @@ truncate[T](self: Ptr[Array[T]], count: UInt) {
 // -- Reordering --
 
 swap[T](self: Ptr[Array[T]], i: UInt, j: UInt) {
-    if i >= self->size { _tl_fatal_(c"Array.swap: index out of bounds") }
-    if j >= self->size { _tl_fatal_(c"Array.swap: index out of bounds") }
+    if i >= self->size { _tl_fatal_("Array.swap: index out of bounds") }
+    if j >= self->size { _tl_fatal_("Array.swap: index out of bounds") }
     tmp := self->v.[i]
     self->v.[i] = self->v.[j]
     self->v.[j] = tmp
@@ -348,7 +348,7 @@ clone[T](arr: Array[T]) -> Array[T] {
 }
 
 slice[T](alloc, arr: Array[T], start: UInt, end: UInt) -> Array[T] {
-    if end > arr.size || start > end { _tl_fatal_(c"Array.slice: index out of bounds") }
+    if end > arr.size || start > end { _tl_fatal_("Array.slice: index out of bounds") }
     len := end - start
     if len == 0u { return empty[T]() }
     result := with_capacity[T](alloc, len)
@@ -476,7 +476,7 @@ find_value[T](arr: Array[T], f: (T) -> Bool) -> T {
     while i < arr.size, i += 1u {
         if f(arr.v.[i]) { return arr.v.[i] }
     }
-    _tl_fatal_(c"Array.find_value: no matching element")
+    _tl_fatal_("Array.find_value: no matching element")
     arr.v.[0u]
 }
 
@@ -513,7 +513,7 @@ sort[T](self: Ptr[Array[T]], tmp_alloc, cmp: (T, T) -> Int) {
     if n <= 1u { return void }
     width       := _type_width_aligned[T]()
     tmp: Ptr[T] := tmp_alloc->malloc(tmp_alloc, n * width)
-    if tmp == null { _tl_fatal_(c"Array.sort: oom") }
+    if tmp == null { _tl_fatal_("Array.sort: oom") }
     w: UInt := 1u
     while w < n {
         i: UInt := 0u

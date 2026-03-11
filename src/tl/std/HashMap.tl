@@ -135,7 +135,7 @@ create[K, V](alloc: Ptr[Allocator], opts: HashMapOpts[K]) -> Ptr[HashMap[K, V]] 
     if eq_fn == null { eq_fn     = _default_eq[K]/2 }
 
     m: Ptr[HashMap[K, V]] := alloc->malloc(alloc, sizeof[HashMap[K, V]]())
-    if m == null { _tl_fatal_(c"HashMap: oom") }
+    if m == null { _tl_fatal_("HashMap: oom") }
 
     m->_entries  = _alloc_entries[K, V](alloc, cap)
     m->_capacity = cap

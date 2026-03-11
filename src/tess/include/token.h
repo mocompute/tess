@@ -43,7 +43,6 @@
     X(tok_number, "number")                                                                                \
     X(tok_symbol, "symbol")                                                                                \
     X(tok_string, "string")                                                                                \
-    X(tok_c_string, "c_string")                                                                            \
     X(tok_char, "char")                                                                                    \
     X(tok_comment, "comment")
 

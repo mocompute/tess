@@ -27,7 +27,7 @@ main() {
     c_printf("val = %d\n", val)
 
     val2 := add_one_through_const(p)
-    c_printf(c"val2 = %d\n", val2)
+    c_printf("val2 = %d\n", val2)
 
     c_free(p)
 
@@ -36,7 +36,7 @@ main() {
     pt->x = 10
     pt->y = 20
     sum := read_point(pt)
-    c_printf(c"sum = %d\n", sum)
+    c_printf("sum = %d\n", sum)
 
     c_free(pt)
     0

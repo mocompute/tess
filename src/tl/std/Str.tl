@@ -160,7 +160,7 @@ _init_small(src: Ptr[Const[CChar]], n: UInt) -> Str {
 
 _init_big(alloc: Ptr[Allocator], src: Ptr[Const[CChar]], n: UInt) -> Str {
     buf: Ptr[CChar] := alloc->malloc(alloc, n + 1zu)
-    if buf == null { _tl_fatal_(c"Str: out of memory") }
+    if buf == null { _tl_fatal_("Str: out of memory") }
     if n > 0zu { c_memcpy(buf, src, n) }
     Str(big = _Big(len = n, buf = buf))
 }

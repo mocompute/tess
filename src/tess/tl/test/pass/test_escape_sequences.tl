@@ -54,7 +54,7 @@ main() {
     error += if len == 11zu {0} else {1}
 
     // Test multiple escapes in string
-    s2   := c"a\tb\tc"
+    s2   := "a\tb\tc"
     len2 := c_strlen(s2)
     error += if len2 == 5zu {0} else {1}
 

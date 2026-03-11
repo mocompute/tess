@@ -211,7 +211,6 @@ start:; // loop point for skip_depth > 0
         in_vertical_bar,
         in_open_square,
         in_close_square,
-        in_c,
 
         start_number,
         start_number_sign,
@@ -255,11 +254,7 @@ start:; // loop point for skip_depth > 0
         num_decimal,
         num_hex,
         num_binary,
-    } number_format = num_decimal;
-    enum {
-        str_str,
-        str_c,
-    } string_format  = str_str;
+    } number_format  = num_decimal;
 
     size_t const end = self->input.size;
 
@@ -295,11 +290,9 @@ start:; // loop point for skip_depth > 0
             case '*': state = in_star; break;
             case '/': state = in_forward_slash; break;
             case '%': state = in_percent; break;
-            case 'c': state = in_c; continue;
 
             case '"': {
-                string_format = str_str;
-                state         = start_string;
+                state = start_string;
                 continue;
             }
 
@@ -374,23 +367,6 @@ start:; // loop point for skip_depth > 0
 
                 // else skip char
                 break;
-            }
-        } break;
-
-        case in_c: {
-            if (self->pos == end) {
-                replace_token_s(self->strings, &res, tok_symbol, "c");
-                state = stop;
-                goto finish;
-            }
-            char const c = next_char(self);
-            if ('"' == c) {
-                string_format = str_c;
-                state         = start_string;
-            } else {
-                reverse_pos(self); // return char
-                reverse_pos(self); // return `c`
-                state = start_symbol;
             }
         } break;
 
@@ -1151,8 +1127,7 @@ start:; // loop point for skip_depth > 0
         } break;
 
         case stop_string: {
-            replace_token_sn(self->strings, &res, string_format == str_str ? tok_string : tok_c_string,
-                             self->buf.v, self->buf.size);
+            replace_token_sn(self->strings, &res, tok_string, self->buf.v, self->buf.size);
             state = stop;
         } break;
 

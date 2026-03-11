@@ -46,7 +46,7 @@ main() {
     b2                    := Buffer(data = void, len = 0zu)
     bp                    := b2.&
     field_ptr: Ptr[CChar] := bp->data
-    c_strcpy(field_ptr, c"World")
+    c_strcpy(field_ptr, "World")
     error += if c_strlen(field_ptr) == 5zu {0} else {1}
     // Verify the write went into b2, not a dead temporary
     check_ptr: Ptr[CChar] := b2.data

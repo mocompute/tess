@@ -10,8 +10,8 @@ main() {
     p: Ptr[Int]           := arr
     b: Ptr[CUnsignedChar] := p
     c_printf("b.[0] = 0x%x\n", b.[0])
-    c_printf(c"b.[1] = 0x%x\n", b.[1])
-    c_printf(c"b.[2] = 0x%x\n", b.[2])
+    c_printf("b.[1] = 0x%x\n", b.[1])
+    c_printf("b.[2] = 0x%x\n", b.[2])
 
     pp := p.&
 

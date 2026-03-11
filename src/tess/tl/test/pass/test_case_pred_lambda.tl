@@ -4,9 +4,9 @@
 main() {
     s1 := "hello"
     case s1, (a, b) { 0 == c_strcmp(a, b) } {
-        c"world" { 1 }
-        c"there" { 1 }
-        c"hello" { 0 }
+        "world" { 1 }
+        "there" { 1 }
+        "hello" { 0 }
     }
 }
 

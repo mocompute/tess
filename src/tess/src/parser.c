@@ -586,8 +586,7 @@ int the_symbol(parser *p, char const *const want) {
 int a_string(parser *p) {
     if (next_token(p)) return 1;
 
-    if (tok_string == p->token.tag || tok_c_string == p->token.tag)
-        return result_ast_str(p, ast_string, p->token.s);
+    if (tok_string == p->token.tag) return result_ast_str(p, ast_string, p->token.s);
 
     p->error.tag = tl_err_expected_string;
     return 1;
