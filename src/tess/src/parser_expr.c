@@ -401,7 +401,7 @@ int a_for_statement(parser *self) {
     // just need one let-in: to grab the iterator pointer and set the value variable.
 
     // First, we need a name for the hidden iterator variable
-    ast_node *iterator = ast_node_create_sym_c(self->ast_arena, "gen_iter");
+    ast_node *iterator = ast_node_create_sym(self->ast_arena, next_var_name(self));
 
     // And we need an address-of operation for the iterator and the iterable
     ast_node *address_of       = ast_node_create_sym_c(self->ast_arena, "&");
