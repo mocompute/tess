@@ -476,7 +476,6 @@ Implemented in `src/tess/src/manifest.c` with header `src/tess/include/manifest.
 
 - `tl_package_parse_file()`: Reads file, parses with TL parser, walks AST to extract metadata
 - `extract_string()` / `extract_int()`: Helper functions to extract typed values from AST nodes
-- String literals are unwrapped from the parser's `nfa("Str__from_literal__1", [c_string(value)])` representation
 
 **DSL functions:**
 

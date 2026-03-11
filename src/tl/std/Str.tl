@@ -17,20 +17,18 @@ Allocator = Alloc.Allocator
 _STR_SMALL_TAG: Byte := 0x01u
 _STR_MAX_SMALL: UInt := 14u
 
-// The following are in prelude.tl:
-// _Big: {
-//     len: UInt,
-//     buf: Ptr[CChar],
-// }
-// _Small: {
-//     buf:     CArray[CChar, 15],
-//     tag_len: CUnsignedChar,
-// }
-// Str: { | big: _Big
-//        | small: _Small }
-//
-// from_literal is directly invoked by compiler to generate string literals
-// from_literal(s: Ptr[Const[CChar]]) -> Str
+_Big: {
+    len: CSize,
+    buf: Ptr[CChar],
+}
+
+_Small: {
+    buf:     CArray[CChar, 15],
+    tag_len: CUnsignedChar,
+}
+
+Str: { | big: _Big
+       | small: _Small }
 
 
 // -- Synopsis --
@@ -197,11 +195,6 @@ from_cstr(s: Ptr[Const[CChar]]) -> Str {
 }
 
 
-from_literal(s: Ptr[Const[CChar]]) -> Str {
-    from_cstr(Alloc.context.string_literals, s)
-}
-
-
 copy(alloc, s: Str) -> Str {
     n := len  (s)
     p := _buf (s.&)
@@ -255,8 +248,8 @@ from_byte(b: Byte) -> Str {
 }
 
 from_bool(b: Bool) -> Str {
-    if b { return from_literal(c"true") }
-    from_literal(c"false")
+    if b { return from_cstr(c"true") }
+    from_cstr(c"false")
 }
 
 
