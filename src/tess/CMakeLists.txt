@@ -141,6 +141,8 @@ add_test(NAME test-vendor-deflate COMMAND $<TARGET_FILE:test-vendor-deflate>)
 
 # -- tesslang tests --
 
+file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/tl)
+
 function(tl_create_test NAME SUBDIR)
   set(TEST_NAME test-tl-${NAME})
   set(TEST_SRC ${CMAKE_CURRENT_SOURCE_DIR}/tl/${SUBDIR}/test_${NAME}.tl)
