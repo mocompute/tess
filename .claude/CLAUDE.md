@@ -34,19 +34,7 @@ Single test:
 ./tess run src/tess/tl/test/pass/test_<name>.tl
 ```
 
-Compiler usage:
-```bash
-./tess c <file.tl>                   # Transpile to C (stdout)
-./tess exe <file.tl> -o <output>     # Compile to executable
-./tess run <file.tl>                 # Compile and execute in one step
-# exe and run work without <file.tl> if package.tl declares source()
-./tess lib <file.tl> -o <output.so>  # Compile to shared library
-./tess lib --static <file.tl> -o <output.a>  # Compile to static library
-./tess c --stats <file.tl>           # Per-phase memory and time statistics
-echo '...' | ./tess c -             # Read source from stdin (c, exe, run)
-```
-
-Common flags: `-v` (verbose), `--no-line-directive`, `--no-standard-includes`, `-I <path>`, `--time`.
+Compiler: `./tess <command> <file.tl>` — commands: `c` (transpile to C), `exe` (compile), `run` (compile+execute), `lib` (shared/static library). Common flags: `-v`, `--no-line-directive`, `-I <path>`, `--time`, `--stats`.
 
 ## Code Style
 
