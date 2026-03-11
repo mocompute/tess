@@ -3230,6 +3230,755 @@ static int test_e2e_pkg_prefix_c_export(void) {
     return 0;
 }
 
+// Test: compiling a module without package.tl produces no package prefix.
+static int test_e2e_pkg_prefix_no_package(void) {
+    char dir[512];
+    make_temp_path(dir, sizeof(dir), "e2e_pkg_no_pkg/");
+    test_mkdir_p(dir);
+
+    // No package.tl — just a standalone module
+    char src[512];
+    snprintf(src, sizeof(src), "%smath.tl", dir);
+    if (write_file(src, "#module Math\n\nadd(x: Int, y: Int) -> Int { x + y }\n")) {
+        fprintf(stderr, "  failed to write math.tl\n");
+        return 1;
+    }
+
+    char output_log[512];
+    snprintf(output_log, sizeof(output_log), "%sout.c", dir);
+
+    // cd to the temp dir so we're NOT in a directory with package.tl
+    char cmd[2048];
+    snprintf(cmd, sizeof(cmd),
+             CD_CMD " \"%s\" && \"%s\" lib-emit-c --no-standard-includes -S \"%s\""
+                    " --no-line-directive \"%s\" >\"%s\" 2>&1",
+             dir, e2e_tess_exe, e2e_stdlib_dir, src, output_log);
+    if (run_cmd(cmd) != 0) {
+        fprintf(stderr, "  tess lib-emit-c failed\n");
+        return 1;
+    }
+
+    char *output = read_file_contents(output_log, null);
+    if (!output) {
+        fprintf(stderr, "  failed to read output\n");
+        return 1;
+    }
+
+    // Should have plain module-mangled name without any package prefix
+    if (!strstr(output, "Math__add__2")) {
+        fprintf(stderr, "  expected 'Math__add__2' in output\n");
+        fprintf(stderr, "  got: %s\n", output);
+        return 1;
+    }
+
+    // Should NOT have any double-underscore prefix before 'Math'
+    // (i.e. no "something__Math__add__2" pattern)
+    if (strstr(output, "__Math__add__2")) {
+        fprintf(stderr, "  unexpected package prefix before 'Math__add__2'\n");
+        return 1;
+    }
+
+    return 0;
+}
+
+// Test: special characters in version string are converted to valid C identifiers.
+static int test_e2e_pkg_prefix_special_version(void) {
+    char dir[512];
+    make_temp_path(dir, sizeof(dir), "e2e_pkg_special_ver/");
+    test_mkdir_p(dir);
+
+    char path[512];
+    snprintf(path, sizeof(path), "%spackage.tl", dir);
+    if (write_file(path, "format(1)\npackage(mylib)\nversion(\"1.0.0-beta+build.42\")\nexport(Api)\n")) {
+        fprintf(stderr, "  failed to write package.tl\n");
+        return 1;
+    }
+
+    char src[512];
+    snprintf(src, sizeof(src), "%sapi.tl", dir);
+    if (write_file(src, "#module Api\n\nfoo() -> Int { 1 }\n")) {
+        fprintf(stderr, "  failed to write api.tl\n");
+        return 1;
+    }
+
+    char output_log[512];
+    snprintf(output_log, sizeof(output_log), "%sout.c", dir);
+
+    char cmd[2048];
+    snprintf(cmd, sizeof(cmd),
+             CD_CMD " \"%s\" && \"%s\" lib-emit-c --no-standard-includes -S \"%s\""
+                    " --no-line-directive \"%s\" >\"%s\" 2>&1",
+             dir, e2e_tess_exe, e2e_stdlib_dir, src, output_log);
+    if (run_cmd(cmd) != 0) {
+        fprintf(stderr, "  tess lib-emit-c failed\n");
+        return 1;
+    }
+
+    char *output = read_file_contents(output_log, null);
+    if (!output) {
+        fprintf(stderr, "  failed to read output\n");
+        return 1;
+    }
+
+    // Version "1.0.0-beta+build.42" should become "1_0_0_beta_build_42"
+    // (dots, hyphens, plus signs all become underscores)
+    if (!strstr(output, "mylib__1_0_0_beta_build_42__Api__foo__0")) {
+        fprintf(stderr, "  expected 'mylib__1_0_0_beta_build_42__Api__foo__0' in output\n");
+        fprintf(stderr, "  got: %s\n", output);
+        return 1;
+    }
+
+    return 0;
+}
+
+// Test: struct type definitions get package-versioned prefix in C output.
+static int test_e2e_pkg_prefix_struct(void) {
+    char dir[512];
+    make_temp_path(dir, sizeof(dir), "e2e_pkg_struct/");
+    test_mkdir_p(dir);
+
+    char path[512];
+    snprintf(path, sizeof(path), "%spackage.tl", dir);
+    if (write_file(path, "format(1)\npackage(geom)\nversion(\"1.0.0\")\nexport(Geom)\n")) {
+        fprintf(stderr, "  failed to write package.tl\n");
+        return 1;
+    }
+
+    char src[512];
+    snprintf(src, sizeof(src), "%sgeom.tl", dir);
+    if (write_file(src, "#module Geom\n\n"
+                        "Point : { x: Int, y: Int }\n\n"
+                        "make_point(x: Int, y: Int) -> Point {\n"
+                        "  Point(x = x, y = y)\n"
+                        "}\n")) {
+        fprintf(stderr, "  failed to write geom.tl\n");
+        return 1;
+    }
+
+    char output_log[512];
+    snprintf(output_log, sizeof(output_log), "%sout.c", dir);
+
+    char cmd[2048];
+    snprintf(cmd, sizeof(cmd),
+             CD_CMD " \"%s\" && \"%s\" lib-emit-c --no-standard-includes -S \"%s\""
+                    " --no-line-directive \"%s\" >\"%s\" 2>&1",
+             dir, e2e_tess_exe, e2e_stdlib_dir, src, output_log);
+    if (run_cmd(cmd) != 0) {
+        fprintf(stderr, "  tess lib-emit-c failed\n");
+        return 1;
+    }
+
+    char *output = read_file_contents(output_log, null);
+    if (!output) {
+        fprintf(stderr, "  failed to read output\n");
+        return 1;
+    }
+
+    // Struct type should have pkg-versioned prefix: geom__1_0_0__Geom__Point
+    if (!strstr(output, "geom__1_0_0__Geom__Point")) {
+        fprintf(stderr, "  expected 'geom__1_0_0__Geom__Point' in output\n");
+        fprintf(stderr, "  got: %s\n", output);
+        return 1;
+    }
+
+    // Function should also be prefixed
+    if (!strstr(output, "geom__1_0_0__Geom__make_point__2")) {
+        fprintf(stderr, "  expected 'geom__1_0_0__Geom__make_point__2' in output\n");
+        return 1;
+    }
+
+    return 0;
+}
+
+// Test: tagged union type and constructors get package-versioned prefix in C output.
+static int test_e2e_pkg_prefix_tagged_union(void) {
+    char dir[512];
+    make_temp_path(dir, sizeof(dir), "e2e_pkg_tagged/");
+    test_mkdir_p(dir);
+
+    char path[512];
+    snprintf(path, sizeof(path), "%spackage.tl", dir);
+    if (write_file(path, "format(1)\npackage(shapes)\nversion(\"2.0.0\")\nexport(Shapes)\n")) {
+        fprintf(stderr, "  failed to write package.tl\n");
+        return 1;
+    }
+
+    char src[512];
+    snprintf(src, sizeof(src), "%sshapes.tl", dir);
+    if (write_file(src, "#module Shapes\n\n"
+                        "Shape : | Circle { radius: Int } | Square { side: Int }\n\n"
+                        "area(s: Shape) -> Int {\n"
+                        "  when s {\n"
+                        "    c: Circle { c.radius * c.radius }\n"
+                        "    q: Square { q.side * q.side }\n"
+                        "  }\n"
+                        "}\n")) {
+        fprintf(stderr, "  failed to write shapes.tl\n");
+        return 1;
+    }
+
+    char output_log[512];
+    snprintf(output_log, sizeof(output_log), "%sout.c", dir);
+
+    char cmd[2048];
+    snprintf(cmd, sizeof(cmd),
+             CD_CMD " \"%s\" && \"%s\" lib-emit-c --no-standard-includes -S \"%s\""
+                    " --no-line-directive \"%s\" >\"%s\" 2>&1",
+             dir, e2e_tess_exe, e2e_stdlib_dir, src, output_log);
+    if (run_cmd(cmd) != 0) {
+        fprintf(stderr, "  tess lib-emit-c failed\n");
+        return 1;
+    }
+
+    char *output = read_file_contents(output_log, null);
+    if (!output) {
+        fprintf(stderr, "  failed to read output\n");
+        return 1;
+    }
+
+    // Tagged union type should have pkg prefix
+    if (!strstr(output, "shapes__2_0_0__Shapes__Shape")) {
+        fprintf(stderr, "  expected 'shapes__2_0_0__Shapes__Shape' in output\n");
+        fprintf(stderr, "  got: %s\n", output);
+        return 1;
+    }
+
+    // Variant struct names should also have pkg prefix
+    if (!strstr(output, "shapes__2_0_0__Shapes__Shape__Circle")) {
+        fprintf(stderr, "  expected 'shapes__2_0_0__Shapes__Shape__Circle' in output\n");
+        return 1;
+    }
+
+    if (!strstr(output, "shapes__2_0_0__Shapes__Shape__Square")) {
+        fprintf(stderr, "  expected 'shapes__2_0_0__Shapes__Shape__Square' in output\n");
+        return 1;
+    }
+
+    // Tag enum should have pkg prefix
+    if (!strstr(output, "shapes__2_0_0__Shapes____Shape__Tag_")) {
+        fprintf(stderr, "  expected 'shapes__2_0_0__Shapes____Shape__Tag_' in output\n");
+        return 1;
+    }
+
+    // Function should be prefixed
+    if (!strstr(output, "shapes__2_0_0__Shapes__area__1")) {
+        fprintf(stderr, "  expected 'shapes__2_0_0__Shapes__area__1' in output\n");
+        return 1;
+    }
+
+    return 0;
+}
+
+// Test: generic function specializations get package-versioned prefix in C output.
+static int test_e2e_pkg_prefix_generic(void) {
+    char dir[512];
+    make_temp_path(dir, sizeof(dir), "e2e_pkg_generic/");
+    test_mkdir_p(dir);
+
+    char path[512];
+    snprintf(path, sizeof(path), "%spackage.tl", dir);
+    if (write_file(path, "format(1)\npackage(UtilsPkg)\nversion(\"1.0.0\")\nexport(Utils)\n")) {
+        fprintf(stderr, "  failed to write package.tl\n");
+        return 1;
+    }
+
+    char src[512];
+    snprintf(src, sizeof(src), "%sutils.tl", dir);
+    if (write_file(src, "#module Utils\n\n"
+                        "identity(x) { x }\n")) {
+        fprintf(stderr, "  failed to write utils.tl\n");
+        return 1;
+    }
+
+    // Pack library
+    char tlib_path[512];
+    snprintf(tlib_path, sizeof(tlib_path), "%sUtilsPkg.tlib", dir);
+
+    char cmd[2048];
+    snprintf(cmd, sizeof(cmd),
+             CD_CMD " \"%s\" && \"%s\" pack --no-standard-includes -S \"%s\""
+                    " utils.tl -o UtilsPkg.tlib 2>&1",
+             dir, e2e_tess_exe, e2e_stdlib_dir);
+    if (run_cmd(cmd) != 0) {
+        fprintf(stderr, "  tess pack failed\n");
+        return 1;
+    }
+
+    // Consumer that triggers a specialization
+    char app_dir[512], app_libs[512];
+    make_temp_path(app_dir, sizeof(app_dir), "e2e_pkg_generic_app/");
+    snprintf(app_libs, sizeof(app_libs), "%slibs" SEP_STR, app_dir);
+    test_mkdir_p(app_dir);
+    test_mkdir_p(app_libs);
+
+    snprintf(path, sizeof(path), "%spackage.tl", app_dir);
+    if (write_file(path, "format(1)\npackage(App)\nversion(\"0.1.0\")\n"
+                         "depend(UtilsPkg, \"1.0.0\")\ndepend_path(\"./libs\")\n")) {
+        fprintf(stderr, "  failed to write app package.tl\n");
+        return 1;
+    }
+
+    snprintf(path, sizeof(path), "%smain.tl", app_dir);
+    if (write_file(path, "#module main\n\n"
+                         "main() {\n"
+                         "  a := Utils.identity(42)\n"
+                         "  a\n"
+                         "}\n")) {
+        fprintf(stderr, "  failed to write main.tl\n");
+        return 1;
+    }
+
+    char dst[512];
+    snprintf(dst, sizeof(dst), "%sUtilsPkg.tlib", app_libs);
+    copy_file(tlib_path, dst);
+
+    // Transpile to C to check mangled names
+    char output_log[512];
+    snprintf(output_log, sizeof(output_log), "%sout.c", app_dir);
+
+    snprintf(cmd, sizeof(cmd),
+             CD_CMD " \"%s\" && \"%s\" c --no-standard-includes -S \"%s\""
+                    " --no-line-directive main.tl >\"%s\" 2>&1",
+             app_dir, e2e_tess_exe, e2e_stdlib_dir, output_log);
+    if (run_cmd(cmd) != 0) {
+        fprintf(stderr, "  tess c failed\n");
+        return 1;
+    }
+
+    char *output = read_file_contents(output_log, null);
+    if (!output) {
+        fprintf(stderr, "  failed to read output\n");
+        return 1;
+    }
+
+    // The generic identity function should be specialized with a pkg-prefixed base name.
+    // Specialization names are: base_name + "_" + counter
+    // So we expect something like "UtilsPkg__1_0_0__Utils__identity__1_0"
+    if (!strstr(output, "UtilsPkg__1_0_0__Utils__identity__1_")) {
+        fprintf(stderr, "  expected 'UtilsPkg__1_0_0__Utils__identity__1_' (specialized) in output\n");
+        fprintf(stderr, "  got: %s\n", output);
+        return 1;
+    }
+
+    return 0;
+}
+
+// Test: __init function gets package-versioned prefix in C output.
+static int test_e2e_pkg_prefix_init_fn(void) {
+    char dir[512];
+    make_temp_path(dir, sizeof(dir), "e2e_pkg_init/");
+    test_mkdir_p(dir);
+
+    char path[512];
+    snprintf(path, sizeof(path), "%spackage.tl", dir);
+    if (write_file(path, "format(1)\npackage(mylib)\nversion(\"1.0.0\")\nexport(Mod)\n")) {
+        fprintf(stderr, "  failed to write package.tl\n");
+        return 1;
+    }
+
+    char src[512];
+    snprintf(src, sizeof(src), "%smod.tl", dir);
+    if (write_file(src, "#module Mod\n\n"
+                        "counter := 0\n\n"
+                        "__init() {\n"
+                        "  counter = 42\n"
+                        "}\n\n"
+                        "get_counter() { counter }\n")) {
+        fprintf(stderr, "  failed to write mod.tl\n");
+        return 1;
+    }
+
+    char output_log[512];
+    snprintf(output_log, sizeof(output_log), "%sout.c", dir);
+
+    char cmd[2048];
+    snprintf(cmd, sizeof(cmd),
+             CD_CMD " \"%s\" && \"%s\" lib-emit-c --no-standard-includes -S \"%s\""
+                    " --no-line-directive \"%s\" >\"%s\" 2>&1",
+             dir, e2e_tess_exe, e2e_stdlib_dir, src, output_log);
+    if (run_cmd(cmd) != 0) {
+        fprintf(stderr, "  tess lib-emit-c failed\n");
+        return 1;
+    }
+
+    char *output = read_file_contents(output_log, null);
+    if (!output) {
+        fprintf(stderr, "  failed to read output\n");
+        return 1;
+    }
+
+    // __init should have pkg-versioned prefix: mylib__1_0_0__Mod____init__0
+    if (!strstr(output, "mylib__1_0_0__Mod____init__0")) {
+        fprintf(stderr, "  expected 'mylib__1_0_0__Mod____init__0' in output\n");
+        fprintf(stderr, "  got: %s\n", output);
+        return 1;
+    }
+
+    return 0;
+}
+
+// Test: two packages exporting modules with the same name produce distinct C symbols.
+static int test_e2e_pkg_prefix_same_module_name(void) {
+    // -- Create PkgA with module "Utils" --
+    char a_dir[512];
+    make_temp_path(a_dir, sizeof(a_dir), "e2e_pkg_samemod_a/");
+    test_mkdir_p(a_dir);
+
+    char path[512];
+    snprintf(path, sizeof(path), "%spackage.tl", a_dir);
+    write_file(path, "format(1)\npackage(PkgA)\nversion(\"1.0.0\")\nexport(Utils)\n");
+
+    snprintf(path, sizeof(path), "%sutils.tl", a_dir);
+    write_file(path, "#module Utils\n\nval() { 10 }\n");
+
+    char cmd[2048];
+    snprintf(cmd, sizeof(cmd),
+             CD_CMD " \"%s\" && \"%s\" pack --no-standard-includes -S \"%s\""
+                    " utils.tl -o PkgA.tlib 2>&1",
+             a_dir, e2e_tess_exe, e2e_stdlib_dir);
+    if (run_cmd(cmd) != 0) {
+        fprintf(stderr, "  tess pack PkgA failed\n");
+        return 1;
+    }
+
+    // -- Create PkgB with module "Utils" (same name, different package) --
+    char b_dir[512];
+    make_temp_path(b_dir, sizeof(b_dir), "e2e_pkg_samemod_b/");
+    test_mkdir_p(b_dir);
+
+    snprintf(path, sizeof(path), "%spackage.tl", b_dir);
+    write_file(path, "format(1)\npackage(PkgB)\nversion(\"1.0.0\")\nexport(Utils)\n");
+
+    snprintf(path, sizeof(path), "%sutils.tl", b_dir);
+    write_file(path, "#module Utils\n\nval() { 32 }\n");
+
+    snprintf(cmd, sizeof(cmd),
+             CD_CMD " \"%s\" && \"%s\" pack --no-standard-includes -S \"%s\""
+                    " utils.tl -o PkgB.tlib 2>&1",
+             b_dir, e2e_tess_exe, e2e_stdlib_dir);
+    if (run_cmd(cmd) != 0) {
+        fprintf(stderr, "  tess pack PkgB failed\n");
+        return 1;
+    }
+
+    // -- App depends on both PkgA and PkgB --
+    char app_dir[512], app_libs[512];
+    make_temp_path(app_dir, sizeof(app_dir), "e2e_pkg_samemod_app/");
+    snprintf(app_libs, sizeof(app_libs), "%slibs" SEP_STR, app_dir);
+    test_mkdir_p(app_dir);
+    test_mkdir_p(app_libs);
+
+    snprintf(path, sizeof(path), "%spackage.tl", app_dir);
+    write_file(path, "format(1)\npackage(App)\nversion(\"0.1.0\")\n"
+                     "depend(PkgA, \"1.0.0\")\n"
+                     "depend(PkgB, \"1.0.0\")\n"
+                     "depend_path(\"./libs\")\n");
+
+    // Both packages export "Utils" — the consumer must disambiguate.
+    // With package-versioned mangling, PkgA's Utils.val becomes PkgA__1_0_0__Utils__val__0
+    // and PkgB's Utils.val becomes PkgB__1_0_0__Utils__val__0.
+    // For now, the consumer just calls Utils.val() — this tests whether the resolver
+    // can handle two packages exporting the same module name without collision.
+    snprintf(path, sizeof(path), "%smain.tl", app_dir);
+    write_file(path, "#module main\n\n"
+                     "main() {\n"
+                     "  Utils.val()\n"
+                     "}\n");
+
+    char src_tlib[512], dst_tlib[512];
+    snprintf(src_tlib, sizeof(src_tlib), "%sPkgA.tlib", a_dir);
+    snprintf(dst_tlib, sizeof(dst_tlib), "%sPkgA.tlib", app_libs);
+    copy_file(src_tlib, dst_tlib);
+
+    snprintf(src_tlib, sizeof(src_tlib), "%sPkgB.tlib", b_dir);
+    snprintf(dst_tlib, sizeof(dst_tlib), "%sPkgB.tlib", app_libs);
+    copy_file(src_tlib, dst_tlib);
+
+    // Compile — this should at minimum not crash. The two packages both export "Utils".
+    // With proper support, PkgA.Utils and PkgB.Utils would be distinct namespaces.
+    char out_exe[512];
+    snprintf(out_exe, sizeof(out_exe), "%sapp" EXE_SUFFIX, app_dir);
+    snprintf(cmd, sizeof(cmd),
+             CD_CMD " \"%s\" && \"%s\" exe --no-standard-includes -S \"%s\" -o \"%s\" main.tl 2>&1",
+             app_dir, e2e_tess_exe, e2e_stdlib_dir, out_exe);
+
+    // This may fail if the resolver rejects duplicate module names across packages.
+    // When it works, the exit code should be the value from one of the Utils.val() calls.
+    if (run_cmd(cmd) != 0) {
+        fprintf(stderr, "  tess exe failed (same module name across packages)\n");
+        return 1;
+    }
+
+    return 0;
+}
+
+// Test: transitive dependency chain A->B->C with package-versioned mangling compiles and runs.
+static int test_e2e_pkg_prefix_transitive(void) {
+    // -- Create PkgC (leaf) --
+    char c_dir[512];
+    make_temp_path(c_dir, sizeof(c_dir), "e2e_pkg_trans_c/");
+    test_mkdir_p(c_dir);
+
+    char path[512];
+    snprintf(path, sizeof(path), "%spackage.tl", c_dir);
+    write_file(path, "format(1)\npackage(PkgC)\nversion(\"1.0.0\")\nexport(ModC)\n");
+
+    snprintf(path, sizeof(path), "%smodc.tl", c_dir);
+    write_file(path, "#module ModC\n\nbase_val() { 10 }\n");
+
+    char cmd[2048];
+    snprintf(cmd, sizeof(cmd),
+             CD_CMD " \"%s\" && \"%s\" pack --no-standard-includes -S \"%s\""
+                    " modc.tl -o PkgC.tlib 2>&1",
+             c_dir, e2e_tess_exe, e2e_stdlib_dir);
+    if (run_cmd(cmd) != 0) {
+        fprintf(stderr, "  tess pack PkgC failed\n");
+        return 1;
+    }
+
+    // -- Create PkgB (depends on PkgC) --
+    char b_dir[512], b_libs[512];
+    make_temp_path(b_dir, sizeof(b_dir), "e2e_pkg_trans_b/");
+    snprintf(b_libs, sizeof(b_libs), "%slibs" SEP_STR, b_dir);
+    test_mkdir_p(b_dir);
+    test_mkdir_p(b_libs);
+
+    snprintf(path, sizeof(path), "%spackage.tl", b_dir);
+    write_file(path, "format(1)\npackage(PkgB)\nversion(\"2.0.0\")\nexport(ModB)\n"
+                     "depend(PkgC, \"1.0.0\")\ndepend_path(\"./libs\")\n");
+
+    snprintf(path, sizeof(path), "%smodb.tl", b_dir);
+    write_file(path, "#module ModB\n\nmid_val() { ModC.base_val() + 10 }\n");
+
+    char src_tlib[512], dst_tlib[512];
+    snprintf(src_tlib, sizeof(src_tlib), "%sPkgC.tlib", c_dir);
+    snprintf(dst_tlib, sizeof(dst_tlib), "%sPkgC.tlib", b_libs);
+    copy_file(src_tlib, dst_tlib);
+
+    snprintf(cmd, sizeof(cmd),
+             CD_CMD " \"%s\" && \"%s\" pack --no-standard-includes -S \"%s\""
+                    " modb.tl -o PkgB.tlib 2>&1",
+             b_dir, e2e_tess_exe, e2e_stdlib_dir);
+    if (run_cmd(cmd) != 0) {
+        fprintf(stderr, "  tess pack PkgB failed\n");
+        return 1;
+    }
+
+    // -- Create App (depends on PkgB, transitively on PkgC) --
+    char app_dir[512], app_libs[512];
+    make_temp_path(app_dir, sizeof(app_dir), "e2e_pkg_trans_app/");
+    snprintf(app_libs, sizeof(app_libs), "%slibs" SEP_STR, app_dir);
+    test_mkdir_p(app_dir);
+    test_mkdir_p(app_libs);
+
+    snprintf(path, sizeof(path), "%spackage.tl", app_dir);
+    write_file(path, "format(1)\npackage(App)\nversion(\"0.1.0\")\n"
+                     "depend(PkgB, \"2.0.0\")\n"
+                     "depend_path(\"./libs\")\n");
+
+    snprintf(path, sizeof(path), "%smain.tl", app_dir);
+    write_file(path, "#module main\n\n"
+                     "main() {\n"
+                     "  ModB.mid_val() + 22\n"
+                     "}\n");
+
+    // Copy both tlibs to app's libs (flattened transitive closure)
+    snprintf(src_tlib, sizeof(src_tlib), "%sPkgB.tlib", b_dir);
+    snprintf(dst_tlib, sizeof(dst_tlib), "%sPkgB.tlib", app_libs);
+    copy_file(src_tlib, dst_tlib);
+
+    snprintf(src_tlib, sizeof(src_tlib), "%sPkgC.tlib", c_dir);
+    snprintf(dst_tlib, sizeof(dst_tlib), "%sPkgC.tlib", app_libs);
+    copy_file(src_tlib, dst_tlib);
+
+    // Compile and run: base_val()=10, mid_val()=10+10=20, main()=20+22=42
+    char out_exe[512];
+    snprintf(out_exe, sizeof(out_exe), "%sapp" EXE_SUFFIX, app_dir);
+    snprintf(cmd, sizeof(cmd),
+             CD_CMD " \"%s\" && \"%s\" exe --no-standard-includes -S \"%s\" -o \"%s\" main.tl 2>&1",
+             app_dir, e2e_tess_exe, e2e_stdlib_dir, out_exe);
+    if (run_cmd(cmd) != 0) {
+        fprintf(stderr, "  tess exe failed\n");
+        return 1;
+    }
+
+    int exit_code = run_exe(out_exe);
+    if (exit_code != 42) {
+        fprintf(stderr, "  expected exit code 42, got %d\n", exit_code);
+        return 1;
+    }
+
+    return 0;
+}
+
+// Test: diamond dependency with DIFFERENT versions of the same package coexist.
+// LibA depends on BaseLib v1.0.0 (val returns 10), LibB depends on BaseLib v2.0.0 (val returns 20).
+// App uses both — each should call its own version's implementation.
+// Expected result: ModA.compute() + ModB.compute() = 10 + 20 = 30.
+static int test_e2e_pkg_prefix_multi_version(void) {
+    // -- Create BaseLib v1.0.0 --
+    char base1_dir[512];
+    make_temp_path(base1_dir, sizeof(base1_dir), "e2e_pkg_multiver_base1/");
+    test_mkdir_p(base1_dir);
+
+    char path[512];
+    snprintf(path, sizeof(path), "%spackage.tl", base1_dir);
+    write_file(path, "format(1)\npackage(BaseLib)\nversion(\"1.0.0\")\nexport(Base)\n");
+
+    snprintf(path, sizeof(path), "%sbase.tl", base1_dir);
+    write_file(path, "#module Base\n\nval() { 10 }\n");
+
+    char cmd[2048];
+    snprintf(cmd, sizeof(cmd),
+             CD_CMD " \"%s\" && \"%s\" pack --no-standard-includes -S \"%s\""
+                    " base.tl -o BaseLib.tlib 2>&1",
+             base1_dir, e2e_tess_exe, e2e_stdlib_dir);
+    if (run_cmd(cmd) != 0) {
+        fprintf(stderr, "  tess pack BaseLib v1 failed\n");
+        return 1;
+    }
+
+    // -- Create BaseLib v2.0.0 --
+    char base2_dir[512];
+    make_temp_path(base2_dir, sizeof(base2_dir), "e2e_pkg_multiver_base2/");
+    test_mkdir_p(base2_dir);
+
+    snprintf(path, sizeof(path), "%spackage.tl", base2_dir);
+    write_file(path, "format(1)\npackage(BaseLib)\nversion(\"2.0.0\")\nexport(Base)\n");
+
+    snprintf(path, sizeof(path), "%sbase.tl", base2_dir);
+    write_file(path, "#module Base\n\nval() { 20 }\n");
+
+    snprintf(cmd, sizeof(cmd),
+             CD_CMD " \"%s\" && \"%s\" pack --no-standard-includes -S \"%s\""
+                    " base.tl -o BaseLib.tlib 2>&1",
+             base2_dir, e2e_tess_exe, e2e_stdlib_dir);
+    if (run_cmd(cmd) != 0) {
+        fprintf(stderr, "  tess pack BaseLib v2 failed\n");
+        return 1;
+    }
+
+    // -- Create LibA (depends on BaseLib v1.0.0) --
+    char liba_dir[512], liba_libs[512];
+    make_temp_path(liba_dir, sizeof(liba_dir), "e2e_pkg_multiver_liba/");
+    snprintf(liba_libs, sizeof(liba_libs), "%slibs" SEP_STR, liba_dir);
+    test_mkdir_p(liba_dir);
+    test_mkdir_p(liba_libs);
+
+    snprintf(path, sizeof(path), "%spackage.tl", liba_dir);
+    write_file(path, "format(1)\npackage(LibA)\nversion(\"1.0.0\")\nexport(ModA)\n"
+                     "depend(BaseLib, \"1.0.0\")\ndepend_path(\"./libs\")\n");
+
+    snprintf(path, sizeof(path), "%smoda.tl", liba_dir);
+    write_file(path, "#module ModA\n\ncompute() { Base.val() }\n");
+
+    char src_tlib[512], dst_tlib[512];
+    snprintf(src_tlib, sizeof(src_tlib), "%sBaseLib.tlib", base1_dir);
+    snprintf(dst_tlib, sizeof(dst_tlib), "%sBaseLib.tlib", liba_libs);
+    copy_file(src_tlib, dst_tlib);
+
+    snprintf(cmd, sizeof(cmd),
+             CD_CMD " \"%s\" && \"%s\" pack --no-standard-includes -S \"%s\""
+                    " moda.tl -o LibA.tlib 2>&1",
+             liba_dir, e2e_tess_exe, e2e_stdlib_dir);
+    if (run_cmd(cmd) != 0) {
+        fprintf(stderr, "  tess pack LibA failed\n");
+        return 1;
+    }
+
+    // -- Create LibB (depends on BaseLib v2.0.0) --
+    char libb_dir[512], libb_libs[512];
+    make_temp_path(libb_dir, sizeof(libb_dir), "e2e_pkg_multiver_libb/");
+    snprintf(libb_libs, sizeof(libb_libs), "%slibs" SEP_STR, libb_dir);
+    test_mkdir_p(libb_dir);
+    test_mkdir_p(libb_libs);
+
+    snprintf(path, sizeof(path), "%spackage.tl", libb_dir);
+    write_file(path, "format(1)\npackage(LibB)\nversion(\"1.0.0\")\nexport(ModB)\n"
+                     "depend(BaseLib, \"2.0.0\")\ndepend_path(\"./libs\")\n");
+
+    snprintf(path, sizeof(path), "%smodb.tl", libb_dir);
+    write_file(path, "#module ModB\n\ncompute() { Base.val() }\n");
+
+    snprintf(src_tlib, sizeof(src_tlib), "%sBaseLib.tlib", base2_dir);
+    snprintf(dst_tlib, sizeof(dst_tlib), "%sBaseLib.tlib", libb_libs);
+    copy_file(src_tlib, dst_tlib);
+
+    snprintf(cmd, sizeof(cmd),
+             CD_CMD " \"%s\" && \"%s\" pack --no-standard-includes -S \"%s\""
+                    " modb.tl -o LibB.tlib 2>&1",
+             libb_dir, e2e_tess_exe, e2e_stdlib_dir);
+    if (run_cmd(cmd) != 0) {
+        fprintf(stderr, "  tess pack LibB failed\n");
+        return 1;
+    }
+
+    // -- Create App depending on both LibA and LibB --
+    // This is the key test: LibA uses BaseLib v1 (val=10), LibB uses BaseLib v2 (val=20).
+    // With multi-version coexistence, both should compile and link without conflict.
+    char app_dir[512], app_libs[512];
+    make_temp_path(app_dir, sizeof(app_dir), "e2e_pkg_multiver_app/");
+    snprintf(app_libs, sizeof(app_libs), "%slibs" SEP_STR, app_dir);
+    test_mkdir_p(app_dir);
+    test_mkdir_p(app_libs);
+
+    snprintf(path, sizeof(path), "%spackage.tl", app_dir);
+    write_file(path, "format(1)\npackage(App)\nversion(\"0.1.0\")\n"
+                     "depend(LibA, \"1.0.0\")\n"
+                     "depend(LibB, \"1.0.0\")\n"
+                     "depend_path(\"./libs\")\n");
+
+    snprintf(path, sizeof(path), "%smain.tl", app_dir);
+    write_file(path, "#module main\n\n"
+                     "main() {\n"
+                     "  ModA.compute() + ModB.compute()\n"
+                     "}\n");
+
+    // Copy all tlibs — both BaseLib versions need to be available.
+    // Currently the resolver expects one BaseLib.tlib, so this may need
+    // versioned filenames (e.g. BaseLib-1.0.0.tlib) or another mechanism.
+    // For now, copy both versions — one will overwrite the other.
+    snprintf(src_tlib, sizeof(src_tlib), "%sLibA.tlib", liba_dir);
+    snprintf(dst_tlib, sizeof(dst_tlib), "%sLibA.tlib", app_libs);
+    copy_file(src_tlib, dst_tlib);
+
+    snprintf(src_tlib, sizeof(src_tlib), "%sLibB.tlib", libb_dir);
+    snprintf(dst_tlib, sizeof(dst_tlib), "%sLibB.tlib", app_libs);
+    copy_file(src_tlib, dst_tlib);
+
+    // Copy BaseLib v1 as BaseLib.tlib (the resolver finds <PkgName>.tlib)
+    snprintf(src_tlib, sizeof(src_tlib), "%sBaseLib.tlib", base1_dir);
+    snprintf(dst_tlib, sizeof(dst_tlib), "%sBaseLib.tlib", app_libs);
+    copy_file(src_tlib, dst_tlib);
+
+    // Also copy BaseLib v2 with a versioned filename — future resolver support
+    snprintf(src_tlib, sizeof(src_tlib), "%sBaseLib.tlib", base2_dir);
+    snprintf(dst_tlib, sizeof(dst_tlib), "%sBaseLib-2.0.0.tlib", app_libs);
+    copy_file(src_tlib, dst_tlib);
+
+    // Compile and run
+    char out_exe[512];
+    snprintf(out_exe, sizeof(out_exe), "%sapp" EXE_SUFFIX, app_dir);
+    snprintf(cmd, sizeof(cmd),
+             CD_CMD " \"%s\" && \"%s\" exe --no-standard-includes -S \"%s\" -o \"%s\" main.tl 2>&1",
+             app_dir, e2e_tess_exe, e2e_stdlib_dir, out_exe);
+    if (run_cmd(cmd) != 0) {
+        fprintf(stderr, "  tess exe failed (multi-version coexistence)\n");
+        return 1;
+    }
+
+    // ModA.compute() should call BaseLib v1's Base.val() = 10
+    // ModB.compute() should call BaseLib v2's Base.val() = 20
+    // Total = 30
+    int exit_code = run_exe(out_exe);
+    if (exit_code != 30) {
+        fprintf(stderr, "  expected exit code 30, got %d\n", exit_code);
+        return 1;
+    }
+
+    return 0;
+}
+
 int main(void) {
     init_temp_dir();
     init_e2e_paths();
@@ -3285,5 +4034,14 @@ int main(void) {
     T(test_e2e_pkg_prefix_mangling)
     T(test_e2e_pkg_prefix_cross_module)
     T(test_e2e_pkg_prefix_c_export)
+    T(test_e2e_pkg_prefix_no_package)
+    T(test_e2e_pkg_prefix_special_version)
+    T(test_e2e_pkg_prefix_struct)
+    T(test_e2e_pkg_prefix_tagged_union)
+    T(test_e2e_pkg_prefix_generic)
+    T(test_e2e_pkg_prefix_init_fn)
+    T(test_e2e_pkg_prefix_same_module_name)
+    T(test_e2e_pkg_prefix_transitive)
+    T(test_e2e_pkg_prefix_multi_version)
     return error;
 }

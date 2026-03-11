@@ -413,14 +413,27 @@ static void scan_file_directives(state *self, str path, str_array *resolved_path
 
 // Find a .tlib file for a dependency.
 // If dep->path is non-empty (3-arg depend()), use it directly.
-// Otherwise, search depend_path() directories for <name>.tlib.
+// Otherwise, search depend_path() directories for:
+//   1. <Name>-<Version>.tlib  (versioned, preferred)
+//   2. <Name>.tlib            (unversioned fallback)
 static str resolve_tlib_path(state *self, tl_package_dep const *dep, tl_package_info const *info) {
     if (!str_is_empty(dep->path)) {
         return dep->path;
     }
 
+    str versioned_name = str_empty();
+    if (!str_is_empty(dep->version)) {
+        versioned_name = str_cat_4(self->arena, dep->name, S("-"), dep->version, S(".tlib"));
+    }
     str tlib_name = str_cat_c(self->arena, dep->name, ".tlib");
+
     for (u32 i = 0; i < info->depend_path_count; i++) {
+        if (!str_is_empty(versioned_name)) {
+            str candidate = str_cat_3(self->arena, info->depend_paths[i], S("/"), versioned_name);
+            if (file_exists(candidate)) {
+                return candidate;
+            }
+        }
         str candidate = str_cat_3(self->arena, info->depend_paths[i], S("/"), tlib_name);
         if (file_exists(candidate)) {
             return candidate;
@@ -450,29 +463,176 @@ typedef struct {
 
 // Context for recursive dependency resolution.
 typedef struct {
-    hashmap  *loaded;        // name -> version (str->str map) for dedup and conflict detection
-    str_array stack;         // package names currently being resolved (cycle detection)
-    hashmap  *module_owners; // module_name (str) -> module_pkg_info for duplicate detection
+    hashmap  *loaded;            // "name=version" -> version (str->str map) for dedup
+    str_array stack;             // package names currently being resolved (cycle detection)
+    hashmap  *module_owners;     // module_name (str) -> module_pkg_info for duplicate detection
+    hashmap  *pkg_modules;       // "name=version" (str) -> str_array (module names per package)
+    hashmap  *file_pkg_prefixes; // file_path (str) -> hashmap* (module->prefix per extracted file)
 } dep_resolve_ctx;
 
 // Check for duplicate module names across packages after extraction.
-// Warns (but does not fail) if two packages export the same module.
+// Warns (but does not fail) if two different packages export the same module.
+// Different versions of the same package exporting the same module is expected
+// (multi-version coexistence) and does not warn.
 static void check_duplicate_modules(tl_tlib_metadata *meta, str tlib_path, dep_resolve_ctx *ctx) {
     for (u16 i = 0; i < meta->module_count; i++) {
         str mod = meta->modules[i];
         if (str_map_contains(ctx->module_owners, mod)) {
             module_pkg_info *existing = str_map_get(ctx->module_owners, mod);
-            fprintf(stderr,
-                    "warning: module '%s' exported by package '%s' (%s)"
-                    " was already exported by package '%s' (%s)\n",
-                    str_cstr(&mod), str_cstr(&meta->name), str_cstr(&tlib_path),
-                    str_cstr(&existing->pkg_name), str_cstr(&existing->tlib_path));
+            // Same package, different version: expected with multi-version support
+            if (!str_eq(existing->pkg_name, meta->name)) {
+                fprintf(stderr,
+                        "warning: module '%s' exported by package '%s' (%s)"
+                        " was already exported by package '%s' (%s)\n",
+                        str_cstr(&mod), str_cstr(&meta->name), str_cstr(&tlib_path),
+                        str_cstr(&existing->pkg_name), str_cstr(&existing->tlib_path));
+            }
         } else {
             module_pkg_info info = {
               .pkg_name = meta->name, .version = meta->version, .tlib_path = tlib_path};
             str_map_set(&ctx->module_owners, mod, &info);
         }
     }
+}
+
+// Build a "name=version" composite key for dependency dedup maps.
+static str make_dep_key(allocator *alloc, str name, str version) {
+    return str_cat_3(alloc, name, S("="), version);
+}
+
+// Encode a version string for use in C identifiers: "1.2.0" → "1_2_0".
+static str encode_version(allocator *alloc, str version) {
+    return str_make_c_identifier(alloc, version);
+}
+
+// Build a package prefix: "mylib" + "1.2.0" → "mylib__1_2_0".
+static str build_pkg_prefix(allocator *alloc, str name, str version) {
+    str ver = encode_version(alloc, version);
+    return str_qualify(alloc, name, ver);
+}
+
+// Record which modules a package exports, keyed by "name=version".
+static void record_pkg_modules(allocator *alloc, tl_tlib_metadata *meta, dep_resolve_ctx *ctx) {
+    str       key  = make_dep_key(alloc, meta->name, meta->version);
+    str_array mods = {.alloc = alloc};
+    for (u16 i = 0; i < meta->module_count; i++) {
+        array_push(mods, meta->modules[i]);
+    }
+    str_map_set(&ctx->pkg_modules, key, &mods);
+}
+
+// Build a per-file prefix map for files extracted from a package.
+// Contains the package's own modules + all its dependencies' modules,
+// each mapped to the appropriate "pkg__ver" prefix.
+static hashmap *build_file_prefix_map(allocator *alloc, tl_tlib_metadata *meta, dep_resolve_ctx *ctx) {
+    hashmap *prefixes = map_new(alloc, str, str, 16);
+
+    // Add the package's own modules
+    str pkg_prefix = build_pkg_prefix(alloc, meta->name, meta->version);
+    for (u16 i = 0; i < meta->module_count; i++) {
+        str_map_set(&prefixes, meta->modules[i], &pkg_prefix);
+    }
+
+    // Add modules from each dependency
+    for (u16 i = 0; i < meta->depends_count; i++) {
+        str dep_name = str_empty(), dep_version = str_empty();
+        if (parse_dep_string(alloc, meta->depends[i], &dep_name, &dep_version)) continue;
+
+        str        dep_key  = make_dep_key(alloc, dep_name, dep_version);
+        str_array *dep_mods = str_map_get(ctx->pkg_modules, dep_key);
+        if (!dep_mods) continue;
+
+        str dep_prefix = build_pkg_prefix(alloc, dep_name, dep_version);
+        for (u32 j = 0; j < dep_mods->size; j++) {
+            str_map_set(&prefixes, dep_mods->v[j], &dep_prefix);
+        }
+    }
+
+    return prefixes;
+}
+
+// Register per-file prefix maps for newly extracted files.
+static void register_file_prefixes(allocator *alloc, tl_tlib_metadata *meta, dep_resolve_ctx *ctx,
+                                   str_array *pkg_files, u32 prev_count) {
+    hashmap *file_prefixes = build_file_prefix_map(alloc, meta, ctx);
+    for (u32 k = prev_count; k < pkg_files->size; k++) {
+        str_map_set_ptr(&ctx->file_pkg_prefixes, pkg_files->v[k], file_prefixes);
+    }
+}
+
+// Scan extracted files for #module directives and register any internal (non-exported) modules
+// in both module_owners and the per-file prefix map so they get the library's prefix, not the
+// consumer's.
+static void register_internal_modules(allocator *alloc, tl_tlib_metadata *meta, dep_resolve_ctx *ctx,
+                                      str_array *pkg_files, u32 prev_count, str tlib_path) {
+    // Build a set of exported modules for quick lookup
+    hashmap *exported = hset_create(alloc, meta->module_count * 2 + 1);
+    for (u16 i = 0; i < meta->module_count; i++) {
+        str_hset_insert(&exported, meta->modules[i]);
+    }
+
+    // Get the per-file prefix map (same one register_file_prefixes just stored)
+    hashmap *file_prefixes = null;
+    if (prev_count < pkg_files->size) {
+        file_prefixes = str_map_get_ptr(ctx->file_pkg_prefixes, pkg_files->v[prev_count]);
+    }
+
+    str pkg_prefix = build_pkg_prefix(alloc, meta->name, meta->version);
+
+    for (u32 k = prev_count; k < pkg_files->size; k++) {
+        char    *data = null;
+        u32      size = 0;
+        file_read(alloc, str_cstr(&pkg_files->v[k]), &data, &size);
+        if (!data) continue;
+
+        // Simple line-by-line scan for "#module <Name>" directives
+        char const *p   = data;
+        char const *end = data + size;
+        while (p < end) {
+            // Find end of line
+            char const *eol = p;
+            while (eol < end && *eol != '\n') eol++;
+
+            // Check for "#module " or "#module_prelude " prefix
+            if (eol - p > 8 && p[0] == '#') {
+                char const *q = p + 1;
+                // Skip "module_prelude" or "module"
+                int is_module = 0;
+                if (eol - q >= 7 && memcmp(q, "module", 6) == 0) {
+                    if (q[6] == ' ') {
+                        q += 7;
+                        is_module = 1;
+                    } else if (eol - q >= 16 && memcmp(q, "module_prelude ", 15) == 0) {
+                        q += 15;
+                        is_module = 1;
+                    }
+                }
+                if (is_module) {
+                    // Extract module name (until whitespace or EOL)
+                    char const *name_start = q;
+                    while (q < eol && *q != ' ' && *q != '\t' && *q != '\r') q++;
+                    if (q > name_start) {
+                        str mod = str_init_n(alloc, name_start, (u32)(q - name_start));
+                        if (!str_hset_contains(exported, mod)) {
+                            // Internal module — register with library's prefix
+                            if (!str_map_contains(ctx->module_owners, mod)) {
+                                module_pkg_info info = {
+                                  .pkg_name = meta->name, .version = meta->version, .tlib_path = tlib_path};
+                                str_map_set(&ctx->module_owners, mod, &info);
+                            }
+                            if (file_prefixes) {
+                                str_map_set(&file_prefixes, mod, &pkg_prefix);
+                            }
+                        }
+                    }
+                }
+            }
+
+            p = (eol < end) ? eol + 1 : end;
+        }
+    }
+
+    hset_destroy(&exported);
 }
 
 // Recursively resolve a single dependency and its transitive deps.
@@ -492,15 +652,10 @@ static int resolve_dep_recursive(state *self, str dep_name, str dep_version,
         }
     }
 
-    // Check if already loaded
-    if (str_map_contains(ctx->loaded, dep_name)) {
-        str *loaded_version = str_map_get(ctx->loaded, dep_name);
-        if (!str_eq(*loaded_version, dep_version)) {
-            fprintf(stderr, "error: version conflict for package '%s': requires both '%s' and '%s'\n",
-                    str_cstr(&dep_name), str_cstr(loaded_version), str_cstr(&dep_version));
-            return 1;
-        }
-        return 0; // already loaded with matching version
+    // Check if already loaded (keyed by "name=version" to allow multi-version coexistence)
+    str loaded_key = make_dep_key(self->arena, dep_name, dep_version);
+    if (str_map_contains(ctx->loaded, loaded_key)) {
+        return 0; // already loaded with matching name+version
     }
 
     // Resolve .tlib path
@@ -557,8 +712,8 @@ static int resolve_dep_recursive(state *self, str dep_name, str dep_version,
     // Pop from resolution stack
     ctx->stack.size--;
 
-    // Mark as loaded
-    str_map_set(&ctx->loaded, dep_name, &dep_version);
+    // Mark as loaded (keyed by "name=version")
+    str_map_set(&ctx->loaded, loaded_key, &dep_version);
 
     // Extract to temp directory
     platform_temp_path tmppath;
@@ -568,12 +723,17 @@ static int resolve_dep_recursive(state *self, str dep_name, str dep_version,
     }
     state_track_temp_dir(self, tmppath.path);
 
+    u32 prev_file_count = out_pkg_files->size;
     if (tl_tlib_extract(self->arena, &archive, tmppath.path, out_pkg_files)) {
         fprintf(stderr, "error: failed to extract package '%s'\n", str_cstr(&dep_name));
         return 1;
     }
 
     check_duplicate_modules(&archive.metadata, tlib_path, ctx);
+    record_pkg_modules(self->arena, &archive.metadata, ctx);
+    register_file_prefixes(self->arena, &archive.metadata, ctx, out_pkg_files, prev_file_count);
+    register_internal_modules(self->arena, &archive.metadata, ctx, out_pkg_files, prev_file_count,
+                              tlib_path);
 
     if (self->verbose) {
         fprintf(stderr, "Loaded package: %s=%s from %s (%u files to %s)\n", str_cstr(&dep_name),
@@ -581,17 +741,6 @@ static int resolve_dep_recursive(state *self, str dep_name, str dep_version,
     }
 
     return 0;
-}
-
-// Encode a version string for use in C identifiers: "1.2.0" → "1_2_0".
-static str encode_version(allocator *alloc, str version) {
-    return str_make_c_identifier(alloc, version);
-}
-
-// Build a package prefix: "mylib" + "1.2.0" → "mylib__1_2_0".
-static str build_pkg_prefix(allocator *alloc, str name, str version) {
-    str ver = encode_version(alloc, version);
-    return str_qualify(alloc, name, ver);
 }
 
 // Build module→prefix map from dependency resolution context.
@@ -614,7 +763,8 @@ static hashmap *build_module_prefix_map(allocator *alloc, dep_resolve_ctx *ctx) 
 // Optionally builds a module→prefix map for package-versioned name mangling.
 // Returns 0 on success (including no package.tl), 1 on error.
 static int load_package_deps(state *self, str_array *out_pkg_files, hashmap **out_module_prefixes,
-                             str *out_pkg_name, str *out_pkg_version) {
+                             hashmap **out_file_pkg_prefixes, str *out_pkg_name,
+                             str *out_pkg_version) {
     str pkg_path = str_init_static("package.tl");
     if (!file_exists(pkg_path)) {
         return 0;
@@ -634,9 +784,11 @@ static int load_package_deps(state *self, str_array *out_pkg_files, hashmap **ou
     }
 
     dep_resolve_ctx ctx = {
-      .loaded        = map_new(self->arena, str, str, 8),
-      .stack         = {.alloc = self->arena},
-      .module_owners = map_new(self->arena, str, module_pkg_info, 16),
+      .loaded            = map_new(self->arena, str, str, 8),
+      .stack             = {.alloc = self->arena},
+      .module_owners     = map_new(self->arena, str, module_pkg_info, 16),
+      .pkg_modules       = map_new(self->arena, str, str_array, 16),
+      .file_pkg_prefixes = map_create_ptr(self->arena, 32),
     };
 
     for (u32 i = 0; i < pkg.dep_count; i++) {
@@ -657,16 +809,10 @@ static int load_package_deps(state *self, str_array *out_pkg_files, hashmap **ou
             return 1;
         }
 
-        // Check if already loaded (handles diamond deps where a direct dep
-        // was already loaded as a transitive dep of a previous direct dep)
-        if (str_map_contains(ctx.loaded, dep->name)) {
-            str *loaded_version = str_map_get(ctx.loaded, dep->name);
-            if (!str_eq(*loaded_version, dep->version)) {
-                fprintf(stderr, "error: version conflict for package '%s': requires both '%s' and '%s'\n",
-                        str_cstr(&dep->name), str_cstr(loaded_version), str_cstr(&dep->version));
-                return 1;
-            }
-            continue; // already loaded with matching version
+        // Check if already loaded (keyed by "name=version" to allow multi-version coexistence)
+        str direct_loaded_key = make_dep_key(self->arena, dep->name, dep->version);
+        if (str_map_contains(ctx.loaded, direct_loaded_key)) {
+            continue; // already loaded with matching name+version
         }
 
         // Read archive
@@ -705,8 +851,8 @@ static int load_package_deps(state *self, str_array *out_pkg_files, hashmap **ou
         // Pop from resolution stack
         ctx.stack.size--;
 
-        // Mark as loaded
-        str_map_set(&ctx.loaded, dep->name, &dep->version);
+        // Mark as loaded (keyed by "name=version")
+        str_map_set(&ctx.loaded, direct_loaded_key, &dep->version);
 
         // Extract to temp directory
         platform_temp_path tmppath;
@@ -717,12 +863,17 @@ static int load_package_deps(state *self, str_array *out_pkg_files, hashmap **ou
         }
         state_track_temp_dir(self, tmppath.path);
 
+        u32 prev_file_count = out_pkg_files->size;
         if (tl_tlib_extract(self->arena, &archive, tmppath.path, out_pkg_files)) {
             fprintf(stderr, "error: failed to extract package '%s'\n", str_cstr(&dep->name));
             return 1;
         }
 
         check_duplicate_modules(&archive.metadata, tlib_path, &ctx);
+        record_pkg_modules(self->arena, &archive.metadata, &ctx);
+        register_file_prefixes(self->arena, &archive.metadata, &ctx, out_pkg_files, prev_file_count);
+        register_internal_modules(self->arena, &archive.metadata, &ctx, out_pkg_files, prev_file_count,
+                                  tlib_path);
 
         if (self->verbose) {
             fprintf(stderr, "Loaded package: %s=%s from %s (%u files to %s)\n", str_cstr(&dep->name),
@@ -732,6 +883,10 @@ static int load_package_deps(state *self, str_array *out_pkg_files, hashmap **ou
 
     if (out_module_prefixes) {
         *out_module_prefixes = build_module_prefix_map(self->arena, &ctx);
+    }
+
+    if (out_file_pkg_prefixes) {
+        *out_file_pkg_prefixes = ctx.file_pkg_prefixes;
     }
 
     return 0;
@@ -992,11 +1147,14 @@ int compile(state *self) {
     }
 
     // Load package dependencies (if package.tl exists with depend() declarations)
-    str_array pkg_files       = {.alloc = self->arena};
-    hashmap  *module_prefixes = null;
-    str       cur_pkg_name    = str_empty();
-    str       cur_pkg_version = str_empty();
-    if (load_package_deps(self, &pkg_files, &module_prefixes, &cur_pkg_name, &cur_pkg_version)) return 1;
+    str_array pkg_files           = {.alloc = self->arena};
+    hashmap  *module_prefixes     = null;
+    hashmap  *file_pkg_prefixes   = null;
+    str       cur_pkg_name        = str_empty();
+    str       cur_pkg_version     = str_empty();
+    if (load_package_deps(self, &pkg_files, &module_prefixes, &file_pkg_prefixes, &cur_pkg_name,
+                          &cur_pkg_version))
+        return 1;
 
     tl_infer_opts infer_opts    = {.is_library = self->is_library};
     tl_infer     *infer         = tl_infer_create(self->arena, &infer_opts);
@@ -1028,6 +1186,7 @@ int compile(state *self) {
       .preloaded_data      = self->stdin_data,
       .preloaded_size      = self->stdin_size,
       .module_pkg_prefixes = module_prefixes,
+      .file_pkg_prefixes   = file_pkg_prefixes,
       // The parser validates nested modules (#module Foo.Bar) by checking that the
       // parent (Foo) exists. Without this, cross-file nested modules fail when import
       // resolution orders the child before the parent (the parser hasn't seen Foo yet).
@@ -1964,7 +2123,7 @@ static int pack_files(state *self) {
         opts.depends_count = (u16)pkg.dep_count;
 
         for (u32 i = 0; i < pkg.dep_count; i++) {
-            opts.depends[i] = str_cat_3(self->arena, pkg.deps[i].name, S("="), pkg.deps[i].version);
+            opts.depends[i] = make_dep_key(self->arena, pkg.deps[i].name, pkg.deps[i].version);
         }
     }
 
@@ -1979,7 +2138,7 @@ static int pack_files(state *self) {
         opts.depends_optional_count = (u16)pkg.optional_dep_count;
         for (u32 i = 0; i < pkg.optional_dep_count; i++) {
             opts.depends_optional[i] =
-              str_cat_3(self->arena, pkg.optional_deps[i].name, S("="), pkg.optional_deps[i].version);
+              make_dep_key(self->arena, pkg.optional_deps[i].name, pkg.optional_deps[i].version);
         }
     }
 

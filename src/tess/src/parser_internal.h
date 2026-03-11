@@ -54,12 +54,14 @@ struct parser {
     u32                 files_index;
     char_csized         current_file_data;
     hashmap            *modules_seen;                 // str hset
+    hashmap            *modules_version_seen;         // str hset: "prefix::module" for version-aware dedup
     hashmap            *module_preludes_seen;         // str hset: modules declared with #module_prelude
     hashmap            *nested_type_parents;          // str hset: types that have nested types
     hashmap            *tagged_union_variant_parents; // str hset: type names that are tagged union parents
     hashmap            *module_aliases;               // map str -> str: alias name -> original module name
     hashmap            *nullary_variant_parents; // map str -> str: mangled variant name -> TU parent name
     hashmap            *module_pkg_prefixes;    // optional: module name -> "pkg__ver" prefix (str->str)
+    hashmap            *file_pkg_prefixes;     // optional: file_path -> hashmap* (per-file prefix map)
 
     ast_node           *result;
     token_array         tokens;

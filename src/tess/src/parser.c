@@ -36,12 +36,14 @@ parser *parser_create(allocator *alloc, parser_opts const *opts) {
     self->current_file_data.v          = null;
     self->current_file_data.size       = 0;
     self->modules_seen                 = hset_create(self->parent_alloc, 32);
+    self->modules_version_seen         = hset_create(self->parent_alloc, 32);
     self->module_preludes_seen         = hset_create(self->parent_alloc, 32);
     self->nested_type_parents          = hset_create(self->parent_alloc, 1024);
     self->tagged_union_variant_parents = hset_create(self->parent_alloc, 256);
     self->module_aliases               = map_new(self->parent_alloc, str, str, 32);
     self->nullary_variant_parents      = map_new(self->parent_alloc, str, str, 16);
     self->module_pkg_prefixes          = opts->module_pkg_prefixes;
+    self->file_pkg_prefixes            = opts->file_pkg_prefixes;
     self->result                       = null;
     self->tokens                       = (token_array){0};
     self->error                        = (struct parser_error){0};
@@ -86,6 +88,7 @@ void parser_destroy(parser **self) {
     hset_destroy(&(*self)->tagged_union_variant_parents);
     map_destroy(&(*self)->nullary_variant_parents);
     hset_destroy(&(*self)->module_preludes_seen);
+    hset_destroy(&(*self)->modules_version_seen);
     hset_destroy(&(*self)->modules_seen);
     arena_destroy(&(*self)->transient);
     arena_destroy(&(*self)->speculative);
@@ -1240,13 +1243,30 @@ int toplevel_hash_module(parser *self, str cmd, str module) {
     }
     str_deinit(self->transient, &parent);
 
-    if (str_hset_contains(self->modules_seen, module)) self->skip_module = 1;
+    // Version-aware dedup: when a package prefix is available, use "prefix::module" key in
+    // modules_version_seen so different versions both get parsed while same-version diamond
+    // deps are correctly skipped.  modules_seen keeps bare names only — all other consumers
+    // (nested-parent validation, #use, #alias, etc.) are unaffected.
+    int already_seen = 0;
+    str *pfx = self->module_pkg_prefixes ? str_map_get(self->module_pkg_prefixes, module) : null;
+    if (pfx) {
+        str vkey = str_cat_3(self->transient, *pfx, S("::"), module);
+        already_seen = str_hset_contains(self->modules_version_seen, vkey);
+        if (!already_seen)
+            str_hset_insert(&self->modules_version_seen, vkey);
+    } else {
+        already_seen = str_hset_contains(self->modules_seen, module);
+    }
+
+    if (already_seen) self->skip_module = 1;
     else {
         // save current module symbols, if any
         save_current_module_symbols(self);
 
         // Prelude: don't add to modules_seen
-        if (!is_prelude) str_hset_insert(&self->modules_seen, module);
+        if (!is_prelude) {
+            str_hset_insert(&self->modules_seen, module);
+        }
         if (is_main_function(module)) self->current_module = str_empty();
         else {
             // Note: do not use ast_arena, as it could be speculative and discarded
@@ -1539,6 +1559,12 @@ int parser_next(parser *self) {
                 } else {
                     file_read(self->file_arena, file, (char **)&self->current_file_data.v,
                               &self->current_file_data.size);
+                }
+
+                // Swap per-file prefix map if available
+                if (self->file_pkg_prefixes) {
+                    hashmap *per_file = str_map_get_ptr(self->file_pkg_prefixes, file_str);
+                    self->module_pkg_prefixes = per_file ? per_file : self->opts.module_pkg_prefixes;
                 }
 
                 tok_opts.input      = self->current_file_data;

@@ -269,7 +269,7 @@ $(TESS_EXE_OBJ): $(TESS_EXE_SRC) $(VERSION_HEADER)
 # Default Target
 # ------------------------------------------------------------------------------
 
-all: $(TESS_EXE) tess
+all: $(TESS_EXE) tess build-mos-tests build-tess-tests
 
 tess: $(TESS_EXE)
 	$(Q)cp $< $@
