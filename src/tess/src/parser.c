@@ -1192,11 +1192,17 @@ int toplevel_c_chunk(parser *self) {
     return 0;
 }
 
+// Build "prefix::module" versioned key for multi-version module isolation.
+static str make_version_key(allocator *alloc, str prefix, str module_name) {
+    return str_cat_3(alloc, prefix, S("::"), module_name);
+}
+
 hashmap *resolve_module_symbols(parser *self, str module_name) {
     if (self->module_pkg_prefixes) {
         str *pfx = str_map_get(self->module_pkg_prefixes, module_name);
         if (pfx) {
-            str vkey = str_cat_3(self->transient, *pfx, S("::"), module_name);
+            // transient is fine: key is used for lookup only, map_set copies key bytes
+            str vkey = make_version_key(self->transient, *pfx, module_name);
             hashmap *syms = str_map_get_ptr(self->module_symbols, vkey);
             if (syms) return syms;
         }
@@ -1214,7 +1220,7 @@ void save_current_module_symbols(parser *self) {
     if (self->module_pkg_prefixes) {
         str *pfx = str_map_get(self->module_pkg_prefixes, module_name);
         if (pfx) {
-            str vkey = str_cat_3(self->ast_arena, *pfx, S("::"), module_name);
+            str vkey = make_version_key(self->ast_arena, *pfx, module_name);
             str_map_set_ptr(&self->module_symbols, vkey, copy);
             return;
         }
@@ -1274,7 +1280,7 @@ int toplevel_hash_module(parser *self, str cmd, str module) {
     int already_seen = 0;
     str *pfx = self->module_pkg_prefixes ? str_map_get(self->module_pkg_prefixes, module) : null;
     if (pfx) {
-        str vkey = str_cat_3(self->transient, *pfx, S("::"), module);
+        str vkey = make_version_key(self->transient, *pfx, module);
         already_seen = str_hset_contains(self->modules_version_seen, vkey);
         if (!already_seen)
             str_hset_insert(&self->modules_version_seen, vkey);
