@@ -81,6 +81,7 @@ str *str_dcat_array(allocator *, str *, str_sized);
 void str_resize(allocator *, str *, size_t);
 str  str_replace_char(allocator *, str, char find, char replace);
 str  str_replace_char_str(allocator *, str, char find, str replace);
+str  str_make_c_identifier(allocator *, str);
 
 // -- queries --
 

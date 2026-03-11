@@ -1,5 +1,6 @@
 #include "platform.h"
 
+#include <ctype.h> // for isalnum
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -60,9 +61,9 @@ double hires_timer_elapsed_sec(hires_timer *t) {
 // Reject strings containing path separators or shell metacharacters
 static int is_safe_command_name(char const *cmd) {
     for (char const *p = cmd; *p; p++) {
-        if (*p == '/' || *p == '\\' || *p == ' ' || *p == ';' ||
-            *p == '|' || *p == '&' || *p == '\'' || *p == '"' ||
-            *p == '`' || *p == '$' || *p == '(' || *p == ')') return 0;
+        if (*p == '/' || *p == '\\' || *p == ' ' || *p == ';' || *p == '|' || *p == '&' || *p == '\'' ||
+            *p == '"' || *p == '`' || *p == '$' || *p == '(' || *p == ')')
+            return 0;
     }
     return 1;
 }
@@ -88,7 +89,7 @@ int platform_command_exists(char const *cmd) {
         size_t dir_len = (size_t)(end - p);
         if (dir_len > 0) {
             char candidate[PLATFORM_PATH_MAX];
-            int cn = snprintf(candidate, sizeof(candidate), "%.*s/%s", (int)dir_len, p, cmd);
+            int  cn = snprintf(candidate, sizeof(candidate), "%.*s/%s", (int)dir_len, p, cmd);
             if (cn >= 0 && (size_t)cn < sizeof(candidate)) {
                 if (access(candidate, X_OK) == 0) return 1;
             }
@@ -266,7 +267,7 @@ static int append_quoted_arg(char *buf, size_t bufsize, size_t pos, char const *
     if (pos >= bufsize) return -1;
     buf[pos++] = '"';
 
-    for (char const *p = arg; *p; ) {
+    for (char const *p = arg; *p;) {
         size_t num_backslashes = 0;
         while (p[num_backslashes] == '\\') num_backslashes++;
 
@@ -520,3 +521,18 @@ int platform_exec_replace(char const *path, char const *const *argv) {
 }
 
 #endif
+
+// -- String utilities
+
+size_t platform_make_c_identifier(char *dest, char const *src, size_t len) {
+    size_t j = 0;
+    for (size_t i = 0; src[i] && j < len - 1; i++) {
+        if (isalnum((unsigned char)src[i])) {
+            dest[j++] = src[i];
+        } else {
+            dest[j++] = '_';
+        }
+    }
+    dest[j] = '\0';
+    return j;
+}

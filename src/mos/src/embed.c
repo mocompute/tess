@@ -10,24 +10,6 @@
 #include <dirent.h>
 #endif
 
-static void make_c_identifier(char *dest, char const *src, size_t len) {
-    size_t j = 0;
-    for (size_t i = 0; src[i] && j < len - 1; i++) {
-        if (isalnum(src[i]) || src[i] == '_') {
-            dest[j++] = src[i];
-        } else if (src[i] == '.' || src[i] == '-' || src[i] == ' ') {
-            dest[j++] = '_';
-        }
-    }
-    dest[j] = '\0';
-
-    // Ensure it doesn't start with a digit
-    if (isdigit(dest[0])) {
-        memmove(dest + 1, dest, strlen(dest) + 1);
-        dest[0] = '_';
-    }
-}
-
 void generate_c_string(FILE *out, char const *var_name, FILE *in) {
     fprintf(out, "// Original file: %s\n", var_name);
     fprintf(out, "char const *%s = \n", var_name);
@@ -88,7 +70,7 @@ int process_file(FILE *out, char const *path, char const *filename) {
     }
 
     char var_name[256];
-    make_c_identifier(var_name, filename, sizeof(var_name));
+    platform_make_c_identifier(var_name, filename, sizeof(var_name));
 
     // Add prefix to ensure uniqueness
     char full_var_name[512];

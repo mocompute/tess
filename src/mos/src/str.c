@@ -434,6 +434,33 @@ str str_replace_char_str(allocator *alloc, str s, char find, str replace) {
     return str_build_finish(&builder);
 }
 
+str str_make_c_identifier(allocator *alloc, str in) {
+    span   src = str_span(&in);
+    size_t len = src.len;
+
+    if (len <= MOS_STR_MAX_SMALL) {
+        str out       = {0};
+        out.small.tag = STR_SMALL;
+        out.small.len = (unsigned char)platform_make_c_identifier(
+            out.small.buf, src.buf, MOS_STR_MAX_SMALL + 1);
+        return out;
+    }
+
+    char  *tmp     = alloc_malloc(alloc, len + 1);
+    size_t out_len = platform_make_c_identifier(tmp, src.buf, len + 1);
+
+    if (out_len <= MOS_STR_MAX_SMALL) {
+        str out       = {0};
+        out.small.tag = STR_SMALL;
+        out.small.len = (unsigned char)out_len;
+        memcpy(out.small.buf, tmp, out_len + 1);
+        alloc_free(alloc, tmp);
+        return out;
+    }
+
+    return (str){.big = {.len = out_len, .buf = tmp}};
+}
+
 size_t str_len(str self) {
     if (is_small(self)) return self.small.len;
     return self.big.len;
@@ -824,7 +851,10 @@ str str_init_f64(allocator *alloc, f64 val) {
     // %.17g strips trailing zeros and may produce "3" for 3.0 — append ".0".
     int has_dot_or_exp = 0;
     for (int i = 0; i < len; i++) {
-        if (buf[i] == '.' || buf[i] == 'e' || buf[i] == 'E') { has_dot_or_exp = 1; break; }
+        if (buf[i] == '.' || buf[i] == 'e' || buf[i] == 'E') {
+            has_dot_or_exp = 1;
+            break;
+        }
     }
     if (!has_dot_or_exp && len + 2 < (int)sizeof buf) {
         buf[len]     = '.';

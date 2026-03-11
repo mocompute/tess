@@ -57,7 +57,7 @@ typedef struct {
     int               no_optimize;
     int               bounds_check;           // --bounds-check (override: ON)
     int               no_bounds_check;        // --no-bounds-check (override: OFF)
-    int               effective_bounds_check;  // computed from the above + no_optimize
+    int               effective_bounds_check; // computed from the above + no_optimize
 
     int               in_place;
     int               pack_list;   // --list option for pack command
@@ -70,8 +70,8 @@ typedef struct {
     int               dashdash_at; // index in words where '--' args begin; -1 if not set
 
     // Stdin data (when compiling from stdin via '-')
-    char             *stdin_data;
-    u32               stdin_size;
+    char *stdin_data;
+    u32   stdin_size;
 
     // Temp directories created during package extraction (cleaned up in state_deinit)
     c_string_carray temp_dirs;
@@ -150,32 +150,32 @@ void state_init(state *self) {
     self->out_path = null;
     self->words    = (c_string_carray){.alloc = self->arena};
     array_reserve(self->words, 32);
-    self->cc                   = str_empty();
-    self->cflags               = (str_sized){0};
-    self->resolver             = import_resolver_create(self->arena);
-    self->defines              = (str_array){.alloc = self->arena};
-    self->scanner              = tl_source_scanner_create(self->arena, self->resolver);
-    self->program              = str_empty();
-    self->verbose              = 0;
-    self->verbose_ast          = 0;
-    self->verbose_parse        = 0;
-    self->report_time          = 0;
-    self->report_stats         = 0;
-    self->no_line_directive    = 0;
-    self->no_standard_includes = 0;
-    self->help                 = 0;
-    self->no_optimize          = 0;
+    self->cc                     = str_empty();
+    self->cflags                 = (str_sized){0};
+    self->resolver               = import_resolver_create(self->arena);
+    self->defines                = (str_array){.alloc = self->arena};
+    self->scanner                = tl_source_scanner_create(self->arena, self->resolver);
+    self->program                = str_empty();
+    self->verbose                = 0;
+    self->verbose_ast            = 0;
+    self->verbose_parse          = 0;
+    self->report_time            = 0;
+    self->report_stats           = 0;
+    self->no_line_directive      = 0;
+    self->no_standard_includes   = 0;
+    self->help                   = 0;
+    self->no_optimize            = 0;
     self->bounds_check           = 0;
     self->no_bounds_check        = 0;
     self->effective_bounds_check = 0;
     self->in_place               = 0;
-    self->is_library           = 0;
-    self->is_static_library    = 0;
-    self->is_executable        = 0;
-    self->dashdash_at          = -1;
-    self->stdin_data           = null;
-    self->stdin_size           = 0;
-    self->temp_dirs            = (c_string_carray){.alloc = self->arena};
+    self->is_library             = 0;
+    self->is_static_library      = 0;
+    self->is_executable          = 0;
+    self->dashdash_at            = -1;
+    self->stdin_data             = null;
+    self->stdin_size             = 0;
+    self->temp_dirs              = (c_string_carray){.alloc = self->arena};
 }
 
 static void state_track_temp_dir(state *self, char const *path) {
@@ -468,7 +468,8 @@ static void check_duplicate_modules(tl_tlib_metadata *meta, str tlib_path, dep_r
                     str_cstr(&mod), str_cstr(&meta->name), str_cstr(&tlib_path),
                     str_cstr(&existing->pkg_name), str_cstr(&existing->tlib_path));
         } else {
-            module_pkg_info info = {.pkg_name = meta->name, .version = meta->version, .tlib_path = tlib_path};
+            module_pkg_info info = {
+              .pkg_name = meta->name, .version = meta->version, .tlib_path = tlib_path};
             str_map_set(&ctx->module_owners, mod, &info);
         }
     }
@@ -584,10 +585,7 @@ static int resolve_dep_recursive(state *self, str dep_name, str dep_version,
 
 // Encode a version string for use in C identifiers: "1.2.0" → "1_2_0".
 static str encode_version(allocator *alloc, str version) {
-    // FIXME: embed.c has a make_c_identifier: extract it to a helper
-    // and use it, because otherwise other typical characters in a
-    // version string might fail.
-    return str_replace_char(alloc, version, '.', '_');
+    return str_make_c_identifier(alloc, version);
 }
 
 // Build a package prefix: "mylib" + "1.2.0" → "mylib__1_2_0".
@@ -599,8 +597,8 @@ static str build_pkg_prefix(allocator *alloc, str name, str version) {
 // Build module→prefix map from dependency resolution context.
 // Maps module names to "pkg__ver" prefixes for name mangling.
 static hashmap *build_module_prefix_map(allocator *alloc, dep_resolve_ctx *ctx) {
-    hashmap *prefixes = map_new(alloc, str, str, 16);
-    hashmap_iterator iter = {0};
+    hashmap         *prefixes = map_new(alloc, str, str, 16);
+    hashmap_iterator iter     = {0};
     while (map_iter(ctx->module_owners, &iter)) {
         str              mod    = str_init_n(alloc, iter.key_ptr, iter.key_size);
         module_pkg_info *info   = iter.data;
@@ -628,7 +626,7 @@ static int load_package_deps(state *self, str_array *out_pkg_files, hashmap **ou
     }
 
     // Pass back current package identity for prefix map construction
-    if (out_pkg_name)    *out_pkg_name    = pkg.info.name;
+    if (out_pkg_name) *out_pkg_name = pkg.info.name;
     if (out_pkg_version) *out_pkg_version = pkg.info.version;
 
     if (pkg.dep_count == 0) {
@@ -902,9 +900,9 @@ static void print_stats_row_no_mem(char const *phase, double time_ms, size_t inp
 }
 
 static int read_stdin(state *self) {
-    u32  capacity = 64 * 1024;
-    char *data    = alloc_malloc(self->arena, capacity);
-    u32   size    = 0;
+    u32   capacity = 64 * 1024;
+    char *data     = alloc_malloc(self->arena, capacity);
+    u32   size     = 0;
 
     for (;;) {
         size_t n = fread(data + size, 1, capacity - size, stdin);
@@ -953,7 +951,7 @@ int compile(state *self) {
     c_string_csized paths;
     int             used_source_entries = 0;
 
-    char const *stdin_path = STDIN_PATH;
+    char const     *stdin_path          = STDIN_PATH;
     if (self->words.size >= 2 && 0 == strcmp(self->words.v[1], "-")) {
         // Reading from stdin
         if (self->words.size > 2) {
@@ -994,24 +992,24 @@ int compile(state *self) {
     }
 
     // Load package dependencies (if package.tl exists with depend() declarations)
-    str_array  pkg_files       = {.alloc = self->arena};
-    hashmap   *module_prefixes = null;
-    str        cur_pkg_name    = str_empty();
-    str        cur_pkg_version = str_empty();
+    str_array pkg_files       = {.alloc = self->arena};
+    hashmap  *module_prefixes = null;
+    str       cur_pkg_name    = str_empty();
+    str       cur_pkg_version = str_empty();
     if (load_package_deps(self, &pkg_files, &module_prefixes, &cur_pkg_name, &cur_pkg_version)) return 1;
 
-    tl_infer_opts infer_opts  = {.is_library = self->is_library};
-    tl_infer     *infer       = tl_infer_create(self->arena, &infer_opts);
+    tl_infer_opts infer_opts    = {.is_library = self->is_library};
+    tl_infer     *infer         = tl_infer_create(self->arena, &infer_opts);
 
-    str_sized ordered_files = files_in_order(self, paths, (str_sized)array_sized(pkg_files));
+    str_sized     ordered_files = files_in_order(self, paths, (str_sized)array_sized(pkg_files));
 
     // Add current package's modules to the prefix map
     if (!str_is_empty(cur_pkg_name) && !str_is_empty(cur_pkg_version)) {
         if (!module_prefixes) {
             module_prefixes = map_new(self->arena, str, str, 16);
         }
-        str cur_prefix = build_pkg_prefix(self->arena, cur_pkg_name, cur_pkg_version);
-        hashmap_iterator iter = {0};
+        str              cur_prefix = build_pkg_prefix(self->arena, cur_pkg_name, cur_pkg_version);
+        hashmap_iterator iter       = {0};
         while (map_iter(self->scanner.modules_seen, &iter)) {
             str mod = str_init_n(self->arena, iter.key_ptr, iter.key_size);
             if (str_eq(mod, S("builtin")) || str_eq(mod, S("main"))) continue;
@@ -1021,20 +1019,20 @@ int compile(state *self) {
         }
     }
 
-    parser_opts   parser_opts = {
-        .registry              = tl_infer_get_registry(infer),
-        .files                 = ordered_files,
-        .prelude               = embed_prelude_tl,
-        .defines               = self->defines,
-        .preloaded_path        = self->stdin_data ? STDIN_PATH : null,
-        .preloaded_data        = self->stdin_data,
-        .preloaded_size        = self->stdin_size,
-        .module_pkg_prefixes   = module_prefixes,
+    parser_opts parser_opts = {
+      .registry            = tl_infer_get_registry(infer),
+      .files               = ordered_files,
+      .prelude             = embed_prelude_tl,
+      .defines             = self->defines,
+      .preloaded_path      = self->stdin_data ? STDIN_PATH : null,
+      .preloaded_data      = self->stdin_data,
+      .preloaded_size      = self->stdin_size,
+      .module_pkg_prefixes = module_prefixes,
       // The parser validates nested modules (#module Foo.Bar) by checking that the
       // parent (Foo) exists. Without this, cross-file nested modules fail when import
       // resolution orders the child before the parent (the parser hasn't seen Foo yet).
       // The scanner has already discovered all modules, so we pass its map here.
-        .known_modules = self->scanner.modules_seen,
+      .known_modules = self->scanner.modules_seen,
     };
 
     // === PARSING PHASE ===
@@ -2095,9 +2093,8 @@ static int init_package(state *self) {
 }
 
 static char const *validate_command_flags(state const *self, char const *cmd) {
-    int is_compile = (0 == strcmp(cmd, "c") || 0 == strcmp(cmd, "exe") ||
-                      0 == strcmp(cmd, "run") || 0 == strcmp(cmd, "lib") ||
-                      0 == strcmp(cmd, "lib-emit-c"));
+    int is_compile = (0 == strcmp(cmd, "c") || 0 == strcmp(cmd, "exe") || 0 == strcmp(cmd, "run") ||
+                      0 == strcmp(cmd, "lib") || 0 == strcmp(cmd, "lib-emit-c"));
     int has_stats  = is_compile && 0 != strcmp(cmd, "run");
 
     if (self->no_line_directive && !is_compile) return "--no-line-directive";
@@ -2206,8 +2203,8 @@ int main(int argc, char *argv[]) {
         hires_timer_start(&timer);
 
         // Determine output path: use -o if provided, else temp file
-        platform_temp_file tmp_exe = {0};
-        int using_temp = 0;
+        platform_temp_file tmp_exe    = {0};
+        int                using_temp = 0;
         if (!self.out_path) {
 #ifdef MOS_WINDOWS
             int tmp_err = platform_temp_file_create(&tmp_exe, ".exe");
@@ -2220,19 +2217,17 @@ int main(int argc, char *argv[]) {
                 goto done;
             }
             self.out_path = tmp_exe.path;
-            using_temp = 1;
+            using_temp    = 1;
         }
 
         self.is_executable = 1;
 
         // Temporarily hide program args from compile()
         size_t saved_words_size = self.words.size;
-        if (self.dashdash_at >= 0)
-            self.words.size = (size_t)self.dashdash_at;
+        if (self.dashdash_at >= 0) self.words.size = (size_t)self.dashdash_at;
 
         result = compile(&self);
-        if (result == 0)
-            result = compile_c(&self);
+        if (result == 0) result = compile_c(&self);
 
         self.words.size = saved_words_size;
 
@@ -2242,8 +2237,7 @@ int main(int argc, char *argv[]) {
         }
 
         // Build argv: [exe_path, program_args..., NULL]
-        int prog_argc = (self.dashdash_at >= 0)
-            ? (int)self.words.size - self.dashdash_at : 0;
+        int          prog_argc = (self.dashdash_at >= 0) ? (int)self.words.size - self.dashdash_at : 0;
         char const **exec_argv = malloc((size_t)(prog_argc + 2) * sizeof(char const *));
         if (!exec_argv) {
             fprintf(stderr, "error: out of memory\n");
@@ -2252,8 +2246,7 @@ int main(int argc, char *argv[]) {
             goto done;
         }
         exec_argv[0] = self.out_path;
-        for (int k = 0; k < prog_argc; k++)
-            exec_argv[k + 1] = self.words.v[self.dashdash_at + k];
+        for (int k = 0; k < prog_argc; k++) exec_argv[k + 1] = self.words.v[self.dashdash_at + k];
         exec_argv[prog_argc + 1] = NULL;
 
         // Replace process
