@@ -282,7 +282,17 @@ str file_path_normalize(allocator *alloc, str path) {
 
     // Add prefix for absolute paths
     if (is_abs) {
+#ifdef MOS_WINDOWS
+        // Normalize drive prefix separator: "C:\" -> "C:/"
+        if (prefix_len == 3 && s.buf[1] == ':') {
+            str_build_cat_n(&build, s.buf, 2);
+            str_build_cat(&build, S("/"));
+        } else {
+            str_build_cat_n(&build, s.buf, prefix_len);
+        }
+#else
         str_build_cat_n(&build, s.buf, prefix_len);
+#endif
     }
 
     // Add components
