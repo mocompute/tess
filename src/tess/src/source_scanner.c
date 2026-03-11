@@ -204,6 +204,39 @@ void tl_source_scanner_collect_imports(allocator *alloc, char_csized input, str_
     scan_directives(input, collect_imports_callback, &ctx);
 }
 
+// Context and callback for collect_modules (no conditionals, modules only).
+typedef struct {
+    allocator *alloc;
+    str_array *modules;
+} collect_modules_ctx;
+
+static int collect_modules_callback(void *raw_ctx, char const *data, u32 start, u32 end) {
+    collect_modules_ctx *ctx = raw_ctx;
+
+    u32                  len = end - start;
+    if (len > 0 && data[end - 1] == '\n') len -= 1;
+    if (len > 0 && data[end - 2] == '\r') len -= 1;
+
+    str       command = str_init_n(ctx->alloc, &data[start], len);
+    str_array words   = {.alloc = ctx->alloc};
+    str_parse_words(command, &words);
+
+    if (words.size >= 2 && (str_eq(words.v[0], S("module")) || str_eq(words.v[0], S("module_prelude")))) {
+        str _t = str_copy(ctx->alloc, words.v[1]);
+        array_push(*ctx->modules, _t);
+    }
+
+    forall(i, words) str_deinit(ctx->alloc, &words.v[i]);
+    array_free(words);
+
+    return 0;
+}
+
+void tl_source_scanner_collect_modules(allocator *alloc, char_csized input, str_array *modules) {
+    collect_modules_ctx ctx = {.alloc = alloc, .modules = modules};
+    scan_directives(input, collect_modules_callback, &ctx);
+}
+
 tl_source_scanner_validate_result tl_source_scanner_validate(tl_source_scanner *self,
                                                              str const         *export_modules,
                                                              u32 export_module_count, int verbose) {

@@ -584,6 +584,86 @@ static int test_collect_ignores_conditionals(void) {
     return error;
 }
 
+// --- collect_modules tests (no conditional compilation, string/comment aware) ---
+
+// Helper: collect modules from a string without a full scanner.
+static str_array collect_modules(allocator *alloc, char const *content) {
+    str_array   modules = {.alloc = alloc};
+    char_csized input   = {.v = content, .size = (u32)strlen(content)};
+    tl_source_scanner_collect_modules(alloc, input, &modules);
+    return modules;
+}
+
+// Both #module and #module_prelude detected
+static int test_collect_modules_basic(void) {
+    int        error   = 0;
+    allocator *alloc   = arena_create(default_allocator(), 1024);
+    str_array  modules = collect_modules(alloc, "#module Foo\n#module_prelude Bar\n");
+
+    error += modules.size != 2;
+    if (modules.size >= 2) {
+        error += !str_eq(modules.v[0], S("Foo"));
+        error += !str_eq(modules.v[1], S("Bar"));
+    }
+
+    if (error) fprintf(stderr, "  %d check(s) failed\n", error);
+    arena_destroy(&alloc);
+    return error;
+}
+
+// #module inside string literal is skipped
+static int test_collect_modules_ignores_string(void) {
+    int        error   = 0;
+    allocator *alloc   = arena_create(default_allocator(), 1024);
+    str_array  modules = collect_modules(alloc, "x = \"\n#module Fake\n\"\n#module Real\n");
+
+    error += modules.size != 1;
+    if (modules.size >= 1) {
+        error += !str_eq(modules.v[0], S("Real"));
+    }
+
+    if (error) fprintf(stderr, "  %d check(s) failed\n", error);
+    arena_destroy(&alloc);
+    return error;
+}
+
+// #module inside // comment is skipped
+static int test_collect_modules_ignores_comment(void) {
+    int        error   = 0;
+    allocator *alloc   = arena_create(default_allocator(), 1024);
+    str_array  modules = collect_modules(alloc, "// #module Fake\n#module Real\n");
+
+    error += modules.size != 1;
+    if (modules.size >= 1) {
+        error += !str_eq(modules.v[0], S("Real"));
+    }
+
+    if (error) fprintf(stderr, "  %d check(s) failed\n", error);
+    arena_destroy(&alloc);
+    return error;
+}
+
+// #ifdef-wrapped #module still collected (no conditional filtering)
+static int test_collect_modules_no_conditionals(void) {
+    int        error   = 0;
+    allocator *alloc   = arena_create(default_allocator(), 1024);
+    str_array  modules = collect_modules(alloc, "#ifdef FEATURE\n"
+                                                 "#module Conditional\n"
+                                                 "#endif\n"
+                                                 "#module Always\n");
+
+    // Both modules should be collected (no conditional filtering)
+    error += modules.size != 2;
+    if (modules.size >= 2) {
+        error += !str_eq(modules.v[0], S("Conditional"));
+        error += !str_eq(modules.v[1], S("Always"));
+    }
+
+    if (error) fprintf(stderr, "  %d check(s) failed\n", error);
+    arena_destroy(&alloc);
+    return error;
+}
+
 // --- Validation tests ---
 
 // Manifest declares module not found in source -> error
@@ -719,6 +799,12 @@ int main(void) {
     T(test_collect_ignores_string)
     T(test_collect_ignores_comment)
     T(test_collect_ignores_conditionals)
+
+    T(test_collect_modules_basic)
+    T(test_collect_modules_ignores_string)
+    T(test_collect_modules_ignores_comment)
+    T(test_collect_modules_no_conditionals)
+
     T(test_validate_missing_module)
     T(test_validate_ok)
     T(test_validate_empty_modules)

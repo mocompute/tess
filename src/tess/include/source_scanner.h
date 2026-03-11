@@ -66,4 +66,10 @@ tl_source_scanner_validate_result tl_source_scanner_validate(tl_source_scanner *
 // Appends to *imports (caller initializes the array).
 void tl_source_scanner_collect_imports(allocator *alloc, char_csized input, str_array *imports);
 
+// Extract all #module and #module_prelude directives from source text.
+// Uses the scanner state machine for correct string/comment handling.
+// Does NOT apply conditional compilation — all modules are collected unconditionally.
+// Appends module names to *modules (caller initializes the array).
+void tl_source_scanner_collect_modules(allocator *alloc, char_csized input, str_array *modules);
+
 #endif // TESS_SOURCE_SCANNER_H

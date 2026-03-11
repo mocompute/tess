@@ -580,55 +580,26 @@ static void register_internal_modules(allocator *alloc, tl_tlib_metadata *meta, 
     str pkg_prefix = build_pkg_prefix(alloc, meta->name, meta->version);
 
     for (u32 k = prev_count; k < pkg_files->size; k++) {
-        char    *data = null;
-        u32      size = 0;
+        char *data = null;
+        u32   size = 0;
         file_read(alloc, str_cstr(&pkg_files->v[k]), &data, &size);
         if (!data) continue;
 
-        // Simple line-by-line scan for "#module <Name>" directives
-        char const *p   = data;
-        char const *end = data + size;
-        while (p < end) {
-            // Find end of line
-            char const *eol = p;
-            while (eol < end && *eol != '\n') eol++;
+        str_array modules = {.alloc = alloc};
+        tl_source_scanner_collect_modules(alloc, (char_csized){.v = data, .size = size}, &modules);
 
-            // Check for "#module " or "#module_prelude " prefix
-            if (eol - p > 8 && p[0] == '#') {
-                char const *q = p + 1;
-                // Skip "module_prelude" or "module"
-                int is_module = 0;
-                if (eol - q >= 7 && memcmp(q, "module", 6) == 0) {
-                    if (q[6] == ' ') {
-                        q += 7;
-                        is_module = 1;
-                    } else if (eol - q >= 16 && memcmp(q, "module_prelude ", 15) == 0) {
-                        q += 15;
-                        is_module = 1;
-                    }
-                }
-                if (is_module) {
-                    // Extract module name (until whitespace or EOL)
-                    char const *name_start = q;
-                    while (q < eol && *q != ' ' && *q != '\t' && *q != '\r') q++;
-                    if (q > name_start) {
-                        str mod = str_init_n(alloc, name_start, (u32)(q - name_start));
-                        if (!str_hset_contains(exported, mod)) {
-                            // Internal module — register with library's prefix
-                            if (!str_map_contains(ctx->module_owners, mod)) {
-                                module_pkg_info info = {
-                                  .pkg_name = meta->name, .version = meta->version, .tlib_path = tlib_path};
-                                str_map_set(&ctx->module_owners, mod, &info);
-                            }
-                            if (file_prefixes) {
-                                str_map_set(&file_prefixes, mod, &pkg_prefix);
-                            }
-                        }
-                    }
-                }
+        for (u32 m = 0; m < modules.size; m++) {
+            str mod = modules.v[m];
+            if (str_hset_contains(exported, mod)) continue;
+            // Internal module — register with library's prefix
+            if (!str_map_contains(ctx->module_owners, mod)) {
+                module_pkg_info info = {
+                  .pkg_name = meta->name, .version = meta->version, .tlib_path = tlib_path};
+                str_map_set(&ctx->module_owners, mod, &info);
             }
-
-            p = (eol < end) ? eol + 1 : end;
+            if (file_prefixes) {
+                str_map_set(&file_prefixes, mod, &pkg_prefix);
+            }
         }
     }
 
