@@ -887,7 +887,7 @@ int symbol_is_module_function(parser *self, ast_node *name, u8 arity) {
     }
 
     // For cross-module references, look up the module's symbol table
-    hashmap *module_syms = str_map_get_ptr(self->module_symbols, module_name);
+    hashmap *module_syms = resolve_module_symbols(self, module_name);
     if (!module_syms) return 0;
 
     // Check if arity-mangled symbol exists in that module
@@ -1192,20 +1192,43 @@ int toplevel_c_chunk(parser *self) {
     return 0;
 }
 
+hashmap *resolve_module_symbols(parser *self, str module_name) {
+    if (self->module_pkg_prefixes) {
+        str *pfx = str_map_get(self->module_pkg_prefixes, module_name);
+        if (pfx) {
+            str vkey = str_cat_3(self->transient, *pfx, S("::"), module_name);
+            hashmap *syms = str_map_get_ptr(self->module_symbols, vkey);
+            if (syms) return syms;
+        }
+    }
+    return str_map_get_ptr(self->module_symbols, module_name);
+}
+
 void save_current_module_symbols(parser *self) {
     if (self->mode != mode_symbols) return;
     str      module_name = str_is_empty(self->current_module) ? S("main") : self->current_module;
     hashmap *copy        = map_copy(self->current_module_symbols);
     str_map_set_ptr(&self->module_symbols, module_name, copy);
+
+    // Also save under versioned key for multi-version lookups
+    if (self->module_pkg_prefixes) {
+        str *pfx = str_map_get(self->module_pkg_prefixes, module_name);
+        if (pfx) {
+            str vkey = str_cat_3(self->ast_arena, *pfx, S("::"), module_name);
+            hashmap *copy2 = map_copy(self->current_module_symbols);
+            str_map_set_ptr(&self->module_symbols, vkey, copy2);
+        }
+    }
 }
 
 void load_module_symbols(parser *self) {
     str module_name = str_is_empty(self->current_module) ? S("main") : self->current_module;
-    if (str_map_contains(self->module_symbols, module_name)) {
+    hashmap *syms = resolve_module_symbols(self, module_name);
+    if (syms) {
         // Don't destroy current_module_symbols here - after the first load, it points to a hashmap
         // in module_symbols, and destroying it would corrupt module_symbols entries.
         // The memory is managed by module_symbols and will be freed when the parser is destroyed.
-        self->current_module_symbols = str_map_get_ptr(self->module_symbols, module_name);
+        self->current_module_symbols = syms;
     }
 }
 

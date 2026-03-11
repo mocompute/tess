@@ -3847,7 +3847,7 @@ static int test_e2e_pkg_prefix_multi_version(void) {
     write_file(path, "format(1)\npackage(BaseLib)\nversion(\"2.0.0\")\nexport(Base)\n");
 
     snprintf(path, sizeof(path), "%sbase.tl", base2_dir);
-    write_file(path, "#module Base\n\nval() { 20 }\n");
+    write_file(path, "#module Base\n\nvalue() { 20 }\n");
 
     snprintf(cmd, sizeof(cmd),
              CD_CMD " \"%s\" && \"%s\" pack --no-standard-includes -S \"%s\""
@@ -3898,7 +3898,7 @@ static int test_e2e_pkg_prefix_multi_version(void) {
                      "depend(BaseLib, \"2.0.0\")\ndepend_path(\"./libs\")\n");
 
     snprintf(path, sizeof(path), "%smodb.tl", libb_dir);
-    write_file(path, "#module ModB\n\ncompute() { Base.val() }\n");
+    write_file(path, "#module ModB\n\ncompute() { Base.value() }\n");
 
     snprintf(src_tlib, sizeof(src_tlib), "%sBaseLib.tlib", base2_dir);
     snprintf(dst_tlib, sizeof(dst_tlib), "%sBaseLib.tlib", libb_libs);
@@ -3935,9 +3935,8 @@ static int test_e2e_pkg_prefix_multi_version(void) {
                      "}\n");
 
     // Copy all tlibs — both BaseLib versions need to be available.
-    // Currently the resolver expects one BaseLib.tlib, so this may need
-    // versioned filenames (e.g. BaseLib-1.0.0.tlib) or another mechanism.
-    // For now, copy both versions — one will overwrite the other.
+    // BaseLib v1 uses the unversioned fallback name, BaseLib v2 uses
+    // the versioned filename that the resolver picks up automatically.
     snprintf(src_tlib, sizeof(src_tlib), "%sLibA.tlib", liba_dir);
     snprintf(dst_tlib, sizeof(dst_tlib), "%sLibA.tlib", app_libs);
     copy_file(src_tlib, dst_tlib);
@@ -3946,12 +3945,12 @@ static int test_e2e_pkg_prefix_multi_version(void) {
     snprintf(dst_tlib, sizeof(dst_tlib), "%sLibB.tlib", app_libs);
     copy_file(src_tlib, dst_tlib);
 
-    // Copy BaseLib v1 as BaseLib.tlib (the resolver finds <PkgName>.tlib)
+    // Copy BaseLib v1 as BaseLib.tlib (unversioned fallback)
     snprintf(src_tlib, sizeof(src_tlib), "%sBaseLib.tlib", base1_dir);
     snprintf(dst_tlib, sizeof(dst_tlib), "%sBaseLib.tlib", app_libs);
     copy_file(src_tlib, dst_tlib);
 
-    // Also copy BaseLib v2 with a versioned filename — future resolver support
+    // Copy BaseLib v2 with versioned filename (resolver finds <PkgName>-<Version>.tlib)
     snprintf(src_tlib, sizeof(src_tlib), "%sBaseLib.tlib", base2_dir);
     snprintf(dst_tlib, sizeof(dst_tlib), "%sBaseLib-2.0.0.tlib", app_libs);
     copy_file(src_tlib, dst_tlib);

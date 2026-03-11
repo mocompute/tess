@@ -1248,7 +1248,7 @@ int maybe_mangle_binop(parser *self, ast_node *op, ast_node **inout, ast_node *r
             str      target_module = (*inout)->symbol.name;
             str      original_name = to_mangle->symbol.name;
             str      mangled_name  = mangle_str_for_arity(self->ast_arena, original_name, arity);
-            hashmap *module_syms   = str_map_get_ptr(self->module_symbols, target_module);
+            hashmap *module_syms   = resolve_module_symbols(self, target_module);
             if (module_syms && str_hset_contains(module_syms, mangled_name)) {
                 to_mangle->symbol.name = mangled_name;
             }
@@ -1303,9 +1303,9 @@ int maybe_mangle_binop(parser *self, ast_node *op, ast_node **inout, ast_node *r
 
                 // Look up in the appropriate module's symbol table
                 hashmap *syms = null;
-                if (!str_is_empty(module)) syms = str_map_get_ptr(self->module_symbols, module);
+                if (!str_is_empty(module)) syms = resolve_module_symbols(self, module);
                 else if (!str_is_empty(self->current_module))
-                    syms = str_map_get_ptr(self->module_symbols, self->current_module);
+                    syms = resolve_module_symbols(self, self->current_module);
 
                 int found = 0;
                 if (syms) found = str_hset_contains(syms, candidate_name);

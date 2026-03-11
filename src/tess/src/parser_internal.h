@@ -220,7 +220,8 @@ str  mangle_str_for_module(parser *, str name, str module);
 void unmangle_name(parser *, ast_node *);
 
 // Module symbols
-void add_module_symbol(parser *, ast_node *);
+void     add_module_symbol(parser *, ast_node *);
+hashmap *resolve_module_symbols(parser *, str module_name);
 
 // parser infrastructure
 

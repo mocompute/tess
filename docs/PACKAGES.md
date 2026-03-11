@@ -233,7 +233,7 @@ When you run `tess exe` (or `tess run`, `tess c`, `tess lib`), the compiler:
 
 1. Looks for `package.tl` in the current working directory
 2. Discovers local source files from `source()` entries (if no files given on the command line)
-3. For each `depend()` declaration, searches `depend_path()` directories for `<PackageName>.tlib`
+3. For each `depend()` declaration, searches `depend_path()` directories for `<PackageName>-<Version>.tlib`, then `<PackageName>.tlib`
 4. Reads the archive and verifies the version matches exactly
 5. Extracts source files to a temporary directory
 6. Recursively loads transitive dependencies from the archive's metadata
@@ -286,11 +286,21 @@ MyApp
 
 The consumer must have all transitive dependencies available in their `depend_path()` directories. If a transitive dependency cannot be found, the compiler emits an error naming the missing package and which package requires it.
 
-### Strict version equality
+### Multi-version coexistence
 
-All modules share a single global namespace. Two versions of the same package cannot coexist because they would define the same module names. This means dependency versions use strict equality -- `"1.0.0"` must match exactly.
+Different versions of the same package can coexist in the same build. If package A requires `BaseLib=1.0.0` and package B requires `BaseLib=2.0.0`, the compiler loads both. This works because package-versioned name mangling gives each version distinct C symbols (e.g., `BaseLib__1_0_0__Base__val__0` vs `BaseLib__2_0_0__Base__val__0`), and the compiler maintains per-file prefix maps so each library's source resolves module references to the correct version.
 
-If package A requires `logging_lib=1.0.0` and package B requires `logging_lib=2.0.0`, the compiler emits an error. There is no way to satisfy both.
+Version strings use strict equality -- `"1.0.0"` must match exactly. There is no semver range resolution.
+
+To make multiple versions available, use versioned `.tlib` filenames. The compiler searches for `<PackageName>-<Version>.tlib` first, then falls back to `<PackageName>.tlib`:
+
+```
+libs/
+  BaseLib.tlib          # BaseLib v1.0.0 (unversioned fallback)
+  BaseLib-2.0.0.tlib    # BaseLib v2.0.0 (versioned)
+  LibA.tlib
+  LibB.tlib
+```
 
 ### Diamond dependencies
 
@@ -332,7 +342,7 @@ Tree shaking removes unused internal modules from the final binary.
 
 ### Single global namespace
 
-All modules -- whether from local source or packages -- share a single global namespace. If two packages define a module with the same name, or if local code conflicts with a package module, the compiler emits an error.
+All modules -- whether from local source or packages -- share a single global namespace. If two different packages define a module with the same name, the compiler emits an error. However, different versions of the *same* package may export the same module name -- package-versioned name mangling ensures they get distinct C symbols.
 
 ### Package names vs module names
 
