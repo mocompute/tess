@@ -36,6 +36,16 @@ Single test:
 
 Compiler: `./tess <command> <file.tl>` — commands: `c` (transpile to C), `exe` (compile), `run` (compile+execute), `lib` (shared/static library). Common flags: `-v`, `--no-line-directive`, `-I <path>`, `--time`, `--stats`.
 
+## Tess Language Quick Reference
+
+Key syntax to remember when writing `.tl` code:
+
+- **Binding**: `x := 42` or `x: Int := 42` — introduces a new variable (let-in semantics)
+- **Reassignment**: `x = 99` — mutates an existing binding (statement, not expression)
+- **There is NO `mut` keyword.** All bindings are reassignable by default. Do not write `mut` anywhere.
+- Compound assignment: `x += 1`, `x -= 1`, etc.
+- See `docs/LANGUAGE_REFERENCE.md` for full syntax
+
 ## Code Style
 
 - **C11 with NO extensions** - Must be compatible with cross-platform C compilers

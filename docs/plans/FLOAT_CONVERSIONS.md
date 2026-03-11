@@ -150,14 +150,14 @@ i: Int := some_float
 f: Float := some_int
 ```
 
-### Mutable Re-Assignment
+### Re-Assignment
 
-As with integers, the let-in annotation only applies at the declaration
-site. For re-assignment to a mutable variable, an intermediate let-in is
-required if the conversion needs an explicit cast:
+As with integers, the let-in annotation only applies at the binding
+site. For re-assignment of an existing variable, an intermediate let-in
+is required if the conversion needs an explicit cast:
 
 ```tl
-x: mut CFloat := 0.0
+x: CFloat := 0.0
 // Later:
 narrow: CFloat := some_double
 x = narrow

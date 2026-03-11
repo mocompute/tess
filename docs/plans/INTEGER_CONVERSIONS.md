@@ -119,13 +119,13 @@ is a deliberate design choice: because the let-in form is visually prominent,
 developers scanning code can identify every potentially unsafe conversion
 point. There is no `as` keyword or cast function.
 
-### Mutable Re-Assignment
+### Re-Assignment
 
-The let-in annotation only applies at the declaration site. For re-assignment
-to a mutable variable, an intermediate let-in is required if narrowing:
+The let-in annotation only applies at the binding site. For re-assignment
+of an existing variable, an intermediate let-in is required if narrowing:
 
 ```tl
-x: mut CInt := 0
+x: CInt := 0
 
 // Later, with an Int value that needs narrowing:
 narrow: CInt := some_int_value
@@ -400,7 +400,7 @@ to `TL_KNOWN_FAIL_FAILURES` (compiler doesn't reject them yet):
 - `test_fail_integer_narrowing_funcall.tl` — Int value to CInt parameter
 - `test_fail_integer_narrowing_let.tl` — Int assigned to CInt via let-in
 - `test_fail_integer_narrowing_return.tl` — returns Int, declared -> CInt
-- `test_fail_integer_narrowing_reassign.tl` — Int assigned to mut CInt var
+- `test_fail_integer_narrowing_reassign.tl` — Int assigned to CInt var
 - `test_fail_integer_cross_chain.tl` — CInt to CInt32 (C-named vs fixed-width)
 - `test_fail_integer_exact_operator.tl` — CInt + CShort
 - `test_fail_integer_exact_conditional.tl` — branches: CInt vs CShort
