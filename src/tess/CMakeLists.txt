@@ -74,7 +74,10 @@ set(SOURCES
   src/manifest.c
   src/source_scanner.c
   src/parser.c
+  src/parser_expr.c
+  src/parser_statements.c
   src/parser_tagged_union.c
+  src/parser_types.c
   src/tess.c
   src/token.c
   src/tokenizer.c

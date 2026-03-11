@@ -83,48 +83,73 @@ struct parser {
 };
 
 // ============================================================================
-// Internal API: parser.c (shared utilities used by parser_tagged_union.c)
+// Internal API: parser.c
 // ============================================================================
 
-// Result helpers
-int result_ast_node(parser *, ast_node *);
+typedef int (*parse_fun_s)(parser *, char const *);
+typedef int (*parse_fun_int)(parser *, int);
 
-// Token parsers
-nodiscard int a_try(parser *, parse_fun);
-int           a_identifier(parser *);
-int           a_colon(parser *);
-int           a_vertical_bar(parser *);
-int           a_open_curly(parser *);
-int           a_close_curly(parser *);
-int           a_comma(parser *);
-int           a_dot(parser *);
-int           a_param(parser *);
-int           a_type_identifier(parser *);
+// Top-level definitions
 
-// Node helpers
-void set_node_file(parser *, ast_node *);
-int  set_node_parameters(parser *, ast_node *, ast_node_array *);
+int toplevel_defun(parser *);
+int toplevel_enum(parser *self);
+int toplevel_struct(parser *self);
+int toplevel_trait(parser *self);
+int toplevel_type_alias(parser *self);
+int toplevel_union(parser *self);
+int toplevel(parser *);
 
-// Name mangling
-void mangle_name(parser *, ast_node *);
-void mangle_name_for_module(parser *, ast_node *, str module);
-void unmangle_name(parser *, ast_node *);
-str  mangle_str_for_module(parser *, str name, str module);
+// Expressions and operators
 
-// Module symbols
-void add_module_symbol(parser *, ast_node *);
+int       a_binary_operator(parser *self, int min_prec);
+int       a_expression(parser *);
+int       a_unary_operator(parser *self, int min_prec);
+int       a_value(parser *);
+int       operator_precedence(char const *op, int is_prefix);
+ast_node *parse_expression(parser *, int min_preced);
+ast_node *parse_if_expr(parser *);
+ast_node *parse_lvalue(parser *);
+
+// Statements and bodies
+
+int       a_assignment(parser *);
+int       a_assignment_by_operator(parser *, int);
+int       a_body_element(parser *);
+int       a_defer_statement(parser *);
+int       a_field_assignment(parser *);
+int       a_reassignment(parser *);
+int       a_statement(parser *);
+ast_node *create_body(parser *self, ast_node_array exprs, ast_node_array defers);
+ast_node *create_body_fallback(parser *self, ast_node_array exprs, ast_node_array defers, ast_node *);
+
+ast_node *parse_body(parser *);
+
+// Functions and lambdas
+
+int a_funcall(parser *);
+int a_lambda_function(parser *);
+int a_lambda_funcall(parser *);
+int too_many_arguments(parser *);
+
+// Types and type annotations
+
+int a_type_arrow(parser *self);
+int a_type_annotation(parser *self);
+int a_type_constructor(parser *);
+int maybe_type_arguments(parser *self, ast_node_array *type_args);
+int a_type_identifier(parser *);
+int maybe_trait_bound(parser *);
+int is_reserved_type_name(ast_node const *);
 
 // Type definition helpers
-int       is_reserved_type_name(ast_node const *);
 ast_node *create_utd(parser *, ast_node *name, u8 n_type_args, ast_node **type_args, ast_node_array fields,
                      int is_union);
 ast_node *create_enum_utd(parser *, ast_node *name, ast_node_array idents);
 u8        collect_used_type_params(parser *, u8 n_type_args, ast_node **type_args, ast_node_array fields,
                                    ast_node ***out_used_type_args);
+int       parse_param_list(parser *, ast_node_array *, int);
 
-// ============================================================================
-// Internal API: parser_tagged_union.c
-// ============================================================================
+// tagged union helpers
 
 int       toplevel_tagged_union(parser *);
 ast_node *build_tagged_union_wrapping(parser *, str tu_name, str var_name, str module,
@@ -133,5 +158,91 @@ ast_node *maybe_auto_invoke_nullary_variant(parser *, ast_node *symbol, str orig
                                             str target_module);
 ast_node *maybe_wrap_variant_in_tagged_union(parser *, str parent_name, str child_name, str module,
                                              ast_node *right);
+
+// token parsers (atomic terminals)
+
+int a_identifier(parser *);
+int a_colon(parser *);
+int a_colon_equal(parser *p);
+int a_vertical_bar(parser *);
+int a_open_curly(parser *);
+int a_close_curly(parser *);
+int a_comma(parser *);
+int a_dot(parser *);
+int a_param(parser *);
+int a_attribute_set(parser *);
+
+int a_ampersand(parser *);
+int a_arrow(parser *);
+int a_bool(parser *);
+int a_close_round(parser *);
+int a_close_square(parser *);
+int a_double_open_square(parser *);
+int a_double_close_square(parser *);
+int a_char(parser *);
+int a_ellipsis(parser *);
+int a_equal_sign(parser *);
+int a_identifier_optional_arity(parser *);
+int a_attributed_identifier(parser *);
+int a_nil(parser *);
+int a_null(parser *);
+int a_number(parser *);
+int a_open_round(parser *);
+int a_open_square(parser *);
+int a_star(parser *);
+int a_string(parser *);
+int the_symbol(parser *, char const *const);
+
+// Result helpers
+
+int result_ast(parser *, ast_tag);
+int result_ast_bool(parser *, int);
+int result_ast_f64(parser *, f64);
+int result_ast_i64(parser *, i64);
+int result_ast_i64_z(parser *, i64);
+int result_ast_str(parser *, ast_tag, char const *s);
+int result_ast_u64(parser *, u64);
+int result_ast_u64_zu(parser *, u64);
+int result_ast_node(parser *, ast_node *);
+
+// Node helpers
+void set_node_file(parser *, ast_node *);
+int  set_node_parameters(parser *, ast_node *, ast_node_array *);
+
+// Name mangling
+void mangle_name(parser *, ast_node *);
+void mangle_name_for_module(parser *, ast_node *, str module);
+void mangle_name_for_arity(parser *self, ast_node *name, u8 arity, int is_definition);
+str  mangle_str_for_module(parser *, str name, str module);
+void unmangle_name(parser *, ast_node *);
+
+// Module symbols
+void add_module_symbol(parser *, ast_node *);
+
+// parser infrastructure
+
+int           is_eof(parser *);
+int           is_unary_operator(char const *);
+int           is_reserved(char const *);
+int           is_ampersand(ast_node const *node);
+
+nodiscard int a_try(parser *, parse_fun);
+nodiscard int a_try_s(parser *, parse_fun_s, char const *);
+nodiscard int a_try_int(parser *p, parse_fun_int fun, int arg);
+
+int           eat_comments(parser *);
+int           next_token(parser *);
+
+int           string_to_number(parser *, char const *const);
+str           next_var_name(parser *);
+
+void          tokens_push_back(struct parser *, struct token *);
+void          tokens_shrink(struct parser *, u32);
+
+#ifndef MOS_WINDOWS
+void parser_dbg(struct parser *, char const *restrict fmt, ...) __attribute__((format(printf, 2, 3)));
+#else
+void parser_dbg(struct parser *, char const *restrict fmt, ...);
+#endif
 
 #endif // TESS_PARSER_INTERNAL_H

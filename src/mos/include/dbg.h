@@ -6,14 +6,14 @@
 #ifndef NDEBUG
 
 #ifndef MOS_WINDOWS
-void dbg(char const *restrict fmt, ...) __attribute__((format(printf, 1, 2)));
+void mos_dbg(char const *restrict fmt, ...) __attribute__((format(printf, 1, 2)));
 #else
-void dbg(char const *restrict fmt, ...);
+void mos_dbg(char const *restrict fmt, ...);
 #endif
 
 #else
 
-#define dbg(...) (void)0
+#define mos_dbg(...) (void)0
 
 #endif
 

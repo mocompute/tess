@@ -139,7 +139,10 @@ TESS_SOURCES =				\
 	$(TESS_SRC_DIR)/src/format.c	\
 	$(TESS_SRC_DIR)/src/import_resolver.c \
 	$(TESS_SRC_DIR)/src/parser.c	\
+	$(TESS_SRC_DIR)/src/parser_expr.c \
+	$(TESS_SRC_DIR)/src/parser_statements.c \
 	$(TESS_SRC_DIR)/src/parser_tagged_union.c \
+	$(TESS_SRC_DIR)/src/parser_types.c \
 	$(TESS_SRC_DIR)/src/tess.c	\
 	$(TESS_SRC_DIR)/src/token.c	\
 	$(TESS_SRC_DIR)/src/tokenizer.c \

@@ -36,11 +36,11 @@ static int test_sexp_parse(void) {
     error += 0 == sexp_parser_next(&p, &expr, &err, &err_pos) ? 0 : 1;
 
     if (error) {
-        dbg("error: %s\n", sexp_err_tag_to_string(err));
+        mos_dbg("error: %s\n", sexp_err_tag_to_string(err));
     } else {
         char *s = sexp_to_string(alloc, expr);
         if (null == s) return error + 1;
-        dbg("parsed: %s\n", s);
+        mos_dbg("parsed: %s\n", s);
         error += 0 == strcmp(s, "(a (b \"str\" c) d -123)") ? 0 : 1;
         alloc_free(alloc, s);
 

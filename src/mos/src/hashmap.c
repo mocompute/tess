@@ -141,12 +141,12 @@ static int set_one_at(hashmap *map, hashmap_entry const *header, byte const *ele
 
     while (1) {
         if (probe_distance > MAX_PROBE_LEN) {
-            dbg("map.c set_one: overflow\n");
+            mos_dbg("map.c set_one: overflow\n");
             return 1; // overflow
         }
         if (probe_distance > WARN_DISTANCE && !warning_printed) {
-            dbg("warning: high probe distance for key: %p, load factor: %f\n",
-                ((hashmap_entry *)to_store)->key, map_load_factor(map));
+            mos_dbg("warning: high probe distance for key: %p, load factor: %f\n",
+                    ((hashmap_entry *)to_store)->key, map_load_factor(map));
             warning_printed = 1;
         }
 
@@ -203,7 +203,7 @@ static int grow_buckets(hashmap **map) {
     u64 new_buckets = ((*map)->n_cells * 2ULL);
 
     if (new_buckets > UINT32_MAX) {
-        dbg("map grow_buckets: too many buckets\n");
+        mos_dbg("map grow_buckets: too many buckets\n");
         return 1;
     }
 
@@ -364,7 +364,7 @@ void map_set(hashmap **self, void const *key, u8 key_len, void const *data) {
 
     if (map_load_factor(*self) >= DEFAULT_LOAD_FACTOR) {
         if (grow_buckets(self)) {
-            dbg("map_set: oom\n");
+            mos_dbg("map_set: oom\n");
             assert(0);
             exit(1);
         }
@@ -382,7 +382,7 @@ void map_set(hashmap **self, void const *key, u8 key_len, void const *data) {
     memcpy(entry.key->data, key, key_len);
 
     if (set_one_at(*self, &entry, data, bucket_index)) {
-        dbg("map_set: error in set_one\n");
+        mos_dbg("map_set: error in set_one\n");
         assert(0);
         exit(1);
     }
