@@ -1208,17 +1208,18 @@ void save_current_module_symbols(parser *self) {
     if (self->mode != mode_symbols) return;
     str      module_name = str_is_empty(self->current_module) ? S("main") : self->current_module;
     hashmap *copy        = map_copy(self->current_module_symbols);
-    str_map_set_ptr(&self->module_symbols, module_name, copy);
 
-    // Also save under versioned key for multi-version lookups
+    // Use versioned key when a package prefix exists, bare name otherwise.
+    // resolve_module_symbols() mirrors this: versioned lookup first, bare fallback.
     if (self->module_pkg_prefixes) {
         str *pfx = str_map_get(self->module_pkg_prefixes, module_name);
         if (pfx) {
             str vkey = str_cat_3(self->ast_arena, *pfx, S("::"), module_name);
-            hashmap *copy2 = map_copy(self->current_module_symbols);
-            str_map_set_ptr(&self->module_symbols, vkey, copy2);
+            str_map_set_ptr(&self->module_symbols, vkey, copy);
+            return;
         }
     }
+    str_map_set_ptr(&self->module_symbols, module_name, copy);
 }
 
 void load_module_symbols(parser *self) {
