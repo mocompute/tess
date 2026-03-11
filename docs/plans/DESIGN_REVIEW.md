@@ -4,7 +4,6 @@
 
   Type System
 
-  1. CChar has contradictory signedness metadata (type.c:181) — Marked unsigned_int=1 but given range [-128, 127]. The design doc correctly says CChar should be standalone, but the implementation puts it in the unsigned family. u-suffixed literals can bind to CChar incorrectly.
   2. Const stripping is incomplete (infer_constraint.c:1265, 1115) — The unifier strips Const symmetrically from both sides (type.c:2965-2967), with safety enforced only by pre-unification guards at function call sites. Struct field assignment and return statements bypass these guards, allowing Ptr[Const[T]] →
   Ptr[T] silently.
   3. Cross-subchain directed unification falls through to symmetric (type.c:2924-2940) — Standalone types (CSize, CPtrDiff, CChar) silently convert in TL_UNIFY_DIRECTED mode when they should require explicit annotation.
@@ -30,7 +29,6 @@
   Architecture
 
   13. Error reporting lacks source locations for many inference errors (infer.c:591-613) — Errors created with null node (e.g., tl_err_unknown_symbol_in_main) print no file/line. Users can't find the problem.
-  14. hot_parse_ctx reentrancy guard is assert-only (infer.c:106) — Compiled away with -DNDEBUG in release builds. Silent corruption if re-entrancy occurs in production.
   15. traverse_ctx_create uses malloc with no structural enforcement (infer_constraint.c:419) — Has already caused a real bug (MEMORY.md documents skip_alloc_expr not initialized). Adding any new field to traverse_ctx without updating the init function produces debug-only failures.
 
   ---
@@ -59,3 +57,9 @@
   └──────────────┴──────────────────────────────────────────────────────────────────────────────────────────┴─────────────────────────────────────┘
 
   ---
+
+  DONE
+
+  1. CChar has contradictory signedness metadata (type.c:181) — Marked unsigned_int=1 but given range [-128, 127]. The design doc correctly says CChar should be standalone, but the implementation puts it in the unsigned family. u-suffixed literals can bind to CChar incorrectly.
+
+  14. hot_parse_ctx reentrancy guard is assert-only (infer.c:106) — Compiled away with -DNDEBUG in release builds. Silent corruption if re-entrancy occurs in production.

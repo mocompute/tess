@@ -103,7 +103,7 @@ tl_infer *tl_infer_create(allocator *alloc, tl_infer_opts const *opts) {
 // and capture the parse result into a local before calling anything that could re-enter
 // (any path through specialize_type_constructor_ or specialize_arrow may call this again).
 void hot_parse_ctx_reinit(tl_infer *self, hashmap *outer_type_arguments) {
-    assert(!self->hot_parse_ctx_guard && "reentrancy: hot_parse_ctx reinit while still in use");
+    if (self->hot_parse_ctx_guard) fatal("reentrancy: hot_parse_ctx reinit while still in use");
     self->hot_parse_ctx_guard = 1;
     map_reset(self->hot_parse_ctx_own_ta);
     tl_type_registry_parse_type_ctx_reinit(
