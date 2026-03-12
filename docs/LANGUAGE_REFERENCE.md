@@ -29,7 +29,7 @@ result := (x := compute()
 
 **Curly braces for blocks:** Code blocks use `{ }` and contain one or more expressions. The block's value is its final expression.
 
-**Minimal syntax:** Tess favors consistency over special-purpose constructs. A colon (`:`) always introduces a type—whether annotating a variable (`x: Int`), defining a type (`Point : { ... }`), or declaring a field. Parentheses (`()`) always mean application: calling a function, constructing a value, or instantiating a generic. Braces (`{ }`) delimit bodies uniformly across functions, types, and blocks. Statements and expressions are separated by whitespace (conventionally newlines)—there are no semicolons. Pointer operators are postfix (`.&`, `.*`, `->`) rather than prefix, reading left-to-right like field access. The result is a small grammar with few special cases.
+**Minimal syntax:** Tess favors consistency over special-purpose constructs. A colon (`:`) always introduces a type—whether annotating a variable (`x: Int`), defining a type (`Point : { ... }`), or declaring a field. Parentheses (`()`) always mean application: calling a function, constructing a value, or instantiating a generic. Braces (`{ }`) delimit bodies uniformly across functions, types, and blocks. Statements and expressions are separated by whitespace (conventionally newlines). A comma (`,`) or semicolon (`;`) can optionally be placed between expressions to explicitly mark expression boundaries (see [Expression Separators](#expression-separators)). Pointer operators are postfix (`.&`, `.*`, `->`) rather than prefix, reading left-to-right like field access. The result is a small grammar with few special cases.
 
 **Distinct declaration vs assignment:** `:=` declares a new binding (expression with value); `=` mutates an existing one (statement with no value). This enables predictable scoping and intentional shadowing.
 
@@ -873,6 +873,24 @@ value := ({
   x * y        // Returns 200
 })
 ```
+
+### Expression Separators
+
+Because whitespace is not significant in Tess, the parser can sometimes interpret adjacent expressions differently than intended. A comma (`,`) or semicolon (`;`) can be placed between expressions to explicitly mark where one expression ends and the next begins.
+
+This is most commonly needed when a binding's right-hand side is followed by a parenthesized expression. Without a separator, the parser interprets the parenthesized expression as a function call:
+
+```tl
+// Problem: parsed as tag_len(tl & 0xF0zu) — a function call on tag_len
+tl: CSize := s.small.tag_len
+(tl & 0xF0zu) >> 4zu
+
+// Solution: comma (or semicolon) marks the end of the binding expression
+tl: CSize := s.small.tag_len,
+(tl & 0xF0zu) >> 4zu
+```
+
+The separator is only needed when the next expression starts with `(` and the previous expression ends with an identifier, which would otherwise be parsed as a function call. In most code, natural syntax (different starting tokens, explicit `return`, etc.) avoids the ambiguity entirely.
 
 ### Type Predicates
 
