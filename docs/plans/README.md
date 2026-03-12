@@ -10,3 +10,9 @@ This directory contains design documents and proposals for features.
 |----------|--------|
 | [INTEGER_CONVERSIONS.md](INTEGER_CONVERSIONS.md) | Fully implemented (all 7 phases) |
 | [EXPLICIT_TYPE_ARGS.md](EXPLICIT_TYPE_ARGS.md) | Fully implemented |
+
+## Proposed
+
+| Document | Status |
+|----------|--------|
+| [TRAIT_CONFORMANCE_OPT_OUT.md](TRAIT_CONFORMANCE_OPT_OUT.md) | Proposed — `[[no_conform(Trait)]]` attribute for opting out of structural conformance |
