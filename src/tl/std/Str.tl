@@ -131,9 +131,8 @@ _is_small(s: Str) -> Bool {
 }
 
 _small_len(s: Str) -> CSize {
-    raw: CSize := s.small.tag_len
-    res        := (raw & 0xF0zu) >> 4zu
-    res
+    tl: CSize := s.small.tag_len, (tl & 0xF0zu) >> 4zu
+
 }
 
 _buf(s: Ptr[Str]) -> Ptr[CChar] {
