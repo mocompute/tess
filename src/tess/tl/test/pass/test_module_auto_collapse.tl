@@ -12,7 +12,7 @@ make_array() -> Array[Int] {
 test_return_type() -> CInt {
     error: CInt := 0
     a           := make_array()
-    if a.size != 2u { error += 1 }
+    if a.size != 2zu { error += 1 }
     if a.v.[0] != 1 { error += 1 }
     if a.v.[1] != 2 { error += 1 }
     Array.free(a.&)
@@ -22,8 +22,8 @@ test_return_type() -> CInt {
 // Test: bare Array[T] in function parameter type
 sum_array(a: Array[Int]) -> Int {
     total := 0
-    i     := 0u
-    while i < a.size, i += 1u { total += a.v.[i] }
+    i: CSize := 0zu
+    while i < a.size, i += 1zu { total += a.v.[i] }
     total
 }
 

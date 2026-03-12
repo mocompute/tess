@@ -7,7 +7,7 @@
 test_create_destroy() {
     error := 0
     m     := HashMap.create[Int, Int]()
-    if HashMap.size(m) != 0u { error += 1 }
+    if HashMap.size(m) != 0zu { error += 1 }
     if !HashMap.is_empty(m) { error += 1 }
     HashMap.destroy(m)
     error
@@ -21,7 +21,7 @@ test_set_get() {
     HashMap.set(m, 2, 200)
     HashMap.set(m, 3, 300)
 
-    if HashMap.size(m) != 3u { error += 1 }
+    if HashMap.size(m) != 3zu { error += 1 }
 
     p1 := HashMap.get(m, 1)
     p2 := HashMap.get(m, 2)
@@ -83,10 +83,10 @@ test_overwrite() {
     m     := HashMap.create[Int, Int]()
 
     HashMap.set(m, 1, 100)
-    if HashMap.size(m) != 1u { error += 1 }
+    if HashMap.size(m) != 1zu { error += 1 }
 
     HashMap.set(m, 1, 200)
-    if HashMap.size(m) != 1u { error += 1 }
+    if HashMap.size(m) != 1zu { error += 1 }
 
     p := HashMap.get(m, 1)
     if p == null { error += 1 }
@@ -105,7 +105,7 @@ test_remove() {
     HashMap.set(m, 3, 30)
 
     if !HashMap.remove(m, 2) { error += 1 }
-    if HashMap.size(m) != 2u { error += 1 }
+    if HashMap.size(m) != 2zu { error += 1 }
     if HashMap.contains(m, 2) { error += 1 }
 
     // Remaining keys still accessible
@@ -123,7 +123,7 @@ test_remove() {
     // Remove remaining keys
     if !HashMap.remove(m, 1) { error += 1 }
     if !HashMap.remove(m, 3) { error += 1 }
-    if HashMap.size(m) != 0u { error += 1 }
+    if HashMap.size(m) != 0zu { error += 1 }
 
     HashMap.destroy(m)
     error
@@ -140,7 +140,7 @@ test_grow() {
         HashMap.set(m, i, i * 10)
     }
 
-    if HashMap.size(m) != 200u { error += 1 }
+    if HashMap.size(m) != 200zu { error += 1 }
 
     // Verify all entries survived growth
     i = 0
@@ -163,13 +163,13 @@ test_clear() {
     HashMap.set(m, 3, 30)
 
     HashMap.clear(m)
-    if HashMap.size(m) != 0u { error += 1 }
+    if HashMap.size(m) != 0zu { error += 1 }
     if !HashMap.is_empty(m) { error += 1 }
     if HashMap.contains(m, 1) { error += 1 }
 
     // Can still insert after clear
     HashMap.set(m, 4, 40)
-    if HashMap.size(m) != 1u { error += 1 }
+    if HashMap.size(m) != 1zu { error += 1 }
     p := HashMap.get(m, 4)
     if p == null { error += 1 }
     if p != null && p.* != 40 { error += 1 }
@@ -189,15 +189,15 @@ test_keys_values() {
     ks := HashMap.keys(m)
     vs := HashMap.values(m)
 
-    if ks.size != 3u { error += 1 }
-    if vs.size != 3u { error += 1 }
+    if ks.size != 3zu { error += 1 }
+    if vs.size != 3zu { error += 1 }
 
     // Check that each key and value is present (order is not guaranteed)
     found_1 := false
     found_2 := false
     found_3 := false
-    i: UInt := 0u
-    while i < ks.size, i += 1u {
+    i: CSize := 0zu
+    while i < ks.size, i += 1zu {
         if ks.v.[i] == 1 { found_1 = true }
         if ks.v.[i] == 2 { found_2 = true }
         if ks.v.[i] == 3 { found_3 = true }
@@ -209,8 +209,8 @@ test_keys_values() {
     found_10 := false
     found_20 := false
     found_30 := false
-    i = 0u
-    while i < vs.size, i += 1u {
+    i = 0zu
+    while i < vs.size, i += 1zu {
         if vs.v.[i] == 10 { found_10 = true }
         if vs.v.[i] == 20 { found_20 = true }
         if vs.v.[i] == 30 { found_30 = true }
@@ -232,7 +232,7 @@ test_empty_map() {
     if HashMap.get(m, 1) != null { error += 1 }
     if HashMap.contains(m, 1) { error += 1 }
     if HashMap.remove(m, 1) { error += 1 }
-    if HashMap.size(m) != 0u { error += 1 }
+    if HashMap.size(m) != 0zu { error += 1 }
     if !HashMap.is_empty(m) { error += 1 }
 
     opt := HashMap.get_copy(m, 1)
@@ -243,8 +243,8 @@ test_empty_map() {
 
     ks := HashMap.keys(m)
     vs := HashMap.values(m)
-    if ks.size != 0u { error += 1 }
-    if vs.size != 0u { error += 1 }
+    if ks.size != 0zu { error += 1 }
+    if vs.size != 0zu { error += 1 }
 
     Array.free(ks.&)
     Array.free(vs.&)
@@ -253,8 +253,8 @@ test_empty_map() {
 }
 
 // Custom hash/eq for testing
-_custom_hash(key: Ptr[Int]) -> UInt {
-    k: UInt := key.*
+_custom_hash(key: Ptr[Int]) -> CSize {
+    k: CSize := key.*
     k
 }
 
@@ -264,13 +264,13 @@ _custom_eq(a: Ptr[Int], b: Ptr[Int]) -> Bool {
 
 test_custom_hash_eq() {
     error := 0
-    opts  := HashMap.HashMapOpts[Int](hash = _custom_hash/1, eq = _custom_eq/2, capacity = 8u)
+    opts  := HashMap.HashMapOpts[Int](hash = _custom_hash/1, eq = _custom_eq/2, capacity = 8zu)
     m     := HashMap.create[Int, Int](Alloc.context.default, opts)
 
     HashMap.set(m, 5, 50)
     HashMap.set(m, 10, 100)
 
-    if HashMap.size(m) != 2u { error += 1 }
+    if HashMap.size(m) != 2zu { error += 1 }
 
     p := HashMap.get(m, 5)
     if p == null { error += 1 }
@@ -298,7 +298,7 @@ test_struct_keys() {
     HashMap.set(m, p2, 20)
     HashMap.set(m, p3, 30)
 
-    if HashMap.size(m) != 3u { error += 1 }
+    if HashMap.size(m) != 3zu { error += 1 }
 
     v := HashMap.get(m, Point(x = 1, y = 2))
     if v == null { error += 1 }
@@ -326,7 +326,7 @@ test_remove_and_reinsert() {
 
     // Re-insert with same key, different value
     HashMap.set(m, 1, 99)
-    if HashMap.size(m) != 2u { error += 1 }
+    if HashMap.size(m) != 2zu { error += 1 }
 
     p := HashMap.get(m, 1)
     if p == null { error += 1 }
@@ -338,14 +338,14 @@ test_remove_and_reinsert() {
 
 // Hash that maps everything to one of 4 buckets — forces heavy collisions,
 // Robin Hood displacement, and backward-shift deletion chains.
-_colliding_hash(key: Ptr[Int]) -> UInt {
-    k: UInt := key.*
-    k & 3u
+_colliding_hash(key: Ptr[Int]) -> CSize {
+    k: CSize := key.*
+    k & 3zu
 }
 
 test_collision_stress() {
     error := 0
-    opts  := HashMap.HashMapOpts[Int](hash = _colliding_hash/1, eq = _custom_eq/2, capacity = 8u)
+    opts  := HashMap.HashMapOpts[Int](hash = _colliding_hash/1, eq = _custom_eq/2, capacity = 8zu)
     m     := HashMap.create[Int, Int](Alloc.context.default, opts)
 
     // Insert 32 entries — all land in buckets 0-3, forces Robin Hood swaps
@@ -354,7 +354,7 @@ test_collision_stress() {
     while i < n, i += 1 {
         HashMap.set(m, i, i * 7)
     }
-    if HashMap.size(m) != 32u { error += 1 }
+    if HashMap.size(m) != 32zu { error += 1 }
 
     // Verify all entries are accessible
     i = 0
@@ -366,7 +366,7 @@ test_collision_stress() {
 
     // Overwrite in collision-heavy map
     HashMap.set(m, 4, 999)
-    if HashMap.size(m) != 32u { error += 1 }
+    if HashMap.size(m) != 32zu { error += 1 }
     p := HashMap.get(m, 4)
     if p == null { error += 1 }
     if p != null && p.* != 999 { error += 1 }
@@ -376,7 +376,7 @@ test_collision_stress() {
     while i < 16, i += 1 {
         if !HashMap.remove(m, i) { error += 1 }
     }
-    if HashMap.size(m) != 16u { error += 1 }
+    if HashMap.size(m) != 16zu { error += 1 }
 
     // Remaining entries (16..31) must still be accessible after backward-shift
     i = 16
@@ -406,13 +406,13 @@ test_large_remove() {
     while i < n, i += 1 {
         HashMap.set(m, i, i)
     }
-    if HashMap.size(m) != 200u { error += 1 }
+    if HashMap.size(m) != 200zu { error += 1 }
 
     i = 0
     while i < n, i += 1 {
         if !HashMap.remove(m, i) { error += 1 }
     }
-    if HashMap.size(m) != 0u { error += 1 }
+    if HashMap.size(m) != 0zu { error += 1 }
     if !HashMap.is_empty(m) { error += 1 }
 
     // Re-insert after mass removal
@@ -420,7 +420,7 @@ test_large_remove() {
     while i < 50, i += 1 {
         HashMap.set(m, i, i * 3)
     }
-    if HashMap.size(m) != 50u { error += 1 }
+    if HashMap.size(m) != 50zu { error += 1 }
     i = 0
     while i < 50, i += 1 {
         p := HashMap.get(m, i)
@@ -440,7 +440,7 @@ test_zero_and_negative_keys() {
     HashMap.set(m, -1, 200)
     HashMap.set(m, -999, 300)
 
-    if HashMap.size(m) != 3u { error += 1 }
+    if HashMap.size(m) != 3zu { error += 1 }
 
     p := HashMap.get(m, 0)
     if p == null { error += 1 }
@@ -457,7 +457,7 @@ test_zero_and_negative_keys() {
     // Remove key 0
     if !HashMap.remove(m, 0) { error += 1 }
     if HashMap.contains(m, 0) { error += 1 }
-    if HashMap.size(m) != 2u { error += 1 }
+    if HashMap.size(m) != 2zu { error += 1 }
 
     HashMap.destroy(m)
     error
@@ -471,7 +471,7 @@ test_struct_values() {
     HashMap.set(m, 2, Point(x = 30, y = 40))
     HashMap.set(m, 3, Point(x = 50, y = 60))
 
-    if HashMap.size(m) != 3u { error += 1 }
+    if HashMap.size(m) != 3zu { error += 1 }
 
     p := HashMap.get(m, 1)
     if p == null { error += 1 }
@@ -483,7 +483,7 @@ test_struct_values() {
 
     // Overwrite with different struct value
     HashMap.set(m, 1, Point(x = 99, y = 88))
-    if HashMap.size(m) != 3u { error += 1 }
+    if HashMap.size(m) != 3zu { error += 1 }
     p = HashMap.get(m, 1)
     if p == null { error += 1 }
     if p != null && (p->x != 99 || p->y != 88) { error += 1 }
@@ -499,7 +499,7 @@ test_create_with_alloc() {
     HashMap.set(m, 1, 10)
     HashMap.set(m, 2, 20)
 
-    if HashMap.size(m) != 2u { error += 1 }
+    if HashMap.size(m) != 2zu { error += 1 }
     p := HashMap.get(m, 1)
     if p == null { error += 1 }
     if p != null && p.* != 10 { error += 1 }
@@ -519,13 +519,13 @@ test_keys_values_with_alloc() {
     ks    := HashMap.keys(m, alloc)
     vs    := HashMap.values(m, alloc)
 
-    if ks.size != 2u { error += 1 }
-    if vs.size != 2u { error += 1 }
+    if ks.size != 2zu { error += 1 }
+    if vs.size != 2zu { error += 1 }
 
     found_1 := false
     found_2 := false
-    i: UInt := 0u
-    while i < ks.size, i += 1u {
+    i: CSize := 0zu
+    while i < ks.size, i += 1zu {
         if ks.v.[i] == 1 { found_1 = true }
         if ks.v.[i] == 2 { found_2 = true }
     }
@@ -534,8 +534,8 @@ test_keys_values_with_alloc() {
 
     found_10 := false
     found_20 := false
-    i = 0u
-    while i < vs.size, i += 1u {
+    i = 0zu
+    while i < vs.size, i += 1zu {
         if vs.v.[i] == 10 { found_10 = true }
         if vs.v.[i] == 20 { found_20 = true }
     }
@@ -562,14 +562,14 @@ test_remove_then_grow() {
     while i < 50, i += 1 {
         HashMap.remove(m, i)
     }
-    if HashMap.size(m) != 50u { error += 1 }
+    if HashMap.size(m) != 50zu { error += 1 }
 
     // Insert 200 more to trigger growth from a partially-removed state
     i = 1000
     while i < 1200, i += 1 {
         HashMap.set(m, i, i * 2)
     }
-    if HashMap.size(m) != 250u { error += 1 }
+    if HashMap.size(m) != 250zu { error += 1 }
 
     // Verify surviving original entries
     i = 50
@@ -615,7 +615,7 @@ test_default_eq() {
 
     // Overwrite: eq must return true for identical key so size stays 1
     HashMap.set(m, 42, 200)
-    if HashMap.size(m) != 1u { error += 1 }
+    if HashMap.size(m) != 1zu { error += 1 }
     p = HashMap.get(m, 42)
     if p == null { error += 1 }
     if p != null && p.* != 200 { error += 1 }

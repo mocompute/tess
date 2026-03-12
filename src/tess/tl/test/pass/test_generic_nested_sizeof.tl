@@ -11,10 +11,10 @@ Inner[K, V]: { key: K, value: V }
 
 Outer[K, V]: {
     items: Ptr[Inner[K, V]],
-    size:  UInt,
+    size:  CSize,
 }
 
-_alloc_inner[K, V](alloc: Ptr[Alloc.Allocator], n: UInt) -> Ptr[Inner[K, V]] {
+_alloc_inner[K, V](alloc: Ptr[Alloc.Allocator], n: CSize) -> Ptr[Inner[K, V]] {
     p: Ptr[Inner[K, V]] := alloc->calloc(alloc, n, sizeof[Inner[K, V]]())
     p
 }
@@ -22,13 +22,13 @@ _alloc_inner[K, V](alloc: Ptr[Alloc.Allocator], n: UInt) -> Ptr[Inner[K, V]] {
 make[K, V]() -> Ptr[Outer[K, V]] {
     alloc               := Alloc.context.default
     m: Ptr[Outer[K, V]] := alloc->malloc(alloc, sizeof[Outer[K, V]]())
-    m->items = _alloc_inner[K, V](alloc, 16u)
-    m->size  = 0u
+    m->items = _alloc_inner[K, V](alloc, 16zu)
+    m->size  = 0zu
     m
 }
 
 main() {
     m := make[Int, Int]()
-    if m->size != 0u { return 1 }
+    if m->size != 0zu { return 1 }
     0
 }

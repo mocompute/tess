@@ -2932,16 +2932,10 @@ static int check_integer_direction(tl_monotype *expected, tl_monotype *actual, t
             return 1;
         }
         // At this point, at least one side is a standalone type (subchain >= 5:
-        // CSize, CPtrDiff, CChar). When both sides are narrow integers, reject
-        // cross-subchain conversion in both DIRECTED and EXACT modes.
-        // Non-narrow canonicals (CLongLong, CUnsignedLongLong) fall through to
-        // SYMMETRIC to allow e.g. CSize → CUnsignedLongLong.
-        if (expected->cons_inst->def->is_narrow_integer &&
-            actual->cons_inst->def->is_narrow_integer) {
-            if (cb) cb(user, expected, actual);
-            return 1;
-        }
-        return -1;
+        // CSize, CPtrDiff, CChar). All cross-subchain standalone conversions
+        // require explicit annotation.
+        if (cb) cb(user, expected, actual);
+        return 1;
     }
 
     if (dir == TL_UNIFY_EXACT) {

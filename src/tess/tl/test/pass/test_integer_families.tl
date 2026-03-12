@@ -46,20 +46,7 @@ test_signed_unification() {
     error
 }
 
-// --- 3. Unsigned family unification ---
-
-// CSize and CUnsignedLongLong (UInt) are both unsigned — they should unify and canonicalize.
-test_unsigned_unification() {
-    error := 0
-
-    x: CSize := 99zu
-    y: UInt  := x
-    error += if y == 99u {0} else {1}
-
-    error
-}
-
-// --- 4. Option with same-family types ---
+// --- 3. Option with same-family types ---
 
 test_option_signed_family() {
     error := 0
@@ -166,11 +153,6 @@ test_non_canonical_signed() {
     d: Int   := c
     error += if d == 456 {0} else {1}
 
-    // CPtrDiff is signed
-    e: CPtrDiff := -10z
-    f: Int      := e
-    error += if f == -10 {0} else {1}
-
     error
 }
 
@@ -199,7 +181,6 @@ main() {
 
     error += test_unsigned_literals()
     error += test_signed_unification()
-    error += test_unsigned_unification()
     error += test_option_signed_family()
     error += test_option_unsigned_family()
     error += test_signed_family_assignment()

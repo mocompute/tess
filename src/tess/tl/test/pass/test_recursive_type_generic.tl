@@ -4,10 +4,10 @@
 
 Point[a]: { x: a, y: a, next: Ptr[Point[a]] }
 
-make_points(count: UInt) { Array.with_capacity[Point[CInt]](count) }
+make_points(count: CSize) { Array.with_capacity[Point[CInt]](count) }
 
 main() {
-    points := make_points(8u)
+    points := make_points(8zu)
 
     Array.push(points.&, Point(x = 0, y = 1, next = null))
     Array.push(points.&, Point(x = 2, y = 3, next = points.v.[0].&))

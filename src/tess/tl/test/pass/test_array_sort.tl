@@ -7,7 +7,7 @@ test_empty() {
     error := 0
     arr   := Array.empty[Int]()
     Array.sort(arr.&, (a, b) { a - b })
-    if arr.size != 0u { error += 1 }
+    if arr.size != 0zu { error += 1 }
     error
 }
 
@@ -16,7 +16,7 @@ test_single() {
     arr   := Array.empty[Int]()
     Array.push(arr.&, 42)
     Array.sort(arr.&, (a, b) { a - b })
-    if arr.size != 1u { error += 1 }
+    if arr.size != 1zu { error += 1 }
     if arr.v.[0] != 42 { error += 1 }
     Array.free(arr.&)
     error

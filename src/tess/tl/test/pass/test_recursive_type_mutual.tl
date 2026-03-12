@@ -6,7 +6,7 @@ Forest[a]: { trees: Array.Array[Tree[a]]        }
 
 main() {
     t1     := Tree[Int](value = 1, children = null)
-    forest := Forest[Int](trees = Array.with_capacity[Tree[Int]](16u))
+    forest := Forest[Int](trees = Array.with_capacity[Tree[Int]](16zu))
     t1.children = forest.&
     0
 }

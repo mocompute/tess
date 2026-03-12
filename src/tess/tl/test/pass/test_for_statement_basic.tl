@@ -4,7 +4,7 @@
 main() {
 
     // xs := Array.with_capacity_undefined(Int, 4)
-    xs := Array.init(0, 4u)
+    xs := Array.init(0, 4zu)
 
     i := 1
     for x.& in xs {

@@ -3,12 +3,12 @@
 
 test_get() {
     error := 0
-    arr   := Array.init(0, 5u)
+    arr   := Array.init(0, 5zu)
     i     := 0
     while i < 5, i += 1 { arr.v.[i] = i * 10 }
-    if Array.get(arr, 0u) != 0 { error += 1 }
-    if Array.get(arr, 2u) != 20 { error += 1 }
-    if Array.get(arr, 4u) != 40 { error += 1 }
+    if Array.get(arr, 0zu) != 0 { error += 1 }
+    if Array.get(arr, 2zu) != 20 { error += 1 }
+    if Array.get(arr, 4zu) != 40 { error += 1 }
     Array.free(arr.&)
     error
 }
@@ -32,19 +32,19 @@ test_pop() {
     Array.push(arr.&, 2)
     Array.push(arr.&, 3)
     if Array.pop(arr.&) != 3 { error += 1 }
-    if arr.size != 2u { error += 1 }
+    if arr.size != 2zu { error += 1 }
     if Array.pop(arr.&) != 2 { error += 1 }
-    if arr.size != 1u { error += 1 }
+    if arr.size != 1zu { error += 1 }
     Array.free(arr.&)
     error
 }
 
 test_clear() {
     error := 0
-    arr   := Array.init(42, 5u)
+    arr   := Array.init(42, 5zu)
     Array.clear(arr.&)
-    if arr.size != 0u { error += 1 }
-    if arr.capacity < 5u { error += 1 }
+    if arr.size != 0zu { error += 1 }
+    if arr.capacity < 5zu { error += 1 }
     Array.free(arr.&)
     error
 }
@@ -56,20 +56,20 @@ test_insert() {
     Array.push(arr.&, 3)
     Array.push(arr.&, 4)
     // Insert 2 at index 1: [1, 2, 3, 4]
-    Array.insert(arr.&, 1u, 2)
-    if arr.size != 4u { error += 1 }
+    Array.insert(arr.&, 1zu, 2)
+    if arr.size != 4zu { error += 1 }
     if arr.v.[0] != 1 { error += 1 }
     if arr.v.[1] != 2 { error += 1 }
     if arr.v.[2] != 3 { error += 1 }
     if arr.v.[3] != 4 { error += 1 }
     // Insert 0 at front
-    Array.insert(arr.&, 0u, 0)
+    Array.insert(arr.&, 0zu, 0)
     if arr.v.[0] != 0 { error += 1 }
-    if arr.size != 5u { error += 1 }
+    if arr.size != 5zu { error += 1 }
     // Insert 5 at end
-    Array.insert(arr.&, 5u, 5)
+    Array.insert(arr.&, 5zu, 5)
     if arr.v.[5] != 5 { error += 1 }
-    if arr.size != 6u { error += 1 }
+    if arr.size != 6zu { error += 1 }
     Array.free(arr.&)
     error
 }
@@ -82,9 +82,9 @@ test_remove() {
     Array.push(arr.&, 30)
     Array.push(arr.&, 40)
     // Remove index 1 -> 20
-    val := Array.remove(arr.&, 1u)
+    val := Array.remove(arr.&, 1zu)
     if val != 20 { error += 1 }
-    if arr.size != 3u { error += 1 }
+    if arr.size != 3zu { error += 1 }
     if arr.v.[0] != 10 { error += 1 }
     if arr.v.[1] != 30 { error += 1 }
     if arr.v.[2] != 40 { error += 1 }
@@ -100,9 +100,9 @@ test_swap_remove() {
     Array.push(arr.&, 30)
     Array.push(arr.&, 40)
     // swap_remove index 1 -> returns 20, replaces with last (40)
-    val := Array.swap_remove(arr.&, 1u)
+    val := Array.swap_remove(arr.&, 1zu)
     if val != 20 { error += 1 }
-    if arr.size != 3u { error += 1 }
+    if arr.size != 3zu { error += 1 }
     if arr.v.[0] != 10 { error += 1 }
     if arr.v.[1] != 40 { error += 1 }
     if arr.v.[2] != 30 { error += 1 }
@@ -116,16 +116,16 @@ test_resize() {
     Array.push(arr.&, 1)
     Array.push(arr.&, 2)
     // Grow to 5 with fill value 99
-    Array.resize(arr.&, 5u, 99)
-    if arr.size != 5u { error += 1 }
+    Array.resize(arr.&, 5zu, 99)
+    if arr.size != 5zu { error += 1 }
     if arr.v.[0] != 1 { error += 1 }
     if arr.v.[1] != 2 { error += 1 }
     if arr.v.[2] != 99 { error += 1 }
     if arr.v.[3] != 99 { error += 1 }
     if arr.v.[4] != 99 { error += 1 }
     // Shrink to 2
-    Array.resize(arr.&, 2u, 0)
-    if arr.size != 2u { error += 1 }
+    Array.resize(arr.&, 2zu, 0)
+    if arr.size != 2zu { error += 1 }
     if arr.v.[0] != 1 { error += 1 }
     if arr.v.[1] != 2 { error += 1 }
     Array.free(arr.&)
@@ -134,31 +134,31 @@ test_resize() {
 
 test_shrink_to_fit() {
     error := 0
-    arr   := Array.with_capacity[Int](100u)
+    arr   := Array.with_capacity[Int](100zu)
     Array.push(arr.&, 1)
     Array.push(arr.&, 2)
     Array.push(arr.&, 3)
     Array.shrink_to_fit(arr.&)
-    if arr.size != 3u { error += 1 }
-    if arr.capacity != 3u { error += 1 }
+    if arr.size != 3zu { error += 1 }
+    if arr.capacity != 3zu { error += 1 }
     if arr.v.[0] != 1 { error += 1 }
     if arr.v.[1] != 2 { error += 1 }
     if arr.v.[2] != 3 { error += 1 }
     // Shrink empty
     Array.clear(arr.&)
     Array.shrink_to_fit(arr.&)
-    if arr.capacity != 0u { error += 1 }
+    if arr.capacity != 0zu { error += 1 }
     error
 }
 
 test_truncate() {
     error := 0
-    arr   := Array.init(7, 5u)
-    Array.truncate(arr.&, 3u)
-    if arr.size != 3u { error += 1 }
+    arr   := Array.init(7, 5zu)
+    Array.truncate(arr.&, 3zu)
+    if arr.size != 3zu { error += 1 }
     // Truncate beyond size is no-op
-    Array.truncate(arr.&, 10u)
-    if arr.size != 3u { error += 1 }
+    Array.truncate(arr.&, 10zu)
+    if arr.size != 3zu { error += 1 }
     Array.free(arr.&)
     error
 }
@@ -172,7 +172,7 @@ test_append() {
     Array.push(b.&, 3)
     Array.push(b.&, 4)
     Array.append(a.&, b)
-    if a.size != 4u { error += 1 }
+    if a.size != 4zu { error += 1 }
     if a.v.[0] != 1 { error += 1 }
     if a.v.[1] != 2 { error += 1 }
     if a.v.[2] != 3 { error += 1 }
@@ -189,7 +189,7 @@ test_clone() {
     Array.push(arr.&, 20)
     Array.push(arr.&, 30)
     c := Array.clone(arr)
-    if c.size != 3u { error += 1 }
+    if c.size != 3zu { error += 1 }
     if c.v.[0] != 10 { error += 1 }
     if c.v.[1] != 20 { error += 1 }
     if c.v.[2] != 30 { error += 1 }
@@ -207,14 +207,14 @@ test_slice() {
     i     := 0
     while i < 5, i += 1 { Array.push(arr.&, i * 10) }
     // slice [1, 4) -> [10, 20, 30]
-    s := Array.slice(arr, 1u, 4u)
-    if s.size != 3u { error += 1 }
+    s := Array.slice(arr, 1zu, 4zu)
+    if s.size != 3zu { error += 1 }
     if s.v.[0] != 10 { error += 1 }
     if s.v.[1] != 20 { error += 1 }
     if s.v.[2] != 30 { error += 1 }
     // Empty slice
-    e := Array.slice(arr, 2u, 2u)
-    if e.size != 0u { error += 1 }
+    e := Array.slice(arr, 2zu, 2zu)
+    if e.size != 0zu { error += 1 }
     Array.free(arr.&)
     Array.free(s.&)
     error
@@ -222,12 +222,12 @@ test_slice() {
 
 test_from_ptr() {
     error := 0
-    arr   := Array.init(0, 3u)
+    arr   := Array.init(0, 3zu)
     arr.v.[0] = 100
     arr.v.[1] = 200
     arr.v.[2] = 300
-    result := Array.from_ptr(arr.v, 3u)
-    if result.size != 3u { error += 1 }
+    result := Array.from_ptr(arr.v, 3zu)
+    if result.size != 3zu { error += 1 }
     if result.v.[0] != 100 { error += 1 }
     if result.v.[1] != 200 { error += 1 }
     if result.v.[2] != 300 { error += 1 }
@@ -265,7 +265,7 @@ test_index_of() {
     Array.push(arr.&, 20)
     Array.push(arr.&, 30)
     when Array.index_of(arr, 20) {
-        s: Some { if s.v != 1u { error += 1 } }
+        s: Some { if s.v != 1zu { error += 1 } }
         n: None { error += 1 }
     }
     when Array.index_of(arr, 99) {
@@ -273,7 +273,7 @@ test_index_of() {
         n: None { }
     }
     when Array.index_of(arr, 10) {
-        s: Some { if s.v != 0u { error += 1 } }
+        s: Some { if s.v != 0zu { error += 1 } }
         n: None { error += 1 }
     }
     Array.free(arr.&)
@@ -307,7 +307,7 @@ test_swap() {
     Array.push(arr.&, 10)
     Array.push(arr.&, 20)
     Array.push(arr.&, 30)
-    Array.swap(arr.&, 0u, 2u)
+    Array.swap(arr.&, 0zu, 2zu)
     if arr.v.[0] != 30 { error += 1 }
     if arr.v.[2] != 10 { error += 1 }
     if arr.v.[1] != 20 { error += 1 }
@@ -322,7 +322,7 @@ test_map() {
     Array.push(arr.&, 2)
     Array.push(arr.&, 3)
     result := Array.map(arr, (x) { x * 10 })
-    if result.size != 3u { error += 1 }
+    if result.size != 3zu { error += 1 }
     if result.v.[0] != 10 { error += 1 }
     if result.v.[1] != 20 { error += 1 }
     if result.v.[2] != 30 { error += 1 }
@@ -331,7 +331,7 @@ test_map() {
     // Empty array
     e := Array.empty[Int]()
     r := Array.map(e, (x) { x * 10 })
-    if r.size != 0u { error += 1 }
+    if r.size != 0zu { error += 1 }
     Array.free(arr.&)
     Array.free(result.&)
     error
@@ -346,12 +346,12 @@ test_filter() {
     Array.push(arr.&, 4)
     Array.push(arr.&, 5)
     result := Array.filter(arr, (x) { x > 3 })
-    if result.size != 2u { error += 1 }
+    if result.size != 2zu { error += 1 }
     if result.v.[0] != 4 { error += 1 }
     if result.v.[1] != 5 { error += 1 }
     // Filter none
     r2 := Array.filter(arr, (x) { x > 100 })
-    if r2.size != 0u { error += 1 }
+    if r2.size != 0zu { error += 1 }
     Array.free(arr.&)
     Array.free(result.&)
     Array.free(r2.&)
@@ -395,7 +395,7 @@ test_find() {
     Array.push(arr.&, 20)
     Array.push(arr.&, 30)
     when Array.find(arr, (x) { x == 20 }) {
-        s: Some { if s.v != 1u { error += 1 } }
+        s: Some { if s.v != 1zu { error += 1 } }
         n: None { error += 1 }
     }
     when Array.find(arr, (x) { x == 99 }) {
@@ -403,7 +403,7 @@ test_find() {
         n: None { }
     }
     when Array.find(arr, (x) { x > 15 }) {
-        s: Some { if s.v != 1u { error += 1 } }
+        s: Some { if s.v != 1zu { error += 1 } }
         n: None { error += 1 }
     }
     Array.free(arr.&)

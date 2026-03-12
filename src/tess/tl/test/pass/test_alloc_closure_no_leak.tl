@@ -10,7 +10,7 @@ make_adder(n: Int, a: Ptr[Alloc.Allocator]) -> (Int) -> Int {
 }
 
 main() {
-    arena := Alloc.bump_create(Alloc.context.default, 4096u)
+    arena := Alloc.bump_create(Alloc.context.default, 4096zu)
 
     add10 := make_adder(10, arena)
 

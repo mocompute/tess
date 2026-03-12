@@ -6,11 +6,11 @@ Rect[a]:  { topleft: Point[a], botright: Point[a] }
 
 Array[a]: {
     v:    Ptr[a],
-    size: UInt,
+    size: CSize,
 }
 
 
-array_new[T](count: UInt) {
+array_new[T](count: CSize) {
     // This type annotation is required for the return type of c_malloc to be concrete. Note that it refers to
     // the type argument T.
     p: Ptr[T] := c_malloc(count * sizeof[T]())
@@ -18,8 +18,8 @@ array_new[T](count: UInt) {
 }
 
 main() {
-    a := array_new[Point[Int]](8u)
-    b := array_new[Rect[Int]](8u)
+    a := array_new[Point[Int]](8zu)
+    b := array_new[Rect[Int]](8zu)
     c_free(a.v)
     c_free(b.v)
     0
