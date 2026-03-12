@@ -328,11 +328,6 @@ nodiscard int a_try(parser *p, parse_fun fun) {
     if ((result = fun(p))) {
         assert(p->tokens.size >= save_toks);
         if (p->tokens.size > save_toks) {
-            if (0) {
-                char *str = token_to_string(p->transient, &p->tokens.v[save_toks]);
-                // log(p, "a_try: put back %i tokens starting with %s", p->tokens.size - save_toks, str);
-                alloc_free(p->transient, str);
-            }
             tokenizer_put_back(p->tokenizer, &p->tokens.v[save_toks], p->tokens.size - save_toks);
             tokens_shrink(p, save_toks);
         }
@@ -923,10 +918,6 @@ void mangle_name_for_module(parser *self, ast_node *name, str module) {
         ast_node_name_replace(name, mangle_str_for_module(self, name->symbol.name, module));
         name->symbol.is_module_mangled = 1;
         name->symbol.module            = str_copy(self->ast_arena, module);
-        if (0) {
-            fprintf(stderr, "parser: mangle '%s' to '%s'\n", str_cstr(&name->symbol.original),
-                    str_cstr(&name->symbol.name));
-        }
     }
 }
 
@@ -1751,7 +1742,7 @@ void parser_dbg(struct parser *self, char const *restrict fmt, ...) {
     int  offset = snprintf(buf, sizeof buf, "%*s", spaces, "");
     if (offset < 0) return;
 
-    snprintf(buf + offset, sizeof buf - (u32)offset, "parser: %s\n", fmt);
+    snprintf(buf + offset, sizeof buf - (u32)offset, "[parse] %s\n", fmt);
 
     va_list args;
     va_start(args, fmt);

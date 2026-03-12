@@ -275,7 +275,6 @@ static int run_load_toplevels(tl_infer *self, ast_node_sized nodes) {
     arena_reset(self->transient);
     if (self->errors.size) return 1;
 
-    dbg(self, "-- toplevels");
     log_toplevels(self);
     return 0;
 }
@@ -328,13 +327,10 @@ static int run_check_free_variables(tl_infer *self) {
     apply_subs_to_ast(self);
     arena_reset(self->transient);
 
-    dbg(self, "-- inference complete --");
-    dbg(self, "");
-    dbg(self, "-- toplevels");
+    dbg_at(1, self, "-- inference complete --");
+    dbg_at(1, self, "");
     log_toplevels(self);
-    dbg(self, "-- subs");
     log_subs(self);
-    dbg(self, "-- env");
     log_env(self);
     arena_reset(self->transient);
     return 0;
@@ -342,7 +338,7 @@ static int run_check_free_variables(tl_infer *self) {
 
 // Phase 5: Generic function specialization.
 static int run_specialize(tl_infer *self, ast_node_sized nodes, ast_node *main) {
-    dbg(self, "-- specialize phase");
+    dbg_at(1, self, "-- specialize phase");
 
     // Rewrite binary/unary operators on user-defined types to function calls.
     // Types are concrete after Phase 4, so we can identify user-defined operands.
@@ -375,7 +371,7 @@ static int run_specialize(tl_infer *self, ast_node_sized nodes, ast_node *main) 
                 if (is_main_function(fun_name)) continue;
                 tl_polytype *type = tl_type_env_lookup(self->env, fun_name);
                 if (tl_polytype_is_concrete(type)) {
-                    dbg(self, "library: exporting '%s'", str_cstr(&fun_name));
+                    dbg_at(2, self, "library: exporting '%s'", str_cstr(&fun_name));
 
                     // The type is already concrete, so use it directly for
                     // specialization. Calling make_arrow_with would create fresh
@@ -385,7 +381,8 @@ static int run_specialize(tl_infer *self, ast_node_sized nodes, ast_node *main) 
                     str inst_name =
                       specialize_arrow(self, traverse_ctx, fun_name, type->type, (tl_monotype_sized){0});
                     // FIXME: ignores specialize_arrow error
-                    dbg(self, "library: exporting '%s' => '%s'", str_cstr(&fun_name), str_cstr(&inst_name));
+                    dbg_at(2, self, "library: exporting '%s' => '%s'", str_cstr(&fun_name),
+                           str_cstr(&inst_name));
                 }
             }
         }
@@ -476,12 +473,10 @@ static int run_update_types(tl_infer *self) {
     check_closure_checks(self);
     arena_reset(self->transient);
 
-    dbg(self, "-- final subs");
     log_subs(self);
-    dbg(self, "-- final env --");
+    dbg_at(1, self, "-- final env --");
     log_env(self);
     arena_reset(self->transient);
-    dbg(self, "-- final toplevels");
     log_toplevels(self);
     arena_reset(self->transient);
 
@@ -493,7 +488,7 @@ static int run_update_types(tl_infer *self) {
 // ============================================================================
 
 int tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *out_result) {
-    dbg(self, "-- start inference --");
+    dbg_at(1, self, "-- start inference --");
 
     hires_timer phase_timer;
     if (self->report_stats) hires_timer_init(&phase_timer);
@@ -614,15 +609,13 @@ void tl_infer_report_errors(tl_infer *self) {
 }
 
 void tl_infer_dbg(tl_infer const *self, char const *restrict fmt, ...) {
-    if (!self->verbose) return;
-
     int  spaces = self->indent_level * 2;
 
     char buf[256];
     int  offset = snprintf(buf, sizeof buf, "%*s", spaces, "");
     if (offset < 0) return;
 
-    snprintf(buf + offset, sizeof buf - (u32)offset, "tl_infer: %s\n", fmt);
+    snprintf(buf + offset, sizeof buf - (u32)offset, "[infer] %s\n", fmt);
 
     va_list args;
     va_start(args, fmt);
@@ -631,14 +624,13 @@ void tl_infer_dbg(tl_infer const *self, char const *restrict fmt, ...) {
 }
 
 static void log_str(tl_infer const *self, str str) {
-    if (!self->verbose) return;
-
-    int spaces = self->indent_level * 2;
-    fprintf(stderr, "%*stl_infer: %.*s\n", spaces, "", str_ilen(str), str_buf(&str));
+    if (self->verbose < 3) return;
+    tl_infer_dbg(self, "%.*s", str_ilen(str), str_buf(&str));
 }
 
 void log_toplevels(tl_infer const *self) {
-    if (!self->verbose) return;
+    if (self->verbose < 3) return;
+    dbg_at(3, self, "-- toplevels --");
     str_array sorted = str_map_sorted_keys(self->transient, self->toplevels);
     forall(i, sorted) {
         ast_node *node = str_map_get_ptr(self->toplevels, sorted.v[i]);
@@ -651,7 +643,10 @@ void log_toplevels(tl_infer const *self) {
 }
 
 void log_env(tl_infer const *self) {
-    if (self->verbose) tl_type_env_log(self->env);
+    if (self->verbose >= 3) {
+        dbg_at(3, self, "-- env --");
+        tl_type_env_log(self->env);
+    }
 }
 
 void do_apply_subs(void *ctx, ast_node *node) {
@@ -731,7 +726,7 @@ str toplevel_name(ast_node const *node) {
 }
 
 void log_constraint(tl_infer *self, tl_polytype *left, tl_polytype *right, ast_node const *node) {
-    if (!self->verbose) return;
+    if (self->verbose < 3) return;
     str left_str  = tl_polytype_to_string(self->transient, left);
     str right_str = tl_polytype_to_string(self->transient, right);
     str node_str  = v2_ast_node_to_string(self->transient, node);
@@ -752,5 +747,8 @@ void log_type_error_mm(tl_infer *self, tl_monotype *left, tl_monotype *right, as
 }
 
 void log_subs(tl_infer *self) {
-    if (self->verbose) tl_type_subs_log(self->subs);
+    if (self->verbose >= 3) {
+        dbg_at(3, self, "-- subs --");
+        tl_type_subs_log(self->subs);
+    }
 }

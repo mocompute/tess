@@ -178,7 +178,10 @@ void      toplevel_del(tl_infer *, str);
 ast_node *toplevel_get(tl_infer *, str);
 ast_node *toplevel_iter(tl_infer *, hashmap_iterator *);
 void      tl_infer_dbg(tl_infer const *, char const *restrict, ...);
-#define dbg tl_infer_dbg
+// Verbose levels: 1 = phase markers, 2 = key decisions, 3 = full detail
+#define dbg_at(level, self, ...) \
+    do { if ((self)->verbose >= (level)) tl_infer_dbg(self, __VA_ARGS__); } while(0)
+#define dbg(self, ...) dbg_at(3, self, __VA_ARGS__)
 void         log_toplevels(tl_infer const *);
 void         log_env(tl_infer const *);
 void         log_subs(tl_infer *);

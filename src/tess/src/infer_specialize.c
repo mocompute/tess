@@ -833,8 +833,8 @@ void specialized_add_to_env(tl_infer *self, str inst_name, tl_monotype *mono) {
         // Note: functions like c_malloc etc will not have concrete types but still need to exist in the
         // environment.
         str arrow_str = tl_monotype_to_string(self->transient, mono);
-        dbg(self, "note: adding non-concrete type to environment: '%s' : %s", str_cstr(&inst_name),
-            str_cstr(&arrow_str));
+        dbg_at(2, self, "note: adding non-concrete type to environment: '%s' : %s", str_cstr(&inst_name),
+               str_cstr(&arrow_str));
     }
     tl_type_env_insert_mono(self->env, inst_name, mono);
 }
@@ -1118,7 +1118,7 @@ int post_specialize(tl_infer *self, traverse_ctx *traverse_ctx, ast_node *specia
             hires_timer_start(&st);
         }
         if (traverse_ast(self, traverse_ctx, infer_target, infer_traverse_cb)) {
-            dbg(self, "note: post_specialize failed infer");
+            dbg_at(2, self, "note: post_specialize failed infer");
             return 1;
         }
         if (stats) {
@@ -1148,7 +1148,7 @@ int post_specialize(tl_infer *self, traverse_ctx *traverse_ctx, ast_node *specia
         if (stats) self->counters.traverse_specialize_calls++;
         if (stats) hires_timer_start(&st);
         if (traverse_ast(self, traverse_ctx, infer_target, specialize_applications_cb)) {
-            dbg(self, "note: post_specialize failed specialize");
+            dbg_at(2, self, "note: post_specialize failed specialize");
             return 1;
         }
         if (stats) {
@@ -1432,7 +1432,7 @@ str specialize_arrow(tl_infer *self, traverse_ctx *traverse_ctx, str name, tl_mo
     specialized_add_to_env(self, inst_name, arrow);
     toplevel_add(self, inst_name, generic_node);
     tl_infer_set_attributes(self, toplevel_name_node(generic_node));
-    dbg(self, "toplevel_add: %s", str_cstr(&inst_name));
+    dbg_at(2, self, "toplevel_add: %s", str_cstr(&inst_name));
 
     // 6. CRITICAL: Process the specialized function body
     ast_node *special = toplevel_get(self, inst_name);
@@ -1662,14 +1662,14 @@ void specialize_type_alias(tl_infer *self, ast_node *node) {
     if (tl_monotype_is_inst(parsed) && tl_monotype_is_concrete(parsed)) {
         str name = toplevel_name(node);
         str tmp  = tl_monotype_to_string(self->transient, parsed);
-        dbg(self, "specialize_type_alias: %s = %s", str_cstr(&name), str_cstr(&tmp));
+        dbg_at(2, self, "specialize_type_alias: %s = %s", str_cstr(&name), str_cstr(&tmp));
         tl_type_registry_type_alias_insert(self->registry, name,
                                            tl_polytype_absorb_mono(self->arena, parsed));
         assert(tl_polytype_is_concrete(tl_type_registry_get(self->registry, name)));
     } else if (tl_monotype_is_inst(parsed)) {
         str name = toplevel_name(node);
         str tmp  = tl_monotype_to_string(self->transient, parsed);
-        dbg(self, "specialize_type_alias: not concrete: %s = %s", str_cstr(&name), str_cstr(&tmp));
+        dbg_at(2, self, "specialize_type_alias: not concrete: %s = %s", str_cstr(&name), str_cstr(&tmp));
     }
 }
 
@@ -1802,7 +1802,7 @@ int specialize_applications_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_n
     if (!is_anon) {
         str name = ast_node_str(node->named_application.name);
 
-        if (self->verbose) {
+        if (self->verbose >= 3) {
             str tmp = v2_ast_node_to_string(self->transient, node);
             dbg(self, "specialize_applications_cb: nfa '%s'", str_cstr(&tmp));
             str_deinit(self->transient, &tmp);
@@ -1934,12 +1934,12 @@ int specialize_applications_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_n
 #endif
         if (specialize_arrow_with_name(self, traverse_ctx, node->named_application.name, callsite->type,
                                        resolved_type_args)) {
-            dbg(self, "note: failed to specialize '%s'", str_cstr(&name));
+            dbg_at(2, self, "note: failed to specialize '%s'", str_cstr(&name));
             return 1;
         }
         // and recurse over any arguments which are toplevel functions
         if (specialize_arguments(self, traverse_ctx, node, callsite->type)) {
-            dbg(self, "note: failed to specialize arguments of '%s'", str_cstr(&name));
+            dbg_at(2, self, "note: failed to specialize arguments of '%s'", str_cstr(&name));
             return 1;
         }
 
@@ -2053,8 +2053,8 @@ int add_generic(tl_infer *self, ast_node *node) {
         return 0;
     } else if (ast_node_is_let_in(node)) {
         if (infer_one(self, infer_target, null)) {
-            dbg(self, "-- add_generic error: %.*s (%.*s) --", str_ilen(name), str_buf(&name),
-                str_ilen(orig_name), str_buf(&orig_name));
+            dbg_at(2, self, "-- add_generic error: %.*s (%.*s) --", str_ilen(name), str_buf(&name),
+                   str_ilen(orig_name), str_buf(&orig_name));
         }
 
         assert(node->let_in.value->type);
@@ -2091,8 +2091,8 @@ int add_generic(tl_infer *self, ast_node *node) {
 
     // run inference
     if (infer_one(self, infer_target, provisional)) {
-        dbg(self, "-- add_generic error: %.*s (%.*s) --", str_ilen(name), str_buf(&name),
-            str_ilen(orig_name), str_buf(&orig_name));
+        dbg_at(2, self, "-- add_generic error: %.*s (%.*s) --", str_ilen(name), str_buf(&name),
+               str_ilen(orig_name), str_buf(&orig_name));
         return 1;
     }
 

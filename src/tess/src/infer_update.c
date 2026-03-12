@@ -100,7 +100,6 @@ static void do_tree_shake(void *ctx_, ast_node *node) {
         while ((param = ast_arguments_next(&iter))) {
             if (!ast_node_is_symbol(param)) continue;
             str name = ast_node_str(param);
-            // dbg(self, "do_tree_shake: adding '%s'", str_cstr(&name));
             str_hset_insert(&ctx->names, name);
         }
     } else if (ast_case == node->tag && node->case_.binary_predicate) {
@@ -181,7 +180,7 @@ void tree_shake_toplevels(tl_infer *self, ast_node const *start) {
     }
 
     forall(i, remove) {
-        dbg(self, "tree_shake_toplevels: removing '%s'", str_cstr(&remove.v[i]));
+        dbg_at(2, self, "tree_shake_toplevels: removing '%s'", str_cstr(&remove.v[i]));
         toplevel_del(self, remove.v[i]);
     }
     array_free(remove);

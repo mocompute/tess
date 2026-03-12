@@ -119,7 +119,7 @@ noreturn void usage(int status, char const *argv0) {
     printf("    -i, --in-place         overwrite file in place (fmt command only)\n");
     printf("    --list                 list archive contents (pack command only)\n");
     printf("    --unpack               extract .tlib archive (-o for output dir, default .)\n");
-    printf("    -v                     verbose logging\n");
+    printf("    -v                     verbose logging (-v phase markers, -vv key decisions, -vvv full detail)\n");
     printf("    --no-line-directive    suppress output of #line directives in C file\n");
     printf("    --bounds-check         enable integer narrowing bounds checks (default in debug)\n");
     printf("    --no-bounds-check      disable integer narrowing bounds checks\n");
@@ -199,7 +199,7 @@ void state_gather_single_options(state *self, char *str) {
     for (u32 i = 1; i < len; ++i) {
         switch (str[i]) {
         case 'h': self->help = 1; break;
-        case 'v': self->verbose = 1; break;
+        case 'v': self->verbose++; break;
         case 'V': version(); break;
         case 'i': self->in_place = 1; break;
         default:  usage(1, self->argv0); break;

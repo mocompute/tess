@@ -307,7 +307,7 @@ void load_toplevel(tl_infer *self, ast_node_sized nodes) {
             tl_polytype *poly = tl_monotype_generalize(self->arena, mono);
             {
                 str poly_str = tl_polytype_to_string(self->transient, poly);
-                dbg(self, "type_alias: %s = %s", str_cstr(&name), str_cstr(&poly_str));
+                dbg_at(2, self, "type_alias: %s = %s", str_cstr(&name), str_cstr(&poly_str));
             }
             tl_type_registry_type_alias_insert(self->registry, name, poly);
 #if DEBUG_TYPE_ALIAS
@@ -1193,7 +1193,7 @@ static int infer_lambda_function_application(tl_infer *self, traverse_ctx *ctx, 
     tl_polytype       *app  = make_arrow(self, ctx, iter.nodes, node, 0);
     if (!app) return 1;
 
-    if (self->verbose) {
+    if (self->verbose >= 3) {
         str inst_str = tl_monotype_to_string(self->transient, inst);
         str app_str  = tl_polytype_to_string(self->transient, app);
         dbg(self, "application: anon lambda %.*s callsite arrow: %.*s", str_ilen(inst_str),
@@ -1760,7 +1760,7 @@ static int infer_type_constructor_nfa(tl_infer *self, traverse_ctx *ctx, ast_nod
         tl_polytype *app = make_arrow(self, ctx, iter.nodes, null, 0);
         if (!app) return 1;
 
-        if (self->verbose) {
+        if (self->verbose >= 3) {
             str inst_str = tl_monotype_to_string(self->transient, inst);
             str app_str  = tl_polytype_to_string(self->transient, app);
             dbg(self, "type constructor: callsite '%s' (%s) arrow: %s", str_cstr(&name),
@@ -1930,7 +1930,7 @@ static int infer_named_function_application(tl_infer *self, traverse_ctx *ctx, a
         }
 #endif
 
-        if (self->verbose) {
+        if (self->verbose >= 3) {
             str app_str = tl_polytype_to_string(self->transient, app);
             dbg(self, "application: callsite '%s' (%s) arrow: %s", str_cstr(&name), str_cstr(&inst_str),
                 str_cstr(&app_str));
@@ -2632,7 +2632,7 @@ static int infer_struct_access(tl_infer *self, traverse_ctx *ctx, ast_node *node
 
     else {
         // struct type is not a type constructor
-        dbg(self, "warning: infer struct access without a struct type");
+        dbg_at(2, self, "warning: infer struct access without a struct type");
 #if DEBUG_TYPE_ALIAS
         if (ast_node_is_symbol(left)) {
             str left_name2 = ast_node_str(left);

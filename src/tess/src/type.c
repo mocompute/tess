@@ -21,7 +21,7 @@
 #define THREAD_LOCAL _Thread_local
 #endif
 
-#define DEBUG_ENV             1
+#define DEBUG_ENV             0
 #define DEBUG_RECURSIVE_TYPES 0 // Trace recursive type parsing, deferral, and placeholder resolution
 
 // Helper for cycle detection in recursive type traversals.
@@ -1353,21 +1353,21 @@ tl_type_env *tl_type_env_create(allocator *alloc) {
 }
 
 void tl_type_env_insert(tl_type_env *self, str name, tl_polytype *type) {
-#if DEBUG_ENV
-    str type_str = tl_polytype_to_string(transient_allocator, type);
-    dbg(self, "insert %.*s :  %.*s", str_ilen(name), str_buf(&name), str_ilen(type_str),
-        str_buf(&type_str));
-#endif
+    if (self->verbose >= 3) {
+        str type_str = tl_polytype_to_string(transient_allocator, type);
+        dbg(self, "insert %.*s :  %.*s", str_ilen(name), str_buf(&name), str_ilen(type_str),
+            str_buf(&type_str));
+    }
     str_map_set_ptr(&self->map, name, type);
 }
 
 void tl_type_env_insert_mono(tl_type_env *self, str name, tl_monotype *type) {
     tl_polytype *poly = tl_polytype_absorb_mono(self->alloc, type);
-#if DEBUG_ENV
-    str type_str = tl_polytype_to_string(transient_allocator, poly);
-    dbg(self, "insert_mono %.*s :  %.*s", str_ilen(name), str_buf(&name), str_ilen(type_str),
-        str_buf(&type_str));
-#endif
+    if (self->verbose >= 3) {
+        str type_str = tl_polytype_to_string(transient_allocator, poly);
+        dbg(self, "insert_mono %.*s :  %.*s", str_ilen(name), str_buf(&name), str_ilen(type_str),
+            str_buf(&type_str));
+    }
     str_map_set_ptr(&self->map, name, poly);
 }
 
@@ -3766,11 +3766,11 @@ tl_monotype_sized tl_polytype_sized_concrete(allocator *alloc, tl_polytype_sized
 }
 
 static void dbg(tl_type_env *self, char const *restrict fmt, ...) {
-    if (!self->verbose) return;
+    if (self->verbose < 3) return;
 
     char buf[256];
 
-    snprintf(buf, sizeof buf, "tl_type_env: %s\n", fmt);
+    snprintf(buf, sizeof buf, "[type:env] %s\n", fmt);
 
     va_list args;
     va_start(args, fmt);
