@@ -41,8 +41,8 @@ Generic dynamic array. All functions that allocate memory come in two variants: 
 ```tl
 Array[T] : {
     v:        Ptr[T],
-    size:     Int,
-    capacity: Int,
+    size:     CSize,
+    capacity: CSise,
 }
 ```
 
@@ -51,10 +51,10 @@ Array[T] : {
 | Function | Signature | Description |
 |----------|-----------|-------------|
 | `empty` | `[T]() -> Array[T]` | Empty array with zero capacity |
-| `init` | `(val: T, count: Int) -> Array[T]` | Array of `count` elements, each set to `val` |
-| `with_capacity` | `[T](count: Int) -> Array[T]` | Empty array with pre-allocated capacity |
-| `with_capacity_undefined` | `[T](count: Int) -> Array[T]` | Array with size set to capacity; contents undefined |
-| `from_ptr` | `(ptr: Ptr[T], len: Int) -> Array[T]` | Copy `len` elements from a pointer into a new array |
+| `init` | `(val: T, count: CSise) -> Array[T]` | Array of `count` elements, each set to `val` |
+| `with_capacity` | `[T](count: CSize) -> Array[T]` | Empty array with pre-allocated capacity |
+| `with_capacity_undefined` | `[T](count: CSize) -> Array[T]` | Array with size set to capacity; contents undefined |
+| `from_ptr` | `(ptr: Ptr[T], len: CSize) -> Array[T]` | Copy `len` elements from a pointer into a new array |
 
 ### Element Access
 
@@ -62,7 +62,7 @@ All access functions are bounds-checked and abort on out-of-bounds access.
 
 | Function | Signature | Description |
 |----------|-----------|-------------|
-| `get` | `(arr: Array[T], index: Int) -> T` | Element at index |
+| `get` | `(arr: Array[T], index: CSize) -> T` | Element at index |
 | `front` | `(arr: Array[T]) -> T` | First element |
 | `back` | `(arr: Array[T]) -> T` | Last element |
 
@@ -72,19 +72,19 @@ All access functions are bounds-checked and abort on out-of-bounds access.
 |----------|-----------|-------------|
 | `push` | `(self: Ptr[Array[T]], x: T) -> Void` | Append element, growing if needed |
 | `pop` | `(self: Ptr[Array[T]]) -> T` | Remove and return last element |
-| `insert` | `(self: Ptr[Array[T]], index: Int, val: T) -> Void` | Insert at index, shifting elements right |
-| `remove` | `(self: Ptr[Array[T]], index: Int) -> T` | Remove at index, shifting elements left; returns removed element |
-| `swap_remove` | `(self: Ptr[Array[T]], index: Int) -> T` | Remove at index by swapping with last element (O(1)); returns removed element |
+| `insert` | `(self: Ptr[Array[T]], index: CSize, val: T) -> Void` | Insert at index, shifting elements right |
+| `remove` | `(self: Ptr[Array[T]], index: CSize) -> T` | Remove at index, shifting elements left; returns removed element |
+| `swap_remove` | `(self: Ptr[Array[T]], index: CSize) -> T` | Remove at index by swapping with last element (O(1)); returns removed element |
 | `clear` | `(self: Ptr[Array[T]]) -> Void` | Set size to zero (does not deallocate) |
 
 ### Sizing
 
 | Function | Signature | Description |
 |----------|-----------|-------------|
-| `reserve` | `(self: Ptr[Array[T]], count: Int) -> Void` | Ensure capacity for at least `count` elements |
-| `resize` | `(self: Ptr[Array[T]], count: Int, val: T) -> Void` | Grow or shrink; new elements initialized to `val` |
+| `reserve` | `(self: Ptr[Array[T]], count: CSize) -> Void` | Ensure capacity for at least `count` elements |
+| `resize` | `(self: Ptr[Array[T]], count: CSize, val: T) -> Void` | Grow or shrink; new elements initialized to `val` |
 | `shrink_to_fit` | `(self: Ptr[Array[T]]) -> Void` | Reduce capacity to match size |
-| `truncate` | `(self: Ptr[Array[T]], count: Int) -> Void` | Reduce size to at most `count` |
+| `truncate` | `(self: Ptr[Array[T]], count: CSize) -> Void` | Reduce size to at most `count` |
 | `free` | `(self: Ptr[Array[T]]) -> Void` | Deallocate the array buffer |
 
 ### Bulk Operations
@@ -93,7 +93,7 @@ All access functions are bounds-checked and abort on out-of-bounds access.
 |----------|-----------|-------------|
 | `append` | `(self: Ptr[Array[T]], other: Array[T]) -> Void` | Append all elements from `other` |
 | `clone` | `(arr: Array[T]) -> Array[T]` | Shallow copy of the array |
-| `slice` | `(arr: Array[T], start: Int, end: Int) -> Array[T]` | Copy of elements in range `[start, end)` |
+| `slice` | `(arr: Array[T], start: CSize, end: CSize) -> Array[T]` | Copy of elements in range `[start, end)` |
 
 ### Search / Query
 
@@ -101,7 +101,7 @@ All access functions are bounds-checked and abort on out-of-bounds access.
 |----------|-----------|-------------|
 | `is_empty` | `(arr: Array[T]) -> Bool` | True if size is zero |
 | `contains` | `(arr: Array[T], val: T) -> Bool` | True if `val` is in the array (uses `==`) |
-| `index_of` | `(arr: Array[T], val: T) -> Int` | Index of first occurrence, or `-1` |
+| `index_of` | `(arr: Array[T], val: T) -> CSize` | Index of first occurrence, or `-1` |
 
 ### Sorting
 
@@ -117,7 +117,7 @@ The `cmp` function should return negative if `a < b`, zero if `a == b`, positive
 | Function | Signature | Description |
 |----------|-----------|-------------|
 | `reverse` | `(self: Ptr[Array[T]]) -> Void` | Reverse elements in place |
-| `swap` | `(self: Ptr[Array[T]], i: Int, j: Int) -> Void` | Swap elements at indices `i` and `j` |
+| `swap` | `(self: Ptr[Array[T]], i: CSize, j: CSize) -> Void` | Swap elements at indices `i` and `j` |
 
 ### Functional Operations
 
@@ -129,8 +129,7 @@ The `cmp` function should return negative if `a < b`, zero if `a == b`, positive
 | `foreach` | `(arr: Array[T], f: (T) -> Void) -> Void` | Apply `f` to each element for side effects |
 | `any_of` | `(arr: Array[T], f: (T) -> Bool) -> Bool` | True if `f` returns true for any element |
 | `all` | `(arr: Array[T], f: (T) -> Bool) -> Bool` | True if `f` returns true for all elements |
-| `find` | `(arr: Array[T], f: (T) -> Bool) -> Int` | Index of first match, or `-1` |
-| `find_value` | `(arr: Array[T], f: (T) -> Bool) -> T` | First matching element (aborts if none) |
+| `find` | `(arr: Array[T], f: (T) -> Bool) -> CSize` | Index of first match, or `-1` |
 
 ### Iterators
 
@@ -165,7 +164,7 @@ for it.& in Array.Indexed arr {
 ```tl
 #import <Array.tl>
 
-main() -> Int {
+main() {
     arr := Array.empty[Int]()
     Array.push(arr.&, 3)
     Array.push(arr.&, 1)

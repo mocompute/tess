@@ -52,12 +52,12 @@ free[T](self: Ptr[Array[T]])                        -> Void
 
 // Element access (bounds-checked).
 get[T]  (arr: Array[T], index: CSize) -> T
-front[T](arr: Array[T])              -> T
-back[T] (arr: Array[T])              -> T
+front[T](arr: Array[T])               -> T
+back[T] (arr: Array[T])               -> T
 
 // Removal / mutation.
-pop[T]        (self: Ptr[Array[T]])                                             -> T
-clear[T]      (self: Ptr[Array[T]])                                             -> Void
+pop[T]        (self: Ptr[Array[T]])                                              -> T
+clear[T]      (self: Ptr[Array[T]])                                              -> Void
 insert[T]     (self: Ptr[Array[T]], alloc: Ptr[Allocator], index: CSize, val: T) -> Void
 insert[T]     (self: Ptr[Array[T]], index: CSize, val: T)                        -> Void
 remove[T]     (self: Ptr[Array[T]], index: CSize)                                -> T
@@ -66,15 +66,15 @@ swap_remove[T](self: Ptr[Array[T]], index: CSize)                               
 // Sizing.
 resize[T]       (self: Ptr[Array[T]], alloc: Ptr[Allocator], count: CSize, val: T) -> Void
 resize[T]       (self: Ptr[Array[T]], count: CSize, val: T)                        -> Void
-shrink_to_fit[T](self: Ptr[Array[T]], alloc: Ptr[Allocator])                      -> Void
-shrink_to_fit[T](self: Ptr[Array[T]])                                             -> Void
+shrink_to_fit[T](self: Ptr[Array[T]], alloc: Ptr[Allocator])                       -> Void
+shrink_to_fit[T](self: Ptr[Array[T]])                                              -> Void
 truncate[T]     (self: Ptr[Array[T]], count: CSize)                                -> Void
 
 // Bulk operations.
-append[T](self: Ptr[Array[T]], alloc: Ptr[Allocator], other: Array[T])  -> Void
-append[T](self: Ptr[Array[T]], other: Array[T])                         -> Void
-clone[T] (alloc: Ptr[Allocator], arr: Array[T])                         -> Array[T]
-clone[T] (arr: Array[T])                                                -> Array[T]
+append[T](self: Ptr[Array[T]], alloc: Ptr[Allocator], other: Array[T])    -> Void
+append[T](self: Ptr[Array[T]], other: Array[T])                           -> Void
+clone[T] (alloc: Ptr[Allocator], arr: Array[T])                           -> Array[T]
+clone[T] (arr: Array[T])                                                  -> Array[T]
 slice[T] (alloc: Ptr[Allocator], arr: Array[T], start: CSize, end: CSize) -> Array[T]
 slice[T] (arr: Array[T], start: CSize, end: CSize)                        -> Array[T]
 
@@ -90,7 +90,7 @@ sorted[T](alloc: Ptr[Allocator], tmp_alloc: Ptr[Allocator], arr: Array[T], cmp: 
 sorted[T](arr: Array[T], cmp: (T, T) -> Int)                                                   -> Array[T]
 
 // Reordering.
-reverse[T](self: Ptr[Array[T]])                   -> Void
+reverse[T](self: Ptr[Array[T]])                     -> Void
 swap[T]   (self: Ptr[Array[T]], i: CSize, j: CSize) -> Void
 
 // Construction.
@@ -98,16 +98,15 @@ from_ptr[T](alloc: Ptr[Allocator], ptr: Ptr[T], len: CSize) -> Array[T]
 from_ptr[T](ptr: Ptr[T], len: CSize)                        -> Array[T]
 
 // Functional operations.
-map[T, U]    (alloc: Ptr[Allocator], arr: Array[T], f: (T) -> U)    -> Array[U]
-map[T, U]    (arr: Array[T], f: (T) -> U)                           -> Array[U]
-filter[T]    (alloc: Ptr[Allocator], arr: Array[T], f: (T) -> Bool) -> Array[T]
-filter[T]    (arr: Array[T], f: (T) -> Bool)                        -> Array[T]
-reduce[T, U] (arr: Array[T], init: U, f: (U, T) -> U)               -> U
-foreach[T]   (arr: Array[T], f: (T) -> Void)                        -> Void
-any_of[T]    (arr: Array[T], f: (T) -> Bool)                        -> Bool
-all[T]       (arr: Array[T], f: (T) -> Bool)                        -> Bool
-find[T]      (arr: Array[T], f: (T) -> Bool)                        -> Option[CSize]
-find_value[T](arr: Array[T], f: (T) -> Bool)                        -> T
+map[T, U]   (alloc: Ptr[Allocator], arr: Array[T], f: (T) -> U)    -> Array[U]
+map[T, U]   (arr: Array[T], f: (T) -> U)                           -> Array[U]
+filter[T]   (alloc: Ptr[Allocator], arr: Array[T], f: (T) -> Bool) -> Array[T]
+filter[T]   (arr: Array[T], f: (T) -> Bool)                        -> Array[T]
+reduce[T, U](arr: Array[T], init: U, f: (U, T) -> U)               -> U
+foreach[T]  (arr: Array[T], f: (T) -> Void)                        -> Void
+any_of[T]   (arr: Array[T], f: (T) -> Bool)                        -> Bool
+all[T]      (arr: Array[T], f: (T) -> Bool)                        -> Bool
+find[T]     (arr: Array[T], f: (T) -> Bool)                        -> Option[CSize]
 
 
 // -- Implementation --
@@ -311,7 +310,7 @@ swap[T](self: Ptr[Array[T]], i: CSize, j: CSize) {
 reverse[T](self: Ptr[Array[T]]) {
     if self->size == 0zu { return void }
     i: CSize := 0zu
-    j       := self->size - 1zu
+    j        := self->size - 1zu
     while i < j, i += 1zu {
         swap(self, i, j)
         j = j - 1zu
@@ -419,7 +418,7 @@ map[T, U](arr: Array[T], f: (T) -> U) -> Array[U] {
 }
 
 filter[T](alloc, arr: Array[T], f: (T) -> Bool) -> Array[T] {
-    result  := empty[T]()
+    result   := empty[T]()
     i: CSize := 0zu
     while i < arr.size, i += 1zu {
         if f(arr.v.[i]) { push(result.&, alloc, arr.v.[i]) }
@@ -432,7 +431,7 @@ filter[T](arr: Array[T], f: (T) -> Bool) -> Array[T] {
 }
 
 reduce[T, U](arr: Array[T], init: U, f: (U, T) -> U) -> U {
-    acc     := init
+    acc      := init
     i: CSize := 0zu
     while i < arr.size, i += 1zu {
         acc = f(acc, arr.v.[i])
@@ -469,15 +468,6 @@ find[T](arr: Array[T], f: (T) -> Bool) -> Option[CSize] {
         if f(arr.v.[i]) { return Some(i) }
     }
     None
-}
-
-find_value[T](arr: Array[T], f: (T) -> Bool) -> T {
-    i: CSize := 0zu
-    while i < arr.size, i += 1zu {
-        if f(arr.v.[i]) { return arr.v.[i] }
-    }
-    _tl_fatal_("Array.find_value: no matching element")
-    arr.v.[0zu]
 }
 
 
@@ -566,15 +556,15 @@ iter_init  (arr)  { Iter ( v = arr->v, size = arr->size, index = 0zu) }
 iter_ptr   (iter) { iter->v.[iter->index].&                           }
 iter_value (iter) { iter->v.[iter->index]                             }
 iter_cond  (iter) { iter->index < iter->size                          }
-iter_update(iter) { iter->index = iter->index + 1zu                    }
+iter_update(iter) { iter->index = iter->index + 1zu                   }
 iter_deinit(iter) {                                                   }
 
 
 // -- Private functions --
 
 _grow[T]              (self: Ptr[Array[T]], alloc: Ptr[Allocator], at_least: CSize) -> Void
-_is_full[T]           (self: Ptr[Array[T]])                                        -> Bool
-_type_width_aligned[T]()                                                           -> CSize
+_is_full[T]           (self: Ptr[Array[T]])                                         -> Bool
+_type_width_aligned[T]()                                                            -> CSize
 
 // --
 
@@ -636,5 +626,5 @@ iter_init(arr) { Iter (v = arr->v,
 iter_ptr   (iter) { iter->ivp.ptr  = iter->v.[iter->index].& iter->ivp.index = iter->index iter->ivp }
 iter_value (iter) { iter->iv.value = iter->v.[iter->index] iter->iv.index = iter->index iter->iv     }
 iter_cond  (iter) { iter->index < iter->size                                                         }
-iter_update(iter) { iter->index = iter->index + 1zu                                                   }
+iter_update(iter) { iter->index = iter->index + 1zu                                                  }
 iter_deinit(iter) {                                                                                  }

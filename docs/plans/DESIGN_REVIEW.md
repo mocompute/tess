@@ -16,7 +16,6 @@
 
   Language Semantics & Stdlib
 
-  11. Array.find_value aborts on no match (Array.tl:474-481) — Return type T implies guaranteed success, but it calls _tl_fatal_. Inconsistent with the rest of the search API which returns Option.
   12. STANDARD_LIBRARY.md says Array.size is Int, implementation uses UInt — All documented signatures show Int for indices/counts while the actual code uses UInt.
 
   Architecture
@@ -59,6 +58,7 @@
   7. _tl_fatal_ format string injection (transpile.c:3362) — User strings are spliced directly into fprintf's format position. Any % in the message is UB. Should use "%s" as format.
 
   10. Str value assignment aliases the heap buffer (Str.tl:20-30) — For strings >14 bytes, := copies only the struct; both copies share the heap buffer. Freeing either produces use-after-free on the other. No language-level protection, no documentation warning.
+  11. Array.find_value aborts on no match (Array.tl:474-481) — Return type T implies guaranteed success, but it calls _tl_fatal_. Inconsistent with the rest of the search API which returns Option.
 
   14. hot_parse_ctx reentrancy guard is assert-only (infer.c:106) — Compiled away with -DNDEBUG in release builds. Silent corruption if re-entrancy occurs in production.
 

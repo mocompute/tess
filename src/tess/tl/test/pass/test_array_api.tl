@@ -410,17 +410,6 @@ test_find() {
     error
 }
 
-test_find_value() {
-    error := 0
-    arr   := Array.empty[Int]()
-    Array.push(arr.&, 10)
-    Array.push(arr.&, 20)
-    Array.push(arr.&, 30)
-    if Array.find_value(arr, (x) { x > 15 }) != 20 { error += 1 }
-    if Array.find_value(arr, (x) { x == 30 }) != 30 { error += 1 }
-    Array.free(arr.&)
-    error
-}
 
 test_foreach() {
     error := 0
@@ -482,7 +471,6 @@ main() {
     error += test_any_of()
     error += test_all()
     error += test_find()
-    error += test_find_value()
     error += test_foreach()
     error += test_reduce()
     error
