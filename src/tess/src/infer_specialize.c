@@ -844,11 +844,15 @@ void apply_subs_to_ast_node(tl_infer *self, ast_node *node) {
     ast_node_dfs(self, node, do_apply_subs);
 }
 
+// Forward declaration — defined in trait bound section below.
+static int has_no_conform(tl_infer *self, tl_monotype *concrete_type, char const *trait_generic_name);
+
 // ============================================================================
 // Operator overloading — rewrite binary/unary ops on user-defined types to NFAs
 // ============================================================================
 
 // Map binary operator string to the trait function name. Returns null if not overloadable.
+// Note: keep in sync with func_name_to_trait_name() below.
 static char const *binary_op_to_func_name(char const *op) {
     if (0 == strcmp(op, "+")) return "add";
     if (0 == strcmp(op, "-")) return "sub";
@@ -921,6 +925,41 @@ static str find_overload_func(tl_infer *self, tl_monotype *type, char const *fun
     return str_copy(self->arena, lookup);
 }
 
+// Map operator function name to its corresponding trait name for no_conform checking.
+// Note: keep in sync with binary_op_to_func_name() and unary_op_to_func_name() above.
+static char const *func_name_to_trait_name(char const *func) {
+    if (0 == strcmp(func, "add")) return "Add";
+    if (0 == strcmp(func, "sub")) return "Sub";
+    if (0 == strcmp(func, "mul")) return "Mul";
+    if (0 == strcmp(func, "div")) return "Div";
+    if (0 == strcmp(func, "mod")) return "Mod";
+    if (0 == strcmp(func, "bit_and")) return "BitAnd";
+    if (0 == strcmp(func, "bit_or")) return "BitOr";
+    if (0 == strcmp(func, "bit_xor")) return "BitXor";
+    if (0 == strcmp(func, "shl")) return "Shl";
+    if (0 == strcmp(func, "shr")) return "Shr";
+    if (0 == strcmp(func, "eq")) return "Eq";
+    if (0 == strcmp(func, "cmp")) return "Ord";
+    if (0 == strcmp(func, "neg")) return "Neg";
+    if (0 == strcmp(func, "not")) return "Not";
+    if (0 == strcmp(func, "bit_not")) return "BitNot";
+    return null;
+}
+
+// Check [[no_conform]] for an operator and emit an error if denied. Returns 1 if blocked.
+static int check_no_conform_operator(tl_infer *self, ast_node *node, tl_monotype *type,
+                                     char const *func_name, char const *op) {
+    char const *trait = func_name_to_trait_name(func_name);
+    if (!trait || !has_no_conform(self, type, trait)) return 0;
+    str type_str = tl_monotype_to_string(self->transient, type);
+    str msg = str_fmt(self->arena,
+        "operator '%s' cannot be used on type %s: conformance to '%s' denied via [[no_conform(%s)]]",
+        op, str_cstr(&type_str), trait, trait);
+    array_push(self->errors, ((tl_infer_error){
+        .tag = tl_err_trait_bound_not_satisfied, .node = node, .message = msg}));
+    return 1;
+}
+
 // DFS callback: rewrite operator nodes for user-defined types to function calls.
 static void rewrite_operator_overloads(void *ctx, ast_node *node) {
     tl_infer *self = ctx;
@@ -938,11 +977,14 @@ static void rewrite_operator_overloads(void *ctx, ast_node *node) {
         char const *func_name = binary_op_to_func_name(op);
         if (!func_name) return;
 
+        if (check_no_conform_operator(self, node, left_type, func_name, op)) return;
+
         str full_name = find_overload_func(self, left_type, func_name, 2);
 
         // For == and !=: fall back to cmp if eq is not found.
         if (str_is_empty(full_name) && (is_eq || is_neq)) {
             func_name = "cmp";
+            if (check_no_conform_operator(self, node, left_type, func_name, op)) return;
             full_name = find_overload_func(self, left_type, func_name, 2);
         }
 
@@ -1000,6 +1042,8 @@ static void rewrite_operator_overloads(void *ctx, ast_node *node) {
         char const *func_name = compound_op_to_func_name(op);
         if (!func_name) return;
 
+        if (check_no_conform_operator(self, node, lhs_type, func_name, op)) return;
+
         str full_name = find_overload_func(self, lhs_type, func_name, 2);
         if (str_is_empty(full_name)) return;
 
@@ -1031,6 +1075,8 @@ static void rewrite_operator_overloads(void *ctx, ast_node *node) {
         char const *op        = str_cstr(&node->unary_op.op->symbol.name);
         char const *func_name = unary_op_to_func_name(op);
         if (!func_name) return;
+
+        if (check_no_conform_operator(self, node, operand_type, func_name, op)) return;
 
         str full_name = find_overload_func(self, operand_type, func_name, 1);
         if (str_is_empty(full_name)) return;
@@ -1122,6 +1168,28 @@ int post_specialize(tl_infer *self, traverse_ctx *traverse_ctx, ast_node *specia
 // Trait bound conformance checking
 // ============================================================================
 
+// Check if a type has [[no_conform(trait_name)]] in its attributes.
+static int has_no_conform(tl_infer *self, tl_monotype *concrete_type, char const *trait_generic_name) {
+    str type_name = concrete_type->cons_inst->def->name;
+    ast_node *attrs = str_map_get_ptr(self->attributes, type_name);
+    if (!attrs || attrs->tag != ast_attribute_set) return 0;
+
+    str trait_str = str_init_static(trait_generic_name);
+    for (u8 i = 0; i < attrs->attribute_set.n; i++) {
+        ast_node *attr = attrs->attribute_set.nodes[i];
+        if (!ast_node_is_nfa(attr)) continue;
+        str attr_name = ast_node_str(attr->named_application.name);
+        if (!str_eq(attr_name, S("no_conform"))) continue;
+
+        for (u8 j = 0; j < attr->named_application.n_arguments; j++) {
+            ast_node *arg = attr->named_application.arguments[j];
+            if (!ast_node_is_symbol(arg)) continue;
+            if (str_eq(arg->symbol.name, trait_str)) return 1;
+        }
+    }
+    return 0;
+}
+
 // Extract a trait name from a bound AST node (symbol or named function application).
 static str trait_name_from_bound(ast_node *bound) {
     if (ast_node_is_symbol(bound)) return bound->symbol.name;
@@ -1142,6 +1210,18 @@ static int emit_trait_bound_error(tl_infer *self, ast_node *toplevel, tl_monotyp
     return 1;
 }
 
+// Emit a no_conform trait-bound error. Returns 1 (failure).
+static int emit_no_conform_bound_error(tl_infer *self, ast_node *toplevel, tl_monotype *concrete_type,
+                                       str trait_name, char const *trait_generic_name) {
+    str type_str = tl_monotype_to_string(self->transient, concrete_type);
+    str msg = str_fmt(self->arena,
+        "type %s does not satisfy trait %s: conformance explicitly denied via [[no_conform(%s)]]",
+        str_cstr(&type_str), str_cstr(&trait_name), trait_generic_name);
+    array_push(self->errors, ((tl_infer_error){
+                               .tag = tl_err_trait_bound_not_satisfied, .node = toplevel, .message = msg}));
+    return 1;
+}
+
 // Check that a concrete type satisfies a trait bound. Returns 0 on success, 1 on failure.
 // On failure, pushes an error to self->errors.
 static int check_trait_bound_(tl_infer *self, ast_node *toplevel, tl_monotype *concrete_type,
@@ -1153,6 +1233,11 @@ static int check_trait_bound_(tl_infer *self, ast_node *toplevel, tl_monotype *c
     if (!trait) return 0; // Unknown trait — skip (may be a type, not a trait)
 
     if (!tl_monotype_is_inst(concrete_type)) return 0; // Not a concrete inst type — skip
+
+    // Check for [[no_conform(Trait)]] on the type
+    if (has_no_conform(self, concrete_type, str_cstr(&trait->generic_name)))
+        return emit_no_conform_bound_error(self, toplevel, concrete_type, trait_name,
+                                           str_cstr(&trait->generic_name));
 
     // Built-in types have no module functions — check intrinsic support per signature.
     if (!is_user_defined_type(concrete_type)) {
