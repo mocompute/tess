@@ -2747,6 +2747,18 @@ int resolve_node(tl_infer *self, ast_node *node, traverse_ctx *ctx, node_positio
     case npos_reassign_lhs:
         if (ast_node_is_binary_op_struct_access(node)) return infer_struct_access(self, ctx, node);
 
+        // Check for reassignment to an undeclared variable BEFORE sync_with_env, because
+        // sync_with_env will insert the symbol into the env (it has a type from npos_assign_lhs).
+        // This catches `x = 5` where the user meant `x := 5`.
+        if (ast_node_is_symbol(node) && !tl_type_env_lookup(self->env, ast_node_str(node))) {
+            array_push(self->errors, ((tl_infer_error){
+                .tag = tl_err_undeclared_reassignment,
+                .node = node,
+                .message = ast_node_str(node)
+            }));
+            return 1;
+        }
+
         // Take symbol's existing type: this ensures let-in symbols retain their type info through
         // subsequent mutations. (sync_with_env is safe with ctx==null.)
         sync_with_env(self, ctx, node, 0);
