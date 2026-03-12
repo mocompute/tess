@@ -33,6 +33,9 @@ CompileFlags:
     - -Wno-unused-command-line-argument
     - -isystem${resource_dir}/include
     - -isystem${glibc_include}
+    - -Isrc/mos/include
+    - -Isrc/tess/include
+    - -Ivendor/libdeflate-1.25
   Remove:
     - -flto=auto
     - -fno-fat-lto-objects
