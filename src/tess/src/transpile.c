@@ -1107,7 +1107,10 @@ static str generate_type_constructor(transpile *self, ast_node const *node, eval
 
     str          name = ast_node_str(node->named_application.name);
     tl_monotype *type = env_lookup(self, name);
-    assert(tl_monotype_is_inst(type));
+    if (!tl_monotype_is_inst(type)) {
+        fprintf(stderr, "generate_type_constructor: failed to find '%s'\n", str_cstr(&name));
+        fatal("runtime error");
+    }
 
     str                      res = next_res(self);
     tl_type_constructor_def *def = type->cons_inst->def;
@@ -3106,7 +3109,8 @@ static str type_to_c(transpile *self, tl_polytype *type) {
             str name = mono->cons_inst->special_name;
             if (str_is_empty(name) && mono->cons_inst->args.size > 0) {
                 tl_monotype *updated = tl_infer_update_specialized_type(self->infer, mono);
-                if (updated && tl_monotype_is_inst(updated) && !str_is_empty(updated->cons_inst->special_name))
+                if (updated && tl_monotype_is_inst(updated) &&
+                    !str_is_empty(updated->cons_inst->special_name))
                     name = updated->cons_inst->special_name;
             }
             if (str_is_empty(name)) name = cons_name;
