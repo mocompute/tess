@@ -145,7 +145,7 @@ static void  build_arrow_to_c(transpile *, str_build *, tl_monotype *, str);
 static str   ptr_to_arrow_to_c(transpile *, tl_monotype *);
 static str   ptr_to_arrow_decl(transpile *, tl_monotype *, str);
 static void  generate_function_signature(transpile *, str, tl_polytype *, str_sized);
-static void  exit_error(char const *file, u32 line, char const *restrict fmt, ...);
+noreturn static void exit_error(char const *file, u32 line, char const *restrict fmt, ...);
 static void  update_type(transpile *, tl_monotype **);
 static int   get_c_export_name(allocator *, ast_node *, str *out_export_name);
 static int   is_c_exportable_type(tl_monotype *);
@@ -724,7 +724,7 @@ static str generate_context(transpile *self, str_sized fvs, eval_ctx *ctx, int i
 
             str          field_name = fvs.v[i];
             tl_polytype *type       = tl_type_env_lookup(self->env, field_name);
-            if (!type) fatal("runtime error");
+            if (!type) exit_error(NULL, 0, "unknown free variable '%s' in closure", str_cstr(&field_name));
             field_name = generate_expr_symbol(self, type->type, field_name, str_empty(), ctx);
             cat(self, field_name);
 
@@ -750,7 +750,7 @@ static str generate_context(transpile *self, str_sized fvs, eval_ctx *ctx, int i
 
         str          fname = fvs.v[i];
         tl_polytype *type  = tl_type_env_lookup(self->env, fname);
-        if (!type) fatal("runtime error");
+        if (!type) exit_error(NULL, 0, "unknown free variable '%s' in closure", str_cstr(&fname));
         fname = generate_expr_symbol(self, type->type, fname, str_empty(), ctx);
         cat(self, fname);
 
@@ -941,7 +941,7 @@ static void generate_toplevels(transpile *self) {
 
 static void generate_main(transpile *self) {
     ast_node const *main = ast_node_str_map_get(self->toplevels, S("main"));
-    if (!main) fatal("no main function");
+    if (!main) exit_error(NULL, 0, "no 'main' function defined");
     if (ast_let != main->tag) fatal("logic error");
 
     tl_monotype      *type = env_lookup(self, S("main"));
@@ -1108,10 +1108,10 @@ static str generate_type_constructor(transpile *self, ast_node const *node, eval
     str          name = ast_node_str(node->named_application.name);
     tl_monotype *type = env_lookup(self, name);
     if (!tl_monotype_is_inst(type)) {
-        // FIXME: improve the error here, because this could be a case of parser ambiguity: an NFA was
-        // formed, but the user wanted two separate expressions (the second one being parenthesized).
-        fprintf(stderr, "generate_type_constructor: failed to find '%s'\n", str_cstr(&name));
-        fatal("runtime error");
+        exit_error(node->file, node->line,
+                   "'%s' is not a known type constructor"
+                   " (if this is not a function call, use a comma or semicolon to separate expressions)",
+                   str_cstr(&name));
     }
 
     str                      res = next_res(self);
@@ -1722,7 +1722,7 @@ static str generate_inline_lambda(transpile *self, tl_monotype *result_type, ast
 
     ast_node_sized params = ast_node_sized_from_ast_array(node->lambda_application.lambda);
     ast_node_sized args   = ast_node_sized_from_ast_array((ast_node *)node);
-    if (params.size != args.size) fatal("runtime error");
+    if (params.size != args.size) exit_error(node->file, node->line, "lambda parameter count mismatch");
 
     if (node->lambda_application.lambda->type->quantifiers.size) fatal("type scheme");
     tl_monotype *arrow    = node->lambda_application.lambda->type->type;
@@ -1841,7 +1841,7 @@ static str generate_tagged_union_case(transpile *self, ast_node const *node, eva
 
     // Get the wrapper type (Shape)
     tl_monotype *wrapper_type = node->case_.expression->type->type;
-    if (!tl_monotype_is_inst(wrapper_type)) fatal("expected tagged union wrapper type");
+    if (!tl_monotype_is_inst(wrapper_type)) exit_error(node->file, node->line, "expected tagged union type in case expression");
 
     str wrapper_name = wrapper_type->cons_inst->def->name;
     (void)wrapper_name; // may be used for debug
@@ -1865,8 +1865,7 @@ static str generate_tagged_union_case(transpile *self, ast_node const *node, eva
         if (ast_node_is_nil_or_void(node->case_.conditions.v[i])) {
             // else arm
             if (i + 1 != node->case_.arms.size) {
-                // TODO: make this an error
-                fatal("else must be last");
+                exit_error(node->file, node->line, "'else' must be the last branch in a case expression");
             }
             str arm_body = generate_expr(self, null, node->case_.arms.v[i], ctx);
             if (result_type && should_assign_result(ctx, result_type)) {
@@ -1886,14 +1885,14 @@ static str generate_tagged_union_case(transpile *self, ast_node const *node, eva
 
         ast_node *cond = node->case_.conditions.v[i];
         if (!ast_node_is_symbol(cond) || !cond->symbol.annotation) {
-            fatal("tagged union case condition must be 'binding: VariantType'");
+            exit_error(cond->file, cond->line, "tagged union case condition must be 'binding: VariantType'");
         }
 
         // Get variant type from the condition's annotation
         ast_node    *variant_type_node = cond->symbol.annotation;
         tl_monotype *variant_type      = cond->symbol.annotation_type->type;
 
-        if (!tl_monotype_is_inst(variant_type)) fatal("expected variant type");
+        if (!tl_monotype_is_inst(variant_type)) exit_error(cond->file, cond->line, "expected variant type in case condition");
 
         // Get the variant name (unmangled) from the annotation
         str variant_name = ast_node_name_original(variant_type_node);
@@ -2380,11 +2379,11 @@ static str generate_try(transpile *self, tl_monotype *type, ast_node const *node
     tl_monotype *tag_type   = null;
     tl_monotype *union_type = null;
     tagged_union_wrapper_fields(wrapper_type, &tag_type, &union_type);
-    if (!tag_type || !union_type) fatal("runtime error");
+    if (!tag_type || !union_type) exit_error(node->file, node->line, "try expression requires a tagged union with 'tag' and 'union' fields");
 
     // Get variant names: first = success, second = error
     str_sized variant_names = union_type->cons_inst->def->field_names;
-    if (variant_names.size < 2) fatal("runtime error");
+    if (variant_names.size < 2) exit_error(node->file, node->line, "try expression requires a tagged union with at least two variants");
     str success_name = variant_names.v[0];
     str error_name   = variant_names.v[1];
 
@@ -3276,11 +3275,11 @@ static str tl_sizeof(transpile *self, ast_node const *node, eval_ctx *ctx, void 
         str ctype = type_to_c_mono(self, type);
         return str_cat_3(self->transient, S("sizeof("), ctype, S(")"));
     } else if (node->named_application.n_arguments == 0) {
-        fatal("sizeof: could not resolve type argument");
+        exit_error(node->file, node->line, "sizeof: could not resolve type argument");
     }
 
     // single argument may be an expression or a type constructor
-    if (1 != node->named_application.n_arguments) fatal("wrong number of arguments");
+    if (1 != node->named_application.n_arguments) exit_error(node->file, node->line, "sizeof expects exactly one argument");
     ast_node const *arg = node->named_application.arguments[0];
 
     // // Note: The environment contains the most current type for a symbol argument.
@@ -3290,7 +3289,7 @@ static str tl_sizeof(transpile *self, ast_node const *node, eval_ctx *ctx, void 
     if (ast_node_is_nfa(arg)) {
         // type constructor
         tl_monotype *type = tl_type_registry_parse_type(self->registry, arg);
-        if (!type) fatal("missing type");
+        if (!type) exit_error(arg->file, arg->line, "sizeof: unknown type");
         update_type(self, &type);
 
         if (tl_monotype_is_void(type) || tl_monotype_is_tv(type) || tl_monotype_is_any(type))
@@ -3322,11 +3321,11 @@ static str tl_alignof(transpile *self, ast_node const *node, eval_ctx *ctx, void
         str ctype = type_to_c_mono(self, type);
         return str_cat_3(self->transient, S("_Alignof("), ctype, S(")"));
     } else if (node->named_application.n_arguments == 0) {
-        fatal("alignof: could not resolve type argument");
+        exit_error(node->file, node->line, "alignof: could not resolve type argument");
     }
 
     // single argument may be an expression or a type constructor
-    if (1 != node->named_application.n_arguments) fatal("wrong number of arguments");
+    if (1 != node->named_application.n_arguments) exit_error(node->file, node->line, "alignof expects exactly one argument");
     ast_node const *arg  = node->named_application.arguments[0];
 
     tl_polytype    *poly = arg->type;
@@ -3336,7 +3335,7 @@ static str tl_alignof(transpile *self, ast_node const *node, eval_ctx *ctx, void
     if (ast_node_is_nfa(arg)) {
         // type constructor
         tl_monotype *type = tl_type_registry_parse_type(self->registry, arg);
-        if (!type) fatal("missing type");
+        if (!type) exit_error(arg->file, arg->line, "alignof: unknown type");
         update_type(self, &type);
 
         if (tl_monotype_is_void(type) || tl_monotype_is_tv(type) || tl_monotype_is_any(type))
@@ -3345,7 +3344,7 @@ static str tl_alignof(transpile *self, ast_node const *node, eval_ctx *ctx, void
         return str_cat_3(self->transient, S("_Alignof("), ctype, S(")"));
     } else {
         // expression - not support because MSVC makes us sad
-        fatal("alignof(expression) not supported");
+        exit_error(node->file, node->line, "alignof(expression) is not supported; use alignof(Type)");
     }
 }
 
@@ -3354,11 +3353,10 @@ static str tl_fatal(transpile *self, ast_node const *node, eval_ctx *ctx, void *
     (void)ctx;
     assert(ast_node_is_nfa(node));
 
-    if (1 != node->named_application.n_arguments) fatal("wrong number of arguments");
+    if (1 != node->named_application.n_arguments) exit_error(node->file, node->line, "fatal() expects exactly one argument");
     ast_node const *arg = node->named_application.arguments[0];
     if (ast_string != arg->tag) {
-        // FIXME: report error
-        fatal("expected string");
+        exit_error(arg->file, arg->line, "fatal() argument must be a string literal");
     }
 
     ctx->is_effective_void = 1;
@@ -3396,7 +3394,7 @@ static str generate_funcall_intrinsic(transpile *self, ast_node const *node, eva
     return str_empty();
 }
 
-static void exit_error(char const *file, u32 line, char const *restrict fmt, ...) {
+noreturn static void exit_error(char const *file, u32 line, char const *restrict fmt, ...) {
     char buf[256];
     if (file) {
         snprintf(buf, sizeof buf, "%s:%u: error: %s\n", file, line, fmt);
