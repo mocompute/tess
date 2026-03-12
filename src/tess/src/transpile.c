@@ -1108,6 +1108,8 @@ static str generate_type_constructor(transpile *self, ast_node const *node, eval
     str          name = ast_node_str(node->named_application.name);
     tl_monotype *type = env_lookup(self, name);
     if (!tl_monotype_is_inst(type)) {
+        // FIXME: improve the error here, because this could be a case of parser ambiguity: an NFA was
+        // formed, but the user wanted two separate expressions (the second one being parenthesized).
         fprintf(stderr, "generate_type_constructor: failed to find '%s'\n", str_cstr(&name));
         fatal("runtime error");
     }

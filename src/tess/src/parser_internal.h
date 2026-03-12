@@ -60,8 +60,8 @@ struct parser {
     hashmap            *tagged_union_variant_parents; // str hset: type names that are tagged union parents
     hashmap            *module_aliases;               // map str -> str: alias name -> original module name
     hashmap            *nullary_variant_parents; // map str -> str: mangled variant name -> TU parent name
-    hashmap            *module_pkg_prefixes;    // optional: module name -> "pkg__ver" prefix (str->str)
-    hashmap            *file_pkg_prefixes;     // optional: file_path -> hashmap* (per-file prefix map)
+    hashmap            *module_pkg_prefixes;     // optional: module name -> "pkg__ver" prefix (str->str)
+    hashmap            *file_pkg_prefixes;       // optional: file_path -> hashmap* (per-file prefix map)
 
     ast_node           *result;
     token_array         tokens;
@@ -167,6 +167,7 @@ ast_node *maybe_wrap_variant_in_tagged_union(parser *, str parent_name, str chil
 int a_identifier(parser *);
 int a_colon(parser *);
 int a_colon_equal(parser *p);
+int a_semicolon(parser *);
 int a_vertical_bar(parser *);
 int a_open_curly(parser *);
 int a_close_curly(parser *);

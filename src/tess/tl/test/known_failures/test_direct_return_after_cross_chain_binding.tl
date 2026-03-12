@@ -3,8 +3,7 @@
 Foo: { tag: Byte }
 
 extract(f: Foo) -> CSize {
-    raw: CSize := f.tag
-    (raw & 0xF0zu) >> 4zu
+    raw: CSize := f.tag, (raw & 0xF0zu) >> 4zu
 }
 
 main() {

@@ -260,8 +260,11 @@ done:;
 int a_body_element(parser *self) {
     // Note: statement before expression, because assignment and ident are ambiguous. Commas can be ignored,
     // so they can be used between body elements for readability.
-    int ignore = a_try(self, a_comma);
+
+    // commas and semicolons are accepted as body element separators
+    int ignore = a_try(self, a_comma) && a_try(self, a_semicolon);
     (void)ignore; // for GCC
+
     if (0 == a_try(self, a_statement) || 0 == a_try(self, a_expression)) return 0;
     else return 1;
 }

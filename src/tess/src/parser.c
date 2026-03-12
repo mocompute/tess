@@ -654,6 +654,13 @@ int a_colon(parser *p) {
     return 1;
 }
 
+int a_semicolon(parser *p) {
+    if (next_token(p)) return 1;
+    if (tok_semicolon == p->token.tag) return result_ast_str(p, ast_symbol, ";");
+    p->error.tag = tl_err_expected_semicolon;
+    return 1;
+}
+
 int a_double_open_square(parser *p) {
     if (next_token(p)) return 1;
     if (tok_double_open_square == p->token.tag) return result_ast_str(p, ast_symbol, "[[");
@@ -1202,7 +1209,7 @@ hashmap *resolve_module_symbols(parser *self, str module_name) {
         str *pfx = str_map_get(self->module_pkg_prefixes, module_name);
         if (pfx) {
             // transient is fine: key is used for lookup only, map_set copies key bytes
-            str vkey = make_version_key(self->transient, *pfx, module_name);
+            str      vkey = make_version_key(self->transient, *pfx, module_name);
             hashmap *syms = str_map_get_ptr(self->module_symbols, vkey);
             if (syms) return syms;
         }
@@ -1229,8 +1236,8 @@ void save_current_module_symbols(parser *self) {
 }
 
 void load_module_symbols(parser *self) {
-    str module_name = str_is_empty(self->current_module) ? S("main") : self->current_module;
-    hashmap *syms = resolve_module_symbols(self, module_name);
+    str      module_name = str_is_empty(self->current_module) ? S("main") : self->current_module;
+    hashmap *syms        = resolve_module_symbols(self, module_name);
     if (syms) {
         // Don't destroy current_module_symbols here - after the first load, it points to a hashmap
         // in module_symbols, and destroying it would corrupt module_symbols entries.
@@ -1277,13 +1284,12 @@ int toplevel_hash_module(parser *self, str cmd, str module) {
     // modules_version_seen so different versions both get parsed while same-version diamond
     // deps are correctly skipped.  modules_seen keeps bare names only — all other consumers
     // (nested-parent validation, #use, #alias, etc.) are unaffected.
-    int already_seen = 0;
-    str *pfx = self->module_pkg_prefixes ? str_map_get(self->module_pkg_prefixes, module) : null;
+    int  already_seen = 0;
+    str *pfx          = self->module_pkg_prefixes ? str_map_get(self->module_pkg_prefixes, module) : null;
     if (pfx) {
-        str vkey = make_version_key(self->transient, *pfx, module);
+        str vkey     = make_version_key(self->transient, *pfx, module);
         already_seen = str_hset_contains(self->modules_version_seen, vkey);
-        if (!already_seen)
-            str_hset_insert(&self->modules_version_seen, vkey);
+        if (!already_seen) str_hset_insert(&self->modules_version_seen, vkey);
     } else {
         already_seen = str_hset_contains(self->modules_seen, module);
     }
@@ -1593,7 +1599,7 @@ int parser_next(parser *self) {
 
                 // Swap per-file prefix map if available
                 if (self->file_pkg_prefixes) {
-                    hashmap *per_file = str_map_get_ptr(self->file_pkg_prefixes, file_str);
+                    hashmap *per_file         = str_map_get_ptr(self->file_pkg_prefixes, file_str);
                     self->module_pkg_prefixes = per_file ? per_file : self->opts.module_pkg_prefixes;
                 }
 
