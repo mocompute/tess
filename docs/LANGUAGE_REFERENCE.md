@@ -1625,6 +1625,49 @@ eq[T: Eq](a: Pair[T], b: Pair[T]) -> Bool {
 The compiler verifies conditional conformance transitively: `Pair[Int]` satisfies `Eq`
 because `Int` satisfies `Eq`. `Pair[SomeType]` does not unless `SomeType` also satisfies `Eq`.
 
+### Opting Out of Conformance
+
+Structural conformance checks shape, not intent. A type can accidentally satisfy a trait
+whose semantic contract it does not meet. Use `[[no_conform(Trait1, Trait2, ...)]]` on a
+type definition to prevent it from satisfying the listed traits:
+
+```tl
+#module Graph
+
+[[no_conform(Ord)]]
+Node : { id: Int, edges: Array[Int] }
+
+// This cmp exists for topological sorting — it is a partial order, not total.
+// Node will NOT satisfy Ord despite having a matching cmp function.
+cmp(a: Node, b: Node) -> CInt { ... }
+```
+
+If a generic function with bound `T: Trait` is called with a type that has
+`[[no_conform(Trait)]]`, the compiler reports a trait bound error with a note explaining
+that conformance was explicitly denied.
+
+**Trait inheritance.** Blocking a trait does not automatically block its children or parents.
+`[[no_conform(Ord)]]` blocks `Ord` but not `Eq`. However, blocking a parent trait makes
+derived traits unsatisfiable: `[[no_conform(Eq)]]` prevents both `Eq` and `Ord` (since
+`Ord` inherits `Eq`).
+
+**Compiler-provided traits.** When a compiler-provided trait is blocked, using the
+corresponding operator on that type is a compile-time error. `[[no_conform(Add)]]` means
+`a + b` does not compile for that type, even though `add(a, b)` can still be called as a
+regular function.
+
+**Generic types.** For a generic type like `Pair[T]`, `[[no_conform(Eq)]]` means `Pair[T]`
+never satisfies `Eq` regardless of whether `T` does — conditional conformance is suppressed
+entirely.
+
+**Attribute predicates.** `no_conform` is queryable:
+
+```tl
+Node :: [[no_conform(Ord)]]    // true
+Node :: [[no_conform]]         // true (any no_conform present)
+Node :: [[no_conform(Eq)]]     // false (only Ord is blocked)
+```
+
 ### Compiler-Provided Traits
 
 The compiler provides built-in traits for operator overloading. These are always visible and
@@ -1658,6 +1701,8 @@ do not need to be imported. User code cannot define types or traits with these n
 - **No ad-hoc multi-bounds.** `T: A + B` is not supported; define a named combined trait.
 - **No associated types.** Use explicit type parameters instead.
 - **Same-type operators only.** Both operands must be the same type `T`.
+- **Accidental conformance.** Structural conformance means a type can unintentionally satisfy
+  a trait. Mitigated by `[[no_conform(Trait)]]` — see *Opting Out of Conformance* above.
 
 ## Pointers
 

@@ -177,6 +177,11 @@ while Tess traits are purely compile-time constraints erased after checking.
 means Tess conformance is determined by the module a function lives in, not by receiver
 type.
 
+**Key difference: opt-out.** Go has no mechanism to prevent a type from satisfying an
+interface. Tess provides `[[no_conform(Trait)]]` to explicitly deny conformance when
+structural matching would produce a semantic mismatch (e.g., a partial-order `cmp`
+accidentally satisfying `Ord`).
+
 ### Swift — Protocols
 
 | Aspect | Swift | Tess |
@@ -231,7 +236,7 @@ call site, giving clearer errors, but are less flexible (no arbitrary expression
 - **No default methods.** Every conforming type must provide all functions explicitly,
   except for the special case where `eq` is derived from `cmp` during conformance checking.
 - **Accidental conformance.** A type with a function named `eq` taking two arguments of its
-  type and returning `Bool` conforms to `Eq` whether intended or not. In practice, the
-  specificity of trait function names makes this unlikely to cause problems.
+  type and returning `Bool` conforms to `Eq` whether intended or not. Mitigated by
+  `[[no_conform(Trait)]]`, which explicitly denies conformance for specific traits.
 - **No higher-kinded traits.** Cannot express `Functor`, `Monad`, or similar abstractions
   over type constructors.
