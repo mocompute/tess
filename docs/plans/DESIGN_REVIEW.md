@@ -11,7 +11,6 @@
 
   Codegen
 
-  7. _tl_fatal_ format string injection (transpile.c:3362) — User strings are spliced directly into fprintf's format position. Any % in the message is UB. Should use "%s" as format.
   8. Non-standard main(int argc) signature (transpile.c:956) — One-argument main is a GCC/Clang extension, rejected by MSVC in strict mode. Breaks the Windows build path.
   9. Closure context struct hash only uses variable names, not types (transpile.c:499-509) — Theoretically allows two closures with same-named but differently-typed captures to share a wrong struct layout. Low practical risk due to alpha conversion, but structurally unsound.
 
@@ -57,6 +56,7 @@
   Ptr[T] silently.
   3. Cross-subchain directed unification falls through to symmetric (type.c:2924-2940) — Standalone types (CSize, CPtrDiff, CChar) silently convert in TL_UNIFY_DIRECTED mode when they should require explicit annotation.
   4. for loop uses hardcoded "gen_iter" variable name (parser_expr.c:404) — Every other synthesized name uses the unique-name counter. This one will silently collide with any user binding named gen_iter.
+  7. _tl_fatal_ format string injection (transpile.c:3362) — User strings are spliced directly into fprintf's format position. Any % in the message is UB. Should use "%s" as format.
 
   10. Str value assignment aliases the heap buffer (Str.tl:20-30) — For strings >14 bytes, := copies only the struct; both copies share the heap buffer. Freeing either produces use-after-free on the other. No language-level protection, no documentation warning.
 
