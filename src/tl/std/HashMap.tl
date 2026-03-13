@@ -30,12 +30,10 @@ HashMap[K, V]: {
     _capacity: CSize,
     _size:     CSize,
     _alloc:    Ptr[Alloc.Allocator],
-    _hash:     (Ptr[K]) -> CSize,
     _eq:       (Ptr[K], Ptr[K]) -> Bool,
 }
 
 HashMapOpts[K]: {
-    hash:     (Ptr[K]) -> CSize,
     eq:       (Ptr[K], Ptr[K]) -> Bool,
     capacity: CSize,
 }
@@ -70,22 +68,16 @@ values[K, V](self: Ptr[HashMap[K, V]], alloc: Ptr[Allocator]) -> Array[V]
 #ifc
 #include <string.h>
 
-size_t tl_hashmap_byte_at(void *p, size_t i) {
-    return ((unsigned char*)p)[i];
-}
-
 int tl_hashmap_bytes_equal(void *a, void *b, size_t n) {
     return memcmp(a, b, n) == 0;
 }
 #endc
 
-c_tl_hashmap_byte_at     (p: Ptr[any], i: CSize)              -> CSize
 c_tl_hashmap_bytes_equal (a: Ptr[any], b: Ptr[any], n: CSize) -> CInt
 
 
 // -- Private helpers --
 
-_default_hash[K]    (key: Ptr[K]) -> CSize
 _default_eq[K]      (a: Ptr[K], b: Ptr[K]) -> Bool
 _entry_width[K, V]  () -> CSize
 _grow[K, V]         (self: Ptr[HashMap[K, V]]) -> Void
@@ -95,20 +87,6 @@ _insert_entry[K, V] (entries: Ptr[_Entry[K, V]], capacity: CSize, eq: (Ptr[K], P
 
 
 // -- Implementation --
-
-// FNV-1a 64-bit hash over the raw bytes of a key.
-_default_hash[K](key: Ptr[K]) -> CSize {
-    h:     CSize := 0xcbf29ce484222325zu
-    prime: CSize := 0x100000001b3zu
-    n:     CSize := sizeof[K]()
-    i:     CSize := 0zu
-    while i < n, i += 1zu {
-        b := c_tl_hashmap_byte_at(key, i)
-        h = h ^ b
-        h = h * prime
-    }
-    h
-}
 
 // Byte-level equality of two keys.
 _default_eq[K](a: Ptr[K], b: Ptr[K]) -> Bool {
@@ -129,10 +107,8 @@ _alloc_entries[K, V](alloc, capacity) {
 create[K, V](alloc: Ptr[Allocator], opts: HashMapOpts[K]) -> Ptr[HashMap[K, V]] {
     cap := if opts.capacity == 0zu { 16zu } else { Alloc.next_power_of_two(opts.capacity) }
 
-    hash_fn := opts.hash
-    eq_fn   := opts.eq
-    if hash_fn == null { hash_fn = _default_hash[K]/1 }
-    if eq_fn == null { eq_fn     = _default_eq[K]/2 }
+    eq_fn := opts.eq
+    if eq_fn == null { eq_fn = _default_eq[K]/2 }
 
     m: Ptr[HashMap[K, V]] := alloc->malloc(alloc, sizeof[HashMap[K, V]]())
     if m == null { _tl_fatal_("HashMap: oom") }
@@ -141,18 +117,17 @@ create[K, V](alloc: Ptr[Allocator], opts: HashMapOpts[K]) -> Ptr[HashMap[K, V]] 
     m->_capacity = cap
     m->_size     = 0zu
     m->_alloc    = alloc
-    m->_hash     = hash_fn
     m->_eq       = eq_fn
     m
 }
 
 create[K, V]() -> Ptr[HashMap[K, V]] {
-    opts := HashMapOpts[K](hash = null, eq = null, capacity = 0zu)
+    opts := HashMapOpts[K](eq = null, capacity = 0zu)
     create[K, V](Alloc.context.default, opts)
 }
 
 create[K, V](alloc: Ptr[Allocator]) -> Ptr[HashMap[K, V]] {
-    opts := HashMapOpts[K](hash = null, eq = null, capacity = 0zu)
+    opts := HashMapOpts[K](eq = null, capacity = 0zu)
     create[K, V](alloc, opts)
 }
 
@@ -238,8 +213,8 @@ _grow[K, V](self: Ptr[HashMap[K, V]]) -> Void {
     self->_capacity = new_capacity
 }
 
-set[K, V](self: Ptr[HashMap[K, V]], key: K, value: V) -> Void {
-    hash  := self->_hash(key.&)
+set[K: Hash, V](self: Ptr[HashMap[K, V]], key: K, value: V) -> Void {
+    hash  := hash(key)
     delta := _insert_entry[K, V](self->_entries, self->_capacity, self->_eq, key, value, hash)
     self->_size += delta
 
@@ -249,10 +224,10 @@ set[K, V](self: Ptr[HashMap[K, V]], key: K, value: V) -> Void {
     }
 }
 
-get[K, V](self: Ptr[HashMap[K, V]], key: K) -> Ptr[V] {
+get[K: Hash, V](self: Ptr[HashMap[K, V]], key: K) -> Ptr[V] {
     if self->_size == 0zu { return null }
 
-    hash       := self->_hash(key.&)
+    hash       := hash(key)
     mask       := self->_capacity - 1zu
     bucket     := hash & mask
     dist: CSize := 0zu
@@ -273,23 +248,23 @@ get[K, V](self: Ptr[HashMap[K, V]], key: K) -> Ptr[V] {
     null
 }
 
-get_copy[K, V](self: Ptr[HashMap[K, V]], key: K) -> Option[V] {
+get_copy[K: Hash, V](self: Ptr[HashMap[K, V]], key: K) -> Option[V] {
     p := get(self, key)
     if p == null { return None }
     Some(p.*)
 }
 
-contains[K, V](self: Ptr[HashMap[K, V]], key: K) -> Bool {
+contains[K: Hash, V](self: Ptr[HashMap[K, V]], key: K) -> Bool {
     get(self, key) != null
 }
 
 
 // -- Remove (backward-shift deletion) --
 
-remove[K, V](self: Ptr[HashMap[K, V]], key: K) -> Bool {
+remove[K: Hash, V](self: Ptr[HashMap[K, V]], key: K) -> Bool {
     if self->_size == 0zu { return false }
 
-    hash       := self->_hash(key.&)
+    hash       := hash(key)
     mask       := self->_capacity - 1zu
     bucket     := hash & mask
     dist: CSize := 0zu

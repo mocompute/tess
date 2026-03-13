@@ -1,8 +1,30 @@
+#module Point
+
+Point: { x: Int, y: Int }
+
+hash(p: Point) -> CSize {
+    hx := hash(p.x)
+    hy := hash(p.y)
+    hx ^ (hy * 0x100000001b3zu)
+}
+
+#module CollidingKey
+
+CollidingKey: { v: Int }
+
+hash(k: CollidingKey) -> CSize {
+    v: CSize := k.v
+    v & 3zu
+}
+
 #module main
 #import <HashMap.tl>
 #import <Alloc.tl>
 #import <Array.tl>
 #import <stdio.tl>
+
+Point = Point.Point
+CollidingKey = CollidingKey.CollidingKey
 
 test_create_destroy() {
     error := 0
@@ -252,19 +274,14 @@ test_empty_map() {
     error
 }
 
-// Custom hash/eq for testing
-_custom_hash(key: Ptr[Int]) -> CSize {
-    k: CSize := key.*
-    k
-}
-
+// Custom eq for testing
 _custom_eq(a: Ptr[Int], b: Ptr[Int]) -> Bool {
     a.* == b.*
 }
 
 test_custom_hash_eq() {
     error := 0
-    opts  := HashMap.HashMapOpts[Int](hash = _custom_hash/1, eq = _custom_eq/2, capacity = 8zu)
+    opts  := HashMap.HashMapOpts[Int](eq = _custom_eq/2, capacity = 8zu)
     m     := HashMap.create[Int, Int](Alloc.context.default, opts)
 
     HashMap.set(m, 5, 50)
@@ -283,8 +300,6 @@ test_custom_hash_eq() {
     HashMap.destroy(m)
     error
 }
-
-Point: { x: Int, y: Int }
 
 test_struct_keys() {
     error := 0
@@ -336,52 +351,49 @@ test_remove_and_reinsert() {
     error
 }
 
-// Hash that maps everything to one of 4 buckets — forces heavy collisions,
-// Robin Hood displacement, and backward-shift deletion chains.
-_colliding_hash(key: Ptr[Int]) -> CSize {
-    k: CSize := key.*
-    k & 3zu
+_colliding_eq(a: Ptr[CollidingKey], b: Ptr[CollidingKey]) -> Bool {
+    a->v == b->v
 }
 
 test_collision_stress() {
     error := 0
-    opts  := HashMap.HashMapOpts[Int](hash = _colliding_hash/1, eq = _custom_eq/2, capacity = 8zu)
-    m     := HashMap.create[Int, Int](Alloc.context.default, opts)
+    opts  := HashMap.HashMapOpts[CollidingKey](eq = _colliding_eq/2, capacity = 8zu)
+    m     := HashMap.create[CollidingKey, Int](Alloc.context.default, opts)
 
     // Insert 32 entries — all land in buckets 0-3, forces Robin Hood swaps
     n := 32
     i := 0
     while i < n, i += 1 {
-        HashMap.set(m, i, i * 7)
+        HashMap.set(m, CollidingKey(v = i), i * 7)
     }
     if HashMap.size(m) != 32zu { error += 1 }
 
     // Verify all entries are accessible
     i = 0
     while i < n, i += 1 {
-        p := HashMap.get(m, i)
+        p := HashMap.get(m, CollidingKey(v = i))
         if p == null { error += 1 }
         if p != null && p.* != i * 7 { error += 1 }
     }
 
     // Overwrite in collision-heavy map
-    HashMap.set(m, 4, 999)
+    HashMap.set(m, CollidingKey(v = 4), 999)
     if HashMap.size(m) != 32zu { error += 1 }
-    p := HashMap.get(m, 4)
+    p := HashMap.get(m, CollidingKey(v = 4))
     if p == null { error += 1 }
     if p != null && p.* != 999 { error += 1 }
 
     // Remove entries from the middle of collision chains
     i = 0
     while i < 16, i += 1 {
-        if !HashMap.remove(m, i) { error += 1 }
+        if !HashMap.remove(m, CollidingKey(v = i)) { error += 1 }
     }
     if HashMap.size(m) != 16zu { error += 1 }
 
     // Remaining entries (16..31) must still be accessible after backward-shift
     i = 16
     while i < n, i += 1 {
-        p2 := HashMap.get(m, i)
+        p2 := HashMap.get(m, CollidingKey(v = i))
         if p2 == null { error += 1 }
         if p2 != null && p2.* != i * 7 { error += 1 }
     }
@@ -389,7 +401,7 @@ test_collision_stress() {
     // Removed entries must be gone
     i = 0
     while i < 16, i += 1 {
-        if HashMap.contains(m, i) { error += 1 }
+        if HashMap.contains(m, CollidingKey(v = i)) { error += 1 }
     }
 
     HashMap.destroy(m)
