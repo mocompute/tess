@@ -89,9 +89,15 @@ An ML-flavoured systems language that transpiles to C.
   add5(10)           // 15
   ```
 
-- **Uniform function call syntax** - Call any function with dot syntax on its first argument. `v.length_sq()` calls `length_sq(v)`. Struct fields take priority. Works with value and pointer receivers, chaining, and generics. For struct types, functions are resolved from the struct's module automatically; for non-struct values, use an explicit module qualifier (`n.Mod.foo()`).
+- **Uniform function call syntax** - Call any function with dot syntax on its first argument.
+  `v.length_sq()` calls `length_sq(v)`. Struct fields take priority. Works with value and pointer receivers,
+  chaining, and generics. For struct types, functions are resolved from the struct's module automatically;
+  for non-struct values, use an explicit module qualifier (`n.Mod.foo()`).
 
-- **Expression-based** - Almost everything is an expression. Functions implicitly return their last expression—no `return` keyword needed. Control flow constructs like `if` and `case` produce values. No semicolons. Postfix pointer operators (`.&`, `.*`, `->`) read left-to-right like field access.
+- **Expression-based** - Almost everything is an expression. Functions implicitly return their last
+  expression—no `return` keyword needed. Control flow constructs like `if` and `case` produce values. No
+  semicolons required, but they (or commas) can be used to clarify ambiguous expressions. Postfix pointer
+  operators (`.&`, `.*`, `->`) read left-to-right like field access.
 
 - **Case expressions** - `case` for value matching with support for custom predicates:
   ```tl
