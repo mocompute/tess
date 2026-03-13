@@ -406,10 +406,15 @@ str file_path_relative(allocator *alloc, str from_dir, str to_path) {
     }
 #endif
 
-    // Fast path: if to_path starts with from_dir, just strip the prefix
+    // Fast path: if to_path starts with from_dir, strip the prefix
     size_t from_len = str_len(from_norm);
     size_t to_len   = str_len(to_norm);
-    if (to_len > from_len && str_starts_with(to_norm, from_norm)) {
+    if (to_len >= from_len && str_starts_with(to_norm, from_norm)) {
+        if (to_len == from_len) {
+            str_deinit(alloc, &from_norm);
+            str_deinit(alloc, &to_norm);
+            return str_init(alloc, ".");
+        }
         char const *to_cptr = str_cstr(&to_norm);
         char sep = to_cptr[from_len];
         if (sep == '/' || sep == '\\') {
@@ -418,11 +423,6 @@ str file_path_relative(allocator *alloc, str from_dir, str to_path) {
             str_deinit(alloc, &to_norm);
             return result;
         }
-    }
-    if (to_len == from_len && str_eq(from_norm, to_norm)) {
-        str_deinit(alloc, &from_norm);
-        str_deinit(alloc, &to_norm);
-        return str_init(alloc, ".");
     }
 
     // Split paths into components
