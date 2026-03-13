@@ -1,4 +1,4 @@
-#include "tlib.h"
+#include "tpkg.h"
 #include "array.h"
 #include "file.h"
 #include "hashmap.h"
@@ -11,10 +11,10 @@
 #include <stdio.h>
 #include <string.h>
 
-#define TLIB_MAGIC         0x544C4942u /* "TLIB" big-endian (network order) */
-#define TLIB_VERSION       1u
-#define TLIB_FIXED_HEADER  8u /* magic + version */
-#define TLIB_MAX_FILE_SIZE (64u * 1024u * 1024u)
+#define TPKG_MAGIC         0x54504B47u /* "TPKG" big-endian (network order) */
+#define TPKG_VERSION       1u
+#define TPKG_FIXED_HEADER  8u /* magic + version */
+#define TPKG_MAX_FILE_SIZE (64u * 1024u * 1024u)
 
 static void write_u32_be(byte *p, u32 v) {
     p[0] = (byte)(v >> 24);
@@ -107,7 +107,7 @@ static int read_str16_array(byte const **pp, byte const *end, allocator *alloc, 
     return 0;
 }
 
-int tl_tlib_valid_filename(char const *name, u32 len) {
+int tl_tpkg_valid_filename(char const *name, u32 len) {
     if (len == 0) return 0;
     if (name[0] == '/') return 0;
     /* reject Windows absolute paths (e.g. C:\, D:/) */
@@ -126,14 +126,14 @@ int tl_tlib_valid_filename(char const *name, u32 len) {
     return 1;
 }
 
-int tl_tlib_write(allocator *alloc, char const *output_path, tl_tlib_metadata const *metadata,
-                  tl_tlib_entry const *entries, u32 count) {
+int tl_tpkg_write(allocator *alloc, char const *output_path, tl_tpkg_metadata const *metadata,
+                  tl_tpkg_entry const *entries, u32 count) {
     /* compute payload size with overflow check */
     u32 payload_size = 4; /* file count */
     for (u32 i = 0; i < count; i++) {
         u32 entry_size = 8 + entries[i].name_len + entries[i].data_len;
         if (payload_size > UINT32_MAX - entry_size) {
-            fprintf(stderr, "tlib: payload too large\n");
+            fprintf(stderr, "tpkg: payload too large\n");
             return 1;
         }
         payload_size += entry_size;
@@ -159,7 +159,7 @@ int tl_tlib_write(allocator *alloc, char const *output_path, tl_tlib_metadata co
     struct libdeflate_compressor *c = libdeflate_alloc_compressor(6);
     if (!c) {
         alloc_free(alloc, payload);
-        fprintf(stderr, "tlib: failed to allocate compressor\n");
+        fprintf(stderr, "tpkg: failed to allocate compressor\n");
         return 1;
     }
 
@@ -172,7 +172,7 @@ int tl_tlib_write(allocator *alloc, char const *output_path, tl_tlib_metadata co
 
     if (compressed_size == 0) {
         alloc_free(alloc, compressed);
-        fprintf(stderr, "tlib: compression failed\n");
+        fprintf(stderr, "tpkg: compression failed\n");
         return 1;
     }
 
@@ -180,7 +180,7 @@ int tl_tlib_write(allocator *alloc, char const *output_path, tl_tlib_metadata co
     if (str_len(metadata->name) > UINT16_MAX || str_len(metadata->author) > UINT16_MAX ||
         str_len(metadata->version) > UINT16_MAX) {
         alloc_free(alloc, compressed);
-        fprintf(stderr, "tlib: metadata field too long for u16\n");
+        fprintf(stderr, "tpkg: metadata field too long for u16\n");
         return 1;
     }
 
@@ -188,20 +188,20 @@ int tl_tlib_write(allocator *alloc, char const *output_path, tl_tlib_metadata co
     FILE *f = fopen(output_path, "wb");
     if (!f) {
         alloc_free(alloc, compressed);
-        perror("tlib: failed to open output file");
+        perror("tpkg: failed to open output file");
         return 1;
     }
 
     u32 crc = 0;
 
     /* write fixed header: magic + version */
-    byte header[TLIB_FIXED_HEADER];
-    write_u32_be(header + 0, TLIB_MAGIC);
-    write_u32_be(header + 4, TLIB_VERSION);
-    if (fwrite_crc(f, header, TLIB_FIXED_HEADER, &crc)) {
+    byte header[TPKG_FIXED_HEADER];
+    write_u32_be(header + 0, TPKG_MAGIC);
+    write_u32_be(header + 4, TPKG_VERSION);
+    if (fwrite_crc(f, header, TPKG_FIXED_HEADER, &crc)) {
         fclose(f);
         alloc_free(alloc, compressed);
-        fprintf(stderr, "tlib: failed to write header\n");
+        fprintf(stderr, "tpkg: failed to write header\n");
         return 1;
     }
 
@@ -220,7 +220,7 @@ int tl_tlib_write(allocator *alloc, char const *output_path, tl_tlib_metadata co
     if (!meta_ok) {
         fclose(f);
         alloc_free(alloc, compressed);
-        fprintf(stderr, "tlib: failed to write metadata\n");
+        fprintf(stderr, "tpkg: failed to write metadata\n");
         return 1;
     }
 
@@ -231,7 +231,7 @@ int tl_tlib_write(allocator *alloc, char const *output_path, tl_tlib_metadata co
     if (fwrite_crc(f, sizes, 8, &crc)) {
         fclose(f);
         alloc_free(alloc, compressed);
-        fprintf(stderr, "tlib: failed to write size fields\n");
+        fprintf(stderr, "tpkg: failed to write size fields\n");
         return 1;
     }
 
@@ -239,7 +239,7 @@ int tl_tlib_write(allocator *alloc, char const *output_path, tl_tlib_metadata co
     if (fwrite(compressed, 1, compressed_size, f) != compressed_size) {
         fclose(f);
         alloc_free(alloc, compressed);
-        fprintf(stderr, "tlib: failed to write compressed payload\n");
+        fprintf(stderr, "tpkg: failed to write compressed payload\n");
         return 1;
     }
     crc = libdeflate_crc32(crc, compressed, compressed_size);
@@ -251,7 +251,7 @@ int tl_tlib_write(allocator *alloc, char const *output_path, tl_tlib_metadata co
     write_u32_be(crc_buf, crc);
     if (fwrite(crc_buf, 1, 4, f) != 4) {
         fclose(f);
-        fprintf(stderr, "tlib: failed to write CRC32\n");
+        fprintf(stderr, "tpkg: failed to write CRC32\n");
         return 1;
     }
 
@@ -259,14 +259,14 @@ int tl_tlib_write(allocator *alloc, char const *output_path, tl_tlib_metadata co
     return 0;
 }
 
-// Parse a tlib archive from raw bytes (must include header and CRC32 trailer).
+// Parse a tpkg archive from raw bytes (must include header and CRC32 trailer).
 // Does not free raw_buf. Returns 0 on success.
-static int tl_tlib_parse(allocator *alloc, byte const *raw_buf, u32 raw_size, tl_tlib_archive *out) {
+static int tl_tpkg_parse(allocator *alloc, byte const *raw_buf, u32 raw_size, tl_tpkg_archive *out) {
     memset(out, 0, sizeof(*out));
 
     /* need at least header(8) + CRC32(4) */
-    if (raw_size < TLIB_FIXED_HEADER + 4) {
-        fprintf(stderr, "tlib: file too small\n");
+    if (raw_size < TPKG_FIXED_HEADER + 4) {
+        fprintf(stderr, "tpkg: file too small\n");
         return 1;
     }
 
@@ -274,7 +274,7 @@ static int tl_tlib_parse(allocator *alloc, byte const *raw_buf, u32 raw_size, tl
     u32 stored_crc   = read_u32_be(raw_buf + raw_size - 4);
     u32 computed_crc = libdeflate_crc32(0, raw_buf, raw_size - 4);
     if (stored_crc != computed_crc) {
-        fprintf(stderr, "tlib: CRC32 checksum mismatch (archive corrupted)\n");
+        fprintf(stderr, "tpkg: CRC32 checksum mismatch (archive corrupted)\n");
         return 1;
     }
 
@@ -284,14 +284,14 @@ static int tl_tlib_parse(allocator *alloc, byte const *raw_buf, u32 raw_size, tl
     /* read fixed header */
     u32 magic   = read_u32_be(p + 0);
     u32 version = read_u32_be(p + 4);
-    p += TLIB_FIXED_HEADER;
+    p += TPKG_FIXED_HEADER;
 
-    if (magic != TLIB_MAGIC) {
-        fprintf(stderr, "tlib: invalid magic\n");
+    if (magic != TPKG_MAGIC) {
+        fprintf(stderr, "tpkg: invalid magic\n");
         return 1;
     }
-    if (version != TLIB_VERSION) {
-        fprintf(stderr, "tlib: unsupported version %u\n", version);
+    if (version != TPKG_VERSION) {
+        fprintf(stderr, "tpkg: unsupported version %u\n", version);
         return 1;
     }
 
@@ -314,11 +314,11 @@ static int tl_tlib_parse(allocator *alloc, byte const *raw_buf, u32 raw_size, tl
     p += 8;
 
     if (compressed_sz != (u32)(end - p)) {
-        fprintf(stderr, "tlib: compressed size mismatch\n");
+        fprintf(stderr, "tpkg: compressed size mismatch\n");
         return 1;
     }
-    if (uncompressed_sz > TLIB_MAX_FILE_SIZE) {
-        fprintf(stderr, "tlib: uncompressed size too large\n");
+    if (uncompressed_sz > TPKG_MAX_FILE_SIZE) {
+        fprintf(stderr, "tpkg: uncompressed size too large\n");
         return 1;
     }
 
@@ -328,7 +328,7 @@ static int tl_tlib_parse(allocator *alloc, byte const *raw_buf, u32 raw_size, tl
     struct libdeflate_decompressor *d       = libdeflate_alloc_decompressor();
     if (!d) {
         alloc_free(alloc, payload);
-        fprintf(stderr, "tlib: failed to allocate decompressor\n");
+        fprintf(stderr, "tpkg: failed to allocate decompressor\n");
         return 1;
     }
 
@@ -338,7 +338,7 @@ static int tl_tlib_parse(allocator *alloc, byte const *raw_buf, u32 raw_size, tl
     libdeflate_free_decompressor(d);
 
     if (r != LIBDEFLATE_SUCCESS || actual_out != uncompressed_sz) {
-        fprintf(stderr, "tlib: decompression failed\n");
+        fprintf(stderr, "tpkg: decompression failed\n");
         alloc_free(alloc, payload);
         return 1;
     }
@@ -351,7 +351,7 @@ static int tl_tlib_parse(allocator *alloc, byte const *raw_buf, u32 raw_size, tl
     u32 entry_count = read_u32_be(pp);
     pp += 4;
 
-    tl_tlib_entry *entries = entry_count ? alloc_calloc(alloc, entry_count, sizeof(tl_tlib_entry)) : null;
+    tl_tpkg_entry *entries = entry_count ? alloc_calloc(alloc, entry_count, sizeof(tl_tpkg_entry)) : null;
 
     for (u32 i = 0; i < entry_count; i++) {
         if (pp + 4 > pend) goto corrupt_entries;
@@ -361,8 +361,8 @@ static int tl_tlib_parse(allocator *alloc, byte const *raw_buf, u32 raw_size, tl
         char const *name = (char const *)pp;
         pp += name_len;
 
-        if (!tl_tlib_valid_filename(name, name_len)) {
-            fprintf(stderr, "tlib: invalid filename in archive\n");
+        if (!tl_tpkg_valid_filename(name, name_len)) {
+            fprintf(stderr, "tpkg: invalid filename in archive\n");
             alloc_free(alloc, entries);
             alloc_free(alloc, payload);
             return 1;
@@ -396,28 +396,28 @@ static int tl_tlib_parse(allocator *alloc, byte const *raw_buf, u32 raw_size, tl
 corrupt_entries:
     alloc_free(alloc, entries);
 corrupt:
-    fprintf(stderr, "tlib: corrupted payload\n");
+    fprintf(stderr, "tpkg: corrupted payload\n");
     alloc_free(alloc, payload);
     return 1;
 
 corrupt_meta:
-    fprintf(stderr, "tlib: corrupted metadata\n");
+    fprintf(stderr, "tpkg: corrupted metadata\n");
     return 1;
 }
 
-int tl_tlib_read(allocator *alloc, char const *input_path, tl_tlib_archive *out) {
+int tl_tpkg_read(allocator *alloc, char const *input_path, tl_tpkg_archive *out) {
     char *raw      = null;
     u32   raw_size = 0;
     file_read(alloc, input_path, &raw, &raw_size);
     if (!raw) return 1;
 
-    int result = tl_tlib_parse(alloc, (byte const *)raw, raw_size, out);
+    int result = tl_tpkg_parse(alloc, (byte const *)raw, raw_size, out);
     alloc_free(alloc, raw);
     return result;
 }
 
-int tl_tlib_read_from_memory(allocator *alloc, void const *data, u32 size, tl_tlib_archive *out) {
-    return tl_tlib_parse(alloc, (byte const *)data, size, out);
+int tl_tpkg_read_from_memory(allocator *alloc, void const *data, u32 size, tl_tpkg_archive *out) {
+    return tl_tpkg_parse(alloc, (byte const *)data, size, out);
 }
 
 // -- High-level operations --
@@ -425,7 +425,7 @@ int tl_tlib_read_from_memory(allocator *alloc, void const *data, u32 size, tl_tl
 // Verify all quoted imports in archive entries resolve to other entries.
 // Uses tl_source_scanner_collect_imports() for correct string/comment handling.
 // Returns 0 if self-contained, 1 if an import escapes the archive.
-static int check_self_containment(allocator *alloc, tl_tlib_entry const *entries, u32 count) {
+static int check_self_containment(allocator *alloc, tl_tpkg_entry const *entries, u32 count) {
     int error = 0;
 
     // Build hashset of entry names
@@ -485,22 +485,22 @@ static int check_self_containment(allocator *alloc, tl_tlib_entry const *entries
     return error;
 }
 
-int tl_tlib_pack(allocator *alloc, char const *output_path, str_sized files, str base_dir,
-                 struct import_resolver *resolver, tl_tlib_pack_opts opts) {
+int tl_tpkg_pack(allocator *alloc, char const *output_path, str_sized files, str base_dir,
+                 struct import_resolver *resolver, tl_tpkg_pack_opts opts) {
     // Validate required metadata
     if (!opts.name || strlen(opts.name) == 0) {
-        fprintf(stderr, "tlib: name is required\n");
+        fprintf(stderr, "tpkg: name is required\n");
         return 1;
     }
     if (!opts.version || strlen(opts.version) == 0) {
-        fprintf(stderr, "tlib: package version is required\n");
+        fprintf(stderr, "tpkg: package version is required\n");
         return 1;
     }
 
     // Determine base directory from first input file if not provided
     if (str_is_empty(base_dir)) {
         if (files.size == 0) {
-            fprintf(stderr, "tlib: no input files\n");
+            fprintf(stderr, "tpkg: no input files\n");
             return 1;
         }
         str first_norm = file_path_normalize(alloc, files.v[0]);
@@ -510,7 +510,7 @@ int tl_tlib_pack(allocator *alloc, char const *output_path, str_sized files, str
             // Use current directory
             char cwd_buf[4096];
             if (!file_current_working_directory((span){.buf = cwd_buf, .len = sizeof(cwd_buf)})) {
-                fprintf(stderr, "tlib: failed to determine current working directory\n");
+                fprintf(stderr, "tpkg: failed to determine current working directory\n");
                 return 1;
             }
             base_dir = str_init(alloc, cwd_buf);
@@ -530,12 +530,12 @@ int tl_tlib_pack(allocator *alloc, char const *output_path, str_sized files, str
     }
 
     if (user_file_count == 0) {
-        fprintf(stderr, "tlib: no user files to pack (only standard library dependencies)\n");
+        fprintf(stderr, "tpkg: no user files to pack (only standard library dependencies)\n");
         return 1;
     }
 
     // Allocate entries
-    tl_tlib_entry *entries   = alloc_malloc(alloc, user_file_count * sizeof(tl_tlib_entry));
+    tl_tpkg_entry *entries   = alloc_malloc(alloc, user_file_count * sizeof(tl_tpkg_entry));
     u32            entry_idx = 0;
 
     // Process each file
@@ -554,14 +554,14 @@ int tl_tlib_pack(allocator *alloc, char const *output_path, str_sized files, str
         str rel_path = file_path_relative(alloc, base_dir, file_path);
 
         if (str_is_empty(rel_path)) {
-            fprintf(stderr, "tlib: cannot compute relative path for: %s\n", str_cstr(&file_path));
+            fprintf(stderr, "tpkg: cannot compute relative path for: %s\n", str_cstr(&file_path));
             fprintf(stderr, "      from base directory: %s\n", str_cstr(&base_dir));
             return 1;
         }
 
         // Validate filename for archive (no "..", no absolute paths)
-        if (!tl_tlib_valid_filename(str_cstr(&rel_path), (u32)str_len(rel_path))) {
-            fprintf(stderr, "tlib: invalid archive path: %s\n", str_cstr(&rel_path));
+        if (!tl_tpkg_valid_filename(str_cstr(&rel_path), (u32)str_len(rel_path))) {
+            fprintf(stderr, "tpkg: invalid archive path: %s\n", str_cstr(&rel_path));
             fprintf(stderr, "      Archive paths must not contain '..' or be absolute.\n");
             return 1;
         }
@@ -571,7 +571,7 @@ int tl_tlib_pack(allocator *alloc, char const *output_path, str_sized files, str
         u32   size;
         file_read(alloc, str_cstr(&file_path), &data, &size);
         if (!data) {
-            fprintf(stderr, "tlib: failed to read file: %s\n", str_cstr(&file_path));
+            fprintf(stderr, "tpkg: failed to read file: %s\n", str_cstr(&file_path));
             return 1;
         }
 
@@ -603,11 +603,11 @@ int tl_tlib_pack(allocator *alloc, char const *output_path, str_sized files, str
         u32   pkg_size;
         file_read(alloc, opts.package_tl_path, &pkg_data, &pkg_size);
         if (!pkg_data) {
-            fprintf(stderr, "tlib: failed to read package.tl: %s\n", opts.package_tl_path);
+            fprintf(stderr, "tpkg: failed to read package.tl: %s\n", opts.package_tl_path);
             return 1;
         }
 
-        entries                 = alloc_realloc(alloc, entries, (entry_idx + 1) * sizeof(tl_tlib_entry));
+        entries                 = alloc_realloc(alloc, entries, (entry_idx + 1) * sizeof(tl_tpkg_entry));
         entries[entry_idx].name = "package.tl";
         entries[entry_idx].name_len = 10;
         entries[entry_idx].data     = (byte const *)pkg_data;
@@ -620,7 +620,7 @@ int tl_tlib_pack(allocator *alloc, char const *output_path, str_sized files, str
     }
 
     // Build metadata
-    tl_tlib_metadata meta = {
+    tl_tpkg_metadata meta = {
       .name                   = str_init(alloc, opts.name),
       .author                 = opts.author ? str_init(alloc, opts.author) : str_empty(),
       .version                = str_init(alloc, opts.version),
@@ -649,7 +649,7 @@ int tl_tlib_pack(allocator *alloc, char const *output_path, str_sized files, str
         }
     }
 
-    int result = tl_tlib_write(alloc, output_path, &meta, entries, entry_idx);
+    int result = tl_tpkg_write(alloc, output_path, &meta, entries, entry_idx);
 
     if (result == 0 && opts.verbose) {
         fprintf(stderr, "Archive created successfully.\n");
@@ -701,30 +701,30 @@ static int mkdir_p(char const *path) {
     return 0;
 }
 
-int tl_tlib_extract(allocator *alloc, tl_tlib_archive const *archive, char const *output_dir,
+int tl_tpkg_extract(allocator *alloc, tl_tpkg_archive const *archive, char const *output_dir,
                     str_array *out_files) {
     if (mkdir_p(output_dir) != 0) {
-        fprintf(stderr, "tlib: failed to create output directory: %s\n", output_dir);
+        fprintf(stderr, "tpkg: failed to create output directory: %s\n", output_dir);
         return 1;
     }
 
     str out_dir = str_init(alloc, output_dir);
 
     for (u32 i = 0; i < archive->entries_count; i++) {
-        tl_tlib_entry const *entry    = &archive->entries[i];
+        tl_tpkg_entry const *entry    = &archive->entries[i];
 
         str                  name     = str_init_n(alloc, entry->name, entry->name_len);
         str                  out_path = file_path_join(alloc, out_dir, name);
 
         str                  parent   = file_dirname(alloc, out_path);
         if (!str_is_empty(parent) && mkdir_p(str_cstr(&parent)) != 0) {
-            fprintf(stderr, "tlib: failed to create directory: %s\n", str_cstr(&parent));
+            fprintf(stderr, "tpkg: failed to create directory: %s\n", str_cstr(&parent));
             return 1;
         }
 
         FILE *f = fopen(str_cstr(&out_path), "wb");
         if (!f) {
-            fprintf(stderr, "tlib: failed to create file: %s\n", str_cstr(&out_path));
+            fprintf(stderr, "tpkg: failed to create file: %s\n", str_cstr(&out_path));
             return 1;
         }
 
@@ -732,7 +732,7 @@ int tl_tlib_extract(allocator *alloc, tl_tlib_archive const *archive, char const
         fclose(f);
 
         if (written != entry->data_len) {
-            fprintf(stderr, "tlib: failed to write file: %s\n", str_cstr(&out_path));
+            fprintf(stderr, "tpkg: failed to write file: %s\n", str_cstr(&out_path));
             return 1;
         }
 
@@ -751,17 +751,17 @@ int tl_tlib_extract(allocator *alloc, tl_tlib_archive const *archive, char const
     return 0;
 }
 
-int tl_tlib_unpack(allocator *alloc, char const *archive_path, char const *output_dir,
-                   tl_tlib_unpack_opts opts) {
+int tl_tpkg_unpack(allocator *alloc, char const *archive_path, char const *output_dir,
+                   tl_tpkg_unpack_opts opts) {
     // Read archive
-    tl_tlib_archive archive;
-    if (tl_tlib_read(alloc, archive_path, &archive) != 0) {
+    tl_tpkg_archive archive;
+    if (tl_tpkg_read(alloc, archive_path, &archive) != 0) {
         return 1;
     }
 
     if (opts.list_only) {
         // List mode: print metadata and filenames
-        tl_tlib_metadata *m = &archive.metadata;
+        tl_tpkg_metadata *m = &archive.metadata;
         printf("Name: %s\n", str_cstr(&m->name));
         printf("Version: %s\n", str_cstr(&m->version));
         if (!str_is_empty(m->author)) {
@@ -794,21 +794,21 @@ int tl_tlib_unpack(allocator *alloc, char const *archive_path, char const *outpu
 
     // Extract mode
     if (!output_dir) {
-        fprintf(stderr, "tlib: output directory required for extraction\n");
+        fprintf(stderr, "tpkg: output directory required for extraction\n");
         return 1;
     }
 
     // Create output directory if needed
     if (mkdir_p(output_dir) != 0) {
-        fprintf(stderr, "tlib: failed to create output directory: %s\n", output_dir);
+        fprintf(stderr, "tpkg: failed to create output directory: %s\n", output_dir);
         return 1;
     }
 
-    fprintf(stderr, "tlib: Extracting to: %s\n", output_dir);
+    fprintf(stderr, "tpkg: Extracting to: %s\n", output_dir);
 
     // Extract each file
     for (u32 i = 0; i < archive.entries_count; i++) {
-        tl_tlib_entry const *entry = &archive.entries[i];
+        tl_tpkg_entry const *entry = &archive.entries[i];
 
         // Build output path
         str name     = str_init_n(alloc, entry->name, entry->name_len);
@@ -818,20 +818,20 @@ int tl_tlib_unpack(allocator *alloc, char const *archive_path, char const *outpu
         // Create parent directory if needed
         str parent = file_dirname(alloc, out_path);
         if (!str_is_empty(parent) && mkdir_p(str_cstr(&parent)) != 0) {
-            fprintf(stderr, "error: tlib: failed to create directory: %s\n", str_cstr(&parent));
+            fprintf(stderr, "error: tpkg: failed to create directory: %s\n", str_cstr(&parent));
             return 1;
         }
 
         // If file exists, exit
         if (file_exists(out_path)) {
-            fprintf(stderr, "error: tlib: file exists: %s\n", str_cstr(&out_path));
+            fprintf(stderr, "error: tpkg: file exists: %s\n", str_cstr(&out_path));
             return 1;
         }
 
         // Write file
         FILE *f = fopen(str_cstr(&out_path), "wb");
         if (!f) {
-            perror("error: tlib: failed to create file");
+            perror("error: tpkg: failed to create file");
             fprintf(stderr, "      path: %s\n", str_cstr(&out_path));
             return 1;
         }
@@ -840,7 +840,7 @@ int tl_tlib_unpack(allocator *alloc, char const *archive_path, char const *outpu
         fclose(f);
 
         if (written != entry->data_len) {
-            fprintf(stderr, "error: tlib: failed to write complete file: %s\n", str_cstr(&out_path));
+            fprintf(stderr, "error: tpkg: failed to write complete file: %s\n", str_cstr(&out_path));
             return 1;
         }
 

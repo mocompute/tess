@@ -1,13 +1,13 @@
 # Packages
 
-Tess supports distributing reusable libraries as `.tlib` **packages**. A package bundles one or more modules as a compressed source archive. Consumers declare dependencies in a `package.tl` file, and the compiler loads, version-checks, and compiles everything together via whole-program compilation.
+Tess supports distributing reusable libraries as `.tpkg` **packages**. A package bundles one or more modules as a compressed source archive. Consumers declare dependencies in a `package.tl` file, and the compiler loads, version-checks, and compiles everything together via whole-program compilation.
 
 This is distinct from C-compatible libraries (`tess lib` producing `.so`/`.dll`, or `tess lib --static` producing `.a`/`.lib`), which remain unchanged.
 
 ## Concepts
 
 - **Module**: A namespace declared with `#module Name` in a `.tl` source file. Members are accessed as `Module.function()`. See [LANGUAGE_REFERENCE.md](LANGUAGE_REFERENCE.md).
-- **Package**: A `.tlib` archive containing one or more modules plus metadata. Packages have a name (declared in `package.tl`) that is independent of the module names inside. Only the module names are visible in source code.
+- **Package**: A `.tpkg` archive containing one or more modules plus metadata. Packages have a name (declared in `package.tl`) that is independent of the module names inside. Only the module names are visible in source code.
 
 Packages are source-only archives. There is no pre-compilation or IR. The consumer extracts source and compiles everything together, which preserves whole-program compilation semantics and ensures generic functions specialize correctly.
 
@@ -47,10 +47,10 @@ Note that the package name (`mylib`) and the module name (`MathUtils`) are indep
 
 **Build the package:**
 ```bash
-tess pack -o mylib.tlib
+tess pack -o mylib.tpkg
 ```
 
-Note that `package.tl` is found automatically in the current working directory. The `source("src/")` declaration tells the compiler where to find source files, so no file arguments are needed on the command line. You can still list files explicitly (`tess pack src/math.tl -o mylib.tlib`), which overrides `source()`.
+Note that `package.tl` is found automatically in the current working directory. The `source("src/")` declaration tells the compiler where to find source files, so no file arguments are needed on the command line. You can still list files explicitly (`tess pack src/math.tl -o mylib.tpkg`), which overrides `source()`.
 
 ### Consuming a package
 
@@ -58,7 +58,7 @@ Note that `package.tl` is found automatically in the current working directory. 
 myapp/
   package.tl
   libs/
-    mylib.tlib
+    mylib.tpkg
   src/
     main.tl
 ```
@@ -91,7 +91,7 @@ depend_path("./libs")
 tess exe -o myapp
 ```
 
-The compiler auto-discovers `package.tl` in the current working directory, resolves `source("src/")` to find source files, loads `mylib.tlib` from the `libs/` directory, verifies the version matches, and compiles everything together. Consumer code uses the *module* name (`MathUtils.clamp`), not the package name.
+The compiler auto-discovers `package.tl` in the current working directory, resolves `source("src/")` to find source files, loads `mylib.tpkg` from the `libs/` directory, verifies the version matches, and compiles everything together. Consumer code uses the *module* name (`MathUtils.clamp`), not the package name.
 
 ---
 
@@ -113,7 +113,7 @@ Builds that do not use packages work without `package.tl` -- the compiler simply
 | `source(path, ...)` | 1+ strings | No | Source files or directories (directories scanned recursively for `*.tl`) |
 | `depend(name, ver)` | identifier + string | No | Required dependency with version |
 | `depend_optional(name, ver)` | identifier + string | No | Optional dependency with version |
-| `depend_path(dir)` | 1 string | No | Directory to search for `.tlib` files (accumulates) |
+| `depend_path(dir)` | 1 string | No | Directory to search for `.tpkg` files (accumulates) |
 
 ### Example
 
@@ -156,7 +156,7 @@ When `source()` is declared, commands like `tess run`, `tess exe`, `tess pack`, 
 ```bash
 tess run                    # uses source() from package.tl
 tess exe -o myapp           # uses source() from package.tl
-tess pack -o mylib.tlib     # uses source() from package.tl
+tess pack -o mylib.tpkg     # uses source() from package.tl
 tess validate               # uses source() from package.tl
 ```
 
@@ -175,8 +175,8 @@ Projects without `package.tl` or without `source()` work as before — files mus
 ### The `tess pack` command
 
 ```bash
-tess pack -o output.tlib [-v]
-tess pack <file1.tl> [file2.tl ...] -o output.tlib [-v]
+tess pack -o output.tpkg [-v]
+tess pack <file1.tl> [file2.tl ...] -o output.tpkg [-v]
 ```
 
 When no files are listed on the command line, `tess pack` uses `source()` entries from `package.tl` to find source files automatically. If files are given explicitly, they override `source()` (a warning is printed).
@@ -188,7 +188,7 @@ The command:
 4. Excludes standard library files
 5. Validates that all `export()` modules exist in the source
 6. Checks self-containment: every `#import "file.tl"` resolves to another file in the archive
-7. Compresses and writes the `.tlib` archive
+7. Compresses and writes the `.tpkg` archive
 
 ### Multi-file packages
 
@@ -203,7 +203,7 @@ mylib/
 ```
 
 ```bash
-tess pack -o MathUtils.tlib
+tess pack -o MathUtils.tpkg
 ```
 
 Both `math.tl` and `internal.tl` are included -- `math.tl` is found via `source("src/")` and `internal.tl` is found because `math.tl` imports it.
@@ -219,8 +219,8 @@ Runs the same checks as `tess pack` without producing an archive. Reads `package
 ### Inspecting and extracting an archive
 
 ```bash
-tess pack --list archive.tlib                # Show metadata and file list
-tess pack --unpack archive.tlib [-o outdir]  # Extract files
+tess pack --list archive.tpkg                # Show metadata and file list
+tess pack --unpack archive.tpkg [-o outdir]  # Extract files
 ```
 
 ---
@@ -233,7 +233,7 @@ When you run `tess exe` (or `tess run`, `tess c`, `tess lib`), the compiler:
 
 1. Looks for `package.tl` in the current working directory
 2. Discovers local source files from `source()` entries (if no files given on the command line)
-3. For each `depend()` declaration, searches `depend_path()` directories for `<PackageName>-<Version>.tlib`, then `<PackageName>.tlib`
+3. For each `depend()` declaration, searches `depend_path()` directories for `<PackageName>-<Version>.tpkg`, then `<PackageName>.tpkg`
 4. Reads the archive and verifies the version matches exactly
 5. Extracts source files to a temporary directory
 6. Recursively loads transitive dependencies from the archive's metadata
@@ -276,12 +276,12 @@ depend_path("./libs")
 
 ### Transitive dependencies
 
-The compiler automatically resolves transitive dependencies. If `mylib` depends on `logging_lib`, the compiler reads that from the `mylib.tlib` metadata and searches the consumer's `depend_path()` directories for `logging_lib.tlib`.
+The compiler automatically resolves transitive dependencies. If `mylib` depends on `logging_lib`, the compiler reads that from the `mylib.tpkg` metadata and searches the consumer's `depend_path()` directories for `logging_lib.tpkg`.
 
 ```
 MyApp
   depends on mylib (declared in package.tl)
-    depends on logging_lib (resolved automatically from mylib.tlib metadata)
+    depends on logging_lib (resolved automatically from mylib.tpkg metadata)
 ```
 
 The consumer must have all transitive dependencies available in their `depend_path()` directories. If a transitive dependency cannot be found, the compiler emits an error naming the missing package and which package requires it.
@@ -292,14 +292,14 @@ Different versions of the same package can coexist in the same build. If package
 
 Version strings use strict equality -- `"1.0.0"` must match exactly. There is no semver range resolution.
 
-To make multiple versions available, use versioned `.tlib` filenames. The compiler searches for `<PackageName>-<Version>.tlib` first, then falls back to `<PackageName>.tlib`:
+To make multiple versions available, use versioned `.tpkg` filenames. The compiler searches for `<PackageName>-<Version>.tpkg` first, then falls back to `<PackageName>.tpkg`:
 
 ```
 libs/
-  BaseLib.tlib          # BaseLib v1.0.0 (unversioned fallback)
-  BaseLib-2.0.0.tlib    # BaseLib v2.0.0 (versioned)
-  LibA.tlib
-  LibB.tlib
+  BaseLib.tpkg          # BaseLib v1.0.0 (unversioned fallback)
+  BaseLib-2.0.0.tpkg    # BaseLib v2.0.0 (versioned)
+  LibA.tpkg
+  LibB.tpkg
 ```
 
 ### Diamond dependencies
@@ -353,7 +353,7 @@ Package names (in `package.tl`) and module names (in source code) are independen
 | **In `package.tl`** | `package(logging_lib)` | `export(Logger)` |
 | **In source code** | not visible | `Logger.warn(...)` |
 | **In `depend()`** | `depend(logging_lib, "2.0.0")` | -- |
-| **In `.tlib` filename** | `logging_lib.tlib` | -- |
+| **In `.tpkg` filename** | `logging_lib.tpkg` | -- |
 
 Package names appear in `package.tl`, dependency declarations, and archive filenames. Module names appear in source code.
 
@@ -392,7 +392,7 @@ source("logger.tl")
 ```
 
 ```bash
-tess pack -o logging_lib.tlib
+tess pack -o logging_lib.tpkg
 ```
 
 ### 2. mylib package (depends on logging_lib)
@@ -443,7 +443,7 @@ depend_path("./libs")
 ```
 
 ```bash
-tess pack -o mylib.tlib
+tess pack -o mylib.tpkg
 ```
 
 The archive contains `math.tl` and `internal.tl` but not logging_lib's source. The metadata records the dependency: `logging_lib=2.0.0`.
@@ -480,18 +480,18 @@ depend_path("./libs")
 tess exe -o myapp
 ```
 
-The compiler auto-discovers `src/main.tl` via `source("src/")`, loads `mylib.tlib`, sees it requires `logging_lib=2.0.0`, finds `logging_lib.tlib` in `./libs`, verifies the version, and compiles everything together.
+The compiler auto-discovers `src/main.tl` via `source("src/")`, loads `mylib.tpkg`, sees it requires `logging_lib=2.0.0`, finds `logging_lib.tpkg` in `./libs`, verifies the version, and compiles everything together.
 
 ---
 
-## `.tlib` Archive Format
+## `.tpkg` Archive Format
 
-A `.tlib` file is a custom binary format with uncompressed metadata followed by a deflate-compressed source payload.
+A `.tpkg` file is a custom binary format with uncompressed metadata followed by a deflate-compressed source payload.
 
 ### Layout
 
 ```
-[4 bytes]  Magic: "TLIB"
+[4 bytes]  Magic: "TPKG"
 [4 bytes]  Format version (big-endian u32)
            Metadata (uncompressed):
              Package name, author, version (u16-prefixed strings)

@@ -1,5 +1,5 @@
-#ifndef TESS_TLIB_H
-#define TESS_TLIB_H
+#ifndef TESS_TPKG_H
+#define TESS_TPKG_H
 
 #include "alloc.h"
 #include "str.h"
@@ -19,7 +19,7 @@ typedef struct {
     u16  depends_count;
     str *depends_optional; // array of optional dependencies ("Name=Version")
     u16  depends_optional_count;
-} tl_tlib_metadata;
+} tl_tpkg_metadata;
 
 // Single file entry in the archive
 typedef struct {
@@ -27,29 +27,29 @@ typedef struct {
     u32         name_len;
     byte const *data;
     u32         data_len;
-} tl_tlib_entry;
+} tl_tpkg_entry;
 
 // Complete archive structure
 typedef struct {
-    tl_tlib_metadata metadata;
-    tl_tlib_entry   *entries;
+    tl_tpkg_metadata metadata;
+    tl_tpkg_entry   *entries;
     u32              entries_count;
-} tl_tlib_archive;
+} tl_tpkg_archive;
 
-// Write archive to a .tlib file. Returns 0 on success.
-int tl_tlib_write(allocator *alloc, char const *output_path, tl_tlib_metadata const *metadata,
-                  tl_tlib_entry const *entries, u32 count);
+// Write archive to a .tpkg file. Returns 0 on success.
+int tl_tpkg_write(allocator *alloc, char const *output_path, tl_tpkg_metadata const *metadata,
+                  tl_tpkg_entry const *entries, u32 count);
 
-// Read a .tlib file. Allocates entries and their data from alloc. Returns 0 on success.
-int tl_tlib_read(allocator *alloc, char const *input_path, tl_tlib_archive *out);
+// Read a .tpkg file. Allocates entries and their data from alloc. Returns 0 on success.
+int tl_tpkg_read(allocator *alloc, char const *input_path, tl_tpkg_archive *out);
 
-// Read a .tlib archive from an in-memory buffer. Same as tl_tlib_read but without file I/O.
+// Read a .tpkg archive from an in-memory buffer. Same as tl_tpkg_read but without file I/O.
 // The buffer is read directly (not copied); it must remain valid until parsing completes.
 // Returns 0 on success.
-int tl_tlib_read_from_memory(allocator *alloc, void const *data, u32 size, tl_tlib_archive *out);
+int tl_tpkg_read_from_memory(allocator *alloc, void const *data, u32 size, tl_tpkg_archive *out);
 
 // Validate a filename (no absolute paths, no ".." components). Returns 1 if valid.
-int tl_tlib_valid_filename(char const *name, u32 len);
+int tl_tpkg_valid_filename(char const *name, u32 len);
 
 // -- High-level operations --
 
@@ -68,32 +68,32 @@ typedef struct {
     u16  depends_count;
     str *depends_optional;
     u16  depends_optional_count;
-} tl_tlib_pack_opts;
+} tl_tpkg_pack_opts;
 
-// Pack resolved files into a .tlib archive.
+// Pack resolved files into a .tpkg archive.
 // - files: array of canonical file paths (already resolved via import system)
 // - base_dir: directory for computing relative paths (empty = auto from first file)
 // - resolver: used for stdlib filtering (files under stdlib paths are excluded)
 // Returns 0 on success.
-int tl_tlib_pack(allocator *alloc, char const *output_path, str_sized files, str base_dir,
-                 struct import_resolver *resolver, tl_tlib_pack_opts opts);
+int tl_tpkg_pack(allocator *alloc, char const *output_path, str_sized files, str base_dir,
+                 struct import_resolver *resolver, tl_tpkg_pack_opts opts);
 
 // Extract all entries from an already-loaded archive to output_dir.
 // Creates subdirectories as needed. Appends each written path to out_files.
 // Returns 0 on success, 1 on error.
-int tl_tlib_extract(allocator *alloc, tl_tlib_archive const *archive, char const *output_dir,
+int tl_tpkg_extract(allocator *alloc, tl_tpkg_archive const *archive, char const *output_dir,
                     str_array *out_files);
 
 // Unpack options
 typedef struct {
     int list_only; // print filenames only, don't extract
     int verbose;
-} tl_tlib_unpack_opts;
+} tl_tpkg_unpack_opts;
 
-// Unpack or list a .tlib archive.
+// Unpack or list a .tpkg archive.
 // - output_dir: extraction directory (ignored if list_only)
 // Returns 0 on success.
-int tl_tlib_unpack(allocator *alloc, char const *archive_path, char const *output_dir,
-                   tl_tlib_unpack_opts opts);
+int tl_tpkg_unpack(allocator *alloc, char const *archive_path, char const *output_dir,
+                   tl_tpkg_unpack_opts opts);
 
 #endif

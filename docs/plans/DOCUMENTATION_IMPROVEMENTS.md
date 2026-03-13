@@ -42,7 +42,7 @@ tess run <file.tl>            # Compile and execute
 tess lib <file.tl> -o <out>   # Compile to shared library
 tess lib --static <file.tl>   # Compile to static library
 tess init                     # Scaffold a new project
-tess pack                     # Package a .tlib archive
+tess pack                     # Package a .tpkg archive
 tess validate                 # Validate package.tl
 ```
 
@@ -80,7 +80,7 @@ See [Packages](docs/PACKAGES.md) for the full manifest format.
 
 `docs/tutorials/` has only one tutorial (operator overloading). Good candidates for new tutorials:
 
-- **Getting started with packages** — creating, depending on, and publishing `.tlib` files
+- **Getting started with packages** — creating, depending on, and publishing `.tpkg` files
 - **Closures and memory** — stack vs. allocated closures, arena patterns, shared mutable state
 - **C interop patterns** — calling C from Tess, exporting Tess to C, working with Ptr types
 

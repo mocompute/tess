@@ -179,7 +179,7 @@ static int test_depend_with_path(void) {
                               "format(1)\n"
                                      "package(App)\n"
                                      "version(\"0.1\")\n"
-                                     "depend(Lib, \"1.0\", \"./path/Lib.tlib\")\n",
+                                     "depend(Lib, \"1.0\", \"./path/Lib.tpkg\")\n",
                               &pkg);
 
     error += rc != 0;
@@ -189,7 +189,7 @@ static int test_depend_with_path(void) {
     if (pkg.dep_count == 1) {
         error += !str_eq(pkg.deps[0].name, S("Lib"));
         error += !str_eq(pkg.deps[0].version, S("1.0"));
-        error += !str_eq(pkg.deps[0].path, S("./path/Lib.tlib"));
+        error += !str_eq(pkg.deps[0].path, S("./path/Lib.tpkg"));
     }
 
     if (error) fprintf(stderr, "  %d check(s) failed in test_depend_with_path\n", error);

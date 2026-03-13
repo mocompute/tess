@@ -2,7 +2,7 @@
 
 ## Summary
 
-Add a `tess pack` command that bundles Tess source files into a `.tlib` **package** for distribution as a reusable library. A package contains one or more **modules** (declared with `#module`) plus metadata. Every package (including consumer applications) has a `package.tl` file at its root that declares metadata, exported modules, and dependencies using a function-call DSL that is valid TL syntax. The compiler auto-discovers `package.tl` in the current working directory. The compiler performs whole-program compilation as usual. The `export()` declarations in `package.tl` document which modules are part of the package's public API, though access control is not enforced--all package modules enter the global namespace. Package modules become available to consumer code automatically when declared via `depend()` in `package.tl`--no explicit import is needed. Tree shaking removes unused code.
+Add a `tess pack` command that bundles Tess source files into a `.tpkg` **package** for distribution as a reusable library. A package contains one or more **modules** (declared with `#module`) plus metadata. Every package (including consumer applications) has a `package.tl` file at its root that declares metadata, exported modules, and dependencies using a function-call DSL that is valid TL syntax. The compiler auto-discovers `package.tl` in the current working directory. The compiler performs whole-program compilation as usual. The `export()` declarations in `package.tl` document which modules are part of the package's public API, though access control is not enforced--all package modules enter the global namespace. Package modules become available to consumer code automatically when declared via `depend()` in `package.tl`--no explicit import is needed. Tree shaking removes unused code.
 
 This is distinct from C-compatible libraries (`tess lib` producing `.so`/`.dll`, or `tess lib --static` producing `.a`/`.lib`), which remain unchanged.
 
@@ -11,7 +11,7 @@ This is distinct from C-compatible libraries (`tess lib` producing `.so`/`.dll`,
 ## Terminology
 
 - **Module**: A namespace declared with `#module Name` in a `.tl` source file. Typically one file defines one module. Module members are accessed as `Module.function()`.
-- **Package**: A `.tlib` archive containing one or more modules plus metadata. Packages bundle modules for distribution but have no name visible to source code--only the modules inside are visible.
+- **Package**: A `.tpkg` archive containing one or more modules plus metadata. Packages bundle modules for distribution but have no name visible to source code--only the modules inside are visible.
 
 **Notes:**
 - Every `.tl` file MUST have a `#module` directive before any definitions. The parser will error if it encounters a definition before seeing `#module`.
@@ -32,7 +32,7 @@ This means an imported file's symbols are available to all other files in the tr
 
 ### Source-Only Archives
 
-A `.tlib` is a compressed archive of `.tl` source files plus metadata. There is no pre-compilation or IR. The consumer extracts the source and compiles everything together via whole-program compilation.
+A `.tpkg` is a compressed archive of `.tl` source files plus metadata. There is no pre-compilation or IR. The consumer extracts the source and compiles everything together via whole-program compilation.
 
 **Rationale:**
 - The compiler is designed for whole-program compilation; this preserves that model
@@ -41,7 +41,7 @@ A `.tlib` is a compressed archive of `.tl` source files plus metadata. There is 
 
 ### Single-File Distribution
 
-Source is compressed and stored inside the `.tlib` file itself rather than as sidecar files. This makes distribution ergonomic (one file to ship).
+Source is compressed and stored inside the `.tpkg` file itself rather than as sidecar files. This makes distribution ergonomic (one file to ship).
 
 ### Single Global Module Namespace
 
@@ -64,11 +64,11 @@ Package modules do not use `#import`. When a package is declared as a dependency
 
 ### Package Dependencies
 
-Dependencies declared in `package.tl` via `depend()` are recorded in the `.tlib` archive metadata. The source from external packages is **not** bundled--only local source files are included.
+Dependencies declared in `package.tl` via `depend()` are recorded in the `.tpkg` archive metadata. The source from external packages is **not** bundled--only local source files are included.
 
 Consumers only need to declare their **direct** dependencies in `package.tl` via `depend()`. When the compiler loads a package, it reads the archive's dependency metadata and automatically resolves transitive dependencies from `depend_path()` directories, verifying version equality. See Phase 8 for the full resolution algorithm.
 
-The binary encoding of dependencies in the `.tlib` archive is described in the Archive Format section.
+The binary encoding of dependencies in the `.tpkg` archive is described in the Archive Format section.
 
 ### Module-Level Access Control
 
@@ -83,7 +83,7 @@ Library authors control their API surface by organizing code into public and int
 
 ### Standard Library Exclusion
 
-Standard library files are excluded from `.tlib` archives. The consumer's compiler has its own standard library. Only user-authored source files are bundled.
+Standard library files are excluded from `.tpkg` archives. The consumer's compiler has its own standard library. Only user-authored source files are bundled.
 
 ### Whole-Program Compilation with Tree Shaking
 
@@ -131,7 +131,7 @@ error(msg) {
 
 Built with:
 ```bash
-tess pack logger.tl -o LoggingLib.tlib
+tess pack logger.tl -o LoggingLib.tpkg
 ```
 
 The compiler auto-discovers `package.tl` in the current working directory. Package names and module names are independent (they may differ or be the same). Package names appear in `package.tl` and dependency metadata. Module names appear in source code (`Logger.error(...)`).
@@ -143,7 +143,7 @@ The compiler auto-discovers `package.tl` in the current working directory. Packa
 mathutils/
   package.tl
   libs/
-    LoggingLib.tlib
+    LoggingLib.tpkg
   src/
     math.tl
     internal.tl
@@ -200,10 +200,10 @@ Note: `MathUtils.Internal` is not listed in `export()`, signaling it is not part
 
 **Build the package:**
 ```bash
-tess pack src/math.tl -o MathUtils.tlib
+tess pack src/math.tl -o MathUtils.tpkg
 ```
 
-The resulting `MathUtils.tlib` contains `math.tl` and `internal.tl` (but NOT LoggingLib's source--that stays in LoggingLib.tlib). The metadata records:
+The resulting `MathUtils.tpkg` contains `math.tl` and `internal.tl` (but NOT LoggingLib's source--that stays in LoggingLib.tpkg). The metadata records:
 - name="MathUtils", version="1.0.0"
 - depends=["LoggingLib=2.0.0"]
 
@@ -214,8 +214,8 @@ The resulting `MathUtils.tlib` contains `math.tl` and `internal.tl` (but NOT Log
 myapp/
   package.tl
   libs/
-    MathUtils.tlib
-    LoggingLib.tlib    # transitive dependency
+    MathUtils.tpkg
+    LoggingLib.tpkg    # transitive dependency
   src/
     main.tl
 ```
@@ -255,7 +255,7 @@ tess exe src/main.tl -o myapp
 
 The compiler auto-discovers `package.tl` in the current working directory, loads declared dependencies, and
 verifies versions match. Consumers only declare **direct** dependencies. The compiler reads MathUtils's
-`depends` field (`"LoggingLib", "2.0.0"`), searches `depend_path()` directories for `LoggingLib.tlib`,
+`depends` field (`"LoggingLib", "2.0.0"`), searches `depend_path()` directories for `LoggingLib.tpkg`,
 verifies the version matches, and loads it automatically. If a transitive dependency cannot be found, the
 compiler emits an error naming the missing package and which package requires it.
 
@@ -263,14 +263,14 @@ A `package.tl` is required for any build that uses packages. Builds that do not 
 
 ---
 
-## `.tlib` Archive Format
+## `.tpkg` Archive Format
 
 A custom binary format, chosen over tar for simplicity, security, and zero external dependencies (aside from libdeflate for compression).
 
 ### Layout
 
 ```
-[4 bytes]  Magic: "TLIB"
+[4 bytes]  Magic: "TPKG"
 [4 bytes]  Format version: 1 (big-endian uint32)
 [2 bytes]  Name length (big-endian uint16)
 [N bytes]  Package name (UTF-8 string)
@@ -382,7 +382,7 @@ This section describes an incremental implementation plan. Each phase is designe
 
 #### Phase 2: Basic Archive Format ✓
 
-Implemented in `src/tess/src/tlib.c` with header `src/tess/include/tlib.h`:
+Implemented in `src/tess/src/tpkg.c` with header `src/tess/include/tpkg.h`:
 
 ```c
 typedef struct {
@@ -390,18 +390,18 @@ typedef struct {
     u32         name_len;
     byte const *data;
     u32         data_len;
-} tl_tlib_entry;
+} tl_tpkg_entry;
 
 typedef struct {
-    tl_tlib_entry *entries;
+    tl_tpkg_entry *entries;
     u32            count;
-} tl_tlib_archive;
+} tl_tpkg_archive;
 ```
 
-- `tl_tlib_write()`: Writes magic, version, compressed payload
-- `tl_tlib_read()`: Reads and validates archive, decompresses payload
-- `tl_tlib_valid_filename()`: Validates filenames (rejects absolute paths and `..` components)
-- Unit tests in `src/tess/src/test_tlib.c`
+- `tl_tpkg_write()`: Writes magic, version, compressed payload
+- `tl_tpkg_read()`: Reads and validates archive, decompresses payload
+- `tl_tpkg_valid_filename()`: Validates filenames (rejects absolute paths and `..` components)
+- Unit tests in `src/tess/src/test_tpkg.c`
 
 **Note:** This was a simplified format without metadata fields. Phase 4 added the full format with name/version/modules/depends.
 
@@ -410,20 +410,20 @@ typedef struct {
 Implemented in `src/tess/src/tess_exe.c`:
 
 ```bash
-tess pack <file1.tl> [file2.tl ...] -o output.tlib [-v]
-tess pack --unpack archive.tlib [-o output_dir] [-v]
-tess pack --list archive.tlib [-v]
+tess pack <file1.tl> [file2.tl ...] -o output.tpkg [-v]
+tess pack --unpack archive.tpkg [-o output_dir] [-v]
+tess pack --list archive.tpkg [-v]
 ```
 
-High-level operations in `src/tess/src/tlib.c`:
-- `tl_tlib_pack()`: Resolves imports, excludes stdlib, computes relative paths
-- `tl_tlib_unpack()`: Extracts files or lists contents
+High-level operations in `src/tess/src/tpkg.c`:
+- `tl_tpkg_pack()`: Resolves imports, excludes stdlib, computes relative paths
+- `tl_tpkg_unpack()`: Extracts files or lists contents
 
 **Limitations:** No `package.tl` support, no metadata in archive.
 
 #### Phase 4: Archive Metadata ✓
 
-Implemented in `src/tess/src/tlib.c` and `src/tess/include/tlib.h`.
+Implemented in `src/tess/src/tpkg.c` and `src/tess/include/tpkg.h`.
 
 ```c
 typedef struct {
@@ -436,20 +436,20 @@ typedef struct {
     u16  depends_count;
     str *depends_optional; // array of optional dependencies ("Name=Version")
     u16  depends_optional_count;
-} tl_tlib_metadata;
+} tl_tpkg_metadata;
 
 typedef struct {
     char const *name;
     u32         name_len;
     byte const *data;
     u32         data_len;
-} tl_tlib_entry;
+} tl_tpkg_entry;
 
 typedef struct {
-    tl_tlib_metadata metadata;
-    tl_tlib_entry   *entries;
+    tl_tpkg_metadata metadata;
+    tl_tpkg_entry   *entries;
     u32              entries_count;
-} tl_tlib_archive;
+} tl_tpkg_archive;
 ```
 
 **Target binary format:** Metadata is stored uncompressed after the fixed header (magic + version) and before the payload sizes. All metadata uses u16 lengths: scalar fields (name, author, version) are u16 length-prefixed UTF-8 strings, and array fields (modules, depends, depends-optional) use a u16 element count followed by u16 length-prefixed strings. Only payload sizes use u32. This allows metadata inspection without decompressing the archive. A CRC32 checksum at the end covers the entire archive for corruption detection.
@@ -457,14 +457,14 @@ typedef struct {
 **CLI flags for testing** (temporary until `package.tl` support in Phase 5):
 
 ```bash
-tess pack --name MyLib --pkg-version 1.0.0 --author "Alice" --modules "Foo,Bar" src/*.tl -o MyLib.tlib
+tess pack --name MyLib --pkg-version 1.0.0 --author "Alice" --modules "Foo,Bar" src/*.tl -o MyLib.tpkg
 ```
 
 - `--name` and `--pkg-version` are required (note: `--pkg-version` instead of `--version` to avoid collision with `-V/--version`)
 - `--author` and `--modules` are optional (default to empty)
 - `tess pack --unpack --list` displays metadata followed by file list
 
-**Unit tests** in `src/tess/src/test_tlib.c`:
+**Unit tests** in `src/tess/src/test_tpkg.c`:
 - `test_metadata_roundtrip()` - all fields preserved through write/read cycle
 - `test_metadata_empty_fields()` - optional fields handle empty strings correctly
 
@@ -501,7 +501,7 @@ Implemented in `src/tess/src/manifest.c` with header `src/tess/include/manifest.
 `tess pack` and `tess validate` auto-discover `package.tl` in the current working directory via `tl_package_parse_file()`. The `-m` flag and `--name`/`--author`/`--version`/`--modules` CLI flags were removed.
 
 - `pack_files()` and `validate_files()` in `tess_exe.c` read `package.tl` from CWD
-- Integration test: `test_pack_with_manifest` in `src/tess/src/test_tlib.c`
+- Integration test: `test_pack_with_manifest` in `src/tess/src/test_tpkg.c`
 
 #### Phase 6: Module Discovery (partial) ✓
 
@@ -535,7 +535,7 @@ The remaining parts of Phase 6 are listed under "Remaining Phases" below as Phas
 Implemented in two sub-phases (export scanning was removed — see Design Change Log):
 
 1. **Module Validation** — `tl_source_scanner_validate()` cross-checks `export()` modules against discovered `#module` directives. Errors on missing modules, verbose-only listing of internal modules.
-2. **Self-Containment** — `check_self_containment()` in `tlib.c` verifies every quoted `#import` resolves to another file in the archive. Uses shared `tl_source_scanner_collect_imports()` for correct string/comment handling.
+2. **Self-Containment** — `check_self_containment()` in `tpkg.c` verifies every quoted `#import` resolves to another file in the archive. Uses shared `tl_source_scanner_collect_imports()` for correct string/comment handling.
 
 Key infrastructure: callback-based `scan_directives()` core in `source_scanner.c` shared by the full scanner and the lightweight import collector. `validate` CLI command for standalone validation.
 
@@ -553,9 +553,9 @@ tess exe main.tl -o main
 
 The compilation process:
 1. Auto-discover and parse `package.tl` (skip dependency loading if not found)
-2. Load each `depend()` package via `tl_tlib_read()`, resolving from explicit paths (3-argument `depend()`) or `depend_path()` directories
+2. Load each `depend()` package via `tl_tpkg_read()`, resolving from explicit paths (3-argument `depend()`) or `depend_path()` directories
 3. Verify each loaded package's metadata version matches the `depend()` declaration exactly
-4. Extract source files to a temp directory via `tl_tlib_extract()`
+4. Extract source files to a temp directory via `tl_tpkg_extract()`
 5. All modules from all packages (exported and internal) enter the single global namespace
 6. Detect module name conflicts (duplicate `#module` across packages or between packages and local code)
 7. Feed all source (local + package) into the existing compilation pipeline
@@ -566,12 +566,12 @@ All package source is loaded upfront and unconditionally based on `depend()` dec
 **Parser fix for cross-file nested modules:** Import resolution orders files depth-first (imported files before importers), which means a child module file (e.g., `internal.tl` with `#module MathUtils.Internal`) is parsed before its parent (`math.tl` with `#module MathUtils`). The parser's nested module validation (`#module Parent.Child` checks that `Parent` exists) originally only checked modules parsed so far, causing a `nested_module_parent_not_found` error. Fixed by passing the source scanner's pre-scanned module map (`known_modules`) to the parser, so it can validate against all modules discovered during directive scanning. This enables the `MathUtils.Internal` pattern shown in the end-to-end example.
 
 Key functions:
-- `tl_tlib_extract()` in `tlib.c`: Extracts archive entries to a directory, returns file paths
-- `resolve_tlib_path()` in `tess_exe.c`: Searches `depend_path()` dirs or explicit path for `.tlib` files
+- `tl_tpkg_extract()` in `tpkg.c`: Extracts archive entries to a directory, returns file paths
+- `resolve_tpkg_path()` in `tess_exe.c`: Searches `depend_path()` dirs or explicit path for `.tpkg` files
 - `load_package_deps()` in `tess_exe.c`: Parses `package.tl`, resolves/reads/version-checks/extracts dependencies
 - `files_in_order()` modified to accept package files, scan them for directives, and include them in the compilation file list with deduplication
 
-E2E tests in `test_tlib.c`: `test_e2e_basic_package`, `test_e2e_version_mismatch`, `test_e2e_dep_not_found`, `test_e2e_multi_file_library` (uses cross-file nested modules).
+E2E tests in `test_tpkg.c`: `test_e2e_basic_package`, `test_e2e_version_mismatch`, `test_e2e_dep_not_found`, `test_e2e_multi_file_library` (uses cross-file nested modules).
 
 ---
 
@@ -590,7 +590,7 @@ Dependencies are declared in `package.tl`, not auto-detected from source. If a p
 
 **During compile (transitive dependency resolution in `load_package_deps()`):**
 1. When loading a package, check its `depends` field (parsed via `parse_dep_string()`)
-2. For each required dependency, search the consumer's `depend_path()` directories for `<PackageName>.tlib`
+2. For each required dependency, search the consumer's `depend_path()` directories for `<PackageName>.tpkg`
 3. Read metadata and verify version matches exactly
 4. Recurse: `resolve_dep_recursive()` loads transitive dependencies the same way
 5. Detect cycles during resolution (A→B→A) via resolution stack, emit error listing the cycle path
@@ -602,7 +602,7 @@ Key functions added to `tess_exe.c`:
 - `resolve_dep_recursive()`: Recursive resolver with cycle detection (stack) and dedup/conflict detection (loaded hashmap)
 - `dep_resolve_ctx`: Tracking struct with `loaded` map (str→str) and `stack` array
 
-E2E tests in `test_tlib.c`:
+E2E tests in `test_tpkg.c`:
 - `test_e2e_transitive_deps`: A→B→C chain (LogLib→MathLib→App, exit code 42)
 - `test_e2e_diamond_deps`: LibA and LibB both depend on BaseLib (loaded once, exit code 42)
 - `test_e2e_circular_deps`: A→B→A cycle detection (compile error)
@@ -631,7 +631,7 @@ It is the producer's responsibility to name internal modules clearly (e.g., `Mat
 Final validation and edge case coverage. Audit confirmed comprehensive coverage across 75+ tests in 3 test files.
 
 **Unit tests (all covered):**
-- `.tlib` write/read roundtrip: 10 tests (roundtrip, empty, validation, byte order, large payload, metadata, unicode, corruption, CRC32)
+- `.tpkg` write/read roundtrip: 10 tests (roundtrip, empty, validation, byte order, large payload, metadata, unicode, corruption, CRC32)
 - `package.tl` parsing: 17 tests in `test_manifest.c` (valid packages, missing fields, malformed DSL, all error cases)
 - Filename validation: `test_filename_validation` (rejects `..` escapes, absolute paths, backslashes)
 - Module discovery: 29 tests in `test_source_scanner.c` (simple, conditional, edge cases, string/comment handling)
@@ -648,7 +648,7 @@ Final validation and edge case coverage. Audit confirmed comprehensive coverage 
 - Diamond dependencies: `test_e2e_diamond_deps` (A,B both depend on C, loaded once)
 
 **Build system:**
-- All tests in `test_tlib.c` — no new test files needed, both Makefile and CMakeLists.txt already build `test_tlib`
+- All tests in `test_tpkg.c` — no new test files needed, both Makefile and CMakeLists.txt already build `test_tpkg`
 
 ---
 
@@ -708,7 +708,7 @@ Each phase can be merged independently, allowing incremental progress and early 
 
   This is not blocking—hash verification is a future extension.
 
-- **Module naming conflicts**: What error message when two packages define the same module? Should we include package paths in the error? Example: "module 'Utils' defined in both 'libs/A.tlib' and 'libs/B.tlib'"
+- **Module naming conflicts**: What error message when two packages define the same module? Should we include package paths in the error? Example: "module 'Utils' defined in both 'libs/A.tpkg' and 'libs/B.tpkg'"
 
 - **Optional dependencies for consumers**: How are `depend_optional()` declarations used during compilation? Options:
   1. Consumer must explicitly enable them (e.g., `-D USE_WINAPI`)

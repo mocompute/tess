@@ -88,7 +88,7 @@ set(SOURCES
   src/infer_specialize.c
   src/infer_update.c
   src/transpile.c
-  src/tlib.c
+  src/tpkg.c
   src/type.c
 
   ${CMAKE_CURRENT_BINARY_DIR}/tess_embed.c
@@ -141,8 +141,8 @@ endfunction()
 tess_create_test(tess)
 tess_create_test(type_v2)
 tess_create_test(format)
-tess_create_test(tlib)
-target_compile_definitions(test-tlib PRIVATE
+tess_create_test(tpkg)
+target_compile_definitions(test-tpkg PRIVATE
   "TEST_TESS_EXE=\"$<TARGET_FILE:tess_exe>\""
   "TEST_STDLIB_DIR=\"${PROJECT_SOURCE_DIR}/src/tl/std\"")
 tess_create_test(import_resolver)

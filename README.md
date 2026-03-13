@@ -115,7 +115,7 @@ An ML-flavoured systems language that transpiles to C.
   add(x, y, z) { x + y + z }
   ```
 
-- **Packages** - Distribute reusable libraries as `.tlib` source archives. Declare dependencies in `package.tl`, and the compiler handles version verification, transitive resolution, and whole-program compilation.
+- **Packages** - Distribute reusable libraries as `.tpkg` source archives. Declare dependencies in `package.tl`, and the compiler handles version verification, transitive resolution, and whole-program compilation.
 
 - **Call C from Tess** - `#include` headers and call C functions directly with the `c_` prefix:
   ```tl
@@ -234,7 +234,7 @@ This is a research project exploring what a minimal, C-like language might look 
 - **[Language Reference](docs/LANGUAGE_REFERENCE.md)** - Complete syntax guide
 - **[Type System](docs/TYPE_SYSTEM.md)** - Integer sub-chains, conversions, and type inference details
 - **[Standard Library Reference](docs/STANDARD_LIBRARY.md)** - API reference for Array, Alloc, and other modules
-- **[Packages](docs/PACKAGES.md)** - Creating and consuming reusable `.tlib` libraries
+- **[Packages](docs/PACKAGES.md)** - Creating and consuming reusable `.tpkg` libraries
 - **[All Documentation](docs/)** - Specialization, name mangling, and compiler internals
 
 ## Standard Library

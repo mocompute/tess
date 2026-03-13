@@ -73,7 +73,7 @@ This convention also makes [auto-collapse](#auto-collapse-for-same-name-types) w
 
 ### Packages
 
-Modules can be distributed as `.tlib` packages. When a package is declared as a dependency via `depend()` in `package.tl`, all its modules are loaded automatically -- no `#import` needed. Consumer code accesses package modules with the same qualified syntax: `Module.function()`.
+Modules can be distributed as `.tpkg` packages. When a package is declared as a dependency via `depend()` in `package.tl`, all its modules are loaded automatically -- no `#import` needed. Consumer code accesses package modules with the same qualified syntax: `Module.function()`.
 
 See [PACKAGES.md](PACKAGES.md) for the full package system reference.
 

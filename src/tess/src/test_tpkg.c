@@ -3,7 +3,7 @@
 #include "import_resolver.h"
 #include "manifest.h"
 #include "platform.h"
-#include "tlib.h"
+#include "tpkg.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -64,10 +64,10 @@ static void make_temp_path(char *buf, size_t bufsize, char const *filename) {
 
 static str              test_modules[2];
 
-static tl_tlib_metadata make_test_metadata(allocator *alloc) {
+static tl_tpkg_metadata make_test_metadata(allocator *alloc) {
     test_modules[0] = str_init(alloc, "Foo");
     test_modules[1] = str_init(alloc, "Bar");
-    return (tl_tlib_metadata){
+    return (tl_tpkg_metadata){
       .name                   = str_init(alloc, "TestLib"),
       .author                 = str_init(alloc, "Tester"),
       .version                = str_init(alloc, "1.0.0"),
@@ -85,24 +85,24 @@ static int test_roundtrip(void) {
 
     allocator *alloc = arena_create(default_allocator(), 4096);
     char       path[512];
-    make_temp_path(path, sizeof(path), "test_tlib_roundtrip.tlib");
+    make_temp_path(path, sizeof(path), "test_tpkg_roundtrip.tpkg");
 
-    tl_tlib_metadata meta       = make_test_metadata(alloc);
+    tl_tpkg_metadata meta       = make_test_metadata(alloc);
 
-    tl_tlib_entry    entries[3] = {
+    tl_tpkg_entry    entries[3] = {
       {"hello.tl", 8, (byte const *)"hello!\n", 7},
       {"sub/world.tl", 12, (byte const *)"world!\n", 7},
       {"empty.tl", 8, (byte const *)"", 0},
     };
 
-    if (tl_tlib_write(alloc, path, &meta, entries, 3)) {
+    if (tl_tpkg_write(alloc, path, &meta, entries, 3)) {
         fprintf(stderr, "  write failed\n");
         error = 1;
         goto cleanup;
     }
 
-    tl_tlib_archive arc = {0};
-    if (tl_tlib_read(alloc, path, &arc)) {
+    tl_tpkg_archive arc = {0};
+    if (tl_tpkg_read(alloc, path, &arc)) {
         fprintf(stderr, "  read failed\n");
         error = 1;
         goto cleanup;
@@ -151,18 +151,18 @@ static int test_empty_archive(void) {
     int        error = 0;
     allocator *alloc = arena_create(default_allocator(), 4096);
     char       path[512];
-    make_temp_path(path, sizeof(path), "test_tlib_empty.tlib");
+    make_temp_path(path, sizeof(path), "test_tpkg_empty.tpkg");
 
-    tl_tlib_metadata meta = make_test_metadata(alloc);
+    tl_tpkg_metadata meta = make_test_metadata(alloc);
 
-    if (tl_tlib_write(alloc, path, &meta, null, 0)) {
+    if (tl_tpkg_write(alloc, path, &meta, null, 0)) {
         fprintf(stderr, "  write failed\n");
         error = 1;
         goto cleanup;
     }
 
-    tl_tlib_archive arc = {0};
-    if (tl_tlib_read(alloc, path, &arc)) {
+    tl_tpkg_archive arc = {0};
+    if (tl_tpkg_read(alloc, path, &arc)) {
         fprintf(stderr, "  read failed\n");
         error = 1;
         goto cleanup;
@@ -182,20 +182,20 @@ static int test_filename_validation(void) {
     int error = 0;
 
     /* valid names */
-    error += tl_tlib_valid_filename("foo.tl", 6) != 1;
-    error += tl_tlib_valid_filename("sub/bar.tl", 10) != 1;
-    error += tl_tlib_valid_filename("a/b/c.tl", 8) != 1;
-    error += tl_tlib_valid_filename("..x", 3) != 1; // weird but legal regular hidden filename
+    error += tl_tpkg_valid_filename("foo.tl", 6) != 1;
+    error += tl_tpkg_valid_filename("sub/bar.tl", 10) != 1;
+    error += tl_tpkg_valid_filename("a/b/c.tl", 8) != 1;
+    error += tl_tpkg_valid_filename("..x", 3) != 1; // weird but legal regular hidden filename
 
     /* invalid names */
-    error += tl_tlib_valid_filename("", 0) != 0;
-    error += tl_tlib_valid_filename("/etc/passwd", 11) != 0;
-    error += tl_tlib_valid_filename("../foo", 6) != 0;
-    error += tl_tlib_valid_filename("foo/../bar", 10) != 0;
-    error += tl_tlib_valid_filename("..", 2) != 0;
-    error += tl_tlib_valid_filename("foo\\bar", 7) != 0;
-    error += tl_tlib_valid_filename("C:\\foo", 6) != 0;
-    error += tl_tlib_valid_filename("D:/bar.tl", 9) != 0;
+    error += tl_tpkg_valid_filename("", 0) != 0;
+    error += tl_tpkg_valid_filename("/etc/passwd", 11) != 0;
+    error += tl_tpkg_valid_filename("../foo", 6) != 0;
+    error += tl_tpkg_valid_filename("foo/../bar", 10) != 0;
+    error += tl_tpkg_valid_filename("..", 2) != 0;
+    error += tl_tpkg_valid_filename("foo\\bar", 7) != 0;
+    error += tl_tpkg_valid_filename("C:\\foo", 6) != 0;
+    error += tl_tpkg_valid_filename("D:/bar.tl", 9) != 0;
 
     if (error) fprintf(stderr, "  %d filename validation check(s) failed\n", error);
 
@@ -206,12 +206,12 @@ static int test_byte_order(void) {
     int        error = 0;
     allocator *alloc = arena_create(default_allocator(), 4096);
     char       path[512];
-    make_temp_path(path, sizeof(path), "test_tlib_byteorder.tlib");
+    make_temp_path(path, sizeof(path), "test_tpkg_byteorder.tpkg");
 
-    tl_tlib_metadata meta  = make_test_metadata(alloc);
-    tl_tlib_entry    entry = {"a.tl", 4, (byte const *)"x", 1};
+    tl_tpkg_metadata meta  = make_test_metadata(alloc);
+    tl_tpkg_entry    entry = {"a.tl", 4, (byte const *)"x", 1};
 
-    if (tl_tlib_write(alloc, path, &meta, &entry, 1)) {
+    if (tl_tpkg_write(alloc, path, &meta, &entry, 1)) {
         fprintf(stderr, "  write failed\n");
         error = 1;
         goto cleanup;
@@ -234,9 +234,9 @@ static int test_byte_order(void) {
     }
     fclose(f);
 
-    // Verify magic is "TLIB" in reading order (big-endian)
-    if (header[0] != 'T' || header[1] != 'L' || header[2] != 'I' || header[3] != 'B') {
-        fprintf(stderr, "  magic mismatch: expected TLIB, got %c%c%c%c\n", header[0], header[1], header[2],
+    // Verify magic is "TPKG" in reading order (big-endian)
+    if (header[0] != 'T' || header[1] != 'P' || header[2] != 'K' || header[3] != 'G') {
+        fprintf(stderr, "  magic mismatch: expected TPKG, got %c%c%c%c\n", header[0], header[1], header[2],
                 header[3]);
         error = 1;
         goto cleanup;
@@ -257,24 +257,24 @@ static int test_large_payload(void) {
     int        error = 0;
     allocator *alloc = arena_create(default_allocator(), 3 * 1024 * 1024);
     char       path[512];
-    make_temp_path(path, sizeof(path), "test_tlib_large.tlib");
+    make_temp_path(path, sizeof(path), "test_tpkg_large.tpkg");
 
-    tl_tlib_metadata meta = make_test_metadata(alloc);
+    tl_tpkg_metadata meta = make_test_metadata(alloc);
 
     u32              size = 1024 * 1024;
     byte            *data = alloc_malloc(alloc, size);
     for (u32 i = 0; i < size; i++) data[i] = (byte)(i * 7 + 13);
 
-    tl_tlib_entry entry = {"big.tl", 6, data, size};
+    tl_tpkg_entry entry = {"big.tl", 6, data, size};
 
-    if (tl_tlib_write(alloc, path, &meta, &entry, 1)) {
+    if (tl_tpkg_write(alloc, path, &meta, &entry, 1)) {
         fprintf(stderr, "  write failed\n");
         error = 1;
         goto cleanup;
     }
 
-    tl_tlib_archive arc = {0};
-    if (tl_tlib_read(alloc, path, &arc)) {
+    tl_tpkg_archive arc = {0};
+    if (tl_tpkg_read(alloc, path, &arc)) {
         fprintf(stderr, "  read failed\n");
         error = 1;
         goto cleanup;
@@ -295,7 +295,7 @@ static int test_metadata_roundtrip(void) {
     int        error = 0;
     allocator *alloc = arena_create(default_allocator(), 4096);
     char       path[512];
-    make_temp_path(path, sizeof(path), "test_tlib_metadata.tlib");
+    make_temp_path(path, sizeof(path), "test_tpkg_metadata.tpkg");
 
     str modules[3];
     modules[0] = str_init(alloc, "Core");
@@ -308,7 +308,7 @@ static int test_metadata_roundtrip(void) {
     str depends_opt[1];
     depends_opt[0]        = str_init(alloc, "Debug=0.5.0");
 
-    tl_tlib_metadata meta = {
+    tl_tpkg_metadata meta = {
       .name                   = str_init(alloc, "MetaTest"),
       .author                 = str_init(alloc, "Alice"),
       .version                = str_init(alloc, "2.3.4"),
@@ -320,16 +320,16 @@ static int test_metadata_roundtrip(void) {
       .depends_optional_count = 1,
     };
 
-    tl_tlib_entry entry = {"test.tl", 7, (byte const *)"content", 7};
+    tl_tpkg_entry entry = {"test.tl", 7, (byte const *)"content", 7};
 
-    if (tl_tlib_write(alloc, path, &meta, &entry, 1)) {
+    if (tl_tpkg_write(alloc, path, &meta, &entry, 1)) {
         fprintf(stderr, "  write failed\n");
         error = 1;
         goto cleanup;
     }
 
-    tl_tlib_archive arc = {0};
-    if (tl_tlib_read(alloc, path, &arc)) {
+    tl_tpkg_archive arc = {0};
+    if (tl_tpkg_read(alloc, path, &arc)) {
         fprintf(stderr, "  read failed\n");
         error = 1;
         goto cleanup;
@@ -364,9 +364,9 @@ static int test_metadata_empty_fields(void) {
     int        error = 0;
     allocator *alloc = arena_create(default_allocator(), 4096);
     char       path[512];
-    make_temp_path(path, sizeof(path), "test_tlib_metadata_empty.tlib");
+    make_temp_path(path, sizeof(path), "test_tpkg_metadata_empty.tpkg");
 
-    tl_tlib_metadata meta = {
+    tl_tpkg_metadata meta = {
       .name                   = str_init(alloc, "MinimalLib"),
       .author                 = str_empty(),
       .version                = str_init(alloc, "0.1"),
@@ -378,16 +378,16 @@ static int test_metadata_empty_fields(void) {
       .depends_optional_count = 0,
     };
 
-    tl_tlib_entry entry = {"a.tl", 4, (byte const *)"x", 1};
+    tl_tpkg_entry entry = {"a.tl", 4, (byte const *)"x", 1};
 
-    if (tl_tlib_write(alloc, path, &meta, &entry, 1)) {
+    if (tl_tpkg_write(alloc, path, &meta, &entry, 1)) {
         fprintf(stderr, "  write failed\n");
         error = 1;
         goto cleanup;
     }
 
-    tl_tlib_archive arc = {0};
-    if (tl_tlib_read(alloc, path, &arc)) {
+    tl_tpkg_archive arc = {0};
+    if (tl_tpkg_read(alloc, path, &arc)) {
         fprintf(stderr, "  read failed\n");
         error = 1;
         goto cleanup;
@@ -414,13 +414,13 @@ static int test_metadata_unicode(void) {
     int        error = 0;
     allocator *alloc = arena_create(default_allocator(), 4096);
     char       path[512];
-    make_temp_path(path, sizeof(path), "test_tlib_metadata_unicode.tlib");
+    make_temp_path(path, sizeof(path), "test_tpkg_metadata_unicode.tpkg");
 
     str unicode_modules[2];
     unicode_modules[0]    = str_init(alloc, "Módulo");
     unicode_modules[1]    = str_init(alloc, "Функция");
 
-    tl_tlib_metadata meta = {
+    tl_tpkg_metadata meta = {
       .name                   = str_init(alloc, "Bibliothèque"),
       .author                 = str_init(alloc, "日本語 Author™"),
       .version                = str_init(alloc, "1.0.0-β"),
@@ -432,16 +432,16 @@ static int test_metadata_unicode(void) {
       .depends_optional_count = 0,
     };
 
-    tl_tlib_entry entry = {"test.tl", 7, (byte const *)"content", 7};
+    tl_tpkg_entry entry = {"test.tl", 7, (byte const *)"content", 7};
 
-    if (tl_tlib_write(alloc, path, &meta, &entry, 1)) {
+    if (tl_tpkg_write(alloc, path, &meta, &entry, 1)) {
         fprintf(stderr, "  write failed\n");
         error = 1;
         goto cleanup;
     }
 
-    tl_tlib_archive arc = {0};
-    if (tl_tlib_read(alloc, path, &arc)) {
+    tl_tpkg_archive arc = {0};
+    if (tl_tpkg_read(alloc, path, &arc)) {
         fprintf(stderr, "  read failed\n");
         error = 1;
         goto cleanup;
@@ -468,12 +468,12 @@ static int test_corrupted_metadata(void) {
     int        error = 0;
     allocator *alloc = arena_create(default_allocator(), 4096);
     char       path[512];
-    make_temp_path(path, sizeof(path), "test_tlib_corrupted_meta.tlib");
+    make_temp_path(path, sizeof(path), "test_tpkg_corrupted_meta.tpkg");
 
     str test_mods[1];
     test_mods[0]          = str_init(alloc, "Foo");
 
-    tl_tlib_metadata meta = {
+    tl_tpkg_metadata meta = {
       .name                   = str_init(alloc, "TestLib"),
       .author                 = str_init(alloc, "Author"),
       .version                = str_init(alloc, "1.0.0"),
@@ -485,9 +485,9 @@ static int test_corrupted_metadata(void) {
       .depends_optional_count = 0,
     };
 
-    tl_tlib_entry entry = {"test.tl", 7, (byte const *)"content", 7};
+    tl_tpkg_entry entry = {"test.tl", 7, (byte const *)"content", 7};
 
-    if (tl_tlib_write(alloc, path, &meta, &entry, 1)) {
+    if (tl_tpkg_write(alloc, path, &meta, &entry, 1)) {
         fprintf(stderr, "  write failed\n");
         error = 1;
         goto cleanup;
@@ -512,8 +512,8 @@ static int test_corrupted_metadata(void) {
     }
 
     // Try to read - should fail gracefully
-    tl_tlib_archive arc         = {0};
-    int             read_result = tl_tlib_read(alloc, path, &arc);
+    tl_tpkg_archive arc         = {0};
+    int             read_result = tl_tpkg_read(alloc, path, &arc);
 
     if (read_result == 0) {
         fprintf(stderr, "  read should have failed on corrupted metadata\n");
@@ -529,12 +529,12 @@ static int test_crc32_integrity(void) {
     int        error = 0;
     allocator *alloc = arena_create(default_allocator(), 4096);
     char       path[512];
-    make_temp_path(path, sizeof(path), "test_tlib_crc32.tlib");
+    make_temp_path(path, sizeof(path), "test_tpkg_crc32.tpkg");
 
-    tl_tlib_metadata meta  = make_test_metadata(alloc);
-    tl_tlib_entry    entry = {"test.tl", 7, (byte const *)"content", 7};
+    tl_tpkg_metadata meta  = make_test_metadata(alloc);
+    tl_tpkg_entry    entry = {"test.tl", 7, (byte const *)"content", 7};
 
-    if (tl_tlib_write(alloc, path, &meta, &entry, 1)) {
+    if (tl_tpkg_write(alloc, path, &meta, &entry, 1)) {
         fprintf(stderr, "  write failed\n");
         error = 1;
         goto cleanup;
@@ -568,8 +568,8 @@ static int test_crc32_integrity(void) {
     fclose(f);
 
     // Try to read - should fail with CRC mismatch
-    tl_tlib_archive arc         = {0};
-    int             read_result = tl_tlib_read(alloc, path, &arc);
+    tl_tpkg_archive arc         = {0};
+    int             read_result = tl_tpkg_read(alloc, path, &arc);
 
     if (read_result == 0) {
         fprintf(stderr, "  read should have failed on CRC mismatch\n");
@@ -661,7 +661,7 @@ static int test_pack_with_manifest(void) {
     }
 
     // Build pack opts from package (same logic as pack_files in tess_exe.c)
-    tl_tlib_pack_opts opts = {.verbose = 0};
+    tl_tpkg_pack_opts opts = {.verbose = 0};
     opts.name              = str_cstr(&pkg.info.name);
     opts.version           = str_cstr(&pkg.info.version);
     opts.author            = str_is_empty(pkg.info.author) ? null : str_cstr(&pkg.info.author);
@@ -701,16 +701,16 @@ static int test_pack_with_manifest(void) {
 
     // Pack
     char out_path[512];
-    make_temp_path(out_path, sizeof(out_path), "test_manifest_pack.tlib");
-    if (tl_tlib_pack(alloc, out_path, files, base_dir, resolver, opts)) {
+    make_temp_path(out_path, sizeof(out_path), "test_manifest_pack.tpkg");
+    if (tl_tpkg_pack(alloc, out_path, files, base_dir, resolver, opts)) {
         fprintf(stderr, "  pack failed\n");
         error = 1;
         goto cleanup;
     }
 
     // Read back and verify
-    tl_tlib_archive arc = {0};
-    if (tl_tlib_read(alloc, out_path, &arc)) {
+    tl_tpkg_archive arc = {0};
+    if (tl_tpkg_read(alloc, out_path, &arc)) {
         fprintf(stderr, "  read failed\n");
         error = 1;
         goto cleanup;
@@ -796,10 +796,10 @@ static void test_mkdir_p(char const *path) {
     platform_mkdir(tmp);
 }
 
-// Helper: pack files from in-memory content using tl_tlib_pack.
+// Helper: pack files from in-memory content using tl_tpkg_pack.
 // file_names and file_contents must have `count` elements.
 // file_names are relative paths within a temp directory.
-// Returns the result of tl_tlib_pack (0 = success).
+// Returns the result of tl_tpkg_pack (0 = success).
 static int pack_test_files(char const **file_names, char const **file_contents, u32 count) {
     allocator *alloc = arena_create(default_allocator(), 8192);
 
@@ -832,16 +832,16 @@ static int pack_test_files(char const **file_names, char const **file_contents, 
     str_sized         files    = {.v = file_paths, .size = count};
 
     import_resolver  *resolver = import_resolver_create(alloc);
-    tl_tlib_pack_opts opts     = {
+    tl_tpkg_pack_opts opts     = {
           .verbose = 0,
           .name    = "TestSelfContain",
           .version = "1.0.0",
     };
 
     char out_path[512];
-    make_temp_path(out_path, sizeof(out_path), "test_self_contain.tlib");
+    make_temp_path(out_path, sizeof(out_path), "test_self_contain.tpkg");
 
-    int result = tl_tlib_pack(alloc, out_path, files, base_dir, resolver, opts);
+    int result = tl_tpkg_pack(alloc, out_path, files, base_dir, resolver, opts);
 
     // Clean up temp files (need paths before arena destroy)
     for (u32 i = 0; i < count; i++) {
@@ -911,25 +911,25 @@ static int test_extract(void) {
     int        error = 0;
     allocator *alloc = arena_create(default_allocator(), 8192);
     char       path[512];
-    make_temp_path(path, sizeof(path), "test_tlib_extract.tlib");
+    make_temp_path(path, sizeof(path), "test_tpkg_extract.tpkg");
 
     char const      *pkg_content = "format(1)\npackage(TestLib)\nversion(\"1.0.0\")\n";
 
-    tl_tlib_metadata meta        = make_test_metadata(alloc);
-    tl_tlib_entry    entries[3]  = {
+    tl_tpkg_metadata meta        = make_test_metadata(alloc);
+    tl_tpkg_entry    entries[3]  = {
       {"lib.tl", 6, (byte const *)"#module Lib\nfoo() { 1 }\n", 24},
       {"sub/util.tl", 11, (byte const *)"#module Util\nbar() { 2 }\n", 25},
       {"package.tl", 10, (byte const *)pkg_content, (u32)strlen(pkg_content)},
     };
 
-    if (tl_tlib_write(alloc, path, &meta, entries, 3)) {
+    if (tl_tpkg_write(alloc, path, &meta, entries, 3)) {
         fprintf(stderr, "  write failed\n");
         error = 1;
         goto cleanup;
     }
 
-    tl_tlib_archive arc = {0};
-    if (tl_tlib_read(alloc, path, &arc)) {
+    tl_tpkg_archive arc = {0};
+    if (tl_tpkg_read(alloc, path, &arc)) {
         fprintf(stderr, "  read failed\n");
         error = 1;
         goto cleanup;
@@ -941,7 +941,7 @@ static int test_extract(void) {
     test_mkdir_p(extract_dir);
 
     str_array out_files = {.alloc = alloc};
-    if (tl_tlib_extract(alloc, &arc, extract_dir, &out_files)) {
+    if (tl_tpkg_extract(alloc, &arc, extract_dir, &out_files)) {
         fprintf(stderr, "  extract failed\n");
         error = 1;
         goto cleanup;
@@ -1000,7 +1000,7 @@ cleanup:
 // End-to-end integration tests (Phase 7: package consumption)
 // ===========================================================================
 //
-// These tests exercise the full pipeline: create library, pack to .tlib,
+// These tests exercise the full pipeline: create library, pack to .tpkg,
 // create consumer with package.tl, compile with tess exe, run the result.
 // They require the `tess` binary to be built (it is when running via `make test`).
 
@@ -1088,13 +1088,13 @@ static int test_e2e_basic_package(void) {
     }
 
     // -- Pack library --
-    char tlib_path[512];
-    snprintf(tlib_path, sizeof(tlib_path), "%sGreeter.tlib", lib_dir);
+    char tpkg_path[512];
+    snprintf(tpkg_path, sizeof(tpkg_path), "%sGreeter.tpkg", lib_dir);
 
     char cmd[2048];
     snprintf(cmd, sizeof(cmd),
              CD_CMD
-             " \"%s\" && \"%s\" pack --no-standard-includes -S \"%s\" greeter.tl -o Greeter.tlib 2>&1",
+             " \"%s\" && \"%s\" pack --no-standard-includes -S \"%s\" greeter.tl -o Greeter.tpkg 2>&1",
              lib_dir, e2e_tess_exe, e2e_stdlib_dir);
     if (run_cmd(cmd) != 0) {
         fprintf(stderr, "  tess pack failed\n");
@@ -1124,11 +1124,11 @@ static int test_e2e_basic_package(void) {
         return 1;
     }
 
-    // Copy .tlib to consumer's libs/
-    char dst_tlib[512];
-    snprintf(dst_tlib, sizeof(dst_tlib), "%sGreeter.tlib", libs_dir);
-    if (copy_file(tlib_path, dst_tlib)) {
-        fprintf(stderr, "  failed to copy Greeter.tlib\n");
+    // Copy .tpkg to consumer's libs/
+    char dst_tpkg[512];
+    snprintf(dst_tpkg, sizeof(dst_tpkg), "%sGreeter.tpkg", libs_dir);
+    if (copy_file(tpkg_path, dst_tpkg)) {
+        fprintf(stderr, "  failed to copy Greeter.tpkg\n");
         return 1;
     }
 
@@ -1153,8 +1153,8 @@ static int test_e2e_basic_package(void) {
     return 0;
 }
 
-// Test: version mismatch between package.tl depend() and .tlib metadata.
-// Consumer expects version 2.0.0 but .tlib has 1.0.0 → compilation must fail.
+// Test: version mismatch between package.tl depend() and .tpkg metadata.
+// Consumer expects version 2.0.0 but .tpkg has 1.0.0 → compilation must fail.
 static int test_e2e_version_mismatch(void) {
     // -- Set up library (version 1.0.0) --
     char lib_dir[512];
@@ -1168,13 +1168,13 @@ static int test_e2e_version_mismatch(void) {
     snprintf(path, sizeof(path), "%sgreeter.tl", lib_dir);
     write_file(path, "#module Greeter\n\ngreet() { 42 }\n");
 
-    char tlib_path[512];
-    snprintf(tlib_path, sizeof(tlib_path), "%sGreeter.tlib", lib_dir);
+    char tpkg_path[512];
+    snprintf(tpkg_path, sizeof(tpkg_path), "%sGreeter.tpkg", lib_dir);
 
     char cmd[2048];
     snprintf(cmd, sizeof(cmd),
              CD_CMD
-             " \"%s\" && \"%s\" pack --no-standard-includes -S \"%s\" greeter.tl -o Greeter.tlib 2>&1",
+             " \"%s\" && \"%s\" pack --no-standard-includes -S \"%s\" greeter.tl -o Greeter.tpkg 2>&1",
              lib_dir, e2e_tess_exe, e2e_stdlib_dir);
     if (run_cmd(cmd) != 0) {
         fprintf(stderr, "  tess pack failed\n");
@@ -1198,9 +1198,9 @@ static int test_e2e_version_mismatch(void) {
     snprintf(path, sizeof(path), "%smain.tl", app_dir);
     write_file(path, "#module main\n\nmain() { Greeter.greet() }\n");
 
-    char dst_tlib[512];
-    snprintf(dst_tlib, sizeof(dst_tlib), "%sGreeter.tlib", libs_dir);
-    copy_file(tlib_path, dst_tlib);
+    char dst_tpkg[512];
+    snprintf(dst_tpkg, sizeof(dst_tpkg), "%sGreeter.tpkg", libs_dir);
+    copy_file(tpkg_path, dst_tpkg);
 
     // -- Compile consumer: should fail due to version mismatch --
     char out_exe[512];
@@ -1216,8 +1216,8 @@ static int test_e2e_version_mismatch(void) {
     return 0;
 }
 
-// Test: dependency .tlib not found in any depend_path().
-// Consumer depends on "NonExistent" which has no .tlib → compilation must fail.
+// Test: dependency .tpkg not found in any depend_path().
+// Consumer depends on "NonExistent" which has no .tpkg → compilation must fail.
 static int test_e2e_dep_not_found(void) {
     char app_dir[512], libs_dir[512];
     make_temp_path(app_dir, sizeof(app_dir), "e2e_notfound_app/");
@@ -1284,12 +1284,12 @@ static int test_e2e_multi_file_library(void) {
                      "}\n");
 
     // -- Pack library (passing root file, imports are resolved automatically) --
-    char tlib_path[512];
-    snprintf(tlib_path, sizeof(tlib_path), "%sMathLib.tlib", lib_dir);
+    char tpkg_path[512];
+    snprintf(tpkg_path, sizeof(tpkg_path), "%sMathLib.tpkg", lib_dir);
 
     char cmd[2048];
     snprintf(cmd, sizeof(cmd),
-             CD_CMD " \"%s\" && \"%s\" pack --no-standard-includes -S \"%s\" math.tl -o MathLib.tlib 2>&1",
+             CD_CMD " \"%s\" && \"%s\" pack --no-standard-includes -S \"%s\" math.tl -o MathLib.tpkg 2>&1",
              lib_dir, e2e_tess_exe, e2e_stdlib_dir);
     // internal.tl is resolved automatically via #import in math.tl
     if (run_cmd(cmd) != 0) {
@@ -1319,9 +1319,9 @@ static int test_e2e_multi_file_library(void) {
                      "  result\n"
                      "}\n");
 
-    char dst_tlib[512];
-    snprintf(dst_tlib, sizeof(dst_tlib), "%sMathLib.tlib", libs_dir);
-    copy_file(tlib_path, dst_tlib);
+    char dst_tpkg[512];
+    snprintf(dst_tpkg, sizeof(dst_tpkg), "%sMathLib.tpkg", libs_dir);
+    copy_file(tpkg_path, dst_tpkg);
 
     // -- Compile and run --
     char out_exe[512];
@@ -1359,7 +1359,7 @@ static int test_e2e_transitive_deps(void) {
 
     char cmd[2048];
     snprintf(cmd, sizeof(cmd),
-             CD_CMD " \"%s\" && \"%s\" pack --no-standard-includes -S \"%s\" logger.tl -o LogLib.tlib 2>&1",
+             CD_CMD " \"%s\" && \"%s\" pack --no-standard-includes -S \"%s\" logger.tl -o LogLib.tpkg 2>&1",
              loglib_dir, e2e_tess_exe, e2e_stdlib_dir);
     if (run_cmd(cmd) != 0) {
         fprintf(stderr, "  tess pack LogLib failed\n");
@@ -1387,14 +1387,14 @@ static int test_e2e_transitive_deps(void) {
                      "  Logger.log_value() + 32\n"
                      "}\n");
 
-    // Copy LogLib.tlib to MathLib's libs/
-    char src_tlib[512], dst_tlib[512];
-    snprintf(src_tlib, sizeof(src_tlib), "%sLogLib.tlib", loglib_dir);
-    snprintf(dst_tlib, sizeof(dst_tlib), "%sLogLib.tlib", mathlib_libs);
-    copy_file(src_tlib, dst_tlib);
+    // Copy LogLib.tpkg to MathLib's libs/
+    char src_tpkg[512], dst_tpkg[512];
+    snprintf(src_tpkg, sizeof(src_tpkg), "%sLogLib.tpkg", loglib_dir);
+    snprintf(dst_tpkg, sizeof(dst_tpkg), "%sLogLib.tpkg", mathlib_libs);
+    copy_file(src_tpkg, dst_tpkg);
 
     snprintf(cmd, sizeof(cmd),
-             CD_CMD " \"%s\" && \"%s\" pack --no-standard-includes -S \"%s\" math.tl -o MathLib.tlib 2>&1",
+             CD_CMD " \"%s\" && \"%s\" pack --no-standard-includes -S \"%s\" math.tl -o MathLib.tpkg 2>&1",
              mathlib_dir, e2e_tess_exe, e2e_stdlib_dir);
     if (run_cmd(cmd) != 0) {
         fprintf(stderr, "  tess pack MathLib failed\n");
@@ -1418,14 +1418,14 @@ static int test_e2e_transitive_deps(void) {
     snprintf(path, sizeof(path), "%smain.tl", app_dir);
     write_file(path, "#module main\n\nmain() {\n  MathLib.compute()\n}\n");
 
-    // Copy both .tlibs to App's libs/
-    snprintf(src_tlib, sizeof(src_tlib), "%sMathLib.tlib", mathlib_dir);
-    snprintf(dst_tlib, sizeof(dst_tlib), "%sMathLib.tlib", app_libs);
-    copy_file(src_tlib, dst_tlib);
+    // Copy both .tpkgs to App's libs/
+    snprintf(src_tpkg, sizeof(src_tpkg), "%sMathLib.tpkg", mathlib_dir);
+    snprintf(dst_tpkg, sizeof(dst_tpkg), "%sMathLib.tpkg", app_libs);
+    copy_file(src_tpkg, dst_tpkg);
 
-    snprintf(src_tlib, sizeof(src_tlib), "%sLogLib.tlib", loglib_dir);
-    snprintf(dst_tlib, sizeof(dst_tlib), "%sLogLib.tlib", app_libs);
-    copy_file(src_tlib, dst_tlib);
+    snprintf(src_tpkg, sizeof(src_tpkg), "%sLogLib.tpkg", loglib_dir);
+    snprintf(dst_tpkg, sizeof(dst_tpkg), "%sLogLib.tpkg", app_libs);
+    copy_file(src_tpkg, dst_tpkg);
 
     // -- Compile and run --
     char out_exe[512];
@@ -1463,7 +1463,7 @@ static int test_e2e_diamond_deps(void) {
 
     char cmd[2048];
     snprintf(cmd, sizeof(cmd),
-             CD_CMD " \"%s\" && \"%s\" pack --no-standard-includes -S \"%s\" base.tl -o BaseLib.tlib 2>&1",
+             CD_CMD " \"%s\" && \"%s\" pack --no-standard-includes -S \"%s\" base.tl -o BaseLib.tpkg 2>&1",
              base_dir, e2e_tess_exe, e2e_stdlib_dir);
     if (run_cmd(cmd) != 0) {
         fprintf(stderr, "  tess pack BaseLib failed\n");
@@ -1488,13 +1488,13 @@ static int test_e2e_diamond_deps(void) {
     snprintf(path, sizeof(path), "%smoda.tl", liba_dir);
     write_file(path, "#module ModA\n\ncompute() { Base.val() + 1 }\n");
 
-    char src_tlib[512], dst_tlib[512];
-    snprintf(src_tlib, sizeof(src_tlib), "%sBaseLib.tlib", base_dir);
-    snprintf(dst_tlib, sizeof(dst_tlib), "%sBaseLib.tlib", liba_libs);
-    copy_file(src_tlib, dst_tlib);
+    char src_tpkg[512], dst_tpkg[512];
+    snprintf(src_tpkg, sizeof(src_tpkg), "%sBaseLib.tpkg", base_dir);
+    snprintf(dst_tpkg, sizeof(dst_tpkg), "%sBaseLib.tpkg", liba_libs);
+    copy_file(src_tpkg, dst_tpkg);
 
     snprintf(cmd, sizeof(cmd),
-             CD_CMD " \"%s\" && \"%s\" pack --no-standard-includes -S \"%s\" moda.tl -o LibA.tlib 2>&1",
+             CD_CMD " \"%s\" && \"%s\" pack --no-standard-includes -S \"%s\" moda.tl -o LibA.tpkg 2>&1",
              liba_dir, e2e_tess_exe, e2e_stdlib_dir);
     if (run_cmd(cmd) != 0) {
         fprintf(stderr, "  tess pack LibA failed\n");
@@ -1519,11 +1519,11 @@ static int test_e2e_diamond_deps(void) {
     snprintf(path, sizeof(path), "%smodb.tl", libb_dir);
     write_file(path, "#module ModB\n\ncompute() { Base.val() + 1 }\n");
 
-    snprintf(dst_tlib, sizeof(dst_tlib), "%sBaseLib.tlib", libb_libs);
-    copy_file(src_tlib, dst_tlib);
+    snprintf(dst_tpkg, sizeof(dst_tpkg), "%sBaseLib.tpkg", libb_libs);
+    copy_file(src_tpkg, dst_tpkg);
 
     snprintf(cmd, sizeof(cmd),
-             CD_CMD " \"%s\" && \"%s\" pack --no-standard-includes -S \"%s\" modb.tl -o LibB.tlib 2>&1",
+             CD_CMD " \"%s\" && \"%s\" pack --no-standard-includes -S \"%s\" modb.tl -o LibB.tpkg 2>&1",
              libb_dir, e2e_tess_exe, e2e_stdlib_dir);
     if (run_cmd(cmd) != 0) {
         fprintf(stderr, "  tess pack LibB failed\n");
@@ -1551,18 +1551,18 @@ static int test_e2e_diamond_deps(void) {
                      "  ModA.compute() + ModB.compute()\n"
                      "}\n");
 
-    // Copy all .tlibs to App's libs/
-    snprintf(src_tlib, sizeof(src_tlib), "%sLibA.tlib", liba_dir);
-    snprintf(dst_tlib, sizeof(dst_tlib), "%sLibA.tlib", app_libs);
-    copy_file(src_tlib, dst_tlib);
+    // Copy all .tpkgs to App's libs/
+    snprintf(src_tpkg, sizeof(src_tpkg), "%sLibA.tpkg", liba_dir);
+    snprintf(dst_tpkg, sizeof(dst_tpkg), "%sLibA.tpkg", app_libs);
+    copy_file(src_tpkg, dst_tpkg);
 
-    snprintf(src_tlib, sizeof(src_tlib), "%sLibB.tlib", libb_dir);
-    snprintf(dst_tlib, sizeof(dst_tlib), "%sLibB.tlib", app_libs);
-    copy_file(src_tlib, dst_tlib);
+    snprintf(src_tpkg, sizeof(src_tpkg), "%sLibB.tpkg", libb_dir);
+    snprintf(dst_tpkg, sizeof(dst_tpkg), "%sLibB.tpkg", app_libs);
+    copy_file(src_tpkg, dst_tpkg);
 
-    snprintf(src_tlib, sizeof(src_tlib), "%sBaseLib.tlib", base_dir);
-    snprintf(dst_tlib, sizeof(dst_tlib), "%sBaseLib.tlib", app_libs);
-    copy_file(src_tlib, dst_tlib);
+    snprintf(src_tpkg, sizeof(src_tpkg), "%sBaseLib.tpkg", base_dir);
+    snprintf(dst_tpkg, sizeof(dst_tpkg), "%sBaseLib.tpkg", app_libs);
+    copy_file(src_tpkg, dst_tpkg);
 
     // -- Compile and run --
     char out_exe[512];
@@ -1588,19 +1588,19 @@ static int test_e2e_diamond_deps(void) {
 static int test_e2e_circular_deps(void) {
     allocator *alloc = arena_create(default_allocator(), 4096);
 
-    // Create two .tlib files that reference each other via raw write API
+    // Create two .tpkg files that reference each other via raw write API
     char libs_dir[512];
     make_temp_path(libs_dir, sizeof(libs_dir), "e2e_circular_libs/");
     test_mkdir_p(libs_dir);
 
-    // A.tlib depends on B=1.0.0
+    // A.tpkg depends on B=1.0.0
     str a_depends[1];
     a_depends[0] = str_init(alloc, "PkgB=1.0.0");
 
     str a_modules[1];
     a_modules[0]            = str_init(alloc, "ModA");
 
-    tl_tlib_metadata meta_a = {
+    tl_tpkg_metadata meta_a = {
       .name          = str_init(alloc, "PkgA"),
       .author        = str_empty(),
       .version       = str_init(alloc, "1.0.0"),
@@ -1611,24 +1611,24 @@ static int test_e2e_circular_deps(void) {
     };
 
     char const   *a_src   = "#module ModA\n\nfoo() { 1 }\n";
-    tl_tlib_entry a_entry = {"moda.tl", 7, (byte const *)a_src, (u32)strlen(a_src)};
+    tl_tpkg_entry a_entry = {"moda.tl", 7, (byte const *)a_src, (u32)strlen(a_src)};
 
     char          a_path[512];
-    snprintf(a_path, sizeof(a_path), "%sPkgA.tlib", libs_dir);
-    if (tl_tlib_write(alloc, a_path, &meta_a, &a_entry, 1)) {
-        fprintf(stderr, "  failed to write PkgA.tlib\n");
+    snprintf(a_path, sizeof(a_path), "%sPkgA.tpkg", libs_dir);
+    if (tl_tpkg_write(alloc, a_path, &meta_a, &a_entry, 1)) {
+        fprintf(stderr, "  failed to write PkgA.tpkg\n");
         arena_destroy(&alloc);
         return 1;
     }
 
-    // B.tlib depends on A=1.0.0
+    // B.tpkg depends on A=1.0.0
     str b_depends[1];
     b_depends[0] = str_init(alloc, "PkgA=1.0.0");
 
     str b_modules[1];
     b_modules[0]            = str_init(alloc, "ModB");
 
-    tl_tlib_metadata meta_b = {
+    tl_tpkg_metadata meta_b = {
       .name          = str_init(alloc, "PkgB"),
       .author        = str_empty(),
       .version       = str_init(alloc, "1.0.0"),
@@ -1639,12 +1639,12 @@ static int test_e2e_circular_deps(void) {
     };
 
     char const   *b_src   = "#module ModB\n\nbar() { 2 }\n";
-    tl_tlib_entry b_entry = {"modb.tl", 7, (byte const *)b_src, (u32)strlen(b_src)};
+    tl_tpkg_entry b_entry = {"modb.tl", 7, (byte const *)b_src, (u32)strlen(b_src)};
 
     char          b_path[512];
-    snprintf(b_path, sizeof(b_path), "%sPkgB.tlib", libs_dir);
-    if (tl_tlib_write(alloc, b_path, &meta_b, &b_entry, 1)) {
-        fprintf(stderr, "  failed to write PkgB.tlib\n");
+    snprintf(b_path, sizeof(b_path), "%sPkgB.tpkg", libs_dir);
+    if (tl_tpkg_write(alloc, b_path, &meta_b, &b_entry, 1)) {
+        fprintf(stderr, "  failed to write PkgB.tpkg\n");
         arena_destroy(&alloc);
         return 1;
     }
@@ -1670,11 +1670,11 @@ static int test_e2e_circular_deps(void) {
     snprintf(path, sizeof(path), "%smain.tl", app_dir);
     write_file(path, "#module main\n\nmain() { 0 }\n");
 
-    // Copy .tlibs to App's libs/
+    // Copy .tpkgs to App's libs/
     char dst[512];
-    snprintf(dst, sizeof(dst), "%sPkgA.tlib", app_libs);
+    snprintf(dst, sizeof(dst), "%sPkgA.tpkg", app_libs);
     copy_file(a_path, dst);
-    snprintf(dst, sizeof(dst), "%sPkgB.tlib", app_libs);
+    snprintf(dst, sizeof(dst), "%sPkgB.tpkg", app_libs);
     copy_file(b_path, dst);
 
     // -- Compile: should fail with circular dependency error --
@@ -1704,7 +1704,7 @@ static int test_e2e_version_conflict(void) {
     str base_modules[1];
     base_modules[0]            = str_init(alloc, "Base");
 
-    tl_tlib_metadata meta_base = {
+    tl_tpkg_metadata meta_base = {
       .name         = str_init(alloc, "BaseLib"),
       .author       = str_empty(),
       .version      = str_init(alloc, "1.0.0"),
@@ -1713,11 +1713,11 @@ static int test_e2e_version_conflict(void) {
     };
 
     char const   *base_src   = "#module Base\n\nval() { 1 }\n";
-    tl_tlib_entry base_entry = {"base.tl", 7, (byte const *)base_src, (u32)strlen(base_src)};
+    tl_tpkg_entry base_entry = {"base.tl", 7, (byte const *)base_src, (u32)strlen(base_src)};
 
     char          base_path[512];
-    snprintf(base_path, sizeof(base_path), "%sBaseLib.tlib", libs_dir);
-    tl_tlib_write(alloc, base_path, &meta_base, &base_entry, 1);
+    snprintf(base_path, sizeof(base_path), "%sBaseLib.tpkg", libs_dir);
+    tl_tpkg_write(alloc, base_path, &meta_base, &base_entry, 1);
 
     // LibA depends on BaseLib=1.0.0
     str a_depends[1];
@@ -1726,7 +1726,7 @@ static int test_e2e_version_conflict(void) {
     str a_modules[1];
     a_modules[0]            = str_init(alloc, "ModA");
 
-    tl_tlib_metadata meta_a = {
+    tl_tpkg_metadata meta_a = {
       .name          = str_init(alloc, "LibA"),
       .author        = str_empty(),
       .version       = str_init(alloc, "1.0.0"),
@@ -1737,11 +1737,11 @@ static int test_e2e_version_conflict(void) {
     };
 
     char const   *a_src   = "#module ModA\n\nfoo() { Base.val() }\n";
-    tl_tlib_entry a_entry = {"moda.tl", 7, (byte const *)a_src, (u32)strlen(a_src)};
+    tl_tpkg_entry a_entry = {"moda.tl", 7, (byte const *)a_src, (u32)strlen(a_src)};
 
     char          a_path[512];
-    snprintf(a_path, sizeof(a_path), "%sLibA.tlib", libs_dir);
-    tl_tlib_write(alloc, a_path, &meta_a, &a_entry, 1);
+    snprintf(a_path, sizeof(a_path), "%sLibA.tpkg", libs_dir);
+    tl_tpkg_write(alloc, a_path, &meta_a, &a_entry, 1);
 
     // LibB depends on BaseLib=2.0.0 (conflict!)
     str b_depends[1];
@@ -1750,7 +1750,7 @@ static int test_e2e_version_conflict(void) {
     str b_modules[1];
     b_modules[0]            = str_init(alloc, "ModB");
 
-    tl_tlib_metadata meta_b = {
+    tl_tpkg_metadata meta_b = {
       .name          = str_init(alloc, "LibB"),
       .author        = str_empty(),
       .version       = str_init(alloc, "1.0.0"),
@@ -1761,11 +1761,11 @@ static int test_e2e_version_conflict(void) {
     };
 
     char const   *b_src   = "#module ModB\n\nbar() { Base.val() }\n";
-    tl_tlib_entry b_entry = {"modb.tl", 7, (byte const *)b_src, (u32)strlen(b_src)};
+    tl_tpkg_entry b_entry = {"modb.tl", 7, (byte const *)b_src, (u32)strlen(b_src)};
 
     char          b_path[512];
-    snprintf(b_path, sizeof(b_path), "%sLibB.tlib", libs_dir);
-    tl_tlib_write(alloc, b_path, &meta_b, &b_entry, 1);
+    snprintf(b_path, sizeof(b_path), "%sLibB.tpkg", libs_dir);
+    tl_tpkg_write(alloc, b_path, &meta_b, &b_entry, 1);
 
     // Arena no longer needed after writes
     arena_destroy(&alloc);
@@ -1789,13 +1789,13 @@ static int test_e2e_version_conflict(void) {
     snprintf(path, sizeof(path), "%smain.tl", app_dir);
     write_file(path, "#module main\n\nmain() { 0 }\n");
 
-    // Copy all .tlibs
+    // Copy all .tpkgs
     char dst[512];
-    snprintf(dst, sizeof(dst), "%sLibA.tlib", app_libs);
+    snprintf(dst, sizeof(dst), "%sLibA.tpkg", app_libs);
     copy_file(a_path, dst);
-    snprintf(dst, sizeof(dst), "%sLibB.tlib", app_libs);
+    snprintf(dst, sizeof(dst), "%sLibB.tpkg", app_libs);
     copy_file(b_path, dst);
-    snprintf(dst, sizeof(dst), "%sBaseLib.tlib", app_libs);
+    snprintf(dst, sizeof(dst), "%sBaseLib.tpkg", app_libs);
     copy_file(base_path, dst);
 
     // -- Compile: should fail (LibA needs Base=1.0.0, LibB needs Base=2.0.0) --
@@ -1828,7 +1828,7 @@ static int test_e2e_missing_transitive_dep(void) {
     str m_modules[1];
     m_modules[0]            = str_init(alloc, "MathLib");
 
-    tl_tlib_metadata meta_m = {
+    tl_tpkg_metadata meta_m = {
       .name          = str_init(alloc, "MathLib"),
       .author        = str_empty(),
       .version       = str_init(alloc, "1.0.0"),
@@ -1839,11 +1839,11 @@ static int test_e2e_missing_transitive_dep(void) {
     };
 
     char const   *m_src   = "#module MathLib\n\nadd(a, b) { a + b }\n";
-    tl_tlib_entry m_entry = {"math.tl", 7, (byte const *)m_src, (u32)strlen(m_src)};
+    tl_tpkg_entry m_entry = {"math.tl", 7, (byte const *)m_src, (u32)strlen(m_src)};
 
     char          m_path[512];
-    snprintf(m_path, sizeof(m_path), "%sMathLib.tlib", libs_dir);
-    tl_tlib_write(alloc, m_path, &meta_m, &m_entry, 1);
+    snprintf(m_path, sizeof(m_path), "%sMathLib.tpkg", libs_dir);
+    tl_tpkg_write(alloc, m_path, &meta_m, &m_entry, 1);
 
     // Arena no longer needed after writes
     arena_destroy(&alloc);
@@ -1866,9 +1866,9 @@ static int test_e2e_missing_transitive_dep(void) {
     snprintf(path, sizeof(path), "%smain.tl", app_dir);
     write_file(path, "#module main\n\nmain() { 0 }\n");
 
-    // Copy only MathLib.tlib (NOT LogLib.tlib)
+    // Copy only MathLib.tpkg (NOT LogLib.tpkg)
     char dst[512];
-    snprintf(dst, sizeof(dst), "%sMathLib.tlib", app_libs);
+    snprintf(dst, sizeof(dst), "%sMathLib.tpkg", app_libs);
     copy_file(m_path, dst);
 
     // -- Compile: should fail with missing transitive dep --
@@ -1913,13 +1913,13 @@ static int test_e2e_internal_module_accessible(void) {
                      "int_val() { 32 }\n");
 
     // -- Pack --
-    char tlib_path[512];
-    snprintf(tlib_path, sizeof(tlib_path), "%sMathPkg.tlib", lib_dir);
+    char tpkg_path[512];
+    snprintf(tpkg_path, sizeof(tpkg_path), "%sMathPkg.tpkg", lib_dir);
 
     char cmd[2048];
     snprintf(cmd, sizeof(cmd),
              CD_CMD
-             " \"%s\" && \"%s\" pack --no-standard-includes -S \"%s\" mathpub.tl -o MathPkg.tlib 2>&1",
+             " \"%s\" && \"%s\" pack --no-standard-includes -S \"%s\" mathpub.tl -o MathPkg.tpkg 2>&1",
              lib_dir, e2e_tess_exe, e2e_stdlib_dir);
     if (run_cmd(cmd) != 0) {
         fprintf(stderr, "  tess pack failed\n");
@@ -1947,8 +1947,8 @@ static int test_e2e_internal_module_accessible(void) {
                      "}\n");
 
     char dst[512];
-    snprintf(dst, sizeof(dst), "%sMathPkg.tlib", app_libs);
-    copy_file(tlib_path, dst);
+    snprintf(dst, sizeof(dst), "%sMathPkg.tpkg", app_libs);
+    copy_file(tpkg_path, dst);
 
     // -- Compile and run: both modules accessible --
     char out_exe[512];
@@ -1990,12 +1990,12 @@ static int test_e2e_generic_package(void) {
                      "identity(x) { x }\n"
                      "add(a, b) { a + b }\n");
 
-    char tlib_path[512];
-    snprintf(tlib_path, sizeof(tlib_path), "%sGenLib.tlib", lib_dir);
+    char tpkg_path[512];
+    snprintf(tpkg_path, sizeof(tpkg_path), "%sGenLib.tpkg", lib_dir);
 
     char cmd[2048];
     snprintf(cmd, sizeof(cmd),
-             CD_CMD " \"%s\" && \"%s\" pack --no-standard-includes -S \"%s\" genlib.tl -o GenLib.tlib 2>&1",
+             CD_CMD " \"%s\" && \"%s\" pack --no-standard-includes -S \"%s\" genlib.tl -o GenLib.tpkg 2>&1",
              lib_dir, e2e_tess_exe, e2e_stdlib_dir);
     if (run_cmd(cmd) != 0) {
         fprintf(stderr, "  tess pack failed\n");
@@ -2024,8 +2024,8 @@ static int test_e2e_generic_package(void) {
                      "}\n");
 
     char dst[512];
-    snprintf(dst, sizeof(dst), "%sGenLib.tlib", app_libs);
-    copy_file(tlib_path, dst);
+    snprintf(dst, sizeof(dst), "%sGenLib.tpkg", app_libs);
+    copy_file(tpkg_path, dst);
 
     char out_exe[512];
     snprintf(out_exe, sizeof(out_exe), "%sapp" EXE_SUFFIX, app_dir);
@@ -2058,7 +2058,7 @@ static int test_e2e_module_conflict(void) {
     str a_modules[1];
     a_modules[0]            = str_init(alloc, "Utils");
 
-    tl_tlib_metadata meta_a = {
+    tl_tpkg_metadata meta_a = {
       .name         = str_init(alloc, "LibA"),
       .author       = str_empty(),
       .version      = str_init(alloc, "1.0.0"),
@@ -2067,17 +2067,17 @@ static int test_e2e_module_conflict(void) {
     };
 
     char const   *a_src   = "#module Utils\n\nfoo() { 1 }\n";
-    tl_tlib_entry a_entry = {"utils.tl", 8, (byte const *)a_src, (u32)strlen(a_src)};
+    tl_tpkg_entry a_entry = {"utils.tl", 8, (byte const *)a_src, (u32)strlen(a_src)};
 
     char          a_path[512];
-    snprintf(a_path, sizeof(a_path), "%sLibA.tlib", libs_dir);
-    tl_tlib_write(alloc, a_path, &meta_a, &a_entry, 1);
+    snprintf(a_path, sizeof(a_path), "%sLibA.tpkg", libs_dir);
+    tl_tpkg_write(alloc, a_path, &meta_a, &a_entry, 1);
 
     // LibB also with module "Utils" (conflict!)
     str b_modules[1];
     b_modules[0]            = str_init(alloc, "Utils");
 
-    tl_tlib_metadata meta_b = {
+    tl_tpkg_metadata meta_b = {
       .name         = str_init(alloc, "LibB"),
       .author       = str_empty(),
       .version      = str_init(alloc, "1.0.0"),
@@ -2086,11 +2086,11 @@ static int test_e2e_module_conflict(void) {
     };
 
     char const   *b_src   = "#module Utils\n\nbar() { 2 }\n";
-    tl_tlib_entry b_entry = {"utils.tl", 8, (byte const *)b_src, (u32)strlen(b_src)};
+    tl_tpkg_entry b_entry = {"utils.tl", 8, (byte const *)b_src, (u32)strlen(b_src)};
 
     char          b_path[512];
-    snprintf(b_path, sizeof(b_path), "%sLibB.tlib", libs_dir);
-    tl_tlib_write(alloc, b_path, &meta_b, &b_entry, 1);
+    snprintf(b_path, sizeof(b_path), "%sLibB.tpkg", libs_dir);
+    tl_tpkg_write(alloc, b_path, &meta_b, &b_entry, 1);
 
     // Arena no longer needed after writes
     arena_destroy(&alloc);
@@ -2115,9 +2115,9 @@ static int test_e2e_module_conflict(void) {
     write_file(path, "#module main\n\nmain() { 0 }\n");
 
     char dst[512];
-    snprintf(dst, sizeof(dst), "%sLibA.tlib", app_libs);
+    snprintf(dst, sizeof(dst), "%sLibA.tpkg", app_libs);
     copy_file(a_path, dst);
-    snprintf(dst, sizeof(dst), "%sLibB.tlib", app_libs);
+    snprintf(dst, sizeof(dst), "%sLibB.tpkg", app_libs);
     copy_file(b_path, dst);
 
     // -- Compile: should succeed (duplicate modules across packages are allowed) --
@@ -2717,19 +2717,19 @@ static int test_e2e_source_pack(void) {
     }
 
     // Pack with no CLI files — should use source()
-    char tlib_path[512];
-    snprintf(tlib_path, sizeof(tlib_path), "%sMyLib.tlib", lib_dir);
+    char tpkg_path[512];
+    snprintf(tpkg_path, sizeof(tpkg_path), "%sMyLib.tpkg", lib_dir);
 
     char cmd[2048];
     snprintf(cmd, sizeof(cmd),
-             CD_CMD " \"%s\" && \"%s\" pack --no-standard-includes -S \"%s\" -o MyLib.tlib 2>&1", lib_dir,
+             CD_CMD " \"%s\" && \"%s\" pack --no-standard-includes -S \"%s\" -o MyLib.tpkg 2>&1", lib_dir,
              e2e_tess_exe, e2e_stdlib_dir);
     if (run_cmd(cmd) != 0) {
         fprintf(stderr, "  tess pack with source() failed\n");
         return 1;
     }
 
-    // Verify .tlib was created by consuming it
+    // Verify .tpkg was created by consuming it
     char app_dir[512], libs_dir[512];
     make_temp_path(app_dir, sizeof(app_dir), "e2e_source_pack_app/");
     snprintf(libs_dir, sizeof(libs_dir), "%slibs" SEP_STR, app_dir);
@@ -2749,10 +2749,10 @@ static int test_e2e_source_pack(void) {
         return 1;
     }
 
-    char dst_tlib[512];
-    snprintf(dst_tlib, sizeof(dst_tlib), "%sMyLib.tlib", libs_dir);
-    if (copy_file(tlib_path, dst_tlib)) {
-        fprintf(stderr, "  failed to copy MyLib.tlib\n");
+    char dst_tpkg[512];
+    snprintf(dst_tpkg, sizeof(dst_tpkg), "%sMyLib.tpkg", libs_dir);
+    if (copy_file(tpkg_path, dst_tpkg)) {
+        fprintf(stderr, "  failed to copy MyLib.tpkg\n");
         return 1;
     }
 
@@ -3110,13 +3110,13 @@ static int test_e2e_pkg_prefix_cross_module(void) {
     }
 
     // Pack library
-    char tlib_path[512];
-    snprintf(tlib_path, sizeof(tlib_path), "%sGreeter.tlib", lib_dir);
+    char tpkg_path[512];
+    snprintf(tpkg_path, sizeof(tpkg_path), "%sGreeter.tpkg", lib_dir);
 
     char cmd[2048];
     snprintf(cmd, sizeof(cmd),
              CD_CMD " \"%s\" && \"%s\" pack --no-standard-includes -S \"%s\""
-                    " helper.tl greeter.tl -o Greeter.tlib 2>&1",
+                    " helper.tl greeter.tl -o Greeter.tpkg 2>&1",
              lib_dir, e2e_tess_exe, e2e_stdlib_dir);
     if (run_cmd(cmd) != 0) {
         fprintf(stderr, "  tess pack failed\n");
@@ -3147,11 +3147,11 @@ static int test_e2e_pkg_prefix_cross_module(void) {
         return 1;
     }
 
-    // Copy .tlib
-    char dst_tlib[512];
-    snprintf(dst_tlib, sizeof(dst_tlib), "%sGreeter.tlib", libs_dir);
-    if (copy_file(tlib_path, dst_tlib)) {
-        fprintf(stderr, "  failed to copy Greeter.tlib\n");
+    // Copy .tpkg
+    char dst_tpkg[512];
+    snprintf(dst_tpkg, sizeof(dst_tpkg), "%sGreeter.tpkg", libs_dir);
+    if (copy_file(tpkg_path, dst_tpkg)) {
+        fprintf(stderr, "  failed to copy Greeter.tpkg\n");
         return 1;
     }
 
@@ -3491,13 +3491,13 @@ static int test_e2e_pkg_prefix_generic(void) {
     }
 
     // Pack library
-    char tlib_path[512];
-    snprintf(tlib_path, sizeof(tlib_path), "%sUtilsPkg.tlib", dir);
+    char tpkg_path[512];
+    snprintf(tpkg_path, sizeof(tpkg_path), "%sUtilsPkg.tpkg", dir);
 
     char cmd[2048];
     snprintf(cmd, sizeof(cmd),
              CD_CMD " \"%s\" && \"%s\" pack --no-standard-includes -S \"%s\""
-                    " utils.tl -o UtilsPkg.tlib 2>&1",
+                    " utils.tl -o UtilsPkg.tpkg 2>&1",
              dir, e2e_tess_exe, e2e_stdlib_dir);
     if (run_cmd(cmd) != 0) {
         fprintf(stderr, "  tess pack failed\n");
@@ -3529,8 +3529,8 @@ static int test_e2e_pkg_prefix_generic(void) {
     }
 
     char dst[512];
-    snprintf(dst, sizeof(dst), "%sUtilsPkg.tlib", app_libs);
-    copy_file(tlib_path, dst);
+    snprintf(dst, sizeof(dst), "%sUtilsPkg.tpkg", app_libs);
+    copy_file(tpkg_path, dst);
 
     // Transpile to C to check mangled names
     char output_log[512];
@@ -3634,7 +3634,7 @@ static int test_e2e_pkg_prefix_same_module_name(void) {
     char cmd[2048];
     snprintf(cmd, sizeof(cmd),
              CD_CMD " \"%s\" && \"%s\" pack --no-standard-includes -S \"%s\""
-                    " utils.tl -o PkgA.tlib 2>&1",
+                    " utils.tl -o PkgA.tpkg 2>&1",
              a_dir, e2e_tess_exe, e2e_stdlib_dir);
     if (run_cmd(cmd) != 0) {
         fprintf(stderr, "  tess pack PkgA failed\n");
@@ -3654,7 +3654,7 @@ static int test_e2e_pkg_prefix_same_module_name(void) {
 
     snprintf(cmd, sizeof(cmd),
              CD_CMD " \"%s\" && \"%s\" pack --no-standard-includes -S \"%s\""
-                    " utils.tl -o PkgB.tlib 2>&1",
+                    " utils.tl -o PkgB.tpkg 2>&1",
              b_dir, e2e_tess_exe, e2e_stdlib_dir);
     if (run_cmd(cmd) != 0) {
         fprintf(stderr, "  tess pack PkgB failed\n");
@@ -3685,14 +3685,14 @@ static int test_e2e_pkg_prefix_same_module_name(void) {
                      "  Utils.val()\n"
                      "}\n");
 
-    char src_tlib[512], dst_tlib[512];
-    snprintf(src_tlib, sizeof(src_tlib), "%sPkgA.tlib", a_dir);
-    snprintf(dst_tlib, sizeof(dst_tlib), "%sPkgA.tlib", app_libs);
-    copy_file(src_tlib, dst_tlib);
+    char src_tpkg[512], dst_tpkg[512];
+    snprintf(src_tpkg, sizeof(src_tpkg), "%sPkgA.tpkg", a_dir);
+    snprintf(dst_tpkg, sizeof(dst_tpkg), "%sPkgA.tpkg", app_libs);
+    copy_file(src_tpkg, dst_tpkg);
 
-    snprintf(src_tlib, sizeof(src_tlib), "%sPkgB.tlib", b_dir);
-    snprintf(dst_tlib, sizeof(dst_tlib), "%sPkgB.tlib", app_libs);
-    copy_file(src_tlib, dst_tlib);
+    snprintf(src_tpkg, sizeof(src_tpkg), "%sPkgB.tpkg", b_dir);
+    snprintf(dst_tpkg, sizeof(dst_tpkg), "%sPkgB.tpkg", app_libs);
+    copy_file(src_tpkg, dst_tpkg);
 
     // Compile — this should at minimum not crash. The two packages both export "Utils".
     // With proper support, PkgA.Utils and PkgB.Utils would be distinct namespaces.
@@ -3729,7 +3729,7 @@ static int test_e2e_pkg_prefix_transitive(void) {
     char cmd[2048];
     snprintf(cmd, sizeof(cmd),
              CD_CMD " \"%s\" && \"%s\" pack --no-standard-includes -S \"%s\""
-                    " modc.tl -o PkgC.tlib 2>&1",
+                    " modc.tl -o PkgC.tpkg 2>&1",
              c_dir, e2e_tess_exe, e2e_stdlib_dir);
     if (run_cmd(cmd) != 0) {
         fprintf(stderr, "  tess pack PkgC failed\n");
@@ -3750,14 +3750,14 @@ static int test_e2e_pkg_prefix_transitive(void) {
     snprintf(path, sizeof(path), "%smodb.tl", b_dir);
     write_file(path, "#module ModB\n\nmid_val() { ModC.base_val() + 10 }\n");
 
-    char src_tlib[512], dst_tlib[512];
-    snprintf(src_tlib, sizeof(src_tlib), "%sPkgC.tlib", c_dir);
-    snprintf(dst_tlib, sizeof(dst_tlib), "%sPkgC.tlib", b_libs);
-    copy_file(src_tlib, dst_tlib);
+    char src_tpkg[512], dst_tpkg[512];
+    snprintf(src_tpkg, sizeof(src_tpkg), "%sPkgC.tpkg", c_dir);
+    snprintf(dst_tpkg, sizeof(dst_tpkg), "%sPkgC.tpkg", b_libs);
+    copy_file(src_tpkg, dst_tpkg);
 
     snprintf(cmd, sizeof(cmd),
              CD_CMD " \"%s\" && \"%s\" pack --no-standard-includes -S \"%s\""
-                    " modb.tl -o PkgB.tlib 2>&1",
+                    " modb.tl -o PkgB.tpkg 2>&1",
              b_dir, e2e_tess_exe, e2e_stdlib_dir);
     if (run_cmd(cmd) != 0) {
         fprintf(stderr, "  tess pack PkgB failed\n");
@@ -3782,14 +3782,14 @@ static int test_e2e_pkg_prefix_transitive(void) {
                      "  ModB.mid_val() + 22\n"
                      "}\n");
 
-    // Copy both tlibs to app's libs (flattened transitive closure)
-    snprintf(src_tlib, sizeof(src_tlib), "%sPkgB.tlib", b_dir);
-    snprintf(dst_tlib, sizeof(dst_tlib), "%sPkgB.tlib", app_libs);
-    copy_file(src_tlib, dst_tlib);
+    // Copy both tpkgs to app's libs (flattened transitive closure)
+    snprintf(src_tpkg, sizeof(src_tpkg), "%sPkgB.tpkg", b_dir);
+    snprintf(dst_tpkg, sizeof(dst_tpkg), "%sPkgB.tpkg", app_libs);
+    copy_file(src_tpkg, dst_tpkg);
 
-    snprintf(src_tlib, sizeof(src_tlib), "%sPkgC.tlib", c_dir);
-    snprintf(dst_tlib, sizeof(dst_tlib), "%sPkgC.tlib", app_libs);
-    copy_file(src_tlib, dst_tlib);
+    snprintf(src_tpkg, sizeof(src_tpkg), "%sPkgC.tpkg", c_dir);
+    snprintf(dst_tpkg, sizeof(dst_tpkg), "%sPkgC.tpkg", app_libs);
+    copy_file(src_tpkg, dst_tpkg);
 
     // Compile and run: base_val()=10, mid_val()=10+10=20, main()=20+22=42
     char out_exe[512];
@@ -3831,7 +3831,7 @@ static int test_e2e_pkg_prefix_multi_version(void) {
     char cmd[2048];
     snprintf(cmd, sizeof(cmd),
              CD_CMD " \"%s\" && \"%s\" pack --no-standard-includes -S \"%s\""
-                    " base.tl -o BaseLib.tlib 2>&1",
+                    " base.tl -o BaseLib.tpkg 2>&1",
              base1_dir, e2e_tess_exe, e2e_stdlib_dir);
     if (run_cmd(cmd) != 0) {
         fprintf(stderr, "  tess pack BaseLib v1 failed\n");
@@ -3851,7 +3851,7 @@ static int test_e2e_pkg_prefix_multi_version(void) {
 
     snprintf(cmd, sizeof(cmd),
              CD_CMD " \"%s\" && \"%s\" pack --no-standard-includes -S \"%s\""
-                    " base.tl -o BaseLib.tlib 2>&1",
+                    " base.tl -o BaseLib.tpkg 2>&1",
              base2_dir, e2e_tess_exe, e2e_stdlib_dir);
     if (run_cmd(cmd) != 0) {
         fprintf(stderr, "  tess pack BaseLib v2 failed\n");
@@ -3872,14 +3872,14 @@ static int test_e2e_pkg_prefix_multi_version(void) {
     snprintf(path, sizeof(path), "%smoda.tl", liba_dir);
     write_file(path, "#module ModA\n\ncompute() { Base.val() }\n");
 
-    char src_tlib[512], dst_tlib[512];
-    snprintf(src_tlib, sizeof(src_tlib), "%sBaseLib.tlib", base1_dir);
-    snprintf(dst_tlib, sizeof(dst_tlib), "%sBaseLib.tlib", liba_libs);
-    copy_file(src_tlib, dst_tlib);
+    char src_tpkg[512], dst_tpkg[512];
+    snprintf(src_tpkg, sizeof(src_tpkg), "%sBaseLib.tpkg", base1_dir);
+    snprintf(dst_tpkg, sizeof(dst_tpkg), "%sBaseLib.tpkg", liba_libs);
+    copy_file(src_tpkg, dst_tpkg);
 
     snprintf(cmd, sizeof(cmd),
              CD_CMD " \"%s\" && \"%s\" pack --no-standard-includes -S \"%s\""
-                    " moda.tl -o LibA.tlib 2>&1",
+                    " moda.tl -o LibA.tpkg 2>&1",
              liba_dir, e2e_tess_exe, e2e_stdlib_dir);
     if (run_cmd(cmd) != 0) {
         fprintf(stderr, "  tess pack LibA failed\n");
@@ -3900,13 +3900,13 @@ static int test_e2e_pkg_prefix_multi_version(void) {
     snprintf(path, sizeof(path), "%smodb.tl", libb_dir);
     write_file(path, "#module ModB\n\ncompute() { Base.value() }\n");
 
-    snprintf(src_tlib, sizeof(src_tlib), "%sBaseLib.tlib", base2_dir);
-    snprintf(dst_tlib, sizeof(dst_tlib), "%sBaseLib.tlib", libb_libs);
-    copy_file(src_tlib, dst_tlib);
+    snprintf(src_tpkg, sizeof(src_tpkg), "%sBaseLib.tpkg", base2_dir);
+    snprintf(dst_tpkg, sizeof(dst_tpkg), "%sBaseLib.tpkg", libb_libs);
+    copy_file(src_tpkg, dst_tpkg);
 
     snprintf(cmd, sizeof(cmd),
              CD_CMD " \"%s\" && \"%s\" pack --no-standard-includes -S \"%s\""
-                    " modb.tl -o LibB.tlib 2>&1",
+                    " modb.tl -o LibB.tpkg 2>&1",
              libb_dir, e2e_tess_exe, e2e_stdlib_dir);
     if (run_cmd(cmd) != 0) {
         fprintf(stderr, "  tess pack LibB failed\n");
@@ -3934,26 +3934,26 @@ static int test_e2e_pkg_prefix_multi_version(void) {
                      "  ModA.compute() + ModB.compute()\n"
                      "}\n");
 
-    // Copy all tlibs — both BaseLib versions need to be available.
+    // Copy all tpkgs — both BaseLib versions need to be available.
     // BaseLib v1 uses the unversioned fallback name, BaseLib v2 uses
     // the versioned filename that the resolver picks up automatically.
-    snprintf(src_tlib, sizeof(src_tlib), "%sLibA.tlib", liba_dir);
-    snprintf(dst_tlib, sizeof(dst_tlib), "%sLibA.tlib", app_libs);
-    copy_file(src_tlib, dst_tlib);
+    snprintf(src_tpkg, sizeof(src_tpkg), "%sLibA.tpkg", liba_dir);
+    snprintf(dst_tpkg, sizeof(dst_tpkg), "%sLibA.tpkg", app_libs);
+    copy_file(src_tpkg, dst_tpkg);
 
-    snprintf(src_tlib, sizeof(src_tlib), "%sLibB.tlib", libb_dir);
-    snprintf(dst_tlib, sizeof(dst_tlib), "%sLibB.tlib", app_libs);
-    copy_file(src_tlib, dst_tlib);
+    snprintf(src_tpkg, sizeof(src_tpkg), "%sLibB.tpkg", libb_dir);
+    snprintf(dst_tpkg, sizeof(dst_tpkg), "%sLibB.tpkg", app_libs);
+    copy_file(src_tpkg, dst_tpkg);
 
-    // Copy BaseLib v1 as BaseLib.tlib (unversioned fallback)
-    snprintf(src_tlib, sizeof(src_tlib), "%sBaseLib.tlib", base1_dir);
-    snprintf(dst_tlib, sizeof(dst_tlib), "%sBaseLib.tlib", app_libs);
-    copy_file(src_tlib, dst_tlib);
+    // Copy BaseLib v1 as BaseLib.tpkg (unversioned fallback)
+    snprintf(src_tpkg, sizeof(src_tpkg), "%sBaseLib.tpkg", base1_dir);
+    snprintf(dst_tpkg, sizeof(dst_tpkg), "%sBaseLib.tpkg", app_libs);
+    copy_file(src_tpkg, dst_tpkg);
 
-    // Copy BaseLib v2 with versioned filename (resolver finds <PkgName>-<Version>.tlib)
-    snprintf(src_tlib, sizeof(src_tlib), "%sBaseLib.tlib", base2_dir);
-    snprintf(dst_tlib, sizeof(dst_tlib), "%sBaseLib-2.0.0.tlib", app_libs);
-    copy_file(src_tlib, dst_tlib);
+    // Copy BaseLib v2 with versioned filename (resolver finds <PkgName>-<Version>.tpkg)
+    snprintf(src_tpkg, sizeof(src_tpkg), "%sBaseLib.tpkg", base2_dir);
+    snprintf(dst_tpkg, sizeof(dst_tpkg), "%sBaseLib-2.0.0.tpkg", app_libs);
+    copy_file(src_tpkg, dst_tpkg);
 
     // Compile and run
     char out_exe[512];
