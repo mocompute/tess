@@ -99,9 +99,28 @@ target_include_directories(tess PUBLIC "${PROJECT_SOURCE_DIR}/src/tess/include")
 target_link_libraries(tess PUBLIC mos libdeflate::libdeflate_static)
 target_link_options(tess PRIVATE ${MOS_C_LINK_OPTIONS})
 
+# -- stdlib embedding --
+
+add_executable(stdlib_pack src/stdlib_pack.c)
+target_compile_options(stdlib_pack BEFORE PRIVATE ${MOS_C_DIAGNOSTIC})
+target_link_libraries(stdlib_pack PRIVATE tess)
+target_link_options(stdlib_pack PRIVATE ${MOS_C_LINK_OPTIONS})
+
+file(GLOB TL_STD_SOURCES "${PROJECT_SOURCE_DIR}/src/tl/std/*.tl")
+add_custom_command(
+  OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/tess_stdlib_embed.c
+  COMMAND stdlib_pack
+    ${PROJECT_SOURCE_DIR}/src/tl/std
+    ${CMAKE_CURRENT_BINARY_DIR}/tess_stdlib_embed.c
+  DEPENDS
+    $<TARGET_FILE:stdlib_pack>
+    ${TL_STD_SOURCES}
+  COMMENT "Packing stdlib into embeddable C source"
+)
+
 # -- exe --
 
-add_executable(tess_exe src/tess_exe.c)
+add_executable(tess_exe src/tess_exe.c ${CMAKE_CURRENT_BINARY_DIR}/tess_stdlib_embed.c)
 set_target_properties(tess_exe PROPERTIES OUTPUT_NAME tess)
 target_compile_options(tess_exe BEFORE PRIVATE ${MOS_C_DIAGNOSTIC} ${MOS_C_EXEC})
 target_include_directories(tess_exe PRIVATE ${CMAKE_CURRENT_BINARY_DIR})

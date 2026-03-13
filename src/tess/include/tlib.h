@@ -43,6 +43,11 @@ int tl_tlib_write(allocator *alloc, char const *output_path, tl_tlib_metadata co
 // Read a .tlib file. Allocates entries and their data from alloc. Returns 0 on success.
 int tl_tlib_read(allocator *alloc, char const *input_path, tl_tlib_archive *out);
 
+// Read a .tlib archive from an in-memory buffer. Same as tl_tlib_read but without file I/O.
+// The buffer is read directly (not copied); it must remain valid until parsing completes.
+// Returns 0 on success.
+int tl_tlib_read_from_memory(allocator *alloc, void const *data, u32 size, tl_tlib_archive *out);
+
 // Validate a filename (no absolute paths, no ".." components). Returns 1 if valid.
 int tl_tlib_valid_filename(char const *name, u32 len);
 

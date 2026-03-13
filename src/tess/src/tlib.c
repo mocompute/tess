@@ -259,31 +259,26 @@ int tl_tlib_write(allocator *alloc, char const *output_path, tl_tlib_metadata co
     return 0;
 }
 
-int tl_tlib_read(allocator *alloc, char const *input_path, tl_tlib_archive *out) {
+// Parse a tlib archive from raw bytes (must include header and CRC32 trailer).
+// Does not free raw_buf. Returns 0 on success.
+static int tl_tlib_parse(allocator *alloc, byte const *raw_buf, u32 raw_size, tl_tlib_archive *out) {
     memset(out, 0, sizeof(*out));
-
-    char *raw      = null;
-    u32   raw_size = 0;
-    file_read(alloc, input_path, &raw, &raw_size);
-    if (!raw) return 1;
 
     /* need at least header(8) + CRC32(4) */
     if (raw_size < TLIB_FIXED_HEADER + 4) {
         fprintf(stderr, "tlib: file too small\n");
-        alloc_free(alloc, raw);
         return 1;
     }
 
     /* verify CRC32: checksum covers all bytes except the trailing 4 */
-    u32 stored_crc   = read_u32_be((byte const *)raw + raw_size - 4);
-    u32 computed_crc = libdeflate_crc32(0, raw, raw_size - 4);
+    u32 stored_crc   = read_u32_be(raw_buf + raw_size - 4);
+    u32 computed_crc = libdeflate_crc32(0, raw_buf, raw_size - 4);
     if (stored_crc != computed_crc) {
         fprintf(stderr, "tlib: CRC32 checksum mismatch (archive corrupted)\n");
-        alloc_free(alloc, raw);
         return 1;
     }
 
-    byte const *p   = (byte const *)raw;
+    byte const *p   = raw_buf;
     byte const *end = p + raw_size - 4; /* exclude CRC32 from field parsing */
 
     /* read fixed header */
@@ -293,12 +288,10 @@ int tl_tlib_read(allocator *alloc, char const *input_path, tl_tlib_archive *out)
 
     if (magic != TLIB_MAGIC) {
         fprintf(stderr, "tlib: invalid magic\n");
-        alloc_free(alloc, raw);
         return 1;
     }
     if (version != TLIB_VERSION) {
         fprintf(stderr, "tlib: unsupported version %u\n", version);
-        alloc_free(alloc, raw);
         return 1;
     }
 
@@ -322,12 +315,10 @@ int tl_tlib_read(allocator *alloc, char const *input_path, tl_tlib_archive *out)
 
     if (compressed_sz != (u32)(end - p)) {
         fprintf(stderr, "tlib: compressed size mismatch\n");
-        alloc_free(alloc, raw);
         return 1;
     }
     if (uncompressed_sz > TLIB_MAX_FILE_SIZE) {
         fprintf(stderr, "tlib: uncompressed size too large\n");
-        alloc_free(alloc, raw);
         return 1;
     }
 
@@ -337,7 +328,6 @@ int tl_tlib_read(allocator *alloc, char const *input_path, tl_tlib_archive *out)
     struct libdeflate_decompressor *d       = libdeflate_alloc_decompressor();
     if (!d) {
         alloc_free(alloc, payload);
-        alloc_free(alloc, raw);
         fprintf(stderr, "tlib: failed to allocate decompressor\n");
         return 1;
     }
@@ -346,7 +336,6 @@ int tl_tlib_read(allocator *alloc, char const *input_path, tl_tlib_archive *out)
     enum libdeflate_result r =
       libdeflate_deflate_decompress(d, p, compressed_sz, payload, uncompressed_sz, &actual_out);
     libdeflate_free_decompressor(d);
-    alloc_free(alloc, raw);
 
     if (r != LIBDEFLATE_SUCCESS || actual_out != uncompressed_sz) {
         fprintf(stderr, "tlib: decompression failed\n");
@@ -413,8 +402,22 @@ corrupt:
 
 corrupt_meta:
     fprintf(stderr, "tlib: corrupted metadata\n");
-    alloc_free(alloc, raw);
     return 1;
+}
+
+int tl_tlib_read(allocator *alloc, char const *input_path, tl_tlib_archive *out) {
+    char *raw      = null;
+    u32   raw_size = 0;
+    file_read(alloc, input_path, &raw, &raw_size);
+    if (!raw) return 1;
+
+    int result = tl_tlib_parse(alloc, (byte const *)raw, raw_size, out);
+    alloc_free(alloc, raw);
+    return result;
+}
+
+int tl_tlib_read_from_memory(allocator *alloc, void const *data, u32 size, tl_tlib_archive *out) {
+    return tl_tlib_parse(alloc, (byte const *)data, size, out);
 }
 
 // -- High-level operations --
@@ -738,9 +741,11 @@ int tl_tlib_extract(allocator *alloc, tl_tlib_archive const *archive, char const
             continue;
         }
 
-        str normed = file_path_normalize(alloc, out_path);
+        if (out_files) {
+            str normed = file_path_normalize(alloc, out_path);
+            array_push(*out_files, normed);
+        }
         str_deinit(alloc, &out_path);
-        array_push(*out_files, normed);
     }
 
     return 0;

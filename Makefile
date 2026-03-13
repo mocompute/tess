@@ -247,6 +247,28 @@ $(BUILD_DIR)/libdeflate/%.o: $(LIBDEFLATE_DIR)/%.c
 	$(Q)$(CC) $(LIBDEFLATE_CFLAGS) -c -o $@ $<
 
 # ------------------------------------------------------------------------------
+# Stdlib Embedding
+# ------------------------------------------------------------------------------
+
+STDLIB_PACK_TOOL = $(BUILD_DIR)/stdlib_pack
+TESS_STDLIB_SRC  = $(BUILD_DIR)/tess_stdlib_embed.c
+TESS_STDLIB_OBJ  = $(BUILD_DIR)/tess/tess_stdlib_embed.o
+
+$(STDLIB_PACK_TOOL): $(TESS_SRC_DIR)/src/stdlib_pack.c $(TESS_OBJECTS) $(TESS_EMBED_OBJ) $(MOS_OBJECTS) $(LIBDEFLATE_OBJECTS)
+	@mkdir -p $(dir $@)
+	$(MSG_LD) $@
+	$(Q)$(CC) $(CFLAGS) $(CPPFLAGS) $(LDFLAGS) -o $@ $^
+
+$(TESS_STDLIB_SRC): $(STDLIB_PACK_TOOL) $(TL_STD_SOURCES)
+	$(MSG_GEN) $@
+	$(Q)$(STDLIB_PACK_TOOL) $(TL_STD_DIR) $(TESS_STDLIB_SRC)
+
+$(TESS_STDLIB_OBJ): $(TESS_STDLIB_SRC)
+	@mkdir -p $(dir $@)
+	$(MSG_CC) $<
+	$(Q)$(CC) $(CFLAGS) -c -o $@ $<
+
+# ------------------------------------------------------------------------------
 # tess Executable
 # ------------------------------------------------------------------------------
 
@@ -254,7 +276,7 @@ TESS_EXE_SRC = $(TESS_SRC_DIR)/src/tess_exe.c
 TESS_EXE_OBJ = $(BUILD_DIR)/tess_exe.o
 TESS_EXE     = $(BUILD_DIR)/bin/tess
 
-$(TESS_EXE): $(TESS_EXE_OBJ) $(TESS_OBJECTS) $(TESS_EMBED_OBJ) $(MOS_OBJECTS) $(LIBDEFLATE_OBJECTS)
+$(TESS_EXE): $(TESS_EXE_OBJ) $(TESS_OBJECTS) $(TESS_EMBED_OBJ) $(MOS_OBJECTS) $(LIBDEFLATE_OBJECTS) $(TESS_STDLIB_OBJ)
 	@mkdir -p $(dir $@)
 	$(MSG_LD) $@
 	$(Q)$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $^

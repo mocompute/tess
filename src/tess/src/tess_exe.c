@@ -335,6 +335,41 @@ static void add_standard_include_paths(state *self, char const *cwd) {
     import_resolver_add_standard_path(self->resolver, cwd_std);
 }
 
+// -- embedded stdlib --
+
+extern unsigned char const tess_stdlib_tlib[];
+extern unsigned int const  tess_stdlib_tlib_size;
+
+static void extract_embedded_stdlib(state *self) {
+    allocator *scratch = arena_create(self->arena, 256 * 1024);
+
+    tl_tlib_archive archive;
+    if (tl_tlib_read_from_memory(scratch, tess_stdlib_tlib, tess_stdlib_tlib_size, &archive)) {
+        fprintf(stderr, "warning: failed to load embedded stdlib\n");
+        arena_destroy(&scratch);
+        return;
+    }
+
+    platform_temp_path tmppath;
+    if (platform_temp_path_create(&tmppath, "tess-stdlib-")) {
+        fprintf(stderr, "warning: failed to create temp dir for embedded stdlib\n");
+        arena_destroy(&scratch);
+        return;
+    }
+    state_track_temp_dir(self, tmppath.path);
+
+    if (tl_tlib_extract(scratch, &archive, tmppath.path, null)) {
+        fprintf(stderr, "warning: failed to extract embedded stdlib\n");
+        arena_destroy(&scratch);
+        return;
+    }
+
+    arena_destroy(&scratch);
+
+    str tmpdir = str_init(self->arena, tmppath.path);
+    import_resolver_add_standard_path(self->resolver, tmpdir);
+}
+
 // Resolve an import path using the import resolver
 // Returns empty string on error (error already printed)
 static str resolve_import(state *self, str import_path, str importing_file) {
@@ -2277,6 +2312,7 @@ int main(int argc, char *argv[]) {
 
     if (!self.no_standard_includes) {
         add_standard_include_paths(&self, buf);
+        extract_embedded_stdlib(&self);
     }
 
     get_c_compiler(&self);
