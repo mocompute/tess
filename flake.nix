@@ -92,6 +92,7 @@
                   bashInteractive
                   cmake
                   tree
+                  xxd
 
                 ] ++ (with pkgs.llvmPackages_20; [
 
