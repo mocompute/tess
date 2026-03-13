@@ -8,6 +8,10 @@ hash(p: Point) -> CSize {
     hx ^ (hy * 0x100000001b3zu)
 }
 
+eq(a: Point, b: Point) -> Bool {
+    a.x == b.x && a.y == b.y
+}
+
 #module CollidingKey
 
 CollidingKey: { v: Int }
@@ -15,6 +19,10 @@ CollidingKey: { v: Int }
 hash(k: CollidingKey) -> CSize {
     v: CSize := k.v
     v & 3zu
+}
+
+eq(a: CollidingKey, b: CollidingKey) -> Bool {
+    a.v == b.v
 }
 
 #module main
@@ -274,33 +282,6 @@ test_empty_map() {
     error
 }
 
-// Custom eq for testing
-_custom_eq(a: Ptr[Int], b: Ptr[Int]) -> Bool {
-    a.* == b.*
-}
-
-test_custom_hash_eq() {
-    error := 0
-    opts  := HashMap.HashMapOpts[Int](eq = _custom_eq/2, capacity = 8zu)
-    m     := HashMap.create[Int, Int](Alloc.context.default, opts)
-
-    HashMap.set(m, 5, 50)
-    HashMap.set(m, 10, 100)
-
-    if HashMap.size(m) != 2zu { error += 1 }
-
-    p := HashMap.get(m, 5)
-    if p == null { error += 1 }
-    if p != null && p.* != 50 { error += 1 }
-
-    p = HashMap.get(m, 10)
-    if p == null { error += 1 }
-    if p != null && p.* != 100 { error += 1 }
-
-    HashMap.destroy(m)
-    error
-}
-
 test_struct_keys() {
     error := 0
     m     := HashMap.create[Point, Int]()
@@ -351,13 +332,9 @@ test_remove_and_reinsert() {
     error
 }
 
-_colliding_eq(a: Ptr[CollidingKey], b: Ptr[CollidingKey]) -> Bool {
-    a->v == b->v
-}
-
 test_collision_stress() {
     error := 0
-    opts  := HashMap.HashMapOpts[CollidingKey](eq = _colliding_eq/2, capacity = 8zu)
+    opts  := HashMap.HashMapOpts(capacity = 8zu)
     m     := HashMap.create[CollidingKey, Int](Alloc.context.default, opts)
 
     // Insert 32 entries — all land in buckets 0-3, forces Robin Hood swaps
@@ -662,7 +639,6 @@ main() {
     error += test_clear()
     error += test_keys_values()
     error += test_empty_map()
-    error += test_custom_hash_eq()
     error += test_struct_keys()
     error += test_remove_and_reinsert()
     error += test_collision_stress()
