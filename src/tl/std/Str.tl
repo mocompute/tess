@@ -56,7 +56,7 @@ char_at   (s: Str, index: CSize) -> Option[CChar]
 cstr      (s: Ptr[Str])          -> CString
 
 // Hashing.
-hash         (s: Str)                     -> CSize
+hash (s: Str) -> CSize
 
 // Comparison.
 eq           (a: Str, b: Str)             -> Bool
@@ -294,14 +294,14 @@ cstr(s: Ptr[Str]) -> CString {
 // -- Hashing --
 
 hash(s: Str) -> CSize {
-    n  := len(s)
-    p  := _buf(s.&)
-    h: CSize := 0xcbf29ce484222325zu
-    i: CSize := 0zu
+    n        := len(s)
+    p        := _buf(s.&)
+    h: CSize := 0xcbf29ce484222325
+    i: CSize := 0
     while i < n, i += 1zu {
         b: CSize := p.[i]
         h = h ^ b
-        h = h * 0x100000001b3zu
+        h = h * 0x100000001b3
     }
     h
 }
