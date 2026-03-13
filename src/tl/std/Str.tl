@@ -2,6 +2,7 @@
 #import <Alloc.tl>
 #import <Array.tl>
 #import <Unsafe.tl>
+#import <Hash.tl>
 #import <string.tl>
 #import <stdlib.tl>
 #import <stdio.tl>
@@ -294,16 +295,7 @@ cstr(s: Ptr[Str]) -> CString {
 // -- Hashing --
 
 hash(s: Str) -> CSize {
-    n        := len(s)
-    p        := _buf(s.&)
-    h: CSize := 0xcbf29ce484222325
-    i: CSize := 0
-    while i < n, i += 1zu {
-        b: CSize := p.[i]
-        h = h ^ b
-        h = h * 0x100000001b3
-    }
-    h
+    Hash.fnv1a(_buf(s.&), len(s))
 }
 
 

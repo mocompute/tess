@@ -345,23 +345,20 @@ static void extract_embedded_stdlib(state *self) {
 
     tl_tpkg_archive archive;
     if (tl_tpkg_read_from_memory(scratch, tess_stdlib_tpkg, tess_stdlib_tpkg_size, &archive)) {
-        fprintf(stderr, "warning: failed to load embedded stdlib\n");
-        arena_destroy(&scratch);
-        return;
+        fprintf(stderr, "error: failed to load embedded stdlib\n");
+        exit(1);
     }
 
     platform_temp_path tmppath;
     if (platform_temp_path_create(&tmppath, "tess-stdlib-")) {
-        fprintf(stderr, "warning: failed to create temp dir for embedded stdlib\n");
-        arena_destroy(&scratch);
-        return;
+        fprintf(stderr, "error: failed to create temp dir for embedded stdlib\n");
+        exit(1);
     }
     state_track_temp_dir(self, tmppath.path);
 
     if (tl_tpkg_extract(scratch, &archive, tmppath.path, null)) {
-        fprintf(stderr, "warning: failed to extract embedded stdlib\n");
-        arena_destroy(&scratch);
-        return;
+        fprintf(stderr, "error: failed to extract embedded stdlib\n");
+        exit(1);
     }
 
     arena_destroy(&scratch);
