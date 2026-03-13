@@ -2547,6 +2547,13 @@ static int ufcs_rewrite_call(tl_infer *self, traverse_ctx *ctx, ast_node *node,
             addr->col  = left->col;
             ensure_tv(self, &amp->type);
             ensure_tv(self, &addr->type);
+            // Constrain addr type to Ptr[operand_type], mirroring infer_unary_op for '&'.
+            // Without this, the addr type var is disconnected from the receiver's type,
+            // causing nullary UFCS calls to produce non-concrete specializations.
+            {
+                tl_monotype *ptr = tl_type_registry_ptr(self->registry, left->type->type);
+                if (constrain_pm(self, addr->type, ptr, addr, TL_UNIFY_SYMMETRIC)) return 1;
+            }
             left = addr;
         }
     }
