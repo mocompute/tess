@@ -1,5 +1,9 @@
-// From root directory, build with:
-// ./tess exe -o example src/tl/examples/argc_argv.tl
+// Build with:
+// tess exe -o example argc_argv.tl
+//
+// or run directly with:
+// tess run argc_argv.tl -- extra args
+
 
 #module main
 #import <stdio.tl>
