@@ -942,6 +942,12 @@ int a_funcall(parser *self) {
 done:
     array_shrink(args);
 
+    // Rewrite hash(x) → _tl_hash_(x) so it resolves to the body-less intrinsic.
+    // Set symbol.name directly (not ast_node_name_replace) to keep original empty,
+    // so symbol_is_module_function uses the new name for arity mangling lookup.
+    if (ast_node_is_symbol(name) && str_eq(name->symbol.name, S("hash")))
+        name->symbol.name = S("_tl_hash_");
+
     // IMPORTANT: arity-mangle FIRST, then module-mangle.
     // symbol_is_module_function checks for the arity-mangled name (e.g., "foo__0") in
     // current_module_symbols. If we module-mangle first, we'd be checking for the wrong name.

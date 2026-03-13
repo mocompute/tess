@@ -1691,6 +1691,7 @@ do not need to be imported. User code cannot define types or traits with these n
 | `Neg[T]` | `neg(a: T) -> T` | `-` (unary) | |
 | `Not[T]` | `not(a: T) -> Bool` | `!` (unary) | |
 | `BitNot[T]` | `bit_not(a: T) -> T` | `~` (unary) | |
+| `Hash[T]` | `hash(a: T) -> CSize` | `hash()` | FNV-1a; builtins + `Ptr[CChar]` + user-defined |
 
 ### Limitations
 

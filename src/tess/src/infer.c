@@ -69,6 +69,7 @@ tl_infer *tl_infer_create(allocator *alloc, tl_infer_opts const *opts) {
           {"Mod", "mod", 2}, {"BitAnd", "bit_and", 2}, {"BitOr", "bit_or", 2}, {"BitXor", "bit_xor", 2},
           {"Shl", "shl", 2}, {"Shr", "shr", 2},        {"Eq", "eq", 2},        {"Neg", "neg", 1},
           {"Not", "not", 1}, {"BitNot", "bit_not", 1},
+          {"Hash", "hash", 1},
         };
         for (u32 i = 0; i < sizeof(builtins) / sizeof(builtins[0]); i++) {
             tl_trait_def *def = new(self->arena, tl_trait_def);

@@ -5,6 +5,21 @@
 #include <stdlib.h>             // for exit
 
 #include <stddef.h>
+#include <string.h>
+
+#ifc
+static inline size_t tl_hash_bytes(const void *p, size_t n) {
+    size_t h = 0xcbf29ce484222325ULL;
+    const unsigned char *b = (const unsigned char *)p;
+    for (size_t i = 0; i < n; i++) { h ^= b[i]; h *= 0x100000001b3ULL; }
+    return h;
+}
+static inline size_t tl_hash_cstring(const char *s) {
+    size_t h = 0xcbf29ce484222325ULL;
+    if (s) for (; *s; s++) { h ^= (unsigned char)*s; h *= 0x100000001b3ULL; }
+    return h;
+}
+#endc
 
 // Symbols in the builtin module are available without qualification.
 
@@ -12,6 +27,7 @@ _tl_sizeof_[T] ()     -> CSize
 _tl_sizeof_[T] (x: T) -> CSize
 _tl_alignof_[T]()     -> CSize
 _tl_alignof_[T](x: T) -> CSize
+_tl_hash_[T]   (key: T) -> CSize
 
 Int     = CLongLong
 UInt    = CUnsignedLongLong

@@ -3366,6 +3366,27 @@ static str tl_fatal(transpile *self, ast_node const *node, eval_ctx *ctx, void *
     return str_cat_3(self->transient, S("(fprintf(stderr, \"%s\\n\", \""), msg, S("\"), exit(1))"));
 }
 
+static str tl_hash(transpile *self, ast_node const *node, eval_ctx *ctx, void *extra) {
+    (void)extra;
+    assert(ast_node_is_nfa(node));
+    if (1 != node->named_application.n_arguments)
+        exit_error(node->file, node->line, "hash() expects exactly one argument");
+
+    ast_node const *arg  = node->named_application.arguments[0];
+    str              expr = generate_expr(self, null, arg, ctx);
+
+    // Ptr[CChar] (CString): hash the null-terminated string
+    if (arg->type && tl_monotype_is_ptr_to_char(arg->type->type))
+        return str_cat_3(self->transient, S("tl_hash_cstring("), expr, S(")"));
+
+    // Other builtins: hash raw bytes
+    // Use compound literal for addressable storage: (T){expr}
+    tl_monotype *mono  = arg->type->type;
+    str          ctype = type_to_c_mono(self, mono);
+    return str_fmt(self->transient, "tl_hash_bytes(&(%s){%s}, sizeof(%s))",
+                   str_cstr(&ctype), str_cstr(&expr), str_cstr(&ctype));
+}
+
 static str generate_funcall_intrinsic(transpile *self, ast_node const *node, eval_ctx *ctx) {
     assert(ast_node_is_nfa(node));
     str name = ast_node_str(node->named_application.name);
@@ -3379,6 +3400,7 @@ static str generate_funcall_intrinsic(transpile *self, ast_node const *node, eva
     static const struct dispatch table[] = {
       {"_tl_alignof_", tl_alignof, null},
       {"_tl_fatal_", tl_fatal, null},
+      {"_tl_hash_", tl_hash, null},
       {"_tl_sizeof_", tl_sizeof, null},
       // {"_tl_sizeoft_", tl_sizeoft, null},
 

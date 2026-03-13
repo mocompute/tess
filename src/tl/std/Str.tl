@@ -55,6 +55,9 @@ byte_at   (s: Str, index: CSize) -> Option[Byte]
 char_at   (s: Str, index: CSize) -> Option[CChar]
 cstr      (s: Ptr[Str])          -> CString
 
+// Hashing.
+hash         (s: Str)                     -> CSize
+
 // Comparison.
 eq           (a: Str, b: Str)             -> Bool
 cmp          (a: Str, b: Str)             -> Int
@@ -285,6 +288,22 @@ cstr(s: Ptr[Str]) -> CString {
     p := _buf(s)
     if p.[n] != '\0' { p.[n] = '\0' }
     p
+}
+
+
+// -- Hashing --
+
+hash(s: Str) -> CSize {
+    n  := len(s)
+    p  := _buf(s.&)
+    h: CSize := 0xcbf29ce484222325zu
+    i: CSize := 0zu
+    while i < n, i += 1zu {
+        b: CSize := p.[i]
+        h = h ^ b
+        h = h * 0x100000001b3zu
+    }
+    h
 }
 
 
