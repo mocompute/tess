@@ -5,18 +5,26 @@ message(STATUS "Using diagnostics: ${MOS_C_DIAGNOSTIC}")
 file(STRINGS ${PROJECT_SOURCE_DIR}/VERSION TESS_VERSION)
 set(VERSION_HEADER ${CMAKE_CURRENT_BINARY_DIR}/version.h)
 
-# Get git hash at configure time (will be "unknown" if not in a git repo)
-execute_process(
-  COMMAND git rev-parse --short=7 HEAD
-  WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
-  OUTPUT_VARIABLE GIT_HASH
-  OUTPUT_STRIP_TRAILING_WHITESPACE
-  ERROR_QUIET
-  RESULT_VARIABLE GIT_RESULT
-)
-if(NOT GIT_RESULT EQUAL 0)
-  set(GIT_HASH "unknown")
+# Get git hash — accept GIT_HASH env var (for Nix), else try git, else "nogit"
+if(DEFINED ENV{GIT_HASH})
+  set(GIT_HASH $ENV{GIT_HASH})
+else()
+  execute_process(
+    COMMAND git rev-parse --short=7 HEAD
+    WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
+    OUTPUT_VARIABLE GIT_HASH
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+    ERROR_QUIET
+    RESULT_VARIABLE GIT_RESULT
+  )
+  if(NOT GIT_RESULT EQUAL 0)
+    set(GIT_HASH "nogit")
+  endif()
 endif()
+
+# System info
+set(TESS_ARCH ${CMAKE_SYSTEM_PROCESSOR})
+string(TOLOWER ${CMAKE_SYSTEM_NAME} TESS_OS)
 
 # Generate version header at configure time
 file(WRITE ${VERSION_HEADER}
@@ -24,7 +32,7 @@ file(WRITE ${VERSION_HEADER}
 #ifndef TESS_VERSION_H
 #define TESS_VERSION_H
 
-#define TESS_VERSION \"${TESS_VERSION}-${GIT_HASH}\"
+#define TESS_VERSION \"${TESS_VERSION}-${GIT_HASH}-${TESS_ARCH}-${TESS_OS}\"
 
 #endif /* TESS_VERSION_H */
 ")

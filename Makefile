@@ -203,12 +203,15 @@ $(VERSION_HEADER): VERSION
 	@mkdir -p $(dir $@)
 	$(MSG_GEN) $@
 	$(Q)( \
-		HASH=$$(git rev-parse --short=7 HEAD 2>/dev/null || echo "unknown"); \
+		if [ -n "$$GIT_HASH" ]; then HASH="$$GIT_HASH"; \
+		else HASH=$$(git rev-parse --short=7 HEAD 2>/dev/null || echo "nogit"); fi; \
+		ARCH=$$(uname -m); \
+		OS=$$(uname -s | tr '[:upper:]' '[:lower:]'); \
 		echo "/* Auto-generated version header */" > $@; \
 		echo "#ifndef TESS_VERSION_H" >> $@; \
 		echo "#define TESS_VERSION_H" >> $@; \
 		echo "" >> $@; \
-		echo "#define TESS_VERSION \"$(VERSION)-$$HASH\"" >> $@; \
+		echo "#define TESS_VERSION \"$(VERSION)-$$HASH-$$ARCH-$$OS\"" >> $@; \
 		echo "" >> $@; \
 		echo "#endif /* TESS_VERSION_H */" >> $@; \
 	)

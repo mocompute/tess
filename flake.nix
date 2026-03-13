@@ -23,13 +23,14 @@
       mkPackage = { pkgs, config ? "release" }:
         pkgs.stdenv.mkDerivation {
           pname = "tess";
-          version = "0.1.0";
+          version = builtins.replaceStrings ["\n"] [""] (builtins.readFile ./VERSION);
 
           src = ./.;
           nativeBuildInputs = with pkgs; [ gnumake ];
 
           # Used by tess Makefile
           CONFIG = config;
+          GIT_HASH = self.shortRev or "nogit";
 
           # not autotools
           dontConfigure = true;
