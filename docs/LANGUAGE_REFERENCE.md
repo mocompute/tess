@@ -706,11 +706,11 @@ v.reset()                    // calls reset(v.&) — implicit address-of
 
 Note: The `->` operator is reserved for struct field access through pointers (`ptr->field`) and does not support UFCS.
 
-**Cross-module UFCS:** To call a function from another module, include the module name after the dot:
+**Cross-module UFCS:** For struct types, the compiler looks up functions in the module that defines the struct's type — no module qualifier is needed. For non-struct values (e.g., integers, pointers), include the module name after the dot as a fallback:
 
 ```tl
-v.veclib.length_sq()         // calls veclib.length_sq(v)
-v.veclib.scale(2)            // calls veclib.scale(v, 2)
+v.length_sq()                // v is Vec2 — looks up length_sq in Vec2's module
+n.mymath.square()            // n is Int — module qualifier needed for non-struct types
 ```
 
 **Generics:** UFCS works with generic structs and generic functions. Inside generic function bodies, UFCS resolution is deferred to specialization, when the receiver's type is known.
