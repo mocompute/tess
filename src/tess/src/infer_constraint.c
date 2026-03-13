@@ -2630,29 +2630,6 @@ static int infer_struct_access(tl_infer *self, traverse_ctx *ctx, ast_node *node
         }
     }
 
-    else {
-        // struct type is not a type constructor
-        dbg_at(2, self, "warning: infer struct access without a struct type");
-#if DEBUG_TYPE_ALIAS
-        if (ast_node_is_symbol(left)) {
-            str left_name2 = ast_node_str(left);
-            int is_alias2  = tl_type_registry_is_type_alias(self->registry, left_name2);
-            str st_str3    = tl_monotype_to_string(self->transient, struct_type);
-            fprintf(
-              stderr,
-              "[DEBUG_TYPE_ALIAS] infer_struct_access: FALLTHROUGH left='%s' struct_type=%s is_alias=%d\n",
-              str_cstr(&left_name2), str_cstr(&st_str3), is_alias2);
-            if (is_alias2) {
-                tl_polytype *alias_poly = tl_type_registry_get(self->registry, left_name2);
-                if (alias_poly) {
-                    str alias_str = tl_polytype_to_string(self->transient, alias_poly);
-                    fprintf(stderr, "[DEBUG_TYPE_ALIAS]   alias points to: %s\n", str_cstr(&alias_str));
-                }
-            }
-        }
-#endif
-    }
-
 end_struct_access_op:
     // always substitute operands immediately
     return 0;
@@ -2751,11 +2728,9 @@ int resolve_node(tl_infer *self, ast_node *node, traverse_ctx *ctx, node_positio
         // sync_with_env will insert the symbol into the env (it has a type from npos_assign_lhs).
         // This catches `x = 5` where the user meant `x := 5`.
         if (ast_node_is_symbol(node) && !tl_type_env_lookup(self->env, ast_node_str(node))) {
-            array_push(self->errors, ((tl_infer_error){
-                .tag = tl_err_undeclared_reassignment,
-                .node = node,
-                .message = ast_node_str(node)
-            }));
+            array_push(self->errors, ((tl_infer_error){.tag     = tl_err_undeclared_reassignment,
+                                                       .node    = node,
+                                                       .message = ast_node_str(node)}));
             return 1;
         }
 
