@@ -30,7 +30,7 @@
 
           # Used by tess Makefile
           CONFIG = config;
-          GIT_HASH = self.shortRev or "nogit";
+          GIT_HASH = self.shortRev or self.dirtyShortRev or "nogit";
 
           # not autotools
           dontConfigure = true;
