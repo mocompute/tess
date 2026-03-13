@@ -352,10 +352,10 @@ test-mos: build-mos-tests
 TESS_TESTS     = tess type_v2 format tlib import_resolver manifest source_scanner
 TESS_TEST_EXES = $(patsubst %,$(BUILD_DIR)/test_%,$(TESS_TESTS))
 
-$(BUILD_DIR)/test_%: $(TESS_SRC_DIR)/src/test_%.c $(TESS_OBJECTS) $(TESS_EMBED_OBJ) $(MOS_OBJECTS) $(LIBDEFLATE_OBJECTS)
+$(BUILD_DIR)/test_%: $(TESS_SRC_DIR)/src/test_%.c $(TESS_OBJECTS) $(TESS_EMBED_OBJ) $(MOS_OBJECTS) $(LIBDEFLATE_OBJECTS) | $(TESS_EXE)
 	@mkdir -p $(dir $@)
 	$(MSG_LD) $@
-	$(Q)$(CC) $(CFLAGS) $(CPPFLAGS) $(LDFLAGS) -o $@ $^
+	$(Q)$(CC) $(CFLAGS) $(CPPFLAGS) $(LDFLAGS) -DTEST_TESS_EXE='"$(CURDIR)/$(TESS_EXE)"' -DTEST_STDLIB_DIR='"$(CURDIR)/$(TL_STD_DIR)"' -o $@ $^
 
 build-tess-tests: $(TESS_TEST_EXES)
 
@@ -438,7 +438,7 @@ $(TL_BUILD_DIR)/test_opt_%: $(TL_DIR_PASS_OPT)/test_%.tl $(TESS_EXE) $(TL_STD_SO
 		$(MSG_FAIL) $@; \
 	fi
 
-build-tl-tests: $(TL_TEST_EXES) $(TL_TEST_OPT_EXES)
+build-tl-tests: $(TESS_EXE) $(TL_TEST_EXES) $(TL_TEST_OPT_EXES)
 
 test-tl: build-tl-tests
 	@failed=0; \
@@ -530,7 +530,7 @@ test-tl: build-tl-tests
 
 build-tests: build-mos-tests build-tess-tests build-vendor-tests build-tl-tests
 
-test:
+test: build-tests
 	@mos_ok=0; tess_ok=0; vendor_ok=0; tl_ok=0; \
 	$(MAKE) --no-print-directory test-mos && mos_ok=1; \
 	$(MAKE) --no-print-directory test-tess && tess_ok=1; \
