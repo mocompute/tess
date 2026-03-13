@@ -23,9 +23,9 @@ main() {
     words.push(Str.from_cstr("four"))              // Array.push via implicit module
     error += if words.size == 4zu {0} else {1}
 
-    // cleanup
-    Array.free(words.&)
-    Array.free(parts.&)
+    // cleanup via implicit module
+    words.free()
+    parts.free()
 
     error
 }

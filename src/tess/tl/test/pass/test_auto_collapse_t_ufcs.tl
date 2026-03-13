@@ -21,21 +21,25 @@ main() {
 
     a := Point(x = 3, y = 4)
 
-    // UFCS: a.Point.scale(2) rewrites to Point.scale(a, 2)
-    b := a.Point.scale(2)
+    // Implicit module resolve: a.scale(2) rewrites to Point.scale(a, 2)
+    b := a.scale(2)
     error += if b.x == 6 && b.y == 8 { 0 } else { 1 }
 
-    // UFCS chaining
-    c := a.Point.scale(2).Point.scale(3)
+    // Implicit module chaining
+    c := a.scale(2).scale(3)
     error += if c.x == 18 && c.y == 24 { 0 } else { 1 }
 
-    // UFCS returning a scalar
-    d := a.Point.dot(a)
+    // Implicit module returning a scalar
+    d := a.dot(a)
     error += if d == 25 { 0 } else { 1 }
 
-    // Float variant
+    // Explicit .Point. still works
+    e := a.Point.scale(2)
+    error += if e.x == 6 && e.y == 8 { 0 } else { 1 }
+
+    // Float variant with implicit module
     af := Point(x = 1.5, y = 2.5)
-    bf := af.Point.scale(2.0)
+    bf := af.scale(2.0)
     error += if bf.x == 3.0 && bf.y == 5.0 { 0 } else { 1 }
 
     error
