@@ -2491,7 +2491,7 @@ static tl_polytype *lookup_poly(tl_infer *self, str name) {
 // Rewrite x.foo(a, b) → foo(x, a, b) or Module__foo(x, a, b).
 static int ufcs_rewrite_call(tl_infer *self, traverse_ctx *ctx, ast_node *node,
                              tl_monotype *struct_type, ast_node *left,
-                             ast_node *nfa, str field_name, char const *op) {
+                             ast_node *nfa, str field_name) {
 
     u8  ufcs_arity = nfa->named_application.n_arguments + 1;
     str ufcs_name  = mangle_str_for_arity(self->arena, field_name, ufcs_arity);
@@ -2519,9 +2519,7 @@ static int ufcs_rewrite_call(tl_infer *self, traverse_ctx *ctx, ast_node *node,
         return 1;
     }
 
-    // Receiver coercion: implicit dereference or address-of
-    int is_arrow_op = (0 == strcmp("->", op));
-
+    // Receiver coercion: implicit address-of
     tl_monotype *fn_mono = fn_poly->type;
     int first_param_is_ptr = 0;
     if (tl_monotype_is_arrow(fn_mono)) {
@@ -2531,17 +2529,7 @@ static int ufcs_rewrite_call(tl_infer *self, traverse_ctx *ctx, ast_node *node,
         }
     }
 
-    if (is_arrow_op && !first_param_is_ptr) {
-        // ptr->f() where f expects T: dereference receiver
-        ast_node *star  = ast_node_create_sym_c(self->arena, "*");
-        ast_node *deref = ast_node_create_unary_op(self->arena, star, left);
-        deref->file = left->file;
-        deref->line = left->line;
-        deref->col  = left->col;
-        ensure_tv(self, &star->type);
-        ensure_tv(self, &deref->type);
-        left = deref;
-    } else if (!is_arrow_op && first_param_is_ptr) {
+    if (first_param_is_ptr) {
         // val.f() where f expects Ptr[T]: implicit address-of
         tl_monotype *recv_mono = left->type->type;
         tl_monotype_substitute(self->arena, recv_mono, self->subs, null);
@@ -2692,7 +2680,12 @@ static int infer_struct_access(tl_infer *self, traverse_ctx *ctx, ast_node *node
                     }
                 }
             } else if (nfa) {
-                return ufcs_rewrite_call(self, ctx, node, struct_type, left, nfa, field_name, op);
+                if (0 == strcmp("->", op)) {
+                    array_push(self->errors,
+                               ((tl_infer_error){.tag = tl_err_field_not_found, .node = right}));
+                    return 1;
+                }
+                return ufcs_rewrite_call(self, ctx, node, struct_type, left, nfa, field_name);
             } else {
                 array_push(self->errors, ((tl_infer_error){.tag = tl_err_field_not_found, .node = right}));
                 return 1;

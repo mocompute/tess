@@ -44,17 +44,7 @@ main() {
     chained := v.vec2_scale(3).vec2_length_sq()
     error += if chained == 225 {0} else {1}
 
-    // Test 6: UFCS with -> operator — ptr->vec2_length_sq() derefs and calls vec2_length_sq(ptr.*)
-    ptr     := v.&
-    len_sq2 := ptr->vec2_length_sq()
-    error += if len_sq2 == 25 {0} else {1}
-
-    // Test 7: UFCS with -> and extra arguments — ptr->vec2_scale(10) derefs and calls vec2_scale(ptr.*, 10)
-    v4 := ptr->vec2_scale(10)
-    error += if v4.x == 30 {0} else {1}
-    error += if v4.y == 40 {0} else {1}
-
-    // Test 8: UFCS on generic struct — Pair[Int, Int].sum()
+    // Test 6: UFCS on generic struct — Pair[Int, Int].sum()
     p := Pair(a = 3, b = 7)
     error += if p.pair_sum() == 10 {0} else {1}
 

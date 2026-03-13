@@ -696,14 +696,15 @@ main() {
 
 **Priority:** Struct fields always take priority over UFCS. If a struct has a field `foo`, then `x.foo(...)` calls the field's function pointer, not a free function named `foo`.
 
-**Pointer receiver:** The `->` operator also supports UFCS, passing the pointer as the first argument:
+**Pointer receiver:** The `.` operator auto-dereferences pointer receivers. If a function takes `Ptr[T]` and the receiver is a value of type `T`, the address is taken implicitly. If the receiver is already a pointer, it is passed as-is:
 
 ```tl
 reset(p: Ptr(Vec2)) { p->x = 0  p->y = 0  void }
 
-ptr := v.&
-ptr->reset()                 // calls reset(ptr)
+v.reset()                    // calls reset(v.&) — implicit address-of
 ```
+
+Note: The `->` operator is reserved for struct field access through pointers (`ptr->field`) and does not support UFCS.
 
 **Cross-module UFCS:** To call a function from another module, include the module name after the dot:
 
