@@ -2601,14 +2601,54 @@ static int infer_struct_access(tl_infer *self, traverse_ctx *ctx, ast_node *node
                 // Rewrite x.foo(a, b) to foo(x, a, b).
                 u8  ufcs_arity = nfa->named_application.n_arguments + 1;
                 str ufcs_name  = mangle_str_for_arity(self->arena, field_name, ufcs_arity);
-                if (!tl_type_env_lookup(self->env, ufcs_name) &&
-                    !tl_type_registry_get(self->registry, ufcs_name)) {
+                tl_polytype *fn_poly = tl_type_env_lookup(self->env, ufcs_name);
+                if (!fn_poly) fn_poly = tl_type_registry_get(self->registry, ufcs_name);
+                if (!fn_poly) {
                     array_push(self->errors,
                                ((tl_infer_error){.tag = tl_err_field_not_found, .node = right}));
                     return 1;
                 }
 
-                // Prepend `left` to the NFA's argument list
+                // --- UFCS receiver coercion ---
+                int is_arrow_op = (0 == strcmp("->", op));
+
+                tl_monotype *fn_mono = fn_poly->type;
+                int first_param_is_ptr = 0;
+                if (tl_monotype_is_arrow(fn_mono)) {
+                    tl_monotype_sized params = tl_monotype_arrow_get_args(fn_mono);
+                    if (params.size > 0) {
+                        first_param_is_ptr = tl_monotype_is_ptr(params.v[0]);
+                    }
+                }
+
+                if (is_arrow_op && !first_param_is_ptr) {
+                    // ptr->f() where f expects T: dereference receiver
+                    ast_node *star  = ast_node_create_sym_c(self->arena, "*");
+                    ast_node *deref = ast_node_create_unary_op(self->arena, star, left);
+                    deref->file = left->file;
+                    deref->line = left->line;
+                    deref->col  = left->col;
+                    ensure_tv(self, &star->type);
+                    ensure_tv(self, &deref->type);
+                    left = deref;
+                } else if (!is_arrow_op && first_param_is_ptr) {
+                    // val.f() where f expects Ptr[T]: implicit address-of
+                    tl_monotype *recv_mono = left->type->type;
+                    tl_monotype_substitute(self->arena, recv_mono, self->subs, null);
+                    if (!tl_monotype_is_ptr(recv_mono)) {
+                        ast_node *amp  = ast_node_create_sym_c(self->arena, "&");
+                        ast_node *addr = ast_node_create_unary_op(self->arena, amp, left);
+                        addr->file = left->file;
+                        addr->line = left->line;
+                        addr->col  = left->col;
+                        ensure_tv(self, &amp->type);
+                        ensure_tv(self, &addr->type);
+                        left = addr;
+                    }
+                }
+                // --- end UFCS receiver coercion ---
+
+                // Prepend `left` (possibly coerced) to the NFA's argument list
                 u8         old_n    = nfa->named_application.n_arguments;
                 ast_node **new_args = alloc_malloc(self->arena, (old_n + 1) * sizeof(ast_node *));
                 new_args[0]         = left;
