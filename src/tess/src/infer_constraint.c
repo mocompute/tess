@@ -2500,7 +2500,13 @@ static int ufcs_rewrite_call(tl_infer *self, traverse_ctx *ctx, ast_node *node,
     tl_polytype *fn_poly = lookup_poly(self, ufcs_name);
     if (!fn_poly) {
         // e.g. arr.push(10) where arr: Array[Int] → try Array__push__2
-        str module = struct_type->cons_inst->def->module;
+        // Auto-dereference: if struct_type is Ptr[T], use T's module for lookup.
+        // This lets dot-UFCS work on pointer receivers (e.g. m.size() where m: Ptr[HashMap]).
+        tl_monotype *lookup_type = struct_type;
+        if (tl_monotype_is_ptr(lookup_type)) {
+            lookup_type = tl_monotype_ptr_target(lookup_type);
+        }
+        str module = lookup_type->cons_inst->def->module;
         if (!str_is_empty(module)) {
             str qualified = str_qualify(self->arena, module, field_name);
             ufcs_name = mangle_str_for_arity(self->arena, qualified, ufcs_arity);
