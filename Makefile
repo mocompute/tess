@@ -198,20 +198,20 @@ TESS_EMBED_OBJ = $(BUILD_DIR)/tess/tess_embed.o
 # Version header generation
 VERSION_HEADER = $(BUILD_DIR)/version.h
 VERSION := $(shell cat VERSION)
+HOST_ARCH := $(shell uname -m | sed 's/^arm64$$/aarch64/')
+HOST_OS   := $(shell uname -s | tr '[:upper:]' '[:lower:]')
 
-$(VERSION_HEADER): VERSION
+$(VERSION_HEADER): VERSION $(wildcard .git/HEAD .git/packed-refs)
 	@mkdir -p $(dir $@)
 	$(MSG_GEN) $@
 	$(Q)( \
 		if [ -n "$$GIT_HASH" ]; then HASH="$$GIT_HASH"; \
 		else HASH=$$(git rev-parse --short=7 HEAD 2>/dev/null || echo "nogit"); fi; \
-		ARCH=$$(uname -m); \
-		OS=$$(uname -s | tr '[:upper:]' '[:lower:]'); \
 		echo "/* Auto-generated version header */" > $@; \
 		echo "#ifndef TESS_VERSION_H" >> $@; \
 		echo "#define TESS_VERSION_H" >> $@; \
 		echo "" >> $@; \
-		echo "#define TESS_VERSION \"$(VERSION)-$$HASH-$$ARCH-$$OS\"" >> $@; \
+		echo "#define TESS_VERSION \"$(VERSION)-$$HASH-$(HOST_ARCH)-$(HOST_OS)\"" >> $@; \
 		echo "" >> $@; \
 		echo "#endif /* TESS_VERSION_H */" >> $@; \
 	)
