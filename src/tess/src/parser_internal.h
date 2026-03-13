@@ -142,6 +142,7 @@ int a_type_constructor(parser *);
 int maybe_type_arguments(parser *self, ast_node_array *type_args);
 int a_type_identifier(parser *);
 int maybe_trait_bound(parser *);
+int maybe_type_parameters(parser *, ast_node_array *out);
 int is_reserved_type_name(ast_node const *);
 
 // Type definition helpers

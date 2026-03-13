@@ -1034,28 +1034,32 @@ int maybe_trait_bound(parser *self) {
     return 0;
 }
 
-int toplevel_defun(parser *self) {
-    if (a_try(self, a_attributed_identifier)) return 1;
-    ast_node      *name        = self->result;
-    ast_node_array type_params = {.alloc = self->ast_arena};
-    ast_node_array params      = {.alloc = self->ast_arena};
-
+int maybe_type_parameters(parser *self, ast_node_array *out) {
+    *out = (ast_node_array){.alloc = self->ast_arena};
     if (0 == a_try(self, a_open_square)) {
-        if (0 == a_try(self, a_close_square)) goto type_params_done;
+        if (0 == a_try(self, a_close_square)) return 0;
         if (a_try(self, a_identifier)) return 1;
         if (maybe_trait_bound(self)) return 1;
-        array_push(type_params, self->result);
+        array_push(*out, self->result);
 
         while (1) {
-            if (0 == a_try(self, a_close_square)) goto type_params_done;
+            if (0 == a_try(self, a_close_square)) return 0;
             if (a_try(self, a_comma)) return 1;
             if (a_try(self, a_identifier)) return 1;
             if (maybe_trait_bound(self)) return 1;
-            array_push(type_params, self->result);
+            array_push(*out, self->result);
         }
     }
+    return 0;
+}
 
-type_params_done:;
+int toplevel_defun(parser *self) {
+    if (a_try(self, a_attributed_identifier)) return 1;
+    ast_node      *name        = self->result;
+    ast_node_array type_params;
+    ast_node_array params      = {.alloc = self->ast_arena};
+
+    if (maybe_type_parameters(self, &type_params)) return 1;
     int res = parse_param_list(self, &params, 1);
     if (res) return res;
 
@@ -1135,7 +1139,7 @@ int toplevel_forward(parser *self) {
     ast_node      *name = self->result;
 
     ast_node_array type_args;
-    if (ERROR_STOP == maybe_type_arguments(self, &type_args)) return ERROR_STOP;
+    if (maybe_type_parameters(self, &type_args)) return 1;
 
     if (a_try(self, a_type_arrow)) return 1;
     ast_node *arrow = self->result;
