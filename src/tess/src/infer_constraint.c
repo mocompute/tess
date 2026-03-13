@@ -19,7 +19,8 @@
 
 int        constrain(tl_infer *self, tl_polytype *left, tl_polytype *right, ast_node const *node,
                      tl_unify_direction dir);
-static int types_strip_const(tl_monotype *param, tl_monotype *arg);
+static int         types_strip_const(tl_monotype *param, tl_monotype *arg);
+static tl_polytype *lookup_poly(tl_infer *self, str name);
 
 int        env_insert_constrain(tl_infer *self, str name, tl_polytype *type, ast_node const *name_node) {
 
@@ -1834,11 +1835,8 @@ static int infer_named_function_application(tl_infer *self, traverse_ctx *ctx, a
 
     str          name     = ast_node_str(node->named_application.name);
     str          original = ast_node_name_original(node->named_application.name);
-    tl_polytype *type     = tl_type_env_lookup(self->env, name);
-    if (!type) {
-        type = tl_type_registry_get(self->registry, name);
-        if (!type) return 0;
-    }
+    tl_polytype *type     = lookup_poly(self, name);
+    if (!type) return 0;
 
     if (is_type_literal(self, ctx, node)) return 0;
 
@@ -2482,6 +2480,90 @@ void ensure_symbol_type_from_env(tl_infer *self, ast_node *node) {
     if (!node->type || !tl_polytype_is_concrete(node->type)) constrain_or_set(self, node, poly);
 }
 
+// Look up a polytype by name: first in the type environment, then in the registry.
+static tl_polytype *lookup_poly(tl_infer *self, str name) {
+    tl_polytype *p = tl_type_env_lookup(self->env, name);
+    if (!p) p = tl_type_registry_get(self->registry, name);
+    return p;
+}
+
+// UFCS: field not found on struct, but right side is a function call.
+// Rewrite x.foo(a, b) → foo(x, a, b) or Module__foo(x, a, b).
+static int ufcs_rewrite_call(tl_infer *self, traverse_ctx *ctx, ast_node *node,
+                             tl_monotype *struct_type, ast_node *left,
+                             ast_node *nfa, str field_name, char const *op) {
+
+    u8  ufcs_arity = nfa->named_application.n_arguments + 1;
+    str ufcs_name  = mangle_str_for_arity(self->arena, field_name, ufcs_arity);
+
+    // Lookup: try unqualified, then module-qualified from receiver's type
+    tl_polytype *fn_poly = lookup_poly(self, ufcs_name);
+    if (!fn_poly) {
+        // e.g. arr.push(10) where arr: Array[Int] → try Array__push__2
+        str module = struct_type->cons_inst->def->module;
+        if (!str_is_empty(module)) {
+            str qualified = str_qualify(self->arena, module, field_name);
+            ufcs_name = mangle_str_for_arity(self->arena, qualified, ufcs_arity);
+            fn_poly = lookup_poly(self, ufcs_name);
+        }
+    }
+    if (!fn_poly) {
+        array_push(self->errors,
+                   ((tl_infer_error){.tag = tl_err_field_not_found, .node = nfa->named_application.name}));
+        return 1;
+    }
+
+    // Receiver coercion: implicit dereference or address-of
+    int is_arrow_op = (0 == strcmp("->", op));
+
+    tl_monotype *fn_mono = fn_poly->type;
+    int first_param_is_ptr = 0;
+    if (tl_monotype_is_arrow(fn_mono)) {
+        tl_monotype_sized params = tl_monotype_arrow_get_args(fn_mono);
+        if (params.size > 0) {
+            first_param_is_ptr = tl_monotype_is_ptr(params.v[0]);
+        }
+    }
+
+    if (is_arrow_op && !first_param_is_ptr) {
+        // ptr->f() where f expects T: dereference receiver
+        ast_node *star  = ast_node_create_sym_c(self->arena, "*");
+        ast_node *deref = ast_node_create_unary_op(self->arena, star, left);
+        deref->file = left->file;
+        deref->line = left->line;
+        deref->col  = left->col;
+        ensure_tv(self, &star->type);
+        ensure_tv(self, &deref->type);
+        left = deref;
+    } else if (!is_arrow_op && first_param_is_ptr) {
+        // val.f() where f expects Ptr[T]: implicit address-of
+        tl_monotype *recv_mono = left->type->type;
+        tl_monotype_substitute(self->arena, recv_mono, self->subs, null);
+        if (!tl_monotype_is_ptr(recv_mono)) {
+            ast_node *amp  = ast_node_create_sym_c(self->arena, "&");
+            ast_node *addr = ast_node_create_unary_op(self->arena, amp, left);
+            addr->file = left->file;
+            addr->line = left->line;
+            addr->col  = left->col;
+            ensure_tv(self, &amp->type);
+            ensure_tv(self, &addr->type);
+            left = addr;
+        }
+    }
+
+    // Prepend receiver (possibly coerced) to the NFA's argument list
+    u8         old_n    = nfa->named_application.n_arguments;
+    ast_node **new_args = alloc_malloc(self->arena, (old_n + 1) * sizeof(ast_node *));
+    new_args[0]         = left;
+    for (u8 i = 0; i < old_n; i++) new_args[i + 1] = nfa->named_application.arguments[i];
+
+    // Rewrite node in place from binary_op to NFA
+    ast_node_name_replace(nfa->named_application.name, ufcs_name);
+    ast_node_rewrite_to_nfa(node, nfa->named_application.name, new_args, ufcs_arity);
+
+    return infer_named_function_application(self, ctx, node);
+}
+
 static int infer_struct_access(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
     if (!ast_node_is_binary_op_struct_access(node)) fatal("logic error");
     ensure_tv(self, &node->type);
@@ -2597,68 +2679,7 @@ static int infer_struct_access(tl_infer *self, traverse_ctx *ctx, ast_node *node
                     }
                 }
             } else if (nfa) {
-                // UFCS: field not found, but right side is a function call.
-                // Rewrite x.foo(a, b) to foo(x, a, b).
-                u8  ufcs_arity = nfa->named_application.n_arguments + 1;
-                str ufcs_name  = mangle_str_for_arity(self->arena, field_name, ufcs_arity);
-                tl_polytype *fn_poly = tl_type_env_lookup(self->env, ufcs_name);
-                if (!fn_poly) fn_poly = tl_type_registry_get(self->registry, ufcs_name);
-                if (!fn_poly) {
-                    array_push(self->errors,
-                               ((tl_infer_error){.tag = tl_err_field_not_found, .node = right}));
-                    return 1;
-                }
-
-                // --- UFCS receiver coercion ---
-                int is_arrow_op = (0 == strcmp("->", op));
-
-                tl_monotype *fn_mono = fn_poly->type;
-                int first_param_is_ptr = 0;
-                if (tl_monotype_is_arrow(fn_mono)) {
-                    tl_monotype_sized params = tl_monotype_arrow_get_args(fn_mono);
-                    if (params.size > 0) {
-                        first_param_is_ptr = tl_monotype_is_ptr(params.v[0]);
-                    }
-                }
-
-                if (is_arrow_op && !first_param_is_ptr) {
-                    // ptr->f() where f expects T: dereference receiver
-                    ast_node *star  = ast_node_create_sym_c(self->arena, "*");
-                    ast_node *deref = ast_node_create_unary_op(self->arena, star, left);
-                    deref->file = left->file;
-                    deref->line = left->line;
-                    deref->col  = left->col;
-                    ensure_tv(self, &star->type);
-                    ensure_tv(self, &deref->type);
-                    left = deref;
-                } else if (!is_arrow_op && first_param_is_ptr) {
-                    // val.f() where f expects Ptr[T]: implicit address-of
-                    tl_monotype *recv_mono = left->type->type;
-                    tl_monotype_substitute(self->arena, recv_mono, self->subs, null);
-                    if (!tl_monotype_is_ptr(recv_mono)) {
-                        ast_node *amp  = ast_node_create_sym_c(self->arena, "&");
-                        ast_node *addr = ast_node_create_unary_op(self->arena, amp, left);
-                        addr->file = left->file;
-                        addr->line = left->line;
-                        addr->col  = left->col;
-                        ensure_tv(self, &amp->type);
-                        ensure_tv(self, &addr->type);
-                        left = addr;
-                    }
-                }
-                // --- end UFCS receiver coercion ---
-
-                // Prepend `left` (possibly coerced) to the NFA's argument list
-                u8         old_n    = nfa->named_application.n_arguments;
-                ast_node **new_args = alloc_malloc(self->arena, (old_n + 1) * sizeof(ast_node *));
-                new_args[0]         = left;
-                for (u8 i = 0; i < old_n; i++) new_args[i + 1] = nfa->named_application.arguments[i];
-
-                // Rewrite node in place from binary_op to NFA
-                ast_node_name_replace(nfa->named_application.name, ufcs_name);
-                ast_node_rewrite_to_nfa(node, nfa->named_application.name, new_args, ufcs_arity);
-
-                return infer_named_function_application(self, ctx, node);
+                return ufcs_rewrite_call(self, ctx, node, struct_type, left, nfa, field_name, op);
             } else {
                 array_push(self->errors, ((tl_infer_error){.tag = tl_err_field_not_found, .node = right}));
                 return 1;
