@@ -10,8 +10,8 @@ CONFIG ?= release
 ASAN_OPTIONS ?= detect_leaks=1
 
 ifeq ($(CONFIG),release)
-  CFLAGS_CONFIG = -O2 -DNDEBUG
-  LDFLAGS_CONFIG =
+  CFLAGS_CONFIG = -O2 -DNDEBUG -flto=auto
+  LDFLAGS_CONFIG = -flto=auto
   BUILD_DIR = build-release
 else ifeq ($(CONFIG),debug)
   CFLAGS_CONFIG = -g -DDEBUG -fno-omit-frame-pointer
