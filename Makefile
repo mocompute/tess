@@ -62,7 +62,7 @@ INSTALL_LIB  = $(DESTDIR)$(PREFIX)/lib/tess
 # Test directories
 TL_TEST_DIR    = $(TESS_SRC_DIR)/tl
 TL_STD_DIR     = src/tl/std
-TL_STD_SOURCES = $(wildcard $(TL_STD_DIR)/*.tl)
+TL_STD_SOURCES = $(shell find $(TL_STD_DIR) -name '*.tl')
 TL_BUILD_DIR   = $(BUILD_DIR)/tl
 
 # ------------------------------------------------------------------------------

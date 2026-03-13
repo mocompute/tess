@@ -12,8 +12,6 @@
 #include "types.h"
 
 #include <stdio.h>
-#include <string.h>
-
 int main(int argc, char *argv[]) {
     if (argc != 3) {
         fprintf(stderr, "Usage: %s <stdlib_dir> <output.c>\n", argv[0]);
@@ -50,13 +48,17 @@ int main(int argc, char *argv[]) {
             return 1;
         }
 
-        char const *name    = file_basename(filepath);
-        entries[i].name     = name;
-        entries[i].name_len = (u32)strlen(name);
+        str rel = file_path_relative(alloc, str_init(alloc, stdlib_dir), str_init(alloc, filepath));
+        if (str_is_empty(rel)) {
+            fprintf(stderr, "stdlib_pack: cannot compute relative path for: %s\n", filepath);
+            return 1;
+        }
+        entries[i].name     = str_cstr(&rel);
+        entries[i].name_len = (u32)str_len(rel);
         entries[i].data     = (byte const *)data;
         entries[i].data_len = data_len;
 
-        fprintf(stderr, "stdlib_pack: packing %s (%u bytes)\n", name, data_len);
+        fprintf(stderr, "stdlib_pack: packing %s (%u bytes)\n", entries[i].name, data_len);
     }
 
     // Write tpkg archive to a temp file

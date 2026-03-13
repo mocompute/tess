@@ -106,7 +106,7 @@ target_compile_options(stdlib_pack BEFORE PRIVATE ${MOS_C_DIAGNOSTIC})
 target_link_libraries(stdlib_pack PRIVATE tess)
 target_link_options(stdlib_pack PRIVATE ${MOS_C_LINK_OPTIONS})
 
-file(GLOB TL_STD_SOURCES "${PROJECT_SOURCE_DIR}/src/tl/std/*.tl")
+file(GLOB_RECURSE TL_STD_SOURCES "${PROJECT_SOURCE_DIR}/src/tl/std/*.tl")
 add_custom_command(
   OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/tess_stdlib_embed.c
   COMMAND stdlib_pack
