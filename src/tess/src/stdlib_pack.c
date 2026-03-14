@@ -12,7 +12,7 @@
 #include "types.h"
 
 #include <stdio.h>
-#include <string.h>
+
 int main(int argc, char *argv[]) {
     if (argc != 3) {
         fprintf(stderr, "Usage: %s <stdlib_dir> <output.c>\n", argv[0]);
@@ -54,11 +54,8 @@ int main(int argc, char *argv[]) {
             fprintf(stderr, "stdlib_pack: cannot compute relative path for: %s\n", filepath);
             return 1;
         }
-        u32 rlen = (u32)str_len(rel);
-        char *name_copy = alloc_malloc(alloc, rlen + 1);
-        memcpy(name_copy, str_cstr(&rel), rlen + 1);
-        entries[i].name     = name_copy;
-        entries[i].name_len = rlen;
+        entries[i].name     = str_cstr_copy(alloc, rel);
+        entries[i].name_len = (u32)str_len(rel);
         entries[i].data     = (byte const *)data;
         entries[i].data_len = data_len;
 

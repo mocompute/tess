@@ -582,11 +582,8 @@ int tl_tpkg_pack(allocator *alloc, char const *output_path, str_sized files, str
         // Add entry
         // Note: rel_path may use small string optimization (inline storage),
         // so we must copy it to arena to ensure the pointer stays valid.
-        u32   rel_path_len  = (u32)str_len(rel_path);
-        char *rel_path_copy = alloc_malloc(alloc, rel_path_len + 1);
-        memcpy(rel_path_copy, str_cstr(&rel_path), rel_path_len + 1);
-        entries[entry_idx].name     = rel_path_copy;
-        entries[entry_idx].name_len = rel_path_len;
+        entries[entry_idx].name     = str_cstr_copy(alloc, rel_path);
+        entries[entry_idx].name_len = (u32)str_len(rel_path);
         entries[entry_idx].data     = (byte const *)data;
         entries[entry_idx].data_len = size;
         entry_idx++;

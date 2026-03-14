@@ -972,6 +972,10 @@ str str_build_finish(str_build *p) {
 
 //
 
+char *str_cstr_copy(allocator *alloc, str s) {
+    return alloc_strdup(alloc, str_cstr(&s));
+}
+
 char const *str_cstr(str *self) {
     if (is_small(*self)) {
         unsigned len = self->small.len;

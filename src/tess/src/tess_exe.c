@@ -966,11 +966,7 @@ static int resolve_source_entries(state *self, tl_package_info *info, c_string_c
         if (file_is_directory(entry)) {
             file_scan_dir_recursive(self->arena, str_cstr(&entry), ".tl", out);
         } else if (file_exists(entry)) {
-            char const *cstr = str_cstr(&entry);
-            size_t      len  = strlen(cstr);
-            char       *copy = alloc_malloc(self->arena, len + 1);
-            memcpy(copy, cstr, len + 1);
-            char const *path = copy;
+            char const *path = str_cstr_copy(self->arena, entry);
             array_push(*out, path);
         } else {
             fprintf(stderr, "error: source() path not found: '%s'\n", str_cstr(&entry));

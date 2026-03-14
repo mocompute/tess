@@ -132,6 +132,7 @@ str         str_init_u64(allocator *, u64);
 str         str_init_f64(allocator *, f64);
 
 char const *str_cstr(str *);
+char       *str_cstr_copy(allocator *, str);
 
 // -- string builder --
 
