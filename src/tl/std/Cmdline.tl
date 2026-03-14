@@ -19,30 +19,30 @@ _S(s: Ptr[Const[CChar]]) -> Str.Str { Str.from_cstr(s) }
 // -- Types --
 
 // What kind of argument a spec describes.
-ArgKind: | FlagBool     // --verbose, -v (no value)
-         | FlagCount    // -v -v -v (stackable counter)
-         | FlagValue    // --output FILE (takes a value)
+ArgKind: | FlagBool                     // --verbose, -v (no value)
+         | FlagCount                    // -v -v -v (stackable counter)
+         | FlagValue                    // --output FILE (takes a value)
 
 // A single argument specification.
 ArgSpec: {
     long_name:   Str,
-    short_name:  CChar,     // '\0' for none
+    short_name:  CChar,                 // '\0' for none
     description: Str,
     kind:        ArgKind,
-    required:    Int,       // 1 = required, 0 = optional
+    required:    Int,                   // 1 = required, 0 = optional
 }
 
 // Parsed value for a single argument.
-ArgValue: | BoolVal  { v: Bool }
+ArgValue: | BoolVal { v: Bool }
           | CountVal { v: Int }
-          | StrVal   { v: Str }
+          | StrVal { v:   Str }
           | Absent
 
 // Individual parse error.
-ParseError: | UnknownFlag     { flag: Str }
-            | MissingValue    { flag: Str }
-            | MissingRequired { name: Str }
-            | InvalidCommand  { name: Str }
+ParseError: | UnknownFlag { flag: Str }
+            | MissingValue    { flag:    Str }
+            | MissingRequired { name: Str    }
+            | InvalidCommand  { name:  Str   }
 
 // Collection of all errors from a parse.
 ParseErrors: { errors: Array[ParseError] }
@@ -67,8 +67,8 @@ Parser: {
 // -- Synopsis --
 
 create (alloc: Ptr[Allocator], name: Str, description: Str) -> Ptr[Parser]
-create (name: Str, description: Str)                         -> Ptr[Parser]
-destroy(self: Ptr[Parser])                                   -> Void
+create (name: Str, description: Str)                        -> Ptr[Parser]
+destroy(self: Ptr[Parser])                                  -> Void
 
 flag    (self: Ptr[Parser], long_name: Str, short_name: CChar, desc: Str) -> Void
 flag    (self: Ptr[Parser], long_name: Str, desc: Str)                    -> Void
@@ -97,10 +97,10 @@ from_argv(argc: Int, argv: Ptr[CString]) -> Array[Str]
 
 // -- Private helpers --
 
-_find_spec_long (self: Ptr[Parser], name: Str)       -> Option[CSize]
-_find_spec_short(self: Ptr[Parser], ch: CChar)        -> Option[CSize]
-_store_bool     (values: Ptr[HashMap[Str, ArgValue]], name: Str) -> Void
-_store_count    (values: Ptr[HashMap[Str, ArgValue]], name: Str) -> Void
+_find_spec_long (self: Ptr[Parser], name: Str)                             -> Option[CSize]
+_find_spec_short(self: Ptr[Parser], ch: CChar)                             -> Option[CSize]
+_store_bool     (values: Ptr[HashMap[Str, ArgValue]], name: Str)           -> Void
+_store_count    (values: Ptr[HashMap[Str, ArgValue]], name: Str)           -> Void
 _store_str      (values: Ptr[HashMap[Str, ArgValue]], name: Str, val: Str) -> Void
 
 
@@ -124,7 +124,7 @@ create(name: Str, description: Str) -> Ptr[Parser] {
     create(Alloc.context.default, name, description)
 }
 
-destroy(self: Ptr[Parser]) -> Void {
+destroy(self) -> Void {
     alloc := self->_alloc
     Array.free(self->_specs.&)
     Array.free(self->_commands.&)
@@ -134,50 +134,50 @@ destroy(self: Ptr[Parser]) -> Void {
 
 // -- Spec builders --
 
-flag(self: Ptr[Parser], long_name: Str, short_name: CChar, desc: Str) -> Void {
+flag(self, long_name: Str, short_name: CChar, desc: Str) -> Void {
     spec := ArgSpec(long_name = long_name, short_name = short_name,
                     description = desc, kind = FlagBool, required = 0)
     Array.push(self->_specs.&, spec)
 }
 
-flag(self: Ptr[Parser], long_name: Str, desc: Str) -> Void {
+flag(self, long_name: Str, desc: Str) -> Void {
     flag(self, long_name, '\0', desc)
 }
 
-counter(self: Ptr[Parser], long_name: Str, short_name: CChar, desc: Str) -> Void {
+counter(self, long_name: Str, short_name: CChar, desc: Str) -> Void {
     spec := ArgSpec(long_name = long_name, short_name = short_name,
                     description = desc, kind = FlagCount, required = 0)
     Array.push(self->_specs.&, spec)
 }
 
-option(self: Ptr[Parser], long_name: Str, short_name: CChar, desc: Str) -> Void {
+option(self, long_name: Str, short_name: CChar, desc: Str) -> Void {
     spec := ArgSpec(long_name = long_name, short_name = short_name,
                     description = desc, kind = FlagValue, required = 0)
     Array.push(self->_specs.&, spec)
 }
 
-option(self: Ptr[Parser], long_name: Str, desc: Str) -> Void {
+option(self, long_name: Str, desc: Str) -> Void {
     option(self, long_name, '\0', desc)
 }
 
-required(self: Ptr[Parser], long_name: Str, short_name: CChar, desc: Str) -> Void {
+required(self, long_name: Str, short_name: CChar, desc: Str) -> Void {
     spec := ArgSpec(long_name = long_name, short_name = short_name,
                     description = desc, kind = FlagValue, required = 1)
     Array.push(self->_specs.&, spec)
 }
 
-required(self: Ptr[Parser], long_name: Str, desc: Str) -> Void {
+required(self, long_name: Str, desc: Str) -> Void {
     required(self, long_name, '\0', desc)
 }
 
-command(self: Ptr[Parser], name: Str) -> Void {
+command(self, name: Str) -> Void {
     Array.push(self->_commands.&, name)
 }
 
 
 // -- Private helpers --
 
-_find_spec_long(self: Ptr[Parser], name: Str) -> Option[CSize] {
+_find_spec_long(self, name: Str) -> Option[CSize] {
     i: CSize := 0zu
     while i < self->_specs.size, i += 1zu {
         if Str.eq(self->_specs.v.[i].long_name, name) {
@@ -187,7 +187,7 @@ _find_spec_long(self: Ptr[Parser], name: Str) -> Option[CSize] {
     None
 }
 
-_find_spec_short(self: Ptr[Parser], ch: CChar) -> Option[CSize] {
+_find_spec_short(self, ch: CChar) -> Option[CSize] {
     if ch == '\0' { return None }
     i: CSize := 0zu
     while i < self->_specs.size, i += 1zu {
@@ -209,7 +209,7 @@ _store_count(values: Ptr[HashMap[Str, ArgValue]], name: Str) -> Void {
     }
     when s.v {
         c: CountVal { HashMap.set(values, name, CountVal(v = c.v + 1)) }
-        else        { HashMap.set(values, name, CountVal(v = 1))       }
+        else { HashMap.set(values, name, CountVal(v = 1)) }
     }
 }
 
@@ -219,11 +219,12 @@ _store_str(values: Ptr[HashMap[Str, ArgValue]], name: Str, val: Str) -> Void {
 
 _parse_long(self: Ptr[Parser], values: Ptr[HashMap[Str, ArgValue]],
             errors: Ptr[Array[ParseError]], name: Str, arg: Str,
-            argc: Int, argv: Ptr[CString], ip: Ptr[Int]) -> Void {
+
+argc: Int, argv: Ptr[CString], ip: Ptr[Int]) -> Void {
     when Str.index_of_char(name, '=') {
         eq_pos: Some {
-            key := Str.slice(name, 0zu, eq_pos.v)
-            val := Str.slice(name, eq_pos.v + 1zu, Str.len(name))
+            key      := Str.slice(name, 0zu, eq_pos.v)
+            val      := Str.slice(name, eq_pos.v + 1zu, Str.len(name))
             si: Some := _find_spec_long(self, key) else {
                 Array.push(errors, UnknownFlag(flag = arg))
                 return
@@ -231,7 +232,7 @@ _parse_long(self: Ptr[Parser], values: Ptr[HashMap[Str, ArgValue]],
             spec := self->_specs.v.[si.v]
             when spec.kind {
                 fv: FlagValue { _store_str(values, key, val) }
-                else          { Array.push(errors, UnknownFlag(flag = arg)) }
+                else { Array.push(errors, UnknownFlag(flag = arg)) }
             }
         }
         no_eq: None {
@@ -241,7 +242,7 @@ _parse_long(self: Ptr[Parser], values: Ptr[HashMap[Str, ArgValue]],
             }
             spec := self->_specs.v.[si.v]
             when spec.kind {
-                fb: FlagBool  { _store_bool(values, name)  }
+                fb: FlagBool { _store_bool(values, name) }
                 fc: FlagCount { _store_count(values, name) }
                 fv: FlagValue {
                     if ip.* + 1 < argc {
@@ -258,8 +259,9 @@ _parse_long(self: Ptr[Parser], values: Ptr[HashMap[Str, ArgValue]],
 
 _parse_short(self: Ptr[Parser], values: Ptr[HashMap[Str, ArgValue]],
              errors: Ptr[Array[ParseError]], arg: Str,
-             argc: Int, argv: Ptr[CString], ip: Ptr[Int]) -> Void {
-    arg_len := Str.len(arg)
+
+argc: Int, argv: Ptr[CString], ip: Ptr[Int]) -> Void {
+    arg_len  := Str.len(arg)
     j: CSize := 1zu
     while j < arg_len {
         bv: Some := Str.byte_at(arg, j) else {
@@ -267,7 +269,7 @@ _parse_short(self: Ptr[Parser], values: Ptr[HashMap[Str, ArgValue]],
             continue
         }
         ch: CChar := bv.v
-        si: Some := _find_spec_short(self, ch) else {
+        si: Some  := _find_spec_short(self, ch) else {
             flag_str := Str.cat(_S("-"), Str.from_bytes(ch.&, 1zu))
             Array.push(errors, UnknownFlag(flag = flag_str))
             j += 1zu
@@ -275,7 +277,7 @@ _parse_short(self: Ptr[Parser], values: Ptr[HashMap[Str, ArgValue]],
         }
         spec := self->_specs.v.[si.v]
         when spec.kind {
-            fb: FlagBool  { _store_bool(values, spec.long_name)  }
+            fb: FlagBool { _store_bool(values, spec.long_name) }
             fc: FlagCount { _store_count(values, spec.long_name) }
             fv: FlagValue {
                 if j + 1zu < arg_len {
@@ -298,10 +300,10 @@ _parse_short(self: Ptr[Parser], values: Ptr[HashMap[Str, ArgValue]],
 // -- Parse --
 
 parse(self: Ptr[Parser], argc: Int, argv: Ptr[CString]) -> Result[Args, ParseErrors] {
-    values := HashMap.create[Str, ArgValue]()
-    positional := Array.empty[Str]()
-    rest_args  := Array.empty[Str]()
-    errors     := Array.empty[ParseError]()
+    values           := HashMap.create[Str, ArgValue]()
+    positional       := Array.empty[Str]()
+    rest_args        := Array.empty[Str]()
+    errors           := Array.empty[ParseError]()
     cmd: Option[Str] := None
 
     dd           := _S("--")
@@ -343,10 +345,10 @@ parse(self: Ptr[Parser], argc: Int, argv: Ptr[CString]) -> Result[Args, ParseErr
         // Not a flag — check for command or positional
         if self->_commands.size > 0zu && positional.size == 0zu {
             found_cmd := 0
-            k: CSize := 0zu
+            k: CSize  := 0zu
             while k < self->_commands.size, k += 1zu {
                 if Str.eq(self->_commands.v.[k], arg) {
-                    cmd = Some(arg)
+                    cmd       = Some(arg)
                     found_cmd = 1
                     break
                 }
@@ -381,18 +383,18 @@ parse(self: Ptr[Parser], argc: Int, argv: Ptr[CString]) -> Result[Args, ParseErr
     }
 }
 
-parse_or_exit(self: Ptr[Parser], argc: Int, argv: Ptr[CString]) -> Args {
+parse_or_exit(self, argc: Int, argv: Ptr[CString]) -> Args {
     result := parse(self, argc, argv)
     when result {
-        ok: Ok { ok.v }
+        ok:  Ok { ok.v }
         err: Err {
             i: CSize := 0zu
             while i < err.v.errors.size, i += 1zu {
                 when err.v.errors.v.[i] {
-                    uf: UnknownFlag     { c_printf("error: unknown flag '%s'\n", Str.cstr(uf.flag.&))     }
-                    mv: MissingValue    { c_printf("error: missing value for '%s'\n", Str.cstr(mv.flag.&)) }
+                    uf: UnknownFlag { c_printf("error: unknown flag '%s'\n", Str.cstr(uf.flag.&)) }
+                    mv: MissingValue { c_printf("error: missing value for '%s'\n", Str.cstr(mv.flag.&)) }
                     mr: MissingRequired { c_printf("error: missing required option '%s'\n", Str.cstr(mr.name.&)) }
-                    ic: InvalidCommand  { c_printf("error: unknown command '%s'\n", Str.cstr(ic.name.&))   }
+                    ic: InvalidCommand { c_printf("error: unknown command '%s'\n", Str.cstr(ic.name.&)) }
                 }
             }
             c_printf("\n")
@@ -410,7 +412,7 @@ get_flag(args: Args, name: Str) -> Bool {
     s: Some := HashMap.get_copy(args._values, name) else { return false }
     when s.v {
         b: BoolVal { b.v }
-        else       { false }
+        else { false }
     }
 }
 
@@ -418,7 +420,7 @@ get_count(args: Args, name: Str) -> Int {
     s: Some := HashMap.get_copy(args._values, name) else { return 0 }
     when s.v {
         c: CountVal { c.v }
-        else        { 0   }
+        else { 0 }
     }
 }
 
@@ -426,7 +428,7 @@ get_option(args: Args, name: Str) -> Option[Str] {
     s: Some := HashMap.get_copy(args._values, name) else { return None }
     when s.v {
         sv: StrVal { Some(sv.v) }
-        else       { None       }
+        else { None }
     }
 }
 
@@ -443,7 +445,7 @@ has(args: Args, name: Str) -> Bool {
 
 // -- Help --
 
-help_text(self: Ptr[Parser]) -> Str {
+help_text(self) -> Str {
     result := Str.cat(_S("Usage: "), self->_name)
     result = Str.cat(result, _S(" [options]"))
 
@@ -480,7 +482,7 @@ help_text(self: Ptr[Parser]) -> Str {
 
             when spec.kind {
                 fv: FlagValue { result = Str.cat(result, _S(" <value>")) }
-                else          { }
+                else { }
             }
 
             result = Str.cat(result, _S("\t"))
@@ -507,7 +509,7 @@ help_text(self: Ptr[Parser]) -> Str {
     result
 }
 
-print_help(self: Ptr[Parser]) -> Void {
+print_help(self) -> Void {
     txt := help_text(self)
     c_printf("%s", Str.cstr(txt.&))
 }
@@ -517,7 +519,7 @@ print_help(self: Ptr[Parser]) -> Void {
 
 from_argv(argc: Int, argv: Ptr[CString]) -> Array[Str] {
     result := Array.empty[Str]()
-    i := 0
+    i      := 0
     while i < argc, i += 1 {
         Array.push(result.&, Str.from_cstr(argv.[i]))
     }

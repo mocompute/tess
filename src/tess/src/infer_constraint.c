@@ -17,12 +17,12 @@
 // Constraint and error helpers
 // ============================================================================
 
-int        constrain(tl_infer *self, tl_polytype *left, tl_polytype *right, ast_node const *node,
-                     tl_unify_direction dir);
-static int         types_strip_const(tl_monotype *param, tl_monotype *arg);
+int                 constrain(tl_infer *self, tl_polytype *left, tl_polytype *right, ast_node const *node,
+                              tl_unify_direction dir);
+static int          types_strip_const(tl_monotype *param, tl_monotype *arg);
 static tl_polytype *lookup_poly(tl_infer *self, str name);
 
-int        env_insert_constrain(tl_infer *self, str name, tl_polytype *type, ast_node const *name_node) {
+int env_insert_constrain(tl_infer *self, str name, tl_polytype *type, ast_node const *name_node) {
 
     // insert type in the environment, but constrains against existing type, if any.
 
@@ -241,6 +241,11 @@ static void load_toplevel_let(tl_infer *self, ast_node *node) {
 
                 arg->symbol.annotation_type =
                   tl_polytype_absorb_mono(self->arena, param_tuple->list.xs.v[j]);
+
+                // Also copy the AST annotation from the forward declaration's parameter.
+                // parse_type_annotation reads symbol.annotation (the AST node), not
+                // annotation_type, so without this the type is never seen during inference.
+                arg->symbol.annotation = ast_param_tuple->tuple.elements[j]->symbol.annotation;
 
             next:
                 j++;
@@ -2489,9 +2494,8 @@ static tl_polytype *lookup_poly(tl_infer *self, str name) {
 
 // UFCS: field not found on struct, but right side is a function call.
 // Rewrite x.foo(a, b) → foo(x, a, b) or Module__foo(x, a, b).
-static int ufcs_rewrite_call(tl_infer *self, traverse_ctx *ctx, ast_node *node,
-                             tl_monotype *struct_type, ast_node *left,
-                             ast_node *nfa, str field_name) {
+static int ufcs_rewrite_call(tl_infer *self, traverse_ctx *ctx, ast_node *node, tl_monotype *struct_type,
+                             ast_node *left, ast_node *nfa, str field_name) {
 
     u8  ufcs_arity = nfa->named_application.n_arguments + 1;
     str ufcs_name  = mangle_str_for_arity(self->arena, field_name, ufcs_arity);
@@ -2509,8 +2513,8 @@ static int ufcs_rewrite_call(tl_infer *self, traverse_ctx *ctx, ast_node *node,
         str module = lookup_type->cons_inst->def->module;
         if (!str_is_empty(module)) {
             str qualified = str_qualify(self->arena, module, field_name);
-            ufcs_name = mangle_str_for_arity(self->arena, qualified, ufcs_arity);
-            fn_poly = lookup_poly(self, ufcs_name);
+            ufcs_name     = mangle_str_for_arity(self->arena, qualified, ufcs_arity);
+            fn_poly       = lookup_poly(self, ufcs_name);
         }
     }
     if (!fn_poly) {
@@ -2520,8 +2524,8 @@ static int ufcs_rewrite_call(tl_infer *self, traverse_ctx *ctx, ast_node *node,
     }
 
     // Receiver coercion: implicit address-of
-    tl_monotype *fn_mono = fn_poly->type;
-    int first_param_is_ptr = 0;
+    tl_monotype *fn_mono            = fn_poly->type;
+    int          first_param_is_ptr = 0;
     if (tl_monotype_is_arrow(fn_mono)) {
         tl_monotype_sized params = tl_monotype_arrow_get_args(fn_mono);
         if (params.size > 0) {
@@ -2536,9 +2540,9 @@ static int ufcs_rewrite_call(tl_infer *self, traverse_ctx *ctx, ast_node *node,
         if (!tl_monotype_is_ptr(recv_mono)) {
             ast_node *amp  = ast_node_create_sym_c(self->arena, "&");
             ast_node *addr = ast_node_create_unary_op(self->arena, amp, left);
-            addr->file = left->file;
-            addr->line = left->line;
-            addr->col  = left->col;
+            addr->file     = left->file;
+            addr->line     = left->line;
+            addr->col      = left->col;
             ensure_tv(self, &amp->type);
             ensure_tv(self, &addr->type);
             // Constrain addr type to Ptr[operand_type], mirroring infer_unary_op for '&'.
