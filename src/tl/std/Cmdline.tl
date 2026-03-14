@@ -203,17 +203,13 @@ _store_bool(values: Ptr[HashMap[Str, ArgValue]], name: Str) -> Void {
 }
 
 _store_count(values: Ptr[HashMap[Str, ArgValue]], name: Str) -> Void {
-    prev := HashMap.get_copy(values, name)
-    when prev {
-        s: Some {
-            case s.v: ArgValue {
-                c: CountVal { HashMap.set(values, name, CountVal(v = c.v + 1)) }
-                b: BoolVal  { HashMap.set(values, name, CountVal(v = 1))       }
-                sv: StrVal  { HashMap.set(values, name, CountVal(v = 1))       }
-                a: Absent   { HashMap.set(values, name, CountVal(v = 1))       }
-            }
-        }
-        n: None { HashMap.set(values, name, CountVal(v = 1)) }
+    s: Some := HashMap.get_copy(values, name) else {
+        HashMap.set(values, name, CountVal(v = 1))
+        return
+    }
+    when s.v {
+        c: CountVal { HashMap.set(values, name, CountVal(v = c.v + 1)) }
+        else        { HashMap.set(values, name, CountVal(v = 1))       }
     }
 }
 
@@ -228,36 +224,33 @@ _parse_long(self: Ptr[Parser], values: Ptr[HashMap[Str, ArgValue]],
         eq_pos: Some {
             key := Str.slice(name, 0zu, eq_pos.v)
             val := Str.slice(name, eq_pos.v + 1zu, Str.len(name))
-            when _find_spec_long(self, key) {
-                si: Some {
-                    spec := self->_specs.v.[si.v]
-                    case spec.kind: ArgKind {
-                        fb: FlagBool  { Array.push(errors, UnknownFlag(flag = arg)) }
-                        fc: FlagCount { Array.push(errors, UnknownFlag(flag = arg)) }
-                        fv: FlagValue { _store_str(values, key, val) }
-                    }
-                }
-                n: None { Array.push(errors, UnknownFlag(flag = arg)) }
+            si: Some := _find_spec_long(self, key) else {
+                Array.push(errors, UnknownFlag(flag = arg))
+                return
+            }
+            spec := self->_specs.v.[si.v]
+            when spec.kind {
+                fv: FlagValue { _store_str(values, key, val) }
+                else          { Array.push(errors, UnknownFlag(flag = arg)) }
             }
         }
         no_eq: None {
-            when _find_spec_long(self, name) {
-                si: Some {
-                    spec := self->_specs.v.[si.v]
-                    case spec.kind: ArgKind {
-                        fb: FlagBool  { _store_bool(values, name)  }
-                        fc: FlagCount { _store_count(values, name) }
-                        fv: FlagValue {
-                            if ip.* + 1 < argc {
-                                ip.* = ip.* + 1
-                                _store_str(values, name, Str.from_cstr(argv.[ip.*]))
-                            } else {
-                                Array.push(errors, MissingValue(flag = name))
-                            }
-                        }
+            si: Some := _find_spec_long(self, name) else {
+                Array.push(errors, UnknownFlag(flag = arg))
+                return
+            }
+            spec := self->_specs.v.[si.v]
+            when spec.kind {
+                fb: FlagBool  { _store_bool(values, name)  }
+                fc: FlagCount { _store_count(values, name) }
+                fv: FlagValue {
+                    if ip.* + 1 < argc {
+                        ip.* = ip.* + 1
+                        _store_str(values, name, Str.from_cstr(argv.[ip.*]))
+                    } else {
+                        Array.push(errors, MissingValue(flag = name))
                     }
                 }
-                n: None { Array.push(errors, UnknownFlag(flag = arg)) }
             }
         }
     }
@@ -266,38 +259,36 @@ _parse_long(self: Ptr[Parser], values: Ptr[HashMap[Str, ArgValue]],
 _parse_short(self: Ptr[Parser], values: Ptr[HashMap[Str, ArgValue]],
              errors: Ptr[Array[ParseError]], arg: Str,
              argc: Int, argv: Ptr[CString], ip: Ptr[Int]) -> Void {
+    arg_len := Str.len(arg)
     j: CSize := 1zu
-    while j < Str.len(arg) {
-        when Str.byte_at(arg, j) {
-            bv: Some {
-                ch: CChar := bv.v
-                when _find_spec_short(self, ch) {
-                    si: Some {
-                        spec := self->_specs.v.[si.v]
-                        case spec.kind: ArgKind {
-                            fb: FlagBool  { _store_bool(values, spec.long_name)  }
-                            fc: FlagCount { _store_count(values, spec.long_name) }
-                            fv: FlagValue {
-                                if j + 1zu < Str.len(arg) {
-                                    val := Str.slice(arg, j + 1zu, Str.len(arg))
-                                    _store_str(values, spec.long_name, val)
-                                    j = Str.len(arg)
-                                } else if ip.* + 1 < argc {
-                                    ip.* = ip.* + 1
-                                    _store_str(values, spec.long_name, Str.from_cstr(argv.[ip.*]))
-                                } else {
-                                    Array.push(errors, MissingValue(flag = spec.long_name))
-                                }
-                            }
-                        }
-                    }
-                    n: None {
-                        flag_str := Str.cat(_S("-"), Str.from_bytes(ch.&, 1zu))
-                        Array.push(errors, UnknownFlag(flag = flag_str))
-                    }
+    while j < arg_len {
+        bv: Some := Str.byte_at(arg, j) else {
+            j += 1zu
+            continue
+        }
+        ch: CChar := bv.v
+        si: Some := _find_spec_short(self, ch) else {
+            flag_str := Str.cat(_S("-"), Str.from_bytes(ch.&, 1zu))
+            Array.push(errors, UnknownFlag(flag = flag_str))
+            j += 1zu
+            continue
+        }
+        spec := self->_specs.v.[si.v]
+        when spec.kind {
+            fb: FlagBool  { _store_bool(values, spec.long_name)  }
+            fc: FlagCount { _store_count(values, spec.long_name) }
+            fv: FlagValue {
+                if j + 1zu < arg_len {
+                    val := Str.slice(arg, j + 1zu, arg_len)
+                    _store_str(values, spec.long_name, val)
+                    j = arg_len
+                } else if ip.* + 1 < argc {
+                    ip.* = ip.* + 1
+                    _store_str(values, spec.long_name, Str.from_cstr(argv.[ip.*]))
+                } else {
+                    Array.push(errors, MissingValue(flag = spec.long_name))
                 }
             }
-            nb: None { }
         }
         j += 1zu
     }
@@ -313,8 +304,8 @@ parse(self: Ptr[Parser], argc: Int, argv: Ptr[CString]) -> Result[Args, ParseErr
     errors     := Array.empty[ParseError]()
     cmd: Option[Str] := None
 
-    dd     := _S("--")
-    prefix := _S("--")
+    dd           := _S("--")
+    short_prefix := _S("-")
 
     i := 1; past_separator := 0
     while i < argc {
@@ -335,7 +326,7 @@ parse(self: Ptr[Parser], argc: Int, argv: Ptr[CString]) -> Result[Args, ParseErr
         }
 
         // Check for --long options
-        if Str.starts_with(arg, prefix) {
+        if Str.starts_with(arg, dd) {
             name := Str.slice(arg, 2zu, Str.len(arg))
             _parse_long(self, values, errors.&, name, arg, argc, argv, i.&)
             i += 1
@@ -343,7 +334,6 @@ parse(self: Ptr[Parser], argc: Int, argv: Ptr[CString]) -> Result[Args, ParseErr
         }
 
         // Check for -x (short options)
-        short_prefix := _S("-")
         if Str.starts_with(arg, short_prefix) && Str.len(arg) > 1zu {
             _parse_short(self, values, errors.&, arg, argc, argv, i.&)
             i += 1
@@ -393,14 +383,12 @@ parse(self: Ptr[Parser], argc: Int, argv: Ptr[CString]) -> Result[Args, ParseErr
 
 parse_or_exit(self: Ptr[Parser], argc: Int, argv: Ptr[CString]) -> Args {
     result := parse(self, argc, argv)
-    case result: Result[Args, ParseErrors] {
+    when result {
         ok: Ok { ok.v }
         err: Err {
-            // Print errors
             i: CSize := 0zu
             while i < err.v.errors.size, i += 1zu {
-                e := err.v.errors.v.[i]
-                case e: ParseError {
+                when err.v.errors.v.[i] {
                     uf: UnknownFlag     { c_printf("error: unknown flag '%s'\n", Str.cstr(uf.flag.&))     }
                     mv: MissingValue    { c_printf("error: missing value for '%s'\n", Str.cstr(mv.flag.&)) }
                     mr: MissingRequired { c_printf("error: missing required option '%s'\n", Str.cstr(mr.name.&)) }
@@ -410,7 +398,6 @@ parse_or_exit(self: Ptr[Parser], argc: Int, argv: Ptr[CString]) -> Args {
             c_printf("\n")
             print_help(self)
             c_exit(1)
-            // unreachable
             _tl_fatal_("unreachable")
         }
     }
@@ -420,47 +407,26 @@ parse_or_exit(self: Ptr[Parser], argc: Int, argv: Ptr[CString]) -> Args {
 // -- Query --
 
 get_flag(args: Args, name: Str) -> Bool {
-    p := HashMap.get_copy(args._values, name)
-    when p {
-        s: Some {
-            case s.v: ArgValue {
-                b: BoolVal  { b.v }
-                c: CountVal { false }
-                sv: StrVal  { false }
-                a: Absent   { false }
-            }
-        }
-        n: None { false }
+    s: Some := HashMap.get_copy(args._values, name) else { return false }
+    when s.v {
+        b: BoolVal { b.v }
+        else       { false }
     }
 }
 
 get_count(args: Args, name: Str) -> Int {
-    p := HashMap.get_copy(args._values, name)
-    when p {
-        s: Some {
-            case s.v: ArgValue {
-                c: CountVal { c.v }
-                b: BoolVal  { 0   }
-                sv: StrVal  { 0   }
-                a: Absent   { 0   }
-            }
-        }
-        n: None { 0 }
+    s: Some := HashMap.get_copy(args._values, name) else { return 0 }
+    when s.v {
+        c: CountVal { c.v }
+        else        { 0   }
     }
 }
 
 get_option(args: Args, name: Str) -> Option[Str] {
-    p := HashMap.get_copy(args._values, name)
-    when p {
-        s: Some {
-            case s.v: ArgValue {
-                sv: StrVal  { Some(sv.v) }
-                b: BoolVal  { None       }
-                c: CountVal { None       }
-                a: Absent   { None       }
-            }
-        }
-        n: None { None }
+    s: Some := HashMap.get_copy(args._values, name) else { return None }
+    when s.v {
+        sv: StrVal { Some(sv.v) }
+        else       { None       }
     }
 }
 
@@ -512,10 +478,9 @@ help_text(self: Ptr[Parser]) -> Str {
             result = Str.cat(result, _S("--"))
             result = Str.cat(result, spec.long_name)
 
-            case spec.kind: ArgKind {
+            when spec.kind {
                 fv: FlagValue { result = Str.cat(result, _S(" <value>")) }
-                fb: FlagBool  { }
-                fc: FlagCount { }
+                else          { }
             }
 
             result = Str.cat(result, _S("\t"))
@@ -526,7 +491,6 @@ help_text(self: Ptr[Parser]) -> Str {
             }
 
             result = Str.cat(result, _S("\n"))
-            i = i  // dummy to avoid expression-as-statement issue
         }
     }
 
