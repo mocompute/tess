@@ -120,9 +120,15 @@ void platform_temp_file_delete(platform_temp_file *tf) {
 
 #else
 
+static char const *get_temp_dir(void) {
+    char const *d = getenv("TMPDIR");
+    if (d && d[0]) return d;
+    return "/tmp";
+}
+
 int platform_temp_file_create(platform_temp_file *tf, char const *suffix) {
     pid_t pid = getpid();
-    snprintf(tf->path, PLATFORM_PATH_MAX, "/tmp/tess_%ld%s", (long)pid, suffix);
+    snprintf(tf->path, PLATFORM_PATH_MAX, "%s/tess_%ld%s", get_temp_dir(), (long)pid, suffix);
     return 0;
 }
 
@@ -199,12 +205,12 @@ int platform_mkdir(char const *path) {
 #else
 
 int platform_temp_dir(char *buf, size_t bufsize) {
-    snprintf(buf, bufsize, "/tmp/");
+    snprintf(buf, bufsize, "%s/", get_temp_dir());
     return 0;
 }
 
 int platform_temp_path_create(platform_temp_path *tp, char const *prefix) {
-    snprintf(tp->path, PLATFORM_PATH_MAX, "/tmp/%sXXXXXX", prefix);
+    snprintf(tp->path, PLATFORM_PATH_MAX, "%s/%sXXXXXX", get_temp_dir(), prefix);
     if (mkdtemp(tp->path) == NULL) return 1;
     return 0;
 }
