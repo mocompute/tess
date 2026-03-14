@@ -1,3 +1,4 @@
+#include "error.h"
 #include "parser_internal.h"
 
 #include <errno.h>
@@ -265,7 +266,12 @@ int a_body_element(parser *self) {
     int ignore = a_try(self, a_comma) && a_try(self, a_semicolon);
     (void)ignore; // for GCC
 
-    if (0 == a_try(self, a_statement) || 0 == a_try(self, a_expression)) return 0;
+    int res;
+    if (0 == (res = a_try(self, a_statement))) return 0;
+    if (ERROR_STOP == res) return res;
+
+    if (0 == a_try(self, a_expression)) return 0;
+
     else return 1;
 }
 
@@ -278,7 +284,8 @@ int a_while_statement(parser *self) {
     // optional update expression: a command, then expression, before the open curly
     ast_node *update = null;
     if (0 == a_try(self, a_comma)) {
-        if (a_try(self, a_statement)) return 1;
+        int res = 0;
+        if ((res = a_try(self, a_statement))) return res;
         update = self->result;
     }
 
@@ -538,7 +545,11 @@ int a_return_statement(parser *self) {
 }
 
 int a_defer_eligible_statement(parser *self) {
-    if (0 == a_try(self, a_assignment)) return 0;
+    int res;
+    if (0 == (res = a_try(self, a_assignment))) return 0;
+    if (ERROR_STOP == res) {
+        return res;
+    }
     if (0 == a_try(self, a_reassignment)) return 0;
     if (0 == a_try(self, a_while_statement)) return 0;
     if (0 == a_try(self, a_for_statement)) return 0;
@@ -641,11 +652,11 @@ int a_assignment(parser *self) {
     // Desugars to: when val { s: MySome { <remaining body> } else { <diverge> } }
     if (ast_node_is_symbol(lval) && lval->symbol.annotation && 0 == a_try_s(self, the_symbol, "else")) {
         ast_node *else_body = parse_body(self);
-        if (!else_body) return 1;
+        if (!else_body) return ERROR_STOP;
 
         if (!ast_body_is_diverging(else_body)) {
             self->error.tag = tl_err_tagged_union_bail_else_must_diverge;
-            return 1;
+            return ERROR_STOP;
         }
 
         // Parse remaining body expressions (the continuation after the bail)
@@ -692,7 +703,11 @@ int a_assignment(parser *self) {
 }
 
 int a_statement(parser *self) {
-    if (0 == a_try(self, a_assignment)) return 0;
+    int res;
+    if (0 == (res = a_try(self, a_assignment))) return 0;
+    if (ERROR_STOP == res) {
+        return res;
+    }
     if (0 == a_try(self, a_reassignment)) return 0;
     if (0 == a_try(self, a_while_statement)) return 0;
     if (0 == a_try(self, a_for_statement)) return 0;
@@ -1373,7 +1388,11 @@ ast_node *parse_base_expression(parser *self) {
         ast_node *expr = null;
 
         // check for let-in expression before recursing
-        if (0 == a_try(self, a_assignment)) expr = self->result;
+        int res;
+        if (0 == (res = a_try(self, a_assignment))) expr = self->result;
+        if (ERROR_STOP == res) {
+            return null;
+        }
 
         // if not let-in expression, check for body ({ ... }) before recursing
         if (!expr) expr = parse_body(self);

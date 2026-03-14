@@ -1422,7 +1422,10 @@ area := when circle {
 }
 ```
 
-`when` expressions must be exhaustive: there must be one arm per variant, or an `else` arm.
+`when` expressions must be exhaustive: there must be one arm per
+variant, or an `else` arm.
+
+TODO: add an example of `else`
 
 ### Explicit Type Annotation (Case Expression)
 
