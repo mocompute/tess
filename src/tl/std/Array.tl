@@ -157,7 +157,7 @@ with_capacity_undefined[T](count) {
     with_capacity_undefined[T](Alloc.context.default, count)
 }
 
-reserve[T](self: Ptr[Array[T]], alloc, count: CSize) {
+reserve[T](self, alloc, count: CSize) {
     if self->capacity < count {
         p := alloc->realloc(alloc, self->v, count * _type_width_aligned[T]())
         if p == null { _tl_fatal_("oom") }
@@ -166,7 +166,7 @@ reserve[T](self: Ptr[Array[T]], alloc, count: CSize) {
     }
 }
 
-reserve[T](self: Ptr[Array[T]], count: CSize) {
+reserve[T](self, count: CSize) {
     reserve(self, Alloc.context.default, count)
 }
 

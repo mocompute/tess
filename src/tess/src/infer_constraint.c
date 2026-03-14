@@ -174,6 +174,36 @@ static void resolve_fwd_decl_with_type_params(tl_infer *self, ast_node *sym, ast
     self->load_type_arguments = null;
 }
 
+// Recursively remap type parameter names in an annotation AST node.
+// Matches symbols by their original (pre-alpha) name against 'fwd_tp', and replaces
+// their alpha-converted name with the corresponding name from 'impl_tp'.
+static void remap_annotation_type_params(ast_node *ann, ast_node **fwd_tp, ast_node **impl_tp, u32 n) {
+    if (!ann || n == 0) return;
+
+    if (ast_node_is_symbol(ann)) {
+        str orig = ast_node_name_original(ann);
+        for (u32 i = 0; i < n; i++) {
+            if (str_eq(orig, ast_node_name_original(fwd_tp[i]))) {
+                ann->symbol.name     = impl_tp[i]->symbol.name;
+                ann->symbol.original = impl_tp[i]->symbol.original;
+                return;
+            }
+        }
+        return;
+    }
+
+    if (ast_node_is_nfa(ann)) {
+        for (u32 i = 0; i < ann->named_application.n_type_arguments; i++)
+            remap_annotation_type_params(ann->named_application.type_arguments[i], fwd_tp, impl_tp, n);
+    } else if (ast_node_is_tuple(ann)) {
+        for (u32 i = 0; i < ann->tuple.n_elements; i++)
+            remap_annotation_type_params(ann->tuple.elements[i], fwd_tp, impl_tp, n);
+    } else if (ast_node_is_arrow(ann)) {
+        remap_annotation_type_params(ann->arrow.left, fwd_tp, impl_tp, n);
+        remap_annotation_type_params(ann->arrow.right, fwd_tp, impl_tp, n);
+    }
+}
+
 // Handle a let node during toplevel loading: merge forward declarations, copy annotations/attributes.
 static void load_toplevel_let(tl_infer *self, ast_node *node) {
     str        name_str = ast_node_str(node->let.name);
@@ -218,6 +248,7 @@ static void load_toplevel_let(tl_infer *self, ast_node *node) {
             assert(ast_node_is_tuple(ast_param_tuple));
 
             // copy explicit type arguments if the current node does not declare any
+            u32 impl_own_n_type_parameters = node->let.n_type_parameters;
             if (!node->let.n_type_parameters) {
                 node->let.n_type_parameters = ast_arrow->arrow.n_type_parameters;
                 node->let.type_parameters   = ast_arrow->arrow.type_parameters;
@@ -245,7 +276,25 @@ static void load_toplevel_let(tl_infer *self, ast_node *node) {
                 // Also copy the AST annotation from the forward declaration's parameter.
                 // parse_type_annotation reads symbol.annotation (the AST node), not
                 // annotation_type, so without this the type is never seen during inference.
-                arg->symbol.annotation = ast_param_tuple->tuple.elements[j]->symbol.annotation;
+                //
+                // When both the forward declaration and the implementation declare type
+                // parameters (e.g. forward: reserve[T](...) and impl: reserve[T](...)),
+                // they are alpha-converted independently, giving different names (e.g.
+                // tl_T_v204 vs tl_T_v278). Clone the annotation and remap the type
+                // parameter references so they use the implementation's names.
+                ast_node *fwd_ann = ast_param_tuple->tuple.elements[j]->symbol.annotation;
+                if (fwd_ann && impl_own_n_type_parameters > 0 &&
+                    ast_arrow->arrow.n_type_parameters > 0) {
+                    u32 n_remap = impl_own_n_type_parameters < ast_arrow->arrow.n_type_parameters
+                                    ? impl_own_n_type_parameters
+                                    : ast_arrow->arrow.n_type_parameters;
+                    ast_node *cloned_ann = ast_node_clone(self->arena, fwd_ann);
+                    remap_annotation_type_params(cloned_ann, ast_arrow->arrow.type_parameters,
+                                                 node->let.type_parameters, n_remap);
+                    arg->symbol.annotation = cloned_ann;
+                } else {
+                    arg->symbol.annotation = fwd_ann;
+                }
 
             next:
                 j++;

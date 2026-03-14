@@ -235,6 +235,95 @@ This is the heart of monomorphization — creating a concrete copy of a generic 
 
 ---
 
+## Type Parameter Resolution During Specialization
+
+When a generic function like `reserve[T]` is specialized, its type parameter `T` must be resolved to a concrete type (e.g., `Int`). This happens through a multi-step chain involving `concretize_params`, `traverse_ctx_load_type_arguments`, re-inference, and eventually `specialize_applications_cb` for nested generic calls. Understanding this chain is critical for diagnosing type resolution failures.
+
+### The Two Sources of Type Parameter Bindings
+
+`concretize_params()` tries to bind type parameters from two sources:
+
+1. **Direct lookup** in the outer `type_arguments` map (from `traverse_ctx`). This works when the caller's type arguments use the same alpha-converted names as the clone's type parameters — which they don't, because `rename_variables` gives the clone fresh names. So this path rarely succeeds.
+
+2. **Positional fallback** via `resolved_type_args`. This array is built from explicit type arguments at the call site (e.g., `sizeof[Int]()`). When the call site has no explicit type arguments (e.g., `reserve(self, alloc, count)` called from `_grow`), this array is empty and the fallback does nothing.
+
+When both fail, the type parameter is **not bound** by `concretize_params`. This is the normal case for most generic functions called without explicit type arguments.
+
+### How Type Parameters Get Resolved Anyway
+
+The type parameter is resolved during **re-inference** in `post_specialize()`, through the following chain:
+
+```
+post_specialize
+  │
+  ├── traverse_ast(infer_traverse_cb)          ← RE-INFERENCE
+  │     │
+  │     ├── ast_let case:
+  │     │     └── traverse_ctx_load_type_arguments()
+  │     │           For each type parameter of the clone:
+  │     │           - If type_param->type is set (by concretize_params): use it
+  │     │           - Otherwise: create FRESH type variable, add to ctx->type_arguments
+  │     │           Result: ctx->type_arguments has { "tl_T_v278_v662" → tv_fresh }
+  │     │
+  │     ├── formal parameters traversed:
+  │     │     └── process_annotation(self) for each param
+  │     │           Parses self's annotation (e.g., Ptr[Array[T]])
+  │     │           The "T" in the annotation is looked up in ctx->type_arguments
+  │     │           → resolves to tv_fresh
+  │     │           Annotation type Ptr[Array[tv_fresh]] is unified with
+  │     │           self's concrete type Ptr[Array[Int]] from concretize_params
+  │     │           → tv_fresh = Int (recorded in subs)
+  │     │
+  │     ├── body traversed:
+  │     │     When _type_width_aligned[T]() is encountered:
+  │     │     └── traverse_ctx_assign_type_arguments()
+  │     │           Looks up "T" (alpha-converted) in ctx->type_arguments
+  │     │           → finds tv_fresh, which is now bound to Int via subs
+  │     │           Adds _type_width_aligned's type param → tv_fresh to context
+  │     │
+  │     └── infer_named_function_application()
+  │           Uses tv_fresh (= Int) to instantiate _type_width_aligned's type
+  │
+  ├── apply_subs_to_ast_node()                 ← SUBSTITUTE
+  │     tv_fresh → Int applied to all AST nodes
+  │
+  └── traverse_ast(specialize_applications_cb) ← RECURSIVE SPECIALIZATION
+        _type_width_aligned[T]() now has T = Int
+        → sizeof[Int]() generates sizeof(long long)
+```
+
+### The Critical Role of Annotations
+
+The annotation on `self` (e.g., `self: Ptr[Array[T]]`) is the bridge that connects the type parameter `T` to the concrete parameter type. Without it, `T` would remain as an unconstrained fresh type variable through the entire re-inference pass.
+
+**Where annotations come from:** Parameter annotations can be:
+- Written explicitly on the implementation: `reserve[T](self: Ptr[Array[T]], ...)`
+- Copied from a forward declaration during Phase 2 (`load_toplevel_let`)
+
+Forward declaration annotation copy (in `load_toplevel_let`):
+```
+Forward decl:  reserve[T](self: Ptr[Array[T]], alloc: Ptr[Allocator], count: CSize) -> Void
+Implementation: reserve[T](self, alloc, count: CSize) { ... }
+```
+For each unannotated parameter in the implementation, `load_toplevel_let` copies both:
+- `annotation_type` — the resolved monotype from the forward declaration
+- `annotation` — the AST node (e.g., the `Ptr[Array[T]]` subtree)
+
+**Type parameter namespace mismatch:** The forward declaration's `T` and the implementation's `T` are alpha-converted independently, giving different names (e.g., `tl_T_v204` vs `tl_T_v278`). When copying annotations, the type parameter references inside the AST annotation must be **remapped** from the forward declaration's namespace to the implementation's namespace. This is done by `remap_annotation_type_params()`, which matches type parameters by their original (pre-alpha) name and rewrites the alpha-converted names. Without this remapping, `parse_type_annotation` would fail to resolve the type parameter during inference, leaving it as a free variable.
+
+### What Happens When Resolution Fails
+
+If a type parameter is never resolved (stays as a type variable through all phases):
+
+1. During `specialize_applications_cb`, inner calls like `_type_width_aligned[T]()` get the unresolved TV as their type argument
+2. `sizeof[T]()` is specialized with a TV instead of a concrete type
+3. The transpiler (`tl_sizeof` in `transpile.c`) checks the type: if it's a TV, void, or any, it emits `(size_t)0` — **a silent wrong answer**
+4. At runtime, this causes allocations of size 0, leading to OOM or corruption
+
+This failure mode is silent because the compiler doesn't error — it produces valid C code that computes the wrong thing.
+
+---
+
 ## Instance Cache and Naming
 
 ### Naming Scheme: `next_instantiation()`

@@ -3275,7 +3275,9 @@ static str tl_sizeof(transpile *self, ast_node const *node, eval_ctx *ctx, void 
     tl_monotype *type = resolve_nullary_type_argument(self, node);
     if (type) {
         // sizeof(void) is a GCC extension; MSVC rejects _Alignof(void) and warns on sizeof(void).
-        // Unresolved type variables and 'any' also render as void in C.
+        // Unresolved type variables can appear in generic templates (library mode) where
+        // the function is emitted without specialization. In specialized functions, a TV
+        // here indicates a type parameter resolution bug.
         if (tl_monotype_is_void(type) || tl_monotype_is_tv(type) || tl_monotype_is_any(type))
             return S("(size_t)0");
         str ctype = type_to_c_mono(self, type);
