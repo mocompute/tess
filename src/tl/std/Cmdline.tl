@@ -79,8 +79,8 @@ required(self: Ptr[Parser], long_name: Str, short_name: CChar, desc: Str) -> Voi
 required(self: Ptr[Parser], long_name: Str, desc: Str)                    -> Void
 command (self: Ptr[Parser], name: Str)                                    -> Void
 
-parse        (self: Ptr[Parser], argc: Int, argv: Ptr[CString]) -> Result[Args, ParseErrors]
-parse_or_exit(self: Ptr[Parser], argc: Int, argv: Ptr[CString]) -> Args
+parse        (self: Ptr[Parser], argc: CInt, argv: Ptr[CString]) -> Result[Args, ParseErrors]
+parse_or_exit(self: Ptr[Parser], argc: CInt, argv: Ptr[CString]) -> Args
 
 get_flag   (args: Args, name: Str) -> Bool
 get_count  (args: Args, name: Str) -> Int
@@ -93,7 +93,7 @@ has        (args: Args, name: Str) -> Bool
 help_text (self: Ptr[Parser]) -> Str
 print_help(self: Ptr[Parser]) -> Void
 
-from_argv(argc: Int, argv: Ptr[CString]) -> Array[Str]
+from_argv(argc: CInt, argv: Ptr[CString]) -> Array[Str]
 
 // -- Private helpers --
 
@@ -124,7 +124,7 @@ create(name: Str, description: Str) -> Ptr[Parser] {
     create(Alloc.context.default, name, description)
 }
 
-destroy(self) -> Void {
+destroy(self) {
     alloc := self->_alloc
     Array.free(self->_specs.&)
     Array.free(self->_commands.&)
@@ -134,43 +134,43 @@ destroy(self) -> Void {
 
 // -- Spec builders --
 
-flag(self, long_name: Str, short_name: CChar, desc: Str) -> Void {
+flag(self, long_name: Str, short_name: CChar, desc: Str) {
     spec := ArgSpec(long_name = long_name, short_name = short_name,
                     description = desc, kind = FlagBool, required = 0)
     Array.push(self->_specs.&, spec)
 }
 
-flag(self, long_name: Str, desc: Str) -> Void {
+flag(self, long_name: Str, desc: Str) {
     flag(self, long_name, '\0', desc)
 }
 
-counter(self, long_name: Str, short_name: CChar, desc: Str) -> Void {
+counter(self, long_name: Str, short_name: CChar, desc: Str) {
     spec := ArgSpec(long_name = long_name, short_name = short_name,
                     description = desc, kind = FlagCount, required = 0)
     Array.push(self->_specs.&, spec)
 }
 
-option(self, long_name: Str, short_name: CChar, desc: Str) -> Void {
+option(self, long_name: Str, short_name: CChar, desc: Str) {
     spec := ArgSpec(long_name = long_name, short_name = short_name,
                     description = desc, kind = FlagValue, required = 0)
     Array.push(self->_specs.&, spec)
 }
 
-option(self, long_name: Str, desc: Str) -> Void {
+option(self, long_name: Str, desc: Str) {
     option(self, long_name, '\0', desc)
 }
 
-required(self, long_name: Str, short_name: CChar, desc: Str) -> Void {
+required(self, long_name: Str, short_name: CChar, desc: Str) {
     spec := ArgSpec(long_name = long_name, short_name = short_name,
                     description = desc, kind = FlagValue, required = 1)
     Array.push(self->_specs.&, spec)
 }
 
-required(self, long_name: Str, desc: Str) -> Void {
+required(self, long_name: Str, desc: Str) {
     required(self, long_name, '\0', desc)
 }
 
-command(self, name: Str) -> Void {
+command(self, name: Str) {
     Array.push(self->_commands.&, name)
 }
 
@@ -198,11 +198,11 @@ _find_spec_short(self, ch: CChar) -> Option[CSize] {
     None
 }
 
-_store_bool(values: Ptr[HashMap[Str, ArgValue]], name: Str) -> Void {
+_store_bool(values: Ptr[HashMap[Str, ArgValue]], name: Str) {
     HashMap.set(values, name, BoolVal(v = true))
 }
 
-_store_count(values: Ptr[HashMap[Str, ArgValue]], name: Str) -> Void {
+_store_count(values: Ptr[HashMap[Str, ArgValue]], name: Str) {
     s: Some := HashMap.get_copy(values, name) else {
         HashMap.set(values, name, CountVal(v = 1))
         return
@@ -213,14 +213,14 @@ _store_count(values: Ptr[HashMap[Str, ArgValue]], name: Str) -> Void {
     }
 }
 
-_store_str(values: Ptr[HashMap[Str, ArgValue]], name: Str, val: Str) -> Void {
+_store_str(values: Ptr[HashMap[Str, ArgValue]], name: Str, val: Str) {
     HashMap.set(values, name, StrVal(v = val))
 }
 
-_parse_long(self: Ptr[Parser], values: Ptr[HashMap[Str, ArgValue]],
+_parse_long(self, values: Ptr[HashMap[Str, ArgValue]],
             errors: Ptr[Array[ParseError]], name: Str, arg: Str,
 
-argc: Int, argv: Ptr[CString], ip: Ptr[Int]) -> Void {
+argc, argv, ip: Ptr[Int]) {
     when Str.index_of_char(name, '=') {
         eq_pos: Some {
             key      := Str.slice(name, 0zu, eq_pos.v)
@@ -257,10 +257,10 @@ argc: Int, argv: Ptr[CString], ip: Ptr[Int]) -> Void {
     }
 }
 
-_parse_short(self: Ptr[Parser], values: Ptr[HashMap[Str, ArgValue]],
+_parse_short(self, values: Ptr[HashMap[Str, ArgValue]],
              errors: Ptr[Array[ParseError]], arg: Str,
 
-argc: Int, argv: Ptr[CString], ip: Ptr[Int]) -> Void {
+argc, argv, ip: Ptr[Int]) {
     arg_len  := Str.len(arg)
     j: CSize := 1zu
     while j < arg_len {
@@ -299,7 +299,7 @@ argc: Int, argv: Ptr[CString], ip: Ptr[Int]) -> Void {
 
 // -- Parse --
 
-parse(self: Ptr[Parser], argc: Int, argv: Ptr[CString]) -> Result[Args, ParseErrors] {
+parse(self, argc, argv) -> Result[Args, ParseErrors] {
     values           := HashMap.create[Str, ArgValue]()
     positional       := Array.empty[Str]()
     rest_args        := Array.empty[Str]()
@@ -383,7 +383,7 @@ parse(self: Ptr[Parser], argc: Int, argv: Ptr[CString]) -> Result[Args, ParseErr
     }
 }
 
-parse_or_exit(self, argc: Int, argv: Ptr[CString]) -> Args {
+parse_or_exit(self, argc, argv) -> Args {
     result := parse(self, argc, argv)
     when result {
         ok:  Ok { ok.v }
@@ -509,7 +509,7 @@ help_text(self) -> Str {
     result
 }
 
-print_help(self) -> Void {
+print_help(self) {
     txt := help_text(self)
     c_printf("%s", Str.cstr(txt.&))
 }
@@ -517,7 +517,7 @@ print_help(self) -> Void {
 
 // -- Utility --
 
-from_argv(argc: Int, argv: Ptr[CString]) -> Array[Str] {
+from_argv(argc, argv) -> Array[Str] {
     result := Array.empty[Str]()
     i      := 0
     while i < argc, i += 1 {

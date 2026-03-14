@@ -1253,7 +1253,7 @@ str tl_format(allocator *alloc, char const *data, u32 size, char const *filename
             }
             // If this line starts a multi-line construct, ensure blank line before it
             // (but not if the previous line was a comment attached to this construct)
-            if (depth_after > 0 && !last_output_was_blank && !prev_was_comment) {
+            if (depth_after > 0 && !last_output_was_blank && !prev_was_comment && cont_indent < 0) {
                 EMIT_LINE(alloc_strdup(alloc, ""));
                 last_output_was_blank = 1;
             }
