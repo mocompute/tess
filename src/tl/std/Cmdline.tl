@@ -1,6 +1,6 @@
 // Cmdline — Declarative command-line argument parsing.
 //
-// Builder pattern: create a Parser, add specs, then parse argc/argv.
+// Builder pattern: create a Cmdline, add specs, then parse argc/argv.
 // Results are queried via typed accessors on the Args value.
 #module Cmdline
 #import <Alloc.tl>
@@ -55,8 +55,8 @@ Args: {
     _command:    Option[Str],
 }
 
-// Parser specification (builder).
-Parser: {
+// Cmdline specification (builder).
+Cmdline: {
     _alloc:       Ptr[Allocator],
     _name:        Str,
     _description: Str,
@@ -66,39 +66,39 @@ Parser: {
 
 // -- Synopsis --
 
-create (alloc: Ptr[Allocator], name: Str, description: Str) -> Ptr[Parser]
-create (name: Str, description: Str)                        -> Ptr[Parser]
-destroy(self: Ptr[Parser])                                  -> Void
+create (alloc: Ptr[Allocator], name: Str, description: Str) -> Ptr[Cmdline]
+create (name: Str, description: Str)                        -> Ptr[Cmdline]
+destroy(self: Ptr[Cmdline])                                 -> Void
 
-flag    (self: Ptr[Parser], long_name: Str, short_name: CChar, desc: Str) -> Void
-flag    (self: Ptr[Parser], long_name: Str, desc: Str)                    -> Void
-counter (self: Ptr[Parser], long_name: Str, short_name: CChar, desc: Str) -> Void
-option  (self: Ptr[Parser], long_name: Str, short_name: CChar, desc: Str) -> Void
-option  (self: Ptr[Parser], long_name: Str, desc: Str)                    -> Void
-required(self: Ptr[Parser], long_name: Str, short_name: CChar, desc: Str) -> Void
-required(self: Ptr[Parser], long_name: Str, desc: Str)                    -> Void
-command (self: Ptr[Parser], name: Str)                                    -> Void
+flag    (self: Ptr[Cmdline], long_name: Str, short_name: CChar, desc: Str) -> Void
+flag    (self: Ptr[Cmdline], long_name: Str, desc: Str)                    -> Void
+counter (self: Ptr[Cmdline], long_name: Str, short_name: CChar, desc: Str) -> Void
+option  (self: Ptr[Cmdline], long_name: Str, short_name: CChar, desc: Str) -> Void
+option  (self: Ptr[Cmdline], long_name: Str, desc: Str)                    -> Void
+required(self: Ptr[Cmdline], long_name: Str, short_name: CChar, desc: Str) -> Void
+required(self: Ptr[Cmdline], long_name: Str, desc: Str)                    -> Void
+command (self: Ptr[Cmdline], name: Str)                                    -> Void
 
-parse        (self: Ptr[Parser], argc: CInt, argv: Ptr[CString]) -> Result[Args, ParseErrors]
-parse_or_exit(self: Ptr[Parser], argc: CInt, argv: Ptr[CString]) -> Args
+parse        (self: Ptr[Cmdline], argc: CInt, argv: Ptr[CString]) -> Result[Args, ParseErrors]
+parse_or_exit(self: Ptr[Cmdline], argc: CInt, argv: Ptr[CString]) -> Args
 
-get_flag   (args: Args, name: Str) -> Bool
-get_count  (args: Args, name: Str) -> Int
-get_option (args: Args, name: Str) -> Option[Str]
-get_command(args: Args)            -> Option[Str]
-positionals(args: Args)            -> Array[Str]
-rest       (args: Args)            -> Array[Str]
-has        (args: Args, name: Str) -> Bool
+get_flag   (args: Ptr[Const[Args]], name: Str) -> Bool
+get_count  (args: Ptr[Const[Args]], name: Str) -> Int
+get_option (args: Ptr[Const[Args]], name: Str) -> Option[Str]
+get_command(args: Ptr[Const[Args]])            -> Option[Str]
+positionals(args: Ptr[Const[Args]])            -> Array[Str]
+rest       (args: Ptr[Const[Args]])            -> Array[Str]
+has        (args: Ptr[Const[Args]], name: Str) -> Bool
 
-help_text (self: Ptr[Parser]) -> Str
-print_help(self: Ptr[Parser]) -> Void
+help_text (self: Ptr[Cmdline]) -> Str
+print_help(self: Ptr[Cmdline]) -> Void
 
 from_argv(argc: CInt, argv: Ptr[CString]) -> Array[Str]
 
 // -- Private helpers --
 
-_find_spec_long (self: Ptr[Parser], name: Str)                             -> Option[CSize]
-_find_spec_short(self: Ptr[Parser], ch: CChar)                             -> Option[CSize]
+_find_spec_long (self: Ptr[Cmdline], name: Str)                            -> Option[CSize]
+_find_spec_short(self: Ptr[Cmdline], ch: CChar)                            -> Option[CSize]
 _store_bool     (values: Ptr[HashMap[Str, ArgValue]], name: Str)           -> Void
 _store_count    (values: Ptr[HashMap[Str, ArgValue]], name: Str)           -> Void
 _store_str      (values: Ptr[HashMap[Str, ArgValue]], name: Str, val: Str) -> Void
@@ -110,7 +110,7 @@ _store_str      (values: Ptr[HashMap[Str, ArgValue]], name: Str, val: Str) -> Vo
 // -- Create / Destroy --
 
 create(alloc, name, description) {
-    p: Ptr[Parser] := alloc->malloc(alloc, sizeof[Parser]())
+    p: Ptr[Cmdline] := alloc->malloc(alloc, sizeof[Cmdline]())
     if p == null { _tl_fatal_("Cmdline: oom") }
     p->_alloc       = alloc
     p->_name        = name
@@ -303,12 +303,12 @@ parse(self, argc, argv) {
     dd           := _S("--")
     short_prefix := _S("-")
 
-    i := 1; past_separator := 0
+    i := 1; past_separator := false
     while i < argc {
         arg := Str.from_cstr(argv.[i])
 
         // After --, everything is rest
-        if past_separator != 0 {
+        if past_separator {
             Array.push(rest_args.&, arg)
             i += 1
             continue
@@ -316,7 +316,7 @@ parse(self, argc, argv) {
 
         // Check for --
         if Str.eq(arg, dd) {
-            past_separator = 1
+            past_separator = true
             i += 1
             continue
         }
@@ -403,7 +403,7 @@ parse_or_exit(self, argc, argv) {
 // -- Query --
 
 get_flag(args, name) {
-    s: Some := HashMap.get_copy(args._values, name) else { return false }
+    s: Some := HashMap.get_copy(args->_values, name) else { return false }
     when s.v {
         b: BoolVal { b.v }
         else { false }
@@ -411,7 +411,7 @@ get_flag(args, name) {
 }
 
 get_count(args, name) {
-    s: Some := HashMap.get_copy(args._values, name) else { return 0 }
+    s: Some := HashMap.get_copy(args->_values, name) else { return 0 }
     when s.v {
         c: CountVal { c.v }
         else { 0 }
@@ -419,22 +419,17 @@ get_count(args, name) {
 }
 
 get_option(args, name) {
-    s: Some := HashMap.get_copy(args._values, name) else { return None }
+    s: Some := HashMap.get_copy(args->_values, name) else { return None }
     when s.v {
         sv: StrVal { Some(sv.v) }
         else { None }
     }
 }
 
-get_command(args) { args._command }
-
-positionals(args) { args._positional }
-
-rest(args) { args._rest }
-
-has(args, name) {
-    HashMap.contains(args._values, name)
-}
+get_command(args)       { args->_command                        }
+positionals(args)       { args->_positional                     }
+rest       (args)       { args->_rest                           }
+has        (args, name) { HashMap.contains(args->_values, name) }
 
 
 // -- Help --
