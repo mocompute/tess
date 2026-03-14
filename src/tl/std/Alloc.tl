@@ -30,16 +30,16 @@ c_tl_is_aligned    (p: Ptr[any], alignment: CSize) -> CInt
 
 // Define TL_ALLOC_TRANSIENT_SIZE and TL_ALLOC_STRINGS_SIZE before importing (e.g. with -D in CFLAGS) to
 // override default values.
-initialTransientSize:      CSize := 0zu
-initialStringLiteralsSize: CSize := 0zu
+initialTransientSize:      CSize := 0
+initialStringLiteralsSize: CSize := 0
 
 Allocator: {
     malloc:        (a: Ptr[Allocator], sz: CSize)                   -> Ptr[any],
-    calloc:        (a: Ptr[Allocator], num: CSize, sz: CSize)        -> Ptr[any],
+    calloc:        (a: Ptr[Allocator], num: CSize, sz: CSize)       -> Ptr[any],
     realloc:       (a: Ptr[Allocator], p: Ptr[any], sz: CSize)      -> Ptr[any],
-    free:          (a: Ptr[Allocator], p: Ptr[any])                -> Void,
-    aligned_alloc: (a: Ptr[Allocator], sz: CSize, alignment: CSize)  -> Ptr[any],
-    aligned_free:  (a: Ptr[Allocator], p: Ptr[any])                -> Void,
+    free:          (a: Ptr[Allocator], p: Ptr[any])                 -> Void,
+    aligned_alloc: (a: Ptr[Allocator], sz: CSize, alignment: CSize) -> Ptr[any],
+    aligned_free:  (a: Ptr[Allocator], p: Ptr[any])                 -> Void,
     resize:        (a: Ptr[Allocator], p: Ptr[any], sz: CSize)      -> Ptr[any],
 }
 
@@ -84,27 +84,27 @@ BumpState: {
 //
 
 align         (n: CSize, alignment: CSize)    -> CSize
-align_max     (n: CSize)                    -> CSize
+align_max     (n: CSize)                      -> CSize
 align_padding (p: Ptr[any], alignment: CSize) -> CSize
 is_aligned    (p: Ptr[any], alignment: CSize) -> Bool
 
 transient_alloc         (sz: CSize)                   -> Ptr[any]
-transient_clear         (num: CSize, sz: CSize)        -> Ptr[any]
+transient_clear         (num: CSize, sz: CSize)       -> Ptr[any]
 transient_realloc       (p: Ptr[any], sz: CSize)      -> Ptr[any]
-transient_free          (p: Ptr[any])                -> Void
-transient_aligned_alloc (sz: CSize, alignment: CSize)  -> Ptr[any]
-transient_aligned_free  (p: Ptr[any])                -> Void
+transient_free          (p: Ptr[any])                 -> Void
+transient_aligned_alloc (sz: CSize, alignment: CSize) -> Ptr[any]
+transient_aligned_free  (p: Ptr[any])                 -> Void
 transient_resize        (p: Ptr[any], sz: CSize)      -> Ptr[any]
-transient_reset         ()                           -> Void
-transient_save          ()                           -> BumpState
-transient_restore       (state: BumpState)           -> Void
+transient_reset         ()                            -> Void
+transient_save          ()                            -> BumpState
+transient_restore       (state: BumpState)            -> Void
 
 managed_alloc         (sz: CSize)                   -> Ptr[any]
-managed_clear         (num: CSize, sz: CSize)        -> Ptr[any]
+managed_clear         (num: CSize, sz: CSize)       -> Ptr[any]
 managed_realloc       (p: Ptr[any], sz: CSize)      -> Ptr[any]
-managed_free          (p: Ptr[any])                -> Void
-managed_aligned_alloc (sz: CSize, alignment: CSize)  -> Ptr[any]
-managed_aligned_free  (p: Ptr[any])                -> Void
+managed_free          (p: Ptr[any])                 -> Void
+managed_aligned_alloc (sz: CSize, alignment: CSize) -> Ptr[any]
+managed_aligned_free  (p: Ptr[any])                 -> Void
 managed_resize        (p: Ptr[any], sz: CSize)      -> Ptr[any]
 
 bump_reset     (a: Ptr[Allocator])                   -> Void
@@ -116,8 +116,8 @@ bump_get_stats (a: Ptr[Allocator])                   -> BumpStats
 
 
 align(n: CSize, align: CSize) {
-    c_assert(align != 0zu)
-    mask := align - 1zu
+    c_assert(align != 0)
+    mask := align - 1
     (n + mask) & ~mask
 }
 
@@ -137,9 +137,9 @@ is_aligned(p: Ptr[any], alignment: CSize) -> Bool {
 // Access them via managed_alloc, etc.
 
 _malloc  (a: Ptr[Allocator], sz: CSize)              -> Ptr[any] { c_malloc(sz)      }
-_calloc  (a: Ptr[Allocator], num: CSize, sz: CSize)   -> Ptr[any] { c_calloc(num, sz) }
+_calloc  (a: Ptr[Allocator], num: CSize, sz: CSize)  -> Ptr[any] { c_calloc(num, sz) }
 _realloc (a: Ptr[Allocator], p: Ptr[any], sz: CSize) -> Ptr[any] { c_realloc(p, sz)  }
-_free    (a: Ptr[Allocator], p: Ptr[any])           -> Void     { c_free(p)         }
+_free    (a: Ptr[Allocator], p: Ptr[any])            -> Void     { c_free(p)         }
 
 _aligned_alloc (a: Ptr[Allocator], sz: CSize, alignment: CSize) -> Ptr[any] {
     c_aligned_alloc(alignment, sz)
@@ -156,18 +156,18 @@ _resize (a: Ptr[Allocator], p: Ptr[any], sz: CSize) -> Ptr[any] {
 // -- BumpAllocator --
 
 _bump_malloc        (a: Ptr[Allocator], sz: CSize)                   -> Ptr[any]
-_bump_calloc        (a: Ptr[Allocator], num: CSize, sz: CSize)        -> Ptr[any]
+_bump_calloc        (a: Ptr[Allocator], num: CSize, sz: CSize)       -> Ptr[any]
 _bump_realloc       (a: Ptr[Allocator], p: Ptr[any], sz: CSize)      -> Ptr[any]
-_bump_free          (a: Ptr[Allocator], p: Ptr[any])                -> Void
-_bump_aligned_alloc (a: Ptr[Allocator], sz: CSize, alignment: CSize)  -> Ptr[any]
+_bump_free          (a: Ptr[Allocator], p: Ptr[any])                 -> Void
+_bump_aligned_alloc (a: Ptr[Allocator], sz: CSize, alignment: CSize) -> Ptr[any]
 _bump_resize        (a: Ptr[Allocator], p: Ptr[any], sz: CSize)      -> Ptr[any]
 
 bump_create(alloc: Ptr[Allocator], size: CSize) -> Ptr[Allocator] {
     out: Ptr[BumpAllocator] := alloc->malloc(alloc, sizeof[BumpAllocator]())
     out->parent         = alloc
-    out->peak_allocated = 0zu
+    out->peak_allocated = 0
     size := next_power_of_two(size)
-    size = if size == 0zu { 16zu } else { size }
+    size = if size == 0 { 16 } else { size }
 
     out->head                    = _BumpHeader_create(alloc, size)
     out->allocator.malloc        = _bump_malloc/2
@@ -250,12 +250,12 @@ _BumpHeader_create(alloc, capacity) {
 _bump_malloc(a: Ptr[Allocator], sz: CSize) -> Ptr[any] {
     arena: Ptr[BumpAllocator] := a
 
-    bucket                 := arena->head
-    last: Ptr[_BumpHeader] := null
-    last_capacity: CSize   := 0zu
+    bucket                          := arena->head
+    last:          Ptr[_BumpHeader] := null
+    last_capacity: CSize            := 0
 
     sz = align_max(sz)
-    if 0zu == sz { return null }
+    if 0 == sz { return null }
 
     c_assert(bucket != null)
     while bucket != null {
@@ -270,9 +270,9 @@ _bump_malloc(a: Ptr[Allocator], sz: CSize) -> Ptr[any] {
 
     // otherwise, need to allocate a new bucket
     needed       := sz + sizeof[_BumpHeader]()
-    new_capacity := last_capacity * 2zu
+    new_capacity := last_capacity * 2
     if new_capacity < needed { new_capacity = next_power_of_two(needed) }
-    if new_capacity == 0zu { return null } // overflow
+    if new_capacity == 0 { return null } // overflow
 
     last->next = _BumpHeader_create(arena->parent, new_capacity)
     if last->next == null { return null }
@@ -335,7 +335,7 @@ _bump_free(a: Ptr[Allocator], p: Ptr[any]) -> Void {
     arena: Ptr[BumpAllocator] := a
     bucket                    := _find_bucket(arena, p)
     if bucket == null {
-        c_assert(false)                     // attempt to free unknown pointer
+        c_assert(false)                 // attempt to free unknown pointer
         return void
     }
 
@@ -354,14 +354,14 @@ _bump_aligned_alloc(a: Ptr[Allocator], sz: CSize, alignment: CSize) -> Ptr[any] 
     arena: Ptr[BumpAllocator] := a
 
     sz = align_max(sz)
-    if 0zu == sz { return null }
+    if 0 == sz { return null }
 
     // Upper bound on space needed: sz + alignment covers worst-case padding
     total_needed := sz + alignment
 
-    bucket                 := arena->head
-    last: Ptr[_BumpHeader] := null
-    last_capacity: CSize   := 0zu
+    bucket                          := arena->head
+    last:          Ptr[_BumpHeader] := null
+    last_capacity: CSize            := 0
 
     c_assert(bucket != null)
     while bucket != null {
@@ -380,9 +380,9 @@ _bump_aligned_alloc(a: Ptr[Allocator], sz: CSize, alignment: CSize) -> Ptr[any] 
 
     // Need a new bucket
     needed       := total_needed + sizeof[_BumpHeader]() + sizeof[_BumpBlock]()
-    new_capacity := last_capacity * 2zu
+    new_capacity := last_capacity * 2
     if new_capacity < needed { new_capacity = next_power_of_two(needed) }
-    if new_capacity == 0zu { return null }
+    if new_capacity == 0 { return null }
 
     last->next = _BumpHeader_create(arena->parent, new_capacity)
     if last->next == null { return null }
@@ -428,26 +428,26 @@ _bump_resize(a: Ptr[Allocator], p: Ptr[any], sz: CSize) -> Ptr[any] {
 // Returns: input if already a power of two, or else the next higher
 // power of two.
 next_power_of_two(n: CSize) {
-    if n > (c_SIZE_MAX / 2zu) + 1zu {return 0zu} // overflow
+    if n > (c_SIZE_MAX / 2) + 1 {return 0} // overflow
 
-    if (n == 0zu) { return 1zu }
+    if (n == 0) { return 1 }
 
     // set all bits to the right of the highest set bit by masking.
-    n = n - 1zu
-    n = n | (n >> 1zu)
-    n = n | (n >> 2zu)
-    n = n | (n >> 4zu)
-    n = n | (n >> 8zu)
-    n = n | (n >> 16zu)
-    n = n | (n >> 32zu)
-    n + 1zu
+    n = n - 1
+    n = n | (n >> 1)
+    n = n | (n >> 2)
+    n = n | (n >> 4)
+    n = n | (n >> 8)
+    n = n | (n >> 16)
+    n = n | (n >> 32)
+    n + 1
 }
 
 // -- helpers --
 
 _bump_current_allocated(a: Ptr[Allocator]) -> CSize {
     arena: Ptr[BumpAllocator] := a
-    total: CSize               := 0zu
+    total: CSize              := 0
     bucket                    := arena->head
     while bucket != null {
         total += bucket->size - sizeof[_BumpHeader]()
@@ -475,15 +475,15 @@ bump_reset(a: Ptr[Allocator]) -> Void {
 bump_get_stats(a: Ptr[Allocator]) -> BumpStats {
     arena: Ptr[BumpAllocator] := a
 
-    allocated:    CSize := 0zu
-    capacity:     CSize := 0zu
-    bucket_count: CSize := 0zu
+    allocated:    CSize := 0
+    capacity:     CSize := 0
+    bucket_count: CSize := 0
 
     bucket := arena->head
     while bucket != null {
         allocated += bucket->size - sizeof[_BumpHeader]()
         capacity += bucket->capacity - sizeof[_BumpHeader]()
-        bucket_count += 1zu
+        bucket_count += 1
         bucket = bucket->next
     }
 
