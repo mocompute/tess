@@ -627,6 +627,7 @@ int ast_node_is_diverging(ast_node const *node) {
     if (!node) return 0;
     if (ast_return == node->tag) return 1; // return and break (is_break_statement)
     if (ast_continue == node->tag) return 1;
+    if (ast_let_in == node->tag) return ast_body_is_diverging(node->let_in.body);
     if (ast_case == node->tag) {
         // A case/when node diverges if all arms diverge (e.g. nested let-else inside an else block)
         if (0 == node->case_.arms.size) return 0;
