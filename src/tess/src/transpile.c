@@ -1867,6 +1867,9 @@ static str generate_tagged_union_case(transpile *self, ast_node const *node, eva
             if (i + 1 != node->case_.arms.size) {
                 exit_error(node->file, node->line, "'else' must be the last branch in a case expression");
             }
+            if (i > 0) {
+                cat(self, S("else {\n"));
+            }
             str arm_body = generate_expr(self, null, node->case_.arms.v[i], ctx);
             if (result_type && should_assign_result(ctx, result_type)) {
                 generate_assign(self, res, arm_body);
@@ -1879,6 +1882,9 @@ static str generate_tagged_union_case(transpile *self, ast_node const *node, eva
                 cat(self, S("goto "));
                 cat(self, end_label);
                 cat_semicolonln(self);
+            }
+            if (i > 0) {
+                cat_close_curlyln(self);
             }
             break;
         }

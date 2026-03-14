@@ -42,14 +42,27 @@ main() -> CInt {
                 si: Some {
                     spec := specs.v.[si.v]
                     when spec.kind {
-                        fv: FlagValue { HashMap.set(values, key, 1) }
-                        else          { errors += 1 }
+                        fv: FlagValue {
+                            c_fprintf(c_stderr, "matched FlagValue\n")
+                            HashMap.set(values, key, 1)
+                        }
+                        else {
+                            c_fprintf(c_stderr, "first\n")
+                            errors += 1
+
+                        }
                     }
                 }
-                n: None { errors += 1 }
+                n: None {
+                    c_fprintf(c_stderr, "second\n")
+                    errors += 1
+                }
             }
         }
-        no: None { errors += 1 }
+        no: None {
+            c_fprintf(c_stderr, "third\n")
+            errors += 1
+        }
     }
 
     // errors should be 0 (FlagValue matched), value should be stored
