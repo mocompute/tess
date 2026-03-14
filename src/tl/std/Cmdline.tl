@@ -221,6 +221,88 @@ _store_str(values: Ptr[HashMap[Str, ArgValue]], name: Str, val: Str) -> Void {
     HashMap.set(values, name, StrVal(v = val))
 }
 
+_parse_long(self: Ptr[Parser], values: Ptr[HashMap[Str, ArgValue]],
+            errors: Ptr[Array[ParseError]], name: Str, arg: Str,
+            argc: Int, argv: Ptr[CString], ip: Ptr[Int]) -> Void {
+    when Str.index_of_char(name, '=') {
+        eq_pos: Some {
+            key := Str.slice(name, 0zu, eq_pos.v)
+            val := Str.slice(name, eq_pos.v + 1zu, Str.len(name))
+            when _find_spec_long(self, key) {
+                si: Some {
+                    spec := self->_specs.v.[si.v]
+                    case spec.kind: ArgKind {
+                        fb: FlagBool  { Array.push(errors, UnknownFlag(flag = arg)) }
+                        fc: FlagCount { Array.push(errors, UnknownFlag(flag = arg)) }
+                        fv: FlagValue { _store_str(values, key, val) }
+                    }
+                }
+                n: None { Array.push(errors, UnknownFlag(flag = arg)) }
+            }
+        }
+        no_eq: None {
+            when _find_spec_long(self, name) {
+                si: Some {
+                    spec := self->_specs.v.[si.v]
+                    case spec.kind: ArgKind {
+                        fb: FlagBool  { _store_bool(values, name)  }
+                        fc: FlagCount { _store_count(values, name) }
+                        fv: FlagValue {
+                            if ip.* + 1 < argc {
+                                ip.* = ip.* + 1
+                                _store_str(values, name, Str.from_cstr(argv.[ip.*]))
+                            } else {
+                                Array.push(errors, MissingValue(flag = name))
+                            }
+                        }
+                    }
+                }
+                n: None { Array.push(errors, UnknownFlag(flag = arg)) }
+            }
+        }
+    }
+}
+
+_parse_short(self: Ptr[Parser], values: Ptr[HashMap[Str, ArgValue]],
+             errors: Ptr[Array[ParseError]], arg: Str,
+             argc: Int, argv: Ptr[CString], ip: Ptr[Int]) -> Void {
+    j: CSize := 1zu
+    while j < Str.len(arg) {
+        when Str.byte_at(arg, j) {
+            bv: Some {
+                ch: CChar := bv.v
+                when _find_spec_short(self, ch) {
+                    si: Some {
+                        spec := self->_specs.v.[si.v]
+                        case spec.kind: ArgKind {
+                            fb: FlagBool  { _store_bool(values, spec.long_name)  }
+                            fc: FlagCount { _store_count(values, spec.long_name) }
+                            fv: FlagValue {
+                                if j + 1zu < Str.len(arg) {
+                                    val := Str.slice(arg, j + 1zu, Str.len(arg))
+                                    _store_str(values, spec.long_name, val)
+                                    j = Str.len(arg)
+                                } else if ip.* + 1 < argc {
+                                    ip.* = ip.* + 1
+                                    _store_str(values, spec.long_name, Str.from_cstr(argv.[ip.*]))
+                                } else {
+                                    Array.push(errors, MissingValue(flag = spec.long_name))
+                                }
+                            }
+                        }
+                    }
+                    n: None {
+                        flag_str := Str.cat(_S("-"), Str.from_bytes(ch.&, 1zu))
+                        Array.push(errors, UnknownFlag(flag = flag_str))
+                    }
+                }
+            }
+            nb: None { }
+        }
+        j += 1zu
+    }
+}
+
 
 // -- Parse --
 
@@ -234,9 +316,7 @@ parse(self: Ptr[Parser], argc: Int, argv: Ptr[CString]) -> Result[Args, ParseErr
     dd     := _S("--")
     prefix := _S("--")
 
-    i := 1   // skip argv[0]
-    past_separator := 0
-
+    i := 1; past_separator := 0
     while i < argc {
         arg := Str.from_cstr(argv.[i])
 
@@ -254,57 +334,10 @@ parse(self: Ptr[Parser], argc: Int, argv: Ptr[CString]) -> Result[Args, ParseErr
             continue
         }
 
-        // Check for --long
+        // Check for --long options
         if Str.starts_with(arg, prefix) {
-            // Strip the --
             name := Str.slice(arg, 2zu, Str.len(arg))
-
-            // Check for --name=value
-            when Str.index_of_char(name, '=') {
-                eq_pos: Some {
-                    key := Str.slice(name, 0zu, eq_pos.v)
-                    val := Str.slice(name, eq_pos.v + 1zu, Str.len(name))
-                    when _find_spec_long(self, key) {
-                        si: Some {
-                            spec := self->_specs.v.[si.v]
-                            case spec.kind: ArgKind {
-                                fb: FlagBool  { Array.push(errors.&, UnknownFlag(flag = arg)) }
-                                fc: FlagCount { Array.push(errors.&, UnknownFlag(flag = arg)) }
-                                fv: FlagValue { _store_str(values, key, val) }
-                            }
-                        }
-                        n: None {
-                            Array.push(errors.&, UnknownFlag(flag = arg))
-                        }
-                    }
-                }
-                no_eq: None {
-                    // No = sign, plain --name
-                    when _find_spec_long(self, name) {
-                        si: Some {
-                            spec := self->_specs.v.[si.v]
-                            case spec.kind: ArgKind {
-                                fb: FlagBool  { _store_bool(values, name)  }
-                                fc: FlagCount { _store_count(values, name) }
-                                fv: FlagValue {
-                                    // Consume next arg as value
-                                    if i + 1 < argc {
-                                        i += 1
-                                        val := Str.from_cstr(argv.[i])
-                                        _store_str(values, name, val)
-                                    } else {
-                                        Array.push(errors.&, MissingValue(flag = name))
-                                    }
-                                }
-                            }
-                        }
-                        n: None {
-                            Array.push(errors.&, UnknownFlag(flag = arg))
-                        }
-                    }
-                }
-            }
-
+            _parse_long(self, values, errors.&, name, arg, argc, argv, i.&)
             i += 1
             continue
         }
@@ -312,52 +345,13 @@ parse(self: Ptr[Parser], argc: Int, argv: Ptr[CString]) -> Result[Args, ParseErr
         // Check for -x (short options)
         short_prefix := _S("-")
         if Str.starts_with(arg, short_prefix) && Str.len(arg) > 1zu {
-            // Process short flags
-            j: CSize := 1zu
-            while j < Str.len(arg) {
-                when Str.byte_at(arg, j) {
-                    b: Some {
-                        ch: CChar := b.v
-                        when _find_spec_short(self, ch) {
-                            si: Some {
-                                spec := self->_specs.v.[si.v]
-                                case spec.kind: ArgKind {
-                                    fb: FlagBool  { _store_bool(values, spec.long_name)  }
-                                    fc: FlagCount { _store_count(values, spec.long_name) }
-                                    fv: FlagValue {
-                                        // Rest of string is value, or consume next arg
-                                        if j + 1zu < Str.len(arg) {
-                                            val := Str.slice(arg, j + 1zu, Str.len(arg))
-                                            _store_str(values, spec.long_name, val)
-                                            j = Str.len(arg) // break out of short flag loop
-                                        } else if i + 1 < argc {
-                                            i += 1
-                                            val := Str.from_cstr(argv.[i])
-                                            _store_str(values, spec.long_name, val)
-                                        } else {
-                                            Array.push(errors.&, MissingValue(flag = spec.long_name))
-                                        }
-                                    }
-                                }
-                            }
-                            n: None {
-                                // Build a flag string for the error
-                                flag_str := Str.cat(_S("-"), Str.from_bytes(ch.&, 1zu))
-                                Array.push(errors.&, UnknownFlag(flag = flag_str))
-                            }
-                        }
-                    }
-                    nb: None { }
-                }
-                j += 1zu
-            }
+            _parse_short(self, values, errors.&, arg, argc, argv, i.&)
             i += 1
             continue
         }
 
         // Not a flag — check for command or positional
         if self->_commands.size > 0zu && positional.size == 0zu {
-            // First non-flag arg, check if it's a known command
             found_cmd := 0
             k: CSize := 0zu
             while k < self->_commands.size, k += 1zu {
@@ -368,7 +362,6 @@ parse(self: Ptr[Parser], argc: Int, argv: Ptr[CString]) -> Result[Args, ParseErr
                 }
             }
             if found_cmd == 0 {
-                // Not a command, treat as positional
                 Array.push(positional.&, arg)
             }
         } else {
