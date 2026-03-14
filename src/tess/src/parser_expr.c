@@ -1,3 +1,4 @@
+#include "ast.h"
 #include "error.h"
 #include "parser_internal.h"
 
@@ -635,6 +636,10 @@ int ast_node_is_diverging(ast_node const *node) {
             if (!ast_body_is_diverging(node->case_.arms.v[i])) return 0;
         }
         return 1;
+    }
+    if (ast_node_is_nfa(node)) {
+        str name = ast_node_str(node->named_application.name);
+        if (str_eq(name, S("c_exit")) || str_eq(name, S("_tl_fatal_"))) return 1;
     }
     return 0;
 }
