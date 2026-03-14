@@ -297,6 +297,34 @@ The same pattern exists for `transient_*`.
 
 ---
 
+## Hash
+
+```tl
+#import <Hash.tl>
+```
+
+Hashing functions using the FNV-1a algorithm.
+
+| Function | Signature | Description |
+|----------|-----------|-------------|
+| `fnv1a` | `(p: Ptr[any], n: CSize) -> CSize` | FNV-1a hash of `n` bytes starting at `p` |
+| `fnv1a_cstring` | `(s: CString) -> CSize` | FNV-1a hash of a null-terminated C string |
+
+### Example
+
+```tl
+#import <Hash.tl>
+
+main() {
+    s := "hello"
+    h := Hash.fnv1a_cstring(s)
+    c_printf("hash = %zu\n", h)
+    0
+}
+```
+
+---
+
 ## Unsafe
 
 ```tl
