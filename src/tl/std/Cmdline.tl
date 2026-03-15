@@ -29,7 +29,7 @@ ArgSpec: {
     short_name:  CChar,                 // '\0' for none
     description: Str,
     kind:        ArgKind,
-    required:    Int,                   // 1 = required, 0 = optional
+    required:    Bool,
 }
 
 
@@ -80,6 +80,10 @@ has        (args: Ptr[Const[Args]], name: Str) -> Bool
 
 #module Cmdline
 
+// -- Aliases --
+
+ArgValue = Args.ArgValue
+
 // -- Synopsis --
 
 create (alloc: Ptr[Allocator], name: Str, description: Str) -> Ptr[Cmdline]
@@ -106,11 +110,11 @@ from_argv(argc: CInt, argv: Ptr[CString]) -> Array[Str]
 
 // -- Private helpers --
 
-_find_spec_long (self: Ptr[Cmdline], name: Str)                                 -> Option[CSize]
-_find_spec_short(self: Ptr[Cmdline], ch: CChar)                                 -> Option[CSize]
-_store_bool     (values: Ptr[HashMap[Str, Args.ArgValue]], name: Str)           -> Void
-_store_count    (values: Ptr[HashMap[Str, Args.ArgValue]], name: Str)           -> Void
-_store_str      (values: Ptr[HashMap[Str, Args.ArgValue]], name: Str, val: Str) -> Void
+_find_spec_long (self: Ptr[Cmdline], name: Str)                            -> Option[CSize]
+_find_spec_short(self: Ptr[Cmdline], ch: CChar)                            -> Option[CSize]
+_store_bool     (values: Ptr[HashMap[Str, ArgValue]], name: Str)           -> Void
+_store_count    (values: Ptr[HashMap[Str, ArgValue]], name: Str)           -> Void
+_store_str      (values: Ptr[HashMap[Str, ArgValue]], name: Str, val: Str) -> Void
 
 
 // -- Implementation --
@@ -145,7 +149,7 @@ destroy(self) {
 
 flag(self, long_name: Str, short_name: CChar, desc: Str) {
     spec := ArgSpec(long_name = long_name, short_name = short_name,
-                    description = desc, kind = FlagBool, required = 0)
+                    description = desc, kind = FlagBool, required = false)
     Array.push(self->_specs.&, spec)
 }
 
@@ -155,13 +159,13 @@ flag(self, long_name: Str, desc: Str) {
 
 counter(self, long_name: Str, short_name: CChar, desc: Str) {
     spec := ArgSpec(long_name = long_name, short_name = short_name,
-                    description = desc, kind = FlagCount, required = 0)
+                    description = desc, kind = FlagCount, required = false)
     Array.push(self->_specs.&, spec)
 }
 
 option(self, long_name: Str, short_name: CChar, desc: Str) {
     spec := ArgSpec(long_name = long_name, short_name = short_name,
-                    description = desc, kind = FlagValue, required = 0)
+                    description = desc, kind = FlagValue, required = false)
     Array.push(self->_specs.&, spec)
 }
 
@@ -171,7 +175,7 @@ option(self, long_name: Str, desc: Str) {
 
 required(self, long_name: Str, short_name: CChar, desc: Str) {
     spec := ArgSpec(long_name = long_name, short_name = short_name,
-                    description = desc, kind = FlagValue, required = 1)
+                    description = desc, kind = FlagValue, required = true)
     Array.push(self->_specs.&, spec)
 }
 
@@ -241,7 +245,7 @@ _parse_long(self, values, errors, name, arg, argc, argv, ip) {
                 else { Array.push(errors, UnknownFlag(flag = arg)) }
             }
         }
-        no_eq: None {
+        n: None {
             si: Some := _find_spec_long(self, name) else {
                 Array.push(errors, UnknownFlag(flag = arg))
                 return
@@ -252,7 +256,7 @@ _parse_long(self, values, errors, name, arg, argc, argv, ip) {
                 fc: FlagCount { _store_count(values, name) }
                 fv: FlagValue {
                     if ip.* + 1 < argc {
-                        ip.* = ip.* + 1
+                        ip.* += 1
                         _store_str(values, name, Str.from_cstr(argv.[ip.*]))
                     } else {
                         Array.push(errors, MissingValue(flag = name))
@@ -303,7 +307,7 @@ _parse_short(self, values, errors, arg, argc, argv, ip) {
 // -- Parse --
 
 parse(self, argc, argv) {
-    values           := HashMap.create[Str, Args.ArgValue]()
+    values           := HashMap.create[Str, ArgValue]()
     positional       := Array.empty[Str]()
     rest_args        := Array.empty[Str]()
     errors           := Array.empty[ParseError]()
@@ -370,7 +374,7 @@ parse(self, argc, argv) {
     r: CSize := 0
     while r < self->_specs.size, r += 1 {
         spec := self->_specs.v.[r]
-        if spec.required != 0 {
+        if spec.required {
             if !HashMap.contains(values, spec.long_name) {
                 Array.push(errors.&, MissingRequired(name = spec.long_name))
             }
@@ -454,7 +458,7 @@ help_text(self) {
             result = Str.cat(result, _S("\t"))
             result = Str.cat(result, spec.description)
 
-            if spec.required != 0 {
+            if spec.required {
                 result = Str.cat(result, _S(" (required)"))
             }
 
