@@ -1,4 +1,5 @@
 #include "ast.h"
+#include "ast_tags.h"
 #include "error.h"
 #include "parser_internal.h"
 
@@ -626,6 +627,7 @@ int ast_body_is_diverging(ast_node const *node) {
 
 int ast_node_is_diverging(ast_node const *node) {
     if (!node) return 0;
+    if (ast_node_is_body(node)) return ast_body_is_diverging(node);
     if (ast_return == node->tag) return 1; // return and break (is_break_statement)
     if (ast_continue == node->tag) return 1;
     if (ast_let_in == node->tag) return ast_body_is_diverging(node->let_in.body);
@@ -640,6 +642,10 @@ int ast_node_is_diverging(ast_node const *node) {
     if (ast_node_is_nfa(node)) {
         str name = ast_node_str(node->named_application.name);
         if (str_eq(name, S("c_exit")) || str_eq(name, S("_tl_fatal_"))) return 1;
+    }
+    if (ast_if_then_else == node->tag) {
+        return ast_node_is_diverging(node->if_then_else.yes) &&
+               (!node->if_then_else.no || ast_node_is_diverging(node->if_then_else.no));
     }
     return 0;
 }
