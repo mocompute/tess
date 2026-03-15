@@ -69,6 +69,8 @@ Rules for writing `.tl` code (inlined from `docs/TL_CODING_CONVENTIONS.md`):
 - **Run `tess fmt` before committing.**
 - **One module, one type.** Name the type the same as the module (or `T`). Callers use UFCS.
 - **Named fields in struct construction.** `ArgSpec(long_name = name, kind = FlagBool)`
+- **Full C-style operators.** `&`, `|`, `^`, `<<`, `>>`, `~` and compound forms (`<<=`, `>>=`, etc.) all work on integer types.
+- **`#ifc`/`#endc` for inline C.** Embeds raw C code in `.tl` files (used in `builtin.tl` for FFI primitives like hash functions).
 
 See `docs/LANGUAGE_REFERENCE.md` for full syntax.
 
@@ -79,6 +81,7 @@ These mistakes have caused repeated debugging sessions — avoid them:
 1. **Trait methods must be in a named module.** `hash(p: Point)` in `#module main` won't be found by trait dispatch. Define it in `#module Point`.
 2. **Don't alias types over module names.** `Str = Str.Str` inside a module shadows the `Str` module. Auto-collapse handles bare `Str` in type positions.
 3. **`:=` vs `=` confusion.** `n: Int = 10` (reassignment to undeclared `n`) is NOT a binding — it causes confusing downstream errors. Use `n: Int := 10`.
+4. **`Hash` and `Eq` traits are compiler builtins.** Defined in `infer.c`, not in any `.tl` file. `_tl_hash_[T]` (in `builtin.tl`) transpiles to `tl_hash_bytes(&(T){expr}, sizeof(T))` via `transpile.c`. To change hash behavior for all types, modify `tl_hash_bytes` in `builtin.tl`.
 
 ## Source Architecture
 

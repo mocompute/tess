@@ -22,7 +22,7 @@ HashEq[K]: Hash[K], Eq[K] { }
 _Entry[K, V]: {
     key:   K,
     value: V,
-    meta:  CSize,  // bit 0: occupied, bits 1-8: hash tag, bits 9+: probe distance
+    meta:  CSize,                       // bit 0: occupied, bits 1-8: hash tag, bits 9+: probe distance
 }
 
 HashMap[K, V]: {
@@ -45,11 +45,11 @@ create[K, V] (alloc: Ptr[Allocator])                    -> Ptr[HashMap[K, V]]
 create[K, V] (alloc: Ptr[Allocator], opts: HashMapOpts) -> Ptr[HashMap[K, V]]
 destroy[K, V](self: Ptr[HashMap[K, V]])                 -> Void
 
-set[K:      HashEq, V](self: Ptr[HashMap[K, V]], key: K, value: V) -> Void
-get[K:      HashEq, V](self: Ptr[HashMap[K, V]], key: K)           -> Ptr[V]
+set[K:      HashEq, V]     (self: Ptr[HashMap[K, V]], key: K, value: V) -> Void
+get[K:      HashEq, V]     (self: Ptr[HashMap[K, V]], key: K)           -> Ptr[V]
 get_copy[K: HashEq, V](self: Ptr[HashMap[K, V]], key: K)           -> Option[V]
 contains[K: HashEq, V](self: Ptr[HashMap[K, V]], key: K)           -> Bool
-remove[K:   HashEq, V](self: Ptr[HashMap[K, V]], key: K)           -> Bool
+remove[K:   HashEq, V]  (self: Ptr[HashMap[K, V]], key: K)           -> Bool
 
 size[K, V]    (self: Ptr[HashMap[K, V]]) -> CSize
 is_empty[K, V](self: Ptr[HashMap[K, V]]) -> Bool
@@ -63,11 +63,11 @@ values[K, V](self: Ptr[HashMap[K, V]], alloc: Ptr[Allocator]) -> Array[V]
 
 // -- Private helpers --
 
-_is_occupied  (meta: CSize) -> Bool
-_get_tag      (meta: CSize) -> CSize
-_get_dist     (meta: CSize) -> CSize
-_make_meta    (tag: CSize, dist: CSize) -> CSize
-_hash_tag     (hash: CSize) -> CSize
+_is_occupied (meta: CSize)             -> Bool
+_get_tag     (meta: CSize)             -> CSize
+_get_dist    (meta: CSize)             -> CSize
+_make_meta   (tag: CSize, dist: CSize) -> CSize
+_hash_tag    (hash: CSize)             -> CSize
 
 _entry_width[K, V]     () -> CSize
 _grow[K: HashEq, V]    (self: Ptr[HashMap[K, V]]) -> Void
@@ -78,11 +78,11 @@ _insert_entry[K: Eq, V](entries: Ptr[_Entry[K, V]], capacity: CSize,
 
 // -- Implementation --
 
-_is_occupied(meta) { (meta & 1zu) != 0zu }
-_get_tag    (meta) { (meta >> 1zu) & 0xFFzu }
-_get_dist   (meta) { meta >> 9zu }
+_is_occupied(meta)      { (meta & 1zu) != 0zu                }
+_get_tag    (meta)      { (meta >> 1zu) & 0xFFzu             }
+_get_dist   (meta)      { meta >> 9zu                        }
 _make_meta  (tag, dist) { 1zu | (tag << 1zu) | (dist << 9zu) }
-_hash_tag   (hash) { (hash >> 56zu) & 0xFFzu }
+_hash_tag   (hash)      { (hash >> 56zu) & 0xFFzu            }
 
 _entry_width[K, V]() -> CSize { Alloc.align(sizeof[_Entry[K, V]](), alignof[_Entry[K, V]]()) }
 
