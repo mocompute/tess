@@ -34,10 +34,10 @@ ArgSpec: {
 
 
 // Individual parse error.
-ParseError: | UnknownFlag { flag: Str }
-            | MissingValue    { flag:    Str }
-            | MissingRequired { name: Str    }
-            | InvalidCommand  { name:  Str   }
+ParseError: | UnknownFlag     { flag: Str }
+            | MissingValue    { flag: Str }
+            | MissingRequired { name: Str }
+            | InvalidCommand  { name: Str }
 
 // Collection of all errors from a parse.
 ParseErrors: { errors: Array[ParseError] }
@@ -54,10 +54,12 @@ Cmdline: {
 
 #module Cmdline.Args
 
+// -- Types --
+
 // Parsed value for a single argument.
-ArgValue: | BoolVal { v: Bool }
+ArgValue: | BoolVal  { v: Bool }
           | CountVal { v: Int }
-          | StrVal { v:   Str }
+          | StrVal   { v: Str }
           | Absent
 
 // Parsed arguments container.
@@ -93,8 +95,8 @@ required(self: Ptr[Cmdline], long_name: Str, short_name: CChar, desc: Str) -> Vo
 required(self: Ptr[Cmdline], long_name: Str, desc: Str)                    -> Void
 command (self: Ptr[Cmdline], name: Str)                                    -> Void
 
-parse        (self: Ptr[Cmdline], argc: CInt, argv: Ptr[CString]) -> Result[Args.Args, ParseErrors]
-parse_or_exit(self: Ptr[Cmdline], argc: CInt, argv: Ptr[CString]) -> Args.Args
+parse        (self: Ptr[Cmdline], argc: CInt, argv: Ptr[CString]) -> Result[Args, ParseErrors]
+parse_or_exit(self: Ptr[Cmdline], argc: CInt, argv: Ptr[CString]) -> Args
 
 
 help_text (self: Ptr[Cmdline]) -> Str
