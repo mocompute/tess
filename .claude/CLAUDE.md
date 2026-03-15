@@ -3,6 +3,7 @@
 ## Git Rules
 
 - NEVER commit on your own initiative. Always ask permission before committing, every time.
+- NEVER edit NEWS.md — it's a historical record of past releases, not a living document.
 
 ## Project Overview
 
@@ -11,6 +12,14 @@ Tess is a statically-typed, compiled programming language that transpiles to C. 
 ## Documentation
 
 **IMPORTANT: Always read `docs/` BEFORE exploring source code.** It explains design decisions and implementation strategies not obvious from code alone.
+
+Key docs:
+- `docs/LANGUAGE_REFERENCE.md` — Complete syntax reference
+- `docs/LANGUAGE_MODEL.md` — Core semantics (let-in expressions, closures, scoping)
+- `docs/TL_CODING_CONVENTIONS.md` — Full coding conventions (quick reference is inlined below)
+- `docs/TYPE_SYSTEM.md` — Type inference, generics, constraints
+- `docs/SPECIALIZATION.md` — Monomorphisation pipeline
+- `docs/plans/` — Design documents for planned/in-progress features
 
 ## Build Commands
 
@@ -24,6 +33,8 @@ make -j test-tess          # Compiler unit tests only
 make -j test-tl            # Tess language integration tests only
 ```
 
+Build output: `build-release/` (release), `build-debug/` (debug).
+
 Full debug test run:
 ```bash
 (export CONFIG=debug && make clean && make -j all && make -j test)
@@ -34,17 +45,84 @@ Single test:
 ./tess run src/tess/tl/test/pass/test_<name>.tl
 ```
 
+**After `git stash` or `git stash pop`, ALWAYS rebuild** (`make -j all`) before running tests — the binary on disk is stale.
+
 Compiler: `./tess <command> <file.tl>` — commands: `c` (transpile to C), `exe` (compile), `run` (compile+execute), `lib` (shared/static library). Common flags: `-v`, `--no-line-directive`, `-I <path>`, `--time`, `--stats`.
 
 ## Tess Language Quick Reference
 
-Key syntax to remember when writing `.tl` code:
+Rules for writing `.tl` code (inlined from `docs/TL_CODING_CONVENTIONS.md`):
 
-- **Binding**: `x := 42` or `x: Int := 42` — introduces a new variable (let-in semantics)
-- **Reassignment**: `x = 99` — mutates an existing binding (statement, not expression)
-- **There is NO `mut` keyword.** All bindings are reassignable by default. Do not write `mut` anywhere.
-- Compound assignment: `x += 1`, `x -= 1`, etc.
-- See `docs/LANGUAGE_REFERENCE.md` for full syntax
+- **No `mut` keyword.** All bindings are reassignable. Do not write `mut` anywhere.
+- **`:=` declares, `=` assigns.** `x := 42` creates a new binding; `x = 42` mutates an existing one.
+- **String literals are C strings.** `"foo"` is `Ptr[CChar]`, not `Str`. Use `Str.from_cstr("foo")` to get a `Str`.
+- **`main()` returns `CInt`.** The compiler enforces this. No type annotation needed.
+- **Omit type annotations in implementations.** Synopsis has full types; implementations use parameter names only. Inference handles the rest.
+- **Omit integer suffixes.** Write `0`, not `0zu`. Use suffixes only when inference is ambiguous.
+- **Use `Option` for absence, `Result` for errors.** Not null, not sentinel values.
+- **Use tagged unions for alternatives.** Not integer codes or boolean flags.
+- **`when`/`else` for multiple variants; let-else for a single expected variant.**
+- **Keep code flat.** Early returns and let-else instead of deep nesting.
+- **`self` is the receiver.** `Ptr[T]` for mutating methods, `T` by value for read-only.
+- **Allocator overloads.** Provide explicit `Ptr[Allocator]` version + convenience version using default.
+- **Private helpers start with `_`.** Types are PascalCase, functions are snake_case.
+- **Run `tess fmt` before committing.**
+- **One module, one type.** Name the type the same as the module (or `T`). Callers use UFCS.
+- **Named fields in struct construction.** `ArgSpec(long_name = name, kind = FlagBool)`
+
+See `docs/LANGUAGE_REFERENCE.md` for full syntax.
+
+### Common Pitfalls
+
+These mistakes have caused repeated debugging sessions — avoid them:
+
+1. **Trait methods must be in a named module.** `hash(p: Point)` in `#module main` won't be found by trait dispatch. Define it in `#module Point`.
+2. **Don't alias types over module names.** `Str = Str.Str` inside a module shadows the `Str` module. Auto-collapse handles bare `Str` in type positions.
+3. **`:=` vs `=` confusion.** `n: Int = 10` (reassignment to undeclared `n`) is NOT a binding — it causes confusing downstream errors. Use `n: Int := 10`.
+
+## Source Architecture
+
+The compiler pipeline in `tess_exe.c` runs three phases sequentially: **parse → infer → transpile**, then invokes the system C compiler.
+
+### Compiler (`src/tess/`)
+
+| File(s) | Role |
+|---------|------|
+| `tess_exe.c` | CLI entry point, orchestrates the pipeline |
+| `tokenizer.c`, `token.c` | Lexer — source to token stream |
+| `parser.c`, `parser_expr.c`, `parser_statements.c`, `parser_types.c`, `parser_tagged_union.c` | Two-pass parser: pass 1 collects module symbols, pass 2 builds AST |
+| `ast.c` | AST node representation (s-expression based) |
+| `source_scanner.c` | Pre-scan to discover files, modules, and import order |
+| `import_resolver.c` | Resolves `import` declarations to file paths |
+| `infer.c`, `infer_alpha.c`, `infer_constraint.c`, `infer_specialize.c`, `infer_update.c` | Type inference (HM unification), alpha conversion, constraint solving, monomorphisation |
+| `type.c` | Type representation and operations |
+| `transpile.c` | C code generation from typed AST |
+| `format.c` | Source code formatter (`tess fmt`) |
+| `manifest.c` | `package.tl` DSL parser |
+| `tpkg.c` | Package archive (.tpkg) creation/extraction |
+| `error.c` | Error formatting and reporting |
+
+Key headers: `src/tess/include/` — public API (`ast.h`, `parser.h`, `infer.h`, `transpile.h`, `type.h`, `type_registry.h`, etc.).
+Internal headers: `src/tess/src/parser_internal.h`, `infer_internal.h`.
+
+### MOS library (`src/mos/`) — shared data structures
+
+| File | Provides |
+|------|----------|
+| `alloc.c` | Arena allocator, malloc wrapper (fills 0xCD in debug) |
+| `str.c` | Immutable string type (`str`) |
+| `array.c` | Generic dynamic arrays (`str_array`, etc.) |
+| `hashmap.c` | Generic hash map |
+| `hash.c` | Hash functions |
+| `sexp.c`, `sexp_parser.c` | S-expression AST representation and parser |
+| `file.c` | File I/O utilities |
+| `platform.c` | Platform abstraction (timers, paths) |
+
+Headers: `src/mos/include/`.
+
+### Standard library (`src/tl/std/`) — Tess language runtime
+
+`.tl` files auto-imported by the compiler: `Array.tl`, `Str.tl`, `HashMap.tl`, `Hash.tl`, `Alloc.tl`, `Unsafe.tl`, `Cmdline.tl`, `builtin.tl`, plus C FFI bindings (`stdio.tl`, `stdlib.tl`, `stdint.tl`, `string.tl`).
 
 ## Code Style
 
@@ -52,6 +130,7 @@ Key syntax to remember when writing `.tl` code:
 - **Arena-based allocation** - Explicit allocator passing; most data uses arena allocators
 - **Naming**: `tl_*` (Tess language), `mos_*` (MOS library), snake_case throughout
 - **Booleans** - Use 1 and 0, not true/false
+- **Debug allocator fills with 0xCD** — always initialize new struct fields explicitly
 
 ## Testing
 
