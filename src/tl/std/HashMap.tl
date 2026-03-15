@@ -45,11 +45,11 @@ create[K, V] (alloc: Ptr[Allocator])                    -> Ptr[HashMap[K, V]]
 create[K, V] (alloc: Ptr[Allocator], opts: HashMapOpts) -> Ptr[HashMap[K, V]]
 destroy[K, V](self: Ptr[HashMap[K, V]])                 -> Void
 
-set[K:      HashEq, V]     (self: Ptr[HashMap[K, V]], key: K, value: V) -> Void
-get[K:      HashEq, V]     (self: Ptr[HashMap[K, V]], key: K)           -> Ptr[V]
+set[K: HashEq, V]     (self: Ptr[HashMap[K, V]], key: K, value: V) -> Void
+get[K: HashEq, V]     (self: Ptr[HashMap[K, V]], key: K)           -> Ptr[V]
 get_copy[K: HashEq, V](self: Ptr[HashMap[K, V]], key: K)           -> Option[V]
 contains[K: HashEq, V](self: Ptr[HashMap[K, V]], key: K)           -> Bool
-remove[K:   HashEq, V]  (self: Ptr[HashMap[K, V]], key: K)           -> Bool
+remove[K: HashEq, V]  (self: Ptr[HashMap[K, V]], key: K)           -> Bool
 
 size[K, V]    (self: Ptr[HashMap[K, V]]) -> CSize
 is_empty[K, V](self: Ptr[HashMap[K, V]]) -> Bool

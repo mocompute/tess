@@ -559,7 +559,39 @@ static int test_align_comments(void) {
 }
 
 // ---------------------------------------------------------------------------
-// 15. Idempotency
+// 15. Align with type parameter constraints (bracket depth)
+// ---------------------------------------------------------------------------
+static int test_align_bracket_constraints(void) {
+    int        error = 0;
+    allocator *alloc = arena_create(default_allocator(), 4096);
+
+    // Constraint colons inside [K: HashEq, V] must NOT be picked up
+    // by colon-value alignment. The ( and -> should align cleanly.
+    error += check(alloc, "synopsis with constraints aligns ( and ->",
+                   "set[K: HashEq, V](self: Ptr[T], key: K, value: V) -> Void\n"
+                   "get[K: HashEq, V](self: Ptr[T], key: K) -> Ptr[V]\n"
+                   "get_copy[K: HashEq, V](self: Ptr[T], key: K) -> Option[V]\n"
+                   "contains[K: HashEq, V](self: Ptr[T], key: K) -> Bool\n"
+                   "remove[K: HashEq, V](self: Ptr[T], key: K) -> Bool",
+                   "set[K: HashEq, V]     (self: Ptr[T], key: K, value: V) -> Void\n"
+                   "get[K: HashEq, V]     (self: Ptr[T], key: K)           -> Ptr[V]\n"
+                   "get_copy[K: HashEq, V](self: Ptr[T], key: K)           -> Option[V]\n"
+                   "contains[K: HashEq, V](self: Ptr[T], key: K)           -> Bool\n"
+                   "remove[K: HashEq, V]  (self: Ptr[T], key: K)           -> Bool\n");
+
+    // Simpler case: no constraints, colon-value should still work outside brackets
+    error += check(alloc, "no constraints still aligns ( and ->",
+                   "f[T](x: T) -> T\n"
+                   "gg[T](x: T, y: T) -> T",
+                   "f[T] (x: T)       -> T\n"
+                   "gg[T](x: T, y: T) -> T\n");
+
+    arena_destroy(&alloc);
+    return error;
+}
+
+// ---------------------------------------------------------------------------
+// 16. Idempotency
 // ---------------------------------------------------------------------------
 static int test_idempotency(void) {
     int         error    = 0;
@@ -573,6 +605,11 @@ static int test_idempotency(void) {
       "Point: {\n    x:  int\n    yy: int\n}\n",
       "a() {\n    b() {\n        x\n}}\n",
       "Name: | A\n      // comment\n      | B\n",
+      "set[K: HashEq, V]     (self: Ptr[T], key: K, value: V) -> Void\n"
+      "get[K: HashEq, V]     (self: Ptr[T], key: K)           -> Ptr[V]\n"
+      "get_copy[K: HashEq, V](self: Ptr[T], key: K)           -> Option[V]\n"
+      "contains[K: HashEq, V](self: Ptr[T], key: K)           -> Bool\n"
+      "remove[K: HashEq, V]  (self: Ptr[T], key: K)           -> Bool\n",
     };
     int n = (int)(sizeof(inputs) / sizeof(inputs[0]));
 
@@ -686,6 +723,7 @@ int main(void) {
     T(test_align_arrow);
     T(test_align_paren_brace);
     T(test_align_comments);
+    T(test_align_bracket_constraints);
     T(test_idempotency);
     T(test_edge_cases);
     T(test_attribute_brackets);
