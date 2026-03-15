@@ -932,7 +932,11 @@ void maybe_mangle_implicit_submodule(parser *self, ast_node *name) {
     if (name->symbol.is_module_mangled) return;
     if (str_is_empty(self->current_module)) return;
 
-    str name_str   = ast_node_str(name);
+    str name_str = ast_node_str(name);
+
+    // Top-level modules take precedence over implicit submodule resolution.
+    if (str_hset_contains(self->modules_seen, name_str)) return;
+
     str sub_module = str_cat_3(self->transient, self->current_module, S("."), name_str);
     if (!str_hset_contains(self->modules_seen, sub_module)) return;
 
