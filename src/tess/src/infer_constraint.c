@@ -405,8 +405,8 @@ void load_toplevel(tl_infer *self, ast_node_sized nodes) {
             if (str_map_get(self->toplevels, name_str)) {
                 array_push(self->errors, ((tl_infer_error){.tag = tl_err_type_exists, .node = node}));
             } else {
-                tl_trait_def **existing = str_map_get_ptr(self->traits, name_str);
-                if (existing && (*existing)->source_node) {
+                tl_trait_def *existing = str_map_get_ptr(self->traits, name_str);
+                if (existing && existing->source_node) {
                     // duplicate user-defined trait from re-opened module — skip
                 } else if (existing) {
                     // trying to shadow a built-in trait — error
