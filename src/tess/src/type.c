@@ -1693,6 +1693,28 @@ tl_monotype *tl_polytype_instantiate_with(allocator *alloc, tl_polytype *self, t
     return tl_polytype_instantiate_(alloc, self, subs, args);
 }
 
+// Instantiate a generic function's polytype for a concrete type.
+//
+// A generic function like eq[T](a: Pair[T], b: Pair[T]) -> Bool has N quantifiers
+// (one per type parameter), while the concrete type Pair[Number] may have M >= N
+// type arguments internally (one per field occurrence of the type parameter, e.g.
+// Pair[A] = {fst: A, snd: A} stores [Number, Number] in cons_inst->args).
+//
+// This function projects type_args down to quantifier count: quantifier[i] maps to
+// type_args[i] for i < min(N, M). Extra type args are ignored; missing ones get
+// fresh type variables (via null in the args array).
+tl_monotype *tl_polytype_instantiate_for_type(allocator *alloc, tl_polytype *self,
+                                               tl_monotype_sized type_args, tl_type_subs *subs) {
+    u32 n = self->quantifiers.size;
+    if (n == 0) return tl_monotype_clone(alloc, self->type);
+
+    tl_monotype **v = alloc_malloc(alloc, n * sizeof(tl_monotype *));
+    for (u32 i = 0; i < n; i++)
+        v[i] = i < type_args.size ? type_args.v[i] : null;
+
+    return tl_polytype_instantiate_(alloc, self, subs, (tl_monotype_sized){.v = v, .size = n});
+}
+
 tl_monotype *tl_polytype_specialize(allocator *alloc, tl_polytype *self, tl_monotype_sized args) {
     tl_monotype *fresh = tl_monotype_clone(alloc, self->type);
 

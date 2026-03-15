@@ -17,6 +17,20 @@
 // Public API
 // ============================================================================
 
+// Build a synthetic arrow AST for a built-in trait signature.
+// All parameters are named "T" (the trait's implicit type parameter).
+// ret_type is the return type name: "T" for Self, or a concrete name like "CSize".
+static ast_node *make_builtin_trait_arrow(allocator *a, u8 arity, char const *ret_type) {
+    ast_node_array params = {.alloc = a};
+    for (u8 j = 0; j < arity; j++) {
+        ast_node *p = ast_node_create_sym_c(a, "T");
+        array_push(params, p);
+    }
+    ast_node *tuple = ast_node_create_tuple(a, (ast_node_sized)array_sized(params));
+    ast_node *ret   = ast_node_create_sym_c(a, ret_type);
+    return ast_node_create_arrow(a, tuple, ret, (ast_node_sized){0});
+}
+
 tl_infer *tl_infer_create(allocator *alloc, tl_infer_opts const *opts) {
     tl_infer *self                  = new(alloc, tl_infer);
 
@@ -64,12 +78,16 @@ tl_infer *tl_infer_create(allocator *alloc, tl_infer_opts const *opts) {
             char const *name;
             char const *func;
             u8          arity;
+            char const *ret; // "T" = Self, otherwise concrete type name
         } builtins[] = {
-          {"Add", "add", 2}, {"Sub", "sub", 2},        {"Mul", "mul", 2},      {"Div", "div", 2},
-          {"Mod", "mod", 2}, {"BitAnd", "bit_and", 2}, {"BitOr", "bit_or", 2}, {"BitXor", "bit_xor", 2},
-          {"Shl", "shl", 2}, {"Shr", "shr", 2},        {"Eq", "eq", 2},        {"Neg", "neg", 1},
-          {"Not", "not", 1}, {"BitNot", "bit_not", 1},
-          {"Hash", "hash", 1},
+          {"Add", "add", 2, "T"},     {"Sub", "sub", 2, "T"},
+          {"Mul", "mul", 2, "T"},     {"Div", "div", 2, "T"},
+          {"Mod", "mod", 2, "T"},     {"BitAnd", "bit_and", 2, "T"},
+          {"BitOr", "bit_or", 2, "T"},{"BitXor", "bit_xor", 2, "T"},
+          {"Shl", "shl", 2, "T"},     {"Shr", "shr", 2, "T"},
+          {"Eq", "eq", 2, "Bool"},    {"Neg", "neg", 1, "T"},
+          {"Not", "not", 1, "Bool"},  {"BitNot", "bit_not", 1, "T"},
+          {"Hash", "hash", 1, "CSize"},
         };
         for (u32 i = 0; i < sizeof(builtins) / sizeof(builtins[0]); i++) {
             tl_trait_def *def = new(self->arena, tl_trait_def);
@@ -79,7 +97,9 @@ tl_infer *tl_infer_create(allocator *alloc, tl_infer_opts const *opts) {
             def->sigs         = (tl_trait_sig_array){.alloc = self->arena};
             def->source_node  = null;
             tl_trait_sig sig  = {.name  = str_init(self->arena, builtins[i].func),
-                                 .arity = builtins[i].arity};
+                                 .arity = builtins[i].arity,
+                                 .arrow = make_builtin_trait_arrow(self->arena, builtins[i].arity,
+                                                                   builtins[i].ret)};
             array_push(def->sigs, sig);
             str_map_set_ptr(&self->traits, def->name, def);
         }
@@ -93,7 +113,9 @@ tl_infer *tl_infer_create(allocator *alloc, tl_infer_opts const *opts) {
             def->source_node  = null;
             str parent        = str_init(self->arena, "Eq");
             array_push(def->parents, parent);
-            tl_trait_sig sig = {.name = str_init(self->arena, "cmp"), .arity = 2};
+            tl_trait_sig sig = {.name  = str_init(self->arena, "cmp"),
+                                .arity = 2,
+                                .arrow = make_builtin_trait_arrow(self->arena, 2, "CInt")};
             array_push(def->sigs, sig);
             str_map_set_ptr(&self->traits, def->name, def);
         }

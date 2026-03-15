@@ -57,8 +57,9 @@ typedef struct {
 
 // Trait function signature (stored in trait registry)
 typedef struct {
-    str name;  // function name (e.g., "eq")
-    u8  arity; // parameter count
+    str        name;  // function name (e.g., "eq")
+    u8         arity; // parameter count
+    ast_node  *arrow; // expected arrow type AST (e.g., (T, T) -> Bool); null = skip check
 } tl_trait_sig;
 
 defarray(tl_trait_sig_array, tl_trait_sig);
@@ -282,6 +283,8 @@ void                   tl_polytype_list_append(allocator *, tl_polytype *, tl_po
 nodiscard tl_monotype *tl_polytype_instantiate(allocator *, tl_polytype *, tl_type_subs *);
 nodiscard tl_monotype *tl_polytype_instantiate_with(allocator *, tl_polytype *, tl_monotype_sized,
                                                     tl_type_subs *);
+nodiscard tl_monotype *tl_polytype_instantiate_for_type(allocator *, tl_polytype *, tl_monotype_sized,
+                                                         tl_type_subs *);
 nodiscard tl_monotype *tl_polytype_specialize(allocator *, tl_polytype *, tl_monotype_sized);
 void                   tl_polytype_substitute(allocator *, tl_polytype *, tl_type_subs *);
 void                   tl_polytype_generalize(tl_polytype *, tl_type_env *, tl_type_subs *);

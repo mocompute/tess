@@ -430,17 +430,20 @@ void load_toplevel(tl_infer *self, ast_node_sized nodes) {
                         array_push(def->parents, parent_name);
                     }
 
-                    // Collect signatures (name + arity)
+                    // Collect signatures (name + arity + arrow)
                     for (u32 i = 0; i < node->trait_def.n_signatures; i++) {
                         ast_node *sig   = node->trait_def.signatures[i];
                         u8        arity = 0;
+                        ast_node *arrow = null;
                         if (sig->symbol.annotation && ast_node_is_arrow(sig->symbol.annotation)) {
                             ast_node_sized params =
                               ast_node_sized_from_ast_array_const(sig->symbol.annotation->arrow.left);
                             arity = (u8)params.size;
+                            arrow = sig->symbol.annotation;
                         }
                         tl_trait_sig tsig = {.name  = str_copy(self->arena, ast_node_str(sig)),
-                                             .arity = arity};
+                                             .arity = arity,
+                                             .arrow = arrow};
                         array_push(def->sigs, tsig);
                     }
 

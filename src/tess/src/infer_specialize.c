@@ -1218,27 +1218,86 @@ static str trait_name_from_bound(ast_node *bound) {
 
 #define TRAIT_BOUND_MAX_DEPTH 16
 
-// Emit a trait-bound-not-satisfied error. Returns 1 (failure).
-static int emit_trait_bound_error(tl_infer *self, ast_node *toplevel, tl_monotype *concrete_type,
-                                  str trait_name, str fn_name, u32 arity) {
-    str type_str = tl_monotype_to_string(self->transient, concrete_type);
-    str msg = str_fmt(self->arena, "type %s does not satisfy trait %s: missing function '%s' with arity %u",
-                      str_cstr(&type_str), str_cstr(&trait_name), str_cstr(&fn_name), (unsigned)arity);
+// Push a trait-bound-not-satisfied error. Returns 1 (failure).
+static int push_trait_error(tl_infer *self, ast_node *toplevel, str msg) {
     array_push(self->errors, ((tl_infer_error){
                                .tag = tl_err_trait_bound_not_satisfied, .node = toplevel, .message = msg}));
     return 1;
 }
 
-// Emit a no_conform trait-bound error. Returns 1 (failure).
+static int emit_trait_sig_error(tl_infer *self, ast_node *toplevel, tl_monotype *concrete_type,
+                                str trait_name, str fn_name, str actual_sig, str expected_sig) {
+    str type_str = tl_monotype_to_string(self->transient, concrete_type);
+    return push_trait_error(self, toplevel, str_fmt(self->arena,
+        "type %s does not satisfy trait %s: function '%s' has signature %s, expected %s",
+        str_cstr(&type_str), str_cstr(&trait_name), str_cstr(&fn_name),
+        str_cstr(&actual_sig), str_cstr(&expected_sig)));
+}
+
+// Check that a function's full arrow type matches the trait signature's expected arrow.
+// Returns 0 on success, 1 on failure (error pushed).
+static int check_trait_arrow(tl_infer *self, ast_node *toplevel, tl_monotype *concrete_type,
+                              str trait_name, tl_trait_sig *sig, tl_trait_def *trait,
+                              str func_name) {
+    if (!sig->arrow) return 0;
+
+    tl_polytype *poly = tl_type_env_lookup(self->env, func_name);
+    if (!poly) return 0;
+
+    tl_monotype *actual_arrow = poly->type;
+    if (!tl_monotype_is_arrow(actual_arrow)) return 0;
+
+    // Determine trait's type parameter name.
+    // Built-in traits (source_node == null) use "T".
+    // User-defined traits: first type argument name from the definition AST.
+    str type_param = S("T");
+    if (trait->source_node && trait->source_node->trait_def.n_type_arguments > 0)
+        type_param = ast_node_str(trait->source_node->trait_def.type_arguments[0]);
+
+    // Parse the expected arrow AST with the trait's type parameter mapped to the concrete type.
+    hot_parse_ctx_reinit(self, null);
+    str_map_set_ptr(&self->hot_parse_ctx.type_arguments, type_param, concrete_type);
+    tl_monotype *expected_arrow =
+        tl_type_registry_parse_type_with_ctx(self->registry, sig->arrow, &self->hot_parse_ctx);
+    self->hot_parse_ctx_guard = 0;
+    if (!expected_arrow || !tl_monotype_is_arrow(expected_arrow)) return 0;
+
+    // Resolve the actual arrow to a concrete type.
+    // If the function is generic, instantiate its quantifiers with the concrete
+    // type's type arguments so that type parameters become concrete types.
+    tl_monotype *actual_resolved;
+    tl_monotype_sized type_args = concrete_type->cons_inst->args;
+    if (poly->quantifiers.size > 0 && type_args.size > 0) {
+        actual_resolved = tl_polytype_instantiate_for_type(self->transient, poly, type_args, self->subs);
+    } else {
+        actual_resolved = tl_monotype_clone(self->transient, actual_arrow);
+    }
+    tl_monotype_substitute(self->transient, actual_resolved, self->subs, null);
+
+    // Compare full arrows by hash.
+    if (tl_monotype_hash64(expected_arrow) != tl_monotype_hash64(actual_resolved)) {
+        str actual_str   = tl_monotype_to_string(self->transient, actual_resolved);
+        str expected_str = tl_monotype_to_string(self->transient, expected_arrow);
+        return emit_trait_sig_error(self, toplevel, concrete_type, trait_name,
+                                    sig->name, actual_str, expected_str);
+    }
+    return 0;
+}
+
+static int emit_trait_bound_error(tl_infer *self, ast_node *toplevel, tl_monotype *concrete_type,
+                                  str trait_name, str fn_name, u32 arity) {
+    str type_str = tl_monotype_to_string(self->transient, concrete_type);
+    return push_trait_error(self, toplevel, str_fmt(self->arena,
+        "type %s does not satisfy trait %s: missing function '%s' with arity %u",
+        str_cstr(&type_str), str_cstr(&trait_name), str_cstr(&fn_name), (unsigned)arity));
+}
+
 static int emit_no_conform_bound_error(tl_infer *self, ast_node *toplevel, tl_monotype *concrete_type,
                                        str trait_name, char const *trait_generic_name) {
     str type_str = tl_monotype_to_string(self->transient, concrete_type);
-    str msg = str_fmt(self->arena,
+    return push_trait_error(self, toplevel, str_fmt(self->arena,
         "type %s does not satisfy trait %s: conformance explicitly denied via [[no_conform(%s)]]",
-        str_cstr(&type_str), str_cstr(&trait_name), trait_generic_name);
-    array_push(self->errors, ((tl_infer_error){
-                               .tag = tl_err_trait_bound_not_satisfied, .node = toplevel, .message = msg}));
-    return 1;
+        str_cstr(&type_str), str_cstr(&trait_name), trait_generic_name));
 }
 
 // Check that a concrete type satisfies a trait bound. Returns 0 on success, 1 on failure.
@@ -1293,10 +1352,15 @@ static int check_trait_bound_(tl_infer *self, ast_node *toplevel, tl_monotype *c
         for (u32 i = 0; i < trait->sigs.size; i++) {
             tl_trait_sig *sig = &trait->sigs.v[i];
             str func_name     = find_overload_func(self, concrete_type, str_cstr(&sig->name), sig->arity);
-            // eq is derivable from cmp: Ord inherits Eq, so a type with only cmp
-            // needs this fallback to satisfy the Eq parent-trait check.
-            if (str_is_empty(func_name) && str_eq(sig->name, S("eq")) && sig->arity == 2)
+            if (!str_is_empty(func_name)) {
+                // Direct implementation — check full arrow conformance.
+                if (check_trait_arrow(self, toplevel, concrete_type, trait_name, sig, trait, func_name))
+                    return 1;
+            } else if (str_eq(sig->name, S("eq")) && sig->arity == 2) {
+                // eq is derivable from cmp: Ord inherits Eq, so a type with only cmp
+                // can satisfy Eq. Skip arrow check — the compiler synthesizes the Bool wrapper.
                 func_name = find_overload_func(self, concrete_type, "cmp", 2);
+            }
             if (str_is_empty(func_name))
                 return emit_trait_bound_error(self, toplevel, concrete_type, trait_name, sig->name,
                                               sig->arity);
