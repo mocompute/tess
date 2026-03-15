@@ -119,8 +119,12 @@ static int set_one_at(hashmap *map, hashmap_entry const *header, byte const *ele
             return 1; // overflow
         }
         if (probe_distance > WARN_DISTANCE && !warning_printed) {
-            mos_dbg("warning: high probe distance for key: %p, load factor: %f\n",
-                    ((hashmap_entry *)to_store)->key, map_load_factor(map));
+            hashmap_key *wk = ((hashmap_entry *)to_store)->key;
+            mos_dbg("warning: high probe distance %u, load: %f, n_cells: %u, key_len: %u, key_bytes:",
+                    probe_distance, map_load_factor(map), map->n_cells, wk->size);
+            for (u8 ki = 0; ki < wk->size && ki < 16; ++ki)
+                mos_dbg(" %02x", wk->data[ki]);
+            mos_dbg("\n");
             warning_printed = 1;
         }
 

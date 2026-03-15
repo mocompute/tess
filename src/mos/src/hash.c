@@ -41,6 +41,18 @@ u32 hash32(void const *data, size_t len) {
         hash *= 0x01000193;
     }
 
+    // Murmurhash3 finalizer. FNV-1a processes bytes sequentially, so the low
+    // bits of the hash (used for hashmap bucket selection via hash & mask) are
+    // dominated by the first few key bytes. For pointer-pair keys where most
+    // bytes are constant (e.g. heap addresses sharing upper bits), this causes
+    // severe clustering. The finalizer mixes all bits so every bit of the hash
+    // reflects the full key.
+    hash ^= hash >> 16;
+    hash *= 0x85EBCA6B;
+    hash ^= hash >> 13;
+    hash *= 0xC2B2AE35;
+    hash ^= hash >> 16;
+
     return hash;
 }
 
@@ -52,6 +64,13 @@ u32 hash32_combine(u32 seed, void const *data, size_t len) {
         hash ^= (size_t)((byte *)data)[i];
         hash *= 0x01000193;
     }
+
+    // See hash32 for rationale
+    hash ^= hash >> 16;
+    hash *= 0x85EBCA6B;
+    hash ^= hash >> 13;
+    hash *= 0xC2B2AE35;
+    hash ^= hash >> 16;
 
     return hash;
 }
