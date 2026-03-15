@@ -1226,8 +1226,9 @@ static tl_monotype *tl_type_registry_parse_type_(tl_type_registry               
         forall(i, nodes) {
             tl_monotype *mono = tl_type_registry_parse_type_(self, ctx, nodes.v[i]);
             if (!mono) {
-                result = null;
-                goto top_success;
+                // Unannotated parameter (e.g. `entries` in `f(entries, capacity) -> CSize`).
+                // Use a fresh type variable so the return type is still preserved.
+                mono = tl_monotype_create_fresh_tv(self->subs);
             }
             // clang-format off
             { tl_monotype *_t = mono; array_push(args, _t); }
