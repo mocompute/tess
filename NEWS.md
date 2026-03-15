@@ -5,6 +5,72 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased] - 2026-03-11 to 2026-03-15 (ec70d2ab..c259bf19)
+
+### Highlights
+
+- **Hash trait and HashMap redesign**: compiler-provided `Hash[T]` trait with FNV-1a hashing, replacing HashMap's internal function pointer with trait-based dispatch
+- **UFCS receiver coercion**: the `.` operator now auto-references and auto-dereferences receivers, eliminating the need for separate `_ptr` function variants; the `->` UFCS operator is removed
+- **Embedded standard library**: the compiler binary bundles all `.tl` standard library files, making it fully self-contained
+- **Cmdline standard library module**: declarative command-line parsing with flags, options, positional arguments, and auto-generated help
+- **Standard library migrated from UInt to CSize**: all size/count/index values now use `CSize` (`size_t`), matching C conventions
+
+### Added
+
+- **Hash Trait**: A compiler-provided `Hash[T]` trait with FNV-1a hashing and intrinsic dispatch for builtin types. User-defined types can implement `hash()` in their module. HashMap now uses `Hash` and `Eq` traits instead of internal function pointers and `memcmp`.
+- **`[[no_conform(Trait)]]` Attribute**: Opt-out mechanism for trait conformance, blocking trait bounds and operator dispatch for annotated types, with inheritance to derived types.
+- **UFCS Receiver Coercion**: When calling `val.f()` where `f` expects `Ptr[T]`, the compiler implicitly takes the address of the receiver. Pointer receivers are auto-dereferenced when the function expects a value type.
+- **Cmdline Standard Library Module**: Declarative command-line parsing supporting flags, string options, boolean options, and positional arguments with built-in help generation.
+- **Implicit Submodule Visibility**: Within a module, child submodule names are accessible without the parent prefix (e.g., `Args.ArgValue` instead of `Cmdline.Args.ArgValue`). Bare submodule type names auto-collapse in type positions.
+- **Embedded Standard Library**: The compiler binary bundles all `.tl` standard library files via a tpkg archive (built by a new `stdlib_pack` tool), making the compiler self-contained without needing to locate stdlib on disk.
+- **Semicolons as Expression Separators**: Semicolons are now accepted in addition to commas for separating expressions.
+- **Leveled Verbose Output**: Replaced the all-or-nothing `-v` flag with three levels (`-v`, `-vv`, `-vvv`): phase markers, key decisions, and full detail.
+- **Diverging Function Detection**: `c_exit` and `tl_fatal` are now recognized as never-returning, enabling better control flow analysis.
+- **Undeclared Variable Detection**: Using `=` (reassignment) on an undeclared name now produces a clear error instead of confusing downstream type inference failures.
+- **License**: Added LICENSE (Apache 2.0) and NOTICE files.
+- **Version String Improvements**: Version strings now include architecture and OS (e.g., `0.1.0-ad8458b-x86_64-linux`), with `GIT_HASH` env var support for Nix builds.
+- **HOF/Closure Test Suite**: Comprehensive tests for higher-order functions, closures with captures, nested closures, closures in structs, and generic closures.
+
+### Changed
+
+- **Standard Library Migrated to CSize**: All size, count, index, and capacity values across Str, HashMap, Array, Alloc, and Unsafe now use `CSize` (maps to C `size_t`). Cross-subchain standalone integer conversions are rejected, requiring explicit type annotations.
+- **tlib Renamed to tpkg**: The package archive format renamed across the entire codebase (`tlib.c` → `tpkg.c`, `tlib.h` → `tpkg.h`, all API functions).
+- **Standard Library Modernized**: `Array.tl`, `Str.tl`, `Alloc.tl`, and `HashMap.tl` rewritten to follow new coding conventions: type annotations removed from implementations (relying on inference), `when/else` and `let-else` used throughout.
+- **Module Re-opening**: Modules can now be re-opened after submodule definitions, allowing continued additions to a parent module.
+- **Trait Bounds on Forward Declarations**: Forward-declared functions now support trait bound syntax.
+- **Link-Time Optimization**: LTO enabled for release builds.
+- **`make test` Independence**: Test targets now depend on the build properly, no longer requiring a separate `make all` first.
+- **TMPDIR Respected**: Temp file and directory creation on POSIX now uses the `TMPDIR` environment variable.
+- **CChar Signedness**: CChar is now neither signed nor unsigned, fixing contradictory type classification.
+
+### Removed
+
+- **UFCS `->` Operator**: Since `.` now auto-dereferences pointer receivers, `->` for UFCS is redundant. It remains available only for struct field access through pointers (`ptr->field`).
+- **`Array.find_value`**: Removed from the standard library.
+- **Obsolete Documentation**: Old tlib implementation document and hashmap iteration bug document deleted. The nonexistent `mut` keyword removed from documentation.
+
+### Fixed
+
+- Fixed `when/else` codegen on tagged unions where the else arm was not wrapped in an else block, causing incorrect C output.
+- Fixed `let-else` with bindings in the else block producing incorrect code.
+- Fixed forward declaration annotation copy losing type parameter names, and parameter type merging producing incorrect signatures.
+- Fixed const stripping safety: added pre-unification guards for struct constructor fields, return statements, and reassignments, preventing `Ptr[Const[T]]` from being silently accepted where `Ptr[T]` was expected.
+- Fixed for-loop iterator name collision by replacing hardcoded `gen_iter` with unique generated names, preventing silent collision with user bindings.
+- Fixed `free_variable_not_found` errors now pointing to the exact usage site instead of the enclosing function's closing brace, with deduplication.
+- Fixed format string injection in `_tl_fatal_` where user strings containing `%` were passed as format arguments.
+- Fixed formatter inserting a blank line incorrectly in multi-line argument lists.
+- Fixed alignment pass token ordering for tagged union variants in the formatter.
+- Fixed UFCS dot operator on pointer receivers, resolution for types in submodules, and implicit address-of for nullary mutating functions.
+- Fixed SSO use-after-scope in stdlib_pack entry names.
+- Fixed Windows path normalization for drive prefix separators.
+- Fixed CMake link error for `mos_embed` and TL test build with non-Ninja generators.
+- Fixed version header staleness by tracking `.git/HEAD` and `.git/packed-refs` for regeneration.
+- Fixed implicit submodule names incorrectly shadowing top-level modules.
+
+### Security
+
+- Fixed format string injection in transpile.c where user-provided strings were spliced directly into `fprintf`'s format position, making `%` characters in error messages undefined behavior.
+
 ## [Unreleased] - 2026-03-07 to 2026-03-11 (c5101ccd..ec70d2ab)
 
 ### Highlights
