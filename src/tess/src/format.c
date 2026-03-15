@@ -678,10 +678,23 @@ static void align_subruns(allocator *alloc, char **lines, int start, int end, in
 // If in_function is set, skip paren/brace alignment.
 static void align_group(allocator *alloc, char **lines, int start, int end, int in_function) {
     if (end - start < 2) return;
-    for (int t = 0; t < ALIGN_COUNT; t++) {
+    // Process outer structural tokens before inner tokens so that
+    // brace/paren alignment doesn't disrupt inner value alignment.
+    int order[] = {
+        ALIGN_OPEN_PAREN,
+        ALIGN_OPEN_BRACE,
+        ALIGN_ARROW,
+        ALIGN_COLONEQ,
+        ALIGN_COLON_VALUE,
+        ALIGN_EQ,
+        ALIGN_CLOSE_BRACE,
+    };
+    for (int ti = 0; ti < (int)(sizeof(order) / sizeof(order[0])); ti++) {
+        int t = order[ti];
         if (in_function && (t == ALIGN_OPEN_PAREN || t == ALIGN_OPEN_BRACE || t == ALIGN_CLOSE_BRACE))
             continue;
-        if (t == ALIGN_COLONEQ || t == ALIGN_COLON_VALUE || t == ALIGN_EQ) {
+        if (t == ALIGN_COLONEQ || t == ALIGN_COLON_VALUE || t == ALIGN_EQ
+                || t == ALIGN_OPEN_BRACE || t == ALIGN_CLOSE_BRACE) {
             align_subruns(alloc, lines, start, end, t);
         } else {
             try_align_token(alloc, lines, start, end, t);
@@ -893,6 +906,22 @@ static void align_pass(allocator *alloc, char **lines, int nlines) {
 
         align_group(alloc, lines, group_start, i, in_function);
         align_comments(alloc, lines, group_start, i);
+    }
+
+    // Post-pass: align tagged union opener braces with continuation lines.
+    // e.g. "ArgValue: | BoolVal { ... }" should have its { aligned with the
+    // continuation group "          | CountVal { ... }" that follows.
+    for (i = 0; i + 1 < nlines; i++) {
+        // Must be a tagged union opener (contains `: |`)
+        if (!is_struct_opener(lines[i])) continue;
+        int col0 = find_align_token(lines[i], ALIGN_OPEN_BRACE);
+        if (col0 < 0) continue;
+        // Next line must be a continuation with same token at a greater column
+        int col1 = find_align_token(lines[i + 1], ALIGN_OPEN_BRACE);
+        if (col1 <= col0) continue;
+        // Pad the opener line's brace to match
+        char *new_line = pad_to_column(alloc, lines[i], col0, col1);
+        if (new_line) lines[i] = new_line;
     }
 }
 
