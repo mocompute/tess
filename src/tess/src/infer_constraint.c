@@ -255,7 +255,10 @@ static void load_toplevel_let(tl_infer *self, ast_node *node) {
             }
 
             tl_polytype *arrow = (*p)->symbol.annotation_type;
-            assert(arrow && tl_monotype_is_arrow(arrow->type));
+            if (!arrow || !tl_monotype_is_arrow(arrow->type)) {
+                return;
+            }
+
             tl_monotype *param_tuple = arrow->type->list.xs.v[0];
             assert(tl_tuple == param_tuple->tag);
             ast_arguments_iter iter = ast_node_arguments_iter(node);
@@ -283,11 +286,10 @@ static void load_toplevel_let(tl_infer *self, ast_node *node) {
                 // tl_T_v204 vs tl_T_v278). Clone the annotation and remap the type
                 // parameter references so they use the implementation's names.
                 ast_node *fwd_ann = ast_param_tuple->tuple.elements[j]->symbol.annotation;
-                if (fwd_ann && impl_own_n_type_parameters > 0 &&
-                    ast_arrow->arrow.n_type_parameters > 0) {
-                    u32 n_remap = impl_own_n_type_parameters < ast_arrow->arrow.n_type_parameters
-                                    ? impl_own_n_type_parameters
-                                    : ast_arrow->arrow.n_type_parameters;
+                if (fwd_ann && impl_own_n_type_parameters > 0 && ast_arrow->arrow.n_type_parameters > 0) {
+                    u32       n_remap    = impl_own_n_type_parameters < ast_arrow->arrow.n_type_parameters
+                                             ? impl_own_n_type_parameters
+                                             : ast_arrow->arrow.n_type_parameters;
                     ast_node *cloned_ann = ast_node_clone(self->arena, fwd_ann);
                     remap_annotation_type_params(cloned_ann, ast_arrow->arrow.type_parameters,
                                                  node->let.type_parameters, n_remap);
@@ -415,11 +417,11 @@ void load_toplevel(tl_infer *self, ast_node_sized nodes) {
 
                     // Collect parent trait names
                     for (u32 i = 0; i < node->trait_def.n_parents; i++) {
-                        ast_node *parent = node->trait_def.parents[i];
-                        str raw_name =
-                          ast_node_is_nfa(parent) ? ast_node_str(parent->named_application.name)
+                        ast_node *parent      = node->trait_def.parents[i];
+                        str       raw_name    = ast_node_is_nfa(parent)
+                                                  ? ast_node_str(parent->named_application.name)
                                                   : ast_node_str(parent);
-                        str parent_name = str_copy(self->arena, raw_name);
+                        str       parent_name = str_copy(self->arena, raw_name);
                         array_push(def->parents, parent_name);
                     }
 

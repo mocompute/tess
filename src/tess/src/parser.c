@@ -744,33 +744,35 @@ int a_type_identifier_base(parser *self) {
     if (0 == a_try(self, a_attributed_identifier)) {
         ast_node *ident = self->result;
 
-        // Look for module-qualified identifier
-        if (0 == a_try(self, a_dot)) {
+        // Iteratively resolve dotted names left-to-right (e.g., Cmdline.Args.Args).
+        // This mirrors how parse_expression handles module-qualified names via
+        // maybe_mangle_binop in a while loop.
+        while (0 == a_try(self, a_dot)) {
             ast_node *op = self->result;
 
-            if (a_try(self, a_type_identifier_base)) return 1;
+            if (a_try(self, a_attributed_identifier)) return 1;
             ast_node *right = self->result;
 
             if (maybe_mangle_binop(self, op, &ident, right)) {
-                self->result = ident;
-                return 0;
+                continue;  // combined module or resolved member — check for more dots
             } else {
-                mangle_name(self, self->result);
-                return 0;
+                mangle_name(self, right);
+                return result_ast_node(self, right);
             }
+        }
+
+        // No (more) dots — parse optional type arguments.
+        ast_node_array type_args;
+        if (ERROR_STOP == maybe_type_arguments(self, &type_args)) return ERROR_STOP;
+
+        mangle_name(self, ident);
+
+        if (type_args.size) {
+            ast_node *r = ast_node_create_nfa(
+              self->ast_arena, ident, (ast_node_sized)sized_all(type_args), (ast_node_sized){0});
+            return result_ast_node(self, r);
         } else {
-            ast_node_array type_args;
-            if (ERROR_STOP == maybe_type_arguments(self, &type_args)) return ERROR_STOP;
-
-            mangle_name(self, ident);
-
-            if (type_args.size) {
-                ast_node *r = ast_node_create_nfa(
-                  self->ast_arena, ident, (ast_node_sized)sized_all(type_args), (ast_node_sized){0});
-                return result_ast_node(self, r);
-            } else {
-                return result_ast_node(self, ident);
-            }
+            return result_ast_node(self, ident);
         }
     }
 

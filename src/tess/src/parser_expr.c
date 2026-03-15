@@ -1250,6 +1250,15 @@ int maybe_mangle_binop(parser *self, ast_node *op, ast_node **inout, ast_node *r
         if (original) (*inout)->symbol.name = *original;
     }
 
+    // Module-mangled symbol recovery: if a symbol like Cmdline was mangled to
+    // Cmdline__Cmdline (because it's also a type in the current module), but
+    // the original name is a module, unmangle so module resolution can proceed.
+    if ((0 == str_cmp_c(op->symbol.name, ".")) && ast_node_is_symbol(*inout) &&
+        (*inout)->symbol.is_module_mangled && !str_is_empty((*inout)->symbol.original) &&
+        str_hset_contains(self->modules_seen, (*inout)->symbol.original)) {
+        unmangle_name(self, *inout);
+    }
+
     // Nested module resolution: if left is a module and "left.right" is also a module,
     // synthesize a combined module reference (e.g., Foo.Bar) for the next dot iteration.
     if ((0 == str_cmp_c(op->symbol.name, ".")) && ast_node_is_symbol(*inout) &&
