@@ -20,14 +20,10 @@ HashEq[K]: Hash[K], Eq[K] { }
 // -- Types --
 
 _Entry[K, V]: {
-    key:    K,
-    value:  V,
-    hash:   CSize,
-    dist:   CSize,
-    status: CSize,
+    key:   K,
+    value: V,
+    meta:  CSize,  // bit 0: occupied, bits 1-8: hash tag, bits 9+: probe distance
 }
-
-_OCCUPIED := 1zu
 
 HashMap[K, V]: {
     _entries:  Ptr[_Entry[K, V]],
@@ -67,6 +63,12 @@ values[K, V](self: Ptr[HashMap[K, V]], alloc: Ptr[Allocator]) -> Array[V]
 
 // -- Private helpers --
 
+_is_occupied  (meta: CSize) -> Bool
+_get_tag      (meta: CSize) -> CSize
+_get_dist     (meta: CSize) -> CSize
+_make_meta    (tag: CSize, dist: CSize) -> CSize
+_hash_tag     (hash: CSize) -> CSize
+
 _entry_width[K, V]     () -> CSize
 _grow[K: HashEq, V]    (self: Ptr[HashMap[K, V]]) -> Void
 _alloc_entries[K, V]   (alloc: Ptr[Allocator], capacity: CSize) -> Ptr[_Entry[K, V]]
@@ -75,6 +77,12 @@ _insert_entry[K: Eq, V](entries: Ptr[_Entry[K, V]], capacity: CSize,
 
 
 // -- Implementation --
+
+_is_occupied(meta) { (meta & 1zu) != 0zu }
+_get_tag    (meta) { (meta >> 1zu) & 0xFFzu }
+_get_dist   (meta) { meta >> 9zu }
+_make_meta  (tag, dist) { 1zu | (tag << 1zu) | (dist << 9zu) }
+_hash_tag   (hash) { (hash >> 56zu) & 0xFFzu }
 
 _entry_width[K, V]() -> CSize { Alloc.align(sizeof[_Entry[K, V]](), alignof[_Entry[K, V]]()) }
 
@@ -126,41 +134,39 @@ _insert_entry[K: Eq, V](entries, capacity, key: K, value: V, hash: CSize) -> CSi
 
     cur_key         := key
     cur_value       := value
-    cur_hash        := hash
+    cur_tag         := _hash_tag(hash)
     cur_dist: CSize := 0zu
 
     while true {
-        e := entries.[bucket].&
+        e      := entries.[bucket].&
+        e_meta := e->meta
 
-        if e->status != _OCCUPIED {
-            e->key    = cur_key
-            e->value  = cur_value
-            e->hash   = cur_hash
-            e->dist   = cur_dist
-            e->status = _OCCUPIED
+        if !_is_occupied(e_meta) {
+            e->key   = cur_key
+            e->value = cur_value
+            e->meta  = _make_meta(cur_tag, cur_dist)
             return 1zu
         }
 
-        if e->hash == cur_hash && e->key == cur_key {
+        if _get_tag(e_meta) == cur_tag && e->key == cur_key {
             e->value = cur_value
             return 0zu
         }
 
         // Robin Hood: steal from rich
-        if e->dist < cur_dist {
+        if _get_dist(e_meta) < cur_dist {
             tmp_key   := e->key
             tmp_value := e->value
-            tmp_hash  := e->hash
-            tmp_dist  := e->dist
+            tmp_tag   := _get_tag(e_meta)
+            tmp_dist  := _get_dist(e_meta)
 
             e->key   = cur_key
             e->value = cur_value
-            e->hash  = cur_hash
-            e->dist  = cur_dist
+            e->meta  = _make_meta(cur_tag, cur_dist)
 
             cur_key   = tmp_key
             cur_value = tmp_value
-            cur_hash  = tmp_hash
+            cur_tag   = tmp_tag
             cur_dist  = tmp_dist
         }
 
@@ -182,8 +188,8 @@ _grow[K: HashEq, V](self: Ptr[HashMap[K, V]]) -> Void {
     i: CSize := 0zu
     while i < old_capacity, i += 1zu {
         e := old_entries.[i].&
-        if e->status == _OCCUPIED {
-            _insert_entry[K, V](new_entries, new_capacity, e->key, e->value, e->hash)
+        if _is_occupied(e->meta) {
+            _insert_entry[K, V](new_entries, new_capacity, e->key, e->value, hash(e->key))
         }
     }
 
@@ -209,14 +215,16 @@ get[K: HashEq, V](self: Ptr[HashMap[K, V]], key: K) -> Ptr[V] {
     hash        := hash(key)
     mask        := self->_capacity - 1zu
     bucket      := hash & mask
+    tag         := _hash_tag(hash)
     dist: CSize := 0zu
 
     while true {
-        e := self->_entries.[bucket].&
+        e      := self->_entries.[bucket].&
+        e_meta := e->meta
 
-        if e->status != _OCCUPIED { return null }
-        if e->dist < dist { return null }
-        if e->hash == hash && e->key == key {
+        if !_is_occupied(e_meta) { return null }
+        if _get_dist(e_meta) < dist { return null }
+        if _get_tag(e_meta) == tag && e->key == key {
             return e->value.&
         }
 
@@ -246,16 +254,18 @@ remove[K: HashEq, V](self: Ptr[HashMap[K, V]], key: K) -> Bool {
     hash        := hash(key)
     mask        := self->_capacity - 1zu
     bucket      := hash & mask
+    tag         := _hash_tag(hash)
     dist: CSize := 0zu
 
     while true {
-        e := self->_entries.[bucket].&
+        e      := self->_entries.[bucket].&
+        e_meta := e->meta
 
-        if e->status != _OCCUPIED { return false }
-        if e->dist < dist { return false }
+        if !_is_occupied(e_meta) { return false }
+        if _get_dist(e_meta) < dist { return false }
 
-        if e->hash == hash && e->key == key {
-            e->status = 0zu
+        if _get_tag(e_meta) == tag && e->key == key {
+            e->meta = 0zu
             self->_size -= 1zu
 
             // Backward-shift subsequent entries
@@ -263,11 +273,11 @@ remove[K: HashEq, V](self: Ptr[HashMap[K, V]], key: K) -> Bool {
             bucket = (bucket + 1zu) & mask
             while true {
                 e = self->_entries.[bucket].&
-                if e->status != _OCCUPIED || e->dist == 0zu { break }
+                if !_is_occupied(e->meta) || _get_dist(e->meta) == 0zu { break }
 
                 self->_entries.[prev] = self->_entries.[bucket]
-                self->_entries.[prev].& -> dist -= 1zu
-                e->status = 0zu
+                self->_entries.[prev].& -> meta -= (1zu << 9zu)
+                e->meta = 0zu
 
                 prev   = bucket
                 bucket = (bucket + 1zu) & mask
@@ -303,7 +313,7 @@ keys[K, V](self: Ptr[HashMap[K, V]], alloc: Ptr[Allocator]) -> Array[K] {
     i: CSize := 0zu
     while i < self->_capacity, i += 1zu {
         e := self->_entries.[i].&
-        if e->status == _OCCUPIED {
+        if _is_occupied(e->meta) {
             Array.push(result.&, alloc, e->key)
         }
     }
@@ -319,7 +329,7 @@ values[K, V](self: Ptr[HashMap[K, V]], alloc: Ptr[Allocator]) -> Array[V] {
     i: CSize := 0zu
     while i < self->_capacity, i += 1zu {
         e := self->_entries.[i].&
-        if e->status == _OCCUPIED {
+        if _is_occupied(e->meta) {
             Array.push(result.&, alloc, e->value)
         }
     }

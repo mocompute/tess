@@ -8,16 +8,24 @@
 #include <string.h>
 
 #ifc
+// Murmurhash3 fmix64 finalizer — mixes all bits so low bits (used for
+// bucket selection) reflect the full key, preventing clustering.
+static inline size_t tl_fmix64(size_t h) {
+    h ^= h >> 33; h *= 0xff51afd7ed558ccdULL;
+    h ^= h >> 33; h *= 0xc4ceb9fe1a85ec53ULL;
+    h ^= h >> 33;
+    return h;
+}
 static inline size_t tl_hash_bytes(const void *p, size_t n) {
     size_t h = 0xcbf29ce484222325ULL;
     const unsigned char *b = (const unsigned char *)p;
     for (size_t i = 0; i < n; i++) { h ^= b[i]; h *= 0x100000001b3ULL; }
-    return h;
+    return tl_fmix64(h);
 }
 static inline size_t tl_hash_cstring(const char *s) {
     size_t h = 0xcbf29ce484222325ULL;
     if (s) for (; *s; s++) { h ^= (unsigned char)*s; h *= 0x100000001b3ULL; }
-    return h;
+    return tl_fmix64(h);
 }
 #endc
 
