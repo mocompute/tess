@@ -19,6 +19,7 @@ typedef struct hashmap_key {
 typedef struct {
     struct hashmap_key *key;
     u8                  status;
+    u8                  hash_tag;
     alignas(sizeof(void *)) byte data[]; // size: hashmap.value_size
 } hashmap_entry;
 

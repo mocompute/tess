@@ -75,19 +75,13 @@ static inline u32 hash_to_bucket(hashmap const *map, u32 hash) {
     return hash & (map->n_cells - 1); // n_cells is always power of 2
 }
 
-static inline u32 key_to_bucket(hashmap const *map, byte const *key, u8 key_len) {
-    assert(map);
-    u32 const h = hash32(key, key_len);
-    return hash_to_bucket(map, h);
-}
-
 static inline u32 incr_index(hashmap const *map, u32 index) {
     return (index + 1) & (map->n_cells - 1); // n_cells is always power of 2
 }
 
 // Returns: if key exists, pointer to header.
 // Takes pre-computed bucket index to avoid re-hashing.
-static hashmap_entry *map_find_at(hashmap *map, byte const *key, u8 key_len, u32 index) {
+static hashmap_entry *map_find_at(hashmap *map, byte const *key, u8 key_len, u32 index, u8 hash_tag) {
     assert(map);
 
     u32 probe_distance = 0;
@@ -104,7 +98,9 @@ static hashmap_entry *map_find_at(hashmap *map, byte const *key, u8 key_len, u32
 
         } else if (is_occupied(status)) {
 
-            if (cell->key->size == key_len && 0 == memcmp(key, cell->key->data, cell->key->size))
+            if (cell->hash_tag == hash_tag
+                && cell->key->size == key_len
+                && 0 == memcmp(key, cell->key->data, cell->key->size))
                 return cell;
 
             index = incr_index(map, index);
@@ -117,8 +113,10 @@ static hashmap_entry *map_find_at(hashmap *map, byte const *key, u8 key_len, u32
 }
 
 static hashmap_entry *map_find(hashmap *map, byte const *key, u8 key_len) {
-    u32 index = key_to_bucket(map, key, key_len);
-    return map_find_at(map, key, key_len, index);
+    u32 hash  = hash32(key, key_len);
+    u32 index = hash_to_bucket(map, hash);
+    u8  tag   = (u8)(hash >> 24);
+    return map_find_at(map, key, key_len, index, tag);
 }
 
 static int set_one_at(hashmap *map, hashmap_entry const *header, byte const *element, u32 index) {
@@ -353,9 +351,10 @@ void map_set(hashmap **self, void const *key, u8 key_len, void const *data) {
     // Compute hash once upfront
     u32 hash         = hash32(key, key_len);
     u32 bucket_index = hash_to_bucket(*self, hash);
+    u8  tag          = (u8)(hash >> 24);
 
     // Must check for existing key. Replace if present.
-    hashmap_entry *existing = map_find_at(*self, key, key_len, bucket_index);
+    hashmap_entry *existing = map_find_at(*self, key, key_len, bucket_index, tag);
 
     if (existing) {
         memcpy(existing->data, data, (*self)->value_size);
@@ -373,8 +372,9 @@ void map_set(hashmap **self, void const *key, u8 key_len, void const *data) {
     }
 
     hashmap_entry entry = {
-      .key    = alloc_malloc((*self)->key_alloc, sizeof(hashmap_key) + key_len),
-      .status = 0,
+      .key      = alloc_malloc((*self)->key_alloc, sizeof(hashmap_key) + key_len),
+      .status   = 0,
+      .hash_tag = tag,
     };
 
     // copy key into storage
