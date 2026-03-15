@@ -767,6 +767,19 @@ int a_type_identifier_base(parser *self) {
 
         mangle_name(self, ident);
 
+        // Implicit submodule type: bare "Args" in #module Cmdline resolves to
+        // Cmdline__Args__Args if Cmdline.Args is a submodule with an Args symbol.
+        if (!ident->symbol.is_module_mangled && !str_is_empty(self->current_module)) {
+            str name_str   = ast_node_str(ident);
+            str sub_module = str_cat_3(self->transient, self->current_module, S("."), name_str);
+            if (str_hset_contains(self->modules_seen, sub_module)) {
+                hashmap *sub_syms = resolve_module_symbols(self, sub_module);
+                if (sub_syms && str_hset_contains(sub_syms, name_str)) {
+                    mangle_name_for_module(self, ident, sub_module);  // copies to ast_arena
+                }
+            }
+        }
+
         if (type_args.size) {
             ast_node *r = ast_node_create_nfa(
               self->ast_arena, ident, (ast_node_sized)sized_all(type_args), (ast_node_sized){0});

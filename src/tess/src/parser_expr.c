@@ -1250,6 +1250,17 @@ int maybe_mangle_binop(parser *self, ast_node *op, ast_node **inout, ast_node *r
         if (original) (*inout)->symbol.name = *original;
     }
 
+    // Implicit submodule visibility: in #module Cmdline, bare "Args" resolves
+    // to "Cmdline.Args" if "Cmdline.Args" is a known module.
+    if ((0 == str_cmp_c(op->symbol.name, ".")) && ast_node_is_symbol(*inout) &&
+        !str_is_empty(self->current_module) &&
+        !str_hset_contains(self->modules_seen, (*inout)->symbol.name)) {
+        str combined = str_cat_3(self->transient, self->current_module, S("."), (*inout)->symbol.name);
+        if (str_hset_contains(self->modules_seen, combined)) {
+            (*inout)->symbol.name = str_copy(self->ast_arena, combined);
+        }
+    }
+
     // Module-mangled symbol recovery: if a symbol like Cmdline was mangled to
     // Cmdline__Cmdline (because it's also a type in the current module), but
     // the original name is a module, unmangle so module resolution can proceed.

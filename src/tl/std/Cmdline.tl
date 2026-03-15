@@ -93,8 +93,8 @@ required(self: Ptr[Cmdline], long_name: Str, short_name: CChar, desc: Str) -> Vo
 required(self: Ptr[Cmdline], long_name: Str, desc: Str)                    -> Void
 command (self: Ptr[Cmdline], name: Str)                                    -> Void
 
-parse        (self: Ptr[Cmdline], argc: CInt, argv: Ptr[CString]) -> Result[Cmdline.Args.Args, ParseErrors]
-parse_or_exit(self: Ptr[Cmdline], argc: CInt, argv: Ptr[CString]) -> Cmdline.Args.Args
+parse        (self: Ptr[Cmdline], argc: CInt, argv: Ptr[CString]) -> Result[Args.Args, ParseErrors]
+parse_or_exit(self: Ptr[Cmdline], argc: CInt, argv: Ptr[CString]) -> Args.Args
 
 
 help_text (self: Ptr[Cmdline]) -> Str
@@ -106,9 +106,9 @@ from_argv(argc: CInt, argv: Ptr[CString]) -> Array[Str]
 
 _find_spec_long (self: Ptr[Cmdline], name: Str)                                         -> Option[CSize]
 _find_spec_short(self: Ptr[Cmdline], ch: CChar)                                         -> Option[CSize]
-_store_bool     (values: Ptr[HashMap[Str, Cmdline.Args.ArgValue]], name: Str)           -> Void
-_store_count    (values: Ptr[HashMap[Str, Cmdline.Args.ArgValue]], name: Str)           -> Void
-_store_str      (values: Ptr[HashMap[Str, Cmdline.Args.ArgValue]], name: Str, val: Str) -> Void
+_store_bool     (values: Ptr[HashMap[Str, Args.ArgValue]], name: Str)           -> Void
+_store_count    (values: Ptr[HashMap[Str, Args.ArgValue]], name: Str)           -> Void
+_store_str      (values: Ptr[HashMap[Str, Args.ArgValue]], name: Str, val: Str) -> Void
 
 
 // -- Implementation --
@@ -206,22 +206,22 @@ _find_spec_short(self, ch) {
 }
 
 _store_bool(values, name) {
-    HashMap.set(values, name, Cmdline.Args.BoolVal(v = true))
+    HashMap.set(values, name, Args.BoolVal(v = true))
 }
 
 _store_count(values, name) {
     s: Some := HashMap.get_copy(values, name) else {
-        HashMap.set(values, name, Cmdline.Args.CountVal(v = 1))
+        HashMap.set(values, name, Args.CountVal(v = 1))
         return
     }
     when s.v {
-        c: CountVal { HashMap.set(values, name, Cmdline.Args.CountVal(v = c.v + 1)) }
-        else { HashMap.set(values, name, Cmdline.Args.CountVal(v = 1)) }
+        c: CountVal { HashMap.set(values, name, Args.CountVal(v = c.v + 1)) }
+        else { HashMap.set(values, name, Args.CountVal(v = 1)) }
     }
 }
 
 _store_str(values, name, val) {
-    HashMap.set(values, name, Cmdline.Args.StrVal(v = val))
+    HashMap.set(values, name, Args.StrVal(v = val))
 }
 
 _parse_long(self, values, errors, name, arg, argc, argv, ip) {
@@ -301,7 +301,7 @@ _parse_short(self, values, errors, arg, argc, argv, ip) {
 // -- Parse --
 
 parse(self, argc, argv) {
-    values           := HashMap.create[Str, Cmdline.Args.ArgValue]()
+    values           := HashMap.create[Str, Args.ArgValue]()
     positional       := Array.empty[Str]()
     rest_args        := Array.empty[Str]()
     errors           := Array.empty[ParseError]()
@@ -375,7 +375,7 @@ parse(self, argc, argv) {
         }
     }
 
-    args := Cmdline.Args.Args(_values = values, _positional = positional, _rest = rest_args, _command = cmd)
+    args := Args.Args(_values = values, _positional = positional, _rest = rest_args, _command = cmd)
 
     if errors.size > 0 {
         Err(ParseErrors(errors = errors))
