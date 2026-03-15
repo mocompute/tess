@@ -767,18 +767,7 @@ int a_type_identifier_base(parser *self) {
 
         mangle_name(self, ident);
 
-        // Implicit submodule type: bare "Args" in #module Cmdline resolves to
-        // Cmdline__Args__Args if Cmdline.Args is a submodule with an Args symbol.
-        if (!ident->symbol.is_module_mangled && !str_is_empty(self->current_module)) {
-            str name_str   = ast_node_str(ident);
-            str sub_module = str_cat_3(self->transient, self->current_module, S("."), name_str);
-            if (str_hset_contains(self->modules_seen, sub_module)) {
-                hashmap *sub_syms = resolve_module_symbols(self, sub_module);
-                if (sub_syms && str_hset_contains(sub_syms, name_str)) {
-                    mangle_name_for_module(self, ident, sub_module);  // copies to ast_arena
-                }
-            }
-        }
+        maybe_mangle_implicit_submodule(self, ident);
 
         if (type_args.size) {
             ast_node *r = ast_node_create_nfa(
@@ -933,6 +922,23 @@ void mangle_name_for_module(parser *self, ast_node *name, str module) {
         ast_node_name_replace(name, mangle_str_for_module(self, name->symbol.name, module));
         name->symbol.is_module_mangled = 1;
         name->symbol.module            = str_copy(self->ast_arena, module);
+    }
+}
+
+// Implicit submodule resolution: bare "Child" in #module Parent resolves to
+// Parent__Child__Child if Parent.Child is a submodule with a Child symbol.
+void maybe_mangle_implicit_submodule(parser *self, ast_node *name) {
+    if (!ast_node_is_symbol(name)) return;
+    if (name->symbol.is_module_mangled) return;
+    if (str_is_empty(self->current_module)) return;
+
+    str name_str   = ast_node_str(name);
+    str sub_module = str_cat_3(self->transient, self->current_module, S("."), name_str);
+    if (!str_hset_contains(self->modules_seen, sub_module)) return;
+
+    hashmap *sub_syms = resolve_module_symbols(self, sub_module);
+    if (sub_syms && str_hset_contains(sub_syms, name_str)) {
+        mangle_name_for_module(self, name, sub_module);
     }
 }
 

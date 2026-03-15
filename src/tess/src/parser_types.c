@@ -514,6 +514,9 @@ int a_type_constructor(parser *self) {
 done:
     array_shrink(args);
     mangle_name(self, name);
+
+    maybe_mangle_implicit_submodule(self, name);
+
     ast_node *node = ast_node_create_nfa_tc(self->ast_arena, name, (ast_node_sized)sized_all(type_args),
                                             (ast_node_sized)sized_all(args));
     return result_ast_node(self, node);

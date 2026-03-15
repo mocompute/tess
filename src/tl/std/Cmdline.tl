@@ -377,7 +377,7 @@ parse(self, argc, argv) {
         }
     }
 
-    args := Args.Args(_values = values, _positional = positional, _rest = rest_args, _command = cmd)
+    args := Args(_values = values, _positional = positional, _rest = rest_args, _command = cmd)
 
     if errors.size > 0 {
         Err(ParseErrors(errors = errors))

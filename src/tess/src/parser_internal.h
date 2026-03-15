@@ -224,6 +224,7 @@ void unmangle_name(parser *, ast_node *);
 // Module symbols
 void     add_module_symbol(parser *, ast_node *);
 hashmap *resolve_module_symbols(parser *, str module_name);
+void     maybe_mangle_implicit_submodule(parser *, ast_node *name);
 
 // parser infrastructure
 
