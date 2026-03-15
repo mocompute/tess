@@ -95,6 +95,8 @@ create(name, description) { ... }
 
 Use `// -- Section Name --` to divide the file into logical groups.
 
+**Re-opening modules:** When a submodule must be defined mid-file, the parent module can be re-opened afterward. Keep definitions in the original section when possible and only use re-opening when the submodule must appear between them (e.g., when later definitions depend on the submodule).
+
 ## Naming Conventions
 
 - **Types**: PascalCase: `ArgSpec`, `ParseError`, `Parser`

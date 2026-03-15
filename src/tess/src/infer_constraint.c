@@ -210,9 +210,9 @@ static void load_toplevel_let(tl_infer *self, ast_node *node) {
     ast_node **p        = str_map_get(self->toplevels, name_str);
 
     if (p) {
-        // merge type if the existing node is a symbol; otherwise error
+        // merge type if the existing node is a forward-declaration symbol;
+        // same-kind duplicate (let over let): first wins, silently skip.
         if (!ast_node_is_symbol(*p)) {
-            array_push(self->errors, ((tl_infer_error){.tag = tl_err_type_exists, .node = node}));
             return;
         }
 
@@ -330,9 +330,9 @@ void load_toplevel(tl_infer *self, ast_node_sized nodes) {
             str        name_str = node->symbol.name;
             ast_node **p        = str_map_get(self->toplevels, name_str);
             if (p) {
-                // merge annotation if existing node is a let node; otherwise error
+                // merge annotation if existing node is a let node; otherwise
+                // silently skip — duplicate forward decl from re-opened module.
                 if (!ast_node_is_let(*p)) {
-                    array_push(self->errors, ((tl_infer_error){.tag = tl_err_type_exists, .node = node}));
                     continue;
                 }
 
@@ -392,41 +392,53 @@ void load_toplevel(tl_infer *self, ast_node_sized nodes) {
         else if (ast_node_is_trait_def(node)) {
             str name_str = ast_node_str(node->trait_def.name);
 
-            // Check for duplicate type/trait name
-            if (str_map_get(self->toplevels, name_str) || str_map_get_ptr(self->traits, name_str)) {
+            // Cross-kind collision (trait vs struct/func): error.
+            // Same-kind duplicate user trait: first wins, silently skip.
+            // Built-in traits (source_node == null) cannot be shadowed.
+            if (str_map_get(self->toplevels, name_str)) {
                 array_push(self->errors, ((tl_infer_error){.tag = tl_err_type_exists, .node = node}));
             } else {
-                // Register trait in the trait registry
-                tl_trait_def *def = new(self->arena, tl_trait_def);
-                def->name         = str_copy(self->arena, name_str);
-                def->generic_name = str_copy(self->arena, node->trait_def.name->symbol.original);
-                def->parents      = (str_array){.alloc = self->arena};
-                def->sigs         = (tl_trait_sig_array){.alloc = self->arena};
-                def->source_node  = node;
+                tl_trait_def **existing = str_map_get_ptr(self->traits, name_str);
+                if (existing && (*existing)->source_node) {
+                    // duplicate user-defined trait from re-opened module — skip
+                } else if (existing) {
+                    // trying to shadow a built-in trait — error
+                    array_push(self->errors, ((tl_infer_error){.tag = tl_err_type_exists, .node = node}));
+                } else {
+                    // Register trait in the trait registry
+                    tl_trait_def *def = new(self->arena, tl_trait_def);
+                    def->name         = str_copy(self->arena, name_str);
+                    def->generic_name = str_copy(self->arena, node->trait_def.name->symbol.original);
+                    def->parents      = (str_array){.alloc = self->arena};
+                    def->sigs         = (tl_trait_sig_array){.alloc = self->arena};
+                    def->source_node  = node;
 
-                // Collect parent trait names
-                for (u32 i = 0; i < node->trait_def.n_parents; i++) {
-                    ast_node *parent = node->trait_def.parents[i];
-                    str raw_name    = ast_node_is_nfa(parent) ? ast_node_str(parent->named_application.name)
-                                                              : ast_node_str(parent);
-                    str parent_name = str_copy(self->arena, raw_name);
-                    array_push(def->parents, parent_name);
-                }
-
-                // Collect signatures (name + arity)
-                for (u32 i = 0; i < node->trait_def.n_signatures; i++) {
-                    ast_node *sig   = node->trait_def.signatures[i];
-                    u8        arity = 0;
-                    if (sig->symbol.annotation && ast_node_is_arrow(sig->symbol.annotation)) {
-                        ast_node_sized params =
-                          ast_node_sized_from_ast_array_const(sig->symbol.annotation->arrow.left);
-                        arity = (u8)params.size;
+                    // Collect parent trait names
+                    for (u32 i = 0; i < node->trait_def.n_parents; i++) {
+                        ast_node *parent = node->trait_def.parents[i];
+                        str raw_name =
+                          ast_node_is_nfa(parent) ? ast_node_str(parent->named_application.name)
+                                                  : ast_node_str(parent);
+                        str parent_name = str_copy(self->arena, raw_name);
+                        array_push(def->parents, parent_name);
                     }
-                    tl_trait_sig tsig = {.name = str_copy(self->arena, ast_node_str(sig)), .arity = arity};
-                    array_push(def->sigs, tsig);
-                }
 
-                str_map_set_ptr(&self->traits, name_str, def);
+                    // Collect signatures (name + arity)
+                    for (u32 i = 0; i < node->trait_def.n_signatures; i++) {
+                        ast_node *sig   = node->trait_def.signatures[i];
+                        u8        arity = 0;
+                        if (sig->symbol.annotation && ast_node_is_arrow(sig->symbol.annotation)) {
+                            ast_node_sized params =
+                              ast_node_sized_from_ast_array_const(sig->symbol.annotation->arrow.left);
+                            arity = (u8)params.size;
+                        }
+                        tl_trait_sig tsig = {.name  = str_copy(self->arena, ast_node_str(sig)),
+                                             .arity = arity};
+                        array_push(def->sigs, tsig);
+                    }
+
+                    str_map_set_ptr(&self->traits, name_str, def);
+                }
             }
         }
 
@@ -434,8 +446,15 @@ void load_toplevel(tl_infer *self, ast_node_sized nodes) {
             str        name_str = ast_node_str(node->user_type_def.name);
             ast_node **p        = str_map_get(self->toplevels, name_str);
 
-            if (p || str_map_get_ptr(self->traits, name_str)) {
+            if (str_map_get_ptr(self->traits, name_str)) {
+                // Cross-kind collision (utd vs trait): error
                 array_push(self->errors, ((tl_infer_error){.tag = tl_err_type_exists, .node = node}));
+            } else if (p) {
+                if (!ast_node_is_utd(*p)) {
+                    // Cross-kind collision: error
+                    array_push(self->errors, ((tl_infer_error){.tag = tl_err_type_exists, .node = node}));
+                }
+                // else: same-kind duplicate UTD — first wins, silently skip
             } else {
                 create_type_constructor_from_user_type(self, node);
                 str_map_set(&self->toplevels, name_str, &node);

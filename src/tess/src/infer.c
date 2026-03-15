@@ -77,6 +77,7 @@ tl_infer *tl_infer_create(allocator *alloc, tl_infer_opts const *opts) {
             def->generic_name = str_init(self->arena, builtins[i].name);
             def->parents      = (str_array){.alloc = self->arena};
             def->sigs         = (tl_trait_sig_array){.alloc = self->arena};
+            def->source_node  = null;
             tl_trait_sig sig  = {.name  = str_init(self->arena, builtins[i].func),
                                  .arity = builtins[i].arity};
             array_push(def->sigs, sig);
@@ -89,6 +90,7 @@ tl_infer *tl_infer_create(allocator *alloc, tl_infer_opts const *opts) {
             def->generic_name = str_init(self->arena, "Ord");
             def->parents      = (str_array){.alloc = self->arena};
             def->sigs         = (tl_trait_sig_array){.alloc = self->arena};
+            def->source_node  = null;
             str parent        = str_init(self->arena, "Eq");
             array_push(def->parents, parent);
             tl_trait_sig sig = {.name = str_init(self->arena, "cmp"), .arity = 2};

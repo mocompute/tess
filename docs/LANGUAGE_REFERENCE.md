@@ -126,6 +126,29 @@ HM.insert(map, key, value)   // Same as Collections.HashMap.insert(...)
 - The alias name cannot use reserved prefixes (`c_*`, `_tl_*`) or contain `__`
 - The `main` module cannot be aliased
 
+### Re-opening Modules
+
+A module can be re-opened after other modules have been defined. This is useful when defining a submodule requires interrupting the parent module:
+
+```tl
+#module Foo
+FooData: { x: CInt }
+create_data(x: CInt) -> FooData { FooData(x = x) }
+
+#module Foo.Bar
+BarData: { y: CInt }
+make_bar(y: CInt) -> BarData { BarData(y = y) }
+
+#module Foo
+// Back in Foo — all previously defined symbols are available
+create_pair(x: CInt, y: CInt) -> FooData {
+    bar := Foo.Bar.make_bar(y)
+    create_data(x + bar.y)
+}
+```
+
+When a module is re-opened, all symbols from the original definition are restored. New definitions are added normally. If a symbol is defined more than once (e.g., when the same file is parsed twice through different import paths), the first definition wins and duplicates are silently skipped.
+
 ### Auto-Collapse for Same-Name Types
 
 When a module defines a type with the same name as the module itself, the compiler automatically registers the bare module name as a type alias. This means you can use the short form in type positions without an explicit `#alias`:

@@ -1249,9 +1249,8 @@ void toplevel_hash_unity_file(parser *self, str argument) {
 }
 
 int toplevel_hash_module(parser *self, str cmd, str module) {
-    // Modules: the name's sole use is to prevent multiple evaluations of the same terms. If a
-    // duplicate name is seen, parsing will stop returning terms it sees until a new #module or new
-    // #unity_file directive is seen.
+    // Modules can be re-opened: if #module Foo appears again after #module Foo.Bar, parsing
+    // resumes in Foo with its previously collected symbols intact.
     int is_prelude      = str_eq(cmd, S("module_prelude"));
     self->skip_module   = 0;
     self->expect_module = 0;
@@ -1289,33 +1288,30 @@ int toplevel_hash_module(parser *self, str cmd, str module) {
         already_seen = str_hset_contains(self->modules_seen, module);
     }
 
-    if (already_seen) self->skip_module = 1;
-    else {
-        // save current module symbols, if any
-        save_current_module_symbols(self);
+    // save current module symbols, if any
+    save_current_module_symbols(self);
 
-        // Prelude: don't add to modules_seen
-        if (!is_prelude) {
-            str_hset_insert(&self->modules_seen, module);
-        }
-        if (is_main_function(module)) self->current_module = str_empty();
-        else {
-            // Note: do not use ast_arena, as it could be speculative and discarded
-            self->current_module = str_copy(self->parent_alloc, module);
-        }
-
-        // Only reset during first pass. During second pass, current_module_symbols may point
-        // to a hashmap in module_symbols (set by load_module_symbols), and resetting it would
-        // corrupt module_symbols.
-
-        if (self->mode == mode_symbols) {
-            hset_reset(self->current_module_symbols);
-        }
-
-        // load module symbols, if any (for re-opened modules, this pre-populates with prelude
-        // symbols)
-        load_module_symbols(self);
+    if (!already_seen && !is_prelude) {
+        str_hset_insert(&self->modules_seen, module);
     }
+
+    if (is_main_function(module)) self->current_module = str_empty();
+    else {
+        // Note: do not use ast_arena, as it could be speculative and discarded
+        self->current_module = str_copy(self->parent_alloc, module);
+    }
+
+    // Only reset symbols on first encounter during symbol collection pass.
+    // During second pass, current_module_symbols may point to a hashmap in
+    // module_symbols (set by load_module_symbols), and resetting it would
+    // corrupt module_symbols.
+    if (!already_seen && self->mode == mode_symbols) {
+        hset_reset(self->current_module_symbols);
+    }
+
+    // load module symbols — for re-opened modules, this restores previously
+    // collected symbols
+    load_module_symbols(self);
 
     if (is_prelude) {
         str_hset_insert(&self->module_preludes_seen, module);
