@@ -1301,12 +1301,16 @@ int maybe_mangle_binop(parser *self, ast_node *op, ast_node **inout, ast_node *r
             // When mangling a cross-module function call like ModuleOne.f(-1, 1),
             // we need to also mangle for arity. The arity mangling in a_funcall
             // doesn't know about the target module, so we do it here.
+            // Skip arity mangling for type constructors — they use the bare name.
             str      target_module = (*inout)->symbol.name;
             str      original_name = to_mangle->symbol.name;
-            str      mangled_name  = mangle_str_for_arity(self->ast_arena, original_name, arity);
-            hashmap *module_syms   = resolve_module_symbols(self, target_module);
-            if (module_syms && str_hset_contains(module_syms, mangled_name)) {
-                to_mangle->symbol.name = mangled_name;
+            int      is_tc         = ast_node_is_nfa(right) && right->named_application.is_type_constructor;
+            if (!is_tc) {
+                str      mangled_name  = mangle_str_for_arity(self->ast_arena, original_name, arity);
+                hashmap *module_syms   = resolve_module_symbols(self, target_module);
+                if (module_syms && str_hset_contains(module_syms, mangled_name)) {
+                    to_mangle->symbol.name = mangled_name;
+                }
             }
             mangle_name_for_module(self, to_mangle, target_module);
 
