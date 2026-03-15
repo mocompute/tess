@@ -3544,6 +3544,10 @@ int tl_type_subs_unify_tv_mono(tl_type_subs *self, tl_type_variable tv, tl_monot
     return 0;
 }
 
+static inline int tl_monotype_needs_substitute(tl_monotype *self, u32 gen) {
+    return self && self->visited_gen != gen && self->hash_gen != HASH_GEN_PERMANENT;
+}
+
 static void tl_monotype_substitute_(allocator *alloc, tl_monotype *self, tl_type_subs *subs,
                                     hashmap *exclude, u32 gen) {
     // exclude may be null.
@@ -3569,7 +3573,7 @@ static void tl_monotype_substitute_(allocator *alloc, tl_monotype *self, tl_type
 
         tl_monotype *resolved = subs->data.v[root].type;
         if (resolved) {
-            if (!tl_monotype_is_concrete_no_weak(resolved)) {
+            if (tl_monotype_needs_substitute(resolved, gen)) {
                 tl_monotype_substitute_(alloc, resolved, subs, exclude, gen);
             }
 
@@ -3587,7 +3591,8 @@ static void tl_monotype_substitute_(allocator *alloc, tl_monotype *self, tl_type
     case tl_tuple:     {
         tl_monotype_sized arr = tl_monotype_children(self);
         forall(i, arr) {
-            tl_monotype_substitute_(alloc, arr.v[i], subs, exclude, gen);
+            if (tl_monotype_needs_substitute(arr.v[i], gen))
+                tl_monotype_substitute_(alloc, arr.v[i], subs, exclude, gen);
         }
 
     } break;
