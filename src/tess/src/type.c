@@ -113,6 +113,7 @@ static THREAD_LOCAL tl_type_constructor_inst
 static THREAD_LOCAL tl_type_constructor_inst
   *canonical_unsigned; // canonical unsigned integer cons_inst (CUnsignedLongLong)
 
+#define HASH_GEN_PERMANENT   UINT32_MAX
 #define HASH_CYCLE_STACK_CAP 32
 
 typedef struct {
@@ -137,6 +138,13 @@ static int hash_cycle_push(hash_cycle_stack *s, u64 key) {
 static void hash_cycle_pop(hash_cycle_stack *s) {
     assert(s->count > 0);
     if (s->count > 0) s->count--;
+}
+
+static inline u32 hash_gen_next(void) {
+    u32 gen = hash_gen++;
+    if (gen == HASH_GEN_PERMANENT) gen = hash_gen++;
+    if (gen == 0) gen = hash_gen++;
+    return gen;
 }
 
 tl_type_registry *tl_type_registry_create(allocator *alloc, allocator *transient, tl_type_subs *subs) {
@@ -2407,6 +2415,7 @@ void tl_monotype_ptr_set_target(tl_monotype *ptr, tl_monotype *target) {
     assert(tl_monotype_is_ptr(ptr));
     assert(target);
     ptr->cons_inst->args.v[0] = target;
+    ptr->hash_gen = 0; // invalidate any cached hash
     assert(tl_monotype_ptr_target(ptr) == target);
 }
 
@@ -2451,7 +2460,11 @@ u64 tl_monotype_sized_hash64_(u64, tl_monotype_sized, u32, hash_cycle_stack *);
 u64 tl_monotype_hash64_(tl_monotype *self, u32 gen, hash_cycle_stack *in_progress) {
     if (!self) return 0;
 
-    // Generation-based memoization
+    // Permanent cache for concrete-no-weak types
+    if (self->hash_gen == HASH_GEN_PERMANENT)
+        return self->cached_hash;
+
+    // Generation-based memoization (within-call DAG dedup)
     if (self->hash_gen == gen) {
         return self->cached_hash;
     }
@@ -2533,15 +2546,38 @@ u64 tl_monotype_hash64_(tl_monotype *self, u32 gen, hash_cycle_stack *in_progres
     } break;
     }
 
-    // Cache result
-    self->hash_gen    = gen;
+    // Cache result — permanent for concrete-no-weak types (arrows excluded due to hash_ignore_fvs)
+    int permanent = 0;
+    switch (self->tag) {
+    case tl_integer:
+    case tl_any:       permanent = 1; break;
+    case tl_cons_inst: {
+        permanent = 1;
+        forall(i, self->cons_inst->args)
+            if (self->cons_inst->args.v[i]->hash_gen != HASH_GEN_PERMANENT) { permanent = 0; break; }
+    } break;
+    case tl_tuple: {
+        permanent = 1;
+        forall(i, self->list.xs)
+            if (self->list.xs.v[i]->hash_gen != HASH_GEN_PERMANENT) { permanent = 0; break; }
+    } break;
+    case tl_placeholder:
+    case tl_ellipsis:
+    case tl_var:
+    case tl_weak:
+    case tl_weak_int_signed:
+    case tl_weak_int_unsigned:
+    case tl_weak_float:
+    case tl_arrow:     break;
+    }
+
+    self->hash_gen    = permanent ? HASH_GEN_PERMANENT : gen;
     self->cached_hash = hash;
     return hash;
 }
 
 u64 tl_monotype_hash64(tl_monotype *self) {
-    u32 gen = hash_gen++;
-    if (gen == 0) gen = hash_gen++; // skip 0 on wraparound
+    u32              gen         = hash_gen_next();
     hash_cycle_stack in_progress = {.count = 0};
     return tl_monotype_hash64_(self, gen, &in_progress);
 }
@@ -3732,8 +3768,7 @@ u64 tl_monotype_sized_hash64_(u64 seed, tl_monotype_sized arr, u32 gen, hash_cyc
 
 u64 tl_monotype_sized_hash64(u64 seed, tl_monotype_sized arr) {
     if (!arr.size) return seed;
-    u32 gen = hash_gen++;
-    if (gen == 0) gen = hash_gen++; // skip 0 on wraparound
+    u32              gen         = hash_gen_next();
     hash_cycle_stack in_progress = {.count = 0};
     return tl_monotype_sized_hash64_(seed, arr, gen, &in_progress);
 }
