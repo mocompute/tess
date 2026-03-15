@@ -2582,9 +2582,10 @@ static int ufcs_rewrite_call(tl_infer *self, traverse_ctx *ctx, ast_node *node, 
         }
         str module = lookup_type->cons_inst->def->module;
         if (!str_is_empty(module)) {
-            str qualified = str_qualify(self->arena, module, field_name);
-            ufcs_name     = mangle_str_for_arity(self->arena, qualified, ufcs_arity);
-            fn_poly       = lookup_poly(self, ufcs_name);
+            str safe_module = str_replace_char_str(self->arena, module, '.', S("__"));
+            str qualified   = str_qualify(self->arena, safe_module, field_name);
+            ufcs_name       = mangle_str_for_arity(self->arena, qualified, ufcs_arity);
+            fn_poly         = lookup_poly(self, ufcs_name);
         }
     }
     if (!fn_poly) {

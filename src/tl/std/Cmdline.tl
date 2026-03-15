@@ -32,11 +32,6 @@ ArgSpec: {
     required:    Int,                   // 1 = required, 0 = optional
 }
 
-// Parsed value for a single argument.
-ArgValue: | BoolVal { v: Bool }
-          | CountVal { v: Int }
-          | StrVal { v:   Str }
-          | Absent
 
 // Individual parse error.
 ParseError: | UnknownFlag { flag: Str }
@@ -47,13 +42,6 @@ ParseError: | UnknownFlag { flag: Str }
 // Collection of all errors from a parse.
 ParseErrors: { errors: Array[ParseError] }
 
-// Parsed arguments container.
-Args: {
-    _values:     Ptr[HashMap[Str, ArgValue]],
-    _positional: Array[Str],
-    _rest:       Array[Str],
-    _command:    Option[Str],
-}
 
 // Cmdline specification (builder).
 Cmdline: {
@@ -63,6 +51,32 @@ Cmdline: {
     _specs:       Array[ArgSpec],
     _commands:    Array[Str],
 }
+
+#module Cmdline.Args
+
+// Parsed value for a single argument.
+ArgValue: | BoolVal { v: Bool }
+          | CountVal { v: Int }
+          | StrVal { v:   Str }
+          | Absent
+
+// Parsed arguments container.
+Args: {
+    _values:     Ptr[HashMap[Str, ArgValue]],
+    _positional: Array[Str],
+    _rest:       Array[Str],
+    _command:    Option[Str],
+}
+
+get_flag   (args: Ptr[Const[Args]], name: Str) -> Bool
+get_count  (args: Ptr[Const[Args]], name: Str) -> Int
+get_option (args: Ptr[Const[Args]], name: Str) -> Option[Str]
+get_command(args: Ptr[Const[Args]])            -> Option[Str]
+positionals(args: Ptr[Const[Args]])            -> Array[Str]
+rest       (args: Ptr[Const[Args]])            -> Array[Str]
+has        (args: Ptr[Const[Args]], name: Str) -> Bool
+
+#module Cmdline
 
 // -- Synopsis --
 
@@ -79,16 +93,9 @@ required(self: Ptr[Cmdline], long_name: Str, short_name: CChar, desc: Str) -> Vo
 required(self: Ptr[Cmdline], long_name: Str, desc: Str)                    -> Void
 command (self: Ptr[Cmdline], name: Str)                                    -> Void
 
-parse        (self: Ptr[Cmdline], argc: CInt, argv: Ptr[CString]) -> Result[Args, ParseErrors]
-parse_or_exit(self: Ptr[Cmdline], argc: CInt, argv: Ptr[CString]) -> Args
+parse        (self: Ptr[Cmdline], argc: CInt, argv: Ptr[CString]) -> Result[Cmdline.Args.Args, ParseErrors]
+parse_or_exit(self: Ptr[Cmdline], argc: CInt, argv: Ptr[CString]) -> Cmdline.Args.Args
 
-get_flag   (args: Ptr[Const[Args]], name: Str) -> Bool
-get_count  (args: Ptr[Const[Args]], name: Str) -> Int
-get_option (args: Ptr[Const[Args]], name: Str) -> Option[Str]
-get_command(args: Ptr[Const[Args]])            -> Option[Str]
-positionals(args: Ptr[Const[Args]])            -> Array[Str]
-rest       (args: Ptr[Const[Args]])            -> Array[Str]
-has        (args: Ptr[Const[Args]], name: Str) -> Bool
 
 help_text (self: Ptr[Cmdline]) -> Str
 print_help(self: Ptr[Cmdline]) -> Void
@@ -97,11 +104,11 @@ from_argv(argc: CInt, argv: Ptr[CString]) -> Array[Str]
 
 // -- Private helpers --
 
-_find_spec_long (self: Ptr[Cmdline], name: Str)                            -> Option[CSize]
-_find_spec_short(self: Ptr[Cmdline], ch: CChar)                            -> Option[CSize]
-_store_bool     (values: Ptr[HashMap[Str, ArgValue]], name: Str)           -> Void
-_store_count    (values: Ptr[HashMap[Str, ArgValue]], name: Str)           -> Void
-_store_str      (values: Ptr[HashMap[Str, ArgValue]], name: Str, val: Str) -> Void
+_find_spec_long (self: Ptr[Cmdline], name: Str)                                         -> Option[CSize]
+_find_spec_short(self: Ptr[Cmdline], ch: CChar)                                         -> Option[CSize]
+_store_bool     (values: Ptr[HashMap[Str, Cmdline.Args.ArgValue]], name: Str)           -> Void
+_store_count    (values: Ptr[HashMap[Str, Cmdline.Args.ArgValue]], name: Str)           -> Void
+_store_str      (values: Ptr[HashMap[Str, Cmdline.Args.ArgValue]], name: Str, val: Str) -> Void
 
 
 // -- Implementation --
@@ -199,22 +206,22 @@ _find_spec_short(self, ch) {
 }
 
 _store_bool(values, name) {
-    HashMap.set(values, name, BoolVal(v = true))
+    HashMap.set(values, name, Cmdline.Args.BoolVal(v = true))
 }
 
 _store_count(values, name) {
     s: Some := HashMap.get_copy(values, name) else {
-        HashMap.set(values, name, CountVal(v = 1))
+        HashMap.set(values, name, Cmdline.Args.CountVal(v = 1))
         return
     }
     when s.v {
-        c: CountVal { HashMap.set(values, name, CountVal(v = c.v + 1)) }
-        else { HashMap.set(values, name, CountVal(v = 1)) }
+        c: CountVal { HashMap.set(values, name, Cmdline.Args.CountVal(v = c.v + 1)) }
+        else { HashMap.set(values, name, Cmdline.Args.CountVal(v = 1)) }
     }
 }
 
 _store_str(values, name, val) {
-    HashMap.set(values, name, StrVal(v = val))
+    HashMap.set(values, name, Cmdline.Args.StrVal(v = val))
 }
 
 _parse_long(self, values, errors, name, arg, argc, argv, ip) {
@@ -294,7 +301,7 @@ _parse_short(self, values, errors, arg, argc, argv, ip) {
 // -- Parse --
 
 parse(self, argc, argv) {
-    values           := HashMap.create[Str, ArgValue]()
+    values           := HashMap.create[Str, Cmdline.Args.ArgValue]()
     positional       := Array.empty[Str]()
     rest_args        := Array.empty[Str]()
     errors           := Array.empty[ParseError]()
@@ -368,7 +375,7 @@ parse(self, argc, argv) {
         }
     }
 
-    args := Args(_values = values, _positional = positional, _rest = rest_args, _command = cmd)
+    args := Cmdline.Args.Args(_values = values, _positional = positional, _rest = rest_args, _command = cmd)
 
     if errors.size > 0 {
         Err(ParseErrors(errors = errors))
@@ -398,38 +405,6 @@ parse_or_exit(self, argc, argv) {
         }
     }
 }
-
-
-// -- Query --
-
-get_flag(args, name) {
-    s: Some := HashMap.get_copy(args->_values, name) else { return false }
-    when s.v {
-        b: BoolVal { b.v }
-        else { false }
-    }
-}
-
-get_count(args, name) {
-    s: Some := HashMap.get_copy(args->_values, name) else { return 0 }
-    when s.v {
-        c: CountVal { c.v }
-        else { 0 }
-    }
-}
-
-get_option(args, name) {
-    s: Some := HashMap.get_copy(args->_values, name) else { return None }
-    when s.v {
-        sv: StrVal { Some(sv.v) }
-        else { None }
-    }
-}
-
-get_command(args)       { args->_command                        }
-positionals(args)       { args->_positional                     }
-rest       (args)       { args->_rest                           }
-has        (args, name) { HashMap.contains(args->_values, name) }
 
 
 // -- Help --
@@ -514,3 +489,39 @@ from_argv(argc, argv) {
     }
     result
 }
+
+
+// -- Args --
+
+#module Cmdline.Args
+
+// -- Query --
+
+get_flag(args, name) {
+    s: Some := HashMap.get_copy(args->_values, name) else { return false }
+    when s.v {
+        b: BoolVal { b.v }
+        else { false }
+    }
+}
+
+get_count(args, name) {
+    s: Some := HashMap.get_copy(args->_values, name) else { return 0 }
+    when s.v {
+        c: CountVal { c.v }
+        else { 0 }
+    }
+}
+
+get_option(args, name) {
+    s: Some := HashMap.get_copy(args->_values, name) else { return None }
+    when s.v {
+        sv: StrVal { Some(sv.v) }
+        else { None }
+    }
+}
+
+get_command(args)       { args->_command                        }
+positionals(args)       { args->_positional                     }
+rest       (args)       { args->_rest                           }
+has        (args, name) { HashMap.contains(args->_values, name) }
