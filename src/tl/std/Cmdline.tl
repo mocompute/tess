@@ -104,8 +104,8 @@ from_argv(argc: CInt, argv: Ptr[CString]) -> Array[Str]
 
 // -- Private helpers --
 
-_find_spec_long (self: Ptr[Cmdline], name: Str)                                         -> Option[CSize]
-_find_spec_short(self: Ptr[Cmdline], ch: CChar)                                         -> Option[CSize]
+_find_spec_long (self: Ptr[Cmdline], name: Str)                                 -> Option[CSize]
+_find_spec_short(self: Ptr[Cmdline], ch: CChar)                                 -> Option[CSize]
 _store_bool     (values: Ptr[HashMap[Str, Args.ArgValue]], name: Str)           -> Void
 _store_count    (values: Ptr[HashMap[Str, Args.ArgValue]], name: Str)           -> Void
 _store_str      (values: Ptr[HashMap[Str, Args.ArgValue]], name: Str, val: Str) -> Void

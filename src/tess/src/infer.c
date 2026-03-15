@@ -594,14 +594,24 @@ void tl_infer_report_errors(tl_infer *self) {
             str             message = err->message;
 
             if (node) {
-                str node_str = v2_ast_node_to_string(self->transient, node);
-                if (node->file && *node->file)
-                    fprintf(stderr, "%s:%u: %s: %.*s: %.*s\n", node->file, node->line,
-                            tl_error_tag_to_string(err->tag), str_ilen(message), str_buf(&message),
-                            str_ilen(node_str), str_buf(&node_str));
-                else
-                    fprintf(stderr, "%s: %.*s: %.*s\n", tl_error_tag_to_string(err->tag), str_ilen(message),
-                            str_buf(&message), str_ilen(node_str), str_buf(&node_str));
+                if (err->tag == tl_err_free_variable_not_found) {
+                    if (node->file && *node->file)
+                        fprintf(stderr, "%s:%u: %s: %.*s\n", node->file, node->line,
+                                tl_error_tag_to_string(err->tag), str_ilen(message), str_buf(&message));
+                    else
+                        fprintf(stderr, "%s: %.*s\n", tl_error_tag_to_string(err->tag), str_ilen(message),
+                                str_buf(&message));
+                } else {
+                    str node_str = v2_ast_node_to_string(self->transient, node);
+                    if (node->file && *node->file)
+                        fprintf(stderr, "%s:%u: %s: %.*s: %.*s\n", node->file, node->line,
+                                tl_error_tag_to_string(err->tag), str_ilen(message), str_buf(&message),
+                                str_ilen(node_str), str_buf(&node_str));
+                    else
+                        fprintf(stderr, "%s: %.*s: %.*s\n", tl_error_tag_to_string(err->tag),
+                                str_ilen(message), str_buf(&message), str_ilen(node_str),
+                                str_buf(&node_str));
+                }
             }
 
             else

@@ -2151,15 +2151,65 @@ int add_generic(tl_infer *self, ast_node *node) {
 // Post-inference validation and cleanup
 // ============================================================================
 
-static void missing_fv_error_cb(void *ctx, str fun, str var) {
-    tl_infer *self = ctx;
-    ast_node *node = toplevel_get(self, fun);
-    array_push(self->errors,
-               ((tl_infer_error){.tag = tl_err_free_variable_not_found, .node = node, .message = var}));
+typedef struct {
+    str       target;
+    ast_node *found;
+    tl_infer *self;
+    hashmap  *visited_fns;
+} find_symbol_ctx;
+
+static void find_symbol_cb(void *ctx_, ast_node const *node) {
+    find_symbol_ctx *ctx = ctx_;
+    if (ctx->found) return;
+
+    if (ast_node_is_symbol(node) && 0 == str_cmp(ast_node_str(node), ctx->target)) {
+        ctx->found = (ast_node *)node;
+        return;
+    }
+
+    if (ast_node_is_nfa(node)) {
+        str callee_name = ast_node_str(node->named_application.name);
+        if (!str_hset_contains(ctx->visited_fns, callee_name)) {
+            str_hset_insert(&ctx->visited_fns, callee_name);
+            ast_node *callee = toplevel_get(ctx->self, callee_name);
+            if (callee && !ctx->found) {
+                ast_node_cdfs(ctx, callee, (ast_op_cfun)find_symbol_cb);
+            }
+        }
+    }
+}
+
+typedef struct {
+    tl_infer *self;
+    hashmap  *reported;
+} missing_fv_ctx;
+
+static void missing_fv_error_cb(void *ctx_, str fun, str var) {
+    missing_fv_ctx *ctx = ctx_;
+    if (str_hset_contains(ctx->reported, var)) return;
+    str_hset_insert(&ctx->reported, var);
+
+    ast_node *node = toplevel_get(ctx->self, fun);
+
+    find_symbol_ctx fctx = {
+        .target      = var,
+        .found       = NULL,
+        .self        = ctx->self,
+        .visited_fns = hset_create(ctx->self->transient, 64),
+    };
+    if (node) ast_node_cdfs(&fctx, node, (ast_op_cfun)find_symbol_cb);
+
+    ast_node *err_node = fctx.found ? fctx.found : node;
+    array_push(ctx->self->errors,
+               ((tl_infer_error){.tag = tl_err_free_variable_not_found, .node = err_node, .message = var}));
 }
 
 int check_missing_free_variables(tl_infer *self) {
-    return tl_type_env_check_missing_fvs(self->env, missing_fv_error_cb, self);
+    missing_fv_ctx ctx = {
+        .self     = self,
+        .reported = hset_create(self->transient, 64),
+    };
+    return tl_type_env_check_missing_fvs(self->env, missing_fv_error_cb, &ctx);
 }
 
 void remove_generic_toplevels(tl_infer *self) {
