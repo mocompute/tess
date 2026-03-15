@@ -42,15 +42,10 @@ static int        internal_iter(hashmap const *, hashmap_iterator *, hashmap_ent
 static int        internal_citer(hashmap const *, hashmap_iterator *, hashmap_entry const **out);
 
 static inline int is_occupied(u8 status) constfun;
-static inline int is_tombstone(u8 status) constfun;
 static inline u8  get_probe_distance(u8 status) constfun;
 
 static inline int is_occupied(u8 status) {
     return status & 1;
-}
-
-static inline int is_tombstone(u8 status) {
-    return status & 2;
 }
 
 static inline u8 get_probe_distance(u8 status) {
@@ -60,11 +55,6 @@ static inline u8 get_probe_distance(u8 status) {
 static inline void set_status(u8 *status, int is_occupied, u8 probe_distance) {
     assert(probe_distance <= MAX_PROBE_LEN);
     *status = (u8)(probe_distance << 2) | (is_occupied ? 1 : 0);
-}
-
-static inline void set_tombstone(u8 *status) {
-    *status |= 2;  // set tombstone
-    *status &= ~1; // clear occupied
 }
 
 static inline size_t hashmap_entry_size(hashmap const *map) {
@@ -84,32 +74,18 @@ static inline u32 incr_index(hashmap const *map, u32 index) {
 static hashmap_entry *map_find_at(hashmap *map, byte const *key, u8 key_len, u32 index, u8 hash_tag) {
     assert(map);
 
-    u32 probe_distance = 0;
+    for (u32 pd = 0; pd <= MAX_PROBE_LEN; ++pd, index = incr_index(map, index)) {
+        hashmap_entry *const cell = map_unchecked_at(map, index);
 
-    while (1) {
-        if (probe_distance++ > MAX_PROBE_LEN) return 0;
-
-        hashmap_entry *const cell   = map_unchecked_at(map, index);
-        u8                   status = cell->status;
-
-        if (is_tombstone(status)) {
-
-            index = incr_index(map, index);
-
-        } else if (is_occupied(status)) {
-
-            if (cell->hash_tag == hash_tag
-                && cell->key->size == key_len
-                && 0 == memcmp(key, cell->key->data, cell->key->size))
-                return cell;
-
-            index = incr_index(map, index);
-
-        } else {
-
+        if (!is_occupied(cell->status) || get_probe_distance(cell->status) < pd)
             return null;
-        }
+
+        if (cell->hash_tag == hash_tag
+            && cell->key->size == key_len
+            && 0 == memcmp(key, cell->key->data, cell->key->size))
+            return cell;
     }
+    return null;
 }
 
 static hashmap_entry *map_find(hashmap *map, byte const *key, u8 key_len) {
@@ -456,10 +432,30 @@ void map_erase(hashmap *map, void const *key, u8 key_len) {
     hashmap_entry *cell = map_find(map, key, key_len);
     if (!cell) return;
 
-    set_tombstone(&cell->status);
-
     alloc_free(map->key_alloc, cell->key);
-    cell->key = null;
+
+    u32            index     = (u32)((byte *)cell - map->entries) / (u32)hashmap_entry_size(map);
+    size_t         cell_size = hashmap_entry_size(map);
+    hashmap_entry *curr      = cell;
+
+    // Backwards-shift: fill gap by shifting subsequent entries back
+    while (1) {
+        u32            next      = incr_index(map, index);
+        hashmap_entry *next_cell = map_unchecked_at(map, next);
+
+        if (!is_occupied(next_cell->status) || get_probe_distance(next_cell->status) == 0)
+            break;
+
+        memcpy(curr, next_cell, cell_size);
+        set_status(&curr->status, 1, get_probe_distance(curr->status) - 1);
+
+        curr  = next_cell;
+        index = next;
+    }
+
+    // Clear the vacated slot
+    curr->status = 0;
+    curr->key    = null;
 
     map->n_occupied--;
 }
