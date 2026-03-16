@@ -1684,6 +1684,35 @@ int ast_node_is_void(ast_node const *self) {
 int ast_node_is_nil_or_void(ast_node const *self) {
     return ast_node_is_nil(self) || ast_node_is_void(self);
 }
+int ast_body_is_diverging(ast_node const *node) {
+    if (!node) return 0;
+    if (ast_body != node->tag) return ast_node_is_diverging(node);
+    if (0 == node->body.expressions.size) return 0;
+    return ast_node_is_diverging(node->body.expressions.v[node->body.expressions.size - 1]);
+}
+int ast_node_is_diverging(ast_node const *node) {
+    if (!node) return 0;
+    if (ast_node_is_body(node)) return ast_body_is_diverging(node);
+    if (ast_return == node->tag) return 1; // return and break (is_break_statement)
+    if (ast_continue == node->tag) return 1;
+    if (ast_let_in == node->tag) return ast_body_is_diverging(node->let_in.body);
+    if (ast_case == node->tag) {
+        if (0 == node->case_.arms.size) return 0;
+        for (u32 i = 0; i < node->case_.arms.size; i++) {
+            if (!ast_body_is_diverging(node->case_.arms.v[i])) return 0;
+        }
+        return 1;
+    }
+    if (ast_node_is_nfa(node)) {
+        str name = ast_node_str(node->named_application.name);
+        if (str_eq(name, S("c_exit")) || str_eq(name, S("_tl_fatal_"))) return 1;
+    }
+    if (ast_if_then_else == node->tag) {
+        return ast_node_is_diverging(node->if_then_else.yes) &&
+               (!node->if_then_else.no || ast_node_is_diverging(node->if_then_else.no));
+    }
+    return 0;
+}
 int ast_node_is_symbol(ast_node const *self) {
     return self && ast_symbol == self->tag;
 }

@@ -1153,6 +1153,10 @@ static int infer_body(tl_infer *self, ast_node *node) {
             return 1;
         }
 
+        // Diverging bodies (return, break, continue, fatal) don't produce a value —
+        // leave the type as an unbound variable so it unifies with sibling arms.
+        if (ast_node_is_diverging(last)) return 0;
+
         return constrain(self, node->type, last->type, node, TL_UNIFY_SYMMETRIC);
     }
     return 0;

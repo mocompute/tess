@@ -736,25 +736,21 @@ read_line(self) {
 }
 
 read_all(self, alloc) {
-    when _remaining_bytes(self) {
-        err: Err { Err(err.v) }
-        ok:  Ok {
-            if ok.v == 0 { return Ok(String.empty()) }
+    remaining := try _remaining_bytes(self)
+    if remaining == 0 { return Ok(String.empty()) }
 
-            tmp: Ptr[CChar] := alloc->malloc(alloc, ok.v + 1)
-            if tmp == null { _tl_fatal_("File.read_all: out of memory") }
+    tmp: Ptr[CChar] := alloc->malloc(alloc, remaining + 1)
+    if tmp == null { _tl_fatal_("File.read_all: out of memory") }
 
-            bytes_read := c_fread(tmp, 1, ok.v, self->_handle)
-            if bytes_read < ok.v && c_ferror(self->_handle) != 0 {
-                alloc->free(alloc, tmp)
-                return Err(_errno_to_error(self->_path))
-            }
-
-            result := String.from_bytes(alloc, tmp, bytes_read)
-            alloc->free(alloc, tmp)
-            Ok(result)
-        }
+    bytes_read := c_fread(tmp, 1, remaining, self->_handle)
+    if bytes_read < remaining && c_ferror(self->_handle) != 0 {
+        alloc->free(alloc, tmp)
+        return Err(_errno_to_error(self->_path))
     }
+
+    result := String.from_bytes(alloc, tmp, bytes_read)
+    alloc->free(alloc, tmp)
+    Ok(result)
 }
 
 read_all(self) {
@@ -762,21 +758,17 @@ read_all(self) {
 }
 
 read_bytes(self, alloc) {
-    when _remaining_bytes(self) {
-        err: Err { Err(err.v) }
-        ok:  Ok {
-            if ok.v == 0 { return Ok(Array.empty[Byte]()) }
+    remaining := try _remaining_bytes(self)
+    if remaining == 0 { return Ok(Array.empty[Byte]()) }
 
-            result     := Array.with_capacity_undefined[Byte](alloc, ok.v)
-            bytes_read := c_fread(result.v, 1, ok.v, self->_handle)
-            if bytes_read < ok.v && c_ferror(self->_handle) != 0 {
-                Array.free(result.&, alloc)
-                return Err(_errno_to_error(self->_path))
-            }
-            result.size = bytes_read
-            Ok(result)
-        }
+    result     := Array.with_capacity_undefined[Byte](alloc, remaining)
+    bytes_read := c_fread(result.v, 1, remaining, self->_handle)
+    if bytes_read < remaining && c_ferror(self->_handle) != 0 {
+        Array.free(result.&, alloc)
+        return Err(_errno_to_error(self->_path))
     }
+    result.size = bytes_read
+    Ok(result)
 }
 
 read_bytes(self) {
@@ -858,13 +850,9 @@ is_eof(self) {
 // -- Convenience --
 
 read_file(alloc, path) {
-    when open(alloc, path, Read) {
-        ok: Ok {
-            defer close(ok.v)
-            read_all(ok.v, alloc)
-        }
-        err: Err { Err(err.v) }
-    }
+    f := try open(alloc, path, Read)
+    defer close(f)
+    read_all(f, alloc)
 }
 
 read_file(path) {
@@ -872,13 +860,9 @@ read_file(path) {
 }
 
 read_file_bytes(alloc, path) {
-    when open(alloc, path, Read) {
-        ok: Ok {
-            defer close(ok.v)
-            read_bytes(ok.v, alloc)
-        }
-        err: Err { Err(err.v) }
-    }
+    f := try open(alloc, path, Read)
+    defer close(f)
+    read_bytes(f, alloc)
 }
 
 read_file_bytes(path) {
@@ -904,32 +888,28 @@ append_file(path, content) {
 }
 
 read_lines(alloc, path) {
-    when read_file(alloc, path) {
-        err: Err { Err(err.v) }
-        ok:  Ok {
-            lines := String.split(alloc, ok.v, _S("\n"))
+    content := try read_file(alloc, path)
+    lines   := String.split(alloc, content, _S("\n"))
 
-            // Strip \r from each line (Windows line endings)
-            i: CSize := 0
-            while i < lines.size, i += 1 {
-                line := lines.v.[i]
-                n    := String.len(line)
-                if n > 0 {
-                    last: Some := String.char_at(line, n - 1) else { continue }
-                    if last.v == '\r' {
-                        lines.v.[i] = String.slice(alloc, line, 0, n - 1)
-                    }
-                }
+    // Strip \r from each line (Windows line endings)
+    i: CSize := 0
+    while i < lines.size, i += 1 {
+        line := lines.v.[i]
+        n    := String.len(line)
+        if n > 0 {
+            last: Some := String.char_at(line, n - 1) else { continue }
+            if last.v == '\r' {
+                lines.v.[i] = String.slice(alloc, line, 0, n - 1)
             }
-
-            // Remove trailing empty line (split on "\n" produces one after final newline)
-            if lines.size > 0 && String.is_empty(lines.v.[lines.size - 1]) {
-                lines.size -= 1
-            }
-
-            Ok(lines)
         }
     }
+
+    // Remove trailing empty line (split on "\n" produces one after final newline)
+    if lines.size > 0 && String.is_empty(lines.v.[lines.size - 1]) {
+        lines.size -= 1
+    }
+
+    Ok(lines)
 }
 
 read_lines(path) {

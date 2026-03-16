@@ -10,16 +10,9 @@ Issues encountered while implementing `File.tl` (the first non-trivial std libra
 
 **Fixed:** `try` now only constrains the error variant types to match. The transpiler constructs a new Result of the enclosing function's return type on the error path, copying the error value field-by-field. `File.tl` convenience wrappers (`write_file`, `write_file_bytes`, `append_file`) now use `try open(...)` instead of verbose `when` blocks.
 
-## 3. Divergent `when` arms don't unify with other arms
+## 3. ~~Divergent `when` arms don't unify with other arms~~ (FIXED)
 
-```tl
-when expr {
-    e: Some { c_printf("error\n"); return 1 }  // diverges
-    n: None { }                                  // Void
-}
-```
-
-Type conflict between the diverging arm and the Void arm. Divergent branches should be compatible with any type.
+**Fixed:** `infer_body` now detects diverging bodies (via `ast_node_is_diverging`) and leaves their type unbound instead of constraining it to the last expression's type. Unbound type variables unify freely with sibling arm types. Also fixes diverging `if-else` branches.
 
 ## 4. `if` without `else` is `Void`
 
@@ -42,4 +35,4 @@ The `else` block can diverge but cannot access the `Err` value, so error propaga
 
 ## Summary
 
-Issues 1–3 had the most impact on API design and code quality. ~~Issue 1 forced a different return type convention for write operations.~~ (Fixed: `Result[Void, E]` now works.) ~~Issue 2 made `try` unusable for convenience wrappers.~~ (Fixed: cross-type `try` now works.) Issue 3 made inline error checking with `when` awkward. Issues 3–5 account for the remaining verbosity in the File module.
+Issues 1–3 had the most impact on API design and code quality. ~~Issue 1 forced a different return type convention for write operations.~~ (Fixed.) ~~Issue 2 made `try` unusable for convenience wrappers.~~ (Fixed.) ~~Issue 3 made inline error checking with `when` awkward.~~ (Fixed.) Issues 4–5 account for the remaining verbosity in the File module.
