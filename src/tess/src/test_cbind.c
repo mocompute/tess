@@ -422,6 +422,179 @@ static int test_gcc_with_system_includes(void) {
 }
 
 // ---------------------------------------------------------------------------
+// 20. __builtin_va_list as type
+// ---------------------------------------------------------------------------
+static int test_builtin_va_list(void) {
+    int        error = 0;
+    allocator *a     = arena_create(default_allocator(), 4096);
+
+    error += check(a, "builtin_va_list", "test.h", "test",
+                   "# 1 \"test.h\"\n"
+                   "int vprintf(const char *fmt, __builtin_va_list ap);\n",
+                   "#module test\n"
+                   "#include <test.h>\n"
+                   "\n"
+                   "c_vprintf(fmt: Ptr[Const[CChar]], ap: c___builtin_va_list) -> CInt\n");
+
+    arena_destroy(&a);
+    return error;
+}
+
+// ---------------------------------------------------------------------------
+// 21. Struct with mixed pointer declarators
+// ---------------------------------------------------------------------------
+static int test_struct_mixed_pointers(void) {
+    int        error = 0;
+    allocator *a     = arena_create(default_allocator(), 4096);
+
+    error += check(a, "mixed pointer declarators", "test.h", "test",
+                   "# 1 \"test.h\"\n"
+                   "struct S { int *a, b, **c; };\n",
+                   "#module test\n"
+                   "#include <test.h>\n"
+                   "\n"
+                   "c_struct_S: { a: Ptr[CInt], b: CInt, c: Ptr[Ptr[CInt]] }\n"
+                   "\n");
+
+    arena_destroy(&a);
+    return error;
+}
+
+// ---------------------------------------------------------------------------
+// 22. Enum with negative values
+// ---------------------------------------------------------------------------
+static int test_enum_negative(void) {
+    int        error = 0;
+    allocator *a     = arena_create(default_allocator(), 4096);
+
+    error += check(a, "enum negative values", "test.h", "test",
+                   "# 1 \"test.h\"\n"
+                   "enum status { OK = 0, ERR = -1, NOMEM = -2 };\n",
+                   "#module test\n"
+                   "#include <test.h>\n"
+                   "\n"
+                   "c_OK: CInt\n"
+                   "c_ERR: CInt\n"
+                   "c_NOMEM: CInt\n"
+                   "\n");
+
+    arena_destroy(&a);
+    return error;
+}
+
+// ---------------------------------------------------------------------------
+// 23. Struct with function pointer field
+// ---------------------------------------------------------------------------
+static int test_struct_fp_field(void) {
+    int        error = 0;
+    allocator *a     = arena_create(default_allocator(), 4096);
+
+    error += check(a, "struct fp field", "test.h", "test",
+                   "# 1 \"test.h\"\n"
+                   "struct ops { void (*init)(int); int (*get)(void); };\n",
+                   "#module test\n"
+                   "#include <test.h>\n"
+                   "\n"
+                   "c_struct_ops: { init: (arg0: CInt) -> Void, get: () -> CInt }\n"
+                   "\n");
+
+    arena_destroy(&a);
+    return error;
+}
+
+// ---------------------------------------------------------------------------
+// 24. Static inline function body is skipped
+// ---------------------------------------------------------------------------
+static int test_static_inline_skipped(void) {
+    int        error = 0;
+    allocator *a     = arena_create(default_allocator(), 4096);
+
+    // static inline should be skipped; only the regular function should appear
+    error += check(a, "static inline skipped", "test.h", "test",
+                   "# 1 \"test.h\"\n"
+                   "static inline int square(int x) { return x * x; }\n"
+                   "int cube(int x);\n",
+                   "#module test\n"
+                   "#include <test.h>\n"
+                   "\n"
+                   "c_cube(x: CInt) -> CInt\n");
+
+    arena_destroy(&a);
+    return error;
+}
+
+// ---------------------------------------------------------------------------
+// 25. C11 attributes don't break parsing
+// ---------------------------------------------------------------------------
+static int test_c11_attributes(void) {
+    int        error = 0;
+    allocator *a     = arena_create(default_allocator(), 4096);
+
+    error += check(a, "c11 attributes", "test.h", "test",
+                   "# 1 \"test.h\"\n"
+                   "_Alignas(16) int aligned_func(void);\n",
+                   "#module test\n"
+                   "#include <test.h>\n"
+                   "\n"
+                   "c_aligned_func() -> CInt\n");
+
+    arena_destroy(&a);
+    return error;
+}
+
+// ---------------------------------------------------------------------------
+// 26. Define followed by function (tokenizer doesn't eat +)
+// ---------------------------------------------------------------------------
+static int test_define_then_function(void) {
+    int        error = 0;
+    allocator *a     = arena_create(default_allocator(), 4096);
+
+    error += check(a, "define then function", "test.h", "test",
+                   "# 1 \"test.h\"\n"
+                   "#define VERSION 1\n"
+                   "int init(void);\n",
+                   "#module test\n"
+                   "#include <test.h>\n"
+                   "\n"
+                   "c_VERSION: CInt\n"
+                   "\n"
+                   "c_init() -> CInt\n");
+
+    arena_destroy(&a);
+    return error;
+}
+
+// ---------------------------------------------------------------------------
+// 27. Embedded line markers in multi-line declarations
+// ---------------------------------------------------------------------------
+static int test_embedded_line_markers(void) {
+    int        error = 0;
+    allocator *a     = arena_create(default_allocator(), 4096);
+
+    // Simulates GCC output where __attribute__ and ; are on separate lines
+    // with line markers interspersed (the malloc pattern)
+    error += check(a, "embedded line markers", "test.h", "test",
+                   "# 1 \"test.h\"\n"
+                   "extern void *malloc (size_t __size)\n"
+                   "# 5 \"test.h\" 3 4\n"
+                   "                  __attribute__ ((__nothrow__)) __attribute__ ((__malloc__))\n"
+                   "# 7 \"test.h\" 3 4\n"
+                   ";\n"
+                   "extern void free (void *__ptr)\n"
+                   "# 10 \"test.h\" 3 4\n"
+                   "                 __attribute__ ((__nothrow__))\n"
+                   ";\n",
+                   "#module test\n"
+                   "#include <test.h>\n"
+                   "\n"
+                   "c_malloc(__size: CSize) -> Ptr[any]\n"
+                   "c_free(__ptr: Ptr[any]) -> Void\n");
+
+    arena_destroy(&a);
+    return error;
+}
+
+// ---------------------------------------------------------------------------
 // main
 // ---------------------------------------------------------------------------
 
@@ -455,6 +628,14 @@ int main(void) {
     T(test_multi_word_types);
     T(test_standard_types);
     T(test_gcc_with_system_includes);
+    T(test_builtin_va_list);
+    T(test_struct_mixed_pointers);
+    T(test_enum_negative);
+    T(test_struct_fp_field);
+    T(test_static_inline_skipped);
+    T(test_c11_attributes);
+    T(test_define_then_function);
+    T(test_embedded_line_markers);
 
     if (error) {
         fprintf(stderr, "\n%d test(s) failed\n", error);
