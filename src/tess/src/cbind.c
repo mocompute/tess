@@ -945,6 +945,30 @@ static int parse_define(cbind_state *st) {
     return 1;
 }
 
+// Parse array dimension(s) from a struct field declarator: [N] or [N][M]...
+// Sets t->array_size to the first dimension. Consumes all bracket pairs
+// so multi-dimensional arrays don't leave tokens in the stream.
+static void parse_field_array(cbind_state *st, c_type *t) {
+    while (peek_token(st).kind == CTK_LBRACKET) {
+        next_token(st); // consume [
+        c_token size_tok = peek_token(st);
+        if (size_tok.kind == CTK_NUMBER) {
+            next_token(st);
+            if (t->array_size == 0) {
+                // use a bounded parse: token is not null-terminated
+                char buf[32];
+                u32  n = size_tok.len < sizeof(buf) - 1 ? size_tok.len : (u32)(sizeof(buf) - 1);
+                memcpy(buf, size_tok.start, n);
+                buf[n] = '\0';
+                t->array_size = (u32)strtoul(buf, NULL, 10);
+            }
+        }
+        while (peek_token(st).kind != CTK_RBRACKET && peek_token(st).kind != CTK_EOF)
+            next_token(st);
+        if (peek_token(st).kind == CTK_RBRACKET) next_token(st);
+    }
+}
+
 static void parse_struct_or_union(cbind_state *st, int is_target, str tag_name, int is_typedef,
                                   str *out_typedef_name) {
     c_token brace = peek_token(st);
@@ -1057,19 +1081,7 @@ static void parse_struct_or_union(cbind_state *st, int is_target, str tag_name, 
                     if (bits.kind == CTK_NUMBER) next_token(st);
                 }
 
-                // parse array: [N]
-                c_token arr = peek_token(st);
-                if (arr.kind == CTK_LBRACKET) {
-                    next_token(st);
-                    c_token size_tok = peek_token(st);
-                    if (size_tok.kind == CTK_NUMBER) {
-                        next_token(st);
-                        f.type.array_size = (u32)strtoul(size_tok.start, NULL, 10);
-                    }
-                    while (peek_token(st).kind != CTK_RBRACKET && peek_token(st).kind != CTK_EOF)
-                        next_token(st);
-                    if (peek_token(st).kind == CTK_RBRACKET) next_token(st);
-                }
+                parse_field_array(st, &f.type);
 
                 array_push(fields, f);
 
@@ -1094,18 +1106,7 @@ static void parse_struct_or_union(cbind_state *st, int is_target, str tag_name, 
                         if (next_name.kind == CTK_IDENT) {
                             next_token(st);
                             c_field f2 = {.name = tok_str(st->alloc, next_name), .type = field_type};
-                            // parse array: [N]
-                            if (peek_token(st).kind == CTK_LBRACKET) {
-                                next_token(st);
-                                c_token size_tok = peek_token(st);
-                                if (size_tok.kind == CTK_NUMBER) {
-                                    next_token(st);
-                                    f2.type.array_size = (u32)strtoul(size_tok.start, NULL, 10);
-                                }
-                                while (peek_token(st).kind != CTK_RBRACKET && peek_token(st).kind != CTK_EOF)
-                                    next_token(st);
-                                if (peek_token(st).kind == CTK_RBRACKET) next_token(st);
-                            }
+                            parse_field_array(st, &f2.type);
                             array_push(fields, f2);
                         } else {
                             break;
