@@ -97,6 +97,8 @@ struct c_type {
     u32      fp_param_count;
     c_type  *fp_ret;
     int      fp_variadic;
+
+    u32 array_size; // 0 = not an array, >0 = fixed-size array
 };
 
 struct c_param {
@@ -1055,14 +1057,18 @@ static void parse_struct_or_union(cbind_state *st, int is_target, str tag_name, 
                     if (bits.kind == CTK_NUMBER) next_token(st);
                 }
 
-                // skip array: [N]
+                // parse array: [N]
                 c_token arr = peek_token(st);
                 if (arr.kind == CTK_LBRACKET) {
                     next_token(st);
-                    while (st->pos < st->src_len) {
-                        c_token x = next_token(st);
-                        if (x.kind == CTK_RBRACKET || x.kind == CTK_EOF) break;
+                    c_token size_tok = peek_token(st);
+                    if (size_tok.kind == CTK_NUMBER) {
+                        next_token(st);
+                        f.type.array_size = (u32)strtoul(size_tok.start, NULL, 10);
                     }
+                    while (peek_token(st).kind != CTK_RBRACKET && peek_token(st).kind != CTK_EOF)
+                        next_token(st);
+                    if (peek_token(st).kind == CTK_RBRACKET) next_token(st);
                 }
 
                 array_push(fields, f);
@@ -1088,13 +1094,17 @@ static void parse_struct_or_union(cbind_state *st, int is_target, str tag_name, 
                         if (next_name.kind == CTK_IDENT) {
                             next_token(st);
                             c_field f2 = {.name = tok_str(st->alloc, next_name), .type = field_type};
-                            // skip array: [N]
+                            // parse array: [N]
                             if (peek_token(st).kind == CTK_LBRACKET) {
                                 next_token(st);
-                                while (st->pos < st->src_len) {
-                                    c_token x = next_token(st);
-                                    if (x.kind == CTK_RBRACKET || x.kind == CTK_EOF) break;
+                                c_token size_tok = peek_token(st);
+                                if (size_tok.kind == CTK_NUMBER) {
+                                    next_token(st);
+                                    f2.type.array_size = (u32)strtoul(size_tok.start, NULL, 10);
                                 }
+                                while (peek_token(st).kind != CTK_RBRACKET && peek_token(st).kind != CTK_EOF)
+                                    next_token(st);
+                                if (peek_token(st).kind == CTK_RBRACKET) next_token(st);
                             }
                             array_push(fields, f2);
                         } else {
@@ -1717,6 +1727,14 @@ static str type_to_tess(allocator *a, c_type const *t, hashmap *typedefs) {
         str arrow_part = str_fmt(a, ") -> %.*s", str_ilen(ret), str_buf(&ret));
         str_build_cat(&sb, arrow_part);
         return str_build_finish(&sb);
+    }
+
+    // fixed-size array
+    if (t->array_size > 0) {
+        c_type elem = *t;
+        elem.array_size = 0;
+        str elem_str = type_to_tess(a, &elem, typedefs);
+        return str_fmt(a, "CArray[%.*s, %u]", str_ilen(elem_str), str_buf(&elem_str), t->array_size);
     }
 
     // base type name

@@ -5,10 +5,6 @@
 #include <stdio.h>
 #include <string.h>
 
-#ifndef KNOWN_FAILURE
-#define KNOWN_FAILURE 0
-#endif
-
 // Helper: feed preprocessed text through cbind parser and compare output.
 // target_file controls which declarations are included (via line marker filtering).
 // Returns 0 on match, 1 on mismatch.
@@ -630,7 +626,6 @@ static int test_define_inside_struct(void) {
 // ---------------------------------------------------------------------------
 // 29. Array field inside struct
 // ---------------------------------------------------------------------------
-#if KNOWN_FAILURE
 static int test_struct_array_field(void) {
     int        error = 0;
     allocator *a     = arena_create(default_allocator(), 4096);
@@ -641,12 +636,12 @@ static int test_struct_array_field(void) {
                    "#module test\n"
                    "#include <test.h>\n"
                    "\n"
-                   "c_buffer: { data: CArray[CInt, 32], name: CArray[CChar, 64] }\n");
+                   "c_buffer: { data: CArray[CInt, 32], name: CArray[CChar, 64] }\n"
+                   "\n");
 
     arena_destroy(&a);
     return error;
 }
-#endif
 
 // ---------------------------------------------------------------------------
 // 30. Skip __ functions
@@ -754,9 +749,7 @@ int main(void) {
     T(test_define_then_function);
     T(test_embedded_line_markers);
     T(test_define_inside_struct);
-#if KNOWN_FAILURE
     T(test_struct_array_field);
-#endif
     T(test_skip_dunder_functions);
     T(test_strip_dunder_params);
     T(test_dedup_functions);
