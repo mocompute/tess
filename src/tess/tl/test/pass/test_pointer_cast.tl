@@ -1,5 +1,5 @@
 #module main
-#import <stdio.tl>
+#import <cstdio.tl>
 
 main() {
     data                 := 0x0102030405060708

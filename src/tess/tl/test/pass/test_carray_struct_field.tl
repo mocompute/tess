@@ -1,5 +1,5 @@
 #module main
-#import <string.tl>
+#import <cstring.tl>
 
 // Struct with a CArray field
 Buffer: { data: CArray[CChar, 256], len: CSize }

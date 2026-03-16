@@ -1,5 +1,5 @@
 #module main
-#import <stdint.tl>
+#import <cstdint.tl>
 
 // --- z literal suffix (signed, CPtrDiff-like) ---
 

@@ -6,7 +6,7 @@
 
 
 #module main
-#import <stdio.tl>
+#import <cstdio.tl>
 
 main(argc: Int, argv: Ptr[CString]) {
     c_printf("argc = %i\n", argc)

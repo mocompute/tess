@@ -1,5 +1,5 @@
 #module main
-#import <stdlib.tl>
+#import <cstdlib.tl>
 
 Foo[T]: {v: Ptr[T]}
 

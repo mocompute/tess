@@ -1,5 +1,5 @@
 #module main
-#import <stdint.tl>
+#import <cstdint.tl>
 
 // Cross-chain: CInt (C-signed sub-chain 1) passed to CInt32 (fixed-signed sub-chain 3) should fail.
 

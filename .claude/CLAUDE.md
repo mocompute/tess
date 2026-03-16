@@ -125,7 +125,7 @@ Headers: `src/mos/include/`.
 
 ### Standard library (`src/tl/std/`) — Tess language runtime
 
-`.tl` files auto-imported by the compiler: `Array.tl`, `Str.tl`, `HashMap.tl`, `Hash.tl`, `Alloc.tl`, `Unsafe.tl`, `CommandLine.tl`, `builtin.tl`, plus C FFI bindings (`stdio.tl`, `stdlib.tl`, `stdint.tl`, `string.tl`).
+`.tl` files auto-imported by the compiler: `Array.tl`, `Str.tl`, `HashMap.tl`, `Hash.tl`, `Alloc.tl`, `Unsafe.tl`, `CommandLine.tl`, `builtin.tl`, plus C FFI bindings (`cstdio.tl`, `cstdlib.tl`, `cstdint.tl`, `cstring.tl`).
 
 ## Code Style
 

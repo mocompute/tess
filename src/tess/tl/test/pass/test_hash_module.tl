@@ -3,7 +3,7 @@
 #module main
 #import <String.tl>
 #import <Hash.tl>
-#import <string.tl>
+#import <cstring.tl>
 
 main() -> CInt {
     error: CInt := 0

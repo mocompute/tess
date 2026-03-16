@@ -368,7 +368,7 @@ This walks through a library with a dependency and a consumer using both.
 **logger.tl:**
 ```tl
 #module Logger
-#import <stdio.tl>
+#import <cstdio.tl>
 
 warn(msg) {
   c_fprintf(c_stderr, "[WARN] %s\n", msg)

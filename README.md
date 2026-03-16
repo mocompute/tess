@@ -245,7 +245,7 @@ The standard library is located in [src/tl/std/](src/tl/std/) and includes:
 - `Alloc.tl` - Memory allocation interface with bump allocator
 - `HashMap.tl` - Robin Hood open-addressing hash map
 - `builtin.tl` - Option, Result, and other built-in types
-- `stdlib.tl`, `stdio.tl`, `string.tl` - C standard library bindings
+- `cstdlib.tl`, `cstdio.tl`, `cstring.tl` - C standard library bindings
 
 ## License
 

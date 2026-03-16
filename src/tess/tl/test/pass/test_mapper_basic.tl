@@ -1,5 +1,5 @@
 #module main
-#import <stdlib.tl>
+#import <cstdlib.tl>
 #import <Unsafe.tl>
 
 Arr[a]: {

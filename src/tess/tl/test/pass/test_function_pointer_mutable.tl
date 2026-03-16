@@ -1,5 +1,5 @@
 #module main
-#import <stdlib.tl>
+#import <cstdlib.tl>
 
 // Test: Reassignment and mutation of function pointers
 // Tests various mutable operations on function pointers

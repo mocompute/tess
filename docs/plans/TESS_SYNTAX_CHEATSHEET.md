@@ -3,7 +3,7 @@
 ## File Structure & Modules
 ```tess
 #module main                    // Declare module (required)
-#import <stdint.tl>            // Import standard library
+#import <cstdint.tl>            // Import standard library
 
 // Module organization: each file declares ONE module
 // Multi-module file: use #module to switch

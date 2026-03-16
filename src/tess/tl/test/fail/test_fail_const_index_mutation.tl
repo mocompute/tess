@@ -1,5 +1,5 @@
 #module main
-#import <stdlib.tl>
+#import <cstdlib.tl>
 
 mutate_index(p: Ptr[Const[Int]]) {
     p.[0] = 10                          // error: const violation

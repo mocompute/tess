@@ -1,5 +1,5 @@
 #module main
-#import <stdio.tl>
+#import <cstdio.tl>
 
 // Test: weak float literal resolves to CFloat from context.
 

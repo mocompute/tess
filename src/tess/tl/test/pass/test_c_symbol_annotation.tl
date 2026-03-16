@@ -1,6 +1,6 @@
 #module main
 #include <limits.h>
-#import <stdio.tl>
+#import <cstdio.tl>
 
 c_INT_MAX: Int
 

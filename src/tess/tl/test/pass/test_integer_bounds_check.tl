@@ -1,5 +1,5 @@
 #module main
-#import <stdint.tl>
+#import <cstdint.tl>
 
 // Test that integer narrowing casts produce correct results when the
 // value fits in the target type. With --bounds-check enabled, the

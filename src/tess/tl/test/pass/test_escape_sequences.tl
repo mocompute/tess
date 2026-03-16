@@ -1,5 +1,5 @@
 #module main
-#import <string.tl>
+#import <cstring.tl>
 
 main() {
     error := 0

@@ -1,5 +1,5 @@
 #module main
-#import <stdint.tl>
+#import <cstdint.tl>
 
 // Comprehensive binary operator tests.
 // Covers arithmetic, relational, logical, and bitwise operators

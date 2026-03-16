@@ -1,5 +1,5 @@
 #module main
-#import <stdlib.tl>
+#import <cstdlib.tl>
 
 // Test: Recursive type containing function pointer
 // Implements a linked list of callbacks pattern

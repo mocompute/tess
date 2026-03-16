@@ -1,5 +1,5 @@
 #module main
-#import <stdio.tl>
+#import <cstdio.tl>
 
 // Test: CFloat -> CDouble and CFloat -> CLongDouble widening in funcalls and returns.
 

@@ -1,5 +1,5 @@
 #module main
-#import <stdlib.tl>
+#import <cstdlib.tl>
 #import <Array.tl>
 
 Point[a]: { x: a, y: a, next: Ptr[Point[a]] }

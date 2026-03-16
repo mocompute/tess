@@ -984,7 +984,7 @@ static tl_monotype *parse_type_nfa(tl_type_registry *self, tl_type_registry_pars
 
         tl_monotype *result          = null;
         // If the target is a symbol and not a utd in_progress, it must either be a nullary type or it
-        // is sugar for a type variable, e.g a function in stdlib.tl which returns a `Ptr(T)`.
+        // is sugar for a type variable, e.g a function in cstdlib.tl which returns a `Ptr(T)`.
         if (ast_node_is_symbol(target)) {
             if (str_hset_contains(ctx->in_progress, target_name_str)) {
                 // Self-referential: target is currently being parsed, must defer.

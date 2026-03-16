@@ -299,7 +299,7 @@ static int test_angle_bracket_finds_standard_paths(void) {
     build_path(dir_path, sizeof(dir_path), test_base, "std_find");
     mkdirp(dir_path);
 
-    build_path(file_path, sizeof(file_path), test_base, "std_find/stdlib.tl");
+    build_path(file_path, sizeof(file_path), test_base, "std_find/cstdlib.tl");
     if (create_test_file(file_path)) {
         fprintf(stderr, "  failed to create test file\n");
         goto error;
@@ -309,7 +309,7 @@ static int test_angle_bracket_finds_standard_paths(void) {
     import_resolver_add_standard_path(resolver, str_init_static(dir_path));
 
     // Angle bracket import should find it
-    import_result r = import_resolver_resolve(resolver, S("<stdlib.tl>"), str_empty());
+    import_result r = import_resolver_resolve(resolver, S("<cstdlib.tl>"), str_empty());
     if (str_is_empty(r.canonical_path)) {
         fprintf(stderr, "  angle bracket import should find file in standard paths\n");
         goto error;

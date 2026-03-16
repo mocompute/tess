@@ -1,5 +1,5 @@
 #module main
-#import <stdlib.tl>
+#import <cstdlib.tl>
 
 main() {
     p: Ptr[CInt] := c_malloc(1024zu)

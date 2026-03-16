@@ -1,5 +1,5 @@
 #module Foo
-#import <stdlib.tl>
+#import <cstdlib.tl>
 
 malloc(count: CSize) -> Ptr[any] {
     c_malloc(count)
@@ -13,7 +13,7 @@ allocator := Ctx(malloc_fun = malloc/1)
 
 
 #module main
-#import <stdlib.tl>
+#import <cstdlib.tl>
 
 main() {
     p := Foo.allocator.malloc_fun(16u)

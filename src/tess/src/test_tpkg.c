@@ -876,7 +876,7 @@ static int test_pack_not_self_contained(void) {
 
 static int test_pack_stdlib_import_ok(void) {
     char const *names[]    = {"a.tl"};
-    char const *contents[] = {"#import <stdio.tl>\nfoo() { 1 }\n"};
+    char const *contents[] = {"#import <cstdio.tl>\nfoo() { 1 }\n"};
     int         result     = pack_test_files(names, contents, 1);
     if (result != 0) {
         fprintf(stderr, "  expected pack to succeed (stdlib import ignored)\n");

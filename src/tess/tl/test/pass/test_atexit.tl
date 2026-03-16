@@ -1,6 +1,6 @@
 #module main
-#import <stdio.tl>
-#import <stdlib.tl>
+#import <cstdio.tl>
+#import <cstdlib.tl>
 
 foo() { c_printf("goodbye.\n") }
 

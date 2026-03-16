@@ -1,5 +1,5 @@
 #module main
-#import <stdint.tl>
+#import <cstdint.tl>
 
 // Test that different integer types produce distinct generic specializations.
 // Array[CInt] and Array[Int] should be separate types.

@@ -1,8 +1,8 @@
 #module main
 #import <String.tl>
 #import <Array.tl>
-#import <stdio.tl>
-#import <string.tl>
+#import <cstdio.tl>
+#import <cstring.tl>
 
 // Sentinel for unwrapping Option[CSize] — any value impossible as a valid index.
 _NONE: CSize := 9999zu

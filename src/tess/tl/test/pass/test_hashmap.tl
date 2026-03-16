@@ -29,7 +29,7 @@ eq(a: CollidingKey, b: CollidingKey) -> Bool {
 #import <HashMap.tl>
 #import <Alloc.tl>
 #import <Array.tl>
-#import <stdio.tl>
+#import <cstdio.tl>
 
 Point = Point.Point
 CollidingKey = CollidingKey.CollidingKey

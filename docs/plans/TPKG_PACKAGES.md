@@ -116,7 +116,7 @@ export("Logger")
 ```tl
 #module Logger    // module name used in code
 
-#import <stdio.tl>
+#import <cstdio.tl>
 
 warn(msg) {
   c_fprintf(c_stderr, "[WARN] %s\n", msg)

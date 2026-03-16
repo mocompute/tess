@@ -1,5 +1,5 @@
 #module main
-#import <stdint.tl>
+#import <cstdint.tl>
 
 // Test compound assignment operators with integer types.
 // Weak literals in compound assignment should resolve to the variable's type.

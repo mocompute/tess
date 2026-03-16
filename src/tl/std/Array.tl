@@ -1,9 +1,9 @@
 // Array — Dynamic growable array.
 #module Array
 #import <Alloc.tl>
-#import <stdlib.tl>
-#import <stdio.tl>
-#import <string.tl>
+#import <cstdlib.tl>
+#import <cstdio.tl>
+#import <cstring.tl>
 
 Allocator = Alloc.Allocator
 

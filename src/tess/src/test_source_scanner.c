@@ -111,7 +111,7 @@ static int test_imports_collected(void) {
 
     char const       *src     = "#module Foo\n"
                                 "#import \"bar.tl\"\n"
-                                "#import <stdio.tl>\n"
+                                "#import <cstdio.tl>\n"
                                 "foo() { 1 }\n";
 
     error += scan(&s, "/src/foo.tl", src, &imports) != 0;
@@ -119,7 +119,7 @@ static int test_imports_collected(void) {
     error += imports.size != 2;
     if (imports.size >= 2) {
         error += !str_eq(imports.v[0], S("\"bar.tl\""));
-        error += !str_eq(imports.v[1], S("<stdio.tl>"));
+        error += !str_eq(imports.v[1], S("<cstdio.tl>"));
     }
 
     if (error) fprintf(stderr, "  %d check(s) failed\n", error);
@@ -288,7 +288,7 @@ static int test_stdlib_modules_ignored(void) {
     char const *src = "#module StdModule\nfoo() { 1 }\n";
 
     // Scan as a file under the stdlib path
-    error += scan(&s, "/std/stdlib.tl", src, &imports) != 0;
+    error += scan(&s, "/std/cstdlib.tl", src, &imports) != 0;
 
     // Module should NOT be tracked (it's a stdlib file)
     error += str_map_contains(s.modules_seen, S("StdModule"));
@@ -518,12 +518,12 @@ static str_array collect(allocator *alloc, char const *content) {
 static int test_collect_basic(void) {
     int        error   = 0;
     allocator *alloc   = arena_create(default_allocator(), 1024);
-    str_array  imports = collect(alloc, "#import \"foo.tl\"\n#import <stdio.tl>\n");
+    str_array  imports = collect(alloc, "#import \"foo.tl\"\n#import <cstdio.tl>\n");
 
     error += imports.size != 2;
     if (imports.size >= 2) {
         error += !str_eq(imports.v[0], S("\"foo.tl\""));
-        error += !str_eq(imports.v[1], S("<stdio.tl>"));
+        error += !str_eq(imports.v[1], S("<cstdio.tl>"));
     }
 
     if (error) fprintf(stderr, "  %d check(s) failed\n", error);

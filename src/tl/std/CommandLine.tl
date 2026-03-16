@@ -7,9 +7,9 @@
 #import <Array.tl>
 #import <HashMap.tl>
 #import <String.tl>
-#import <stdlib.tl>
-#import <stdio.tl>
-#import <string.tl>
+#import <cstdlib.tl>
+#import <cstdio.tl>
+#import <cstring.tl>
 
 Allocator = Alloc.Allocator
 

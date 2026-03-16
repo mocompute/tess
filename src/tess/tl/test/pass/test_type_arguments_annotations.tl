@@ -1,5 +1,5 @@
 #module main
-#import <stdlib.tl>
+#import <cstdlib.tl>
 
 Point[a]: { x: a, y: a                            }
 Rect[a]:  { topleft: Point[a], botright: Point[a] }

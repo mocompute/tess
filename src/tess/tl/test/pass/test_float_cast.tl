@@ -1,5 +1,5 @@
 #module main
-#import <stdio.tl>
+#import <cstdio.tl>
 
 // Test: float narrowing via let-in annotation, float-integer cast.
 

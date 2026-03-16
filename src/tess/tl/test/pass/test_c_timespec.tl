@@ -1,5 +1,5 @@
 #module main
-#import <stdio.tl>
+#import <cstdio.tl>
 #include <time.h>
 
 // c_struct_ prefix indicates the type must be rendered in C as "struct <name>"

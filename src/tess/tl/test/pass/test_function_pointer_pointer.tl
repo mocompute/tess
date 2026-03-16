@@ -1,5 +1,5 @@
 #module main
-#import <stdlib.tl>
+#import <cstdlib.tl>
 
 // Test: Pointer to function pointer (Ptr[(Int] -> Int))
 

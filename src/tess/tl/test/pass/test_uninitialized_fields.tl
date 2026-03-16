@@ -1,5 +1,5 @@
 #module main
-#import <stdlib.tl>
+#import <cstdlib.tl>
 
 // Define a struct with multiple fields
 Buffer: { data: Ptr[CChar], size: Int, capacity: Int }

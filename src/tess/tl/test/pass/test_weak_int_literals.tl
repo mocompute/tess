@@ -1,5 +1,5 @@
 #module main
-#import <stdint.tl>
+#import <cstdint.tl>
 
 // Test: weak signed literal resolves from function parameter context
 take_cint  (x: CInt)         { x }

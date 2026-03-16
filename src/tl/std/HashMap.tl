@@ -5,9 +5,9 @@
 #import <Alloc.tl>
 #import <Array.tl>
 #import <Unsafe.tl>
-#import <stdlib.tl>
-#import <stdio.tl>
-#import <string.tl>
+#import <cstdlib.tl>
+#import <cstdio.tl>
+#import <cstring.tl>
 
 // -- Aliases --
 

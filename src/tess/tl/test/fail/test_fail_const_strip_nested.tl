@@ -1,5 +1,5 @@
 #module main
-#import <stdlib.tl>
+#import <cstdlib.tl>
 
 // A function expecting a non-const nested pointer
 mutate_indirect(pp: Ptr[Ptr[Int]]) {

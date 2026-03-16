@@ -353,7 +353,7 @@ Thin wrappers around C standard library functions. All functions use the `c_` pr
 ### stdlib
 
 ```tl
-#import <stdlib.tl>
+#import <cstdlib.tl>
 ```
 
 | Function | C Equivalent | Description |
@@ -394,7 +394,7 @@ Thin wrappers around C standard library functions. All functions use the `c_` pr
 ### stdio
 
 ```tl
-#import <stdio.tl>
+#import <cstdio.tl>
 ```
 
 | Function | C Equivalent | Description |
@@ -404,7 +404,7 @@ Thin wrappers around C standard library functions. All functions use the `c_` pr
 ### string
 
 ```tl
-#import <string.tl>
+#import <cstring.tl>
 ```
 
 | Function | C Equivalent | Description |
@@ -434,7 +434,7 @@ Thin wrappers around C standard library functions. All functions use the `c_` pr
 ### stdint
 
 ```tl
-#import <stdint.tl>
+#import <cstdint.tl>
 ```
 
 Provides access to C fixed-width integer types and limits from `<stdint.h>` and `<limits.h>`. No functions are defined; the module makes the C types available to the Tess type system.

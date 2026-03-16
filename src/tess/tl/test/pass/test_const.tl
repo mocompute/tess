@@ -1,6 +1,6 @@
 #module main
-#import <stdio.tl>
-#import <stdlib.tl>
+#import <cstdio.tl>
+#import <cstdlib.tl>
 
 Point: { x: Int, y: Int }
 

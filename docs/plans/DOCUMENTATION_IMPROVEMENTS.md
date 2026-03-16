@@ -13,7 +13,7 @@ Actionable improvements for the README and docs/ directory, based on a review of
 | **Str** | `src/tl/std/Str.tl` | String type with SSO — likely the most used module after Array |
 | **HashMap** | `src/tl/std/HashMap.tl` | Robin Hood hash map — essential data structure |
 | **Unsafe** | `src/tl/std/Unsafe.tl` | Cross-family integer conversions |
-| **stdint** | `src/tl/std/stdint.tl` | Fixed-width integer types |
+| **stdint** | `src/tl/std/cstdint.tl` | Fixed-width integer types |
 
 The documented modules (builtin, Array, Alloc) are also incomplete — Alloc is partially documented.
 

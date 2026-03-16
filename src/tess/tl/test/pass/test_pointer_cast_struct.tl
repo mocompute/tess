@@ -1,5 +1,5 @@
 #module main
-#import <stdio.tl>
+#import <cstdio.tl>
 
 Foo: { x: Int   }
 Bar: { x: Float }

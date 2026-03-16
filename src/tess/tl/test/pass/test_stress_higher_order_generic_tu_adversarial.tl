@@ -1,12 +1,12 @@
 #module main
-#import <stdlib.tl>
+#import <cstdlib.tl>
 
 // --- Linked list as tagged union (recursive via Ptr) ---
 MyList[T]: | Cons { head: T, tail: Ptr[MyList[T]] }
            | LNil
 
 // --- Result type (single type param, error is always Int) ---
-MyRes[T]: | MyOk { v: T }
+MyRes[T]: | MyOk  { v: T }
           | MyErr { code: Int }
 
 // --- Option-like ---
@@ -58,9 +58,9 @@ apply_or_default[T](o: Opt[T], f, def: T) -> T {
     }
 }
 
-double_int(x: Int)         -> Int  { x * 2 }
-add_ints  (a: Int, b: Int) -> Int  { a + b }
-not_bool  (b: Bool)        -> Bool { !b    }
+double_int(x: Int)         -> Int         { x * 2 }
+add_ints  (a: Int, b: Int) -> Int { a + b         }
+not_bool  (b: Bool)        -> Bool       { !b     }
 
 // ============================================================
 // unwrap helpers

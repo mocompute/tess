@@ -1,5 +1,5 @@
 #module Foo
-#import <stdlib.tl>
+#import <cstdlib.tl>
 
 // Return type annotation is required because this function will not be specialized, because it is only
 // every referenced through a function pointer.
@@ -17,7 +17,7 @@ init() {
 
 
 #module main
-#import <stdlib.tl>
+#import <cstdlib.tl>
 
 main() {
     ctx := Foo.init()

@@ -1,12 +1,12 @@
 #module main
-#import <stdlib.tl>
+#import <cstdlib.tl>
 #import <Array.tl>
 
 Point[a]: { x: a, y: a                            }
 Rect[a]:  { topleft: Point[a], botright: Point[a] }
 
 make_points(count: CSize) { Array.with_capacity[Point[CInt]](count) }
-make_rects ()            { Array.empty[Rect[CInt]]()               }
+make_rects ()             { Array.empty[Rect[CInt]]()               }
 
 main() {
     points := make_points(8zu)

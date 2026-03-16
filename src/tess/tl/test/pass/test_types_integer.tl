@@ -1,6 +1,6 @@
 #module main
-#import <stdio.tl>
-#import <stdint.tl>
+#import <cstdio.tl>
+#import <cstdint.tl>
 
 main() {
     error := 0

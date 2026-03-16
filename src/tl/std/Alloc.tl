@@ -1,9 +1,9 @@
 #module Alloc
 #include <stddef.h>
 #include <stdint.h>
-#import <stdlib.tl>
-#import <stdint.tl>
-#import <string.tl>
+#import <cstdlib.tl>
+#import <cstdint.tl>
+#import <cstring.tl>
 
 #import <Unsafe.tl>
 

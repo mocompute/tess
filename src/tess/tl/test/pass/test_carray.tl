@@ -1,5 +1,5 @@
 #module main
-#import <string.tl>
+#import <cstring.tl>
 
 main() {
     error := 0
@@ -23,7 +23,7 @@ main() {
 
     // Test CArray of CChar (used for string buffers)
     buffer:  CArray[CChar, 256] := void
-    buf_ptr: Ptr[CChar]         := buffer
+    buf_ptr: Ptr[CChar]        := buffer
     c_strcpy(buf_ptr, "Hello, World!")
 
     // Test that CArray decays properly to CString (Ptr[CChar])

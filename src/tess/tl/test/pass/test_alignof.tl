@@ -1,5 +1,5 @@
 #module main
-#import <stdint.tl>
+#import <cstdint.tl>
 
 // Simple struct for testing
 Point: { x: Int, y: Int }

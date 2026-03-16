@@ -1,5 +1,5 @@
 #module main
-#import <string.tl>
+#import <cstring.tl>
 
 streq(a, b) { 0 == c_strcmp(a, b) }
 

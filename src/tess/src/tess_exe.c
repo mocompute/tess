@@ -2232,7 +2232,7 @@ static int init_package(state *self) {
         f = fopen("src/main.tl", "wb");
         if (f) {
             fprintf(f, "#module main\n");
-            fprintf(f, "#import <stdio.tl>\n");
+            fprintf(f, "#import <cstdio.tl>\n");
             fprintf(f, "\n");
             fprintf(f, "main() {\n");
             fprintf(f, "  c_printf(\"hello world\\n\")\n");
