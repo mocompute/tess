@@ -1578,6 +1578,10 @@ static int parse_toplevel_decl(cbind_state *st) {
                 if (after.kind == CTK_SEMICOLON) next_token(st);
 
                 if (st->in_target) {
+                    // Skip internal functions with __ prefix
+                    if (str_len(fname) >= 2 && str_buf(&fname)[0] == '_' && str_buf(&fname)[1] == '_')
+                        return 1;
+
                     c_decl d      = {0};
                     d.kind        = CDECL_FUNCTION;
                     d.name        = fname;
@@ -1881,6 +1885,9 @@ static str emit_bindings(allocator *a, cbind_state *st, char const *module_name)
             str pname;
             if (!str_is_empty(d->params[p].name)) {
                 pname = d->params[p].name;
+                // Strip leading __ from parameter names
+                if (str_len(pname) > 2 && str_buf(&pname)[0] == '_' && str_buf(&pname)[1] == '_')
+                    pname = str_fmt(a, "%.*s", str_ilen(pname) - 2, str_buf(&pname) + 2);
             } else {
                 pname = str_fmt(a, "arg%u", p);
             }

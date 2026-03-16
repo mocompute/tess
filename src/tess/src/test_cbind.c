@@ -643,6 +643,45 @@ static int test_struct_array_field(void) {
 }
 
 // ---------------------------------------------------------------------------
+// 30. Skip __ functions
+// ---------------------------------------------------------------------------
+static int test_skip_dunder_functions(void) {
+    int        error = 0;
+    allocator *a     = arena_create(default_allocator(), 4096);
+
+    error += check(a, "skip __ functions", "test.h", "test",
+                   "# 1 \"test.h\"\n"
+                   "int foo(int x);\n"
+                   "int __bar(int y);\n",
+                   "#module test\n"
+                   "#include <test.h>\n"
+                   "\n"
+                   "c_foo(x: CInt) -> CInt\n");
+
+    arena_destroy(&a);
+    return error;
+}
+
+// ---------------------------------------------------------------------------
+// 31. Strip __ from parameter names
+// ---------------------------------------------------------------------------
+static int test_strip_dunder_params(void) {
+    int        error = 0;
+    allocator *a     = arena_create(default_allocator(), 4096);
+
+    error += check(a, "strip __ params", "test.h", "test",
+                   "# 1 \"test.h\"\n"
+                   "int foo(int __x, const char *__str);\n",
+                   "#module test\n"
+                   "#include <test.h>\n"
+                   "\n"
+                   "c_foo(x: CInt, str: Ptr[Const[CChar]]) -> CInt\n");
+
+    arena_destroy(&a);
+    return error;
+}
+
+// ---------------------------------------------------------------------------
 // main
 // ---------------------------------------------------------------------------
 
@@ -686,6 +725,8 @@ int main(void) {
     T(test_embedded_line_markers);
     T(test_define_inside_struct);
     T(test_struct_array_field);
+    T(test_skip_dunder_functions);
+    T(test_strip_dunder_params);
 
     if (error) {
         fprintf(stderr, "\n%d test(s) failed\n", error);
