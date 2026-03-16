@@ -595,6 +595,54 @@ static int test_embedded_line_markers(void) {
 }
 
 // ---------------------------------------------------------------------------
+// 28. #define inside struct body (glibc fd_set pattern)
+// ---------------------------------------------------------------------------
+static int test_define_inside_struct(void) {
+    int        error = 0;
+    allocator *a     = arena_create(default_allocator(), 4096);
+
+    // A #define inside a struct body must be skipped.
+    // The parser must continue parsing fields and subsequent decls.
+    error += check(a, "define inside struct", "test.h", "test",
+                   "# 1 \"test.h\"\n"
+                   "typedef struct\n"
+                   "  {\n"
+                   "    int count;\n"
+                   "#define MAGIC_COUNT 42\n"
+                   "    long int flags;\n"
+                   "  } my_data;\n"
+                   "int process(my_data *d);\n",
+                   "#module test\n"
+                   "#include <test.h>\n"
+                   "\n"
+                   "c_my_data: { count: CInt, flags: CLong }\n"
+                   "\n"
+                   "c_process(d: Ptr[c_my_data]) -> CInt\n");
+
+    arena_destroy(&a);
+    return error;
+}
+
+// ---------------------------------------------------------------------------
+// 29. Array field inside struct
+// ---------------------------------------------------------------------------
+static int test_struct_array_field(void) {
+    int        error = 0;
+    allocator *a     = arena_create(default_allocator(), 4096);
+
+    error += check(a, "struct array field", "test.h", "test",
+                   "# 1 \"test.h\"\n"
+                   "typedef struct { int data[32]; char name[64]; } buffer;\n",
+                   "#module test\n"
+                   "#include <test.h>\n"
+                   "\n"
+                   "c_buffer: { data: CArray[CInt, 32], name: CArray[CChar, 64] }\n");
+
+    arena_destroy(&a);
+    return error;
+}
+
+// ---------------------------------------------------------------------------
 // main
 // ---------------------------------------------------------------------------
 
@@ -636,6 +684,8 @@ int main(void) {
     T(test_c11_attributes);
     T(test_define_then_function);
     T(test_embedded_line_markers);
+    T(test_define_inside_struct);
+    T(test_struct_array_field);
 
     if (error) {
         fprintf(stderr, "\n%d test(s) failed\n", error);

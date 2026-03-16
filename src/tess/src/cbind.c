@@ -87,16 +87,16 @@ typedef struct c_param c_param;
 
 struct c_type {
     c_type_kind kind;
-    str         name;          // for CT_NAMED
+    str         name; // for CT_NAMED
     int         is_const;
     int         pointer_depth;
-    int         const_at[4];   // is_const at each pointer level
+    int         const_at[4]; // is_const at each pointer level
 
     // function pointer
-    c_param    *fp_params;
-    u32         fp_param_count;
-    c_type     *fp_ret;
-    int         fp_variadic;
+    c_param *fp_params;
+    u32      fp_param_count;
+    c_type  *fp_ret;
+    int      fp_variadic;
 };
 
 struct c_param {
@@ -127,21 +127,20 @@ typedef struct {
     str         name;
 
     // CDECL_FUNCTION
-    c_type      return_type;
-    c_param    *params;
-    u32         param_count;
-    int         is_variadic;
+    c_type   return_type;
+    c_param *params;
+    u32      param_count;
+    int      is_variadic;
 
     // CDECL_STRUCT
-    c_field    *fields;
-    u32         field_count;
+    c_field *fields;
+    u32      field_count;
 
     // CDECL_ENUM_VALUE (no extra data needed beyond name)
 
-
     // CDECL_TYPEDEF
-    c_type      aliased_type;
-    str         struct_tag; // for "typedef struct tag ... name;"
+    c_type aliased_type;
+    str    struct_tag; // for "typedef struct tag ... name;"
 } c_decl;
 
 defarray(decl_array, c_decl);
@@ -164,8 +163,8 @@ typedef struct {
 
     decl_array  decls;
 
-    hashmap    *typedefs;     // str -> str (C name -> tess type string)
-    hashmap    *struct_defs;  // str -> int (struct tag -> 1 if body seen)
+    hashmap    *typedefs;      // str -> str (C name -> tess type string)
+    hashmap    *struct_defs;   // str -> int (struct tag -> 1 if body seen)
     hashmap    *forward_decls; // str hashset (struct tags with forward decl emitted)
 
     int         verbose;
@@ -236,12 +235,12 @@ static c_token next_token_raw(cbind_state *st) {
     case '=': st->pos++; return make_token(CTK_EQUALS, start, 1);
     case '#': st->pos++; return make_token(CTK_HASH, start, 1);
     case ':': st->pos++; return make_token(CTK_COLON, start, 1);
-    default: break;
+    default:  break;
     }
 
     // ellipsis
-    if (c == '.' && st->pos + 2 < st->src_len && st->src[st->pos + 1] == '.'
-        && st->src[st->pos + 2] == '.') {
+    if (c == '.' && st->pos + 2 < st->src_len && st->src[st->pos + 1] == '.' &&
+        st->src[st->pos + 2] == '.') {
         st->pos += 3;
         return make_token(CTK_ELLIPSIS, start, 3);
     }
@@ -277,8 +276,8 @@ static c_token next_token_raw(cbind_state *st) {
             if (isalnum((unsigned char)ch) || ch == '.' || ch == '_') {
                 prev = ch;
                 st->pos++;
-            } else if ((ch == '+' || ch == '-')
-                       && (prev == 'e' || prev == 'E' || prev == 'p' || prev == 'P')) {
+            } else if ((ch == '+' || ch == '-') &&
+                       (prev == 'e' || prev == 'E' || prev == 'p' || prev == 'P')) {
                 // exponent sign: 1e+5, 0x1.0p-3
                 prev = ch;
                 st->pos++;
@@ -292,8 +291,8 @@ static c_token next_token_raw(cbind_state *st) {
     // identifier
     if (isalpha((unsigned char)c) || c == '_') {
         st->pos++;
-        while (st->pos < st->src_len
-               && (isalnum((unsigned char)st->src[st->pos]) || st->src[st->pos] == '_')) {
+        while (st->pos < st->src_len &&
+               (isalnum((unsigned char)st->src[st->pos]) || st->src[st->pos] == '_')) {
             st->pos++;
         }
         return make_token(CTK_IDENT, start, (u32)(st->src + st->pos - start));
@@ -328,8 +327,8 @@ static c_token next_token(cbind_state *st) {
                     u32         plen = file.len - 2;
                     char const *base = path + plen;
                     while (base > path && base[-1] != '/' && base[-1] != '\\') base--;
-                    u32 blen = (u32)(path + plen - base);
-                    u32 tlen = (u32)strlen(st->target_basename);
+                    u32 blen      = (u32)(path + plen - base);
+                    u32 tlen      = (u32)strlen(st->target_basename);
                     st->in_target = (blen == tlen && 0 == memcmp(base, st->target_basename, tlen));
                 }
                 skip_to_end_of_line(st);
@@ -343,12 +342,13 @@ static c_token next_token(cbind_state *st) {
 }
 
 static c_token peek_token(cbind_state *st) {
-    u32     saved = st->pos;
-    c_token t     = next_token(st);
-    st->pos       = saved;
+    u32     saved_pos    = st->pos;
+    int     saved_target = st->in_target;
+    c_token t            = next_token(st);
+    st->pos              = saved_pos;
+    st->in_target        = saved_target;
     return t;
 }
-
 
 // Use sizeof to get compile-time string length instead of calling strlen
 #define tok_eq(t, s) ((t).len == (sizeof(s) - 1) && 0 == memcmp((t).start, s, sizeof(s) - 1))
@@ -421,34 +421,42 @@ static int skip_attribute(cbind_state *st) {
     c_token t = peek_token(st);
     if (t.kind != CTK_IDENT) return 0;
 
-    // keywords with mandatory paren block: keyword(...)
-    if (tok_eq(t, "__attribute__") || tok_eq(t, "__attribute")
-        || tok_eq(t, "__declspec")
-        || tok_eq(t, "_Alignas") || tok_eq(t, "_Alignof")
-        || tok_eq(t, "__typeof__") || tok_eq(t, "__typeof") || tok_eq(t, "typeof")
-        || tok_eq(t, "_Pragma")) {
+    // Compiler __ keywords with mandatory or optional paren block
+    if (tok_eq(t, "__attribute__") || tok_eq(t, "__attribute") || tok_eq(t, "__declspec") ||
+        tok_eq(t, "__typeof__") || tok_eq(t, "__typeof") || tok_eq(t, "__asm__") || tok_eq(t, "__asm") ||
+        tok_eq(t, "__nonnull")) {
         next_token(st);
         skip_paren_block(st);
         return 1;
     }
 
-    // keywords with optional paren block: keyword or keyword(...)
-    if (tok_eq(t, "__asm__") || tok_eq(t, "__asm")
-        || tok_eq(t, "_Atomic")) {
+    // Compiler __ keywords (bare, no parens)
+    if (tok_eq(t, "__extension__") || tok_eq(t, "__restrict") || tok_eq(t, "__restrict__") ||
+        tok_eq(t, "__inline") || tok_eq(t, "__inline__") || tok_eq(t, "__volatile__") ||
+        tok_eq(t, "__volatile") || tok_eq(t, "__signed__") || tok_eq(t, "__signed") ||
+        tok_eq(t, "__const") || tok_eq(t, "__const__") || tok_eq(t, "__auto_type")) {
+        next_token(st);
+        return 1;
+    }
+
+    // C keywords and single-underscore attributes
+    if (tok_eq(t, "_Alignas") || tok_eq(t, "_Alignof") || tok_eq(t, "_Pragma")) {
         next_token(st);
         skip_paren_block(st);
         return 1;
     }
-
-    // bare keywords (no parens)
-    if (tok_eq(t, "__extension__") || tok_eq(t, "__restrict") || tok_eq(t, "__restrict__")
-        || tok_eq(t, "__inline") || tok_eq(t, "__inline__")
-        || tok_eq(t, "__volatile__") || tok_eq(t, "__volatile")
-        || tok_eq(t, "__signed__") || tok_eq(t, "__signed")
-        || tok_eq(t, "__const") || tok_eq(t, "__const__")
-        || tok_eq(t, "restrict") || tok_eq(t, "inline")
-        || tok_eq(t, "_Noreturn") || tok_eq(t, "__auto_type")
-        || tok_eq(t, "_Complex") || tok_eq(t, "_Imaginary")) {
+    if (tok_eq(t, "typeof")) {
+        next_token(st);
+        skip_paren_block(st);
+        return 1;
+    }
+    if (tok_eq(t, "_Atomic")) {
+        next_token(st);
+        skip_paren_block(st);
+        return 1;
+    }
+    if (tok_eq(t, "restrict") || tok_eq(t, "inline") || tok_eq(t, "_Noreturn") || tok_eq(t, "_Complex") ||
+        tok_eq(t, "_Imaginary")) {
         next_token(st);
         return 1;
     }
@@ -468,7 +476,6 @@ static void skip_all_attributes(cbind_state *st) {
 
 static c_type parse_type(cbind_state *st) {
     c_type t = {0};
-
 
     skip_all_attributes(st);
 
@@ -490,7 +497,7 @@ static c_type parse_type(cbind_state *st) {
     str named        = str_empty();
 
     for (;;) {
-    
+
         skip_all_attributes(st);
         c_token p = peek_token(st);
         if (p.kind != CTK_IDENT) break;
@@ -551,7 +558,7 @@ static c_type parse_type(cbind_state *st) {
         }
         if (tok_eq(p, "struct")) {
             next_token(st);
-            saw_struct = 1;
+            saw_struct       = 1;
             c_token name_tok = peek_token(st);
             if (name_tok.kind == CTK_IDENT) {
                 next_token(st);
@@ -562,7 +569,7 @@ static c_type parse_type(cbind_state *st) {
         }
         if (tok_eq(p, "enum")) {
             next_token(st);
-            saw_enum = 1;
+            saw_enum         = 1;
             c_token name_tok = peek_token(st);
             if (name_tok.kind == CTK_IDENT) {
                 next_token(st);
@@ -573,7 +580,7 @@ static c_type parse_type(cbind_state *st) {
         }
         if (tok_eq(p, "union")) {
             next_token(st);
-            saw_union = 1;
+            saw_union        = 1;
             c_token name_tok = peek_token(st);
             if (name_tok.kind == CTK_IDENT) {
                 next_token(st);
@@ -676,8 +683,8 @@ static c_type parse_type(cbind_state *st) {
         }
 
         // if we already collected specifiers, this must be the declarator name — stop
-        if (saw_int || saw_char || saw_float || saw_double || saw_void || saw_unsigned || saw_signed
-            || saw_long || saw_short || saw_named) {
+        if (saw_int || saw_char || saw_float || saw_double || saw_void || saw_unsigned || saw_signed ||
+            saw_long || saw_short || saw_named) {
             break;
         }
 
@@ -689,10 +696,10 @@ static c_type parse_type(cbind_state *st) {
     }
 
     // resolve the specifiers into a type kind
-    if (t.kind == CT_BOOL || t.kind == CT_SIZE_T || t.kind == CT_SSIZE_T || t.kind == CT_PTRDIFF_T
-        || t.kind == CT_INT8 || t.kind == CT_UINT8 || t.kind == CT_INT16 || t.kind == CT_UINT16
-        || t.kind == CT_INT32 || t.kind == CT_UINT32 || t.kind == CT_INT64 || t.kind == CT_UINT64
-        || t.kind == CT_INTPTR || t.kind == CT_UINTPTR) {
+    if (t.kind == CT_BOOL || t.kind == CT_SIZE_T || t.kind == CT_SSIZE_T || t.kind == CT_PTRDIFF_T ||
+        t.kind == CT_INT8 || t.kind == CT_UINT8 || t.kind == CT_INT16 || t.kind == CT_UINT16 ||
+        t.kind == CT_INT32 || t.kind == CT_UINT32 || t.kind == CT_INT64 || t.kind == CT_UINT64 ||
+        t.kind == CT_INTPTR || t.kind == CT_UINTPTR) {
         // already set
     } else if (saw_void) {
         t.kind = CT_VOID;
@@ -735,7 +742,7 @@ static c_type parse_type(cbind_state *st) {
 
     // parse pointer chain
     for (;;) {
-    
+
         skip_all_attributes(st);
         c_token p = peek_token(st);
         if (p.kind == CTK_STAR) {
@@ -746,8 +753,8 @@ static c_type parse_type(cbind_state *st) {
             // check for const after *
             skip_all_attributes(st);
             p = peek_token(st);
-            if (p.kind == CTK_IDENT
-                && (tok_eq(p, "const") || tok_eq(p, "__const") || tok_eq(p, "__const__"))) {
+            if (p.kind == CTK_IDENT &&
+                (tok_eq(p, "const") || tok_eq(p, "__const") || tok_eq(p, "__const__"))) {
                 next_token(st);
                 if (t.pointer_depth > 0 && t.pointer_depth <= 4) {
                     t.const_at[t.pointer_depth - 1] = 1;
@@ -755,8 +762,8 @@ static c_type parse_type(cbind_state *st) {
             }
             // skip restrict after pointer
             p = peek_token(st);
-            if (p.kind == CTK_IDENT
-                && (tok_eq(p, "restrict") || tok_eq(p, "__restrict") || tok_eq(p, "__restrict__"))) {
+            if (p.kind == CTK_IDENT &&
+                (tok_eq(p, "restrict") || tok_eq(p, "__restrict") || tok_eq(p, "__restrict__"))) {
                 next_token(st);
             }
         } else {
@@ -776,7 +783,6 @@ static c_param parse_param(cbind_state *st) {
 
     c_type  type = parse_type(st);
     c_param p    = {.type = type, .name = str_empty()};
-
 
     skip_all_attributes(st);
     c_token tok = peek_token(st);
@@ -801,13 +807,13 @@ static c_param parse_param(cbind_state *st) {
                 if (lparen.kind == CTK_LPAREN) {
                     next_token(st); // consume (
                     // build function pointer type
-                    c_type fp       = {0};
-                    fp.kind         = CT_FUNC_PTR;
-                    fp.fp_ret       = alloc_malloc(st->alloc, sizeof(c_type));
-                    *fp.fp_ret      = type;
-                    param_array fps = {.alloc = st->alloc};
+                    c_type fp         = {0};
+                    fp.kind           = CT_FUNC_PTR;
+                    fp.fp_ret         = alloc_malloc(st->alloc, sizeof(c_type));
+                    *fp.fp_ret        = type;
+                    param_array fps   = {.alloc = st->alloc};
 
-                    c_token check = peek_token(st);
+                    c_token     check = peek_token(st);
                     if (check.kind == CTK_RPAREN) {
                         next_token(st); // empty params
                     } else if (check.kind == CTK_IDENT && tok_eq(check, "void")) {
@@ -845,9 +851,9 @@ static c_param parse_param(cbind_state *st) {
                         c_token rp = peek_token(st);
                         if (rp.kind == CTK_RPAREN) next_token(st);
                     }
-                    fp.fp_params     = fps.v;
+                    fp.fp_params      = fps.v;
                     fp.fp_param_count = fps.size;
-                    p.type           = fp;
+                    p.type            = fp;
                     return p;
                 }
             }
@@ -955,6 +961,13 @@ static void parse_struct_or_union(cbind_state *st, int is_target, str tag_name, 
             }
             if (check.kind == CTK_EOF) break;
 
+            // skip #define directives inside struct body (e.g. glibc's fd_set)
+            if (check.kind == CTK_HASH) {
+                next_token(st); // consume #
+                skip_to_end_of_line(st);
+                continue;
+            }
+
             // parse field: type name; or type (*name)(params);
             c_type ft = parse_type(st);
 
@@ -982,7 +995,7 @@ static void parse_struct_or_union(cbind_state *st, int is_target, str tag_name, 
                                 fp.fp_ret       = alloc_malloc(st->alloc, sizeof(c_type));
                                 *fp.fp_ret      = ft;
                                 param_array fps = {.alloc = st->alloc};
-                                c_token chk = peek_token(st);
+                                c_token     chk = peek_token(st);
                                 if (chk.kind == CTK_RPAREN) {
                                     next_token(st);
                                 } else if (chk.kind == CTK_IDENT && tok_eq(chk, "void")) {
@@ -1015,7 +1028,7 @@ static void parse_struct_or_union(cbind_state *st, int is_target, str tag_name, 
                                 }
                                 fp.fp_params      = fps.v;
                                 fp.fp_param_count = fps.size;
-                                c_field f = {.name = tok_str(st->alloc, fp_name), .type = fp};
+                                c_field f         = {.name = tok_str(st->alloc, fp_name), .type = fp};
                                 array_push(fields, f);
                                 c_token semi = peek_token(st);
                                 if (semi.kind == CTK_SEMICOLON) next_token(st);
@@ -1057,7 +1070,7 @@ static void parse_struct_or_union(cbind_state *st, int is_target, str tag_name, 
                 // handle comma-separated declarators: int *a, b, **c;
                 // strip pointer info from base type — each declarator has its own
                 {
-                    c_type base = ft;
+                    c_type base        = ft;
                     base.pointer_depth = 0;
                     base.is_const      = 0;
                     memset(base.const_at, 0, sizeof(base.const_at));
@@ -1121,10 +1134,10 @@ static void parse_struct_or_union(cbind_state *st, int is_target, str tag_name, 
                 skip_to_semicolon(st);
                 // still emit the struct if from target
                 if (is_target && !str_is_empty(tag_name)) {
-                    c_decl d    = {0};
-                    d.kind      = CDECL_STRUCT;
-                    d.name      = tag_name;
-                    d.fields    = fields.v;
+                    c_decl d      = {0};
+                    d.kind        = CDECL_STRUCT;
+                    d.name        = tag_name;
+                    d.fields      = fields.v;
                     d.field_count = fields.size;
                     array_push(st->decls, d);
                 }
@@ -1139,8 +1152,8 @@ static void parse_struct_or_union(cbind_state *st, int is_target, str tag_name, 
                 if (str_is_empty(tag_name)) {
                     // anonymous struct: typedef struct { ... } foo;
                     // emit as c_foo
-                    str tess_name = str_fmt(st->alloc, "c_%.*s", str_ilen(typedef_name),
-                                           str_buf(&typedef_name));
+                    str tess_name =
+                      str_fmt(st->alloc, "c_%.*s", str_ilen(typedef_name), str_buf(&typedef_name));
                     str_map_set(&st->typedefs, typedef_name, &tess_name);
 
                     if (is_target) {
@@ -1153,8 +1166,8 @@ static void parse_struct_or_union(cbind_state *st, int is_target, str tag_name, 
                     }
                 } else {
                     // named struct: typedef struct tag { ... } name;
-                    str tess_name = str_fmt(st->alloc, "c_struct_%.*s", str_ilen(tag_name),
-                                           str_buf(&tag_name));
+                    str tess_name =
+                      str_fmt(st->alloc, "c_struct_%.*s", str_ilen(tag_name), str_buf(&tag_name));
                     str_map_set(&st->typedefs, typedef_name, &tess_name);
 
                     if (is_target) {
@@ -1206,8 +1219,8 @@ static void parse_struct_or_union(cbind_state *st, int is_target, str tag_name, 
                 if (out_typedef_name) *out_typedef_name = typedef_name;
 
                 if (ptr == 0 && !str_is_empty(tag_name)) {
-                    str tess_name = str_fmt(st->alloc, "c_struct_%.*s", str_ilen(tag_name),
-                                           str_buf(&tag_name));
+                    str tess_name =
+                      str_fmt(st->alloc, "c_struct_%.*s", str_ilen(tag_name), str_buf(&tag_name));
                     str_map_set(&st->typedefs, typedef_name, &tess_name);
                 }
                 // If not defined yet, register forward decl
@@ -1255,7 +1268,7 @@ static void parse_enum_body(cbind_state *st, int is_target, int is_typedef) {
     next_token(st); // consume {
 
     while (st->pos < st->src_len) {
-    
+
         skip_all_attributes(st);
         c_token check = peek_token(st);
         if (check.kind == CTK_RBRACE) {
@@ -1368,8 +1381,7 @@ static int parse_toplevel_decl(cbind_state *st) {
     }
 
     // _Static_assert, static_assert
-    if (first.kind == CTK_IDENT
-        && (tok_eq(first, "_Static_assert") || tok_eq(first, "static_assert"))) {
+    if (first.kind == CTK_IDENT && (tok_eq(first, "_Static_assert") || tok_eq(first, "static_assert"))) {
         next_token(st);
         skip_to_semicolon(st);
         return 1;
@@ -1383,7 +1395,7 @@ static int parse_toplevel_decl(cbind_state *st) {
 
         if (after.kind == CTK_IDENT && (tok_eq(after, "struct") || tok_eq(after, "union"))) {
             next_token(st);
-            c_token tag = peek_token(st);
+            c_token tag      = peek_token(st);
             str     tag_name = str_empty();
             if (tag.kind == CTK_IDENT && !tok_eq(tag, "const") && !tok_eq(tag, "volatile")) {
                 // check if next is { (tag name) or if this IS the body start
@@ -1398,11 +1410,11 @@ static int parse_toplevel_decl(cbind_state *st) {
             c_token tag = peek_token(st);
             if (tag.kind == CTK_IDENT) {
                 // consume enum tag name if present
-                u32     save2 = st->pos;
+                u32 save2 = st->pos;
                 next_token(st);
                 c_token after_name = peek_token(st);
-                if (after_name.kind == CTK_LBRACE || after_name.kind == CTK_IDENT
-                    || after_name.kind == CTK_SEMICOLON) {
+                if (after_name.kind == CTK_LBRACE || after_name.kind == CTK_IDENT ||
+                    after_name.kind == CTK_SEMICOLON) {
                     // consumed tag name, continue
                 } else {
                     st->pos = save2;
@@ -1427,15 +1439,15 @@ static int parse_toplevel_decl(cbind_state *st) {
                 c_token fp_name = peek_token(st);
                 if (fp_name.kind == CTK_IDENT) {
                     next_token(st);
-                    str typedef_name = tok_str(st->alloc, fp_name);
-                    c_token rp = peek_token(st);
+                    str     typedef_name = tok_str(st->alloc, fp_name);
+                    c_token rp           = peek_token(st);
                     if (rp.kind == CTK_RPAREN) {
                         next_token(st);
                         // skip param list — we register the typedef as a named type
                         // (function pointer signature is not preserved yet)
                         skip_paren_block(st);
-                        str tess = str_fmt(st->alloc, "c_%.*s", str_ilen(typedef_name),
-                                          str_buf(&typedef_name));
+                        str tess =
+                          str_fmt(st->alloc, "c_%.*s", str_ilen(typedef_name), str_buf(&typedef_name));
                         str_map_set(&st->typedefs, typedef_name, &tess);
                     }
                 }
@@ -1464,7 +1476,7 @@ static int parse_toplevel_decl(cbind_state *st) {
     if (first.kind == CTK_IDENT && (tok_eq(first, "struct") || tok_eq(first, "union"))) {
         u32 saved_struct = st->pos;
         next_token(st);
-        c_token tag = peek_token(st);
+        c_token tag      = peek_token(st);
         str     tag_name = str_empty();
         if (tag.kind == CTK_IDENT) {
             next_token(st);
@@ -1509,10 +1521,10 @@ static int parse_toplevel_decl(cbind_state *st) {
             if (lp.kind == CTK_LPAREN) {
                 next_token(st); // consume (
 
-                param_array params = {.alloc = st->alloc};
+                param_array params   = {.alloc = st->alloc};
                 int         variadic = 0;
 
-                c_token check = peek_token(st);
+                c_token     check    = peek_token(st);
                 if (check.kind == CTK_RPAREN) {
                     next_token(st); // empty params
                 } else if (check.kind == CTK_IDENT && tok_eq(check, "void")) {
@@ -1529,7 +1541,7 @@ static int parse_toplevel_decl(cbind_state *st) {
                 } else {
                 parse_func_params:;
                     for (;;) {
-                    
+
                         skip_all_attributes(st);
                         c_token e = peek_token(st);
                         if (e.kind == CTK_ELLIPSIS) {
@@ -1542,7 +1554,7 @@ static int parse_toplevel_decl(cbind_state *st) {
                         c_param p           = parse_param(st);
                         if (st->pos == param_start) break; // no progress
                         array_push(params, p);
-                    
+
                         c_token sep = peek_token(st);
                         if (sep.kind == CTK_COMMA) next_token(st);
                         else break;
@@ -1566,13 +1578,13 @@ static int parse_toplevel_decl(cbind_state *st) {
                 if (after.kind == CTK_SEMICOLON) next_token(st);
 
                 if (st->in_target) {
-                    c_decl d       = {0};
-                    d.kind         = CDECL_FUNCTION;
-                    d.name         = fname;
-                    d.return_type  = ret;
-                    d.params       = params.v;
-                    d.param_count  = params.size;
-                    d.is_variadic  = variadic;
+                    c_decl d      = {0};
+                    d.kind        = CDECL_FUNCTION;
+                    d.name        = fname;
+                    d.return_type = ret;
+                    d.params      = params.v;
+                    d.param_count = params.size;
+                    d.is_variadic = variadic;
                     array_push(st->decls, d);
                 }
                 return 1;
@@ -1693,18 +1705,18 @@ static str type_to_tess(allocator *a, c_type const *t, hashmap *typedefs) {
                 pname = str_fmt(a, "arg%u", i);
             }
             str ptype = type_to_tess(a, &t->fp_params[i].type, typedefs);
-            str part  = str_fmt(a, "%.*s: %.*s", str_ilen(pname), str_buf(&pname), str_ilen(ptype),
-                               str_buf(&ptype));
+            str part =
+              str_fmt(a, "%.*s: %.*s", str_ilen(pname), str_buf(&pname), str_ilen(ptype), str_buf(&ptype));
             str_build_cat(&sb, part);
         }
-        str ret = type_to_tess(a, t->fp_ret, typedefs);
+        str ret        = type_to_tess(a, t->fp_ret, typedefs);
         str arrow_part = str_fmt(a, ") -> %.*s", str_ilen(ret), str_buf(&ret));
         str_build_cat(&sb, arrow_part);
         return str_build_finish(&sb);
     }
 
     // base type name
-    str base;
+    str         base;
     char const *builtin = base_type_to_tess(t->kind);
     if (builtin) {
         base = str_init_static(builtin);
@@ -1767,11 +1779,10 @@ static str emit_bindings(allocator *a, cbind_state *st, char const *module_name)
     // determine include style
     str inc_line;
     if (str_contains_char(st->target_file, '/') || str_contains_char(st->target_file, '\\')) {
-        inc_line = str_fmt(a, "#include \"%.*s\"\n\n",
-                          str_ilen(st->target_file), str_buf(&st->target_file));
+        inc_line =
+          str_fmt(a, "#include \"%.*s\"\n\n", str_ilen(st->target_file), str_buf(&st->target_file));
     } else {
-        inc_line = str_fmt(a, "#include <%.*s>\n\n",
-                          str_ilen(st->target_file), str_buf(&st->target_file));
+        inc_line = str_fmt(a, "#include <%.*s>\n\n", str_ilen(st->target_file), str_buf(&st->target_file));
     }
     str_build_cat(&sb, inc_line);
 
@@ -1782,8 +1793,8 @@ static str emit_bindings(allocator *a, cbind_state *st, char const *module_name)
         if (d->kind != CDECL_FORWARD_STRUCT) continue;
         // skip if this struct was later fully defined (O(1) hashmap check)
         if (!str_map_contains(st->struct_defs, d->name)) {
-            str line = str_fmt(a, "c_struct_%.*s: { _opaque: Byte }\n",
-                              str_ilen(d->name), str_buf(&d->name));
+            str line =
+              str_fmt(a, "c_struct_%.*s: { _opaque: Byte }\n", str_ilen(d->name), str_buf(&d->name));
             str_build_cat(&sb, line);
             has_fwd = 1;
         }
@@ -1808,7 +1819,7 @@ static str emit_bindings(allocator *a, cbind_state *st, char const *module_name)
         }
 
         str_build line_sb = str_build_init(a, 128);
-        str lpart = str_fmt(a, "%.*s: { ", str_ilen(prefix), str_buf(&prefix));
+        str       lpart   = str_fmt(a, "%.*s: { ", str_ilen(prefix), str_buf(&prefix));
         str_build_cat(&line_sb, lpart);
 
         for (u32 f = 0; f < d->field_count; f++) {
@@ -1817,8 +1828,8 @@ static str emit_bindings(allocator *a, cbind_state *st, char const *module_name)
                 str_build_cat(&line_sb, comma);
             }
             str ftype = type_to_tess(a, &d->fields[f].type, st->typedefs);
-            str fpart = str_fmt(a, "%.*s: %.*s", str_ilen(d->fields[f].name),
-                               str_buf(&d->fields[f].name), str_ilen(ftype), str_buf(&ftype));
+            str fpart = str_fmt(a, "%.*s: %.*s", str_ilen(d->fields[f].name), str_buf(&d->fields[f].name),
+                                str_ilen(ftype), str_buf(&ftype));
             str_build_cat(&line_sb, fpart);
         }
 
@@ -1859,7 +1870,7 @@ static str emit_bindings(allocator *a, cbind_state *st, char const *module_name)
         if (d->kind != CDECL_FUNCTION) continue;
 
         str_build fn_sb = str_build_init(a, 128);
-        str fname = str_fmt(a, "c_%.*s(", str_ilen(d->name), str_buf(&d->name));
+        str       fname = str_fmt(a, "c_%.*s(", str_ilen(d->name), str_buf(&d->name));
         str_build_cat(&fn_sb, fname);
 
         for (u32 p = 0; p < d->param_count; p++) {
@@ -1874,8 +1885,8 @@ static str emit_bindings(allocator *a, cbind_state *st, char const *module_name)
                 pname = str_fmt(a, "arg%u", p);
             }
             str ptype = type_to_tess(a, &d->params[p].type, st->typedefs);
-            str ppart = str_fmt(a, "%.*s: %.*s", str_ilen(pname), str_buf(&pname), str_ilen(ptype),
-                               str_buf(&ptype));
+            str ppart =
+              str_fmt(a, "%.*s: %.*s", str_ilen(pname), str_buf(&pname), str_ilen(ptype), str_buf(&ptype));
             str_build_cat(&fn_sb, ppart);
         }
 
@@ -1903,21 +1914,21 @@ static str emit_bindings(allocator *a, cbind_state *st, char const *module_name)
 // Public API
 // ---------------------------------------------------------------------------
 
-str tl_cbind_from_preprocessed(allocator *alloc, char const *pp_output, u32 pp_len,
-                               char const *target_file, char const *module_name) {
-    cbind_state st  = {0};
-    st.alloc        = alloc;
-    st.src          = pp_output;
-    st.src_len      = pp_len;
-    st.pos          = 0;
+str tl_cbind_from_preprocessed(allocator *alloc, char const *pp_output, u32 pp_len, char const *target_file,
+                               char const *module_name) {
+    cbind_state st     = {0};
+    st.alloc           = alloc;
+    st.src             = pp_output;
+    st.src_len         = pp_len;
+    st.pos             = 0;
     st.target_file     = str_init(alloc, target_file);
     st.target_basename = file_basename(target_file);
     st.in_target       = 0;
-    st.decls        = (decl_array){.alloc = alloc};
-    st.typedefs     = map_create(alloc, sizeof(str), 64);
-    st.struct_defs   = map_create(alloc, sizeof(int), 64);
-    st.forward_decls = hset_create(alloc, 32);
-    st.verbose      = 0;
+    st.decls           = (decl_array){.alloc = alloc};
+    st.typedefs        = map_create(alloc, sizeof(str), 64);
+    st.struct_defs     = map_create(alloc, sizeof(int), 64);
+    st.forward_decls   = hset_create(alloc, 32);
+    st.verbose         = 0;
 
     parse_all(&st);
 
@@ -1977,10 +1988,10 @@ str tl_cbind(allocator *alloc, tl_cbind_opts const *opts) {
     array_push(argv, null_t);
 
     platform_exec_opts exec = {
-        .argv       = (char const *const *)argv.v,
-        .stdin_data = NULL,
-        .stdin_len  = 0,
-        .verbose    = opts->verbose,
+      .argv       = (char const *const *)argv.v,
+      .stdin_data = NULL,
+      .stdin_len  = 0,
+      .verbose    = opts->verbose,
     };
 
     int rc = platform_exec(&exec);
