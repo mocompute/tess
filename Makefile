@@ -155,6 +155,7 @@ TESS_SOURCES =				\
 	$(TESS_SRC_DIR)/src/manifest.c \
 	$(TESS_SRC_DIR)/src/source_scanner.c \
 	$(TESS_SRC_DIR)/src/tpkg.c	\
+	$(TESS_SRC_DIR)/src/cbind.c	\
 	$(TESS_SRC_DIR)/src/type.c
 
 TESS_OBJECTS = $(patsubst $(TESS_SRC_DIR)/src/%.c,$(BUILD_DIR)/tess/%.o,$(TESS_SOURCES))
@@ -176,6 +177,7 @@ TESS_HEADERS =						\
 	$(TESS_SRC_DIR)/include/token.h			\
 	$(TESS_SRC_DIR)/include/tokenizer.h		\
 	$(TESS_SRC_DIR)/include/transpile.h		\
+	$(TESS_SRC_DIR)/include/cbind.h			\
 	$(TESS_SRC_DIR)/include/type.h			\
 	$(TESS_SRC_DIR)/include/type_registry.h
 
@@ -374,7 +376,7 @@ test-mos: build-mos-tests
 # tess Compiler Tests
 # ------------------------------------------------------------------------------
 
-TESS_TESTS     = tess type_v2 format tpkg import_resolver manifest source_scanner
+TESS_TESTS     = tess type_v2 format tpkg import_resolver manifest source_scanner cbind
 TESS_TEST_EXES = $(patsubst %,$(BUILD_DIR)/test_%,$(TESS_TESTS))
 
 $(BUILD_DIR)/test_%: $(TESS_SRC_DIR)/src/test_%.c $(TESS_OBJECTS) $(TESS_EMBED_OBJ) $(MOS_OBJECTS) $(LIBDEFLATE_OBJECTS) | $(TESS_EXE)

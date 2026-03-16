@@ -70,6 +70,7 @@ set(HEADERS
   ${PROJECT_SOURCE_DIR}/src/tess/include/format.h
   ${PROJECT_SOURCE_DIR}/src/tess/include/infer.h
   ${PROJECT_SOURCE_DIR}/src/tess/include/transpile.h
+  ${PROJECT_SOURCE_DIR}/src/tess/include/cbind.h
   ${PROJECT_SOURCE_DIR}/src/tess/include/type.h
   ${PROJECT_SOURCE_DIR}/src/tess/include/type_registry.h
 )
@@ -97,6 +98,7 @@ set(SOURCES
   src/infer_update.c
   src/transpile.c
   src/tpkg.c
+  src/cbind.c
   src/type.c
 
   ${CMAKE_CURRENT_BINARY_DIR}/tess_embed.c
@@ -156,6 +158,7 @@ target_compile_definitions(test-tpkg PRIVATE
 tess_create_test(import_resolver)
 tess_create_test(manifest)
 tess_create_test(source_scanner)
+tess_create_test(cbind)
 
 # -- vendor tests --
 

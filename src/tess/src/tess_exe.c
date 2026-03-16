@@ -1,5 +1,6 @@
 #include "alloc.h"
 #include "array.h"
+#include "cbind.h"
 #include "file.h"
 #include "format.h"
 #include "hashmap.h"
@@ -108,6 +109,7 @@ noreturn void usage(int status, char const *argv0) {
     printf("    lib                    compile and create library (-o or package.tl required)\n");
     printf("    lib-emit-c             transpile input files to C as library source code\n");
     printf("    pack                   create .tpkg archive, or extract with --unpack\n");
+    printf("    cbind                  generate .tl bindings from a C header file\n");
     printf("    validate               validate source files against package.tl\n");
     printf("\nOptions:\n");
     printf("    -h                     print usage and exit\n");
@@ -993,6 +995,26 @@ static void output_program(state *self) {
     } else {
         printf("%.*s", str_ilen(self->program), str_buf(&self->program));
     }
+}
+
+static int generate_cbindings(state *self) {
+    if (self->words.size < 2) {
+        fprintf(stderr, "error: cbind requires a header file argument\n");
+        return 1;
+    }
+
+    tl_cbind_opts opts = {
+        .header_path = self->words.v[1],
+        .module_name = NULL,
+        .cc          = self->cc,
+        .verbose     = self->verbose,
+    };
+
+    self->program = tl_cbind(self->arena, &opts);
+    if (str_is_empty(self->program)) return 1;
+
+    output_program(self);
+    return 0;
 }
 
 static void get_c_compiler(state *self) {
@@ -2496,6 +2518,10 @@ int main(int argc, char *argv[]) {
 
     else if (0 == strcmp("validate", self.words.v[0])) {
         result = validate_files(&self);
+    }
+
+    else if (0 == strcmp("cbind", self.words.v[0])) {
+        result = generate_cbindings(&self);
     }
 
     else if (0 == strcmp("init", self.words.v[0])) {
