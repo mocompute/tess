@@ -1,5 +1,5 @@
 #module main
-#import <Cmdline.tl>
+#import <CommandLine.tl>
 #import <String.tl>
 
 S(s) { String.from_cstr(s) }
@@ -7,7 +7,7 @@ S(s) { String.from_cstr(s) }
 test_basic_flag() {
     error := 0
 
-    parser := Cmdline.create(S("test"), S("A test tool"))
+    parser := CommandLine.create(S("test"), S("A test tool"))
     parser.flag(S("verbose"), 'v', S("Enable verbose output"))
     parser.flag(S("help"), 'h', S("Show help"))
 
@@ -30,7 +30,7 @@ test_basic_flag() {
 test_short_flag() {
     error := 0
 
-    parser := Cmdline.create(S("test"), S("A test tool"))
+    parser := CommandLine.create(S("test"), S("A test tool"))
     parser.flag(S("verbose"), 'v', S("Enable verbose output"))
     parser.flag(S("help"), 'h', S("Show help"))
 
@@ -51,7 +51,7 @@ test_short_flag() {
 test_option_long() {
     error := 0
 
-    parser := Cmdline.create(S("test"), S("A test tool"))
+    parser := CommandLine.create(S("test"), S("A test tool"))
     parser.option(S("output"), 'o', S("Output file"))
 
     argv: CArray[CString, 3] := void
@@ -74,7 +74,7 @@ test_option_long() {
 test_option_eq() {
     error := 0
 
-    parser := Cmdline.create(S("test"), S("A test tool"))
+    parser := CommandLine.create(S("test"), S("A test tool"))
     parser.option(S("output"), 'o', S("Output file"))
 
     argv: CArray[CString, 2] := void
@@ -96,7 +96,7 @@ test_option_eq() {
 test_option_short() {
     error := 0
 
-    parser := Cmdline.create(S("test"), S("A test tool"))
+    parser := CommandLine.create(S("test"), S("A test tool"))
     parser.option(S("output"), 'o', S("Output file"))
 
     argv: CArray[CString, 3] := void
@@ -119,7 +119,7 @@ test_option_short() {
 test_option_short_inline() {
     error := 0
 
-    parser := Cmdline.create(S("test"), S("A test tool"))
+    parser := CommandLine.create(S("test"), S("A test tool"))
     parser.option(S("output"), 'o', S("Output file"))
 
     argv: CArray[CString, 2] := void
@@ -142,7 +142,7 @@ test_option_short_inline() {
 test_counter() {
     error := 0
 
-    parser := Cmdline.create(S("test"), S("A test tool"))
+    parser := CommandLine.create(S("test"), S("A test tool"))
     parser.counter(S("verbose"), 'v', S("Verbosity level"))
 
     argv: CArray[CString, 4] := void
@@ -163,7 +163,7 @@ test_counter() {
 test_positional() {
     error := 0
 
-    parser := Cmdline.create(S("test"), S("A test tool"))
+    parser := CommandLine.create(S("test"), S("A test tool"))
     parser.flag(S("verbose"), 'v', S("Verbose"))
 
     argv: CArray[CString, 4] := void
@@ -191,7 +191,7 @@ test_positional() {
 test_double_dash() {
     error := 0
 
-    parser := Cmdline.create(S("test"), S("A test tool"))
+    parser := CommandLine.create(S("test"), S("A test tool"))
     parser.flag(S("verbose"), 'v', S("Verbose"))
 
     argv: CArray[CString, 5] := void
@@ -222,7 +222,7 @@ test_double_dash() {
 test_unknown_flag_error() {
     error := 0
 
-    parser := Cmdline.create(S("test"), S("A test tool"))
+    parser := CommandLine.create(S("test"), S("A test tool"))
     parser.flag(S("verbose"), 'v', S("Verbose"))
 
     argv: CArray[CString, 2] := void
@@ -241,7 +241,7 @@ test_unknown_flag_error() {
 test_missing_value_error() {
     error := 0
 
-    parser := Cmdline.create(S("test"), S("A test tool"))
+    parser := CommandLine.create(S("test"), S("A test tool"))
     parser.option(S("output"), 'o', S("Output file"))
 
     argv: CArray[CString, 2] := void
@@ -260,7 +260,7 @@ test_missing_value_error() {
 test_required_missing() {
     error := 0
 
-    parser := Cmdline.create(S("test"), S("A test tool"))
+    parser := CommandLine.create(S("test"), S("A test tool"))
     parser.required(S("config"), 'c', S("Config file path"))
 
     argv: CArray[CString, 1] := void
@@ -278,7 +278,7 @@ test_required_missing() {
 test_required_provided() {
     error := 0
 
-    parser := Cmdline.create(S("test"), S("A test tool"))
+    parser := CommandLine.create(S("test"), S("A test tool"))
     parser.required(S("config"), 'c', S("Config file path"))
 
     argv: CArray[CString, 3] := void
@@ -301,7 +301,7 @@ test_required_provided() {
 test_command() {
     error := 0
 
-    parser := Cmdline.create(S("test"), S("A test tool"))
+    parser := CommandLine.create(S("test"), S("A test tool"))
     parser.command(S("build"))
     parser.command(S("run"))
     parser.flag(S("verbose"), 'v', S("Verbose"))
@@ -333,7 +333,7 @@ test_command() {
 test_has() {
     error := 0
 
-    parser := Cmdline.create(S("test"), S("A test tool"))
+    parser := CommandLine.create(S("test"), S("A test tool"))
     parser.flag(S("verbose"), 'v', S("Verbose"))
     parser.option(S("output"), 'o', S("Output file"))
 
@@ -356,7 +356,7 @@ test_has() {
 test_help_text() {
     error := 0
 
-    parser := Cmdline.create(S("mytool"), S("A useful tool"))
+    parser := CommandLine.create(S("mytool"), S("A useful tool"))
     parser.flag(S("verbose"), 'v', S("Enable verbose output"))
     parser.option(S("output"), 'o', S("Output file path"))
     parser.required(S("config"), 'c', S("Config file"))
@@ -378,7 +378,7 @@ test_from_argv() {
     argv.[0] = "prog"
     argv.[1] = "arg1"
     argv.[2] = "arg2"
-    result := Cmdline.from_argv(3, argv.[0].&)
+    result := CommandLine.from_argv(3, argv.[0].&)
 
     if result.size != 3 { error += 1 }
     if result.size >= 1 {
@@ -398,7 +398,7 @@ test_from_argv() {
 test_empty_args() {
     error := 0
 
-    parser := Cmdline.create(S("test"), S("A test tool"))
+    parser := CommandLine.create(S("test"), S("A test tool"))
     parser.flag(S("verbose"), 'v', S("Verbose"))
 
     argv: CArray[CString, 1] := void
@@ -418,7 +418,7 @@ test_empty_args() {
 test_mixed_flags_and_positionals() {
     error := 0
 
-    parser := Cmdline.create(S("test"), S("A test tool"))
+    parser := CommandLine.create(S("test"), S("A test tool"))
     parser.flag(S("verbose"), 'v', S("Verbose"))
     parser.option(S("output"), 'o', S("Output file"))
 

@@ -1,8 +1,8 @@
-// Cmdline — Declarative command-line argument parsing.
+// CommandLine — Declarative command-line argument parsing.
 //
-// Builder pattern: create a Cmdline, add specs, then parse argc/argv.
+// Builder pattern: create a CommandLine, add specs, then parse argc/argv.
 // Results are queried via typed accessors on the Args value.
-#module Cmdline
+#module CommandLine
 #import <Alloc.tl>
 #import <Array.tl>
 #import <HashMap.tl>
@@ -43,8 +43,8 @@ ParseError: | UnknownFlag     { flag: String }
 ParseErrors: { errors: Array[ParseError] }
 
 
-// Cmdline specification (builder).
-Cmdline: {
+// CommandLine specification (builder).
+CommandLine: {
     _alloc:       Ptr[Allocator],
     _name:        String,
     _description: String,
@@ -52,7 +52,7 @@ Cmdline: {
     _commands:    Array[String],
 }
 
-#module Cmdline.Args
+#module CommandLine.Args
 
 // -- Types --
 
@@ -78,7 +78,7 @@ positionals(args: Ptr[Const[Args]])               -> Array[String]
 rest       (args: Ptr[Const[Args]])               -> Array[String]
 has        (args: Ptr[Const[Args]], name: String) -> Bool
 
-#module Cmdline
+#module CommandLine
 
 // -- Aliases --
 
@@ -86,32 +86,32 @@ ArgValue = Args.ArgValue
 
 // -- Synopsis --
 
-create (alloc: Ptr[Allocator], name: String, description: String) -> Ptr[Cmdline]
-create (name: String, description: String)                        -> Ptr[Cmdline]
-destroy(self: Ptr[Cmdline])                                       -> Void
+create (alloc: Ptr[Allocator], name: String, description: String) -> Ptr[CommandLine]
+create (name: String, description: String)                        -> Ptr[CommandLine]
+destroy(self: Ptr[CommandLine])                                   -> Void
 
-flag    (self: Ptr[Cmdline], long_name: String, short_name: CChar, desc: String) -> Void
-flag    (self: Ptr[Cmdline], long_name: String, desc: String)                    -> Void
-counter (self: Ptr[Cmdline], long_name: String, short_name: CChar, desc: String) -> Void
-option  (self: Ptr[Cmdline], long_name: String, short_name: CChar, desc: String) -> Void
-option  (self: Ptr[Cmdline], long_name: String, desc: String)                    -> Void
-required(self: Ptr[Cmdline], long_name: String, short_name: CChar, desc: String) -> Void
-required(self: Ptr[Cmdline], long_name: String, desc: String)                    -> Void
-command (self: Ptr[Cmdline], name: String)                                       -> Void
+flag    (self: Ptr[CommandLine], long_name: String, short_name: CChar, desc: String) -> Void
+flag    (self: Ptr[CommandLine], long_name: String, desc: String)                    -> Void
+counter (self: Ptr[CommandLine], long_name: String, short_name: CChar, desc: String) -> Void
+option  (self: Ptr[CommandLine], long_name: String, short_name: CChar, desc: String) -> Void
+option  (self: Ptr[CommandLine], long_name: String, desc: String)                    -> Void
+required(self: Ptr[CommandLine], long_name: String, short_name: CChar, desc: String) -> Void
+required(self: Ptr[CommandLine], long_name: String, desc: String)                    -> Void
+command (self: Ptr[CommandLine], name: String)                                       -> Void
 
-parse        (self: Ptr[Cmdline], argc: CInt, argv: Ptr[CString]) -> Result[Args, ParseErrors]
-parse_or_exit(self: Ptr[Cmdline], argc: CInt, argv: Ptr[CString]) -> Args
+parse        (self: Ptr[CommandLine], argc: CInt, argv: Ptr[CString]) -> Result[Args, ParseErrors]
+parse_or_exit(self: Ptr[CommandLine], argc: CInt, argv: Ptr[CString]) -> Args
 
 
-help_text (self: Ptr[Cmdline]) -> String
-print_help(self: Ptr[Cmdline]) -> Void
+help_text (self: Ptr[CommandLine]) -> String
+print_help(self: Ptr[CommandLine]) -> Void
 
 from_argv(argc: CInt, argv: Ptr[CString]) -> Array[String]
 
 // -- Private helpers --
 
-_find_spec_long (self: Ptr[Cmdline], name: String)                                  -> Option[CSize]
-_find_spec_short(self: Ptr[Cmdline], ch: CChar)                                     -> Option[CSize]
+_find_spec_long (self: Ptr[CommandLine], name: String)                              -> Option[CSize]
+_find_spec_short(self: Ptr[CommandLine], ch: CChar)                                 -> Option[CSize]
 _store_bool     (values: Ptr[HashMap[String, ArgValue]], name: String)              -> Void
 _store_count    (values: Ptr[HashMap[String, ArgValue]], name: String)              -> Void
 _store_str      (values: Ptr[HashMap[String, ArgValue]], name: String, val: String) -> Void
@@ -123,8 +123,8 @@ _store_str      (values: Ptr[HashMap[String, ArgValue]], name: String, val: Stri
 // -- Create / Destroy --
 
 create(alloc, name, description) {
-    p: Ptr[Cmdline] := alloc->malloc(alloc, sizeof[Cmdline]())
-    if p == null { _tl_fatal_("Cmdline: oom") }
+    p: Ptr[CommandLine] := alloc->malloc(alloc, sizeof[CommandLine]())
+    if p == null { _tl_fatal_("CommandLine: oom") }
     p->_alloc       = alloc
     p->_name        = name
     p->_description = description
@@ -499,7 +499,7 @@ from_argv(argc, argv) {
 
 // -- Args --
 
-#module Cmdline.Args
+#module CommandLine.Args
 
 // -- Query --
 

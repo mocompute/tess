@@ -1,6 +1,6 @@
 # TL Coding Conventions
 
-Guidelines for writing Tess library and example code. The canonical reference for these conventions is `src/tl/std/Cmdline.tl`.
+Guidelines for writing Tess library and example code. The canonical reference for these conventions is `src/tl/std/CommandLine.tl`.
 
 ## Quick Reference (for LLMs / coding assistants)
 
@@ -68,8 +68,8 @@ Organize files in this order:
 8. **Implementation**: function bodies, grouped into logical sections
 
 ```tl
-// Cmdline: Declarative command-line argument parsing.
-#module Cmdline
+// CommandLine: Declarative command-line argument parsing.
+#module CommandLine
 #import <Alloc.tl>
 #import <Array.tl>
 
@@ -118,7 +118,7 @@ get_flag(args: Args, name: Str) -> Bool
 has     (args: Args, name: Str) -> Bool
 ```
 
-This convention enables UFCS: `parser.flag("verbose", "Be verbose")` desugars to `Cmdline.flag(parser, ...)`.
+This convention enables UFCS: `parser.flag("verbose", "Be verbose")` desugars to `CommandLine.flag(parser, ...)`.
 
 ## Pointers
 
@@ -287,7 +287,7 @@ short_prefix := _S("-")
 Use `_tl_fatal_()` for unrecoverable errors (out of memory, programmer mistakes):
 
 ```tl
-if p == null { _tl_fatal_("Cmdline: oom") }
+if p == null { _tl_fatal_("CommandLine: oom") }
 ```
 
 For recoverable errors, return a `Result` (see [Tagged Unions](#tagged-unions)). Define error variants as a tagged union so callers can distinguish failure modes.

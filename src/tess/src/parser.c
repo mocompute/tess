@@ -744,7 +744,7 @@ int a_type_identifier_base(parser *self) {
     if (0 == a_try(self, a_attributed_identifier)) {
         ast_node *ident = self->result;
 
-        // Iteratively resolve dotted names left-to-right (e.g., Cmdline.Args.Args).
+        // Iteratively resolve dotted names left-to-right (e.g., CommandLine.Args.Args).
         // This mirrors how parse_expression handles module-qualified names via
         // maybe_mangle_binop in a while loop.
         while (0 == a_try(self, a_dot)) {

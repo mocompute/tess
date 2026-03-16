@@ -1256,8 +1256,8 @@ int maybe_mangle_binop(parser *self, ast_node *op, ast_node **inout, ast_node *r
         if (original) (*inout)->symbol.name = *original;
     }
 
-    // Implicit submodule visibility: in #module Cmdline, bare "Args" resolves
-    // to "Cmdline.Args" if "Cmdline.Args" is a known module.
+    // Implicit submodule visibility: in #module CommandLine, bare "Args" resolves
+    // to "CommandLine.Args" if "CommandLine.Args" is a known module.
     if ((0 == str_cmp_c(op->symbol.name, ".")) && ast_node_is_symbol(*inout) &&
         !str_is_empty(self->current_module) &&
         !str_hset_contains(self->modules_seen, (*inout)->symbol.name)) {
@@ -1267,8 +1267,8 @@ int maybe_mangle_binop(parser *self, ast_node *op, ast_node **inout, ast_node *r
         }
     }
 
-    // Module-mangled symbol recovery: if a symbol like Cmdline was mangled to
-    // Cmdline__Cmdline (because it's also a type in the current module), but
+    // Module-mangled symbol recovery: if a symbol like CommandLine was mangled to
+    // CommandLine__CommandLine (because it's also a type in the current module), but
     // the original name is a module, unmangle so module resolution can proceed.
     if ((0 == str_cmp_c(op->symbol.name, ".")) && ast_node_is_symbol(*inout) &&
         (*inout)->symbol.is_module_mangled && !str_is_empty((*inout)->symbol.original) &&
