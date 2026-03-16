@@ -1775,6 +1775,7 @@ static str type_to_tess(allocator *a, c_type const *t, hashmap *typedefs) {
 
 static str emit_bindings(allocator *a, cbind_state *st, char const *module_name) {
     str_build sb = str_build_init(a, 4096);
+    hashmap *emitted = hset_create(a, 64);
 
     // module + include
     str mod_line = str_fmt(a, "#module %s\n", module_name);
@@ -1795,8 +1796,10 @@ static str emit_bindings(allocator *a, cbind_state *st, char const *module_name)
     forall(i, st->decls) {
         c_decl *d = &st->decls.v[i];
         if (d->kind != CDECL_FORWARD_STRUCT) continue;
+        if (str_hset_contains(emitted, d->name)) continue;
         // skip if this struct was later fully defined (O(1) hashmap check)
         if (!str_map_contains(st->struct_defs, d->name)) {
+            str_hset_insert(&emitted, d->name);
             str line =
               str_fmt(a, "c_struct_%.*s: { _opaque: Byte }\n", str_ilen(d->name), str_buf(&d->name));
             str_build_cat(&sb, line);
@@ -1809,6 +1812,8 @@ static str emit_bindings(allocator *a, cbind_state *st, char const *module_name)
     forall(i, st->decls) {
         c_decl *d = &st->decls.v[i];
         if (d->kind != CDECL_STRUCT) continue;
+        if (str_hset_contains(emitted, d->name)) continue;
+        str_hset_insert(&emitted, d->name);
 
         // determine prefix: if name doesn't look like a raw tag, it's from an anonymous typedef
         int is_tag = 0;
@@ -1853,11 +1858,9 @@ static str emit_bindings(allocator *a, cbind_state *st, char const *module_name)
     int has_const = 0;
     forall(i, st->decls) {
         c_decl *d = &st->decls.v[i];
-        if (d->kind == CDECL_ENUM_VALUE) {
-            str line = str_fmt(a, "c_%.*s: CInt\n", str_ilen(d->name), str_buf(&d->name));
-            str_build_cat(&sb, line);
-            has_const = 1;
-        } else if (d->kind == CDECL_DEFINE) {
+        if (d->kind == CDECL_ENUM_VALUE || d->kind == CDECL_DEFINE) {
+            if (str_hset_contains(emitted, d->name)) continue;
+            str_hset_insert(&emitted, d->name);
             str line = str_fmt(a, "c_%.*s: CInt\n", str_ilen(d->name), str_buf(&d->name));
             str_build_cat(&sb, line);
             has_const = 1;
@@ -1872,6 +1875,8 @@ static str emit_bindings(allocator *a, cbind_state *st, char const *module_name)
     forall(i, st->decls) {
         c_decl *d = &st->decls.v[i];
         if (d->kind != CDECL_FUNCTION) continue;
+        if (str_hset_contains(emitted, d->name)) continue;
+        str_hset_insert(&emitted, d->name);
 
         str_build fn_sb = str_build_init(a, 128);
         str       fname = str_fmt(a, "c_%.*s(", str_ilen(d->name), str_buf(&d->name));
