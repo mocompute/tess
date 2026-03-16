@@ -886,33 +886,21 @@ read_file_bytes(path) {
 }
 
 write_file(path, content) {
-    when open(path, Write) {
-        ok: Ok {
-            defer close(ok.v)
-            write_str(ok.v, content)
-        }
-        err: Err { Err(err.v) }
-    }
+    f := try open(path, Write)
+    defer close(f)
+    write_str(f, content)
 }
 
 write_file_bytes(path, data) {
-    when open(path, Write) {
-        ok: Ok {
-            defer close(ok.v)
-            write_bytes(ok.v, data)
-        }
-        err: Err { Err(err.v) }
-    }
+    f := try open(path, Write)
+    defer close(f)
+    write_bytes(f, data)
 }
 
 append_file(path, content) {
-    when open(path, Append) {
-        ok: Ok {
-            defer close(ok.v)
-            write_str(ok.v, content)
-        }
-        err: Err { Err(err.v) }
-    }
+    f := try open(path, Append)
+    defer close(f)
+    write_str(f, content)
 }
 
 read_lines(alloc, path) {

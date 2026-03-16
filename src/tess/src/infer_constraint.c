@@ -1258,10 +1258,52 @@ static int infer_try(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
     ensure_tv(self, &node->type);
     if (constrain_pm(self, node->type, inner_type, node, TL_UNIFY_SYMMETRIC)) return 1;
 
-    // Constrain the enclosing function's return type to be compatible with the wrapper type
-    if (ctx->result_type)
-        if (constrain_pm(self, node->try_.operand->type, ctx->result_type, node, TL_UNIFY_SYMMETRIC))
+    // Constrain the error variant types to match between operand and enclosing function return type.
+    // This allows try across different success types: e.g. try expr where expr : Result[A, E]
+    // inside a function returning Result[B, E] — only E must match.
+    if (ctx->result_type) {
+        tl_monotype *ret = ctx->result_type;
+
+        // Decompose return type as tagged union: find ".u" field
+        if (!tl_monotype_is_inst(ret)) {
+            array_push(self->errors,
+                       ((tl_infer_error){.tag = tl_err_try_requires_two_variant_union, .node = node}));
             return 1;
+        }
+        i32 ret_u = tl_monotype_type_constructor_field_index(ret, S(AST_TAGGED_UNION_UNION_FIELD));
+        if (ret_u < 0) {
+            array_push(self->errors,
+                       ((tl_infer_error){.tag = tl_err_try_requires_two_variant_union, .node = node}));
+            return 1;
+        }
+        tl_monotype *ret_union = ret->cons_inst->args.v[ret_u];
+        if (!tl_monotype_is_inst(ret_union) || ret_union->cons_inst->def->field_names.size != 2) {
+            array_push(self->errors,
+                       ((tl_infer_error){.tag = tl_err_try_requires_two_variant_union, .node = node}));
+            return 1;
+        }
+
+        // Extract error variant from both operand and return type
+        tl_monotype *op_err_variant  = union_type->cons_inst->args.v[1];
+        tl_monotype *ret_err_variant = ret_union->cons_inst->args.v[1];
+
+        // Constrain each error variant field type to match
+        u32 op_n  = tl_monotype_is_inst(op_err_variant)  ? op_err_variant->cons_inst->args.size  : 0;
+        u32 ret_n = tl_monotype_is_inst(ret_err_variant) ? ret_err_variant->cons_inst->args.size : 0;
+
+        if (op_n != ret_n) {
+            array_push(self->errors,
+                       ((tl_infer_error){.tag = tl_err_try_requires_two_variant_union, .node = node}));
+            return 1;
+        }
+
+        for (u32 j = 0; j < op_n; j++) {
+            tl_polytype wrap = tl_polytype_wrap(op_err_variant->cons_inst->args.v[j]);
+            if (constrain_pm(self, &wrap, ret_err_variant->cons_inst->args.v[j], node,
+                             TL_UNIFY_SYMMETRIC))
+                return 1;
+        }
+    }
 
     return 0;
 }

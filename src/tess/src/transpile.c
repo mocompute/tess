@@ -78,8 +78,9 @@ typedef struct {
     // allocated closure: context fields are values (not pointers), access is direct (not dereference)
     int          is_allocated_closure;
 
-    defer_scope *defers;              // innermost defer scope (linked list head)
-    defer_scope *loop_defer_boundary; // snapshot at loop entry; break/continue stop here
+    defer_scope  *defers;              // innermost defer scope (linked list head)
+    defer_scope  *loop_defer_boundary; // snapshot at loop entry; break/continue stop here
+    tl_monotype  *func_return_type;    // return type of enclosing function (for cross-type try)
 
 } eval_ctx;
 
@@ -923,7 +924,9 @@ static void generate_toplevels(transpile *self) {
             cat(self, S("(void)tl_ctx_raw;\n"));
         }
 
-        eval_ctx ctx      = {.free_variables = poly->type->list.fvs, .is_allocated_closure = is_alloc};
+        eval_ctx ctx      = {.free_variables    = poly->type->list.fvs,
+                              .is_allocated_closure = is_alloc,
+                              .func_return_type     = return_type};
         str      body_res = generate_expr(self, return_type, body, &ctx);
         if (!res_is_void && !str_is_empty(body_res) && !ctx.is_effective_void) {
             generate_decl(self, res, return_type);
@@ -2427,9 +2430,57 @@ static str generate_try(transpile *self, tl_monotype *type, ast_node const *node
     // Emit defers before early return (same as generate_return)
     emit_defers_until(self, ctx, null);
 
-    cat(self, S("return "));
-    cat(self, tmp);
-    cat_semicolonln(self);
+    // Check if operand type matches function return type (cross-type try support)
+    str op_c_type  = type_to_c_mono(self, wrapper_type);
+    str ret_c_type = ctx->func_return_type ? type_to_c_mono(self, ctx->func_return_type) : str_empty();
+
+    if (str_is_empty(ret_c_type) || str_eq(op_c_type, ret_c_type)) {
+        // Same type — return directly
+        cat(self, S("return "));
+        cat(self, tmp);
+        cat_semicolonln(self);
+    } else {
+        // Different wrapper type — construct new Result of function return type with error value
+        tl_monotype *ret_tag_type   = null;
+        tl_monotype *ret_union_type = null;
+        tagged_union_wrapper_fields(ctx->func_return_type, &ret_tag_type, &ret_union_type);
+
+        str ret_error_name   = ret_union_type->cons_inst->def->field_names.v[1];
+        str ret_tag_enum     = ret_tag_type->cons_inst->def->name;
+        str ret_tag_err_name = str_qualify(self->transient, ret_tag_enum, ret_error_name);
+
+        tl_monotype *ret_err_variant = ret_union_type->cons_inst->args.v[1];
+        str_sized    err_fields      = ret_err_variant->cons_inst->def->field_names;
+
+        str err_res = next_res(self);
+        generate_decl(self, err_res, ctx->func_return_type);
+
+        // Set tag
+        generate_assign_field(self, err_res, S(AST_TAGGED_UNION_TAG_FIELD), ret_tag_err_name);
+
+        // Copy error fields: err_res.u.ErrName.field = tmp.u.ErrName.field
+        str esc_ret_err = escape_c_keyword(self->transient, ret_error_name);
+        str esc_op_err  = escape_c_keyword(self->transient, error_name);
+        forall(f, err_fields) {
+            str fname = escape_c_keyword(self->transient, err_fields.v[f]);
+            cat(self, err_res);
+            cat(self, S(".u."));
+            cat(self, esc_ret_err);
+            cat_dot(self);
+            cat(self, fname);
+            cat_assign(self);
+            cat(self, tmp);
+            cat(self, S(".u."));
+            cat(self, esc_op_err);
+            cat_dot(self);
+            cat(self, fname);
+            cat_semicolonln(self);
+        }
+
+        cat(self, S("return "));
+        cat(self, err_res);
+        cat_semicolonln(self);
+    }
     cat(self, S("}\n"));
 
     // Unwrap: result = tmp.u.success_name.field_name (full unwrap to inner value)

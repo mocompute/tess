@@ -6,11 +6,9 @@ Issues encountered while implementing `File.tl` (the first non-trivial std libra
 
 **Fixed:** The transpiler now maps `Void` fields to `char` (a 1-byte unit placeholder) wherever they appear: struct field declarations, function parameters, constructor calls, and function call arguments. `File.tl` write/seek/mkdir operations now return `Result[Void, IOError]` with `Ok(void)` / `Err(error)`.
 
-## 2. `try` requires matching `Ok` types
+## 2. ~~`try` requires matching `Ok` types~~ (FIXED)
 
-`try open(path, Write)` fails inside a function returning `Result[String, IOError]` because `open` returns `Result[Ptr[File], IOError]`. The error types match but the `Ok` types don't. This makes `try` unusable in convenience wrappers that call functions with different success types, forcing verbose `when` blocks.
-
-**Fix option:** Unify `try` only on the error variant; construct the early-return `Err` using the enclosing function's Result type.
+**Fixed:** `try` now only constrains the error variant types to match. The transpiler constructs a new Result of the enclosing function's return type on the error path, copying the error value field-by-field. `File.tl` convenience wrappers (`write_file`, `write_file_bytes`, `append_file`) now use `try open(...)` instead of verbose `when` blocks.
 
 ## 3. Divergent `when` arms don't unify with other arms
 
@@ -44,4 +42,4 @@ The `else` block can diverge but cannot access the `Err` value, so error propaga
 
 ## Summary
 
-Issues 1–3 had the most impact on API design and code quality. ~~Issue 1 forced a different return type convention for write operations.~~ (Fixed: `Result[Void, E]` now works.) Issue 2 made `try` unusable for convenience wrappers. Issue 3 made inline error checking with `when` awkward. Issues 2–3 account for most of the remaining verbosity in the File module's convenience functions.
+Issues 1–3 had the most impact on API design and code quality. ~~Issue 1 forced a different return type convention for write operations.~~ (Fixed: `Result[Void, E]` now works.) ~~Issue 2 made `try` unusable for convenience wrappers.~~ (Fixed: cross-type `try` now works.) Issue 3 made inline error checking with `when` awkward. Issues 3–5 account for the remaining verbosity in the File module.
