@@ -1023,6 +1023,10 @@ static str_array generate_args(transpile *self, ast_node_sized args, tl_monotype
 
     assert(arr.size >= args.size);
     forall(i, args) {
+        if (tl_monotype_is_void(arr.v[i])) {
+            array_push(args_res, S("0"));
+            continue;
+        }
         str res = generate_expr(self, arr.v[i], args.v[i], ctx);
         array_push(args_res, res);
     }
@@ -1083,7 +1087,13 @@ static str generate_type_constructor_named(transpile *self, ast_node const *node
                        str_cstr(&name));
         }
 
-        str arg_value = generate_expr(self, type->cons_inst->args.v[found], arg->assignment.value, ctx);
+        tl_monotype *field_type = type->cons_inst->args.v[found];
+        if (tl_monotype_is_void(field_type)) {
+            generate_assign_field(self, res, ast_node_str(arg->assignment.name), S("0"));
+            continue;
+        }
+
+        str arg_value = generate_expr(self, field_type, arg->assignment.value, ctx);
 
         if (!str_is_empty(arg_value)) {
             cat(self, res);
@@ -1123,8 +1133,13 @@ static str generate_type_constructor(transpile *self, ast_node const *node, eval
     generate_decl(self, res, type);
 
     forall(i, def->field_names) {
+        tl_monotype *field_type = type->cons_inst->args.v[i];
+        if (tl_monotype_is_void(field_type)) {
+            generate_assign_field(self, res, def->field_names.v[i], S("0"));
+            continue;
+        }
         str arg_value =
-          generate_expr(self, type->cons_inst->args.v[i], node->named_application.arguments[i], ctx);
+          generate_expr(self, field_type, node->named_application.arguments[i], ctx);
 
         if (!str_is_empty(arg_value)) {
             cat(self, res);
@@ -2717,7 +2732,7 @@ static void generate_decl(transpile *self, str name, tl_monotype *type) {
 
         str typec;
         if (tl_monotype_is_void(type)) {
-            typec = str_init(self->transient, "/*nil*/ void*");
+            typec = S("char");
         } else {
             typec = type_to_c_mono(self, type);
         }
@@ -3212,7 +3227,10 @@ static str arrow_to_c_params(transpile *self, tl_polytype *type, str_sized param
         if (tl_monotype_is_arrow(arg)) {
             build_arrow_to_c(self, &b, arg, pname);
         } else {
-            str_build_cat(&b, type_to_c_mono(self, arg));
+            str tc = tl_monotype_is_void(arg)
+                       ? S("char")
+                       : type_to_c_mono(self, arg);
+            str_build_cat(&b, tc);
             if (!str_is_empty(pname)) {
                 str_build_cat(&b, S(" "));
                 str_build_cat(&b, pname);

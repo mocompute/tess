@@ -247,11 +247,11 @@ read_bytes (self: Ptr[File])                               -> Result[Array[Byte]
 
 // Streaming write.
 write       (self: Ptr[File], buf: Ptr[Const[Byte]], count: CSize) -> Result[CSize, IOError]
-write_str   (self: Ptr[File], data: String)                        -> Option[IOError]
-write_bytes (self: Ptr[File], data: Array[Byte])                   -> Option[IOError]
+write_str   (self: Ptr[File], data: String)                        -> Result[Void, IOError]
+write_bytes (self: Ptr[File], data: Array[Byte])                   -> Result[Void, IOError]
 
 // Positioning.
-seek   (self: Ptr[File], offset: Int, from: SeekFrom) -> Option[IOError]
+seek   (self: Ptr[File], offset: Int, from: SeekFrom) -> Result[Void, IOError]
 tell   (self: Ptr[File])                              -> Result[Int, IOError]
 rewind (self: Ptr[File])                              -> Void
 
@@ -264,9 +264,9 @@ read_file       (alloc: Ptr[Allocator], path: String) -> Result[String, IOError]
 read_file       (path: String)                        -> Result[String, IOError]
 read_file_bytes (alloc: Ptr[Allocator], path: String) -> Result[Array[Byte], IOError]
 read_file_bytes (path: String)                        -> Result[Array[Byte], IOError]
-write_file      (path: String, content: String)       -> Option[IOError]
-write_file_bytes(path: String, data: Array[Byte])     -> Option[IOError]
-append_file     (path: String, content: String)       -> Option[IOError]
+write_file      (path: String, content: String)       -> Result[Void, IOError]
+write_file_bytes(path: String, data: Array[Byte])     -> Result[Void, IOError]
+append_file     (path: String, content: String)       -> Result[Void, IOError]
 read_lines      (alloc: Ptr[Allocator], path: String) -> Result[Array[String], IOError]
 read_lines      (path: String)                        -> Result[Array[String], IOError]
 
@@ -277,7 +277,7 @@ size         (path: String) -> Result[Int, IOError]
 temp_dir     ()             -> String
 
 // Directory operations.
-create_dir(path: String)                                             -> Option[IOError]
+create_dir(path: String)                                             -> Result[Void, IOError]
 scan_dir  (alloc: Ptr[Allocator], path: String, ext: Option[String]) -> Result[Array[String], IOError]
 scan_dir  (path: String, ext: Option[String])                        -> Result[Array[String], IOError]
 
@@ -796,22 +796,22 @@ write(self, buf, count) {
 
 write_str(self, data) {
     n := String.len(data)
-    if n == 0 { return None }
+    if n == 0 { return Ok(void) }
     ptr     := String.cstr(data.&)
     written := c_fwrite(ptr, 1, n, self->_handle)
     if written < n {
-        return Some(_errno_to_error(self->_path))
+        return Err(_errno_to_error(self->_path))
     }
-    None
+    Ok(void)
 }
 
 write_bytes(self, data) {
-    if data.size == 0 { return None }
+    if data.size == 0 { return Ok(void) }
     written := c_fwrite(data.v, 1, data.size, self->_handle)
     if written < data.size {
-        return Some(_errno_to_error(self->_path))
+        return Err(_errno_to_error(self->_path))
     }
-    None
+    Ok(void)
 }
 
 
@@ -825,9 +825,9 @@ seek(self, offset, from) {
     }
     off: CLong := offset
     if c_fseek(self->_handle, off, whence) != 0 {
-        return Some(_errno_to_error(self->_path))
+        return Err(_errno_to_error(self->_path))
     }
-    None
+    Ok(void)
 }
 
 tell(self) {
@@ -891,7 +891,7 @@ write_file(path, content) {
             defer close(ok.v)
             write_str(ok.v, content)
         }
-        err: Err { Some(err.v) }
+        err: Err { Err(err.v) }
     }
 }
 
@@ -901,7 +901,7 @@ write_file_bytes(path, data) {
             defer close(ok.v)
             write_bytes(ok.v, data)
         }
-        err: Err { Some(err.v) }
+        err: Err { Err(err.v) }
     }
 }
 
@@ -911,7 +911,7 @@ append_file(path, content) {
             defer close(ok.v)
             write_str(ok.v, content)
         }
-        err: Err { Some(err.v) }
+        err: Err { Err(err.v) }
     }
 }
 
@@ -977,9 +977,9 @@ temp_dir() {
 
 create_dir(path) {
     if c_tl_file_mkdir(String.cstr(path.&)) != 0 {
-        return Some(_errno_to_error(path))
+        return Err(_errno_to_error(path))
     }
-    None
+    Ok(void)
 }
 
 #ifc

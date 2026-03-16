@@ -2,11 +2,9 @@
 
 Issues encountered while implementing `File.tl` (the first non-trivial std library module with error handling).
 
-## 1. `Result[Void, E]` is not supported
+## 1. ~~`Result[Void, E]` is not supported~~ (FIXED)
 
-`Ok { v: Void }` transpiles to a C struct with a `void` field, which is invalid C. Fallible operations that produce no value (write, seek, mkdir) had to use `Option[IOError]` instead, inverting the usual Some=success convention.
-
-**Fix options:** Introduce a unit type, or special-case `Void` in the transpiler to omit the field.
+**Fixed:** The transpiler now maps `Void` fields to `char` (a 1-byte unit placeholder) wherever they appear: struct field declarations, function parameters, constructor calls, and function call arguments. `File.tl` write/seek/mkdir operations now return `Result[Void, IOError]` with `Ok(void)` / `Err(error)`.
 
 ## 2. `try` requires matching `Ok` types
 
@@ -46,4 +44,4 @@ The `else` block can diverge but cannot access the `Err` value, so error propaga
 
 ## Summary
 
-Issues 1–3 had the most impact on API design and code quality. Issue 1 forced a different return type convention for write operations. Issue 2 made `try` unusable for convenience wrappers. Issue 3 made inline error checking with `when` awkward. Together they account for most of the verbosity in the File module's convenience functions.
+Issues 1–3 had the most impact on API design and code quality. ~~Issue 1 forced a different return type convention for write operations.~~ (Fixed: `Result[Void, E]` now works.) Issue 2 made `try` unusable for convenience wrappers. Issue 3 made inline error checking with `when` awkward. Issues 2–3 account for most of the remaining verbosity in the File module's convenience functions.
