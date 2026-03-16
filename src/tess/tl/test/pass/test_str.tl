@@ -1,5 +1,5 @@
 #module main
-#import <Str.tl>
+#import <String.tl>
 #import <Array.tl>
 #import <stdio.tl>
 #import <string.tl>
@@ -15,82 +15,82 @@ _NUL_CHAR: CChar := '\0'
 
 test_empty() {
     error := 0
-    s     := Str.empty()
-    if Str.len(s) != 0zu { error += 1 }
-    if !Str.is_empty(s) { error += 1 }
+    s     := String.empty()
+    if String.len(s) != 0zu { error += 1 }
+    if !String.is_empty(s) { error += 1 }
     error
 }
 
 test_from_cstr_small() {
     error := 0
-    s     := Str.from_cstr("hello")
-    if Str.len(s) != 5zu { error += 1 }
-    if Str.is_empty(s) { error += 1 }
-    Str.free(s.&)
+    s     := String.from_cstr("hello")
+    if String.len(s) != 5zu { error += 1 }
+    if String.is_empty(s) { error += 1 }
+    String.free(s.&)
     error
 }
 
 test_from_cstr_big() {
     error := 0
-    s     := Str.from_cstr("this is a longer string!!")
-    if Str.len(s) != 25zu { error += 1 }
-    if Str.is_empty(s) { error += 1 }
-    Str.free(s.&)
+    s     := String.from_cstr("this is a longer string!!")
+    if String.len(s) != 25zu { error += 1 }
+    if String.is_empty(s) { error += 1 }
+    String.free(s.&)
     error
 }
 
 test_from_bytes() {
     error      := 0
     p: CString := "hello"
-    s          := Str.from_bytes(p, 5zu)
-    if Str.len(s) != 5zu { error += 1 }
-    Str.free(s.&)
+    s          := String.from_bytes(p, 5zu)
+    if String.len(s) != 5zu { error += 1 }
+    String.free(s.&)
 
     // With embedded null
     p2: CString := "ab\0cd"
-    s2          := Str.from_bytes(p2, 5zu)
-    if Str.len(s2) != 5zu { error += 1 }
-    Str.free(s2.&)
+    s2          := String.from_bytes(p2, 5zu)
+    if String.len(s2) != 5zu { error += 1 }
+    String.free(s2.&)
 
     // n=0 -> empty
-    s3 := Str.from_bytes(p, 0zu)
-    if Str.len(s3) != 0zu { error += 1 }
-    if !Str.is_empty(s3) { error += 1 }
-    Str.free(s3.&)
+    s3 := String.from_bytes(p, 0zu)
+    if String.len(s3) != 0zu { error += 1 }
+    if !String.is_empty(s3) { error += 1 }
+    String.free(s3.&)
 
     error
 }
 
 test_copy_small() {
     error := 0
-    s     := Str.from_cstr("hello")
-    c     := Str.copy(s)
-    if Str.len(c) != 5zu { error += 1 }
+    s     := String.from_cstr("hello")
+    c     := String.copy(s)
+    if String.len(c) != 5zu { error += 1 }
     // Should be independent
-    Str.free(s.&)
-    if Str.len(c) != 5zu { error += 1 }
-    Str.free(c.&)
+    String.free(s.&)
+    if String.len(c) != 5zu { error += 1 }
+    String.free(c.&)
     error
 }
 
 test_copy_big() {
     error := 0
-    s     := Str.from_cstr("this is a longer string!!")
-    c     := Str.copy(s)
-    if Str.len(c) != 25zu { error += 1 }
-    Str.free(s.&)
-    if Str.len(c) != 25zu { error += 1 }
-    Str.free(c.&)
+    s     := String.from_cstr("this is a longer string!!")
+    c     := String.copy(s)
+    if String.len(c) != 25zu { error += 1 }
+    String.free(s.&)
+    if String.len(c) != 25zu { error += 1 }
+    String.free(c.&)
     error
 }
 
 test_copy_empty() {
     error := 0
-    e     := Str.empty()
-    c     := Str.copy(e)
-    if Str.len(c) != 0zu { error += 1 }
-    if !Str.is_empty(c) { error += 1 }
-    Str.free(c.&)
+    e     := String.empty()
+    c     := String.copy(e)
+    if String.len(c) != 0zu { error += 1 }
+    if !String.is_empty(c) { error += 1 }
+    String.free(c.&)
     error
 }
 
@@ -98,15 +98,15 @@ test_copy_empty() {
 
 test_cstr() {
     error := 0
-    s     := Str.from_cstr("hello")
-    cs    := Str.cstr(s.&)
+    s     := String.from_cstr("hello")
+    cs    := String.cstr(s.&)
     if c_strcmp(cs, "hello") != 0 { error += 1 }
 
-    s2  := Str.from_cstr("this is a longer string!!")
-    cs2 := Str.cstr(s2.&)
+    s2  := String.from_cstr("this is a longer string!!")
+    cs2 := String.cstr(s2.&)
     if c_strcmp(cs2, "this is a longer string!!") != 0 { error += 1 }
-    Str.free(s.&)
-    Str.free(s2.&)
+    String.free(s.&)
+    String.free(s2.&)
     error
 }
 
@@ -114,140 +114,140 @@ test_cstr() {
 
 test_eq() {
     error := 0
-    a     := Str.from_cstr("hello")
-    b     := Str.from_cstr("hello")
-    c     := Str.from_cstr("world")
-    if !Str.eq(a, b) { error += 1 }
-    if Str.eq(a, c) { error += 1 }
+    a     := String.from_cstr("hello")
+    b     := String.from_cstr("hello")
+    c     := String.from_cstr("world")
+    if !String.eq(a, b) { error += 1 }
+    if String.eq(a, c) { error += 1 }
 
     // Empty strings
-    e1 := Str.empty()
-    e2 := Str.empty()
-    if !Str.eq(e1, e2) { error += 1 }
+    e1 := String.empty()
+    e2 := String.empty()
+    if !String.eq(e1, e2) { error += 1 }
 
-    Str.free(a.&)
-    Str.free(b.&)
-    Str.free(c.&)
+    String.free(a.&)
+    String.free(b.&)
+    String.free(c.&)
     error
 }
 
 test_cmp() {
     error := 0
-    a     := Str.from_cstr("abc")
-    b     := Str.from_cstr("abd")
-    c     := Str.from_cstr("abc")
-    if Str.cmp(a, b) >= 0 { error += 1 }
-    if Str.cmp(b, a) <= 0 { error += 1 }
-    if Str.cmp(a, c) != 0 { error += 1 }
+    a     := String.from_cstr("abc")
+    b     := String.from_cstr("abd")
+    c     := String.from_cstr("abc")
+    if String.cmp(a, b) >= 0 { error += 1 }
+    if String.cmp(b, a) <= 0 { error += 1 }
+    if String.cmp(a, c) != 0 { error += 1 }
 
     // Prefix relationship: shorter < longer when prefix matches
-    d := Str.from_cstr("abcd")
-    if Str.cmp(a, d) >= 0 { error += 1 } // "abc" < "abcd"
-    if Str.cmp(d, a) <= 0 { error += 1 } // "abcd" > "abc"
-    Str.free(d.&)
+    d := String.from_cstr("abcd")
+    if String.cmp(a, d) >= 0 { error += 1 } // "abc" < "abcd"
+    if String.cmp(d, a) <= 0 { error += 1 } // "abcd" > "abc"
+    String.free(d.&)
 
     // Empty vs non-empty
-    e := Str.empty()
-    if Str.cmp(e, a) >= 0 { error += 1 } // "" < "abc"
-    if Str.cmp(a, e) <= 0 { error += 1 } // "abc" > ""
+    e := String.empty()
+    if String.cmp(e, a) >= 0 { error += 1 } // "" < "abc"
+    if String.cmp(a, e) <= 0 { error += 1 } // "abc" > ""
 
     // Empty vs empty
-    e2 := Str.empty()
-    if Str.cmp(e, e2) != 0 { error += 1 }
+    e2 := String.empty()
+    if String.cmp(e, e2) != 0 { error += 1 }
 
-    Str.free(a.&)
-    Str.free(b.&)
-    Str.free(c.&)
+    String.free(a.&)
+    String.free(b.&)
+    String.free(c.&)
     error
 }
 
 test_starts_with() {
     error := 0
-    s     := Str.from_cstr("hello world")
-    a     := Str.from_cstr("hello")
-    b     := Str.from_cstr("world")
-    e     := Str.empty()
-    if !Str.starts_with(s, a) { error += 1 }
-    if Str.starts_with(s, b) { error += 1 }
-    if !Str.starts_with(s, e) { error += 1 }
+    s     := String.from_cstr("hello world")
+    a     := String.from_cstr("hello")
+    b     := String.from_cstr("world")
+    e     := String.empty()
+    if !String.starts_with(s, a) { error += 1 }
+    if String.starts_with(s, b) { error += 1 }
+    if !String.starts_with(s, e) { error += 1 }
 
     // Prefix longer than string
-    long_p := Str.from_cstr("hello world and more")
-    if Str.starts_with(s, long_p) { error += 1 }
-    Str.free(long_p.&)
+    long_p := String.from_cstr("hello world and more")
+    if String.starts_with(s, long_p) { error += 1 }
+    String.free(long_p.&)
 
     // Exact match: prefix == string
-    if !Str.starts_with(s, s) { error += 1 }
+    if !String.starts_with(s, s) { error += 1 }
 
-    Str.free(s.&)
-    Str.free(a.&)
-    Str.free(b.&)
+    String.free(s.&)
+    String.free(a.&)
+    String.free(b.&)
     error
 }
 
 test_ends_with() {
     error := 0
-    s     := Str.from_cstr("hello world")
-    a     := Str.from_cstr("world")
-    b     := Str.from_cstr("hello")
-    e     := Str.empty()
-    if !Str.ends_with(s, a) { error += 1 }
-    if Str.ends_with(s, b) { error += 1 }
-    if !Str.ends_with(s, e) { error += 1 }
+    s     := String.from_cstr("hello world")
+    a     := String.from_cstr("world")
+    b     := String.from_cstr("hello")
+    e     := String.empty()
+    if !String.ends_with(s, a) { error += 1 }
+    if String.ends_with(s, b) { error += 1 }
+    if !String.ends_with(s, e) { error += 1 }
 
     // Suffix longer than string
-    long_s := Str.from_cstr("say hello world")
-    if Str.ends_with(s, long_s) { error += 1 }
-    Str.free(long_s.&)
+    long_s := String.from_cstr("say hello world")
+    if String.ends_with(s, long_s) { error += 1 }
+    String.free(long_s.&)
 
     // Exact match: suffix == string
-    if !Str.ends_with(s, s) { error += 1 }
+    if !String.ends_with(s, s) { error += 1 }
 
-    Str.free(s.&)
-    Str.free(a.&)
-    Str.free(b.&)
+    String.free(s.&)
+    String.free(a.&)
+    String.free(b.&)
     error
 }
 
 test_contains() {
     error := 0
-    s     := Str.from_cstr("hello world")
-    a     := Str.from_cstr("lo wo")
-    b     := Str.from_cstr("xyz")
-    e     := Str.empty()
-    if !Str.contains(s, a) { error += 1 }
-    if Str.contains(s, b) { error += 1 }
-    if !Str.contains(s, e) { error += 1 }
+    s     := String.from_cstr("hello world")
+    a     := String.from_cstr("lo wo")
+    b     := String.from_cstr("xyz")
+    e     := String.empty()
+    if !String.contains(s, a) { error += 1 }
+    if String.contains(s, b) { error += 1 }
+    if !String.contains(s, e) { error += 1 }
 
     // Needle at very start
-    h := Str.from_cstr("hello")
-    if !Str.contains(s, h) { error += 1 }
-    Str.free(h.&)
+    h := String.from_cstr("hello")
+    if !String.contains(s, h) { error += 1 }
+    String.free(h.&)
 
     // Needle at very end
-    w := Str.from_cstr("world")
-    if !Str.contains(s, w) { error += 1 }
-    Str.free(w.&)
+    w := String.from_cstr("world")
+    if !String.contains(s, w) { error += 1 }
+    String.free(w.&)
 
     // Haystack == needle
-    if !Str.contains(s, s) { error += 1 }
+    if !String.contains(s, s) { error += 1 }
 
-    Str.free(s.&)
-    Str.free(a.&)
-    Str.free(b.&)
+    String.free(s.&)
+    String.free(a.&)
+    String.free(b.&)
     error
 }
 
 test_contains_char() {
     error := 0
-    s     := Str.from_cstr("hello")
-    if !Str.contains_char(s, 'h') { error += 1 }
-    if Str.contains_char(s, 'z') { error += 1 }
-    Str.free(s.&)
+    s     := String.from_cstr("hello")
+    if !String.contains_char(s, 'h') { error += 1 }
+    if String.contains_char(s, 'z') { error += 1 }
+    String.free(s.&)
 
     // Empty string
-    e := Str.empty()
-    if Str.contains_char(e, 'a') { error += 1 }
+    e := String.empty()
+    if String.contains_char(e, 'a') { error += 1 }
 
     error
 }
@@ -256,95 +256,95 @@ test_contains_char() {
 
 test_cat_small_small() {
     error := 0
-    a     := Str.from_cstr("hi")
-    b     := Str.from_cstr(" there")
-    c     := Str.cat(a, b)
-    if Str.len(c) != 8zu { error += 1 }
-    cs := Str.cstr(c.&)
+    a     := String.from_cstr("hi")
+    b     := String.from_cstr(" there")
+    c     := String.cat(a, b)
+    if String.len(c) != 8zu { error += 1 }
+    cs := String.cstr(c.&)
     if c_strcmp(cs, "hi there") != 0 { error += 1 }
-    Str.free(c.&)
+    String.free(c.&)
 
     // empty + x
-    e  := Str.empty()
-    r1 := Str.cat(e, a)
-    if Str.len(r1) != 2zu { error += 1 }
-    cs1 := Str.cstr(r1.&)
+    e  := String.empty()
+    r1 := String.cat(e, a)
+    if String.len(r1) != 2zu { error += 1 }
+    cs1 := String.cstr(r1.&)
     if c_strcmp(cs1, "hi") != 0 { error += 1 }
-    Str.free(r1.&)
+    String.free(r1.&)
 
     // x + empty
-    r2  := Str.cat(a, e)
-    cs2 := Str.cstr(r2.&)
+    r2  := String.cat(a, e)
+    cs2 := String.cstr(r2.&)
     if c_strcmp(cs2, "hi") != 0 { error += 1 }
-    Str.free(r2.&)
+    String.free(r2.&)
 
     // empty + empty
-    r3 := Str.cat(e, e)
-    if Str.len(r3) != 0zu { error += 1 }
-    Str.free(r3.&)
+    r3 := String.cat(e, e)
+    if String.len(r3) != 0zu { error += 1 }
+    String.free(r3.&)
 
-    Str.free(a.&)
-    Str.free(b.&)
+    String.free(a.&)
+    String.free(b.&)
     error
 }
 
 test_cat_to_big() {
     error := 0
-    a     := Str.from_cstr("hello ")
-    b     := Str.from_cstr("beautiful world!")
-    c     := Str.cat(a, b)
-    if Str.len(c) != 22zu { error += 1 }
-    cs := Str.cstr(c.&)
+    a     := String.from_cstr("hello ")
+    b     := String.from_cstr("beautiful world!")
+    c     := String.cat(a, b)
+    if String.len(c) != 22zu { error += 1 }
+    cs := String.cstr(c.&)
     if c_strcmp(cs, "hello beautiful world!") != 0 { error += 1 }
-    Str.free(a.&)
-    Str.free(b.&)
-    Str.free(c.&)
+    String.free(a.&)
+    String.free(b.&)
+    String.free(c.&)
     error
 }
 
 test_push() {
     error := 0
-    s     := Str.from_cstr("hello")
-    b     := Str.from_cstr(" world")
-    Str.push(s.&, b)
-    if Str.len(s) != 11zu { error += 1 }
-    cs := Str.cstr(s.&)
+    s     := String.from_cstr("hello")
+    b     := String.from_cstr(" world")
+    String.push(s.&, b)
+    if String.len(s) != 11zu { error += 1 }
+    cs := String.cstr(s.&)
     if c_strcmp(cs, "hello world") != 0 { error += 1 }
-    Str.free(s.&)
-    Str.free(b.&)
+    String.free(s.&)
+    String.free(b.&)
     error
 }
 
 test_cat_3() {
     error := 0
-    a     := Str.from_cstr("one")
-    b     := Str.from_cstr(" two")
-    c     := Str.from_cstr(" three")
-    r     := Str.cat_3(a, b, c)
-    cs    := Str.cstr(r.&)
+    a     := String.from_cstr("one")
+    b     := String.from_cstr(" two")
+    c     := String.from_cstr(" three")
+    r     := String.cat_3(a, b, c)
+    cs    := String.cstr(r.&)
     if c_strcmp(cs, "one two three") != 0 { error += 1 }
-    Str.free(a.&)
-    Str.free(b.&)
-    Str.free(c.&)
-    Str.free(r.&)
+    String.free(a.&)
+    String.free(b.&)
+    String.free(c.&)
+    String.free(r.&)
     error
 }
 
 test_cat_4() {
     error := 0
-    a     := Str.from_cstr("one")
-    b     := Str.from_cstr(" two")
-    c     := Str.from_cstr(" three")
-    d     := Str.from_cstr(" four")
-    r     := Str.cat_4(a, b, c, d)
-    cs    := Str.cstr(r.&)
+    a     := String.from_cstr("one")
+    b     := String.from_cstr(" two")
+    c     := String.from_cstr(" three")
+    d     := String.from_cstr(" four")
+    r     := String.cat_4(a, b, c, d)
+    cs    := String.cstr(r.&)
     if c_strcmp(cs, "one two three four") != 0 { error += 1 }
-    if Str.len(r) != 18zu { error += 1 }
-    Str.free(a.&)
-    Str.free(b.&)
-    Str.free(c.&)
-    Str.free(d.&)
-    Str.free(r.&)
+    if String.len(r) != 18zu { error += 1 }
+    String.free(a.&)
+    String.free(b.&)
+    String.free(c.&)
+    String.free(d.&)
+    String.free(r.&)
     error
 }
 
@@ -352,51 +352,51 @@ test_cat_4() {
 
 test_byte_at() {
     error := 0
-    s     := Str.from_cstr("abc")
-    if unwrap(Str.byte_at(s, 0zu), _NUL) != 97u { error += 1 } // 'a'
-    if unwrap(Str.byte_at(s, 1zu), _NUL) != 98u { error += 1 } // 'b'
-    if unwrap(Str.byte_at(s, 2zu), _NUL) != 99u { error += 1 } // 'c'
-    Str.free(s.&)
+    s     := String.from_cstr("abc")
+    if unwrap(String.byte_at(s, 0zu), _NUL) != 97u { error += 1 } // 'a'
+    if unwrap(String.byte_at(s, 1zu), _NUL) != 98u { error += 1 } // 'b'
+    if unwrap(String.byte_at(s, 2zu), _NUL) != 99u { error += 1 } // 'c'
+    String.free(s.&)
     error
 }
 
 test_char_at() {
     error := 0
-    s     := Str.from_cstr("abc")
-    if unwrap(Str.char_at(s, 0zu), _NUL_CHAR) != 'a' { error += 1 }
-    if unwrap(Str.char_at(s, 1zu), _NUL_CHAR) != 'b' { error += 1 }
-    if unwrap(Str.char_at(s, 2zu), _NUL_CHAR) != 'c' { error += 1 }
-    Str.free(s.&)
+    s     := String.from_cstr("abc")
+    if unwrap(String.char_at(s, 0zu), _NUL_CHAR) != 'a' { error += 1 }
+    if unwrap(String.char_at(s, 1zu), _NUL_CHAR) != 'b' { error += 1 }
+    if unwrap(String.char_at(s, 2zu), _NUL_CHAR) != 'c' { error += 1 }
+    String.free(s.&)
     error
 }
 
 test_slice() {
     error := 0
-    s     := Str.from_cstr("hello world")
-    sub   := Str.slice(s, 6zu, 11zu)
-    if Str.len(sub) != 5zu { error += 1 }
-    cs := Str.cstr(sub.&)
+    s     := String.from_cstr("hello world")
+    sub   := String.slice(s, 6zu, 11zu)
+    if String.len(sub) != 5zu { error += 1 }
+    cs := String.cstr(sub.&)
     if c_strcmp(cs, "world") != 0 { error += 1 }
 
     // Empty slice
-    e := Str.slice(s, 3zu, 3zu)
-    if Str.len(e) != 0zu { error += 1 }
+    e := String.slice(s, 3zu, 3zu)
+    if String.len(e) != 0zu { error += 1 }
 
     // Full string slice
-    full := Str.slice(s, 0zu, 11zu)
-    csf  := Str.cstr(full.&)
+    full := String.slice(s, 0zu, 11zu)
+    csf  := String.cstr(full.&)
     if c_strcmp(csf, "hello world") != 0 { error += 1 }
-    Str.free(full.&)
+    String.free(full.&)
 
     // Slice from start
-    head := Str.slice(s, 0zu, 5zu)
-    csh  := Str.cstr(head.&)
+    head := String.slice(s, 0zu, 5zu)
+    csh  := String.cstr(head.&)
     if c_strcmp(csh, "hello") != 0 { error += 1 }
-    Str.free(head.&)
+    String.free(head.&)
 
-    Str.free(s.&)
-    Str.free(sub.&)
-    Str.free(e.&)
+    String.free(s.&)
+    String.free(sub.&)
+    String.free(e.&)
     error
 }
 
@@ -404,22 +404,22 @@ test_slice() {
 
 test_index_of_char() {
     error := 0
-    s     := Str.from_cstr("hello")
-    if unwrap(Str.index_of_char(s, 'l'), _NONE) != 2zu { error += 1 }
-    if unwrap(Str.index_of_char(s, 'o'), _NONE) != 4zu { error += 1 }
-    if unwrap(Str.index_of_char(s, 'z'), _NONE) != _NONE { error += 1 }
+    s     := String.from_cstr("hello")
+    if unwrap(String.index_of_char(s, 'l'), _NONE) != 2zu { error += 1 }
+    if unwrap(String.index_of_char(s, 'o'), _NONE) != 4zu { error += 1 }
+    if unwrap(String.index_of_char(s, 'z'), _NONE) != _NONE { error += 1 }
 
     // First byte
-    if unwrap(Str.index_of_char(s, 'h'), _NONE) != 0zu { error += 1 }
+    if unwrap(String.index_of_char(s, 'h'), _NONE) != 0zu { error += 1 }
 
     // Last byte
-    if unwrap(Str.index_of_char(s, 'o'), _NONE) != 4zu { error += 1 }
+    if unwrap(String.index_of_char(s, 'o'), _NONE) != 4zu { error += 1 }
 
-    Str.free(s.&)
+    String.free(s.&)
 
     // Empty string
-    e := Str.empty()
-    if unwrap(Str.index_of_char(e, 'a'), _NONE) != _NONE { error += 1 }
+    e := String.empty()
+    if unwrap(String.index_of_char(e, 'a'), _NONE) != _NONE { error += 1 }
 
     error
 }
@@ -428,20 +428,20 @@ test_index_of_char() {
 
 test_from_int() {
     error := 0
-    s     := Str.from_int(42)
-    cs    := Str.cstr(s.&)
+    s     := String.from_int(42)
+    cs    := String.cstr(s.&)
     if c_strcmp(cs, "42") != 0 { error += 1 }
-    Str.free(s.&)
+    String.free(s.&)
 
-    s2  := Str.from_int(-123)
-    cs2 := Str.cstr(s2.&)
+    s2  := String.from_int(-123)
+    cs2 := String.cstr(s2.&)
     if c_strcmp(cs2, "-123") != 0 { error += 1 }
-    Str.free(s2.&)
+    String.free(s2.&)
 
-    s3  := Str.from_int(0)
-    cs3 := Str.cstr(s3.&)
+    s3  := String.from_int(0)
+    cs3 := String.cstr(s3.&)
     if c_strcmp(cs3, "0") != 0 { error += 1 }
-    Str.free(s3.&)
+    String.free(s3.&)
     error
 }
 
@@ -449,34 +449,34 @@ test_from_float() {
     error := 0
 
     // Positive
-    s  := Str.from_float(3.14)
-    cs := Str.cstr(s.&)
+    s  := String.from_float(3.14)
+    cs := String.cstr(s.&)
     if c_strcmp(cs, "3.14") != 0 { error += 1 }
-    Str.free(s.&)
+    String.free(s.&)
 
     // Negative
-    s2  := Str.from_float(-2.5)
-    cs2 := Str.cstr(s2.&)
+    s2  := String.from_float(-2.5)
+    cs2 := String.cstr(s2.&)
     if c_strcmp(cs2, "-2.5") != 0 { error += 1 }
-    Str.free(s2.&)
+    String.free(s2.&)
 
     // Zero
-    s3  := Str.from_float(0.0)
-    cs3 := Str.cstr(s3.&)
+    s3  := String.from_float(0.0)
+    cs3 := String.cstr(s3.&)
     if c_strcmp(cs3, "0") != 0 { error += 1 }
-    Str.free(s3.&)
+    String.free(s3.&)
 
     // Integer-valued float
-    s4  := Str.from_float(42.0)
-    cs4 := Str.cstr(s4.&)
+    s4  := String.from_float(42.0)
+    cs4 := String.cstr(s4.&)
     if c_strcmp(cs4, "42") != 0 { error += 1 }
-    Str.free(s4.&)
+    String.free(s4.&)
 
     // Small fractional
-    s5  := Str.from_float(0.1)
-    cs5 := Str.cstr(s5.&)
+    s5  := String.from_float(0.1)
+    cs5 := String.cstr(s5.&)
     if c_strcmp(cs5, "0.1") != 0 { error += 1 }
-    Str.free(s5.&)
+    String.free(s5.&)
 
     error
 }
@@ -486,23 +486,23 @@ test_from_float() {
 test_sso_boundary() {
     error := 0
     // 14 bytes should be small
-    s14 := Str.from_cstr("12345678901234")
-    if Str.len(s14) != 14zu { error += 1 }
-    if !Str._is_small(s14) { error += 1 }
-    cs14 := Str.cstr(s14.&)
+    s14 := String.from_cstr("12345678901234")
+    if String.len(s14) != 14zu { error += 1 }
+    if !String._is_small(s14) { error += 1 }
+    cs14 := String.cstr(s14.&)
     if c_strcmp(cs14, "12345678901234") != 0 { error += 1 }
     // Verify cstr() didn't corrupt the string
-    if Str.len(s14) != 14zu { error += 1 }
-    if !Str._is_small(s14) { error += 1 }
+    if String.len(s14) != 14zu { error += 1 }
+    if !String._is_small(s14) { error += 1 }
 
     // 15 bytes should be big
-    s15 := Str.from_cstr("123456789012345")
-    if Str.len(s15) != 15zu { error += 1 }
-    if Str._is_small(s15) { error += 1 }
-    cs15 := Str.cstr(s15.&)
+    s15 := String.from_cstr("123456789012345")
+    if String.len(s15) != 15zu { error += 1 }
+    if String._is_small(s15) { error += 1 }
+    cs15 := String.cstr(s15.&)
     if c_strcmp(cs15, "123456789012345") != 0 { error += 1 }
-    Str.free(s14.&)
-    Str.free(s15.&)
+    String.free(s14.&)
+    String.free(s15.&)
     error
 }
 
@@ -510,33 +510,33 @@ test_sso_boundary() {
 
 test_replace_byte() {
     error := 0
-    s     := Str.from_cstr("hello")
-    r     := Str.replace_byte(s, 'l', 'r')
-    cs    := Str.cstr(r.&)
+    s     := String.from_cstr("hello")
+    r     := String.replace_byte(s, 'l', 'r')
+    cs    := String.cstr(r.&)
     if c_strcmp(cs, "herro") != 0 { error += 1 }
-    Str.free(r.&)
+    String.free(r.&)
 
     // No matches: byte not present
-    r2  := Str.replace_byte(s, 'z', 'x')
-    cs2 := Str.cstr(r2.&)
+    r2  := String.replace_byte(s, 'z', 'x')
+    cs2 := String.cstr(r2.&)
     if c_strcmp(cs2, "hello") != 0 { error += 1 }
-    Str.free(r2.&)
+    String.free(r2.&)
 
-    Str.free(s.&)
+    String.free(s.&)
 
     // Empty string input
-    e  := Str.empty()
-    re := Str.replace_byte(e, 'a', 'b')
-    if Str.len(re) != 0zu { error += 1 }
-    Str.free(re.&)
+    e  := String.empty()
+    re := String.replace_byte(e, 'a', 'b')
+    if String.len(re) != 0zu { error += 1 }
+    String.free(re.&)
 
     // All bytes matching
-    s2  := Str.from_cstr("aaa")
-    r3  := Str.replace_byte(s2, 'a', 'b')
-    cs3 := Str.cstr(r3.&)
+    s2  := String.from_cstr("aaa")
+    r3  := String.replace_byte(s2, 'a', 'b')
+    cs3 := String.cstr(r3.&)
     if c_strcmp(cs3, "bbb") != 0 { error += 1 }
-    Str.free(r3.&)
-    Str.free(s2.&)
+    String.free(r3.&)
+    String.free(s2.&)
 
     error
 }
@@ -545,222 +545,222 @@ test_replace_byte() {
 
 test_from_byte() {
     error := 0
-    s     := Str.from_byte(65u)                               // 'A'
-    if Str.len(s) != 1zu { error += 1 }
-    if unwrap(Str.byte_at(s, 0zu), _NUL) != 65u { error += 1 } // 'A'
-    Str.free(s.&)
+    s     := String.from_byte(65u)                                // 'A'
+    if String.len(s) != 1zu { error += 1 }
+    if unwrap(String.byte_at(s, 0zu), _NUL) != 65u { error += 1 } // 'A'
+    String.free(s.&)
 
-    s2 := Str.from_byte(122u)                                   // 'z'
-    if Str.len(s2) != 1zu { error += 1 }
-    if unwrap(Str.byte_at(s2, 0zu), _NUL) != 122u { error += 1 } // 'z'
-    Str.free(s2.&)
+    s2 := String.from_byte(122u)                                    // 'z'
+    if String.len(s2) != 1zu { error += 1 }
+    if unwrap(String.byte_at(s2, 0zu), _NUL) != 122u { error += 1 } // 'z'
+    String.free(s2.&)
     error
 }
 
 test_eq_cstr() {
     error := 0
-    s     := Str.from_cstr("hello")
-    if !Str.eq_cstr(s, "hello") { error += 1 }
-    if Str.eq_cstr(s, "world") { error += 1 }
-    if Str.eq_cstr(s, "hell") { error += 1 } // length mismatch
-    Str.free(s.&)
+    s     := String.from_cstr("hello")
+    if !String.eq_cstr(s, "hello") { error += 1 }
+    if String.eq_cstr(s, "world") { error += 1 }
+    if String.eq_cstr(s, "hell") { error += 1 } // length mismatch
+    String.free(s.&)
 
     // Both empty
-    e := Str.empty()
-    if !Str.eq_cstr(e, "") { error += 1 }
+    e := String.empty()
+    if !String.eq_cstr(e, "") { error += 1 }
     error
 }
 
 test_index_of() {
     error := 0
-    s     := Str.from_cstr("hello world")
-    h     := Str.from_cstr("hello")
-    w     := Str.from_cstr("world")
-    lo    := Str.from_cstr("lo")
-    xyz   := Str.from_cstr("xyz")
-    e     := Str.empty()
+    s     := String.from_cstr("hello world")
+    h     := String.from_cstr("hello")
+    w     := String.from_cstr("world")
+    lo    := String.from_cstr("lo")
+    xyz   := String.from_cstr("xyz")
+    e     := String.empty()
 
-    if unwrap(Str.index_of(s, h), _NONE) != 0zu { error += 1 }      // beginning
-    if unwrap(Str.index_of(s, w), _NONE) != 6zu { error += 1 }      // end
-    if unwrap(Str.index_of(s, lo), _NONE) != 3zu { error += 1 }     // middle
-    if unwrap(Str.index_of(s, xyz), _NONE) != _NONE { error += 1 } // not found
-    if unwrap(Str.index_of(s, e), _NONE) != 0zu { error += 1 }      // empty needle -> 0
+    if unwrap(String.index_of(s, h), _NONE) != 0zu { error += 1 }     // beginning
+    if unwrap(String.index_of(s, w), _NONE) != 6zu { error += 1 }     // end
+    if unwrap(String.index_of(s, lo), _NONE) != 3zu { error += 1 }    // middle
+    if unwrap(String.index_of(s, xyz), _NONE) != _NONE { error += 1 } // not found
+    if unwrap(String.index_of(s, e), _NONE) != 0zu { error += 1 }     // empty needle -> 0
 
     // Needle longer than haystack
-    big := Str.from_cstr("this is way too long")
-    if unwrap(Str.index_of(h, big), _NONE) != _NONE { error += 1 }
+    big := String.from_cstr("this is way too long")
+    if unwrap(String.index_of(h, big), _NONE) != _NONE { error += 1 }
 
-    Str.free(s.&)
-    Str.free(h.&)
-    Str.free(w.&)
-    Str.free(lo.&)
-    Str.free(xyz.&)
-    Str.free(big.&)
+    String.free(s.&)
+    String.free(h.&)
+    String.free(w.&)
+    String.free(lo.&)
+    String.free(xyz.&)
+    String.free(big.&)
     error
 }
 
 test_index_of_char_from() {
     error := 0
-    s     := Str.from_cstr("hello")
+    s     := String.from_cstr("hello")
 
     // Skip first 'l' at index 2, find second 'l' at index 3
-    if unwrap(Str.index_of_char_from(s, 'l', 3zu), _NONE) != 3zu { error += 1 }
+    if unwrap(String.index_of_char_from(s, 'l', 3zu), _NONE) != 3zu { error += 1 }
 
     // Start at match position
-    if unwrap(Str.index_of_char_from(s, 'l', 2zu), _NONE) != 2zu { error += 1 }
+    if unwrap(String.index_of_char_from(s, 'l', 2zu), _NONE) != 2zu { error += 1 }
 
     // Start past all occurrences
-    if unwrap(Str.index_of_char_from(s, 'l', 4zu), _NONE) != _NONE { error += 1 }
+    if unwrap(String.index_of_char_from(s, 'l', 4zu), _NONE) != _NONE { error += 1 }
 
     // Start >= len
-    if unwrap(Str.index_of_char_from(s, 'l', 5zu), _NONE) != _NONE { error += 1 }
-    if unwrap(Str.index_of_char_from(s, 'l', 100zu), _NONE) != _NONE { error += 1 }
+    if unwrap(String.index_of_char_from(s, 'l', 5zu), _NONE) != _NONE { error += 1 }
+    if unwrap(String.index_of_char_from(s, 'l', 100zu), _NONE) != _NONE { error += 1 }
 
-    Str.free(s.&)
+    String.free(s.&)
     error
 }
 
 test_last_index_of_char() {
     error := 0
-    s     := Str.from_cstr("hello")
+    s     := String.from_cstr("hello")
 
     // Multiple 'l' - finds last at index 3
-    if unwrap(Str.last_index_of_char(s, 'l'), _NONE) != 3zu { error += 1 }
+    if unwrap(String.last_index_of_char(s, 'l'), _NONE) != 3zu { error += 1 }
 
     // Single 'h' at index 0
-    if unwrap(Str.last_index_of_char(s, 'h'), _NONE) != 0zu { error += 1 }
+    if unwrap(String.last_index_of_char(s, 'h'), _NONE) != 0zu { error += 1 }
 
     // Single 'o' at end
-    if unwrap(Str.last_index_of_char(s, 'o'), _NONE) != 4zu { error += 1 }
+    if unwrap(String.last_index_of_char(s, 'o'), _NONE) != 4zu { error += 1 }
 
     // Not found
-    if unwrap(Str.last_index_of_char(s, 'z'), _NONE) != _NONE { error += 1 }
+    if unwrap(String.last_index_of_char(s, 'z'), _NONE) != _NONE { error += 1 }
 
     // Empty string
-    e := Str.empty()
-    if unwrap(Str.last_index_of_char(e, 'a'), _NONE) != _NONE { error += 1 }
+    e := String.empty()
+    if unwrap(String.last_index_of_char(e, 'a'), _NONE) != _NONE { error += 1 }
 
-    Str.free(s.&)
+    String.free(s.&)
     error
 }
 
 test_last_index_of() {
     error := 0
-    s     := Str.from_cstr("abcabcabc")
-    abc   := Str.from_cstr("abc")
-    e     := Str.empty()
+    s     := String.from_cstr("abcabcabc")
+    abc   := String.from_cstr("abc")
+    e     := String.empty()
 
     // Repeated pattern - finds last
-    if unwrap(Str.last_index_of(s, abc), _NONE) != 6zu { error += 1 }
+    if unwrap(String.last_index_of(s, abc), _NONE) != 6zu { error += 1 }
 
     // Empty needle -> len(s)
-    if unwrap(Str.last_index_of(s, e), _NONE) != 9zu { error += 1 }
+    if unwrap(String.last_index_of(s, e), _NONE) != 9zu { error += 1 }
 
     // Not found
-    xyz := Str.from_cstr("xyz")
-    if unwrap(Str.last_index_of(s, xyz), _NONE) != _NONE { error += 1 }
+    xyz := String.from_cstr("xyz")
+    if unwrap(String.last_index_of(s, xyz), _NONE) != _NONE { error += 1 }
 
     // Needle longer than haystack
-    short := Str.from_cstr("ab")
-    long  := Str.from_cstr("abcdef")
-    if unwrap(Str.last_index_of(short, long), _NONE) != _NONE { error += 1 }
-    Str.free(short.&)
-    Str.free(long.&)
+    short := String.from_cstr("ab")
+    long  := String.from_cstr("abcdef")
+    if unwrap(String.last_index_of(short, long), _NONE) != _NONE { error += 1 }
+    String.free(short.&)
+    String.free(long.&)
 
     // Single occurrence
-    hw := Str.from_cstr("hello world")
-    w  := Str.from_cstr("world")
-    if unwrap(Str.last_index_of(hw, w), _NONE) != 6zu { error += 1 }
-    Str.free(hw.&)
-    Str.free(w.&)
+    hw := String.from_cstr("hello world")
+    w  := String.from_cstr("world")
+    if unwrap(String.last_index_of(hw, w), _NONE) != 6zu { error += 1 }
+    String.free(hw.&)
+    String.free(w.&)
 
-    Str.free(s.&)
-    Str.free(abc.&)
-    Str.free(xyz.&)
+    String.free(s.&)
+    String.free(abc.&)
+    String.free(xyz.&)
     error
 }
 
 test_to_upper() {
     error := 0
-    s     := Str.from_cstr("hello")
-    r     := Str.to_upper(s)
-    cs    := Str.cstr(r.&)
+    s     := String.from_cstr("hello")
+    r     := String.to_upper(s)
+    cs    := String.cstr(r.&)
     if c_strcmp(cs, "HELLO") != 0 { error += 1 }
-    Str.free(r.&)
+    String.free(r.&)
 
     // Mixed case
-    s2  := Str.from_cstr("Hello World")
-    r2  := Str.to_upper(s2)
-    cs2 := Str.cstr(r2.&)
+    s2  := String.from_cstr("Hello World")
+    r2  := String.to_upper(s2)
+    cs2 := String.cstr(r2.&)
     if c_strcmp(cs2, "HELLO WORLD") != 0 { error += 1 }
-    Str.free(r2.&)
+    String.free(r2.&)
 
     // Already upper
-    s3  := Str.from_cstr("ABC")
-    r3  := Str.to_upper(s3)
-    cs3 := Str.cstr(r3.&)
+    s3  := String.from_cstr("ABC")
+    r3  := String.to_upper(s3)
+    cs3 := String.cstr(r3.&)
     if c_strcmp(cs3, "ABC") != 0 { error += 1 }
-    Str.free(r3.&)
+    String.free(r3.&)
 
     // Non-alpha preserved
-    s4  := Str.from_cstr("a1b2!")
-    r4  := Str.to_upper(s4)
-    cs4 := Str.cstr(r4.&)
+    s4  := String.from_cstr("a1b2!")
+    r4  := String.to_upper(s4)
+    cs4 := String.cstr(r4.&)
     if c_strcmp(cs4, "A1B2!") != 0 { error += 1 }
-    Str.free(r4.&)
+    String.free(r4.&)
 
     // Empty
-    e  := Str.empty()
-    re := Str.to_upper(e)
-    if Str.len(re) != 0zu { error += 1 }
-    Str.free(re.&)
+    e  := String.empty()
+    re := String.to_upper(e)
+    if String.len(re) != 0zu { error += 1 }
+    String.free(re.&)
 
-    Str.free(s.&)
-    Str.free(s2.&)
-    Str.free(s3.&)
-    Str.free(s4.&)
+    String.free(s.&)
+    String.free(s2.&)
+    String.free(s3.&)
+    String.free(s4.&)
     error
 }
 
 test_to_lower() {
     error := 0
-    s     := Str.from_cstr("HELLO")
-    r     := Str.to_lower(s)
-    cs    := Str.cstr(r.&)
+    s     := String.from_cstr("HELLO")
+    r     := String.to_lower(s)
+    cs    := String.cstr(r.&)
     if c_strcmp(cs, "hello") != 0 { error += 1 }
-    Str.free(r.&)
+    String.free(r.&)
 
     // Mixed
-    s2  := Str.from_cstr("Hello World")
-    r2  := Str.to_lower(s2)
-    cs2 := Str.cstr(r2.&)
+    s2  := String.from_cstr("Hello World")
+    r2  := String.to_lower(s2)
+    cs2 := String.cstr(r2.&)
     if c_strcmp(cs2, "hello world") != 0 { error += 1 }
-    Str.free(r2.&)
+    String.free(r2.&)
 
     // Already lower
-    s3  := Str.from_cstr("abc")
-    r3  := Str.to_lower(s3)
-    cs3 := Str.cstr(r3.&)
+    s3  := String.from_cstr("abc")
+    r3  := String.to_lower(s3)
+    cs3 := String.cstr(r3.&)
     if c_strcmp(cs3, "abc") != 0 { error += 1 }
-    Str.free(r3.&)
+    String.free(r3.&)
 
     // Non-alpha preserved
-    s4  := Str.from_cstr("A1B2!")
-    r4  := Str.to_lower(s4)
-    cs4 := Str.cstr(r4.&)
+    s4  := String.from_cstr("A1B2!")
+    r4  := String.to_lower(s4)
+    cs4 := String.cstr(r4.&)
     if c_strcmp(cs4, "a1b2!") != 0 { error += 1 }
-    Str.free(r4.&)
-    Str.free(s4.&)
+    String.free(r4.&)
+    String.free(s4.&)
 
     // Empty
-    e  := Str.empty()
-    re := Str.to_lower(e)
-    if Str.len(re) != 0zu { error += 1 }
-    Str.free(re.&)
+    e  := String.empty()
+    re := String.to_lower(e)
+    if String.len(re) != 0zu { error += 1 }
+    String.free(re.&)
 
-    Str.free(s.&)
-    Str.free(s2.&)
-    Str.free(s3.&)
+    String.free(s.&)
+    String.free(s2.&)
+    String.free(s3.&)
     error
 }
 
@@ -768,33 +768,33 @@ test_trim_left() {
     error := 0
 
     // Leading spaces
-    s  := Str.from_cstr("  hello")
-    r  := Str.trim_left(s)
-    cs := Str.cstr(r.&)
+    s  := String.from_cstr("  hello")
+    r  := String.trim_left(s)
+    cs := String.cstr(r.&)
     if c_strcmp(cs, "hello") != 0 { error += 1 }
-    Str.free(r.&)
-    Str.free(s.&)
+    String.free(r.&)
+    String.free(s.&)
 
     // No leading whitespace
-    s2  := Str.from_cstr("hello  ")
-    r2  := Str.trim_left(s2)
-    cs2 := Str.cstr(r2.&)
+    s2  := String.from_cstr("hello  ")
+    r2  := String.trim_left(s2)
+    cs2 := String.cstr(r2.&)
     if c_strcmp(cs2, "hello  ") != 0 { error += 1 }
-    Str.free(r2.&)
-    Str.free(s2.&)
+    String.free(r2.&)
+    String.free(s2.&)
 
     // All whitespace
-    s3 := Str.from_cstr("   ")
-    r3 := Str.trim_left(s3)
-    if Str.len(r3) != 0zu { error += 1 }
-    Str.free(r3.&)
-    Str.free(s3.&)
+    s3 := String.from_cstr("   ")
+    r3 := String.trim_left(s3)
+    if String.len(r3) != 0zu { error += 1 }
+    String.free(r3.&)
+    String.free(s3.&)
 
     // Empty string
-    e  := Str.empty()
-    re := Str.trim_left(e)
-    if Str.len(re) != 0zu { error += 1 }
-    Str.free(re.&)
+    e  := String.empty()
+    re := String.trim_left(e)
+    if String.len(re) != 0zu { error += 1 }
+    String.free(re.&)
 
     error
 }
@@ -803,33 +803,33 @@ test_trim_right() {
     error := 0
 
     // Trailing spaces
-    s  := Str.from_cstr("hello  ")
-    r  := Str.trim_right(s)
-    cs := Str.cstr(r.&)
+    s  := String.from_cstr("hello  ")
+    r  := String.trim_right(s)
+    cs := String.cstr(r.&)
     if c_strcmp(cs, "hello") != 0 { error += 1 }
-    Str.free(r.&)
-    Str.free(s.&)
+    String.free(r.&)
+    String.free(s.&)
 
     // No trailing whitespace
-    s2  := Str.from_cstr("  hello")
-    r2  := Str.trim_right(s2)
-    cs2 := Str.cstr(r2.&)
+    s2  := String.from_cstr("  hello")
+    r2  := String.trim_right(s2)
+    cs2 := String.cstr(r2.&)
     if c_strcmp(cs2, "  hello") != 0 { error += 1 }
-    Str.free(r2.&)
-    Str.free(s2.&)
+    String.free(r2.&)
+    String.free(s2.&)
 
     // All whitespace
-    s3 := Str.from_cstr("   ")
-    r3 := Str.trim_right(s3)
-    if Str.len(r3) != 0zu { error += 1 }
-    Str.free(r3.&)
-    Str.free(s3.&)
+    s3 := String.from_cstr("   ")
+    r3 := String.trim_right(s3)
+    if String.len(r3) != 0zu { error += 1 }
+    String.free(r3.&)
+    String.free(s3.&)
 
     // Empty string
-    e  := Str.empty()
-    re := Str.trim_right(e)
-    if Str.len(re) != 0zu { error += 1 }
-    Str.free(re.&)
+    e  := String.empty()
+    re := String.trim_right(e)
+    if String.len(re) != 0zu { error += 1 }
+    String.free(re.&)
 
     error
 }
@@ -838,41 +838,41 @@ test_trim() {
     error := 0
 
     // Both sides
-    s  := Str.from_cstr("  hello  ")
-    r  := Str.trim(s)
-    cs := Str.cstr(r.&)
+    s  := String.from_cstr("  hello  ")
+    r  := String.trim(s)
+    cs := String.cstr(r.&)
     if c_strcmp(cs, "hello") != 0 { error += 1 }
-    Str.free(r.&)
-    Str.free(s.&)
+    String.free(r.&)
+    String.free(s.&)
 
     // No whitespace
-    s2  := Str.from_cstr("hello")
-    r2  := Str.trim(s2)
-    cs2 := Str.cstr(r2.&)
+    s2  := String.from_cstr("hello")
+    r2  := String.trim(s2)
+    cs2 := String.cstr(r2.&)
     if c_strcmp(cs2, "hello") != 0 { error += 1 }
-    Str.free(r2.&)
-    Str.free(s2.&)
+    String.free(r2.&)
+    String.free(s2.&)
 
     // All whitespace
-    s3 := Str.from_cstr("   ")
-    r3 := Str.trim(s3)
-    if Str.len(r3) != 0zu { error += 1 }
-    Str.free(r3.&)
-    Str.free(s3.&)
+    s3 := String.from_cstr("   ")
+    r3 := String.trim(s3)
+    if String.len(r3) != 0zu { error += 1 }
+    String.free(r3.&)
+    String.free(s3.&)
 
     // Empty
-    e  := Str.empty()
-    re := Str.trim(e)
-    if Str.len(re) != 0zu { error += 1 }
-    Str.free(re.&)
+    e  := String.empty()
+    re := String.trim(e)
+    if String.len(re) != 0zu { error += 1 }
+    String.free(re.&)
 
     // Tabs and newlines
-    s4  := Str.from_cstr("\t\nhello\r\n")
-    r4  := Str.trim(s4)
-    cs4 := Str.cstr(r4.&)
+    s4  := String.from_cstr("\t\nhello\r\n")
+    r4  := String.trim(s4)
+    cs4 := String.cstr(r4.&)
     if c_strcmp(cs4, "hello") != 0 { error += 1 }
-    Str.free(r4.&)
-    Str.free(s4.&)
+    String.free(r4.&)
+    String.free(s4.&)
 
     error
 }
@@ -881,42 +881,42 @@ test_repeat() {
     error := 0
 
     // Basic repeat
-    s  := Str.from_cstr("ab")
-    r  := Str.repeat(s, 3zu)
-    cs := Str.cstr(r.&)
+    s  := String.from_cstr("ab")
+    r  := String.repeat(s, 3zu)
+    cs := String.cstr(r.&)
     if c_strcmp(cs, "ababab") != 0 { error += 1 }
-    if Str.len(r) != 6zu { error += 1 }
-    Str.free(r.&)
-    Str.free(s.&)
+    if String.len(r) != 6zu { error += 1 }
+    String.free(r.&)
+    String.free(s.&)
 
     // count=0 -> empty
-    s2 := Str.from_cstr("hello")
-    r2 := Str.repeat(s2, 0zu)
-    if Str.len(r2) != 0zu { error += 1 }
-    Str.free(r2.&)
+    s2 := String.from_cstr("hello")
+    r2 := String.repeat(s2, 0zu)
+    if String.len(r2) != 0zu { error += 1 }
+    String.free(r2.&)
 
     // count=1 -> copy
-    r3  := Str.repeat(s2, 1zu)
-    cs3 := Str.cstr(r3.&)
+    r3  := String.repeat(s2, 1zu)
+    cs3 := String.cstr(r3.&)
     if c_strcmp(cs3, "hello") != 0 { error += 1 }
-    Str.free(r3.&)
-    Str.free(s2.&)
+    String.free(r3.&)
+    String.free(s2.&)
 
     // Empty string
-    e  := Str.empty()
-    re := Str.repeat(e, 5zu)
-    if Str.len(re) != 0zu { error += 1 }
-    Str.free(re.&)
+    e  := String.empty()
+    re := String.repeat(e, 5zu)
+    if String.len(re) != 0zu { error += 1 }
+    String.free(re.&)
 
     // SSO boundary crossing: 5 bytes * 3 = 15 > 14 (SSO max)
-    s4 := Str.from_cstr("12345")
-    r4 := Str.repeat(s4, 3zu)
-    if Str.len(r4) != 15zu { error += 1 }
-    if Str._is_small(r4) { error += 1 } // should be big
-    cs4 := Str.cstr(r4.&)
+    s4 := String.from_cstr("12345")
+    r4 := String.repeat(s4, 3zu)
+    if String.len(r4) != 15zu { error += 1 }
+    if String._is_small(r4) { error += 1 } // should be big
+    cs4 := String.cstr(r4.&)
     if c_strcmp(cs4, "123451234512345") != 0 { error += 1 }
-    Str.free(r4.&)
-    Str.free(s4.&)
+    String.free(r4.&)
+    String.free(s4.&)
 
     error
 }
@@ -925,88 +925,88 @@ test_replace() {
     error := 0
 
     // Basic replace
-    s     := Str.from_cstr("hello world")
-    old   := Str.from_cstr("world")
-    new_s := Str.from_cstr("there")
-    r     := Str.replace(s, old, new_s)
-    cs    := Str.cstr(r.&)
+    s     := String.from_cstr("hello world")
+    old   := String.from_cstr("world")
+    new_s := String.from_cstr("there")
+    r     := String.replace(s, old, new_s)
+    cs    := String.cstr(r.&)
     if c_strcmp(cs, "hello there") != 0 { error += 1 }
-    Str.free(r.&)
-    Str.free(new_s.&)
-    Str.free(old.&)
-    Str.free(s.&)
+    String.free(r.&)
+    String.free(new_s.&)
+    String.free(old.&)
+    String.free(s.&)
 
     // Multiple occurrences
-    s2   := Str.from_cstr("aaa")
-    old2 := Str.from_cstr("a")
-    new2 := Str.from_cstr("bb")
-    r2   := Str.replace(s2, old2, new2)
-    cs2  := Str.cstr(r2.&)
+    s2   := String.from_cstr("aaa")
+    old2 := String.from_cstr("a")
+    new2 := String.from_cstr("bb")
+    r2   := String.replace(s2, old2, new2)
+    cs2  := String.cstr(r2.&)
     if c_strcmp(cs2, "bbbbbb") != 0 { error += 1 }
-    Str.free(r2.&)
-    Str.free(new2.&)
-    Str.free(old2.&)
-    Str.free(s2.&)
+    String.free(r2.&)
+    String.free(new2.&)
+    String.free(old2.&)
+    String.free(s2.&)
 
     // No match -> copy
-    s3   := Str.from_cstr("hello")
-    old3 := Str.from_cstr("xyz")
-    new3 := Str.from_cstr("abc")
-    r3   := Str.replace(s3, old3, new3)
-    cs3  := Str.cstr(r3.&)
+    s3   := String.from_cstr("hello")
+    old3 := String.from_cstr("xyz")
+    new3 := String.from_cstr("abc")
+    r3   := String.replace(s3, old3, new3)
+    cs3  := String.cstr(r3.&)
     if c_strcmp(cs3, "hello") != 0 { error += 1 }
-    Str.free(r3.&)
-    Str.free(new3.&)
-    Str.free(old3.&)
-    Str.free(s3.&)
+    String.free(r3.&)
+    String.free(new3.&)
+    String.free(old3.&)
+    String.free(s3.&)
 
     // Replace with empty (deletion)
-    s4   := Str.from_cstr("hello world")
-    old4 := Str.from_cstr(" world")
-    new4 := Str.empty()
-    r4   := Str.replace(s4, old4, new4)
-    cs4  := Str.cstr(r4.&)
+    s4   := String.from_cstr("hello world")
+    old4 := String.from_cstr(" world")
+    new4 := String.empty()
+    r4   := String.replace(s4, old4, new4)
+    cs4  := String.cstr(r4.&)
     if c_strcmp(cs4, "hello") != 0 { error += 1 }
-    Str.free(r4.&)
-    Str.free(old4.&)
-    Str.free(s4.&)
+    String.free(r4.&)
+    String.free(old4.&)
+    String.free(s4.&)
 
     // Replace with longer string
-    s5   := Str.from_cstr("a-b-c")
-    old5 := Str.from_cstr("-")
-    new5 := Str.from_cstr("--")
-    r5   := Str.replace(s5, old5, new5)
-    cs5  := Str.cstr(r5.&)
+    s5   := String.from_cstr("a-b-c")
+    old5 := String.from_cstr("-")
+    new5 := String.from_cstr("--")
+    r5   := String.replace(s5, old5, new5)
+    cs5  := String.cstr(r5.&)
     if c_strcmp(cs5, "a--b--c") != 0 { error += 1 }
-    Str.free(r5.&)
-    Str.free(new5.&)
-    Str.free(old5.&)
-    Str.free(s5.&)
+    String.free(r5.&)
+    String.free(new5.&)
+    String.free(old5.&)
+    String.free(s5.&)
 
     // Replace crossing SSO boundary: "ab-cd-ef" (8) -> "ab___cd___ef" (12+) wait...
     // "ab-cd-ef" replacing "-" with "-----" = "ab-----cd-----ef" = 16 bytes
-    s6   := Str.from_cstr("ab-cd-ef")
-    old6 := Str.from_cstr("-")
-    new6 := Str.from_cstr("-----")
-    r6   := Str.replace(s6, old6, new6)
-    if Str.len(r6) != 16zu { error += 1 }
-    if Str._is_small(r6) { error += 1 }
-    cs6 := Str.cstr(r6.&)
+    s6   := String.from_cstr("ab-cd-ef")
+    old6 := String.from_cstr("-")
+    new6 := String.from_cstr("-----")
+    r6   := String.replace(s6, old6, new6)
+    if String.len(r6) != 16zu { error += 1 }
+    if String._is_small(r6) { error += 1 }
+    cs6 := String.cstr(r6.&)
     if c_strcmp(cs6, "ab-----cd-----ef") != 0 { error += 1 }
-    Str.free(r6.&)
-    Str.free(new6.&)
-    Str.free(old6.&)
-    Str.free(s6.&)
+    String.free(r6.&)
+    String.free(new6.&)
+    String.free(old6.&)
+    String.free(s6.&)
 
     // Replace on empty string (old longer than s -> copy)
-    s7   := Str.empty()
-    old7 := Str.from_cstr("x")
-    new7 := Str.from_cstr("y")
-    r7   := Str.replace(s7, old7, new7)
-    if Str.len(r7) != 0zu { error += 1 }
-    Str.free(r7.&)
-    Str.free(new7.&)
-    Str.free(old7.&)
+    s7   := String.empty()
+    old7 := String.from_cstr("x")
+    new7 := String.from_cstr("y")
+    r7   := String.replace(s7, old7, new7)
+    if String.len(r7) != 0zu { error += 1 }
+    String.free(r7.&)
+    String.free(new7.&)
+    String.free(old7.&)
 
     error
 }
@@ -1015,107 +1015,107 @@ test_split() {
     error := 0
 
     // Basic split
-    s   := Str.from_cstr("a,b,c")
-    d   := Str.from_cstr(",")
-    arr := Str.split(s, d)
+    s   := String.from_cstr("a,b,c")
+    d   := String.from_cstr(",")
+    arr := String.split(s, d)
     if arr.size != 3zu { error += 1 }
     e0 := Array.get(arr, 0zu)
     e1 := Array.get(arr, 1zu)
     e2 := Array.get(arr, 2zu)
-    if !Str.eq_cstr(e0, "a") { error += 1 }
-    if !Str.eq_cstr(e1, "b") { error += 1 }
-    if !Str.eq_cstr(e2, "c") { error += 1 }
-    Str.free(e0.&) Str.free(e1.&) Str.free(e2.&)
+    if !String.eq_cstr(e0, "a") { error += 1 }
+    if !String.eq_cstr(e1, "b") { error += 1 }
+    if !String.eq_cstr(e2, "c") { error += 1 }
+    String.free(e0.&) String.free(e1.&) String.free(e2.&)
     Array.free(arr.&)
-    Str.free(d.&)
-    Str.free(s.&)
+    String.free(d.&)
+    String.free(s.&)
 
     // Consecutive delimiters -> empty strings
-    s2   := Str.from_cstr("a,,b")
-    d2   := Str.from_cstr(",")
-    arr2 := Str.split(s2, d2)
+    s2   := String.from_cstr("a,,b")
+    d2   := String.from_cstr(",")
+    arr2 := String.split(s2, d2)
     if arr2.size != 3zu { error += 1 }
     f0 := Array.get(arr2, 0zu)
     f1 := Array.get(arr2, 1zu)
     f2 := Array.get(arr2, 2zu)
-    if !Str.eq_cstr(f0, "a") { error += 1 }
-    if !Str.is_empty(f1) { error += 1 }
-    if !Str.eq_cstr(f2, "b") { error += 1 }
-    Str.free(f0.&) Str.free(f1.&) Str.free(f2.&)
+    if !String.eq_cstr(f0, "a") { error += 1 }
+    if !String.is_empty(f1) { error += 1 }
+    if !String.eq_cstr(f2, "b") { error += 1 }
+    String.free(f0.&) String.free(f1.&) String.free(f2.&)
     Array.free(arr2.&)
-    Str.free(d2.&)
-    Str.free(s2.&)
+    String.free(d2.&)
+    String.free(s2.&)
 
     // Trailing delimiter
-    s3   := Str.from_cstr("a,b,")
-    d3   := Str.from_cstr(",")
-    arr3 := Str.split(s3, d3)
+    s3   := String.from_cstr("a,b,")
+    d3   := String.from_cstr(",")
+    arr3 := String.split(s3, d3)
     if arr3.size != 3zu { error += 1 }
     g0 := Array.get(arr3, 0zu)
     g1 := Array.get(arr3, 1zu)
     g2 := Array.get(arr3, 2zu)
-    if !Str.eq_cstr(g0, "a") { error += 1 }
-    if !Str.eq_cstr(g1, "b") { error += 1 }
-    if !Str.is_empty(g2) { error += 1 }
-    Str.free(g0.&) Str.free(g1.&) Str.free(g2.&)
+    if !String.eq_cstr(g0, "a") { error += 1 }
+    if !String.eq_cstr(g1, "b") { error += 1 }
+    if !String.is_empty(g2) { error += 1 }
+    String.free(g0.&) String.free(g1.&) String.free(g2.&)
     Array.free(arr3.&)
-    Str.free(d3.&)
-    Str.free(s3.&)
+    String.free(d3.&)
+    String.free(s3.&)
 
     // Empty string -> [""]
-    e    := Str.empty()
-    d4   := Str.from_cstr(",")
-    arr4 := Str.split(e, d4)
+    e    := String.empty()
+    d4   := String.from_cstr(",")
+    arr4 := String.split(e, d4)
     if arr4.size != 1zu { error += 1 }
     h0 := Array.get(arr4, 0zu)
-    if !Str.is_empty(h0) { error += 1 }
-    Str.free(h0.&)
+    if !String.is_empty(h0) { error += 1 }
+    String.free(h0.&)
     Array.free(arr4.&)
-    Str.free(d4.&)
+    String.free(d4.&)
 
     // Multi-char delimiter
-    s5   := Str.from_cstr("one::two::three")
-    d5   := Str.from_cstr("::")
-    arr5 := Str.split(s5, d5)
+    s5   := String.from_cstr("one::two::three")
+    d5   := String.from_cstr("::")
+    arr5 := String.split(s5, d5)
     if arr5.size != 3zu { error += 1 }
     i0 := Array.get(arr5, 0zu)
     i1 := Array.get(arr5, 1zu)
     i2 := Array.get(arr5, 2zu)
-    if !Str.eq_cstr(i0, "one") { error += 1 }
-    if !Str.eq_cstr(i1, "two") { error += 1 }
-    if !Str.eq_cstr(i2, "three") { error += 1 }
-    Str.free(i0.&) Str.free(i1.&) Str.free(i2.&)
+    if !String.eq_cstr(i0, "one") { error += 1 }
+    if !String.eq_cstr(i1, "two") { error += 1 }
+    if !String.eq_cstr(i2, "three") { error += 1 }
+    String.free(i0.&) String.free(i1.&) String.free(i2.&)
     Array.free(arr5.&)
-    Str.free(d5.&)
-    Str.free(s5.&)
+    String.free(d5.&)
+    String.free(s5.&)
 
     // Delimiter not found -> single element
-    s6   := Str.from_cstr("hello")
-    d6   := Str.from_cstr(",")
-    arr6 := Str.split(s6, d6)
+    s6   := String.from_cstr("hello")
+    d6   := String.from_cstr(",")
+    arr6 := String.split(s6, d6)
     if arr6.size != 1zu { error += 1 }
     j0 := Array.get(arr6, 0zu)
-    if !Str.eq_cstr(j0, "hello") { error += 1 }
-    Str.free(j0.&)
+    if !String.eq_cstr(j0, "hello") { error += 1 }
+    String.free(j0.&)
     Array.free(arr6.&)
-    Str.free(d6.&)
-    Str.free(s6.&)
+    String.free(d6.&)
+    String.free(s6.&)
 
     // Leading delimiter
-    s7   := Str.from_cstr(",a,b")
-    d7   := Str.from_cstr(",")
-    arr7 := Str.split(s7, d7)
+    s7   := String.from_cstr(",a,b")
+    d7   := String.from_cstr(",")
+    arr7 := String.split(s7, d7)
     if arr7.size != 3zu { error += 1 }
     k0 := Array.get(arr7, 0zu)
     k1 := Array.get(arr7, 1zu)
     k2 := Array.get(arr7, 2zu)
-    if !Str.is_empty(k0) { error += 1 }
-    if !Str.eq_cstr(k1, "a") { error += 1 }
-    if !Str.eq_cstr(k2, "b") { error += 1 }
-    Str.free(k0.&) Str.free(k1.&) Str.free(k2.&)
+    if !String.is_empty(k0) { error += 1 }
+    if !String.eq_cstr(k1, "a") { error += 1 }
+    if !String.eq_cstr(k2, "b") { error += 1 }
+    String.free(k0.&) String.free(k1.&) String.free(k2.&)
     Array.free(arr7.&)
-    Str.free(d7.&)
-    Str.free(s7.&)
+    String.free(d7.&)
+    String.free(s7.&)
 
     error
 }
@@ -1124,106 +1124,106 @@ test_join() {
     error := 0
 
     // Basic join
-    arr := Array.empty[Str.Str]()
-    a   := Str.from_cstr("a")
-    b   := Str.from_cstr("b")
-    c   := Str.from_cstr("c")
+    arr := Array.empty[String.String]()
+    a   := String.from_cstr("a")
+    b   := String.from_cstr("b")
+    c   := String.from_cstr("c")
     Array.push(arr.&, a)
     Array.push(arr.&, b)
     Array.push(arr.&, c)
-    sep := Str.from_cstr(",")
-    r   := Str.join(sep, arr)
-    cs  := Str.cstr(r.&)
+    sep := String.from_cstr(",")
+    r   := String.join(sep, arr)
+    cs  := String.cstr(r.&)
     if c_strcmp(cs, "a,b,c") != 0 { error += 1 }
-    Str.free(r.&)
-    Str.free(sep.&)
-    Str.free(a.&) Str.free(b.&) Str.free(c.&)
+    String.free(r.&)
+    String.free(sep.&)
+    String.free(a.&) String.free(b.&) String.free(c.&)
     Array.free(arr.&)
 
     // Empty separator
-    arr2 := Array.empty[Str.Str]()
-    a2   := Str.from_cstr("x")
-    b2   := Str.from_cstr("y")
+    arr2 := Array.empty[String.String]()
+    a2   := String.from_cstr("x")
+    b2   := String.from_cstr("y")
     Array.push(arr2.&, a2)
     Array.push(arr2.&, b2)
-    sep2 := Str.empty()
-    r2   := Str.join(sep2, arr2)
-    cs2  := Str.cstr(r2.&)
+    sep2 := String.empty()
+    r2   := String.join(sep2, arr2)
+    cs2  := String.cstr(r2.&)
     if c_strcmp(cs2, "xy") != 0 { error += 1 }
-    Str.free(r2.&)
-    Str.free(a2.&) Str.free(b2.&)
+    String.free(r2.&)
+    String.free(a2.&) String.free(b2.&)
     Array.free(arr2.&)
 
     // Single element
-    arr3 := Array.empty[Str.Str]()
-    a3   := Str.from_cstr("only")
+    arr3 := Array.empty[String.String]()
+    a3   := String.from_cstr("only")
     Array.push(arr3.&, a3)
-    sep3 := Str.from_cstr(",")
-    r3   := Str.join(sep3, arr3)
-    cs3  := Str.cstr(r3.&)
+    sep3 := String.from_cstr(",")
+    r3   := String.join(sep3, arr3)
+    cs3  := String.cstr(r3.&)
     if c_strcmp(cs3, "only") != 0 { error += 1 }
-    Str.free(r3.&)
-    Str.free(sep3.&)
-    Str.free(a3.&)
+    String.free(r3.&)
+    String.free(sep3.&)
+    String.free(a3.&)
     Array.free(arr3.&)
 
     // Empty array
-    arr4 := Array.empty[Str.Str]()
-    sep4 := Str.from_cstr(",")
-    r4   := Str.join(sep4, arr4)
-    if Str.len(r4) != 0zu { error += 1 }
-    Str.free(r4.&)
-    Str.free(sep4.&)
+    arr4 := Array.empty[String.String]()
+    sep4 := String.from_cstr(",")
+    r4   := String.join(sep4, arr4)
+    if String.len(r4) != 0zu { error += 1 }
+    String.free(r4.&)
+    String.free(sep4.&)
     Array.free(arr4.&)
 
     // Empty elements -> separators only
-    arr5 := Array.empty[Str.Str]()
-    e1   := Str.empty()
-    e2   := Str.empty()
-    e3   := Str.empty()
+    arr5 := Array.empty[String.String]()
+    e1   := String.empty()
+    e2   := String.empty()
+    e3   := String.empty()
     Array.push(arr5.&, e1)
     Array.push(arr5.&, e2)
     Array.push(arr5.&, e3)
-    sep5 := Str.from_cstr(",")
-    r5   := Str.join(sep5, arr5)
-    cs5  := Str.cstr(r5.&)
+    sep5 := String.from_cstr(",")
+    r5   := String.join(sep5, arr5)
+    cs5  := String.cstr(r5.&)
     if c_strcmp(cs5, ",,") != 0 { error += 1 }
-    Str.free(r5.&)
-    Str.free(sep5.&)
+    String.free(r5.&)
+    String.free(sep5.&)
     Array.free(arr5.&)
 
     // Multi-char separator
-    arr6 := Array.empty[Str.Str]()
-    a6   := Str.from_cstr("a")
-    b6   := Str.from_cstr("b")
-    c6   := Str.from_cstr("c")
+    arr6 := Array.empty[String.String]()
+    a6   := String.from_cstr("a")
+    b6   := String.from_cstr("b")
+    c6   := String.from_cstr("c")
     Array.push(arr6.&, a6)
     Array.push(arr6.&, b6)
     Array.push(arr6.&, c6)
-    sep6 := Str.from_cstr(" :: ")
-    r6   := Str.join(sep6, arr6)
-    cs6  := Str.cstr(r6.&)
+    sep6 := String.from_cstr(" :: ")
+    r6   := String.join(sep6, arr6)
+    cs6  := String.cstr(r6.&)
     if c_strcmp(cs6, "a :: b :: c") != 0 { error += 1 }
-    Str.free(r6.&)
-    Str.free(sep6.&)
-    Str.free(a6.&) Str.free(b6.&) Str.free(c6.&)
+    String.free(r6.&)
+    String.free(sep6.&)
+    String.free(a6.&) String.free(b6.&) String.free(c6.&)
     Array.free(arr6.&)
 
     // Join crossing SSO boundary (result > 14 bytes)
-    arr7 := Array.empty[Str.Str]()
-    a7   := Str.from_cstr("hello")
-    b7   := Str.from_cstr("world")
+    arr7 := Array.empty[String.String]()
+    a7   := String.from_cstr("hello")
+    b7   := String.from_cstr("world")
     Array.push(arr7.&, a7)
     Array.push(arr7.&, b7)
-    sep7 := Str.from_cstr("-----")
-    r7   := Str.join(sep7, arr7)        // "hello-----world" = 15 bytes
-    if Str.len(r7) != 15zu { error += 1 }
-    if Str._is_small(r7) { error += 1 }
-    cs7 := Str.cstr(r7.&)
+    sep7 := String.from_cstr("-----")
+    r7   := String.join(sep7, arr7)     // "hello-----world" = 15 bytes
+    if String.len(r7) != 15zu { error += 1 }
+    if String._is_small(r7) { error += 1 }
+    cs7 := String.cstr(r7.&)
     if c_strcmp(cs7, "hello-----world") != 0 { error += 1 }
-    Str.free(r7.&)
-    Str.free(sep7.&)
-    Str.free(a7.&) Str.free(b7.&)
+    String.free(r7.&)
+    String.free(sep7.&)
+    String.free(a7.&) String.free(b7.&)
     Array.free(arr7.&)
 
     error
@@ -1233,9 +1233,9 @@ test_iter() {
     error := 0
 
     // Sum bytes via for loop
-    s         := Str.from_cstr("abc")
+    s          := String.from_cstr("abc")
     sum: CSize := 0zu
-    for b in Str s {
+    for b in String s {
         wide: CSize := b
         sum = sum + wide
     }
@@ -1244,14 +1244,14 @@ test_iter() {
 
     // Count iterations
     count := 0
-    for b in Str s {
+    for b in String s {
         count = count + 1
     }
     if count != 3 { error += 1 }
 
     // Verify actual byte values
     i := 0
-    for b in Str s {
+    for b in String s {
         if i == 0 { if b != 'a' { error += 1 } }
         if i == 1 { if b != 'b' { error += 1 } }
         if i == 2 { if b != 'c' { error += 1 } }
@@ -1259,9 +1259,9 @@ test_iter() {
     }
 
     // Verify with a longer string containing varied bytes
-    s2 := Str.from_cstr("Hello!")
+    s2 := String.from_cstr("Hello!")
     i2 := 0
-    for b in Str s2 {
+    for b in String s2 {
         if i2 == 0 { if b != 'H' { error += 1 } }
         if i2 == 1 { if b != 'e' { error += 1 } }
         if i2 == 2 { if b != 'l' { error += 1 } }
@@ -1271,14 +1271,14 @@ test_iter() {
         i2 = i2 + 1
     }
     if i2 != 6 { error += 1 }
-    Str.free(s2.&)
+    String.free(s2.&)
 
-    Str.free(s.&)
+    String.free(s.&)
 
     // Empty string -> 0 iterations
-    e      := Str.empty()
+    e      := String.empty()
     count2 := 0
-    for b in Str e {
+    for b in String e {
         count2 = count2 + 1
     }
     if count2 != 0 { error += 1 }
@@ -1288,22 +1288,22 @@ test_iter() {
 
 test_count_byte() {
     error := 0
-    s     := Str.from_cstr("hello")
+    s     := String.from_cstr("hello")
 
     // Multiple occurrences: 'l' appears twice
-    if Str.count_byte(s, 'l') != 2zu { error += 1 }
+    if String.count_byte(s, 'l') != 2zu { error += 1 }
 
     // Single occurrence
-    if Str.count_byte(s, 'h') != 1zu { error += 1 }
+    if String.count_byte(s, 'h') != 1zu { error += 1 }
 
     // Zero occurrences
-    if Str.count_byte(s, 'z') != 0zu { error += 1 }
+    if String.count_byte(s, 'z') != 0zu { error += 1 }
 
-    Str.free(s.&)
+    String.free(s.&)
 
     // Empty string
-    e := Str.empty()
-    if Str.count_byte(e, 'a') != 0zu { error += 1 }
+    e := String.empty()
+    if String.count_byte(e, 'a') != 0zu { error += 1 }
 
     error
 }
@@ -1312,47 +1312,47 @@ test_count() {
     error := 0
 
     // Non-overlapping matches: "ab" in "abababab" -> 4
-    s  := Str.from_cstr("abababab")
-    ab := Str.from_cstr("ab")
-    if Str.count(s, ab) != 4zu { error += 1 }
-    Str.free(ab.&)
+    s  := String.from_cstr("abababab")
+    ab := String.from_cstr("ab")
+    if String.count(s, ab) != 4zu { error += 1 }
+    String.free(ab.&)
 
     // Non-overlapping: "abab" in "abababab" -> 2
-    abab := Str.from_cstr("abab")
-    if Str.count(s, abab) != 2zu { error += 1 }
-    Str.free(abab.&)
-    Str.free(s.&)
+    abab := String.from_cstr("abab")
+    if String.count(s, abab) != 2zu { error += 1 }
+    String.free(abab.&)
+    String.free(s.&)
 
     // Single match
-    s2 := Str.from_cstr("hello world")
-    w  := Str.from_cstr("world")
-    if Str.count(s2, w) != 1zu { error += 1 }
-    Str.free(w.&)
+    s2 := String.from_cstr("hello world")
+    w  := String.from_cstr("world")
+    if String.count(s2, w) != 1zu { error += 1 }
+    String.free(w.&)
 
     // No match
-    xyz := Str.from_cstr("xyz")
-    if Str.count(s2, xyz) != 0zu { error += 1 }
-    Str.free(xyz.&)
-    Str.free(s2.&)
+    xyz := String.from_cstr("xyz")
+    if String.count(s2, xyz) != 0zu { error += 1 }
+    String.free(xyz.&)
+    String.free(s2.&)
 
     // Needle longer than haystack
-    short  := Str.from_cstr("ab")
-    long_n := Str.from_cstr("abcdef")
-    if Str.count(short, long_n) != 0zu { error += 1 }
-    Str.free(short.&)
-    Str.free(long_n.&)
+    short  := String.from_cstr("ab")
+    long_n := String.from_cstr("abcdef")
+    if String.count(short, long_n) != 0zu { error += 1 }
+    String.free(short.&)
+    String.free(long_n.&)
 
     // Needle == haystack
-    s3 := Str.from_cstr("hello")
-    if Str.count(s3, s3) != 1zu { error += 1 }
-    Str.free(s3.&)
+    s3 := String.from_cstr("hello")
+    if String.count(s3, s3) != 1zu { error += 1 }
+    String.free(s3.&)
 
     // Single-char needle matching all bytes
-    s4 := Str.from_cstr("aaa")
-    a2 := Str.from_cstr("a")
-    if Str.count(s4, a2) != 3zu { error += 1 }
-    Str.free(s4.&)
-    Str.free(a2.&)
+    s4 := String.from_cstr("aaa")
+    a2 := String.from_cstr("a")
+    if String.count(s4, a2) != 3zu { error += 1 }
+    String.free(s4.&)
+    String.free(a2.&)
 
     error
 }
@@ -1361,37 +1361,37 @@ test_strip_prefix() {
     error := 0
 
     // Prefix present
-    s  := Str.from_cstr("hello world")
-    p  := Str.from_cstr("hello ")
-    r  := Str.strip_prefix(s, p)
-    cs := Str.cstr(r.&)
+    s  := String.from_cstr("hello world")
+    p  := String.from_cstr("hello ")
+    r  := String.strip_prefix(s, p)
+    cs := String.cstr(r.&)
     if c_strcmp(cs, "world") != 0 { error += 1 }
-    Str.free(r.&)
-    Str.free(p.&)
+    String.free(r.&)
+    String.free(p.&)
 
     // Prefix absent -> copy
-    p2  := Str.from_cstr("xyz")
-    r2  := Str.strip_prefix(s, p2)
-    cs2 := Str.cstr(r2.&)
+    p2  := String.from_cstr("xyz")
+    r2  := String.strip_prefix(s, p2)
+    cs2 := String.cstr(r2.&)
     if c_strcmp(cs2, "hello world") != 0 { error += 1 }
-    Str.free(r2.&)
-    Str.free(p2.&)
+    String.free(r2.&)
+    String.free(p2.&)
 
     // Prefix == entire string -> empty
-    r3 := Str.strip_prefix(s, s)
-    if Str.len(r3) != 0zu { error += 1 }
-    Str.free(r3.&)
+    r3 := String.strip_prefix(s, s)
+    if String.len(r3) != 0zu { error += 1 }
+    String.free(r3.&)
 
-    Str.free(s.&)
+    String.free(s.&)
 
     // Empty prefix -> copy
-    s2  := Str.from_cstr("hello")
-    e   := Str.empty()
-    r4  := Str.strip_prefix(s2, e)
-    cs4 := Str.cstr(r4.&)
+    s2  := String.from_cstr("hello")
+    e   := String.empty()
+    r4  := String.strip_prefix(s2, e)
+    cs4 := String.cstr(r4.&)
     if c_strcmp(cs4, "hello") != 0 { error += 1 }
-    Str.free(r4.&)
-    Str.free(s2.&)
+    String.free(r4.&)
+    String.free(s2.&)
 
     error
 }
@@ -1400,56 +1400,56 @@ test_strip_suffix() {
     error := 0
 
     // Suffix present
-    s  := Str.from_cstr("hello world")
-    x  := Str.from_cstr(" world")
-    r  := Str.strip_suffix(s, x)
-    cs := Str.cstr(r.&)
+    s  := String.from_cstr("hello world")
+    x  := String.from_cstr(" world")
+    r  := String.strip_suffix(s, x)
+    cs := String.cstr(r.&)
     if c_strcmp(cs, "hello") != 0 { error += 1 }
-    Str.free(r.&)
-    Str.free(x.&)
+    String.free(r.&)
+    String.free(x.&)
 
     // Suffix absent -> copy
-    x2  := Str.from_cstr("xyz")
-    r2  := Str.strip_suffix(s, x2)
-    cs2 := Str.cstr(r2.&)
+    x2  := String.from_cstr("xyz")
+    r2  := String.strip_suffix(s, x2)
+    cs2 := String.cstr(r2.&)
     if c_strcmp(cs2, "hello world") != 0 { error += 1 }
-    Str.free(r2.&)
-    Str.free(x2.&)
+    String.free(r2.&)
+    String.free(x2.&)
 
     // Suffix == entire string -> empty
-    r3 := Str.strip_suffix(s, s)
-    if Str.len(r3) != 0zu { error += 1 }
-    Str.free(r3.&)
+    r3 := String.strip_suffix(s, s)
+    if String.len(r3) != 0zu { error += 1 }
+    String.free(r3.&)
 
-    Str.free(s.&)
+    String.free(s.&)
 
     // Empty suffix -> copy
-    s2  := Str.from_cstr("hello")
-    e   := Str.empty()
-    r4  := Str.strip_suffix(s2, e)
-    cs4 := Str.cstr(r4.&)
+    s2  := String.from_cstr("hello")
+    e   := String.empty()
+    r4  := String.strip_suffix(s2, e)
+    cs4 := String.cstr(r4.&)
     if c_strcmp(cs4, "hello") != 0 { error += 1 }
-    Str.free(r4.&)
-    Str.free(s2.&)
+    String.free(r4.&)
+    String.free(s2.&)
 
     error
 }
 
 test_from_bool() {
     error := 0
-    t     := Str.from_bool(true)
-    cs    := Str.cstr(t.&)
+    t     := String.from_bool(true)
+    cs    := String.cstr(t.&)
     if c_strcmp(cs, "true") != 0 { error += 1 }
-    if Str.len(t) != 4zu { error += 1 }
-    if !Str._is_small(t) { error += 1 }
-    Str.free(t.&)
+    if String.len(t) != 4zu { error += 1 }
+    if !String._is_small(t) { error += 1 }
+    String.free(t.&)
 
-    f   := Str.from_bool(false)
-    cs2 := Str.cstr(f.&)
+    f   := String.from_bool(false)
+    cs2 := String.cstr(f.&)
     if c_strcmp(cs2, "false") != 0 { error += 1 }
-    if Str.len(f) != 5zu { error += 1 }
-    if !Str._is_small(f) { error += 1 }
-    Str.free(f.&)
+    if String.len(f) != 5zu { error += 1 }
+    if !String._is_small(f) { error += 1 }
+    String.free(f.&)
 
     error
 }

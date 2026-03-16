@@ -131,7 +131,7 @@
                   ;; C floating point
                   "CFloat" "CDouble" "CLongDouble"
                   ;; Common generic types
-                  "Ptr" "Const" "CArray" "Array" "Iter"
+                  "Ptr" "Const" "CArray" "Array" "Iter" "String"
                   ;; Traits
                   "Add" "Sub" "Mul" "Div" "Mod"
                   "BitAnd" "BitOr" "BitXor" "Shl" "Shr"

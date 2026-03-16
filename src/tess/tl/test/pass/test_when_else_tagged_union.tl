@@ -1,9 +1,9 @@
 #module main
-#import <Str.tl>
+#import <String.tl>
 #import <Array.tl>
 #import <HashMap.tl>
 
-S(s: Ptr[Const[CChar]]) -> Str.Str { Str.from_cstr(s) }
+S(s: Ptr[Const[CChar]]) -> String.String { String.from_cstr(s) }
 
 // Bug: `when...else` on a tagged union falls through — the else branch
 // executes AFTER the matched branch when:
@@ -16,12 +16,12 @@ Kind: | FlagBool
       | FlagCount
       | FlagValue
 
-Spec: { name: Str, kind: Kind }
+Spec: { name: String, kind: Kind }
 
-find(specs: Array[Spec], name: Str) -> Option[CSize] {
+find(specs: Array[Spec], name: String) -> Option[CSize] {
     i: CSize := 0zu
     while i < specs.size, i += 1zu {
-        if Str.eq(specs.v.[i].name, name) { return Some(i) }
+        if String.eq(specs.v.[i].name, name) { return Some(i) }
     }
     None
 }
@@ -32,12 +32,12 @@ main() -> CInt {
     specs := Array.empty[Spec]()
     Array.push(specs.&, Spec(name = S("output"), kind = FlagValue))
 
-    values := HashMap.create[Str, Int]()
+    values := HashMap.create[String, Int]()
     errors := 0
 
-    when Str.index_of_char(S("output=bar"), '=') {
+    when String.index_of_char(S("output=bar"), '=') {
         eq: Some {
-            key := Str.slice(S("output=bar"), 0zu, eq.v)
+            key := String.slice(S("output=bar"), 0zu, eq.v)
             when find(specs, key) {
                 si: Some {
                     spec := specs.v.[si.v]

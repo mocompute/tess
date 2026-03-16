@@ -3,6 +3,6 @@
 
 main() {
     arr := Array.empty[Int]()
-    arr.push("hello")   // type error: Str vs Int
+    arr.push("hello")                   // type error: String vs Int
     0
 }

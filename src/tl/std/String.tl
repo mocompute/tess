@@ -1,8 +1,8 @@
-// Str — Small-string-optimized, immutable string type.
+// String — Small-string-optimized, immutable string type.
 //
 // Strings of 14 bytes or fewer are stored inline (no heap allocation).
 // Larger strings use a heap-allocated buffer via an explicit allocator.
-#module Str
+#module String
 #import <Alloc.tl>
 #import <Array.tl>
 #import <Unsafe.tl>
@@ -15,7 +15,7 @@ Allocator = Alloc.Allocator
 
 // -- Types --
 // Small string optimization: strings of 14 bytes or fewer are stored inline (no heap allocation).
-// The Str type is a 16-byte union of _Big (len + pointer) and _Small (15-byte buffer + tag/len byte).
+// The String type is a 16-byte union of _Big (len + pointer) and _Small (15-byte buffer + tag/len byte).
 // The 15-byte buffer holds up to 14 bytes of data + 1 byte for a null terminator (written lazily by cstr).
 // The tag_len byte (byte 15) packs a 4-bit tag in the upper nibble and 4-bit length in the lower nibble.
 // Tag value 0x01 indicates a small string.
@@ -33,113 +33,113 @@ _Small: {
     tag_len: CUnsignedChar,
 }
 
-Str: { | big: _Big
-       | small: _Small }
+String: { | big: _Big
+          | small: _Small }
 
 
 // -- Synopsis --
 
 // Construction.
-empty     ()                                                      -> Str
-from_cstr (alloc: Ptr[Allocator], s: Ptr[Const[CChar]])           -> Str
-from_cstr (s: Ptr[Const[CChar]])                                  -> Str
-from_bytes(alloc: Ptr[Allocator], s: Ptr[Const[CChar]], n: CSize) -> Str
-from_bytes(s: Ptr[Const[CChar]], n: CSize)                        -> Str
-copy      (alloc: Ptr[Allocator], s: Str)                         -> Str
-copy      (s: Str)                                                -> Str
-from_int  (alloc: Ptr[Allocator], n: Int)                         -> Str
-from_int  (n: Int)                                                -> Str
-from_float(alloc: Ptr[Allocator], f: Float)                       -> Str
-from_float(f: Float)                                              -> Str
-from_byte (b: Byte)                                               -> Str
-from_bool (b: Bool)                                               -> Str
+empty     ()                                                      -> String
+from_cstr (alloc: Ptr[Allocator], s: Ptr[Const[CChar]])           -> String
+from_cstr (s: Ptr[Const[CChar]])                                  -> String
+from_bytes(alloc: Ptr[Allocator], s: Ptr[Const[CChar]], n: CSize) -> String
+from_bytes(s: Ptr[Const[CChar]], n: CSize)                        -> String
+copy      (alloc: Ptr[Allocator], s: String)                      -> String
+copy      (s: String)                                             -> String
+from_int  (alloc: Ptr[Allocator], n: Int)                         -> String
+from_int  (n: Int)                                                -> String
+from_float(alloc: Ptr[Allocator], f: Float)                       -> String
+from_float(f: Float)                                              -> String
+from_byte (b: Byte)                                               -> String
+from_bool (b: Bool)                                               -> String
 
 // Queries.
-len      (s: Str)               -> CSize
-is_empty (s: Str)               -> Bool
-byte_at  (s: Str, index: CSize) -> Option[Byte]
-char_at  (s: Str, index: CSize) -> Option[CChar]
-cstr     (s: Ptr[Str])          -> CString
+len      (s: String)               -> CSize
+is_empty (s: String)               -> Bool
+byte_at  (s: String, index: CSize) -> Option[Byte]
+char_at  (s: String, index: CSize) -> Option[CChar]
+cstr     (s: Ptr[String])          -> CString
 
 // Hashing.
-hash (s: Str) -> CSize
+hash (s: String) -> CSize
 
 // Comparison.
-eq           (a: Str, b: Str)             -> Bool
-cmp          (a: Str, b: Str)             -> CInt
-starts_with  (s: Str, prefix: Str)        -> Bool
-ends_with    (s: Str, suffix: Str)        -> Bool
-contains     (haystack: Str, needle: Str) -> Bool
-contains_char(s: Str, b: CChar)           -> Bool
-eq_cstr      (s: Str, cs: CString)        -> Bool
+eq           (a: String, b: String)             -> Bool
+cmp          (a: String, b: String)             -> CInt
+starts_with  (s: String, prefix: String)        -> Bool
+ends_with    (s: String, suffix: String)        -> Bool
+contains     (haystack: String, needle: String) -> Bool
+contains_char(s: String, b: CChar)              -> Bool
+eq_cstr      (s: String, cs: CString)           -> Bool
 
 // Concatenation.
-cat   (alloc: Ptr[Allocator], a: Str, b: Str)                 -> Str
-cat   (a: Str, b: Str)                                        -> Str
-cat_3 (alloc: Ptr[Allocator], a: Str, b: Str, c: Str)         -> Str
-cat_3 (a: Str, b: Str, c: Str)                                -> Str
-cat_4 (alloc: Ptr[Allocator], a: Str, b: Str, c: Str, d: Str) -> Str
-cat_4 (a: Str, b: Str, c: Str, d: Str)                        -> Str
-push  (self: Ptr[Str], alloc: Ptr[Allocator], other: Str)     -> Void
-push  (self: Ptr[Str], other: Str)                            -> Void
+cat   (alloc: Ptr[Allocator], a: String, b: String)                       -> String
+cat   (a: String, b: String)                                              -> String
+cat_3 (alloc: Ptr[Allocator], a: String, b: String, c: String)            -> String
+cat_3 (a: String, b: String, c: String)                                   -> String
+cat_4 (alloc: Ptr[Allocator], a: String, b: String, c: String, d: String) -> String
+cat_4 (a: String, b: String, c: String, d: String)                        -> String
+push  (self: Ptr[String], alloc: Ptr[Allocator], other: String)           -> Void
+push  (self: Ptr[String], other: String)                                  -> Void
 
 // Slicing.
-slice (alloc: Ptr[Allocator], s: Str, start: CSize, end: CSize) -> Str
-slice (s: Str, start: CSize, end: CSize)                        -> Str
+slice (alloc: Ptr[Allocator], s: String, start: CSize, end: CSize) -> String
+slice (s: String, start: CSize, end: CSize)                        -> String
 
 // Search.
-index_of_char     (s: Str, b: CChar)               -> Option[CSize]
-index_of_char_from(s: Str, b: CChar, start: CSize) -> Option[CSize]
-last_index_of_char(s: Str, b: CChar)               -> Option[CSize]
-index_of          (s: Str, needle: Str)            -> Option[CSize]
-last_index_of     (s: Str, needle: Str)            -> Option[CSize]
-count_byte        (s: Str, b: CChar)               -> CSize
-count             (s: Str, needle: Str)            -> CSize
+index_of_char     (s: String, b: CChar)               -> Option[CSize]
+index_of_char_from(s: String, b: CChar, start: CSize) -> Option[CSize]
+last_index_of_char(s: String, b: CChar)               -> Option[CSize]
+index_of          (s: String, needle: String)         -> Option[CSize]
+last_index_of     (s: String, needle: String)         -> Option[CSize]
+count_byte        (s: String, b: CChar)               -> CSize
+count             (s: String, needle: String)         -> CSize
 
 // Mutation.
-replace_byte(alloc: Ptr[Allocator], s: Str, find: CChar, replace: CChar) -> Str
-replace_byte(s: Str, find: CChar, replace: CChar)                        -> Str
+replace_byte(alloc: Ptr[Allocator], s: String, find: CChar, replace: CChar) -> String
+replace_byte(s: String, find: CChar, replace: CChar)                        -> String
 
 // Transformation.
-to_upper    (alloc: Ptr[Allocator], s: Str)                       -> Str
-to_upper    (s: Str)                                              -> Str
-to_lower    (alloc: Ptr[Allocator], s: Str)                       -> Str
-to_lower    (s: Str)                                              -> Str
-trim_left   (alloc: Ptr[Allocator], s: Str)                       -> Str
-trim_left   (s: Str)                                              -> Str
-trim_right  (alloc: Ptr[Allocator], s: Str)                       -> Str
-trim_right  (s: Str)                                              -> Str
-trim        (alloc: Ptr[Allocator], s: Str)                       -> Str
-trim        (s: Str)                                              -> Str
-repeat      (alloc: Ptr[Allocator], s: Str, count: CSize)         -> Str
-repeat      (s: Str, count: CSize)                                -> Str
-replace     (alloc: Ptr[Allocator], s: Str, old: Str, new_s: Str) -> Str
-replace     (s: Str, old: Str, new_s: Str)                        -> Str
-strip_prefix(alloc: Ptr[Allocator], s: Str, prefix: Str)          -> Str
-strip_prefix(s: Str, prefix: Str)                                 -> Str
-strip_suffix(alloc: Ptr[Allocator], s: Str, suffix: Str)          -> Str
-strip_suffix(s: Str, suffix: Str)                                 -> Str
+to_upper    (alloc: Ptr[Allocator], s: String)                             -> String
+to_upper    (s: String)                                                    -> String
+to_lower    (alloc: Ptr[Allocator], s: String)                             -> String
+to_lower    (s: String)                                                    -> String
+trim_left   (alloc: Ptr[Allocator], s: String)                             -> String
+trim_left   (s: String)                                                    -> String
+trim_right  (alloc: Ptr[Allocator], s: String)                             -> String
+trim_right  (s: String)                                                    -> String
+trim        (alloc: Ptr[Allocator], s: String)                             -> String
+trim        (s: String)                                                    -> String
+repeat      (alloc: Ptr[Allocator], s: String, count: CSize)               -> String
+repeat      (s: String, count: CSize)                                      -> String
+replace     (alloc: Ptr[Allocator], s: String, old: String, new_s: String) -> String
+replace     (s: String, old: String, new_s: String)                        -> String
+strip_prefix(alloc: Ptr[Allocator], s: String, prefix: String)             -> String
+strip_prefix(s: String, prefix: String)                                    -> String
+strip_suffix(alloc: Ptr[Allocator], s: String, suffix: String)             -> String
+strip_suffix(s: String, suffix: String)                                    -> String
 
 // Split and join.
-split(alloc: Ptr[Allocator], s: Str, delimiter: Str)          -> Array.Array[Str]
-split(s: Str, delimiter: Str)                                 -> Array.Array[Str]
-join (alloc: Ptr[Allocator], sep: Str, arr: Array.Array[Str]) -> Str
-join (sep: Str, arr: Array.Array[Str])                        -> Str
+split(alloc: Ptr[Allocator], s: String, delimiter: String)          -> Array.Array[String]
+split(s: String, delimiter: String)                                 -> Array.Array[String]
+join (alloc: Ptr[Allocator], sep: String, arr: Array.Array[String]) -> String
+join (sep: String, arr: Array.Array[String])                        -> String
 
 // Memory.
-free(self: Ptr[Str], alloc: Ptr[Allocator]) -> Void
-free(self: Ptr[Str])                        -> Void
+free(self: Ptr[String], alloc: Ptr[Allocator]) -> Void
+free(self: Ptr[String])                        -> Void
 
 
 // -- Private helpers --
 
-_is_small     (s: Str)                                                  -> Bool
-_small_len    (s: Str)                                                  -> CSize
-_buf          (s: Ptr[Str])                                             -> Ptr[CChar]
+_is_small     (s: String)                                               -> Bool
+_small_len    (s: String)                                               -> CSize
+_buf          (s: Ptr[String])                                          -> Ptr[CChar]
 _make_tag_len (n: CSize)                                                -> Byte
 _is_whitespace(b: CChar)                                                -> Bool
-_init_small   (src: Ptr[Const[CChar]], n: CSize)                        -> Str
-_init_big     (alloc: Ptr[Allocator], src: Ptr[Const[CChar]], n: CSize) -> Str
+_init_small   (src: Ptr[Const[CChar]], n: CSize)                        -> String
+_init_big     (alloc: Ptr[Allocator], src: Ptr[Const[CChar]], n: CSize) -> String
 
 // -- Implementation --
 
@@ -157,9 +157,9 @@ _buf(s) {
 }
 
 _make_tag_len(n) {
-    tag:    CSize := _STR_SMALL_TAG
-    r:      CSize := ((n & 0x0F) << 4) | tag
-    result: Byte  := r
+    tag:    CSize   := _STR_SMALL_TAG
+    r:      CSize     := ((n & 0x0F) << 4) | tag
+    result: Byte := r
     result
 }
 
@@ -169,7 +169,7 @@ _is_whitespace(b) {
 
 
 _init_small(src, n) {
-    s := Str(small = _Small(buf = void, tag_len = _make_tag_len(n)))
+    s := String(small = _Small(buf = void, tag_len = _make_tag_len(n)))
     if n > 0 {
         dst: Ptr[CChar] := s.small.buf
         c_memcpy(dst, src, n)
@@ -179,16 +179,16 @@ _init_small(src, n) {
 
 _init_big(alloc, src, n) {
     buf: Ptr[CChar] := alloc->malloc(alloc, n + 1)
-    if buf == null { _tl_fatal_("Str: out of memory") }
-    if n > 0 { c_memcpy(buf, src, n) }
-    Str(big = _Big(len = n, buf = buf))
+    if buf == null { _tl_fatal_("String: out of memory") }
+    if n > 0       { c_memcpy(buf, src, n)               }
+    String(big = _Big(len = n, buf = buf))
 }
 
 
 // -- Construction --
 
 empty() {
-    Str(small = _Small(buf = void, tag_len = _make_tag_len(0)))
+    String(small = _Small(buf = void, tag_len = _make_tag_len(0)))
 }
 
 from_bytes(alloc, s, n) {
@@ -324,7 +324,7 @@ cmp(a, b) {
     pa      := _buf(a.&)
     pb      := _buf(b.&)
     min_len := if la < lb { la } else { lb }
-    if min_len > 0 {
+    if min_len > 0        {
         r := c_memcmp(pa, pb, min_len)
         if r != 0 { return r }
     }
@@ -335,7 +335,7 @@ starts_with(s, prefix) {
     sn := len(s)
     pn := len(prefix)
     if pn > sn { return false }
-    if pn == 0 { return true }
+    if pn == 0 { return true  }
     sp := _buf(s.&)
     pp := _buf(prefix.&)
     c_memcmp(sp, pp, pn) == 0
@@ -345,7 +345,7 @@ ends_with(s, suffix) {
     sn := len(s)
     xn := len(suffix)
     if xn > sn { return false }
-    if xn == 0 { return true }
+    if xn == 0 { return true  }
     sp               := _buf(s.&)
     tail: Ptr[CChar] := Unsafe.pointer_add(sp, sn - xn)
     xp               := _buf(suffix.&)
@@ -355,7 +355,7 @@ ends_with(s, suffix) {
 contains(haystack, needle) {
     hn := len(haystack)
     nn := len(needle)
-    if nn == 0 { return true }
+    if nn == 0 { return true  }
     if nn > hn { return false }
     hp       := _buf(haystack.&)
     np       := _buf(needle.&)
@@ -382,7 +382,7 @@ eq_cstr(s, cs: CString) {
     sn := len(s)
     cn := c_strlen(cs)
     if sn != cn { return false }
-    if sn == 0 { return true }
+    if sn == 0  { return true  }
     sp := _buf(s.&)
     c_memcmp(sp, cs, sn) == 0
 }
@@ -392,14 +392,14 @@ eq_cstr(s, cs: CString) {
 
 _cat_impl(alloc: Ptr[Allocator], bufs: Ptr[Ptr[CChar]], lens: Ptr[CSize], count: CSize) {
     total: CSize := 0
-    i:     CSize := 0
+    i:     CSize     := 0
     while i < count, i += 1 { total += lens.[i] }
 
     if total <= _STR_MAX_SMALL {
-        s               := Str(small = _Small(buf = void, tag_len = _make_tag_len(total)))
+        s               := String(small = _Small(buf = void, tag_len = _make_tag_len(total)))
         dst: Ptr[CChar] := s.small.buf
         off: CSize      := 0
-        j:   CSize      := 0
+        j:   CSize        := 0
         while j < count, j += 1 {
             if lens.[j] > 0 {
                 d: Ptr[CChar] := Unsafe.pointer_add(dst, off)
@@ -411,9 +411,9 @@ _cat_impl(alloc: Ptr[Allocator], bufs: Ptr[Ptr[CChar]], lens: Ptr[CSize], count:
     }
 
     buf: Ptr[CChar] := alloc->malloc(alloc, total + 1)
-    if buf == null { _tl_fatal_("Str: out of memory") }
+    if buf == null { _tl_fatal_("String: out of memory") }
     off: CSize := 0
-    j:   CSize := 0
+    j:   CSize   := 0
     while j < count, j += 1 {
         if lens.[j] > 0 {
             d: Ptr[CChar] := Unsafe.pointer_add(buf, off)
@@ -421,7 +421,7 @@ _cat_impl(alloc: Ptr[Allocator], bufs: Ptr[Ptr[CChar]], lens: Ptr[CSize], count:
         }
         off += lens.[j]
     }
-    Str(big = _Big(len = total, buf = buf))
+    String(big = _Big(len = total, buf = buf))
 }
 
 cat(alloc, a, b) {
@@ -486,7 +486,7 @@ push(self, other) {
 
 slice(alloc, s, start, end) {
     n := len(s)
-    if start > end || end > n { _tl_fatal_("Str.slice: index out of bounds") }
+    if start > end || end > n { _tl_fatal_("String.slice: index out of bounds") }
     slen := end - start
     if slen == 0 { return empty() }
     sp              := _buf(s.&)
@@ -542,7 +542,7 @@ index_of(s, needle) {
     nn       := len(needle)
     i: CSize := 0
     if nn == 0 { return Some(i) }
-    if nn > sn { return None }
+    if nn > sn { return None    }
     sp := _buf(s.&)
     np := _buf(needle.&)
     while i <= sn - nn, i += 1 {
@@ -556,7 +556,7 @@ last_index_of(s, needle) {
     sn := len(s)
     nn := len(needle)
     if nn == 0 { return Some(sn) }
-    if nn > sn { return None }
+    if nn > sn { return None     }
     sp       := _buf(s.&)
     np       := _buf(needle.&)
     i: CSize := sn - nn + 1
@@ -583,8 +583,8 @@ count_byte(s, b) {
 count(s, needle) {
     sn := len(s)
     nn := len(needle)
-    if nn == 0 { _tl_fatal_("Str.count: empty needle") }
-    if nn > sn { return 0 }
+    if nn == 0 { _tl_fatal_("String.count: empty needle") }
+    if nn > sn { return 0                                 }
     sp       := _buf(s.&)
     np       := _buf(needle.&)
     c: CSize := 0
@@ -720,10 +720,10 @@ repeat(alloc, s, count) {
     sp           := _buf(s.&)
 
     if total <= _STR_MAX_SMALL {
-        result          := Str(small = _Small(buf = void, tag_len = _make_tag_len(total)))
+        result          := String(small = _Small(buf = void, tag_len = _make_tag_len(total)))
         dst: Ptr[CChar] := result.small.buf
         off: CSize      := 0
-        i:   CSize      := 0
+        i:   CSize        := 0
         while i < count, i += 1 {
             d: Ptr[CChar] := Unsafe.pointer_add(dst, off)
             c_memcpy(d, sp, sn)
@@ -733,15 +733,15 @@ repeat(alloc, s, count) {
     }
 
     buf: Ptr[CChar] := alloc->malloc(alloc, total + 1)
-    if buf == null { _tl_fatal_("Str.repeat: out of memory") }
+    if buf == null { _tl_fatal_("String.repeat: out of memory") }
     off: CSize := 0
-    i:   CSize := 0
+    i:   CSize   := 0
     while i < count, i += 1 {
         d: Ptr[CChar] := Unsafe.pointer_add(buf, off)
         c_memcpy(d, sp, sn)
         off += sn
     }
-    Str(big = _Big(len = total, buf = buf))
+    String(big = _Big(len = total, buf = buf))
 }
 
 repeat(s, count) {
@@ -751,15 +751,15 @@ repeat(s, count) {
 replace(alloc, s, old, new_s) {
     sn := len(s)
     on := len(old)
-    if on == 0 { _tl_fatal_("Str.replace: empty search string") }
-    if on > sn { return copy(alloc, s) }
+    if on == 0 { _tl_fatal_("String.replace: empty search string") }
+    if on > sn { return copy(alloc, s)                             }
     nn := len(new_s)
     sp := _buf(s.&)
     op := _buf(old.&)
 
     // Count occurrences
     occ: CSize := 0
-    i:   CSize := 0
+    i:   CSize   := 0
     while i <= sn - on, i += 1 {
         candidate: Ptr[CChar] := Unsafe.pointer_add(sp, i)
         if c_memcmp(candidate, op, on) == 0 {
@@ -776,9 +776,9 @@ replace(alloc, s, old, new_s) {
 
     // Build result into heap buffer, then decide SSO
     buf: Ptr[CChar] := alloc->malloc(alloc, total + 1)
-    if buf == null { _tl_fatal_("Str.replace: out of memory") }
+    if buf == null { _tl_fatal_("String.replace: out of memory") }
     off: CSize := 0
-    j:   CSize := 0
+    j:   CSize   := 0
     while j < sn {
         if j <= sn - on {
             candidate: Ptr[CChar] := Unsafe.pointer_add(sp, j)
@@ -806,7 +806,7 @@ replace(alloc, s, old, new_s) {
         alloc->free(alloc, buf)
         return result
     }
-    Str(big = _Big(len = total, buf = buf))
+    String(big = _Big(len = total, buf = buf))
 }
 
 replace(s, old, new_s) {
@@ -847,9 +847,9 @@ strip_suffix(s, suffix) {
 
 split(alloc, s, delimiter) {
     dn := len(delimiter)
-    if dn == 0 { _tl_fatal_("Str.split: empty delimiter") }
+    if dn == 0 { _tl_fatal_("String.split: empty delimiter") }
     sn     := len(s)
-    result := Array.empty[Str]()
+    result := Array.empty[String]()
 
     if sn == 0 {
         e := empty()
@@ -866,7 +866,7 @@ split(alloc, s, delimiter) {
     sp           := _buf(s.&)
     dp           := _buf(delimiter.&)
     start: CSize := 0
-    i:     CSize := 0
+    i:     CSize     := 0
     while i <= sn - dn, i += 1 {
         candidate: Ptr[CChar] := Unsafe.pointer_add(sp, i)
         if c_memcmp(candidate, dp, dn) == 0 {
@@ -880,7 +880,7 @@ split(alloc, s, delimiter) {
 
     // Push remaining segment
     src: Ptr[CChar] := Unsafe.pointer_add(sp, start)
-    part            := from_bytes        (alloc, src, sn - start)
+    part            := from_bytes                   (alloc, src, sn - start)
 
     result.push(alloc, part)
     result
@@ -899,7 +899,7 @@ join(alloc, sep, arr) {
 
     // Calculate total length
     total: CSize := 0
-    i:     CSize := 0
+    i:     CSize     := 0
     while i < arr.size, i += 1 {
         total += len(arr.get(i))
     }
@@ -909,10 +909,10 @@ join(alloc, sep, arr) {
     if total == 0 { return empty() }
 
     if total <= _STR_MAX_SMALL {
-        result          := Str(small = _Small(buf = void, tag_len = _make_tag_len(total)))
+        result          := String(small = _Small(buf = void, tag_len = _make_tag_len(total)))
         dst: Ptr[CChar] := result.small.buf
         off: CSize      := 0
-        j:   CSize      := 0
+        j:   CSize        := 0
         while j < arr.size, j += 1 {
             elem := arr.get(j)
             en   := len(elem)
@@ -932,9 +932,9 @@ join(alloc, sep, arr) {
     }
 
     buf: Ptr[CChar] := alloc->malloc(alloc, total + 1)
-    if buf == null { _tl_fatal_("Str.join: out of memory") }
+    if buf == null { _tl_fatal_("String.join: out of memory") }
     off: CSize := 0
-    j:   CSize := 0
+    j:   CSize   := 0
     while j < arr.size, j += 1 {
         elem := arr.get(j)
         en   := len(elem)
@@ -950,7 +950,7 @@ join(alloc, sep, arr) {
             off += sn
         }
     }
-    Str(big = _Big(len = total, buf = buf))
+    String(big = _Big(len = total, buf = buf))
 }
 
 join(sep, arr) {
@@ -982,7 +982,7 @@ Iter: {
     index: CSize,
 }
 
-iter_init  (s: Ptr[Str])     -> Iter
+iter_init  (s: Ptr[String])  -> Iter
 iter_ptr   (iter: Ptr[Iter]) -> Ptr[CChar]
 iter_value (iter: Ptr[Iter]) -> CChar
 iter_cond  (iter: Ptr[Iter]) -> Bool

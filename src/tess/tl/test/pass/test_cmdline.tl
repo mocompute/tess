@@ -1,8 +1,8 @@
 #module main
 #import <Cmdline.tl>
-#import <Str.tl>
+#import <String.tl>
 
-S(s) { Str.from_cstr(s) }
+S(s) { String.from_cstr(s) }
 
 test_basic_flag() {
     error := 0
@@ -63,7 +63,7 @@ test_option_long() {
     ok: Ok := result else { parser.destroy(), return error + 1 }
 
     when ok.v.get_option(S("output")) {
-        s: Some { if !Str.eq(s.v, S("foo.txt")) { error += 1 } }
+        s: Some { if !String.eq(s.v, S("foo.txt")) { error += 1 } }
         n: None { error += 1 }
     }
 
@@ -85,7 +85,7 @@ test_option_eq() {
     ok: Ok := result else { parser.destroy(), return error + 1 }
 
     when ok.v.get_option(S("output")) {
-        s: Some { if !Str.eq(s.v, S("bar.txt")) { error += 1 } }
+        s: Some { if !String.eq(s.v, S("bar.txt")) { error += 1 } }
         n: None { error += 1 }
     }
 
@@ -108,7 +108,7 @@ test_option_short() {
     ok: Ok := result else { parser.destroy(), return error + 1 }
 
     when ok.v.get_option(S("output")) {
-        s: Some { if !Str.eq(s.v, S("baz.txt")) { error += 1 } }
+        s: Some { if !String.eq(s.v, S("baz.txt")) { error += 1 } }
         n: None { error += 1 }
     }
 
@@ -130,7 +130,7 @@ test_option_short_inline() {
     ok: Ok := result else { parser.destroy(), return error + 1 }
 
     when ok.v.get_option(S("output")) {
-        s: Some { if !Str.eq(s.v, S("file.txt")) { error += 1 } }
+        s: Some { if !String.eq(s.v, S("file.txt")) { error += 1 } }
         n: None { error += 1 }
     }
 
@@ -178,10 +178,10 @@ test_positional() {
     pos := ok.v.positionals()
     if pos.size != 2 { error += 1 }
     if pos.size >= 1 {
-        if !Str.eq(pos.v.[0], S("file1.txt")) { error += 1 }
+        if !String.eq(pos.v.[0], S("file1.txt")) { error += 1 }
     }
     if pos.size >= 2 {
-        if !Str.eq(pos.v.[1], S("file2.txt")) { error += 1 }
+        if !String.eq(pos.v.[1], S("file2.txt")) { error += 1 }
     }
 
     parser.destroy()
@@ -208,10 +208,10 @@ test_double_dash() {
     r := ok.v.rest()
     if r.size != 2 { error += 1 }
     if r.size >= 1 {
-        if !Str.eq(r.v.[0], S("--not-a-flag")) { error += 1 }
+        if !String.eq(r.v.[0], S("--not-a-flag")) { error += 1 }
     }
     if r.size >= 2 {
-        if !Str.eq(r.v.[1], S("foo")) { error += 1 }
+        if !String.eq(r.v.[1], S("foo")) { error += 1 }
     }
     if ok.v.positionals().size != 0 { error += 1 }
 
@@ -290,7 +290,7 @@ test_required_provided() {
     ok: Ok := result else { parser.destroy(), return error + 1 }
 
     when ok.v.get_option(S("config")) {
-        s: Some { if !Str.eq(s.v, S("app.conf")) { error += 1 } }
+        s: Some { if !String.eq(s.v, S("app.conf")) { error += 1 } }
         n: None { error += 1 }
     }
 
@@ -316,14 +316,14 @@ test_command() {
     ok: Ok := result else { parser.destroy(), return error + 1 }
 
     when ok.v.get_command() {
-        s: Some { if !Str.eq(s.v, S("build")) { error += 1 } }
+        s: Some { if !String.eq(s.v, S("build")) { error += 1 } }
         n: None { error += 1 }
     }
     if !ok.v.get_flag(S("verbose")) { error += 1 }
     pos := ok.v.positionals()
     if pos.size != 1 { error += 1 }
     if pos.size >= 1 {
-        if !Str.eq(pos.v.[0], S("file.txt")) { error += 1 }
+        if !String.eq(pos.v.[0], S("file.txt")) { error += 1 }
     }
 
     parser.destroy()
@@ -362,10 +362,10 @@ test_help_text() {
     parser.required(S("config"), 'c', S("Config file"))
 
     txt := parser.help_text()
-    if !Str.contains(txt, S("mytool")) { error += 1 }
-    if !Str.contains(txt, S("verbose")) { error += 1 }
-    if !Str.contains(txt, S("output")) { error += 1 }
-    if !Str.contains(txt, S("(required)")) { error += 1 }
+    if !String.contains(txt, S("mytool")) { error += 1 }
+    if !String.contains(txt, S("verbose")) { error += 1 }
+    if !String.contains(txt, S("output")) { error += 1 }
+    if !String.contains(txt, S("(required)")) { error += 1 }
 
     parser.destroy()
     error
@@ -382,13 +382,13 @@ test_from_argv() {
 
     if result.size != 3 { error += 1 }
     if result.size >= 1 {
-        if !Str.eq(result.v.[0], S("prog")) { error += 1 }
+        if !String.eq(result.v.[0], S("prog")) { error += 1 }
     }
     if result.size >= 2 {
-        if !Str.eq(result.v.[1], S("arg1")) { error += 1 }
+        if !String.eq(result.v.[1], S("arg1")) { error += 1 }
     }
     if result.size >= 3 {
-        if !Str.eq(result.v.[2], S("arg2")) { error += 1 }
+        if !String.eq(result.v.[2], S("arg2")) { error += 1 }
     }
 
     Array.free(result.&)
@@ -434,16 +434,16 @@ test_mixed_flags_and_positionals() {
 
     if !ok.v.get_flag(S("verbose")) { error += 1 }
     when ok.v.get_option(S("output")) {
-        s: Some { if !Str.eq(s.v, S("out.txt")) { error += 1 } }
+        s: Some { if !String.eq(s.v, S("out.txt")) { error += 1 } }
         n: None { error += 1 }
     }
     pos := ok.v.positionals()
     if pos.size != 2 { error += 1 }
     if pos.size >= 1 {
-        if !Str.eq(pos.v.[0], S("input.txt")) { error += 1 }
+        if !String.eq(pos.v.[0], S("input.txt")) { error += 1 }
     }
     if pos.size >= 2 {
-        if !Str.eq(pos.v.[1], S("extra.txt")) { error += 1 }
+        if !String.eq(pos.v.[1], S("extra.txt")) { error += 1 }
     }
 
     parser.destroy()

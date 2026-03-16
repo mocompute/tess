@@ -30,23 +30,23 @@ c_tl_is_aligned    (p: Ptr[any], alignment: CSize) -> CInt
 
 // Define TL_ALLOC_TRANSIENT_SIZE and TL_ALLOC_STRINGS_SIZE before importing (e.g. with -D in CFLAGS) to
 // override default values.
-initialTransientSize:      CSize := 0
+initialTransientSize:      CSize      := 0
 initialStringLiteralsSize: CSize := 0
 
 Allocator: {
-    malloc:        (a: Ptr[Allocator], sz: CSize)                   -> Ptr[any],
-    calloc:        (a: Ptr[Allocator], num: CSize, sz: CSize)       -> Ptr[any],
-    realloc:       (a: Ptr[Allocator], p: Ptr[any], sz: CSize)      -> Ptr[any],
-    free:          (a: Ptr[Allocator], p: Ptr[any])                 -> Void,
+    malloc:        (a: Ptr[Allocator], sz: CSize)                          -> Ptr[any],
+    calloc:        (a: Ptr[Allocator], num: CSize, sz: CSize)              -> Ptr[any],
+    realloc:       (a: Ptr[Allocator], p: Ptr[any], sz: CSize)            -> Ptr[any],
+    free:          (a: Ptr[Allocator], p: Ptr[any])                          -> Void,
     aligned_alloc: (a: Ptr[Allocator], sz: CSize, alignment: CSize) -> Ptr[any],
-    aligned_free:  (a: Ptr[Allocator], p: Ptr[any])                 -> Void,
-    resize:        (a: Ptr[Allocator], p: Ptr[any], sz: CSize)      -> Ptr[any],
+    aligned_free:  (a: Ptr[Allocator], p: Ptr[any])                  -> Void,
+    resize:        (a: Ptr[Allocator], p: Ptr[any], sz: CSize)             -> Ptr[any],
 }
 
 Context: {
     transient:       Ptr[Allocator],
     managed:         Ptr[Allocator],
-    string_literals: Ptr[Allocator],    // used by default by Str.from_cstr/1
+    string_literals: Ptr[Allocator],    // used by default by String.from_cstr/1
     default:         Ptr[Allocator],
 }
 
@@ -136,10 +136,10 @@ is_aligned(p: Ptr[any], alignment: CSize) -> Bool {
 // -- wrappers around stdlib allocator --
 // Access them via managed_alloc, etc.
 
-_malloc  (a: Ptr[Allocator], sz: CSize)              -> Ptr[any] { c_malloc(sz)      }
-_calloc  (a: Ptr[Allocator], num: CSize, sz: CSize)  -> Ptr[any] { c_calloc(num, sz) }
-_realloc (a: Ptr[Allocator], p: Ptr[any], sz: CSize) -> Ptr[any] { c_realloc(p, sz)  }
-_free    (a: Ptr[Allocator], p: Ptr[any])            -> Void     { c_free(p)         }
+_malloc  (a: Ptr[Allocator], sz: CSize)              -> Ptr[any]              { c_malloc(sz) }
+_calloc  (a: Ptr[Allocator], num: CSize, sz: CSize)  -> Ptr[any]  { c_calloc(num, sz)        }
+_realloc (a: Ptr[Allocator], p: Ptr[any], sz: CSize) -> Ptr[any] { c_realloc(p, sz)          }
+_free    (a: Ptr[Allocator], p: Ptr[any])            -> Void                { c_free(p)      }
 
 _aligned_alloc (a: Ptr[Allocator], sz: CSize, alignment: CSize) -> Ptr[any] {
     c_aligned_alloc(alignment, sz)
@@ -250,9 +250,9 @@ _BumpHeader_create(alloc, capacity) {
 _bump_malloc(a: Ptr[Allocator], sz: CSize) -> Ptr[any] {
     arena: Ptr[BumpAllocator] := a
 
-    bucket                          := arena->head
+    bucket                 := arena->head
     last:          Ptr[_BumpHeader] := null
-    last_capacity: CSize            := 0
+    last_capacity: CSize   := 0
 
     sz = align_max(sz)
     if 0 == sz { return null }
@@ -359,9 +359,9 @@ _bump_aligned_alloc(a: Ptr[Allocator], sz: CSize, alignment: CSize) -> Ptr[any] 
     // Upper bound on space needed: sz + alignment covers worst-case padding
     total_needed := sz + alignment
 
-    bucket                          := arena->head
+    bucket                 := arena->head
     last:          Ptr[_BumpHeader] := null
-    last_capacity: CSize            := 0
+    last_capacity: CSize   := 0
 
     c_assert(bucket != null)
     while bucket != null {
@@ -475,8 +475,8 @@ bump_reset(a: Ptr[Allocator]) -> Void {
 bump_get_stats(a: Ptr[Allocator]) -> BumpStats {
     arena: Ptr[BumpAllocator] := a
 
-    allocated:    CSize := 0
-    capacity:     CSize := 0
+    allocated:    CSize    := 0
+    capacity:     CSize     := 0
     bucket_count: CSize := 0
 
     bucket := arena->head

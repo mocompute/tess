@@ -1,5 +1,5 @@
 #module main
-#import <Str.tl>
+#import <String.tl>
 
 [[symbol_attribute]] sym := 123
 
