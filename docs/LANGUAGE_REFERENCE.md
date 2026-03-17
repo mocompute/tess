@@ -1519,7 +1519,7 @@ Use the `.&` suffix on the scrutinee to get pointers to each variant. This is th
 
 > See [Language Model: Let-Else](LANGUAGE_MODEL.md#let-else) for why let-else exists and how it connects to let-in scoping.
 
-When you need a single variant's value for the rest of a scope, use let-else to unwrap it or exit early:
+When you need a single variant's value for the rest of a scope, use let-else to unwrap it or diverge:
 
 ```tl
 s: MySome := val else { return 0 }
@@ -1527,7 +1527,20 @@ s: MySome := val else { return 0 }
 s.v + 1
 ```
 
-The `else` block must diverge (`return`, `break`, or `continue`). This avoids trapping the unwrapped value inside a `when` arm when subsequent code needs it:
+The `else` block may either diverge (`return`, `break`, `continue`) or produce a value. When it produces a value, the overall expression evaluates to that value if the match fails — the continuation after let-else is not reached:
+
+```tl
+// Diverging: exit the function if no match
+s: MySome := val else { return -1 }
+s.v + 1
+
+// Non-diverging: use a fallback value if no match
+s: MySome := val else { 0 }
+// if val was MyNone, the whole expression evaluated to 0
+// if val was MySome, s is bound and execution continues here
+```
+
+This avoids trapping the unwrapped value inside a `when` arm when subsequent code needs it:
 
 ```tl
 // Without let-else — value is trapped inside the arm

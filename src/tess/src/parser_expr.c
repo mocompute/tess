@@ -626,16 +626,11 @@ int a_assignment(parser *self) {
     ast_node *val = parse_expression(self, INT_MIN);
     if (!val) return 1;
 
-    // Bail form: s: MySome := val else { diverge }
-    // Desugars to: when val { s: MySome { <remaining body> } else { <diverge> } }
+    // Let-else form: s: MySome := val else { diverge-or-value }
+    // Desugars to: when val { s: MySome { <remaining body> } else { <else-body> } }
     if (ast_node_is_symbol(lval) && lval->symbol.annotation && 0 == a_try_s(self, the_symbol, "else")) {
         ast_node *else_body = parse_body(self);
         if (!else_body) return ERROR_STOP;
-
-        if (!ast_body_is_diverging(else_body)) {
-            self->error.tag = tl_err_tagged_union_bail_else_must_diverge;
-            return ERROR_STOP;
-        }
 
         // Parse remaining body expressions (the continuation after the bail)
         ast_node_array exprs  = {.alloc = self->ast_arena};
