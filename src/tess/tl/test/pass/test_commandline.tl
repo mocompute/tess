@@ -450,6 +450,30 @@ test_mixed_flags_and_positionals() {
     error
 }
 
+test_parse_or_exit() {
+    error := 0
+
+    parser := CommandLine.create(S("test"), S("A test tool"))
+    parser.flag(S("verbose"), 'v', S("Enable verbose output"))
+    parser.option(S("output"), 'o', S("Output file"))
+
+    argv: CArray[CString, 4] := void
+    argv.[0] = "test"
+    argv.[1] = "-v"
+    argv.[2] = "--output"
+    argv.[3] = "out.txt"
+    args := parser.parse_or_exit(4, argv.[0].&)
+
+    if !args.get_flag(S("verbose")) { error += 1 }
+    when args.get_option(S("output")) {
+        s: Some { if !String.eq(s.v, S("out.txt")) { error += 1 } }
+        n: None { error += 1 }
+    }
+
+    parser.destroy()
+    error
+}
+
 _run(name, f) {
     r := f()
     if r != 0 { c_printf("FAIL: %s (%d)\n", name, r) }
@@ -477,5 +501,6 @@ main() {
     error += _run("from_argv", test_from_argv/0)
     error += _run("empty_args", test_empty_args/0)
     error += _run("mixed", test_mixed_flags_and_positionals/0)
+    error += _run("parse_or_exit", test_parse_or_exit/0)
     error
 }

@@ -1685,6 +1685,7 @@ static str generate_if_then_else(transpile *self, ast_node const *node, eval_ctx
         cat(self, S("}\n"));
     }
 
+    if (ctx && !str_is_empty(res)) ctx->is_effective_void = 0;
     return res;
 }
 
@@ -1978,6 +1979,7 @@ static str generate_tagged_union_case(transpile *self, ast_node const *node, eva
         cat_semicolonln(self);
     }
 
+    if (ctx && !str_is_empty(res)) ctx->is_effective_void = 0;
     return res;
 }
 
@@ -2097,6 +2099,7 @@ static str generate_case(transpile *self, tl_monotype *type, ast_node const *nod
         cat(self, S(":"));
         cat_semicolonln(self);
 
+        if (ctx && !is_nil_result(result_type)) ctx->is_effective_void = 0;
         return res;
 
     } break;
