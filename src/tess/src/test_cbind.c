@@ -200,7 +200,7 @@ static int test_typedef_struct_alias(void) {
                    "\n"
                    "c_struct_point: { x: CInt, y: CInt }\n"
                    "\n"
-                   "c_make_point() -> c_struct_point\n");
+                   "c_make_point() -> c_point_t\n");
 
     arena_destroy(&a);
     return error;
@@ -242,7 +242,7 @@ static int test_typedef_struct_different_names(void) {
                    "\n"
                    "c_struct_point_s: { x: CInt, y: CInt }\n"
                    "\n"
-                   "c_make() -> c_struct_point_s\n");
+                   "c_make() -> c_point_t\n");
 
     arena_destroy(&a);
     return error;
@@ -707,6 +707,29 @@ static int test_dedup_functions(void) {
 }
 
 // ---------------------------------------------------------------------------
+// 28. typedef struct _IO_FILE FILE (preserve typedef name)
+// ---------------------------------------------------------------------------
+static int test_typedef_preserves_name(void) {
+    int        error = 0;
+    allocator *a     = arena_create(default_allocator(), 4096);
+
+    error += check(a, "typedef preserves name", "test.h", "test",
+                   "# 1 \"test.h\"\n"
+                   "struct _IO_FILE { int fd; };\n"
+                   "typedef struct _IO_FILE FILE;\n"
+                   "FILE *fopen(const char *path, const char *mode);\n",
+                   "#module test\n"
+                   "#include <test.h>\n"
+                   "\n"
+                   "c_struct__IO_FILE: { fd: CInt }\n"
+                   "\n"
+                   "c_fopen(path: Ptr[Const[CChar]], mode: Ptr[Const[CChar]]) -> Ptr[c_FILE]\n");
+
+    arena_destroy(&a);
+    return error;
+}
+
+// ---------------------------------------------------------------------------
 // main
 // ---------------------------------------------------------------------------
 
@@ -753,6 +776,7 @@ int main(void) {
     T(test_skip_dunder_functions);
     T(test_strip_dunder_params);
     T(test_dedup_functions);
+    T(test_typedef_preserves_name);
 
     if (error) {
         fprintf(stderr, "\n%d test(s) failed\n", error);

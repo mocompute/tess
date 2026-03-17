@@ -1178,7 +1178,7 @@ static void parse_struct_or_union(cbind_state *st, int is_target, str tag_name, 
                 } else {
                     // named struct: typedef struct tag { ... } name;
                     str tess_name =
-                      str_fmt(st->alloc, "c_struct_%.*s", str_ilen(tag_name), str_buf(&tag_name));
+                      str_fmt(st->alloc, "c_%.*s", str_ilen(typedef_name), str_buf(&typedef_name));
                     str_map_set(&st->typedefs, typedef_name, &tess_name);
 
                     if (is_target) {
@@ -1231,7 +1231,7 @@ static void parse_struct_or_union(cbind_state *st, int is_target, str tag_name, 
 
                 if (ptr == 0 && !str_is_empty(tag_name)) {
                     str tess_name =
-                      str_fmt(st->alloc, "c_struct_%.*s", str_ilen(tag_name), str_buf(&tag_name));
+                      str_fmt(st->alloc, "c_%.*s", str_ilen(typedef_name), str_buf(&typedef_name));
                     str_map_set(&st->typedefs, typedef_name, &tess_name);
                 }
                 // If not defined yet, register forward decl
