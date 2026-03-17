@@ -211,7 +211,7 @@ when spec.kind {
 }
 ```
 
-Use **let-else** when a single variant is expected and all others should diverge:
+Use **let-else** when a single variant is expected and all others should diverge or produce a fallback:
 
 ```tl
 s: Some := HashMap.get_copy(values, name) else { return 0 }

@@ -213,19 +213,26 @@ With the let-in model understood, **let-else** is a natural extension.
 
 A let-else binding tries to match a value against a tagged union variant. If the match
 succeeds, the unwrapped value is bound for the rest of the scope (the "in" part). If it
-fails, the `else` block executes and must **diverge** — it must `return`, `break`, or
-`continue`, because the binding would have no value otherwise.
+fails, the `else` block executes. The else block may either **diverge** (`return`,
+`break`, `continue`) or **produce a fallback value**:
 
 ```tl
+// Diverging: exit the function if no match
 s: Some := val else { return 0 }
 // s is available here — this is the "in" part of the let-in
 s.v + 1
+
+// Non-diverging: use a fallback value if no match
+s: Some := val else { 0 }
+// if val was None, the whole expression evaluated to 0
+// if val was Some, s is bound and execution continues here
 ```
 
-Why must the `else` block diverge? Because `s` is bound for the rest of the scope. If
-the match fails and execution continued past the binding, `s` would be uninitialized.
-Diverging guarantees that the body (everything after the binding) only runs when the
-match succeeded.
+When the else block diverges, `s` is guaranteed to be bound for the rest of the scope —
+the body (everything after the binding) only runs when the match succeeded.
+
+When the else block produces a value, the overall let-else expression evaluates to that
+value if the match fails, and the continuation after the let-else is not reached.
 
 The let-else pattern replaces a common `when` (pattern match) idiom where you only care
 about one variant:
@@ -474,7 +481,8 @@ use(s.v)
 
 The connection to let-in is direct: `s: Some := val else { return 0 }` is a let-in
 expression where the binding either succeeds (and the body is the rest of the block) or
-the else block diverges (so the body is never reached without a valid binding).
+the else block executes (diverging so the body is never reached, or producing a fallback
+value for the overall expression).
 
 ## Summary
 
