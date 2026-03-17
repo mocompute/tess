@@ -2,7 +2,13 @@
 #include <stdio.h>
 #include <errno.h>
 
-c_printf(fmt: Ptr[Const[CChar]], args: ...) -> Void
+c_printf (fmt: Ptr[Const[CChar]], args: ...)                             -> Void
+c_fprintf(stream: Ptr[any], fmt: Ptr[Const[CChar]], args: ...)           -> CInt
+
+// Standard streams.
+c_stdin:  Ptr[any]
+c_stdout: Ptr[any]
+c_stderr: Ptr[any]
 
 // File I/O.
 c_fopen  (path: CString, mode: CString)                                  -> Ptr[any]

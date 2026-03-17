@@ -393,7 +393,7 @@ parse(self, argc, argv) {
 parse_or_exit(self, argc, argv) {
     result := parse(self, argc, argv)
     when result {
-        ok:  Ok { ok.v }
+        ok:  Ok { return ok.v }
         err: Err {
             i := 0
             while i < err.v.errors.size, i += 1 {
