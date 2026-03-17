@@ -31,6 +31,7 @@ _S(s) { String.from_cstr(s) }
 #ifdef _WIN32
 #include <direct.h>
 #include <windows.h>
+#undef small
 #include <io.h>
 #else
 #include <dirent.h>
