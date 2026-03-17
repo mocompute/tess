@@ -180,37 +180,37 @@ main() {
 
 ---
 
-## Str
+## String
 
-The `Str` type is always available — no import needed.
+The `String` type is always available — no import needed.
 
-`Str` is a 16-byte value type with **small string optimization (SSO)**. Strings of 14 bytes or fewer are stored inline (no heap allocation). Longer strings store a length and a pointer to a heap-allocated buffer.
+`String` is a 16-byte value type with **small string optimization (SSO)**. Strings of 14 bytes or fewer are stored inline (no heap allocation). Longer strings store a length and a pointer to a heap-allocated buffer.
 
 ### Value Semantics and Aliasing
 
 Binding with `:=` copies the 16-byte struct, **not** the underlying heap buffer. For small strings (≤14 bytes) this is safe because the data is inline. For big strings (>14 bytes) both copies share the same heap buffer:
 
 ```tl
-a := Str.from_cstr("a long string that exceeds 14 bytes")
-b := a          // b and a share the same heap buffer
-Str.free(a.&)   // frees the buffer — b is now dangling
+a := String.from_cstr("a long string that exceeds 14 bytes")
+b := a            // b and a share the same heap buffer
+String.free(a.&)  // frees the buffer — b is now dangling
 ```
 
-Use `Str.copy` to create an independent deep copy:
+Use `String.copy` to create an independent deep copy:
 
 ```tl
-b := Str.copy(a) // b has its own buffer — safe to free independently
+b := String.copy(a) // b has its own buffer — safe to free independently
 ```
 
 The same aliasing applies to `Array` and any struct containing pointers. See [Value Semantics](LANGUAGE_REFERENCE.md#value-semantics) in the Language Reference.
 
 ### The `cstr` function
 
-`Str.cstr` takes `Ptr[Str]` (not `Str` by value) because it may write a null terminator into the buffer:
+`String.cstr` takes `Ptr[String]` (not `String` by value) because it may write a null terminator into the buffer:
 
 ```tl
-s := Str.from_cstr("hello")
-c_printf("%s\n", Str.cstr(s.&))
+s := String.from_cstr("hello")
+c_printf("%s\n", String.cstr(s.&))
 ```
 
 ### Allocator-aware overloads
@@ -218,15 +218,15 @@ c_printf("%s\n", Str.cstr(s.&))
 Most functions that allocate memory come in two variants: one taking an explicit `Ptr[Allocator]` argument, and one using the default allocator (`Alloc.context.default`). For example:
 
 ```tl
-Str.copy(alloc, s)   // explicit allocator
-Str.copy(s)          // uses default allocator
+String.copy(alloc, s)   // explicit allocator
+String.copy(s)          // uses default allocator
 ```
 
 This pattern applies to `from_cstr`, `from_bytes`, `from_int`, `from_float`, `copy`, `cat`, `slice`, `trim`, `replace`, `split`, `join`, `free`, and others.
 
 ### API overview
 
-See the synopsis at the top of `src/tl/std/Str.tl` (lines 34–122) for the full function listing, organized by category: construction, queries, comparison, concatenation, slicing, search, transformation, split/join, memory, and iteration.
+See the synopsis at the top of `src/tl/std/String.tl` (lines 40–130) for the full function listing, organized by category: construction, queries, comparison, concatenation, slicing, search, transformation, split/join, memory, and iteration.
 
 ---
 
@@ -438,3 +438,172 @@ Thin wrappers around C standard library functions. All functions use the `c_` pr
 ```
 
 Provides access to C fixed-width integer types and limits from `<stdint.h>` and `<limits.h>`. No functions are defined; the module makes the C types available to the Tess type system.
+
+---
+
+## File
+
+```tl
+#import <File.tl>
+```
+
+Streaming file I/O, convenience read/write, and path utilities. Wraps C stdio for cross-platform file access. All operations use binary mode to avoid Windows CR/LF translation. Error handling via `Result[T, IOError]`.
+
+### Types
+
+```tl
+Mode: | Read          // "rb"
+      | Write         // "wb"
+      | Append        // "ab"
+      | ReadWrite     // "r+b"
+      | WriteRead     // "w+b"
+      | AppendRead    // "a+b"
+
+IOError: | NotFound         { path: String }
+         | PermissionDenied { path: String }
+         | AlreadyExists    { path: String }
+         | IOFailed         { path: String, message: String, errno_code: CInt }
+
+SeekFrom: | Start | Current | End
+
+File: {
+    _handle: Ptr[any],
+    _alloc:  Ptr[Allocator],
+    _path:   String,
+}
+```
+
+### Handle Lifecycle
+
+| Function | Signature | Description |
+|----------|-----------|-------------|
+| `open` | `(path: String, mode: Mode) -> Result[Ptr[File], IOError]` | Open a file; returns a heap-allocated handle |
+| `close` | `(self: Ptr[File]) -> Void` | Close the file and free the handle |
+
+### Streaming Read
+
+| Function | Signature | Description |
+|----------|-----------|-------------|
+| `read` | `(self: Ptr[File], buf: Ptr[Byte], count: CSize) -> Result[CSize, IOError]` | Read up to `count` bytes into `buf` |
+| `read_line` | `(self: Ptr[File]) -> Result[Option[String], IOError]` | Read one line (strips `\r\n`); `None` at EOF |
+| `read_all` | `(self: Ptr[File]) -> Result[String, IOError]` | Read remaining contents as a string |
+| `read_bytes` | `(self: Ptr[File]) -> Result[Array[Byte], IOError]` | Read remaining contents as a byte array |
+
+### Streaming Write
+
+| Function | Signature | Description |
+|----------|-----------|-------------|
+| `write` | `(self: Ptr[File], buf: Ptr[Const[Byte]], count: CSize) -> Result[CSize, IOError]` | Write `count` bytes from `buf` |
+| `write_str` | `(self: Ptr[File], data: String) -> Result[Void, IOError]` | Write a string |
+| `write_bytes` | `(self: Ptr[File], data: Array[Byte]) -> Result[Void, IOError]` | Write a byte array |
+
+### Positioning
+
+| Function | Signature | Description |
+|----------|-----------|-------------|
+| `seek` | `(self: Ptr[File], offset: Int, from: SeekFrom) -> Result[Void, IOError]` | Seek to position |
+| `tell` | `(self: Ptr[File]) -> Result[Int, IOError]` | Current position in file |
+| `rewind` | `(self: Ptr[File]) -> Void` | Seek back to start |
+
+### Query
+
+| Function | Signature | Description |
+|----------|-----------|-------------|
+| `path` | `(self: Ptr[Const[File]]) -> String` | Path the file was opened with |
+| `is_eof` | `(self: Ptr[Const[File]]) -> Bool` | True if at end of file |
+
+### Convenience (no handle needed)
+
+| Function | Signature | Description |
+|----------|-----------|-------------|
+| `read_file` | `(path: String) -> Result[String, IOError]` | Read entire file as a string |
+| `read_file_bytes` | `(path: String) -> Result[Array[Byte], IOError]` | Read entire file as bytes |
+| `write_file` | `(path: String, content: String) -> Result[Void, IOError]` | Write string to file (creates/truncates) |
+| `write_file_bytes` | `(path: String, data: Array[Byte]) -> Result[Void, IOError]` | Write bytes to file (creates/truncates) |
+| `append_file` | `(path: String, content: String) -> Result[Void, IOError]` | Append string to file |
+| `read_lines` | `(path: String) -> Result[Array[String], IOError]` | Read file as array of lines |
+
+### File Metadata
+
+| Function | Signature | Description |
+|----------|-----------|-------------|
+| `exists` | `(path: String) -> Bool` | True if path exists |
+| `is_directory` | `(path: String) -> Bool` | True if path is a directory |
+| `size` | `(path: String) -> Result[Int, IOError]` | File size in bytes |
+| `temp_dir` | `() -> String` | Platform temp directory (with trailing separator) |
+
+### Directory Operations
+
+| Function | Signature | Description |
+|----------|-----------|-------------|
+| `create_dir` | `(path: String) -> Result[Void, IOError]` | Create a directory |
+| `scan_dir` | `(path: String, ext: Option[String]) -> Result[Array[String], IOError]` | Recursively list files; optionally filter by extension |
+
+### Allocator-aware Overloads
+
+Most functions that allocate memory come in two variants: one taking an explicit `Ptr[Allocator]` argument, and one using the default allocator. This applies to `open`, `read_line`, `read_all`, `read_bytes`, `read_file`, `read_file_bytes`, `read_lines`, `scan_dir`, and the `File.Path` functions below.
+
+### Example
+
+```tl
+#import <File.tl>
+
+main() {
+    content := try File.read_file(String.from_cstr("data.txt"))
+    try File.write_file(String.from_cstr("out.txt"), content)
+    0
+}
+```
+
+---
+
+## File.Path
+
+`File.Path` is a submodule of `File` providing pure path string manipulation (no filesystem access).
+
+```tl
+#import <File.tl>
+```
+
+### Components
+
+| Function | Signature | Description |
+|----------|-----------|-------------|
+| `dirname` | `(path: String) -> String` | Directory portion of path |
+| `basename` | `(path: String) -> String` | Final component of path |
+| `extension` | `(path: String) -> Option[String]` | File extension including dot, or `None` |
+| `stem` | `(path: String) -> String` | Basename without extension |
+
+### Manipulation
+
+| Function | Signature | Description |
+|----------|-----------|-------------|
+| `join` | `(dir: String, file: String) -> String` | Join directory and filename with separator |
+| `normalize` | `(path: String) -> String` | Resolve `.`, `..`, collapse separators |
+| `relative` | `(from_dir: String, to_path: String) -> Result[String, File.IOError]` | Compute relative path between two paths |
+
+### Queries
+
+| Function | Signature | Description |
+|----------|-----------|-------------|
+| `is_absolute` | `(path: String) -> Bool` | True if path is absolute |
+| `is_relative` | `(path: String) -> Bool` | True if path is relative |
+| `separator` | `() -> CChar` | Platform path separator (`/` or `\\`) |
+
+### Example
+
+```tl
+#import <File.tl>
+
+main() {
+    path := String.from_cstr("/home/user/docs/file.txt")
+    dir  := File.Path.dirname(path)       // "/home/user/docs"
+    base := File.Path.basename(path)      // "file.txt"
+    ext  := File.Path.extension(path)     // Some(".txt")
+    stem := File.Path.stem(path)          // "file"
+
+    joined := File.Path.join(dir, String.from_cstr("other.txt"))
+    // "/home/user/docs/other.txt"
+    0
+}
+```

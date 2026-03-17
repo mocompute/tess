@@ -14,7 +14,7 @@ This directory contains technical documentation for the Tess programming languag
 | [ALPHA_CONVERSION.md](ALPHA_CONVERSION.md) | Variable renaming system that ensures type safety across specializations |
 | [PACKAGES.md](PACKAGES.md) | Package system for distributing reusable `.tpkg` libraries |
 | [TAGGED_UNION_PARSER.md](TAGGED_UNION_PARSER.md) | Parser internals for tagged union variant construction and auto-wrapping |
-| [STANDARD_LIBRARY.md](STANDARD_LIBRARY.md) | Standard library API reference (Array, Alloc, Unsafe, C bindings) |
+| [STANDARD_LIBRARY.md](STANDARD_LIBRARY.md) | Standard library API reference (Array, String, File, HashMap, Alloc, Unsafe, C bindings) |
 | [FAQ.md](FAQ.md) | Historical background, motivations and miscellaneous |
 
 ## Suggested Reading Order
