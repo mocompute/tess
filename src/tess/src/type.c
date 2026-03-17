@@ -3652,15 +3652,18 @@ void tl_type_subs_default_weak_ints(tl_type_subs *subs, tl_monotype *int_type, t
             // Also default the weak int's own var root (it may differ from this root)
             tl_type_variable weak_root = uf_find(subs, type->var);
             if (!subs->data.v[weak_root].type) subs->data.v[weak_root].type = int_type;
-            subs->data.v[root].type = int_type;
+            // Use the resolved type: if the weak int's var was already bound to a
+            // concrete type (e.g. CInt via unification), preserve that instead of
+            // unconditionally defaulting to Int/CLongLong.
+            subs->data.v[root].type = subs->data.v[weak_root].type;
         } else if (tl_weak_int_unsigned == type->tag) {
             tl_type_variable weak_root = uf_find(subs, type->var);
             if (!subs->data.v[weak_root].type) subs->data.v[weak_root].type = uint_type;
-            subs->data.v[root].type = uint_type;
+            subs->data.v[root].type = subs->data.v[weak_root].type;
         } else if (tl_weak_float == type->tag) {
             tl_type_variable weak_root = uf_find(subs, type->var);
             if (!subs->data.v[weak_root].type) subs->data.v[weak_root].type = float_type;
-            subs->data.v[root].type = float_type;
+            subs->data.v[root].type = subs->data.v[weak_root].type;
         }
     }
 }
