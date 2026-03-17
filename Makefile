@@ -99,8 +99,6 @@ MOS_SOURCES =					\
 	$(MOS_SRC_DIR)/src/file.c		\
 	$(MOS_SRC_DIR)/src/hashmap.c		\
 	$(MOS_SRC_DIR)/src/platform.c		\
-	$(MOS_SRC_DIR)/src/sexp.c		\
-	$(MOS_SRC_DIR)/src/sexp_parser.c	\
 	$(MOS_SRC_DIR)/src/str.c
 
 MOS_OBJECTS = $(patsubst $(MOS_SRC_DIR)/src/%.c,$(BUILD_DIR)/mos/%.o,$(MOS_SOURCES))
@@ -115,8 +113,6 @@ MOS_HEADERS =					\
 	$(MOS_SRC_DIR)/include/hashmap.h	\
 	$(MOS_SRC_DIR)/include/nodiscard.h	\
 	$(MOS_SRC_DIR)/include/platform.h	\
-	$(MOS_SRC_DIR)/include/sexp.h		\
-	$(MOS_SRC_DIR)/include/sexp_parser.h	\
 	$(MOS_SRC_DIR)/include/str.h		\
 	$(MOS_SRC_DIR)/include/types.h		\
 	$(MOS_SRC_DIR)/include/util.h
@@ -352,7 +348,7 @@ endef
 # mos Library Tests
 # ------------------------------------------------------------------------------
 
-MOS_TESTS      = alloc array file map sexp str types util
+MOS_TESTS      = alloc array file map str types util
 MOS_BENCHMARKS = hash
 MOS_TEST_EXES      = $(patsubst %,$(BUILD_DIR)/test_mos_%,$(MOS_TESTS))
 MOS_BENCHMARK_EXES = $(patsubst %,$(BUILD_DIR)/test_mos_%,$(MOS_BENCHMARKS))

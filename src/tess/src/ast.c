@@ -4,7 +4,6 @@
 #include "hash.h"
 #include "hashmap.h"
 #include "parser.h"
-#include "sexp.h"
 #include "str.h"
 #include "type.h"
 
@@ -614,29 +613,6 @@ void ast_node_set_attributes(ast_node *self, ast_node *attribute_set) {
 }
 
 //
-
-sexp do_ast_node_to_sexp(allocator *alloc, ast_node const *node,
-                         sexp (*symbol_fun)(allocator *, ast_node const *));
-
-sexp do_ast_node_to_sexp(allocator *alloc, ast_node const *node,
-                         sexp (*symbol_fun)(allocator *, ast_node const *));
-
-sexp symbol_node_to_sexp(allocator *alloc, ast_node const *node) {
-    assert(node->tag == ast_symbol);
-    return sexp_init_list_pair(alloc, sexp_init_sym_c(alloc, "symbol"),
-                               sexp_init_sym(alloc, ast_node_str(node)));
-}
-
-sexp symbol_node_to_sexp_for_error(allocator *alloc, ast_node const *node) {
-    assert(node->tag == ast_symbol);
-
-    if (!str_is_empty(node->symbol.original))
-        return sexp_init_list_pair(alloc, sexp_init_sym_c(alloc, "symbol"),
-                                   sexp_init_sym(alloc, node->symbol.original));
-    else
-        return sexp_init_list_pair(alloc, sexp_init_sym_c(alloc, "symbol"),
-                                   sexp_init_sym(alloc, node->symbol.name));
-}
 
 // -- pool operations --
 

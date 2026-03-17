@@ -117,7 +117,6 @@ Internal headers: `src/tess/src/parser_internal.h`, `infer_internal.h`.
 | `array.c` | Generic dynamic arrays (`str_array`, etc.) |
 | `hashmap.c` | Generic hash map |
 | `hash.c` | Hash functions |
-| `sexp.c`, `sexp_parser.c` | S-expression AST representation and parser |
 | `file.c` | File I/O utilities |
 | `platform.c` | Platform abstraction (timers, paths) |
 
