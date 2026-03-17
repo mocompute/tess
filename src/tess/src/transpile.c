@@ -113,6 +113,7 @@ static void                 generate_assign_field(transpile *, str, str, str);
 static void                 cat(transpile *, str);
 static void                 cat_nl(transpile *);
 static void                 cat_sp(transpile *);
+static void                 cat_op(transpile *, str);
 static void                 cat_ampersand(transpile *);
 static void                 cat_assign(transpile *);
 static void                 cat_commasp(transpile *);
@@ -979,7 +980,7 @@ static void generate_assign(transpile *self, str lhs, str rhs) {
 
 static void generate_assign_op(transpile *self, str lhs, str rhs, str op) {
     cat(self, lhs);
-    if (!str_is_empty(op)) cat(self, op);
+    if (!str_is_empty(op)) cat_op(self, op);
     else cat_assign(self);
     cat(self, rhs);
     cat_semicolonln(self);
@@ -2213,7 +2214,7 @@ static str generate_binary_op(transpile *self, tl_monotype *type, ast_node const
             generate_assign_lhs(self, fun_res);
         }
         cat(self, left);
-        cat(self, op);
+        cat_op(self, op);
         cat(self, fun);
         cat_semicolonln(self);
 
@@ -2280,7 +2281,7 @@ static str generate_binary_op(transpile *self, tl_monotype *type, ast_node const
             cat(self, right);
             cat_close_square(self);
         } else {
-            cat(self, op);
+            cat_op(self, op);
             if (is_ptr_cmp) {
                 cat(self, S("(void*)"));
             }
@@ -3004,6 +3005,11 @@ static void cat_nl(transpile *self) {
     cat(self, S("\n"));
 }
 static void cat_sp(transpile *self) {
+    cat(self, S(" "));
+}
+static void cat_op(transpile *self, str op) {
+    cat(self, S(" "));
+    cat(self, op);
     cat(self, S(" "));
 }
 static void cat_ampersand(transpile *self) {
