@@ -914,15 +914,37 @@ static void rewrite_op_to_nfa(tl_infer *self, ast_node *node, str func_name, ast
     ast_node_rewrite_to_nfa(node, ast_node_create_sym(self->arena, func_name), args, n_args);
 }
 
+// For standalone builtin types (CChar, CSize, CPtrDiff), return the trait family canonical
+// module to try when a direct lookup in the type's own module fails. Returns empty for
+// user-defined types or builtins that already map directly to their family (e.g. CInt → "Int").
+static str builtin_trait_family_module(tl_monotype *type) {
+    if (str_is_empty(type->cons_inst->def->c_type_name)) return str_empty();
+    int sc = type->cons_inst->def->integer_subchain;
+    if (sc == TL_INTEGER_SUBCHAIN_CCHAR || sc == TL_INTEGER_SUBCHAIN_CPTRDIFF) return S("Int");
+    if (sc == TL_INTEGER_SUBCHAIN_CSIZE) return S("UInt");
+    return str_empty();
+}
+
 // Look up an overload function by operator name and arity. Returns the function name on
 // success (allocated on self->arena), or empty string if not found.
+// For builtin types, falls back to the trait family canonical module if the direct lookup misses.
 static str find_overload_func(tl_infer *self, tl_monotype *type, char const *func_name, u8 arity) {
     str module = type->cons_inst->def->module;
     // Use transient arena for the lookup key to avoid leaking on miss.
-    str lookup = build_overload_func_name(self->transient, module, func_name, arity);
-    if (!ast_node_str_map_get(self->toplevels, lookup)) return str_empty();
-    // Found — copy to permanent arena for the rewritten AST.
-    return str_copy(self->arena, lookup);
+    if (!str_is_empty(module)) {
+        str lookup = build_overload_func_name(self->transient, module, func_name, arity);
+        if (ast_node_str_map_get(self->toplevels, lookup))
+            return str_copy(self->arena, lookup);
+    }
+    // Family fallback: standalone builtin types (CChar, CSize, CPtrDiff) fall back to their
+    // canonical family module (Int, UInt).
+    str family = builtin_trait_family_module(type);
+    if (!str_is_empty(family)) {
+        str lookup = build_overload_func_name(self->transient, family, func_name, arity);
+        if (ast_node_str_map_get(self->toplevels, lookup))
+            return str_copy(self->arena, lookup);
+    }
+    return str_empty();
 }
 
 // Map operator function name to its corresponding trait name for no_conform checking.
@@ -1321,8 +1343,14 @@ static int check_trait_bound_(tl_infer *self, ast_node *toplevel, tl_monotype *c
         return emit_no_conform_bound_error(self, toplevel, concrete_type, trait_name,
                                            str_cstr(&trait->generic_name));
 
-    // Built-in types have no module functions — check intrinsic support per signature.
-    if (!is_user_defined_type(concrete_type) || tl_monotype_is_ptr_to_char(concrete_type)) {
+    // Branch on whether both the type AND the trait are builtins. Compiler-provided traits
+    // (Add, Eq, Hash, etc.) on builtin types use the hardcoded capability table. All other
+    // combinations (user-defined traits on builtins, any trait on user types) use function lookup.
+    int is_builtin_type  = !is_user_defined_type(concrete_type) || tl_monotype_is_ptr_to_char(concrete_type);
+    int is_builtin_trait = !trait->source_node;
+
+    if (is_builtin_type && is_builtin_trait) {
+        // Built-in traits on built-in types: check intrinsic support per signature.
         int is_integer  = tl_monotype_is_integer_convertible(concrete_type);
         int is_float    = tl_monotype_is_float_convertible(concrete_type);
         int is_numeric  = is_integer || is_float;
@@ -1351,7 +1379,7 @@ static int check_trait_bound_(tl_infer *self, ast_node *toplevel, tl_monotype *c
                                               trait->sigs.v[i].arity);
         }
     } else {
-        // User-defined types: check each signature in the trait
+        // Function lookup path: user-defined traits on any type, or builtin traits on user types.
         tl_monotype_sized type_args = concrete_type->cons_inst->args;
         for (u32 i = 0; i < trait->sigs.size; i++) {
             tl_trait_sig *sig = &trait->sigs.v[i];

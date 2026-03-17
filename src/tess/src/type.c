@@ -179,37 +179,38 @@ tl_type_registry *tl_type_registry_create(allocator *alloc, allocator *transient
         i64         min_val;
         u64         max_val;
         int         has_range;
+        char const *module;
     } builtin_nullary[] = {
     // clang-format off
-#define BUILTIN(n, s, u, w, f, sc, r, ct, cmin, cmax, mn, mx, hr) \
-    {n, sizeof(n) - 1, s, u, w, f, sc, r, ct, cmin, cmax, mn, mx, hr}
-      //                     name                  signed unsigned narrow float  subchain                          rank  c_type               c_min           c_max            min_val             max_val              has_range
-      BUILTIN("Void",                                0,    0,      0,    0,     TL_INTEGER_SUBCHAIN_NONE,           -1,  "void",              NULL,           NULL,            0,                  0,                   0),
-      BUILTIN("Bool",                                0,    0,      0,    0,     TL_INTEGER_SUBCHAIN_NONE,           -1,  "/*bool*/int",       NULL,           NULL,            0,                  0,                   0),
-      BUILTIN("CChar",                               0,    0,      1,    0,     TL_INTEGER_SUBCHAIN_CCHAR,           0,  "char",              "CHAR_MIN",     "CHAR_MAX",      -128,               127,                 1),
-      BUILTIN("CUnsignedChar",                       0,    1,      1,    0,     TL_INTEGER_SUBCHAIN_C_UNSIGNED,      0,  "unsigned char",     NULL,           "UCHAR_MAX",     0,                  255,                 1),
-      BUILTIN("CSignedChar",                         1,    0,      1,    0,     TL_INTEGER_SUBCHAIN_C_SIGNED,        0,  "signed char",       "SCHAR_MIN",    "SCHAR_MAX",     -128,               127,                 1),
-      BUILTIN("CShort",                              1,    0,      1,    0,     TL_INTEGER_SUBCHAIN_C_SIGNED,        1,  "short",             "SHRT_MIN",     "SHRT_MAX",      -32768,             32767,               1),
-      BUILTIN("CUnsignedShort",                      0,    1,      1,    0,     TL_INTEGER_SUBCHAIN_C_UNSIGNED,      1,  "unsigned short",    NULL,           "USHRT_MAX",     0,                  65535,               1),
-      BUILTIN("CInt",                                1,    0,      1,    0,     TL_INTEGER_SUBCHAIN_C_SIGNED,        2,  "int",               "INT_MIN",      "INT_MAX",       -2147483648LL,      2147483647ULL,       1),
-      BUILTIN("CUnsignedInt",                        0,    1,      1,    0,     TL_INTEGER_SUBCHAIN_C_UNSIGNED,      2,  "unsigned int",      NULL,           "UINT_MAX",      0,                  4294967295ULL,       1),
-      BUILTIN("CLong",                               1,    0,      1,    0,     TL_INTEGER_SUBCHAIN_C_SIGNED,        3,  "long",              "LONG_MIN",     "LONG_MAX",      0,                  0,                   0),
-      BUILTIN("CUnsignedLong",                       0,    1,      1,    0,     TL_INTEGER_SUBCHAIN_C_UNSIGNED,      3,  "unsigned long",     NULL,           "ULONG_MAX",     0,                  0,                   0),
-      BUILTIN("CLongLong",                           1,    0,      0,    0,     TL_INTEGER_SUBCHAIN_C_SIGNED,        4,  "long long",         "LLONG_MIN",    "LLONG_MAX",     0,                  0,                   0),
-      BUILTIN("CUnsignedLongLong",                   0,    1,      0,    0,     TL_INTEGER_SUBCHAIN_C_UNSIGNED,      4,  "unsigned long long",NULL,           "ULLONG_MAX",    0,                  0,                   0),
-      BUILTIN("CSize",                               0,    1,      1,    0,     TL_INTEGER_SUBCHAIN_CSIZE,           0,  "size_t",            NULL,           "SIZE_MAX",      0,                  0,                   0),
-      BUILTIN("CPtrDiff",                            1,    0,      1,    0,     TL_INTEGER_SUBCHAIN_CPTRDIFF,        0,  "ptrdiff_t",         "PTRDIFF_MIN",  "PTRDIFF_MAX",   0,                  0,                   0),
-      BUILTIN("CInt8",                               1,    0,      1,    0,     TL_INTEGER_SUBCHAIN_FIXED_SIGNED,    0,  "int8_t",            "INT8_MIN",     "INT8_MAX",      -128,               127,                 1),
-      BUILTIN("CUInt8",                              0,    1,      1,    0,     TL_INTEGER_SUBCHAIN_FIXED_UNSIGNED,  0,  "uint8_t",           NULL,           "UINT8_MAX",     0,                  255,                 1),
-      BUILTIN("CInt16",                              1,    0,      1,    0,     TL_INTEGER_SUBCHAIN_FIXED_SIGNED,    1,  "int16_t",           "INT16_MIN",    "INT16_MAX",     -32768,             32767,               1),
-      BUILTIN("CUInt16",                             0,    1,      1,    0,     TL_INTEGER_SUBCHAIN_FIXED_UNSIGNED,  1,  "uint16_t",          NULL,           "UINT16_MAX",    0,                  65535,               1),
-      BUILTIN("CInt32",                              1,    0,      1,    0,     TL_INTEGER_SUBCHAIN_FIXED_SIGNED,    2,  "int32_t",           "INT32_MIN",    "INT32_MAX",     -2147483648LL,      2147483647ULL,       1),
-      BUILTIN("CUInt32",                             0,    1,      1,    0,     TL_INTEGER_SUBCHAIN_FIXED_UNSIGNED,  2,  "uint32_t",          NULL,           "UINT32_MAX",    0,                  4294967295ULL,       1),
-      BUILTIN("CInt64",                              1,    0,      1,    0,     TL_INTEGER_SUBCHAIN_FIXED_SIGNED,    3,  "int64_t",           "INT64_MIN",    "INT64_MAX",     0,                  0,                   0),
-      BUILTIN("CUInt64",                             0,    1,      1,    0,     TL_INTEGER_SUBCHAIN_FIXED_UNSIGNED,  3,  "uint64_t",          NULL,           "UINT64_MAX",    0,                  0,                   0),
-      BUILTIN("CFloat",                              0,    0,      0,    1,     TL_INTEGER_SUBCHAIN_FLOAT,           0,  "float",             NULL,           NULL,            0,                  0,                   0),
-      BUILTIN("CDouble",                             0,    0,      0,    1,     TL_INTEGER_SUBCHAIN_FLOAT,           1,  "double",            NULL,           NULL,            0,                  0,                   0),
-      BUILTIN("CLongDouble",                         0,    0,      0,    1,     TL_INTEGER_SUBCHAIN_FLOAT,           2,  "long double",       NULL,           NULL,            0,                  0,                   0),
+#define BUILTIN(n, s, u, w, f, sc, r, ct, cmin, cmax, mn, mx, hr, mod) \
+    {n, sizeof(n) - 1, s, u, w, f, sc, r, ct, cmin, cmax, mn, mx, hr, mod}
+      //                     name                  signed unsigned narrow float  subchain                          rank  c_type               c_min           c_max            min_val             max_val              has_range  module
+      BUILTIN("Void",                                0,    0,      0,    0,     TL_INTEGER_SUBCHAIN_NONE,           -1,  "void",              NULL,           NULL,            0,                  0,                   0,        "Void"),
+      BUILTIN("Bool",                                0,    0,      0,    0,     TL_INTEGER_SUBCHAIN_NONE,           -1,  "/*bool*/int",       NULL,           NULL,            0,                  0,                   0,        "Bool"),
+      BUILTIN("CChar",                               0,    0,      1,    0,     TL_INTEGER_SUBCHAIN_CCHAR,           0,  "char",              "CHAR_MIN",     "CHAR_MAX",      -128,               127,                 1,        "CChar"),
+      BUILTIN("CUnsignedChar",                       0,    1,      1,    0,     TL_INTEGER_SUBCHAIN_C_UNSIGNED,      0,  "unsigned char",     NULL,           "UCHAR_MAX",     0,                  255,                 1,        "UInt"),
+      BUILTIN("CSignedChar",                         1,    0,      1,    0,     TL_INTEGER_SUBCHAIN_C_SIGNED,        0,  "signed char",       "SCHAR_MIN",    "SCHAR_MAX",     -128,               127,                 1,        "Int"),
+      BUILTIN("CShort",                              1,    0,      1,    0,     TL_INTEGER_SUBCHAIN_C_SIGNED,        1,  "short",             "SHRT_MIN",     "SHRT_MAX",      -32768,             32767,               1,        "Int"),
+      BUILTIN("CUnsignedShort",                      0,    1,      1,    0,     TL_INTEGER_SUBCHAIN_C_UNSIGNED,      1,  "unsigned short",    NULL,           "USHRT_MAX",     0,                  65535,               1,        "UInt"),
+      BUILTIN("CInt",                                1,    0,      1,    0,     TL_INTEGER_SUBCHAIN_C_SIGNED,        2,  "int",               "INT_MIN",      "INT_MAX",       -2147483648LL,      2147483647ULL,       1,        "Int"),
+      BUILTIN("CUnsignedInt",                        0,    1,      1,    0,     TL_INTEGER_SUBCHAIN_C_UNSIGNED,      2,  "unsigned int",      NULL,           "UINT_MAX",      0,                  4294967295ULL,       1,        "UInt"),
+      BUILTIN("CLong",                               1,    0,      1,    0,     TL_INTEGER_SUBCHAIN_C_SIGNED,        3,  "long",              "LONG_MIN",     "LONG_MAX",      0,                  0,                   0,        "Int"),
+      BUILTIN("CUnsignedLong",                       0,    1,      1,    0,     TL_INTEGER_SUBCHAIN_C_UNSIGNED,      3,  "unsigned long",     NULL,           "ULONG_MAX",     0,                  0,                   0,        "UInt"),
+      BUILTIN("CLongLong",                           1,    0,      0,    0,     TL_INTEGER_SUBCHAIN_C_SIGNED,        4,  "long long",         "LLONG_MIN",    "LLONG_MAX",     0,                  0,                   0,        "Int"),
+      BUILTIN("CUnsignedLongLong",                   0,    1,      0,    0,     TL_INTEGER_SUBCHAIN_C_UNSIGNED,      4,  "unsigned long long",NULL,           "ULLONG_MAX",    0,                  0,                   0,        "UInt"),
+      BUILTIN("CSize",                               0,    1,      1,    0,     TL_INTEGER_SUBCHAIN_CSIZE,           0,  "size_t",            NULL,           "SIZE_MAX",      0,                  0,                   0,        "CSize"),
+      BUILTIN("CPtrDiff",                            1,    0,      1,    0,     TL_INTEGER_SUBCHAIN_CPTRDIFF,        0,  "ptrdiff_t",         "PTRDIFF_MIN",  "PTRDIFF_MAX",   0,                  0,                   0,        "CPtrDiff"),
+      BUILTIN("CInt8",                               1,    0,      1,    0,     TL_INTEGER_SUBCHAIN_FIXED_SIGNED,    0,  "int8_t",            "INT8_MIN",     "INT8_MAX",      -128,               127,                 1,        "Int"),
+      BUILTIN("CUInt8",                              0,    1,      1,    0,     TL_INTEGER_SUBCHAIN_FIXED_UNSIGNED,  0,  "uint8_t",           NULL,           "UINT8_MAX",     0,                  255,                 1,        "UInt"),
+      BUILTIN("CInt16",                              1,    0,      1,    0,     TL_INTEGER_SUBCHAIN_FIXED_SIGNED,    1,  "int16_t",           "INT16_MIN",    "INT16_MAX",     -32768,             32767,               1,        "Int"),
+      BUILTIN("CUInt16",                             0,    1,      1,    0,     TL_INTEGER_SUBCHAIN_FIXED_UNSIGNED,  1,  "uint16_t",          NULL,           "UINT16_MAX",    0,                  65535,               1,        "UInt"),
+      BUILTIN("CInt32",                              1,    0,      1,    0,     TL_INTEGER_SUBCHAIN_FIXED_SIGNED,    2,  "int32_t",           "INT32_MIN",    "INT32_MAX",     -2147483648LL,      2147483647ULL,       1,        "Int"),
+      BUILTIN("CUInt32",                             0,    1,      1,    0,     TL_INTEGER_SUBCHAIN_FIXED_UNSIGNED,  2,  "uint32_t",          NULL,           "UINT32_MAX",    0,                  4294967295ULL,       1,        "UInt"),
+      BUILTIN("CInt64",                              1,    0,      1,    0,     TL_INTEGER_SUBCHAIN_FIXED_SIGNED,    3,  "int64_t",           "INT64_MIN",    "INT64_MAX",     0,                  0,                   0,        "Int"),
+      BUILTIN("CUInt64",                             0,    1,      1,    0,     TL_INTEGER_SUBCHAIN_FIXED_UNSIGNED,  3,  "uint64_t",          NULL,           "UINT64_MAX",    0,                  0,                   0,        "UInt"),
+      BUILTIN("CFloat",                              0,    0,      0,    1,     TL_INTEGER_SUBCHAIN_FLOAT,           0,  "float",             NULL,           NULL,            0,                  0,                   0,        "Float"),
+      BUILTIN("CDouble",                             0,    0,      0,    1,     TL_INTEGER_SUBCHAIN_FLOAT,           1,  "double",            NULL,           NULL,            0,                  0,                   0,        "Float"),
+      BUILTIN("CLongDouble",                         0,    0,      0,    1,     TL_INTEGER_SUBCHAIN_FLOAT,           2,  "long double",       NULL,           NULL,            0,                  0,                   0,        "Float"),
 #undef BUILTIN
     };
     // clang-format on
@@ -228,6 +229,7 @@ tl_type_registry *tl_type_registry_create(allocator *alloc, allocator *transient
         assert(poly && tl_monotype_is_inst(poly->type));
         tl_type_constructor_def *def = poly->type->cons_inst->def;
         if (builtin_nullary[i].c_type) def->c_type_name = str_init_static(builtin_nullary[i].c_type);
+        if (builtin_nullary[i].module) def->module     = str_init_static(builtin_nullary[i].module);
         def->c_min_macro       = builtin_nullary[i].c_min;
         def->c_max_macro       = builtin_nullary[i].c_max;
         def->integer_min_value = builtin_nullary[i].min_val;
