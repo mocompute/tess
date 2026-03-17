@@ -11,7 +11,7 @@ Tess is a statically-typed, compiled programming language that transpiles to C. 
 **Implicit returns:** Functions return their last expression automatically. For functions that should return nothing, use `void` as the final expression after an expression that produces a value:
 
 ```tl
-greet(name) { c_printf("Hello, %s\n", name)  void }
+greet(name) { c_printf("Hello, %s\n", name), void }
 ```
 
 If a function ends with an assignment statement (`=`), it returns `Void` since assignments have no value:
@@ -524,7 +524,7 @@ It also enables functional patterns where rebinding is preferred over mutation, 
 ```tl
 add(a, b) { a + b }                    // Types inferred
 add(a: Int, b: Int) -> Int { a + b }   // Explicit type annotations
-log(msg) { c_printf("%s\n", msg)  void }  // void needed after expression
+log(msg) { c_printf("%s\n", msg), void }  // void needed after expression
 update(v) { value = v }                // No void needed - assignment has no value
 ```
 
@@ -575,11 +575,12 @@ increment()        // counter is now 2
 make_adder(n) { (x) { x + n } }
 ```
 
-If you need to return a callable without captures, use a named function:
+If you need to return a callable without captures, use a named
+function (with arity) or an allocated closure:
 
 ```tl
 add1(x) { x + 1 }
-get_adder() { add1 }     // OK: returns function pointer, not lambda
+get_adder() { add1/1 }     // OK: returns function pointer, not lambda
 ```
 
 #### Allocated Closures
@@ -602,6 +603,20 @@ n := 5
 f := [[alloc, capture(n)]] (x) { x + n }
 n = 10
 f(1)       // 6, not 11 — n was copied at creation
+```
+
+To mutate state from within an allocated closure, capture a pointer:
+
+```tl
+make_counter(p: Ptr[Int]) {
+  [[alloc, capture(p)]] () { p.* = p.* + 1, p.* }
+}
+
+count := 0
+counter := make_counter(count.&)
+counter()   // 1
+counter()   // 2
+counter()   // 3
 ```
 
 The capture list must exactly match the free variables in the body — missing or unused captures are compile errors:
@@ -722,7 +737,7 @@ main() {
 **Pointer receiver:** The `.` operator auto-dereferences pointer receivers. If a function takes `Ptr[T]` and the receiver is a value of type `T`, the address is taken implicitly. If the receiver is already a pointer, it is passed as-is:
 
 ```tl
-reset(p: Ptr(Vec2)) { p->x = 0  p->y = 0  void }
+reset(p: Ptr[Vec2]) { p->x = 0, p->y = 0, void }
 
 v.reset()                    // calls reset(v.&) — implicit address-of
 ```
@@ -825,7 +840,7 @@ the conformance rules.
 0377                // Octal
 3.14                // Float
 1.5e-10             // Scientific notation
-"hello"             // String (CString)
+"hello"             // Ptr[CChar] (C string)
 'a'                 // Character literal (CChar)
 '\n'                // Character with escape sequence
 true, false         // Boolean
@@ -1297,18 +1312,18 @@ This is useful when a field will be set immediately after construction or when w
 
 Structs have C-like value semantics: binding with `:=` performs a **shallow copy** of the struct (equivalent to C struct assignment). Fields that are pointers to heap memory are copied as pointer values — the underlying memory is **not** duplicated.
 
-This means types containing heap pointers — such as `Str` (for strings longer than 14 bytes) or `Array` — share the underlying buffer after a copy. Freeing one copy invalidates the other:
+This means types containing heap pointers — such as `String` (for strings longer than 14 bytes) or `Array` — share the underlying buffer after a copy. Freeing one copy invalidates the other:
 
 ```tl
-a := Str.from_cstr("a string longer than 14 bytes")
+a := String.from_cstr("a string longer than 14 bytes")
 b := a            // shallow copy — a and b share the heap buffer
-Str.free(a.&)     // b is now dangling
+String.free(a.&)     // b is now dangling
 ```
 
 To get an independent copy, use the type's copy/clone function:
 
 ```tl
-b := Str.copy(a)       // deep copy — independent buffer
+b := String.copy(a)       // deep copy — independent buffer
 c := Array.clone(arr)   // deep copy of array
 ```
 
@@ -1446,9 +1461,14 @@ area := when circle {
 ```
 
 `when` expressions must be exhaustive: there must be one arm per
-variant, or an `else` arm.
+variant, or an `else` arm:
 
-TODO: add an example of `else`
+```tl
+describe := when s {
+  c: Circle { "circle" }
+  else      { "not a circle" }
+}
+```
 
 ### Explicit Type Annotation (Case Expression)
 
@@ -1464,7 +1484,7 @@ result := case opt: Option[Int] {
 This is needed when the scrutinee's type is ambiguous, such as inside a type predicate branch:
 
 ```tl
-unwrap[T](opt_or_res, default: T) -> T {
+unwrap[T, U](opt_or_res, default: T) -> T {
     if opt_or_res :: Option[T] {
         case opt_or_res: Option[T] {
             s: Some { s.v }
@@ -1957,7 +1977,7 @@ int multiply(int, int);
 
 The init function name is derived from the output path: `tess lib mylib.tl -o libmylib.so` produces `tl_init_mylib`. This works identically for static libraries (`-o libmylib.a`). The namespacing prevents symbol collisions when multiple Tess libraries are linked into the same program. The consumer must call this function before calling any exported functions.
 
-**Type restrictions:** Only C-compatible types are allowed in `c_export` function signatures. The compiler rejects Tess-specific types like `Str`, user structs, tagged unions, and enums. Allowed types include all `C*` types (`CInt`, `CChar`, `CSize`, etc.), `Int`, `Float`, `Bool`, `Void`, `Ptr[T]`, and `c_struct_*` types.
+**Type restrictions:** Only C-compatible types are allowed in `c_export` function signatures. The compiler rejects Tess-specific types like `String`, user structs, tagged unions, and enums. Allowed types include all `C*` types (`CInt`, `CChar`, `CSize`, etc.), `Int`, `Float`, `Bool`, `Void`, `Ptr[T]`, and `c_struct_*` types.
 
 ## Global Variables
 

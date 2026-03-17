@@ -188,7 +188,7 @@ A binding can include a type annotation using `:` between the name and `:=`:
 
 ```tl
 x: Int := 42
-name: Str := "hello"
+name: String := "hello"
 ```
 
 This annotates the binding with a type — the compiler checks that the value matches. It

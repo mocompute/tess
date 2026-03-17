@@ -144,11 +144,11 @@ An ML-flavoured systems language that transpiles to C.
 - **Conditional compilation** - `#ifdef`, `#ifndef`, `#define`, `#undef`, and `#endif` directives with `-D` command-line flag:
   ```tl
   #ifdef DEBUG
-  log(msg) { c_printf("%s\n", msg)  void }
+  log(msg) { c_printf("%s\n", msg), void }
   #endif
   ```
 
-- **380+ tests** - Unit tests for the compiler internals and integration tests for every language feature, including expected-failure tests that verify the compiler rejects invalid programs.
+- **500+ tests** - Unit tests for the compiler internals and integration tests for every language feature, including expected-failure tests that verify the compiler rejects invalid programs.
 
 ## Example
 
@@ -196,7 +196,7 @@ Run a single file directly — no project setup needed:
 
 ```bash
 echo '#module main
-main() { c_printf("Hello, world!\n") 0 }' > hello.tl
+main() { c_printf("Hello, world!\n"), 0 }' > hello.tl
 tess run hello.tl
 ```
 
@@ -237,16 +237,24 @@ This is a research project exploring what a minimal, C-like language might look 
 - **[Packages](docs/PACKAGES.md)** - Creating and consuming reusable `.tpkg` libraries
 - **[All Documentation](docs/)** - Specialization, name mangling, and compiler internals
 
+## Examples
+
+The [src/tl/examples/](src/tl/examples/) directory contains complete example projects demonstrating C interoperability, command-line argument handling, and building shared/static libraries.
+
 ## Standard Library
 
 The standard library is located in [src/tl/std/](src/tl/std/) and includes:
 - `Array.tl` - Generic dynamic array with sort, map, filter, reduce
-- `Str.tl` - String type with small string optimization
+- `String.tl` - String type with small string optimization
+- `File.tl` - File I/O
 - `Alloc.tl` - Memory allocation interface with bump allocator
 - `HashMap.tl` - Robin Hood open-addressing hash map
+- `Hash.tl` - Hashing utilities
+- `CommandLine.tl` - Command-line argument parsing
+- `Unsafe.tl` - Unsafe memory operations
 - `builtin.tl` - Option, Result, and other built-in types
-- `cstdlib.tl`, `cstdio.tl`, `cstring.tl` - C standard library bindings
+- `cstdlib.tl`, `cstdio.tl`, `cstdint.tl`, `cstring.tl` - C standard library bindings
 
 ## License
 
-All rights reserved.
+[Apache License 2.0](LICENSE)

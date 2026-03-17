@@ -8,7 +8,7 @@ When generating or editing `.tl` code, follow these rules:
 
 - **No `mut` keyword.** All bindings are reassignable. Do not write `mut` anywhere.
 - **`:=` declares, `=` assigns.** `x := 42` creates a new binding; `x = 42` mutates an existing one.
-- **String literals are C strings.** `"foo"` is `Ptr[CChar]`, not `Str`. Use `Str.from_cstr("foo")` to get a `Str`.
+- **String literals are C strings.** `"foo"` is `Ptr[CChar]`, not `String`. Use `String.from_cstr("foo")` to get a `String`.
 - **`main()` returns `CInt`.** The compiler enforces this. No type annotation needed.
 - **Omit type annotations in implementations.** Synopsis has full types; implementations use parameter names only. Inference handles the rest.
 - **Omit integer suffixes.** Write `0`, not `0zu`. Use suffixes only when inference is ambiguous.
@@ -271,10 +271,10 @@ log(msg) {
 
 ## Literals
 
-**Strings**: `"foo"` is `Ptr[CChar]` (a C string), not `Str`. Convert with `Str.from_cstr()`. For modules that do this frequently, define a private shorthand:
+**Strings**: `"foo"` is `Ptr[CChar]` (a C string), not `String`. Convert with `String.from_cstr()`. For modules that do this frequently, define a private shorthand:
 
 ```tl
-_S(s) { Str.from_cstr(s) }
+_S(s) { String.from_cstr(s) }
 
 dd           := _S("--")
 short_prefix := _S("-")
