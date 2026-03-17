@@ -7,7 +7,11 @@
 #include <stddef.h>
 #include <string.h>
 
+// Symbols in the builtin module are available without qualification.
+
 #ifc
+// Hash functions to support compiler codegen for hash/1 and _tl_hash_/1.
+
 // Murmurhash3 fmix64 finalizer — mixes all bits so low bits (used for
 // bucket selection) reflect the full key, preventing clustering.
 static inline size_t tl_fmix64(size_t h) {
@@ -29,12 +33,11 @@ static inline size_t tl_hash_cstring(const char *s) {
 }
 #endc
 
-// Symbols in the builtin module are available without qualification.
 
-_tl_sizeof_[T] ()     -> CSize
-_tl_sizeof_[T] (x: T) -> CSize
-_tl_alignof_[T]()     -> CSize
-_tl_alignof_[T](x: T) -> CSize
+_tl_sizeof_[T] ()       -> CSize
+_tl_sizeof_[T] (x: T)   -> CSize
+_tl_alignof_[T]()       -> CSize
+_tl_alignof_[T](x: T)   -> CSize
 _tl_hash_[T]   (key: T) -> CSize
 
 Int     = CLongLong
@@ -45,10 +48,11 @@ CString = Ptr[CChar]
 
 _tl_fatal_ (s: CString) -> any
 
-sizeof[T] ()  -> CSize { _tl_sizeof_[T]()  }
-sizeof    (x) -> CSize { _tl_sizeof_(x)    }
-alignof[T]()  -> CSize { _tl_alignof_[T]() }
-alignof   (x) -> CSize { _tl_alignof_(x)   }
+sizeof[T] ()  -> CSize  { _tl_sizeof_[T]()  }
+sizeof    (x) -> CSize { _tl_sizeof_(x)     }
+alignof[T]()  -> CSize  { _tl_alignof_[T]() }
+alignof   (x) -> CSize { _tl_alignof_(x)    }
+
 
 // Option type
 
@@ -57,7 +61,7 @@ Option[T]: | Some { v: T }
 
 // Result type
 
-Result[T, U]: | Ok { v: T }
+Result[T, U]: | Ok  { v: T }
               | Err { v: U }
 
 // Unwrap: extract the value from an Option or Result, or return a default.
