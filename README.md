@@ -2,6 +2,34 @@
 
 An ML-flavoured systems language that transpiles to C.
 
+## Demo
+
+```tl
+// FIXME: Stdlib APIs not yet stabilized
+
+main() {
+    arena := Alloc.bump_create(1024)
+    defer arena.destroy()
+
+    map   := HashMap[String, String].create(arena)
+    defer map.destroy()
+
+    map.set(s"hello", s"world")
+
+
+    value := when map.get(s"hello") {
+        s: Some { s.v }
+        n: None { s"default" }
+    }
+
+    // alternative to `when`
+    value: Some := map.get(s"hello") else { s"default" }
+
+    0
+}
+
+```
+
 ## Features
 
 - **Type inference** - Hindley-Milner style inference means most type annotations are optional.
@@ -186,8 +214,8 @@ main() {
 ## Build
 
 ```bash
-make -j              # Build the compiler
-make -j test         # Run tests
+make -j              # Build the compiler (5 sec)
+make -j test         # Run tests (15 sec)
 ```
 
 ### Quick Start
