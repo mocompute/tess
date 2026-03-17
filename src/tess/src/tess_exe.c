@@ -1411,6 +1411,12 @@ static void add_c_flags(state *self, c_string_array *argv) {
 
 #ifdef MOS_WINDOWS
 static void add_c_flags_msvc(state *self, c_string_array *argv) {
+    // Transpiled C requires C11 (mixed declarations, _Static_assert)
+    {
+        char const *_t = "/std:c11";
+        array_push(*argv, _t);
+    }
+
     // If CFLAGS is present, do not add optimize flags
     if (!self->cflags.size) {
         if (self->no_optimize) {
