@@ -31,7 +31,7 @@ eq(a: CollidingKey, b: CollidingKey) -> Bool {
 #import <Array.tl>
 #import <cstdio.tl>
 
-Point = Point.Point
+Point        = Point.Point
 CollidingKey = CollidingKey.CollidingKey
 
 test_create_destroy() {
@@ -223,9 +223,9 @@ test_keys_values() {
     if vs.size != 3zu { error += 1 }
 
     // Check that each key and value is present (order is not guaranteed)
-    found_1 := false
-    found_2 := false
-    found_3 := false
+    found_1  := false
+    found_2  := false
+    found_3  := false
     i: CSize := 0zu
     while i < ks.size, i += 1zu {
         if ks.v.[i] == 1 { found_1 = true }
@@ -511,8 +511,8 @@ test_keys_values_with_alloc() {
     if ks.size != 2zu { error += 1 }
     if vs.size != 2zu { error += 1 }
 
-    found_1 := false
-    found_2 := false
+    found_1  := false
+    found_2  := false
     i: CSize := 0zu
     while i < ks.size, i += 1zu {
         if ks.v.[i] == 1 { found_1 = true }

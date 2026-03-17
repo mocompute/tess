@@ -13,7 +13,7 @@ test_when_return_void() {
 // Test 2: when with diverging arm (return) + value arm (CInt)
 test_when_return_value() {
     x: Option[CInt] := Some(42)
-    result := when x {
+    result          := when x {
         s: Some { s.v }
         n: None { return 1 }
     }
@@ -23,18 +23,18 @@ test_when_return_value() {
 
 // Test 3: if-else where one branch diverges
 test_if_else_diverge() {
-    x := true
+    x      := true
     result := if x { 42 }
-              else  { return 1 }
+    else { return 1 }
     if result != 42 { return 1 }
     0
 }
 
 // Test 4: if-else where the other branch diverges
 test_if_else_diverge_reverse() {
-    x := false
+    x      := false
     result := if x { return 1 }
-              else  { 99 }
+    else { 99 }
     if result != 99 { return 1 }
     0
 }
@@ -42,8 +42,8 @@ test_if_else_diverge_reverse() {
 // Test 5: when with multiple arms, one diverges
 test_when_multi_diverge() {
     x: Result[CInt, CInt] := Ok(10)
-    result := when x {
-        ok:  Ok  { ok.v }
+    result                := when x {
+        ok:  Ok { ok.v }
         err: Err { return 1 }
     }
     if result != 10 { return 1 }
@@ -53,7 +53,7 @@ test_when_multi_diverge() {
 // Test 6: diverging arm with break in a loop
 test_when_break() {
     x: Option[CInt] := Some(5)
-    i := 0
+    i               := 0
     while i < 10 {
         val := when x {
             s: Some { s.v }
@@ -76,7 +76,7 @@ main() {
     fails += test_when_break()
 
     if fails == 0 { c_printf("All diverging arm tests passed.\n") }
-    else          { c_printf("%d diverging arm test(s) failed.\n", fails) }
+    else { c_printf("%d diverging arm test(s) failed.\n", fails) }
 
     fails
 }

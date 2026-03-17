@@ -179,8 +179,10 @@ ast_node *toplevel_get(tl_infer *, str);
 ast_node *toplevel_iter(tl_infer *, hashmap_iterator *);
 void      tl_infer_dbg(tl_infer const *, char const *restrict, ...);
 // Verbose levels: 1 = phase markers, 2 = key decisions, 3 = full detail
-#define dbg_at(level, self, ...) \
-    do { if ((self)->verbose >= (level)) tl_infer_dbg(self, __VA_ARGS__); } while(0)
+#define dbg_at(level, self, ...)                                                                           \
+    do {                                                                                                   \
+        if ((self)->verbose >= (level)) tl_infer_dbg(self, __VA_ARGS__);                                   \
+    } while (0)
 #define dbg(self, ...) dbg_at(3, self, __VA_ARGS__)
 void         log_toplevels(tl_infer const *);
 void         log_env(tl_infer const *);
@@ -294,7 +296,8 @@ tl_monotype *tl_infer_update_specialized_type_(tl_infer *, tl_monotype *, hashma
 static inline int lambda_has_alloc(tl_infer *self, ast_node *lambda) {
     if (!lambda || lambda->tag != ast_lambda_function) return 0;
     if (!lambda->lambda_function.attributes) return 0;
-    lambda_closure_attrs attrs = lambda_get_closure_attrs(self->transient, lambda->lambda_function.attributes);
+    lambda_closure_attrs attrs =
+      lambda_get_closure_attrs(self->transient, lambda->lambda_function.attributes);
     return attrs.has_alloc;
 }
 

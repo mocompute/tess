@@ -9,6 +9,7 @@ Child: { x: CInt, y: CInt }
 make() -> Child { Child(x = 10, y = 20) }
 
 #module main
+
 main() {
     c := Parent.make()
     c.x + c.y - 30

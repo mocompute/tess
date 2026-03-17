@@ -1,11 +1,11 @@
 #module main
 
 // Tagged union with 6 variants
-Token: | IntLit { v: Int }
-       | FloatLit { v:  Float }
-       | BoolLit { v:   Bool }
-       | StringLit { v: CString }
-       | Ident { name:  CString }
+Token: | IntLit    { v: Int }
+       | FloatLit  { v:    Float   }
+       | BoolLit   { v:    Bool    }
+       | StringLit { v:    CString }
+       | Ident     { name: CString }
        | Eof
 
 classify(tok: Token) -> Int {

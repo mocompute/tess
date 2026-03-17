@@ -36,9 +36,9 @@ test_adder_map() {
 }
 
 test_predicate_filter() {
-    error  := 0
-    gt3    := make_predicate(3)
-    arr    := Array.empty[Int]()
+    error := 0
+    gt3   := make_predicate(3)
+    arr   := Array.empty[Int]()
     Array.push(arr.&, 1)
     Array.push(arr.&, 2)
     Array.push(arr.&, 3)
@@ -76,10 +76,10 @@ test_comparator_sort() {
 
 test_multiple_factories() {
     // Different factory closures used together
-    error  := 0
-    add5   := make_adder(5)
-    gt10   := make_predicate(10)
-    arr    := Array.empty[Int]()
+    error := 0
+    add5  := make_adder(5)
+    gt10  := make_predicate(10)
+    arr   := Array.empty[Int]()
     Array.push(arr.&, 3)
     Array.push(arr.&, 6)
     Array.push(arr.&, 9)

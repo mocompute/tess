@@ -4,9 +4,9 @@
 #module Outer
 
 #module Outer.Inner
-InnerData: { value: CInt }
-create(v: CInt) -> InnerData { InnerData(value = v) }
-get_value(self: Ptr[Const[InnerData]]) -> CInt { self->value }
+InnerData:                                     { value: CInt          }
+create(v: CInt) -> InnerData                   { InnerData(value = v) }
+get_value(self: Ptr[Const[InnerData]]) -> CInt { self->value          }
 
 #module Outer
 
@@ -20,6 +20,7 @@ make_inner(v: CInt) -> Inner.InnerData { Inner.create(v) }
 get_val(d: Inner.InnerData) -> CInt { d.get_value() }
 
 #module main
+
 main() {
     d := Outer.make_inner(10)
     r := Outer.get_val(d)

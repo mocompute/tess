@@ -161,11 +161,7 @@ static int test_tokenizer_compound_assignment_operators(void) {
         char const *input;
         char const *expected;
     } cases[] = {
-        {"&=",  "&="},
-        {"|=",  "|="},
-        {"^=",  "^="},
-        {"<<=", "<<="},
-        {">>=", ">>="},
+      {"&=", "&="}, {"|=", "|="}, {"^=", "^="}, {"<<=", "<<="}, {">>=", ">>="},
     };
 
     size_t n = sizeof(cases) / sizeof(cases[0]);

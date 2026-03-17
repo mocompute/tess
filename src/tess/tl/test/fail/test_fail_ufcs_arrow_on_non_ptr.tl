@@ -10,6 +10,6 @@ len_sq(v: Vec2) -> Int {
 
 main() {
     v := Geom.Vec2(x = 1, y = 2)
-    v->len_sq()   // error: v is not a pointer
+    v->len_sq()                         // error: v is not a pointer
     0
 }

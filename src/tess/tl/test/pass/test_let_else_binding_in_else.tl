@@ -11,10 +11,10 @@
 
 main() -> CInt {
     opt: Option[Int] := Some(42)
-    i := 0
+    i                := 0
     while i < 1 {
         s: Some := opt else {
-            x := 99       // <-- this := causes the parse error
+            x := 99                     // <-- this := causes the parse error
             i += 1
             continue
         }

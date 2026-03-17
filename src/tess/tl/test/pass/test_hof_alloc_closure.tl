@@ -5,10 +5,10 @@
 // Allocated closures passed to stdlib Array HOFs.
 
 test_map_alloc() {
-    error      := 0
+    error       := 0
     offset: Int := 100
-    f          := [[alloc, capture(offset)]] (x) { x + offset }
-    arr        := Array.empty[Int]()
+    f           := [[alloc, capture(offset)]] (x) { x + offset }
+    arr         := Array.empty[Int]()
     Array.push(arr.&, 1)
     Array.push(arr.&, 2)
     Array.push(arr.&, 3)
@@ -41,10 +41,10 @@ test_filter_alloc() {
 }
 
 test_reduce_alloc() {
-    error        := 0
-    scale: Int   := 10
-    f            := [[alloc, capture(scale)]] (acc, x) { acc + x * scale }
-    arr          := Array.empty[Int]()
+    error      := 0
+    scale: Int := 10
+    f          := [[alloc, capture(scale)]] (acc, x) { acc + x * scale }
+    arr        := Array.empty[Int]()
     Array.push(arr.&, 1)
     Array.push(arr.&, 2)
     Array.push(arr.&, 3)
@@ -55,10 +55,10 @@ test_reduce_alloc() {
 }
 
 test_any_of_alloc() {
-    error        := 0
-    target: Int  := 20
-    pred         := [[alloc, capture(target)]] (x) { x == target }
-    arr          := Array.empty[Int]()
+    error       := 0
+    target: Int := 20
+    pred        := [[alloc, capture(target)]] (x) { x == target }
+    arr         := Array.empty[Int]()
     Array.push(arr.&, 10)
     Array.push(arr.&, 20)
     Array.push(arr.&, 30)
@@ -68,10 +68,10 @@ test_any_of_alloc() {
 }
 
 test_all_alloc() {
-    error       := 0
-    bound: Int  := 5
-    pred        := [[alloc, capture(bound)]] (x) { x > bound }
-    arr         := Array.empty[Int]()
+    error      := 0
+    bound: Int := 5
+    pred       := [[alloc, capture(bound)]] (x) { x > bound }
+    arr        := Array.empty[Int]()
     Array.push(arr.&, 10)
     Array.push(arr.&, 20)
     Array.push(arr.&, 30)
@@ -114,11 +114,11 @@ test_sort_alloc() {
 
 test_capture_by_value() {
     // Verify capture-by-value: mutate original after closure creation
-    error      := 0
+    error       := 0
     offset: Int := 100
-    f          := [[alloc, capture(offset)]] (x) { x + offset }
-    offset = 999  // mutate original — should NOT affect f
-    arr        := Array.empty[Int]()
+    f           := [[alloc, capture(offset)]] (x) { x + offset }
+    offset = 999                        // mutate original — should NOT affect f
+    arr := Array.empty[Int]()
     Array.push(arr.&, 1)
     Array.push(arr.&, 2)
     result := Array.map(arr, f)
@@ -130,11 +130,11 @@ test_capture_by_value() {
 }
 
 test_explicit_allocator() {
-    error      := 0
-    a          := Alloc.context.default
+    error       := 0
+    a           := Alloc.context.default
     offset: Int := 50
-    f          := [[alloc(a), capture(offset)]] (x) { x + offset }
-    arr        := Array.empty[Int]()
+    f           := [[alloc(a), capture(offset)]] (x) { x + offset }
+    arr         := Array.empty[Int]()
     Array.push(arr.&, 1)
     Array.push(arr.&, 2)
     result := Array.map(arr, f)

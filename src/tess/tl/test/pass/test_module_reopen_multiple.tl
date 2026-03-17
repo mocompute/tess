@@ -18,6 +18,7 @@ f(x: CInt, y: CInt) -> CInt { x + y }
 h(x: CInt) -> CInt { f(x) + g(x) + f(x, x) }
 
 #module main
+
 main() {
     // h(5) = f(5) + g(5) + f(5,5) = 6 + 16 + 10 = 32
     M.h(5) - 32

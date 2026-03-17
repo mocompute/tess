@@ -2,7 +2,7 @@
 #module Parent
 
 #module Parent.Child
-Data: { x: CInt }
+Data:                   { x: CInt     }
 create(v: CInt) -> Data { Data(x = v) }
 
 #module Parent
@@ -16,12 +16,13 @@ double(d: Data) -> Data { Data(x = d.x * 2) }
 #module Parent
 // Reopened parent: implicit Child still works, including new functions
 second(v: CInt) -> CInt {
-    d := Child.create(v)
+    d  := Child.create(v)
     d2 := Child.double(d)
     d2.x
 }
 
 #module main
+
 main() {
     error: CInt := 0
 

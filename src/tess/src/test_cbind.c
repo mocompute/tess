@@ -8,8 +8,8 @@
 // Helper: feed preprocessed text through cbind parser and compare output.
 // target_file controls which declarations are included (via line marker filtering).
 // Returns 0 on match, 1 on mismatch.
-static int check(allocator *alloc, char const *label, char const *target_file,
-                 char const *module_name, char const *input, char const *expected) {
+static int check(allocator *alloc, char const *label, char const *target_file, char const *module_name,
+                 char const *input, char const *expected) {
     u32         len    = (u32)strlen(input);
     str         result = tl_cbind_from_preprocessed(alloc, input, len, target_file, module_name);
     char const *got    = str_cstr(&result);
@@ -733,11 +733,11 @@ static int test_typedef_preserves_name(void) {
 // main
 // ---------------------------------------------------------------------------
 
-#define T(name)                                                                                    \
-    {                                                                                              \
-        this_error = name();                                                                       \
-        if (this_error) fprintf(stderr, "FAIL: " #name " (%d)\n", this_error);                     \
-        error += this_error;                                                                       \
+#define T(name)                                                                                            \
+    {                                                                                                      \
+        this_error = name();                                                                               \
+        if (this_error) fprintf(stderr, "FAIL: " #name " (%d)\n", this_error);                             \
+        error += this_error;                                                                               \
     }
 
 int main(void) {

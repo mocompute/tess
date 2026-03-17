@@ -11,7 +11,7 @@ test_write_and_read() {
     path  := _tmp("tess_test_file_io.txt")
 
     content := _S("hello, file!\nsecond line\n")
-    _wr := File.write_file(path, content)
+    _wr     := File.write_file(path, content)
 
     rd: Ok := File.read_file(path) else {
         c_printf("FAIL read_file\n")
@@ -163,9 +163,9 @@ test_read_write_bytes() {
     path  := _tmp("tess_test_file_bytes.bin")
 
     data := Array.empty[Byte]()
-    Array.push(data.&, 0x48)  // 'H'
-    Array.push(data.&, 0x69)  // 'i'
-    Array.push(data.&, 0x21)  // '!'
+    Array.push(data.&, 0x48)            // 'H'
+    Array.push(data.&, 0x69)            // 'i'
+    Array.push(data.&, 0x21)            // '!'
 
     _we := File.write_file_bytes(path, data)
 
@@ -328,7 +328,7 @@ main() {
     fails += test_seek_tell()
 
     if fails == 0 { c_printf("All file IO tests passed.\n") }
-    else          { c_printf("%d file IO test(s) failed.\n", fails) }
+    else { c_printf("%d file IO test(s) failed.\n", fails) }
 
     fails
 }

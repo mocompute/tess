@@ -21,6 +21,7 @@ make_bool(b: Bool) -> Child.Wrapper[Bool] { Child.Wrapper(v = b) }
 get_int(w: Child.Wrapper[CInt]) -> CInt { w.unwrap() }
 
 #module main
+
 main() {
     error: CInt := 0
 

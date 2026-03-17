@@ -25,7 +25,7 @@ is_good[a](r: Outcome[a]) -> Bool {
 
 #module B
 
-Pair[a]: | Both { fst: a, snd: a }
+Pair[a]: | Both   { fst: a, snd: a }
          | Single { only: a }
          | Neither
 

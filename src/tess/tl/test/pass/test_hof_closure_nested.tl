@@ -13,7 +13,7 @@ test_closure_capturing_closure() {
     error := 0
     add5  := make_adder(5)
     // Stack closure captures the allocated closure add5
-    arr   := Array.empty[Int]()
+    arr := Array.empty[Int]()
     Array.push(arr.&, 1)
     Array.push(arr.&, 2)
     Array.push(arr.&, 3)
@@ -45,10 +45,10 @@ test_alloc_closure_capturing_closure() {
 }
 
 test_nested_with_filter() {
-    error    := 0
-    add3     := make_adder(3)
+    error := 0
+    add3  := make_adder(3)
     // Filter using a closure that calls another closure
-    arr      := Array.empty[Int]()
+    arr := Array.empty[Int]()
     Array.push(arr.&, 1)
     Array.push(arr.&, 2)
     Array.push(arr.&, 3)

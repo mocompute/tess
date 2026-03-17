@@ -22,7 +22,7 @@ int main(int argc, char *argv[]) {
     char const *stdlib_dir  = argv[1];
     char const *output_path = argv[2];
 
-    allocator *alloc = arena_create(default_allocator(), 1024 * 1024);
+    allocator  *alloc       = arena_create(default_allocator(), 1024 * 1024);
 
     // Collect .tl files from stdlib_dir
     c_string_carray files = {.alloc = alloc};
@@ -41,8 +41,8 @@ int main(int argc, char *argv[]) {
     for (u32 i = 0; i < name_count; i++) {
         char const *filepath = files.v[i];
 
-        char *data     = null;
-        u32   data_len = 0;
+        char       *data     = null;
+        u32         data_len = 0;
         file_read(alloc, filepath, &data, &data_len);
         if (!data) {
             fprintf(stderr, "stdlib_pack: failed to read: %s\n", filepath);
@@ -111,8 +111,8 @@ int main(int argc, char *argv[]) {
 
     fclose(out);
 
-    fprintf(stderr, "stdlib_pack: generated %s (%u bytes archive, %u files)\n", output_path,
-            tpkg_data_len, name_count);
+    fprintf(stderr, "stdlib_pack: generated %s (%u bytes archive, %u files)\n", output_path, tpkg_data_len,
+            name_count);
 
     arena_destroy(&alloc);
     return 0;

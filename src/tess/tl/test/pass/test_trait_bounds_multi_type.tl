@@ -37,9 +37,9 @@ cmp(a: T, b: T) -> CInt {
 
 #module main
 
-double[T:    Add](x: T)       -> T    { x + x                     }
-smallest[T:  Ord](a: T, b: T) -> T    { if a < b { a } else { b } }
-are_equal[T: Eq] (a: T, b: T) -> Bool { a == b                    }
+double[T: Add]  (x: T)       -> T          { x + x               }
+smallest[T: Ord](a: T, b: T) -> T    { if a < b { a } else { b } }
+are_equal[T: Eq](a: T, b: T) -> Bool { a == b                    }
 
 main() {
     error := 0

@@ -6,8 +6,8 @@ hash_from_other_function(v: Int) -> CSize { hash(v) }
 main() {
     error: CInt := 0
 
-    h0 := hash(0)
-    h1 := hash(1)
+    h0  := hash(0)
+    h1  := hash(1)
     hm1 := hash(-1)
     h42 := hash(42)
 

@@ -952,11 +952,12 @@ static int check_no_conform_operator(tl_infer *self, ast_node *node, tl_monotype
     char const *trait = func_name_to_trait_name(func_name);
     if (!trait || !has_no_conform(self, type, trait)) return 0;
     str type_str = tl_monotype_to_string(self->transient, type);
-    str msg = str_fmt(self->arena,
-        "operator '%s' cannot be used on type %s: conformance to '%s' denied via [[no_conform(%s)]]",
-        op, str_cstr(&type_str), trait, trait);
-    array_push(self->errors, ((tl_infer_error){
-        .tag = tl_err_trait_bound_not_satisfied, .node = node, .message = msg}));
+    str msg =
+      str_fmt(self->arena,
+              "operator '%s' cannot be used on type %s: conformance to '%s' denied via [[no_conform(%s)]]",
+              op, str_cstr(&type_str), trait, trait);
+    array_push(self->errors,
+               ((tl_infer_error){.tag = tl_err_trait_bound_not_satisfied, .node = node, .message = msg}));
     return 1;
 }
 
@@ -1189,8 +1190,8 @@ int post_specialize(tl_infer *self, traverse_ctx *traverse_ctx, ast_node *specia
 
 // Check if a type has [[no_conform(trait_name)]] in its attributes.
 static int has_no_conform(tl_infer *self, tl_monotype *concrete_type, char const *trait_generic_name) {
-    str type_name = concrete_type->cons_inst->def->name;
-    ast_node *attrs = str_map_get_ptr(self->attributes, type_name);
+    str       type_name = concrete_type->cons_inst->def->name;
+    ast_node *attrs     = str_map_get_ptr(self->attributes, type_name);
     if (!attrs || attrs->tag != ast_attribute_set) return 0;
 
     str trait_str = str_init_static(trait_generic_name);
@@ -1228,17 +1229,17 @@ static int push_trait_error(tl_infer *self, ast_node *toplevel, str msg) {
 static int emit_trait_sig_error(tl_infer *self, ast_node *toplevel, tl_monotype *concrete_type,
                                 str trait_name, str fn_name, str actual_sig, str expected_sig) {
     str type_str = tl_monotype_to_string(self->transient, concrete_type);
-    return push_trait_error(self, toplevel, str_fmt(self->arena,
-        "type %s does not satisfy trait %s: function '%s' has signature %s, expected %s",
-        str_cstr(&type_str), str_cstr(&trait_name), str_cstr(&fn_name),
-        str_cstr(&actual_sig), str_cstr(&expected_sig)));
+    return push_trait_error(
+      self, toplevel,
+      str_fmt(self->arena, "type %s does not satisfy trait %s: function '%s' has signature %s, expected %s",
+              str_cstr(&type_str), str_cstr(&trait_name), str_cstr(&fn_name), str_cstr(&actual_sig),
+              str_cstr(&expected_sig)));
 }
 
 // Check that a function's full arrow type matches the trait signature's expected arrow.
 // Returns 0 on success, 1 on failure (error pushed).
-static int check_trait_arrow(tl_infer *self, ast_node *toplevel, tl_monotype *concrete_type,
-                              str trait_name, tl_trait_sig *sig, tl_trait_def *trait,
-                              str func_name) {
+static int check_trait_arrow(tl_infer *self, ast_node *toplevel, tl_monotype *concrete_type, str trait_name,
+                             tl_trait_sig *sig, tl_trait_def *trait, str func_name) {
     if (!sig->arrow) return 0;
 
     tl_polytype *poly = tl_type_env_lookup(self->env, func_name);
@@ -1258,14 +1259,14 @@ static int check_trait_arrow(tl_infer *self, ast_node *toplevel, tl_monotype *co
     hot_parse_ctx_reinit(self, null);
     str_map_set_ptr(&self->hot_parse_ctx.type_arguments, type_param, concrete_type);
     tl_monotype *expected_arrow =
-        tl_type_registry_parse_type_with_ctx(self->registry, sig->arrow, &self->hot_parse_ctx);
+      tl_type_registry_parse_type_with_ctx(self->registry, sig->arrow, &self->hot_parse_ctx);
     self->hot_parse_ctx_guard = 0;
     if (!expected_arrow || !tl_monotype_is_arrow(expected_arrow)) return 0;
 
     // Resolve the actual arrow to a concrete type.
     // If the function is generic, instantiate its quantifiers with the concrete
     // type's type arguments so that type parameters become concrete types.
-    tl_monotype *actual_resolved;
+    tl_monotype      *actual_resolved;
     tl_monotype_sized type_args = concrete_type->cons_inst->args;
     if (poly->quantifiers.size > 0 && type_args.size > 0) {
         actual_resolved = tl_polytype_instantiate_for_type(self->transient, poly, type_args, self->subs);
@@ -1278,8 +1279,8 @@ static int check_trait_arrow(tl_infer *self, ast_node *toplevel, tl_monotype *co
     if (tl_monotype_hash64(expected_arrow) != tl_monotype_hash64(actual_resolved)) {
         str actual_str   = tl_monotype_to_string(self->transient, actual_resolved);
         str expected_str = tl_monotype_to_string(self->transient, expected_arrow);
-        return emit_trait_sig_error(self, toplevel, concrete_type, trait_name,
-                                    sig->name, actual_str, expected_str);
+        return emit_trait_sig_error(self, toplevel, concrete_type, trait_name, sig->name, actual_str,
+                                    expected_str);
     }
     return 0;
 }
@@ -1287,17 +1288,20 @@ static int check_trait_arrow(tl_infer *self, ast_node *toplevel, tl_monotype *co
 static int emit_trait_bound_error(tl_infer *self, ast_node *toplevel, tl_monotype *concrete_type,
                                   str trait_name, str fn_name, u32 arity) {
     str type_str = tl_monotype_to_string(self->transient, concrete_type);
-    return push_trait_error(self, toplevel, str_fmt(self->arena,
-        "type %s does not satisfy trait %s: missing function '%s' with arity %u",
-        str_cstr(&type_str), str_cstr(&trait_name), str_cstr(&fn_name), (unsigned)arity));
+    return push_trait_error(
+      self, toplevel,
+      str_fmt(self->arena, "type %s does not satisfy trait %s: missing function '%s' with arity %u",
+              str_cstr(&type_str), str_cstr(&trait_name), str_cstr(&fn_name), (unsigned)arity));
 }
 
 static int emit_no_conform_bound_error(tl_infer *self, ast_node *toplevel, tl_monotype *concrete_type,
                                        str trait_name, char const *trait_generic_name) {
     str type_str = tl_monotype_to_string(self->transient, concrete_type);
-    return push_trait_error(self, toplevel, str_fmt(self->arena,
-        "type %s does not satisfy trait %s: conformance explicitly denied via [[no_conform(%s)]]",
-        str_cstr(&type_str), str_cstr(&trait_name), trait_generic_name));
+    return push_trait_error(
+      self, toplevel,
+      str_fmt(self->arena,
+              "type %s does not satisfy trait %s: conformance explicitly denied via [[no_conform(%s)]]",
+              str_cstr(&type_str), str_cstr(&trait_name), trait_generic_name));
 }
 
 // Check that a concrete type satisfies a trait bound. Returns 0 on success, 1 on failure.
@@ -2253,13 +2257,13 @@ static void missing_fv_error_cb(void *ctx_, str fun, str var) {
     if (str_hset_contains(ctx->reported, var)) return;
     str_hset_insert(&ctx->reported, var);
 
-    ast_node *node = toplevel_get(ctx->self, fun);
+    ast_node       *node = toplevel_get(ctx->self, fun);
 
     find_symbol_ctx fctx = {
-        .target      = var,
-        .found       = NULL,
-        .self        = ctx->self,
-        .visited_fns = hset_create(ctx->self->transient, 64),
+      .target      = var,
+      .found       = NULL,
+      .self        = ctx->self,
+      .visited_fns = hset_create(ctx->self->transient, 64),
     };
     if (node) ast_node_cdfs(&fctx, node, (ast_op_cfun)find_symbol_cb);
 
@@ -2270,8 +2274,8 @@ static void missing_fv_error_cb(void *ctx_, str fun, str var) {
 
 int check_missing_free_variables(tl_infer *self) {
     missing_fv_ctx ctx = {
-        .self     = self,
-        .reported = hset_create(self->transient, 64),
+      .self     = self,
+      .reported = hset_create(self->transient, 64),
     };
     return tl_type_env_check_missing_fvs(self->env, missing_fv_error_cb, &ctx);
 }

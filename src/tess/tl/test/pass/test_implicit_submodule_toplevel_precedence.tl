@@ -22,6 +22,7 @@ make_top(v: CInt) -> Foo { Foo(x = v) }
 make_sub(v: CInt) -> Parent.Foo.Foo { Parent.Foo.Foo(y = v) }
 
 #module main
+
 main() {
     t := Parent.make_top(10)
     s := Parent.make_sub(20)

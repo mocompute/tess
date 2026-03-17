@@ -23,9 +23,9 @@ main() {
     error += if arr.get(2zu) == 30 {0} else {1}
 
     // Test 4: Mixed explicit and implicit
-    Array.push(arr.&, 40)     // fully explicit
-    arr.push(50)               // implicit module + implicit addr
-    arr.Array.push(60)         // explicit module, implicit addr (alternative style)
+    Array.push(arr.&, 40)               // fully explicit
+    arr.push(50)                        // implicit module + implicit addr
+    arr.Array.push(60)                  // explicit module, implicit addr (alternative style)
     error += if arr.size == 6zu {0} else {1}
     error += if arr.get(3zu) == 40 {0} else {1}
     error += if arr.get(4zu) == 50 {0} else {1}

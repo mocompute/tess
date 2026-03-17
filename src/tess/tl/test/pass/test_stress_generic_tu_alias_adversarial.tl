@@ -5,7 +5,7 @@
 // --- Module A: define a generic tagged union ---
 #module A
 
-Res[T]: | ROk { v: T }
+Res[T]: | ROk  { v: T }
         | RErr { code: Int }
 
 // --- Module B: multiple aliases to the same specialization ---
@@ -22,7 +22,7 @@ IR = B.IntRes1
 // --- Module D: two-param generic tagged union ---
 #module D
 
-Either[L, R]: | Left { v: L }
+Either[L, R]: | Left  { v: L }
               | Right { v: R }
 
 IntStrEither = Either[Int, Int]

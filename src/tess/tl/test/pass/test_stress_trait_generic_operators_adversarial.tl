@@ -72,8 +72,8 @@ full_ord_test[T: Ord](a: T, b: T) -> Int {
 }
 
 // --- 3. Combined traits ---
-AddEq[T]:  Add[T], Eq[T]  { }
-AddSub[T]: Add[T], Sub[T] { }
+AddEq[T]:  Add[T], Eq[T]   { }
+AddSub[T]: Add[T], Sub[T] {  }
 
 // Uses both + and == in one function
 add_if_different[T: AddEq](a: T, b: T) -> T {
@@ -87,8 +87,8 @@ add_then_sub[T: AddSub](a: T, b: T, c: T) -> T {
 }
 
 // --- 4. Nested generic calls at different trait levels ---
-inner_sum[T:   Add](a: T, b: T) -> T    { a + b  }
-outer_check[T: Eq] (a: T, b: T) -> Bool { a == b }
+inner_sum[T: Add] (a: T, b: T) -> T    { a + b  }
+outer_check[T: Eq](a: T, b: T) -> Bool { a == b }
 
 nested_sum_then_check[T: AddEq](a: T, b: T, expected: T) -> Bool {
     result := inner_sum(a, b)

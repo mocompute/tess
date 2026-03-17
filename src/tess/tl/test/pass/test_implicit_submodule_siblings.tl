@@ -2,11 +2,11 @@
 #module Parent
 
 #module Parent.A
-Data: { x: CInt }
+Data:                   { x: CInt     }
 create(x: CInt) -> Data { Data(x = x) }
 
 #module Parent.B
-Data: { y: CInt }
+Data:                   { y: CInt     }
 create(y: CInt) -> Data { Data(y = y) }
 
 #module Parent
@@ -23,6 +23,7 @@ transform(a: A.Data) -> B.Data
 transform(a) { B.create(a.x * 2) }
 
 #module main
+
 main() {
     error: CInt := 0
 

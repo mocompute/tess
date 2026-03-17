@@ -38,8 +38,7 @@ static str extract_identifier(allocator *alloc, ast_node *node, char const *func
     return str_copy(alloc, out);
 
 fail:
-    fprintf(stderr, "package.tl: error: %s() argument %d is not an identifier\n", func_name,
-            arg_index + 1);
+    fprintf(stderr, "package.tl: error: %s() argument %d is not an identifier\n", func_name, arg_index + 1);
     return str_empty();
 }
 
@@ -253,8 +252,7 @@ int tl_package_parse_file(allocator *alloc, char const *path, tl_package *out) {
 
         } else if (str_eq(func_name, S("depend"))) {
             if (argc < 2 || argc > 3) {
-                fprintf(stderr, "package.tl: error: depend() expects 2-3 arguments, got %d\n",
-                        (int)argc);
+                fprintf(stderr, "package.tl: error: depend() expects 2-3 arguments, got %d\n", (int)argc);
                 error = 1;
                 continue;
             }
@@ -281,8 +279,7 @@ int tl_package_parse_file(allocator *alloc, char const *path, tl_package *out) {
 
         } else if (str_eq(func_name, S("depend_optional"))) {
             if (argc < 2 || argc > 3) {
-                fprintf(stderr,
-                        "package.tl: error: depend_optional() expects 2-3 arguments, got %d\n",
+                fprintf(stderr, "package.tl: error: depend_optional() expects 2-3 arguments, got %d\n",
                         (int)argc);
                 error = 1;
                 continue;

@@ -3,16 +3,17 @@
 #module Parent
 
 #module Parent.Child
-Child: { x: CInt }
+Child:                   { x: CInt      }
 create(v: CInt) -> Child { Child(x = v) }
 
 #module Parent
 
 // Bare "Child" in type position resolves to Parent.Child.Child
-wrap(v: CInt) -> Child { Child.create(v) }
-get_x(c: Child) -> CInt { c.x }
+wrap (v: CInt)  -> Child { Child.create(v) }
+get_x(c: Child) -> CInt { c.x              }
 
 #module main
+
 main() {
     c := Parent.wrap(42)
     Parent.get_x(c) - 42

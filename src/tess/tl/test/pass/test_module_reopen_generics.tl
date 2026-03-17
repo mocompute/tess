@@ -20,6 +20,7 @@ get_box_int(b: Box[CInt]) -> CInt { b.v }
 wrap_with_helper(x: CInt) -> Box[CInt] { wrap(x + M.Helper.helper()) }
 
 #module main
+
 main() {
     error: CInt := 0
 

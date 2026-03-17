@@ -9,7 +9,7 @@ Point: { default: Int, register: Int }
 Mode: { auto, register, default }
 
 // Tagged union with keyword variant names
-Value: | auto { x: Int }
+Value: | auto    { x: Int }
        | default { x: Int }
 
 add(default: Int, register: Int) { default + register }

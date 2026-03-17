@@ -39,7 +39,7 @@ test_basename() {
 test_extension() {
     fails := 0
 
-    e1 := File.Path.extension(_S("foo.txt"))
+    e1       := File.Path.extension(_S("foo.txt"))
     s1: Some := e1 else { c_printf("FAIL ext 1: None\n") fails += 1 return fails }
     if !String.eq(s1.v, _S(".txt")) { c_printf("FAIL ext 1: %s\n", String.cstr(s1.v.&)) fails += 1 }
 
@@ -49,7 +49,7 @@ test_extension() {
     e3 := File.Path.extension(_S(".hidden"))
     when e3 { s: Some { c_printf("FAIL ext 3: expected None for .hidden\n") fails += 1 } n: None { } }
 
-    e4 := File.Path.extension(_S("archive.tar.gz"))
+    e4       := File.Path.extension(_S("archive.tar.gz"))
     s4: Some := e4 else { c_printf("FAIL ext 4: None\n") fails += 1 return fails }
     if !String.eq(s4.v, _S(".gz")) { c_printf("FAIL ext 4: %s\n", String.cstr(s4.v.&)) fails += 1 }
 
@@ -114,11 +114,11 @@ test_normalize() {
 test_is_absolute() {
     fails := 0
 
-    if !File.Path.is_absolute(_S("/foo"))  { c_printf("FAIL abs 1\n") fails += 1 }
-    if File.Path.is_absolute(_S("foo"))    { c_printf("FAIL abs 2\n") fails += 1 }
-    if File.Path.is_absolute(_S(""))       { c_printf("FAIL abs 3\n") fails += 1 }
-    if !File.Path.is_relative(_S("foo"))   { c_printf("FAIL rel 1\n") fails += 1 }
-    if File.Path.is_relative(_S("/foo"))   { c_printf("FAIL rel 2\n") fails += 1 }
+    if !File.Path.is_absolute(_S("/foo")) { c_printf("FAIL abs 1\n") fails += 1 }
+    if File.Path.is_absolute(_S("foo")) { c_printf("FAIL abs 2\n") fails += 1 }
+    if File.Path.is_absolute(_S("")) { c_printf("FAIL abs 3\n") fails += 1 }
+    if !File.Path.is_relative(_S("foo")) { c_printf("FAIL rel 1\n") fails += 1 }
+    if File.Path.is_relative(_S("/foo")) { c_printf("FAIL rel 2\n") fails += 1 }
 
     fails
 }
@@ -135,7 +135,7 @@ main() {
     fails += test_is_absolute()
 
     if fails == 0 { c_printf("All path tests passed.\n") }
-    else          { c_printf("%d path test(s) failed.\n", fails) }
+    else { c_printf("%d path test(s) failed.\n", fails) }
 
     fails
 }

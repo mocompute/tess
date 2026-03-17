@@ -105,8 +105,8 @@ static inline tl_monotype_sized tl_monotype_children(tl_monotype *self) {
 // variable-arity constructors.
 
 static THREAD_LOCAL allocator *transient_allocator; // initialized by tl_type_registry_create
-static THREAD_LOCAL u32        substitute_gen = 1;  // generation counter for substitute cycle detection
-static THREAD_LOCAL u32        hash_gen       = 1;  // generation counter for hash memoization
+static THREAD_LOCAL u32        substitute_gen  = 1; // generation counter for substitute cycle detection
+static THREAD_LOCAL u32        hash_gen        = 1; // generation counter for hash memoization
 static THREAD_LOCAL int        hash_ignore_fvs = 0; // when set, arrow hashing skips fvs
 static THREAD_LOCAL tl_type_constructor_inst
   *canonical_signed; // canonical signed integer cons_inst (CLongLong)
@@ -1713,13 +1713,12 @@ tl_monotype *tl_polytype_instantiate_with(allocator *alloc, tl_polytype *self, t
 // type_args[i] for i < min(N, M). Extra type args are ignored; missing ones get
 // fresh type variables (via null in the args array).
 tl_monotype *tl_polytype_instantiate_for_type(allocator *alloc, tl_polytype *self,
-                                               tl_monotype_sized type_args, tl_type_subs *subs) {
+                                              tl_monotype_sized type_args, tl_type_subs *subs) {
     u32 n = self->quantifiers.size;
     if (n == 0) return tl_monotype_clone(alloc, self->type);
 
     tl_monotype **v = alloc_malloc(alloc, n * sizeof(tl_monotype *));
-    for (u32 i = 0; i < n; i++)
-        v[i] = i < type_args.size ? type_args.v[i] : null;
+    for (u32 i = 0; i < n; i++) v[i] = i < type_args.size ? type_args.v[i] : null;
 
     return tl_polytype_instantiate_(alloc, self, subs, (tl_monotype_sized){.v = v, .size = n});
 }
@@ -2273,8 +2272,8 @@ int tl_monotype_is_unsigned_integer(tl_monotype *self) {
 }
 int tl_monotype_is_integer_convertible(tl_monotype *self) {
     if (!tl_monotype_is_inst(self)) return 0;
-    return self->cons_inst->def->integer_subchain >= TL_INTEGER_SUBCHAIN_C_SIGNED
-        && self->cons_inst->def->integer_subchain <= TL_INTEGER_SUBCHAIN_CCHAR;
+    return self->cons_inst->def->integer_subchain >= TL_INTEGER_SUBCHAIN_C_SIGNED &&
+           self->cons_inst->def->integer_subchain <= TL_INTEGER_SUBCHAIN_CCHAR;
 }
 int tl_monotype_is_float_convertible(tl_monotype *self) {
     return tl_monotype_is_inst(self) && self->cons_inst->def->is_float_convertible;
@@ -2416,7 +2415,7 @@ void tl_monotype_ptr_set_target(tl_monotype *ptr, tl_monotype *target) {
     assert(tl_monotype_is_ptr(ptr));
     assert(target);
     ptr->cons_inst->args.v[0] = target;
-    ptr->hash_gen = 0; // invalidate any cached hash
+    ptr->hash_gen             = 0; // invalidate any cached hash
     assert(tl_monotype_ptr_target(ptr) == target);
 }
 
@@ -2462,8 +2461,7 @@ u64 tl_monotype_hash64_(tl_monotype *self, u32 gen, hash_cycle_stack *in_progres
     if (!self) return 0;
 
     // Permanent cache for concrete-no-weak types
-    if (self->hash_gen == HASH_GEN_PERMANENT)
-        return self->cached_hash;
+    if (self->hash_gen == HASH_GEN_PERMANENT) return self->cached_hash;
 
     // Generation-based memoization (within-call DAG dedup)
     if (self->hash_gen == gen) {
@@ -2554,13 +2552,17 @@ u64 tl_monotype_hash64_(tl_monotype *self, u32 gen, hash_cycle_stack *in_progres
     case tl_any:       permanent = 1; break;
     case tl_cons_inst: {
         permanent = 1;
-        forall(i, self->cons_inst->args)
-            if (self->cons_inst->args.v[i]->hash_gen != HASH_GEN_PERMANENT) { permanent = 0; break; }
+        forall(i, self->cons_inst->args) if (self->cons_inst->args.v[i]->hash_gen != HASH_GEN_PERMANENT) {
+            permanent = 0;
+            break;
+        }
     } break;
     case tl_tuple: {
         permanent = 1;
-        forall(i, self->list.xs)
-            if (self->list.xs.v[i]->hash_gen != HASH_GEN_PERMANENT) { permanent = 0; break; }
+        forall(i, self->list.xs) if (self->list.xs.v[i]->hash_gen != HASH_GEN_PERMANENT) {
+            permanent = 0;
+            break;
+        }
     } break;
     case tl_placeholder:
     case tl_ellipsis:
@@ -2569,7 +2571,7 @@ u64 tl_monotype_hash64_(tl_monotype *self, u32 gen, hash_cycle_stack *in_progres
     case tl_weak_int_signed:
     case tl_weak_int_unsigned:
     case tl_weak_float:
-    case tl_arrow:     break;
+    case tl_arrow:             break;
     }
 
     self->hash_gen    = permanent ? HASH_GEN_PERMANENT : gen;
@@ -3317,8 +3319,8 @@ static int tl_type_subs_unify_weak_int_concrete(tl_type_subs *subs, tl_monotype 
             return 1;
         }
     } else {
-        if (!def->is_signed_integer && !def->is_unsigned_integer
-            && def->integer_subchain == TL_INTEGER_SUBCHAIN_NONE) {
+        if (!def->is_signed_integer && !def->is_unsigned_integer &&
+            def->integer_subchain == TL_INTEGER_SUBCHAIN_NONE) {
             if (cb) cb(user, weak_int, concrete);
             return 1;
         }
@@ -3672,18 +3674,27 @@ void tl_type_subs_default_weak_ints(tl_type_subs *subs, tl_monotype *int_type, t
 // Unlike tl_type_subs_default_weak_ints (which walks the subs map), this walks the monotype
 // structure directly, replacing any weak_int_signed/unsigned/float nodes with their concrete
 // defaults.  Used when weak int TVs are not registered in the subs map.
-static void tl_monotype_default_weak_ints_(tl_monotype *self, tl_monotype *int_type,
-                                           tl_monotype *uint_type, tl_monotype *float_type, u32 gen) {
+static void tl_monotype_default_weak_ints_(tl_monotype *self, tl_monotype *int_type, tl_monotype *uint_type,
+                                           tl_monotype *float_type, u32 gen) {
     if (!self) return;
     if (self->visited_gen == gen) return;
     self->visited_gen = gen;
     switch (self->tag) {
-    case tl_weak_int_signed:   *self = *int_type; self->visited_gen = gen; return;
-    case tl_weak_int_unsigned: *self = *uint_type; self->visited_gen = gen; return;
-    case tl_weak_float:        *self = *float_type; self->visited_gen = gen; return;
+    case tl_weak_int_signed:
+        *self             = *int_type;
+        self->visited_gen = gen;
+        return;
+    case tl_weak_int_unsigned:
+        *self             = *uint_type;
+        self->visited_gen = gen;
+        return;
+    case tl_weak_float:
+        *self             = *float_type;
+        self->visited_gen = gen;
+        return;
     case tl_cons_inst:
     case tl_arrow:
-    case tl_tuple: {
+    case tl_tuple:     {
         tl_monotype_sized children = tl_monotype_children(self);
         forall(i, children) {
             tl_monotype_default_weak_ints_(children.v[i], int_type, uint_type, float_type, gen);

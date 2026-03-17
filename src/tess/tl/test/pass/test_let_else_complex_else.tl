@@ -9,7 +9,7 @@ Shape: | Circle { r: CInt }
 
 main() {
     s: Shape.Shape := Shape.Square(s = 4)
-    c: Circle := s else {
+    c: Circle      := s else {
         fallback := 1
         if fallback == 1 {
             return 0

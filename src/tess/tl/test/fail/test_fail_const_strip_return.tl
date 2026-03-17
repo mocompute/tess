@@ -1,7 +1,7 @@
 #module main
 
 get_mut_ptr(p: Ptr[Const[Int]]) -> Ptr[Int] {
-    return p                     // error: cannot strip const in return
+    return p                            // error: cannot strip const in return
 }
 
 main() {

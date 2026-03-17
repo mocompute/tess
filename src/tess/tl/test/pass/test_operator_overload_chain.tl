@@ -3,11 +3,11 @@
 // A simple 1x1 "matrix" to test chained operator overloading
 Mat1: { val: Int }
 
-add(a: Mat1, b: Mat1) -> Mat1 { Mat1(val = a.val + b.val) }
-sub(a: Mat1, b: Mat1) -> Mat1 { Mat1(val = a.val - b.val) }
-mul(a: Mat1, b: Mat1) -> Mat1 { Mat1(val = a.val * b.val) }
-neg(v: Mat1)          -> Mat1 { Mat1(val = 0 - v.val)     }
-eq (a: Mat1, b: Mat1) -> Bool { a.val == b.val            }
+add(a: Mat1, b: Mat1) -> Mat1 { Mat1(val = a.val + b.val)      }
+sub(a: Mat1, b: Mat1) -> Mat1 { Mat1(val = a.val - b.val)      }
+mul(a: Mat1, b: Mat1) -> Mat1 { Mat1(val = a.val * b.val)      }
+neg(v: Mat1)          -> Mat1          { Mat1(val = 0 - v.val) }
+eq (a: Mat1, b: Mat1) -> Bool { a.val == b.val                 }
 
 cmp(a: Mat1, b: Mat1) -> CInt {
     if a.val < b.val { -1 }

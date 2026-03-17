@@ -1,7 +1,7 @@
 #module main
 
 // Pattern 1: T :: ConcreteType
-is_int_type[T]  () { T ::   Int }
+is_int_type[T]  () { T :: Int   }
 is_float_type[T]() { T :: Float }
 
 // Pattern 2: x :: T (should already work, verify it)

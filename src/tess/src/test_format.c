@@ -669,23 +669,18 @@ static int test_attribute_brackets(void) {
     allocator *alloc = arena_create(default_allocator(), 4096);
 
     // Space preserved between := and [[ and between ]] and (
-    error += check(alloc, "alloc closure basic",
-                   "f := [[alloc, capture(n)]](x) { x + n }",
+    error += check(alloc, "alloc closure basic", "f := [[alloc, capture(n)]](x) { x + n }",
                    "f := [[alloc, capture(n)]] (x) { x + n }\n");
 
     // Already formatted — idempotent
-    error += check(alloc, "alloc closure already formatted",
-                   "f := [[alloc, capture(n)]] (x) { x + n }",
+    error += check(alloc, "alloc closure already formatted", "f := [[alloc, capture(n)]] (x) { x + n }",
                    "f := [[alloc, capture(n)]] (x) { x + n }\n");
 
     // Regular type args still attach to identifier (no space)
-    error += check(alloc, "type args still attach",
-                   "foo [T](x) { x }",
-                   "foo[T](x) { x }\n");
+    error += check(alloc, "type args still attach", "foo [T](x) { x }", "foo[T](x) { x }\n");
 
     // Attribute with block body
-    error += check(alloc, "alloc closure with block",
-                   "f:=[[alloc,capture(a,b)]](x){\nx+a+b\n}",
+    error += check(alloc, "alloc closure with block", "f:=[[alloc,capture(a,b)]](x){\nx+a+b\n}",
                    "f := [[alloc, capture(a, b)]] (x) {\n"
                    "    x + a + b\n"
                    "}\n");

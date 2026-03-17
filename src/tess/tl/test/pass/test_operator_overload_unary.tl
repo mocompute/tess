@@ -4,8 +4,8 @@
 
 Flag: { val: Bool }
 
-not(a: Flag)          -> Bool { !a.val         }
-eq (a: Flag, b: Flag) -> Bool { a.val == b.val }
+not(a: Flag)          -> Bool          { !a.val }
+eq (a: Flag, b: Flag) -> Bool { a.val == b.val  }
 
 #module main
 

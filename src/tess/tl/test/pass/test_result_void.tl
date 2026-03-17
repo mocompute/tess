@@ -13,7 +13,7 @@ make_err_void(code: CInt) -> Result[Void, CInt] {
 test_ok_match() {
     r: Result[Void, CInt] := Ok(void)
     when r {
-        ok: Ok { 0 }
+        ok:  Ok { 0 }
         err: Err { 1 }
     }
 }
@@ -22,7 +22,7 @@ test_ok_match() {
 test_err_match() {
     r: Result[Void, CInt] := Err(42)
     when r {
-        ok: Ok { 1 }
+        ok:  Ok { 1 }
         err: Err {
             if err.v == 42 { 0 }
             else { 1 }
@@ -44,7 +44,7 @@ test_try_err() -> Result[Void, CInt] {
 
 // Test 5: let-else with Result[Void, CInt]
 test_let_else() {
-    r := make_ok_void()
+    r       := make_ok_void()
     _ok: Ok := r else { return 1 }
     0
 }
@@ -57,7 +57,7 @@ main() {
 
     // Test 3: try Ok — should succeed
     when test_try_ok() {
-        ok: Ok { fails += 0 }
+        ok:  Ok { fails += 0 }
         err: Err {
             c_printf("FAIL test_try_ok: expected Ok\n")
             fails += 1
@@ -81,7 +81,7 @@ main() {
     fails += test_let_else()
 
     if fails == 0 { c_printf("All Result[Void] tests passed.\n") }
-    else          { c_printf("%d Result[Void] test(s) failed.\n", fails) }
+    else { c_printf("%d Result[Void] test(s) failed.\n", fails) }
 
     fails
 }

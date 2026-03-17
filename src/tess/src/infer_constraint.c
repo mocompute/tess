@@ -86,8 +86,8 @@ static void create_type_constructor_from_user_type(tl_infer *self, ast_node *nod
         poly->type->cons_inst->def->module = type_name_node->symbol.module;
     }
     if (ast_node_is_symbol(type_name_node) && type_name_node->symbol.is_module_mangled) {
-        str module   = type_name_node->symbol.module;
-        str original = type_name_node->symbol.original;
+        str module         = type_name_node->symbol.module;
+        str original       = type_name_node->symbol.original;
         int matches_module = str_eq(original, module);
         if (!matches_module && str_contains_char(module, '.')) {
             str dot_original = str_cat(self->transient, S("."), original);
@@ -441,9 +441,8 @@ void load_toplevel(tl_infer *self, ast_node_sized nodes) {
                             arity = (u8)params.size;
                             arrow = sig->symbol.annotation;
                         }
-                        tl_trait_sig tsig = {.name  = str_copy(self->arena, ast_node_str(sig)),
-                                             .arity = arity,
-                                             .arrow = arrow};
+                        tl_trait_sig tsig = {
+                          .name = str_copy(self->arena, ast_node_str(sig)), .arity = arity, .arrow = arrow};
                         array_push(def->sigs, tsig);
                     }
 
@@ -1292,7 +1291,7 @@ static int infer_try(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
         tl_monotype *ret_err_variant = ret_union->cons_inst->args.v[1];
 
         // Constrain each error variant field type to match
-        u32 op_n  = tl_monotype_is_inst(op_err_variant)  ? op_err_variant->cons_inst->args.size  : 0;
+        u32 op_n  = tl_monotype_is_inst(op_err_variant) ? op_err_variant->cons_inst->args.size : 0;
         u32 ret_n = tl_monotype_is_inst(ret_err_variant) ? ret_err_variant->cons_inst->args.size : 0;
 
         if (op_n != ret_n) {
@@ -1303,8 +1302,7 @@ static int infer_try(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
 
         for (u32 j = 0; j < op_n; j++) {
             tl_polytype wrap = tl_polytype_wrap(op_err_variant->cons_inst->args.v[j]);
-            if (constrain_pm(self, &wrap, ret_err_variant->cons_inst->args.v[j], node,
-                             TL_UNIFY_SYMMETRIC))
+            if (constrain_pm(self, &wrap, ret_err_variant->cons_inst->args.v[j], node, TL_UNIFY_SYMMETRIC))
                 return 1;
         }
     }

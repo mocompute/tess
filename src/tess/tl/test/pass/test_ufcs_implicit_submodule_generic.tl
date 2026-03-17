@@ -2,14 +2,14 @@
 #module Parent
 
 #module Parent.Child
-Data: { x: CInt }
-create(v: CInt) -> Data { Data(x = v) }
+Data:                      { x: CInt           }
+create(v: CInt) -> Data    { Data(x = v)       }
 transform(d: Data) -> Data { Data(x = d.x * 2) }
-get_value(d: Data) -> CInt { d.x }
+get_value(d: Data) -> CInt { d.x               }
 
-Wrapper[T]: { v: T }
-wrap[T](x: T) -> Wrapper[T] { Wrapper(v = x) }
-unwrap[T](w: Wrapper[T]) -> T { w.v }
+Wrapper[T]:                   { v: T           }
+wrap[T](x: T) -> Wrapper[T]   { Wrapper(v = x) }
+unwrap[T](w: Wrapper[T]) -> T { w.v            }
 
 #module Parent
 
@@ -22,6 +22,7 @@ chain_test(v: CInt) -> CInt {
 unwrap_int(w: Child.Wrapper[CInt]) -> CInt { w.unwrap() }
 
 #module main
+
 main() {
     error: CInt := 0
 

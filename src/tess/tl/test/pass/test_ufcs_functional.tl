@@ -41,7 +41,7 @@ main() {
 
     // Chained: map then filter then reduce
     result := arr.map((x) { x * 2 }).filter((x) { x > 4 }).reduce(0, (a, b) { a + b })
-    error += if result == 24 {0} else {1}    // 6+8+10
+    error += if result == 24 {0} else {1} // 6+8+10
 
     // sorted + chained access
     arr2 := Array.empty[Int]()

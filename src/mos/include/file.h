@@ -37,7 +37,6 @@ str file_path_relative(allocator *, str from_dir, str to_path);
 // Recursively scan directory, collecting file paths.
 // If ext is non-NULL, only files ending with ext (e.g. ".tl") are collected.
 // If ext is NULL, all files are collected.
-void file_scan_dir_recursive(allocator *alloc, char const *dir,
-                             char const *ext, c_string_carray *out);
+void file_scan_dir_recursive(allocator *alloc, char const *dir, char const *ext, c_string_carray *out);
 
 #endif

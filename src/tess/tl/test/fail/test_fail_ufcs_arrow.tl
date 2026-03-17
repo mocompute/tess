@@ -7,8 +7,8 @@ vec2_length_sq(v: Vec2) -> Int {
 }
 
 main() {
-    v := Vec2(x = 3, y = 4)
+    v   := Vec2(x = 3, y = 4)
     ptr := v.&
-    ptr->vec2_length_sq()   // error: -> does not support UFCS
+    ptr->vec2_length_sq()               // error: -> does not support UFCS
     0
 }

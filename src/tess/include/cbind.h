@@ -15,7 +15,7 @@ typedef struct {
 str tl_cbind(allocator *alloc, tl_cbind_opts const *opts);
 
 // Generate .tl bindings from already-preprocessed text (for unit testing).
-str tl_cbind_from_preprocessed(allocator *alloc, char const *pp_output, u32 pp_len,
-                               char const *target_file, char const *module_name);
+str tl_cbind_from_preprocessed(allocator *alloc, char const *pp_output, u32 pp_len, char const *target_file,
+                               char const *module_name);
 
 #endif

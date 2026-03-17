@@ -5,7 +5,7 @@
 // Custom generic HOFs accepting both stack and allocated closures.
 
 apply_to_each[T](arr: Array[T], f: (T) -> T) -> Array[T] {
-    result := Array.empty[T]()
+    result   := Array.empty[T]()
     i: CSize := 0zu
     while i < arr.size, i += 1zu {
         Array.push(result.&, f(arr.v.[i]))
@@ -26,16 +26,16 @@ fold_right[T, U](arr: Array[T], init: U, f: (T, U) -> U) -> U {
     acc := init
     i   := arr.size
     while i > 0zu {
-        i = i - 1zu
+        i   = i - 1zu
         acc = f(arr.v.[i], acc)
     }
     acc
 }
 
 test_generic_hof_stack_closure() {
-    error      := 0
+    error       := 0
     offset: Int := 10
-    arr        := Array.empty[Int]()
+    arr         := Array.empty[Int]()
     Array.push(arr.&, 1)
     Array.push(arr.&, 2)
     Array.push(arr.&, 3)
@@ -49,10 +49,10 @@ test_generic_hof_stack_closure() {
 }
 
 test_generic_hof_alloc_closure() {
-    error      := 0
+    error       := 0
     offset: Int := 10
-    f          := [[alloc, capture(offset)]] (x) { x + offset }
-    arr        := Array.empty[Int]()
+    f           := [[alloc, capture(offset)]] (x) { x + offset }
+    arr         := Array.empty[Int]()
     Array.push(arr.&, 1)
     Array.push(arr.&, 2)
     Array.push(arr.&, 3)
@@ -66,9 +66,9 @@ test_generic_hof_alloc_closure() {
 }
 
 test_count_matching_stack() {
-    error       := 0
-    bound: Int  := 2
-    arr         := Array.empty[Int]()
+    error      := 0
+    bound: Int := 2
+    arr        := Array.empty[Int]()
     Array.push(arr.&, 1)
     Array.push(arr.&, 2)
     Array.push(arr.&, 3)
@@ -80,10 +80,10 @@ test_count_matching_stack() {
 }
 
 test_count_matching_alloc() {
-    error       := 0
-    bound: Int  := 2
-    pred        := [[alloc, capture(bound)]] (x) { x > bound }
-    arr         := Array.empty[Int]()
+    error      := 0
+    bound: Int := 2
+    pred       := [[alloc, capture(bound)]] (x) { x > bound }
+    arr        := Array.empty[Int]()
     Array.push(arr.&, 1)
     Array.push(arr.&, 2)
     Array.push(arr.&, 3)
@@ -95,9 +95,9 @@ test_count_matching_alloc() {
 }
 
 test_fold_right() {
-    error        := 0
-    scale: Int   := 10
-    arr          := Array.empty[Int]()
+    error      := 0
+    scale: Int := 10
+    arr        := Array.empty[Int]()
     Array.push(arr.&, 1)
     Array.push(arr.&, 2)
     Array.push(arr.&, 3)

@@ -1,6 +1,6 @@
 #module main
 
-Either[a, b]: | Left { v: a }
+Either[a, b]: | Left  { v: a }
               | Right { v: b }
 
 main() {

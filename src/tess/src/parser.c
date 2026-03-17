@@ -754,7 +754,7 @@ int a_type_identifier_base(parser *self) {
             ast_node *right = self->result;
 
             if (maybe_mangle_binop(self, op, &ident, right)) {
-                continue;  // combined module or resolved member — check for more dots
+                continue; // combined module or resolved member — check for more dots
             } else {
                 mangle_name(self, right);
                 return result_ast_node(self, right);
@@ -770,8 +770,8 @@ int a_type_identifier_base(parser *self) {
         maybe_mangle_implicit_submodule(self, ident);
 
         if (type_args.size) {
-            ast_node *r = ast_node_create_nfa(
-              self->ast_arena, ident, (ast_node_sized)sized_all(type_args), (ast_node_sized){0});
+            ast_node *r = ast_node_create_nfa(self->ast_arena, ident, (ast_node_sized)sized_all(type_args),
+                                              (ast_node_sized){0});
             return result_ast_node(self, r);
         } else {
             return result_ast_node(self, ident);
@@ -1080,9 +1080,9 @@ int maybe_type_parameters(parser *self, ast_node_array *out) {
 
 int toplevel_defun(parser *self) {
     if (a_try(self, a_attributed_identifier)) return 1;
-    ast_node      *name        = self->result;
+    ast_node      *name = self->result;
     ast_node_array type_params;
-    ast_node_array params      = {.alloc = self->ast_arena};
+    ast_node_array params = {.alloc = self->ast_arena};
 
     if (maybe_type_parameters(self, &type_params)) return 1;
     int res = parse_param_list(self, &params, 1);

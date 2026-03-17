@@ -15,7 +15,7 @@ main() {
     error += if arr.size == 4zu {0} else {1}
 
     // Mixed: explicit and implicit
-    arr.Array.push(50)                    // explicit still works
+    arr.Array.push(50)                  // explicit still works
     error += if arr.size == 5zu {0} else {1}
 
     // Value receiver — element access

@@ -35,7 +35,7 @@ main() {
     w := Geom.Vec3(x = 10, y = 20, z = 30)
 
     // Implicit module resolve — value receiver
-    error += if v.length_sq() == 14 {0} else {1}       // 1+4+9
+    error += if v.length_sq() == 14 {0} else {1} // 1+4+9
     b := v.scale(2)
     error += if b.x == 2 && b.y == 4 && b.z == 6 {0} else {1}
 
@@ -52,7 +52,7 @@ main() {
 
     // Chaining: value→value→scalar
     r := Geom.Vec3(x = 1, y = 0, z = 0).scale(3).add(Geom.Vec3(x = 0, y = 4, z = 0)).length_sq()
-    error += if r == 25 {0} else {1}                   // (3,4,0) → 9+16+0
+    error += if r == 25 {0} else {1}    // (3,4,0) → 9+16+0
 
     // Explicit .Geom. still works
     d := v.Geom.scale(5)

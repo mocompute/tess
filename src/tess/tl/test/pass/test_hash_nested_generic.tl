@@ -20,21 +20,21 @@ main() {
     error: CInt := 0
 
     // Basic wrapper hash
-    w := Wrapper.wrap(42)
-    hw := hash(w)
+    w   := Wrapper.wrap(42)
+    hw  := hash(w)
     h42 := hash(42)
 
     // Transparent wrapping: hash(Wrapper(v=42)) == hash(42)
     if hw != h42 { error += 1 }
 
     // Nested: Wrapper[Wrapper[Int]]
-    ww := Wrapper.wrap(w)
+    ww  := Wrapper.wrap(w)
     hww := hash(ww)
     // hash(Wrapper(Wrapper(42))) == hash(Wrapper(42)) == hash(42)
     if hww != h42 { error += 1 }
 
     // Multiple trait bounds
-    ch := combine_hash(10, 20)
+    ch       := combine_hash(10, 20)
     expected := hash(10) ^ hash(20)
     if ch != expected { error += 1 }
 

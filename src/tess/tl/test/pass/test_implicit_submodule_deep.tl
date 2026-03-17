@@ -2,11 +2,11 @@
 #module A
 
 #module A.B
-BData: { x: CInt }
+BData:                     { x: CInt      }
 create_b(v: CInt) -> BData { BData(x = v) }
 
 #module A.B.C
-CData: { y: CInt }
+CData:                     { y: CInt      }
 create_c(v: CInt) -> CData { CData(y = v) }
 
 #module A.B
@@ -21,6 +21,7 @@ use_b(v: CInt) -> B.BData { B.create_b(v) }
 use_bc(v: CInt) -> B.C.CData { B.C.create_c(v) }
 
 #module main
+
 main() {
     error: CInt := 0
 

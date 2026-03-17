@@ -1,8 +1,7 @@
-#include <stdio.h>
 #include "mylib.h"
+#include <stdio.h>
 
-int main(void)
-{
+int main(void) {
     tl_init_mylib();
 
     printf("addi(2, 3) = %d\n", MyLib_addi(2, 3));

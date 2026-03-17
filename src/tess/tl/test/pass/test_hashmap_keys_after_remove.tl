@@ -5,7 +5,7 @@
 
 main() {
     error: CInt := 0
-    m := HashMap.create[Int, Int]()
+    m           := HashMap.create[Int, Int]()
 
     // Insert 10 entries
     i := 0

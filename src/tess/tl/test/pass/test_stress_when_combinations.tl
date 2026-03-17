@@ -4,7 +4,7 @@ Shape: | Circle { radius: Int }
        | Square { length: Int }
        | MyNone
 
-Color: | Red { intensity: Int }
+Color: | Red  { intensity: Int }
        | Blue { intensity: Int }
 
 // when as function argument

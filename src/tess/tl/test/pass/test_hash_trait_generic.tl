@@ -21,7 +21,7 @@ compute_hash[T: Hash](x: T) -> CSize {
 main() -> CInt {
     error: CInt := 0
 
-    w := Wrapper.wrap(42)
+    w  := Wrapper.wrap(42)
     h1 := hash(w)
     error += if h1 != 0zu { 0 } else { 1 }
 

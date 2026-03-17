@@ -29,7 +29,7 @@ test_cross_err() -> Result[Void, CInt] {
 
 // Cross-type try: Result[CInt, CInt] -> Result[Int, CInt]
 test_cross_ok_different_success() -> Result[Int, CInt] {
-    val := try make_ok_int(7)
+    val         := try make_ok_int(7)
     result: Int := val
     Ok(result)
 }
@@ -59,7 +59,7 @@ main() {
 
     // Test 1: cross-type try, Ok path
     when test_cross_ok() {
-        ok: Ok { fails += 0 }
+        ok:  Ok { fails += 0 }
         err: Err {
             c_printf("FAIL test_cross_ok: got Err(%d)\n", err.v)
             fails += 1
@@ -96,7 +96,7 @@ main() {
 
     // Test 4: multiple cross-type try
     when test_multi_try() {
-        ok: Ok { fails += 0 }
+        ok:  Ok { fails += 0 }
         err: Err {
             c_printf("FAIL test_multi_try: got Err(%d)\n", err.v)
             fails += 1
@@ -118,7 +118,7 @@ main() {
     }
 
     when outer(10) {
-        ok: Ok { fails += 0 }
+        ok:  Ok { fails += 0 }
         err: Err {
             c_printf("FAIL outer(10): got Err(%d)\n", err.v)
             fails += 1
@@ -126,7 +126,7 @@ main() {
     }
 
     if fails == 0 { c_printf("All cross-type try tests passed.\n") }
-    else          { c_printf("%d cross-type try test(s) failed.\n", fails) }
+    else { c_printf("%d cross-type try test(s) failed.\n", fails) }
 
     fails
 }

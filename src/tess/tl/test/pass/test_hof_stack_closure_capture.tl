@@ -4,9 +4,9 @@
 // Stack closures with captures passed to stdlib Array HOFs.
 
 test_map_capture() {
-    error  := 0
+    error       := 0
     offset: Int := 100
-    arr    := Array.empty[Int]()
+    arr         := Array.empty[Int]()
     Array.push(arr.&, 1)
     Array.push(arr.&, 2)
     Array.push(arr.&, 3)
@@ -21,9 +21,9 @@ test_map_capture() {
 }
 
 test_filter_capture() {
-    error      := 0
+    error          := 0
     threshold: Int := 3
-    arr        := Array.empty[Int]()
+    arr            := Array.empty[Int]()
     Array.push(arr.&, 1)
     Array.push(arr.&, 2)
     Array.push(arr.&, 3)
@@ -39,9 +39,9 @@ test_filter_capture() {
 }
 
 test_reduce_capture() {
-    error    := 0
+    error      := 0
     scale: Int := 10
-    arr      := Array.empty[Int]()
+    arr        := Array.empty[Int]()
     Array.push(arr.&, 1)
     Array.push(arr.&, 2)
     Array.push(arr.&, 3)
@@ -65,9 +65,9 @@ test_foreach_capture() {
 }
 
 test_any_of_capture() {
-    error    := 0
+    error       := 0
     target: Int := 20
-    arr      := Array.empty[Int]()
+    arr         := Array.empty[Int]()
     Array.push(arr.&, 10)
     Array.push(arr.&, 20)
     Array.push(arr.&, 30)
@@ -79,9 +79,9 @@ test_any_of_capture() {
 }
 
 test_all_capture() {
-    error    := 0
+    error      := 0
     bound: Int := 5
-    arr      := Array.empty[Int]()
+    arr        := Array.empty[Int]()
     Array.push(arr.&, 10)
     Array.push(arr.&, 20)
     Array.push(arr.&, 30)
@@ -93,9 +93,9 @@ test_all_capture() {
 }
 
 test_find_capture() {
-    error      := 0
+    error          := 0
     threshold: Int := 15
-    arr        := Array.empty[Int]()
+    arr            := Array.empty[Int]()
     Array.push(arr.&, 10)
     Array.push(arr.&, 20)
     Array.push(arr.&, 30)
@@ -108,9 +108,9 @@ test_find_capture() {
 }
 
 test_sort_capture() {
-    error      := 0
-    direction: Int := 1  // 1 = ascending, -1 = descending
-    arr        := Array.empty[Int]()
+    error          := 0
+    direction: Int := 1                 // 1 = ascending, -1 = descending
+    arr            := Array.empty[Int]()
     Array.push(arr.&, 3)
     Array.push(arr.&, 1)
     Array.push(arr.&, 2)

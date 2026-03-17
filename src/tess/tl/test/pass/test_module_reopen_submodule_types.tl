@@ -3,7 +3,7 @@
 #module Outer
 
 #module Outer.Inner
-InnerData: { value: CInt }
+InnerData:                 { value: CInt          }
 make(v: CInt) -> InnerData { InnerData(value = v) }
 
 #module Outer
@@ -15,9 +15,10 @@ get_inner() -> Outer.Inner.InnerData
 get_inner() { Outer.Inner.make(42) }
 
 #module main
+
 main() {
-    d := Outer.Inner.make(10)
-    r := Outer.wrap(d)
+    d  := Outer.Inner.make(10)
+    r  := Outer.wrap(d)
     d2 := Outer.get_inner()
     r + d2.value - 52
 }

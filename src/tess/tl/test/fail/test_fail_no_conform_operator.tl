@@ -16,7 +16,7 @@ main() {
     b := Vec.Vec2(x = 3, y = 4)
 
     // This should fail: Vec2 has [[no_conform(Add)]], so + operator is blocked
-    c := a + b
+    c            := a + b
     result: CInt := c.x
     result
 }

@@ -24,14 +24,14 @@ typedef struct parser_error {
 typedef struct {
     tl_type_registry *registry;
     str_sized         files;
-    char const       *prelude;        // optional: TL source string parsed before files
-    str_array         defines;        // -D symbols for conditional compilation
-    hashmap          *known_modules;  // optional: pre-scanned module names (str map) for nested module validation
-    hashmap          *module_pkg_prefixes; // optional: module name → "pkg__ver" prefix (str→str map)
-    hashmap          *file_pkg_prefixes;  // optional: file_path → hashmap* (module→prefix per file)
-    char const       *preloaded_path; // optional: path (e.g. "<stdin>") for pre-loaded file data
-    char const       *preloaded_data; // optional: pre-loaded file contents (used instead of file_read)
-    u32               preloaded_size; // size of preloaded_data
+    char const       *prelude; // optional: TL source string parsed before files
+    str_array         defines; // -D symbols for conditional compilation
+    hashmap    *known_modules; // optional: pre-scanned module names (str map) for nested module validation
+    hashmap    *module_pkg_prefixes; // optional: module name → "pkg__ver" prefix (str→str map)
+    hashmap    *file_pkg_prefixes;   // optional: file_path → hashmap* (module→prefix per file)
+    char const *preloaded_path;      // optional: path (e.g. "<stdin>") for pre-loaded file data
+    char const *preloaded_data;      // optional: pre-loaded file contents (used instead of file_read)
+    u32         preloaded_size;      // size of preloaded_data
 } parser_opts;
 
 // -- allocation and deallocation --

@@ -2,7 +2,7 @@
 #module P
 
 #module P.S
-SData: { v: CInt }
+SData:                   { v: CInt      }
 create(v: CInt) -> SData { SData(v = v) }
 
 #module P
@@ -13,6 +13,7 @@ use_s(v: CInt) -> P.S.SData { P.S.create(v) }
 double(d: SData) -> SData { SData(v = d.v * 2) }
 
 #module main
+
 main() {
     error: CInt := 0
 

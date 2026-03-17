@@ -24,17 +24,17 @@ main() -> CInt {
 
     // CInt
     ci: CInt := 7
-    h5 := hash(ci)
+    h5       := hash(ci)
     error += if h5 != 0zu { 0 } else { 1 }
 
     // CSize
     cs: CSize := 99zu
-    h6 := hash(cs)
+    h6        := hash(cs)
     error += if h6 != 0zu { 0 } else { 1 }
 
     // CString (Ptr[CChar])
     s: CString := "hello"
-    h7 := hash(s)
+    h7         := hash(s)
     error += if h7 != 0zu { 0 } else { 1 }
 
     // Same value should produce same hash

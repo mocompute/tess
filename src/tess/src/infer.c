@@ -80,14 +80,11 @@ tl_infer *tl_infer_create(allocator *alloc, tl_infer_opts const *opts) {
             u8          arity;
             char const *ret; // "T" = Self, otherwise concrete type name
         } builtins[] = {
-          {"Add", "add", 2, "T"},     {"Sub", "sub", 2, "T"},
-          {"Mul", "mul", 2, "T"},     {"Div", "div", 2, "T"},
-          {"Mod", "mod", 2, "T"},     {"BitAnd", "bit_and", 2, "T"},
-          {"BitOr", "bit_or", 2, "T"},{"BitXor", "bit_xor", 2, "T"},
-          {"Shl", "shl", 2, "T"},     {"Shr", "shr", 2, "T"},
-          {"Eq", "eq", 2, "Bool"},    {"Neg", "neg", 1, "T"},
-          {"Not", "not", 1, "Bool"},  {"BitNot", "bit_not", 1, "T"},
-          {"Hash", "hash", 1, "CSize"},
+          {"Add", "add", 2, "T"},      {"Sub", "sub", 2, "T"},        {"Mul", "mul", 2, "T"},
+          {"Div", "div", 2, "T"},      {"Mod", "mod", 2, "T"},        {"BitAnd", "bit_and", 2, "T"},
+          {"BitOr", "bit_or", 2, "T"}, {"BitXor", "bit_xor", 2, "T"}, {"Shl", "shl", 2, "T"},
+          {"Shr", "shr", 2, "T"},      {"Eq", "eq", 2, "Bool"},       {"Neg", "neg", 1, "T"},
+          {"Not", "not", 1, "Bool"},   {"BitNot", "bit_not", 1, "T"}, {"Hash", "hash", 1, "CSize"},
         };
         for (u32 i = 0; i < sizeof(builtins) / sizeof(builtins[0]); i++) {
             tl_trait_def *def = new(self->arena, tl_trait_def);
@@ -96,10 +93,10 @@ tl_infer *tl_infer_create(allocator *alloc, tl_infer_opts const *opts) {
             def->parents      = (str_array){.alloc = self->arena};
             def->sigs         = (tl_trait_sig_array){.alloc = self->arena};
             def->source_node  = null;
-            tl_trait_sig sig  = {.name  = str_init(self->arena, builtins[i].func),
-                                 .arity = builtins[i].arity,
-                                 .arrow = make_builtin_trait_arrow(self->arena, builtins[i].arity,
-                                                                   builtins[i].ret)};
+            tl_trait_sig sig  = {
+               .name  = str_init(self->arena, builtins[i].func),
+               .arity = builtins[i].arity,
+               .arrow = make_builtin_trait_arrow(self->arena, builtins[i].arity, builtins[i].ret)};
             array_push(def->sigs, sig);
             str_map_set_ptr(&self->traits, def->name, def);
         }

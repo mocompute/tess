@@ -51,14 +51,14 @@ main() {
     error += if v.y == 0 {0} else {1}
 
     // Test 4: Non-Ptr first param unchanged — value-taking function still works
-    v2 := Vec2(x = 3, y = 4)
+    v2  := Vec2(x = 3, y = 4)
     len := v2.vec2_length_sq()
     error += if len == 25 {0} else {1}
 
     // Test 5: Mixed explicit and implicit
     v3 := Vec2(x = 1, y = 2)
-    vec2_set_x(v3.&, 50)       // explicit
-    v3.vec2_set_y(60)           // implicit address-of
+    vec2_set_x(v3.&, 50)                // explicit
+    v3.vec2_set_y(60)                   // implicit address-of
     error += if v3.x == 50 {0} else {1}
     error += if v3.y == 60 {0} else {1}
 

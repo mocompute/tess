@@ -687,20 +687,15 @@ static void align_group(allocator *alloc, char **lines, int start, int end, int 
     // Process outer structural tokens before inner tokens so that
     // brace/paren alignment doesn't disrupt inner value alignment.
     int order[] = {
-        ALIGN_OPEN_PAREN,
-        ALIGN_OPEN_BRACE,
-        ALIGN_ARROW,
-        ALIGN_COLONEQ,
-        ALIGN_COLON_VALUE,
-        ALIGN_EQ,
-        ALIGN_CLOSE_BRACE,
+      ALIGN_OPEN_PAREN,  ALIGN_OPEN_BRACE, ALIGN_ARROW,       ALIGN_COLONEQ,
+      ALIGN_COLON_VALUE, ALIGN_EQ,         ALIGN_CLOSE_BRACE,
     };
     for (int ti = 0; ti < (int)(sizeof(order) / sizeof(order[0])); ti++) {
         int t = order[ti];
         if (in_function && (t == ALIGN_OPEN_PAREN || t == ALIGN_OPEN_BRACE || t == ALIGN_CLOSE_BRACE))
             continue;
-        if (t == ALIGN_COLONEQ || t == ALIGN_COLON_VALUE || t == ALIGN_EQ
-                || t == ALIGN_OPEN_BRACE || t == ALIGN_CLOSE_BRACE) {
+        if (t == ALIGN_COLONEQ || t == ALIGN_COLON_VALUE || t == ALIGN_EQ || t == ALIGN_OPEN_BRACE ||
+            t == ALIGN_CLOSE_BRACE) {
             align_subruns(alloc, lines, start, end, t);
         } else {
             try_align_token(alloc, lines, start, end, t);
@@ -835,13 +830,13 @@ static void align_pass(allocator *alloc, char **lines, int nlines) {
     int *opener_line = alloc_calloc(alloc, nlines + 1, sizeof(int)); // opener_line[depth] = line index
     int  cur_depth   = 0;
 
-    int in_c_block = 0;
+    int  in_c_block  = 0;
     for (int i = 0; i < nlines; i++) {
         char const *trimmed = ltrim(lines[i]);
 
         // Skip #ifc/#endc blocks entirely
         if (!in_c_block && starts_with(trimmed, "#ifc")) {
-            in_c_block = 1;
+            in_c_block  = 1;
             depth_at[i] = cur_depth;
             continue;
         }

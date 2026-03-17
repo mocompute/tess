@@ -513,12 +513,8 @@ static int node_is_capturing_closure(ast_node const *node) {
 }
 
 static void closure_escape_error(tl_infer *self, ast_node const *node) {
-    array_push(self->errors,
-               ((tl_infer_error){.tag  = tl_err_closure_escape,
-                                 .node = node}));
+    array_push(self->errors, ((tl_infer_error){.tag = tl_err_closure_escape, .node = node}));
 }
-
-
 
 // Check whether a node (at an escape point) is an allocated closure.
 // Traces symbols back through let_in bindings to find the originating lambda.
@@ -526,14 +522,12 @@ static int is_allocated_closure(tl_infer *self, ast_node *node, hashmap *binding
     if (!node) return 0;
 
     // Direct lambda
-    if (node->tag == ast_lambda_function)
-        return lambda_has_alloc(self, node);
+    if (node->tag == ast_lambda_function) return lambda_has_alloc(self, node);
 
     // Symbol — look up its binding in the let_in map and follow alias chains
     if (ast_node_is_symbol(node) && bindings) {
         ast_node *value = ast_node_str_map_get(bindings, ast_node_str(node));
-        if (value)
-            return is_allocated_closure(self, value, bindings);
+        if (value) return is_allocated_closure(self, value, bindings);
     }
 
     // let_in — record the binding and trace into the body.
@@ -552,8 +546,8 @@ static int is_allocated_closure(tl_infer *self, ast_node *node, hashmap *binding
 
     // if/else — both branches must be allocated closures
     if (node->tag == ast_if_then_else) {
-        return is_allocated_closure(self, node->if_then_else.yes, bindings)
-            && is_allocated_closure(self, node->if_then_else.no, bindings);
+        return is_allocated_closure(self, node->if_then_else.yes, bindings) &&
+               is_allocated_closure(self, node->if_then_else.no, bindings);
     }
 
     return 0;
@@ -610,12 +604,11 @@ static ast_node *toplevel_implicit_return(ast_node *node) {
 // (their symbol.original remains empty).  This lets us detect not-in-scope errors here
 // by checking whether a capture symbol was alpha-converted.
 
-
 // Collect free variables from a lambda body into a str_array, registering lambda parameters
 // as lexical names so they are excluded.
 static str_array collect_lambda_fvs(tl_infer *self, ast_node *node) {
     collect_free_variables_ctx fv_ctx;
-    fv_ctx.fvs = (str_array){.alloc = self->transient};
+    fv_ctx.fvs             = (str_array){.alloc = self->transient};
 
     traverse_ctx *inner    = traverse_ctx_create(self->transient);
     inner->user            = &fv_ctx;
@@ -638,7 +631,8 @@ static int check_closure_attrs_cb(tl_infer *self, traverse_ctx *ctx, ast_node *n
     if (node->tag != ast_lambda_function) return 0;
     if (!node->lambda_function.attributes) return 0;
 
-    lambda_closure_attrs attrs = lambda_get_closure_attrs(self->transient, node->lambda_function.attributes);
+    lambda_closure_attrs attrs =
+      lambda_get_closure_attrs(self->transient, node->lambda_function.attributes);
     if (!attrs.has_alloc) return 0;
 
     // Validate alloc_expr type is Ptr[Allocator].
@@ -657,8 +651,7 @@ static int check_closure_attrs_cb(tl_infer *self, traverse_ctx *ctx, ast_node *n
     if (!attrs.has_capture) {
         str_array fvs = collect_lambda_fvs(self, node);
         if (fvs.size)
-            array_push(self->errors,
-                       ((tl_infer_error){.tag = tl_err_alloc_missing_capture, .node = node}));
+            array_push(self->errors, ((tl_infer_error){.tag = tl_err_alloc_missing_capture, .node = node}));
         return 0;
     }
 
@@ -669,9 +662,8 @@ static int check_closure_attrs_cb(tl_infer *self, traverse_ctx *ctx, ast_node *n
         ast_node *cap = attrs.capture_nodes[j];
         if (ast_node_is_symbol(cap) && str_is_empty(cap->symbol.original)) {
             array_push(self->errors,
-                       ((tl_infer_error){.tag     = tl_err_capture_not_in_scope,
-                                         .node    = node,
-                                         .message = cap->symbol.name}));
+                       ((tl_infer_error){
+                         .tag = tl_err_capture_not_in_scope, .node = node, .message = cap->symbol.name}));
             return 0;
         }
     }
@@ -690,8 +682,7 @@ static int check_closure_attrs_cb(tl_infer *self, traverse_ctx *ctx, ast_node *n
             }
         }
         if (!found) {
-            array_push(self->errors,
-                       ((tl_infer_error){.tag = tl_err_capture_unlisted_var, .node = node}));
+            array_push(self->errors, ((tl_infer_error){.tag = tl_err_capture_unlisted_var, .node = node}));
             return 0;
         }
     }
@@ -707,8 +698,7 @@ static int check_closure_attrs_cb(tl_infer *self, traverse_ctx *ctx, ast_node *n
             }
         }
         if (!found) {
-            array_push(self->errors,
-                       ((tl_infer_error){.tag = tl_err_capture_unused_var, .node = node}));
+            array_push(self->errors, ((tl_infer_error){.tag = tl_err_capture_unused_var, .node = node}));
             return 0;
         }
     }
@@ -724,12 +714,12 @@ static int check_closure_checks_cb(tl_infer *self, traverse_ctx *ctx, ast_node *
 }
 
 void check_closure_checks(tl_infer *self) {
-    traverse_ctx    *traverse = traverse_ctx_create(self->transient);
-    hashmap_iterator iter     = {0};
-    ast_node        *node;
+    traverse_ctx           *traverse = traverse_ctx_create(self->transient);
+    hashmap_iterator        iter     = {0};
+    ast_node               *node;
 
     closure_escape_walk_ctx esc_ctx = {0};
-    traverse->user = &esc_ctx;
+    traverse->user                  = &esc_ctx;
 
     while ((node = toplevel_iter(self, &iter))) {
         if (ast_node_is_utd(node)) continue;
@@ -741,8 +731,7 @@ void check_closure_checks(tl_infer *self) {
         // Skip ast_return nodes — those are caught by the traversal callback.
         ast_node *last = toplevel_implicit_return(node);
         if (last && last->tag != ast_return && node_is_capturing_closure(last)) {
-            if (!is_allocated_closure(self, last, esc_ctx.bindings))
-                closure_escape_error(self, last);
+            if (!is_allocated_closure(self, last, esc_ctx.bindings)) closure_escape_error(self, last);
         }
 
         // Single traversal for both escape and alloc/capture checks

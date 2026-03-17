@@ -3,8 +3,8 @@
 
 // Test: CFloat -> CDouble and CFloat -> CLongDouble widening in funcalls and returns.
 
-take_cdouble    (x: CDouble)     -> CDouble     { x }
-take_clongdouble(x: CLongDouble) -> CLongDouble { x }
+take_cdouble    (x: CDouble)     -> CDouble         { x }
+take_clongdouble(x: CLongDouble) -> CLongDouble { x     }
 
 widen_return() -> CDouble {
     f: CFloat := 1.5

@@ -53,7 +53,7 @@ test_generic_func_returning_union() {
 }
 
 // Multiple type parameters with constraints through usage
-Either[a, b]: | Left { v: a }
+Either[a, b]: | Left  { v: a }
               | Right { v: b }
 
 swap_either[a, b](e: Either[a, b]) -> Either[b, a] {

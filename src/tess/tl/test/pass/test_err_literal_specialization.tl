@@ -16,7 +16,7 @@ test() -> Result[Void, CInt] {
 
 main() {
     when test() {
-        ok: Ok { 1 }
+        ok:  Ok { 1 }
         err: Err {
             if err.v != 42 { return 1 }
             0

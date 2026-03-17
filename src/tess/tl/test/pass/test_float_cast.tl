@@ -7,8 +7,8 @@ main() {
     error := 0
 
     // Float narrowing: CDouble -> CFloat via let-in annotation
-    d:      CDouble := 1.5
-    narrow: CFloat  := d
+    d:      CDouble     := 1.5
+    narrow: CFloat := d
     error += if sizeof(narrow) == sizeof[CFloat]() {0} else {1}
 
     // Float to integer cast
@@ -17,7 +17,7 @@ main() {
     error += if i == 3 {0} else {1}
 
     // Integer to float cast
-    n:  Int   := 42
+    n:  Int    := 42
     fl: Float := n
     error += if fl == 42.0 {0} else {1}
 

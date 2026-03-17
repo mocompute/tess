@@ -61,7 +61,7 @@ Container: | Holds { ptr: Ptr[Int], len: Int }
 
 test_variant_with_ptr_to_carray() {
     arr: CArray[Int, 4] := void
-    p:   Ptr[Int]       := arr
+    p:   Ptr[Int]         := arr
     p.[0] = 10
     p.[1] = 20
     p.[2] = 30

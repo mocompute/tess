@@ -441,8 +441,8 @@ str str_make_c_identifier(allocator *alloc, str in) {
     if (len <= MOS_STR_MAX_SMALL) {
         str out       = {0};
         out.small.tag = STR_SMALL;
-        out.small.len = (unsigned char)platform_make_c_identifier(
-            out.small.buf, src.buf, MOS_STR_MAX_SMALL + 1);
+        out.small.len =
+          (unsigned char)platform_make_c_identifier(out.small.buf, src.buf, MOS_STR_MAX_SMALL + 1);
         return out;
     }
 

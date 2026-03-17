@@ -3,7 +3,7 @@
 
 #module Defs
 
-Res[T]: | ROk { v: T }
+Res[T]: | ROk  { v: T }
         | RErr { code: Int }
 
 #module Aliases
@@ -36,8 +36,8 @@ main() {
     error := 0
 
     // --- Test 1: Use alias and full generic form in same program ---
-    via_alias:   Aliases.IntRes := Defs.ROk(10)
-    via_generic: Defs.Res[Int]  := Defs.ROk(20)
+    via_alias:   Aliases.IntRes  := Defs.ROk(10)
+    via_generic: Defs.Res[Int] := Defs.ROk(20)
 
     error += if extract(via_alias, 0) == 10 { 0 } else { 1 }
     error += if extract(via_generic, 0) == 20 { 0 } else { 1 }

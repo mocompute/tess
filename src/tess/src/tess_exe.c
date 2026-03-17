@@ -121,7 +121,8 @@ noreturn void usage(int status, char const *argv0) {
     printf("    -i, --in-place         overwrite file in place (fmt command only)\n");
     printf("    --list                 list archive contents (pack command only)\n");
     printf("    --unpack               extract .tpkg archive (-o for output dir, default .)\n");
-    printf("    -v                     verbose logging (-v phase markers, -vv key decisions, -vvv full detail)\n");
+    printf("    -v                     verbose logging (-v phase markers, -vv key decisions, -vvv full "
+           "detail)\n");
     printf("    --no-line-directive    suppress output of #line directives in C file\n");
     printf("    --bounds-check         enable integer narrowing bounds checks (default in debug)\n");
     printf("    --no-bounds-check      disable integer narrowing bounds checks\n");
@@ -342,8 +343,8 @@ static void add_standard_include_paths(state *self, char const *cwd) {
 extern unsigned char const tess_stdlib_tpkg[];
 extern unsigned int const  tess_stdlib_tpkg_size;
 
-static void extract_embedded_stdlib(state *self) {
-    allocator *scratch = arena_create(self->arena, 256 * 1024);
+static void                extract_embedded_stdlib(state *self) {
+    allocator      *scratch = arena_create(self->arena, 256 * 1024);
 
     tl_tpkg_archive archive;
     if (tl_tpkg_read_from_memory(scratch, tess_stdlib_tpkg, tess_stdlib_tpkg_size, &archive)) {
@@ -768,8 +769,7 @@ static hashmap *build_module_prefix_map(allocator *alloc, dep_resolve_ctx *ctx) 
 // Optionally builds a module→prefix map for package-versioned name mangling.
 // Returns 0 on success (including no package.tl), 1 on error.
 static int load_package_deps(state *self, str_array *out_pkg_files, hashmap **out_module_prefixes,
-                             hashmap **out_file_pkg_prefixes, str *out_pkg_name,
-                             str *out_pkg_version) {
+                             hashmap **out_file_pkg_prefixes, str *out_pkg_name, str *out_pkg_version) {
     str pkg_path = str_init_static("package.tl");
     if (!file_exists(pkg_path)) {
         return 0;
@@ -1004,10 +1004,10 @@ static int generate_cbindings(state *self) {
     }
 
     tl_cbind_opts opts = {
-        .header_path = self->words.v[1],
-        .module_name = NULL,
-        .cc          = self->cc,
-        .verbose     = self->verbose,
+      .header_path = self->words.v[1],
+      .module_name = NULL,
+      .cc          = self->cc,
+      .verbose     = self->verbose,
     };
 
     self->program = tl_cbind(self->arena, &opts);
@@ -1168,11 +1168,11 @@ int compile(state *self) {
     }
 
     // Load package dependencies (if package.tl exists with depend() declarations)
-    str_array pkg_files           = {.alloc = self->arena};
-    hashmap  *module_prefixes     = null;
-    hashmap  *file_pkg_prefixes   = null;
-    str       cur_pkg_name        = str_empty();
-    str       cur_pkg_version     = str_empty();
+    str_array pkg_files         = {.alloc = self->arena};
+    hashmap  *module_prefixes   = null;
+    hashmap  *file_pkg_prefixes = null;
+    str       cur_pkg_name      = str_empty();
+    str       cur_pkg_version   = str_empty();
     if (load_package_deps(self, &pkg_files, &module_prefixes, &file_pkg_prefixes, &cur_pkg_name,
                           &cur_pkg_version))
         return 1;

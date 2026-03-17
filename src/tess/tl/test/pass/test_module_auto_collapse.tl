@@ -21,7 +21,7 @@ test_return_type() -> CInt {
 
 // Test: bare Array[T] in function parameter type
 sum_array(a: Array[Int]) -> Int {
-    total := 0
+    total    := 0
     i: CSize := 0zu
     while i < a.size, i += 1zu { total += a.v.[i] }
     total

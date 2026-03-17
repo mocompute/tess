@@ -78,9 +78,9 @@ typedef struct {
     // allocated closure: context fields are values (not pointers), access is direct (not dereference)
     int          is_allocated_closure;
 
-    defer_scope  *defers;              // innermost defer scope (linked list head)
-    defer_scope  *loop_defer_boundary; // snapshot at loop entry; break/continue stop here
-    tl_monotype  *func_return_type;    // return type of enclosing function (for cross-type try)
+    defer_scope *defers;              // innermost defer scope (linked list head)
+    defer_scope *loop_defer_boundary; // snapshot at loop entry; break/continue stop here
+    tl_monotype *func_return_type;    // return type of enclosing function (for cross-type try)
 
 } eval_ctx;
 
@@ -136,24 +136,24 @@ static void cat_close_curlyln(transpile *);
 // static void        cat_i64(transpile *, i64);
 // static void        cat_f64(transpile *, f64);
 
-tl_monotype *env_lookup(transpile *, str); // may be null
-static str   mangle_fun(transpile *, str); // allocates transient
-static int   should_generate(transpile *, str, tl_polytype *);
-static str   type_to_c(transpile *, tl_polytype *);
-static str   type_to_c_mono(transpile *, tl_monotype *);
-static str   arrow_rhs_to_c(transpile *, tl_polytype *);
-static str   arrow_to_c_params(transpile *, tl_polytype *, str_sized); // allocates transient
-static void  build_arrow_to_c(transpile *, str_build *, tl_monotype *, str);
-static str   ptr_to_arrow_to_c(transpile *, tl_monotype *);
-static str   ptr_to_arrow_decl(transpile *, tl_monotype *, str);
-static void  generate_function_signature(transpile *, str, tl_polytype *, str_sized);
+tl_monotype         *env_lookup(transpile *, str); // may be null
+static str           mangle_fun(transpile *, str); // allocates transient
+static int           should_generate(transpile *, str, tl_polytype *);
+static str           type_to_c(transpile *, tl_polytype *);
+static str           type_to_c_mono(transpile *, tl_monotype *);
+static str           arrow_rhs_to_c(transpile *, tl_polytype *);
+static str           arrow_to_c_params(transpile *, tl_polytype *, str_sized); // allocates transient
+static void          build_arrow_to_c(transpile *, str_build *, tl_monotype *, str);
+static str           ptr_to_arrow_to_c(transpile *, tl_monotype *);
+static str           ptr_to_arrow_decl(transpile *, tl_monotype *, str);
+static void          generate_function_signature(transpile *, str, tl_polytype *, str_sized);
 noreturn static void exit_error(char const *file, u32 line, char const *restrict fmt, ...);
-static void  update_type(transpile *, tl_monotype **);
-static int   get_c_export_name(allocator *, ast_node *, str *out_export_name);
-static int   is_c_exportable_type(tl_monotype *);
-static void  validate_c_exports(transpile *);
-static void  generate_c_exports(transpile *);
-static int   has_c_exports(transpile *);
+static void          update_type(transpile *, tl_monotype **);
+static int           get_c_export_name(allocator *, ast_node *, str *out_export_name);
+static int           is_c_exportable_type(tl_monotype *);
+static void          validate_c_exports(transpile *);
+static void          generate_c_exports(transpile *);
+static int           has_c_exports(transpile *);
 
 // Escape Tess identifiers that clash with C reserved keywords by prefixing them with tl_kw_.
 // Returns the original name unchanged if it is not a C keyword.
@@ -925,9 +925,9 @@ static void generate_toplevels(transpile *self) {
             cat(self, S("(void)tl_ctx_raw;\n"));
         }
 
-        eval_ctx ctx      = {.free_variables    = poly->type->list.fvs,
-                              .is_allocated_closure = is_alloc,
-                              .func_return_type     = return_type};
+        eval_ctx ctx      = {.free_variables       = poly->type->list.fvs,
+                             .is_allocated_closure = is_alloc,
+                             .func_return_type     = return_type};
         str      body_res = generate_expr(self, return_type, body, &ctx);
         if (!res_is_void && !str_is_empty(body_res) && !ctx.is_effective_void) {
             generate_decl(self, res, return_type);
@@ -1142,8 +1142,7 @@ static str generate_type_constructor(transpile *self, ast_node const *node, eval
             generate_assign_field(self, res, def->field_names.v[i], S("0"));
             continue;
         }
-        str arg_value =
-          generate_expr(self, field_type, node->named_application.arguments[i], ctx);
+        str arg_value = generate_expr(self, field_type, node->named_application.arguments[i], ctx);
 
         if (!str_is_empty(arg_value)) {
             cat(self, res);
@@ -1861,7 +1860,8 @@ static str generate_tagged_union_case(transpile *self, ast_node const *node, eva
 
     // Get the wrapper type (Shape)
     tl_monotype *wrapper_type = node->case_.expression->type->type;
-    if (!tl_monotype_is_inst(wrapper_type)) exit_error(node->file, node->line, "expected tagged union type in case expression");
+    if (!tl_monotype_is_inst(wrapper_type))
+        exit_error(node->file, node->line, "expected tagged union type in case expression");
 
     str wrapper_name = wrapper_type->cons_inst->def->name;
     (void)wrapper_name; // may be used for debug
@@ -1911,14 +1911,16 @@ static str generate_tagged_union_case(transpile *self, ast_node const *node, eva
 
         ast_node *cond = node->case_.conditions.v[i];
         if (!ast_node_is_symbol(cond) || !cond->symbol.annotation) {
-            exit_error(cond->file, cond->line, "tagged union case condition must be 'binding: VariantType'");
+            exit_error(cond->file, cond->line,
+                       "tagged union case condition must be 'binding: VariantType'");
         }
 
         // Get variant type from the condition's annotation
         ast_node    *variant_type_node = cond->symbol.annotation;
         tl_monotype *variant_type      = cond->symbol.annotation_type->type;
 
-        if (!tl_monotype_is_inst(variant_type)) exit_error(cond->file, cond->line, "expected variant type in case condition");
+        if (!tl_monotype_is_inst(variant_type))
+            exit_error(cond->file, cond->line, "expected variant type in case condition");
 
         // Get the variant name (unmangled) from the annotation
         str variant_name = ast_node_name_original(variant_type_node);
@@ -2407,11 +2409,15 @@ static str generate_try(transpile *self, tl_monotype *type, ast_node const *node
     tl_monotype *tag_type   = null;
     tl_monotype *union_type = null;
     tagged_union_wrapper_fields(wrapper_type, &tag_type, &union_type);
-    if (!tag_type || !union_type) exit_error(node->file, node->line, "try expression requires a tagged union with 'tag' and 'union' fields");
+    if (!tag_type || !union_type)
+        exit_error(node->file, node->line,
+                   "try expression requires a tagged union with 'tag' and 'union' fields");
 
     // Get variant names: first = success, second = error
     str_sized variant_names = union_type->cons_inst->def->field_names;
-    if (variant_names.size < 2) exit_error(node->file, node->line, "try expression requires a tagged union with at least two variants");
+    if (variant_names.size < 2)
+        exit_error(node->file, node->line,
+                   "try expression requires a tagged union with at least two variants");
     str success_name = variant_names.v[0];
     str error_name   = variant_names.v[1];
 
@@ -2449,14 +2455,14 @@ static str generate_try(transpile *self, tl_monotype *type, ast_node const *node
         tl_monotype *ret_union_type = null;
         tagged_union_wrapper_fields(ctx->func_return_type, &ret_tag_type, &ret_union_type);
 
-        str ret_error_name   = ret_union_type->cons_inst->def->field_names.v[1];
-        str ret_tag_enum     = ret_tag_type->cons_inst->def->name;
-        str ret_tag_err_name = str_qualify(self->transient, ret_tag_enum, ret_error_name);
+        str          ret_error_name   = ret_union_type->cons_inst->def->field_names.v[1];
+        str          ret_tag_enum     = ret_tag_type->cons_inst->def->name;
+        str          ret_tag_err_name = str_qualify(self->transient, ret_tag_enum, ret_error_name);
 
-        tl_monotype *ret_err_variant = ret_union_type->cons_inst->args.v[1];
-        str_sized    err_fields      = ret_err_variant->cons_inst->def->field_names;
+        tl_monotype *ret_err_variant  = ret_union_type->cons_inst->args.v[1];
+        str_sized    err_fields       = ret_err_variant->cons_inst->def->field_names;
 
-        str err_res = next_res(self);
+        str          err_res          = next_res(self);
         generate_decl(self, err_res, ctx->func_return_type);
 
         // Set tag
@@ -3287,9 +3293,7 @@ static str arrow_to_c_params(transpile *self, tl_polytype *type, str_sized param
         if (tl_monotype_is_arrow(arg)) {
             build_arrow_to_c(self, &b, arg, pname);
         } else {
-            str tc = tl_monotype_is_void(arg)
-                       ? S("char")
-                       : type_to_c_mono(self, arg);
+            str tc = tl_monotype_is_void(arg) ? S("char") : type_to_c_mono(self, arg);
             str_build_cat(&b, tc);
             if (!str_is_empty(pname)) {
                 str_build_cat(&b, S(" "));
@@ -3365,7 +3369,8 @@ static str tl_sizeof(transpile *self, ast_node const *node, eval_ctx *ctx, void 
     }
 
     // single argument may be an expression or a type constructor
-    if (1 != node->named_application.n_arguments) exit_error(node->file, node->line, "sizeof expects exactly one argument");
+    if (1 != node->named_application.n_arguments)
+        exit_error(node->file, node->line, "sizeof expects exactly one argument");
     ast_node const *arg = node->named_application.arguments[0];
 
     // // Note: The environment contains the most current type for a symbol argument.
@@ -3411,7 +3416,8 @@ static str tl_alignof(transpile *self, ast_node const *node, eval_ctx *ctx, void
     }
 
     // single argument may be an expression or a type constructor
-    if (1 != node->named_application.n_arguments) exit_error(node->file, node->line, "alignof expects exactly one argument");
+    if (1 != node->named_application.n_arguments)
+        exit_error(node->file, node->line, "alignof expects exactly one argument");
     ast_node const *arg  = node->named_application.arguments[0];
 
     tl_polytype    *poly = arg->type;
@@ -3439,7 +3445,8 @@ static str tl_fatal(transpile *self, ast_node const *node, eval_ctx *ctx, void *
     (void)ctx;
     assert(ast_node_is_nfa(node));
 
-    if (1 != node->named_application.n_arguments) exit_error(node->file, node->line, "fatal() expects exactly one argument");
+    if (1 != node->named_application.n_arguments)
+        exit_error(node->file, node->line, "fatal() expects exactly one argument");
     ast_node const *arg = node->named_application.arguments[0];
     if (ast_string != arg->tag) {
         exit_error(arg->file, arg->line, "fatal() argument must be a string literal");
@@ -3459,7 +3466,7 @@ static str tl_hash(transpile *self, ast_node const *node, eval_ctx *ctx, void *e
         exit_error(node->file, node->line, "hash() expects exactly one argument");
 
     ast_node const *arg  = node->named_application.arguments[0];
-    str              expr = generate_expr(self, null, arg, ctx);
+    str             expr = generate_expr(self, null, arg, ctx);
 
     // Ptr[CChar] (CString): hash the null-terminated string
     if (arg->type && tl_monotype_is_ptr_to_char(arg->type->type))
@@ -3469,8 +3476,8 @@ static str tl_hash(transpile *self, ast_node const *node, eval_ctx *ctx, void *e
     // Use compound literal for addressable storage: (T){expr}
     tl_monotype *mono  = arg->type->type;
     str          ctype = type_to_c_mono(self, mono);
-    return str_fmt(self->transient, "tl_hash_bytes(&(%s){%s}, sizeof(%s))",
-                   str_cstr(&ctype), str_cstr(&expr), str_cstr(&ctype));
+    return str_fmt(self->transient, "tl_hash_bytes(&(%s){%s}, sizeof(%s))", str_cstr(&ctype),
+                   str_cstr(&expr), str_cstr(&ctype));
 }
 
 static str generate_funcall_intrinsic(transpile *self, ast_node const *node, eval_ctx *ctx) {

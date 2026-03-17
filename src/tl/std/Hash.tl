@@ -14,5 +14,5 @@ c_tl_hash_bytes  (p: Ptr[any], n: CSize) -> CSize
 c_tl_hash_cstring(s: CString)            -> CSize
 
 
-fnv1a        (p: Ptr[any], n: CSize) -> CSize { c_tl_hash_bytes(p, n) }
-fnv1a_cstring(s: CString)            -> CSize { c_tl_hash_cstring(s)  }
+fnv1a        (p: Ptr[any], n: CSize) -> CSize { c_tl_hash_bytes(p, n)           }
+fnv1a_cstring(s: CString)            -> CSize            { c_tl_hash_cstring(s) }

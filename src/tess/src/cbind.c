@@ -98,7 +98,7 @@ struct c_type {
     c_type  *fp_ret;
     int      fp_variadic;
 
-    u32 array_size; // 0 = not an array, >0 = fixed-size array
+    u32      array_size; // 0 = not an array, >0 = fixed-size array
 };
 
 struct c_param {
@@ -959,12 +959,11 @@ static void parse_field_array(cbind_state *st, c_type *t) {
                 char buf[32];
                 u32  n = size_tok.len < sizeof(buf) - 1 ? size_tok.len : (u32)(sizeof(buf) - 1);
                 memcpy(buf, size_tok.start, n);
-                buf[n] = '\0';
+                buf[n]        = '\0';
                 t->array_size = (u32)strtoul(buf, NULL, 10);
             }
         }
-        while (peek_token(st).kind != CTK_RBRACKET && peek_token(st).kind != CTK_EOF)
-            next_token(st);
+        while (peek_token(st).kind != CTK_RBRACKET && peek_token(st).kind != CTK_EOF) next_token(st);
         if (peek_token(st).kind == CTK_RBRACKET) next_token(st);
     }
 }
@@ -1732,9 +1731,9 @@ static str type_to_tess(allocator *a, c_type const *t, hashmap *typedefs) {
 
     // fixed-size array
     if (t->array_size > 0) {
-        c_type elem = *t;
+        c_type elem     = *t;
         elem.array_size = 0;
-        str elem_str = type_to_tess(a, &elem, typedefs);
+        str elem_str    = type_to_tess(a, &elem, typedefs);
         return str_fmt(a, "CArray[%.*s, %u]", str_ilen(elem_str), str_buf(&elem_str), t->array_size);
     }
 
@@ -1793,8 +1792,8 @@ static str type_to_tess(allocator *a, c_type const *t, hashmap *typedefs) {
 // ---------------------------------------------------------------------------
 
 static str emit_bindings(allocator *a, cbind_state *st, char const *module_name) {
-    str_build sb = str_build_init(a, 4096);
-    hashmap *emitted = hset_create(a, 64);
+    str_build sb      = str_build_init(a, 4096);
+    hashmap  *emitted = hset_create(a, 64);
 
     // module + include
     str mod_line = str_fmt(a, "#module %s\n", module_name);

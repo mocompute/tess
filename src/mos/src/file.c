@@ -416,7 +416,7 @@ str file_path_relative(allocator *alloc, str from_dir, str to_path) {
             return str_init(alloc, ".");
         }
         char const *to_cptr = str_cstr(&to_norm);
-        char sep = to_cptr[from_len];
+        char        sep     = to_cptr[from_len];
         if (sep == '/' || sep == '\\') {
             str result = str_init_n(alloc, to_cptr + from_len + 1, to_len - from_len - 1);
             str_deinit(alloc, &from_norm);

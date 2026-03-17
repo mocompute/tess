@@ -77,12 +77,10 @@ static hashmap_entry *map_find_at(hashmap *map, byte const *key, u8 key_len, u32
     for (u32 pd = 0; pd <= MAX_PROBE_LEN; ++pd, index = incr_index(map, index)) {
         hashmap_entry *const cell = map_unchecked_at(map, index);
 
-        if (!is_occupied(cell->status) || get_probe_distance(cell->status) < pd)
-            return null;
+        if (!is_occupied(cell->status) || get_probe_distance(cell->status) < pd) return null;
 
-        if (cell->hash_tag == hash_tag
-            && cell->key->size == key_len
-            && 0 == memcmp(key, cell->key->data, cell->key->size))
+        if (cell->hash_tag == hash_tag && cell->key->size == key_len &&
+            0 == memcmp(key, cell->key->data, cell->key->size))
             return cell;
     }
     return null;
@@ -122,8 +120,7 @@ static int set_one_at(hashmap *map, hashmap_entry const *header, byte const *ele
             hashmap_key *wk = ((hashmap_entry *)to_store)->key;
             mos_dbg("warning: high probe distance %u, load: %f, n_cells: %u, key_len: %u, key_bytes:",
                     probe_distance, map_load_factor(map), map->n_cells, wk->size);
-            for (u8 ki = 0; ki < wk->size && ki < 16; ++ki)
-                mos_dbg(" %02x", wk->data[ki]);
+            for (u8 ki = 0; ki < wk->size && ki < 16; ++ki) mos_dbg(" %02x", wk->data[ki]);
             mos_dbg("\n");
             warning_printed = 1;
         }
@@ -447,8 +444,7 @@ void map_erase(hashmap *map, void const *key, u8 key_len) {
         u32            next      = incr_index(map, index);
         hashmap_entry *next_cell = map_unchecked_at(map, next);
 
-        if (!is_occupied(next_cell->status) || get_probe_distance(next_cell->status) == 0)
-            break;
+        if (!is_occupied(next_cell->status) || get_probe_distance(next_cell->status) == 0) break;
 
         memcpy(curr, next_cell, cell_size);
         set_status(&curr->status, 1, get_probe_distance(curr->status) - 1);

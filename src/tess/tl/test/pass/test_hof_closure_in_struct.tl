@@ -7,7 +7,7 @@
 Transformer: { transform: (Int) -> Int, predicate: (Int) -> Bool }
 
 make_transformer(offset: Int, threshold: Int) -> Transformer {
-    t := [[alloc, capture(offset)]]    (x) { x + offset }
+    t := [[alloc, capture(offset)]] (x) { x + offset }
     p := [[alloc, capture(threshold)]] (x) { x > threshold }
     Transformer(transform = t, predicate = p)
 }
