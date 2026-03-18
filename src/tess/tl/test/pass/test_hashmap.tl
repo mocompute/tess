@@ -33,9 +33,6 @@ eq(a: CollidingKey, b: CollidingKey) -> Bool {
 #import <Array.tl>
 #import <cstdio.tl>
 
-Point        = Point.Point
-CollidingKey = CollidingKey.CollidingKey
-
 test_create_destroy() {
     error := 0
     m     := HashMap.create[Int, Int]()
