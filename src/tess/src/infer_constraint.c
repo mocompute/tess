@@ -1571,6 +1571,10 @@ static int infer_unary_op(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
         } else if (tl_polytype_is_concrete(operand->type)) {
             array_push(self->errors, ((tl_infer_error){.tag = tl_err_expected_pointer, .node = node}));
             return 1;
+        } else {
+            // Type variable: constrain operand to Ptr[result_type]
+            tl_monotype *ptr = tl_type_registry_ptr(self->registry, node->type->type);
+            if (constrain_pm(self, operand->type, ptr, node, TL_UNIFY_SYMMETRIC)) return 1;
         }
     } else if (str_eq(op, S("&"))) {
         if (!tl_polytype_is_scheme(operand->type)) {
@@ -2622,17 +2626,18 @@ static int ufcs_rewrite_call(tl_infer *self, traverse_ctx *ctx, ast_node *node, 
     u8  ufcs_arity = nfa->named_application.n_arguments + 1;
     str ufcs_name  = mangle_str_for_arity(self->arena, field_name, ufcs_arity);
 
+    // Auto-dereference: if struct_type is Ptr[T], use T's module for lookup.
+    // This lets dot-UFCS work on pointer receivers (e.g. m.size() where m: Ptr[HashMap]).
+    tl_monotype *recv_type = struct_type;
+    if (tl_monotype_is_ptr(recv_type)) {
+        recv_type = tl_monotype_ptr_target(recv_type);
+    }
+
     // Lookup: try unqualified, then module-qualified from receiver's type
     tl_polytype *fn_poly = lookup_poly(self, ufcs_name);
-    if (!fn_poly) {
+    if (!fn_poly && tl_monotype_is_inst(recv_type)) {
         // e.g. arr.push(10) where arr: Array[Int] → try Array__push__2
-        // Auto-dereference: if struct_type is Ptr[T], use T's module for lookup.
-        // This lets dot-UFCS work on pointer receivers (e.g. m.size() where m: Ptr[HashMap]).
-        tl_monotype *lookup_type = struct_type;
-        if (tl_monotype_is_ptr(lookup_type)) {
-            lookup_type = tl_monotype_ptr_target(lookup_type);
-        }
-        str module = lookup_type->cons_inst->def->module;
+        str module = recv_type->cons_inst->def->module;
         if (!str_is_empty(module)) {
             str safe_module = str_replace_char_str(self->arena, module, '.', S("__"));
             str qualified   = str_qualify(self->arena, safe_module, field_name);
@@ -2641,19 +2646,19 @@ static int ufcs_rewrite_call(tl_infer *self, traverse_ctx *ctx, ast_node *node, 
         }
     }
     // Family fallback for standalone builtin types (CChar→Int, CSize→UInt, CPtrDiff→Int)
-    if (!fn_poly) {
-        tl_monotype *fb_type = struct_type;
-        if (tl_monotype_is_ptr(fb_type)) fb_type = tl_monotype_ptr_target(fb_type);
-        if (tl_monotype_is_inst(fb_type)) {
-            str family = builtin_trait_family_module(fb_type);
-            if (!str_is_empty(family)) {
-                str qualified = str_qualify(self->arena, family, field_name);
-                ufcs_name     = mangle_str_for_arity(self->arena, qualified, ufcs_arity);
-                fn_poly       = lookup_poly(self, ufcs_name);
-            }
+    if (!fn_poly && tl_monotype_is_inst(recv_type)) {
+        str family = builtin_trait_family_module(recv_type);
+        if (!str_is_empty(family)) {
+            str qualified = str_qualify(self->arena, family, field_name);
+            ufcs_name     = mangle_str_for_arity(self->arena, qualified, ufcs_arity);
+            fn_poly       = lookup_poly(self, ufcs_name);
         }
     }
     if (!fn_poly) {
+        // Receiver type is a type variable (e.g., Ptr[T] in a generic function):
+        // defer UFCS dispatch to specialization, where T will be concrete.
+        if (!tl_monotype_is_inst(recv_type)) return 0;
+
         array_push(self->errors,
                    ((tl_infer_error){.tag = tl_err_field_not_found, .node = nfa->named_application.name}));
         return 1;
