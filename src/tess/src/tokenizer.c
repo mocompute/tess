@@ -255,12 +255,12 @@ start:; // loop point for skip_depth > 0
         num_decimal,
         num_hex,
         num_binary,
-    } number_format  = num_decimal;
+    } number_format = num_decimal;
 
     enum {
         str_default,
         str_s_prefix,
-    } string_format = str_default;
+    } string_format  = str_default;
 
     size_t const end = self->input.size;
 
@@ -307,6 +307,7 @@ start:; // loop point for skip_depth > 0
             case '\r':
             case '\n': continue;
 
+            case 's':  state = in_s; continue;
             case '.':  state = in_dot; continue;
             case ':':  state = in_colon; continue;
             case '!':  state = in_bang; continue;
@@ -349,8 +350,6 @@ start:; // loop point for skip_depth > 0
                 replace_token(self->strings, &res, tok_close_curly);
                 state = stop;
                 break;
-
-            case 's': state = in_s; break;
 
             default:
                 if (c >= '0' && c <= '9') {
@@ -1149,11 +1148,10 @@ start:; // loop point for skip_depth > 0
         } break;
 
         case stop_string: {
-            replace_token_sn(self->strings, &res,
-                             string_format == str_s_prefix ? tok_s_string : tok_string,
+            replace_token_sn(self->strings, &res, string_format == str_s_prefix ? tok_s_string : tok_string,
                              self->buf.v, self->buf.size);
             string_format = str_default;
-            state = stop;
+            state         = stop;
         } break;
 
         case error:
