@@ -46,7 +46,7 @@ Allocator: {
 Context: {
     transient:       Ptr[Allocator],
     managed:         Ptr[Allocator],
-    string_literals: Ptr[Allocator],    // used by default by String.from_cstr/1
+    string_literals: Ptr[Allocator],    // used by default by String.from_literal/1
     default:         Ptr[Allocator],
 }
 

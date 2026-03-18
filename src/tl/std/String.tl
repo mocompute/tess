@@ -215,7 +215,7 @@ from_cstr(s: Ptr[Const[CChar]]) {
 }
 
 from_literal(s) {
-    from_cstr(s)
+    from_cstr(Alloc.context.string_literals, s)
 }
 
 copy(alloc, s) {
