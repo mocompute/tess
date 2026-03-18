@@ -14,7 +14,6 @@
 Allocator = Alloc.Allocator
 
 // Shorthand for string literal to String conversion.
-_S(s) { String.from_cstr(s) }
 
 // -- Types --
 
@@ -277,7 +276,7 @@ _parse_short(self, values, errors, arg, argc, argv, ip) {
         }
         ch: CChar := bv.v
         si: Some  := _find_spec_short(self, ch) else {
-            flag_str := String.cat(_S("-"), String.from_bytes(ch.&, 1))
+            flag_str := String.cat(s"-", String.from_bytes(ch.&, 1))
             Array.push(errors, UnknownFlag(flag = flag_str))
             j += 1
             continue
@@ -313,8 +312,8 @@ parse(self, argc, argv) {
     errors              := Array.empty[ParseError]()
     cmd: Option[String] := None
 
-    dd           := _S("--")
-    short_prefix := _S("-")
+    dd           := s"--"
+    short_prefix := s"-"
 
     i := 1; past_separator := false
     while i < argc {
@@ -416,63 +415,63 @@ parse_or_exit(self, argc, argv) {
 // -- Help --
 
 help_text(self) {
-    result := String.cat(_S("Usage: "), self->_name)
-    result = String.cat(result, _S(" [options]"))
+    result := String.cat(s"Usage: ", self->_name)
+    result = String.cat(result, s" [options]")
 
     if self->_commands.size > 0 {
-        result = String.cat(result, _S(" <command>"))
+        result = String.cat(result, s" <command>")
     }
 
-    result = String.cat(result, _S(" [args...]\n"))
+    result = String.cat(result, s" [args...]\n")
 
     if String.len(self->_description) > 0 {
-        result = String.cat(result, _S("\n"))
+        result = String.cat(result, s"\n")
         result = String.cat(result, self->_description)
-        result = String.cat(result, _S("\n"))
+        result = String.cat(result, s"\n")
     }
 
     if self->_specs.size > 0 {
-        result = String.cat(result, _S("\nOptions:\n"))
+        result = String.cat(result, s"\nOptions:\n")
 
         i: CSize := 0
         while i < self->_specs.size, i += 1 {
             spec := self->_specs.v.[i]
-            result = String.cat(result, _S("  "))
+            result = String.cat(result, s"  ")
 
             if spec.short_name != '\0' {
-                result = String.cat(result, _S("-"))
+                result = String.cat(result, s"-")
                 result = String.cat(result, String.from_bytes(spec.short_name.&, 1))
-                result = String.cat(result, _S(", "))
+                result = String.cat(result, s", ")
             } else {
-                result = String.cat(result, _S("    "))
+                result = String.cat(result, s"    ")
             }
 
-            result = String.cat(result, _S("--"))
+            result = String.cat(result, s"--")
             result = String.cat(result, spec.long_name)
 
             when spec.kind {
-                fv: FlagValue { result = String.cat(result, _S(" <value>")) }
+                fv: FlagValue { result = String.cat(result, s" <value>") }
                 else { }
             }
 
-            result = String.cat(result, _S("\t"))
+            result = String.cat(result, s"\t")
             result = String.cat(result, spec.description)
 
             if spec.required {
-                result = String.cat(result, _S(" (required)"))
+                result = String.cat(result, s" (required)")
             }
 
-            result = String.cat(result, _S("\n"))
+            result = String.cat(result, s"\n")
         }
     }
 
     if self->_commands.size > 0 {
-        result = String.cat(result, _S("\nCommands:\n"))
+        result = String.cat(result, s"\nCommands:\n")
         j: CSize := 0
         while j < self->_commands.size, j += 1 {
-            result = String.cat(result, _S("  "))
+            result = String.cat(result, s"  ")
             result = String.cat(result, self->_commands.v.[j])
-            result = String.cat(result, _S("\n"))
+            result = String.cat(result, s"\n")
         }
     }
 

@@ -22,8 +22,6 @@
 #import <cstdio.tl>
 #import <cstdlib.tl>
 
-_S(s) { String.from_cstr(s) }
-
 
 // -- Types --
 
@@ -140,30 +138,30 @@ _print_line(c, show_lines, show_words, show_chars, show_unique) {
 // -- Entry point --
 
 main(argc: CInt, argv: Ptr[CString]) {
-    cl := CommandLine.create(_S("wc"), _S("Count lines, words, and characters in files"))
-    cl.flag(_S("lines"), 'l', _S("Show line count"))
-    cl.flag(_S("words"), 'w', _S("Show word count"))
-    cl.flag(_S("chars"), 'c', _S("Show character/byte count"))
-    cl.flag(_S("unique-words"), 'u', _S("Show unique word count"))
-    cl.flag(_S("ignore-case"), 'i', _S("Case-insensitive unique words (use with -u)"))
-    cl.flag(_S("sort"), 's', _S("Sort output by word count (descending)"))
-    cl.option(_S("top"), 't', _S("Show only top N files"))
-    cl.flag(_S("help"), 'h', _S("Show this help message"))
+    cl := CommandLine.create(s"wc", s"Count lines, words, and characters in files")
+    cl.flag(s"lines", 'l', s"Show line count")
+    cl.flag(s"words", 'w', s"Show word count")
+    cl.flag(s"chars", 'c', s"Show character/byte count")
+    cl.flag(s"unique-words", 'u', s"Show unique word count")
+    cl.flag(s"ignore-case", 'i', s"Case-insensitive unique words (use with -u)")
+    cl.flag(s"sort", 's', s"Sort output by word count (descending)")
+    cl.option(s"top", 't', s"Show only top N files")
+    cl.flag(s"help", 'h', s"Show this help message")
 
     args := cl.parse_or_exit(argc, argv)
 
-    if args.get_flag(_S("help")) {
+    if args.get_flag(s"help") {
         cl.print_help()
         cl.destroy()
         return 0
     }
 
-    show_lines  := args.get_flag(_S("lines"))
-    show_words  := args.get_flag(_S("words"))
-    show_chars  := args.get_flag(_S("chars"))
-    show_unique := args.get_flag(_S("unique-words"))
-    ignore_case := args.get_flag(_S("ignore-case"))
-    do_sort     := args.get_flag(_S("sort"))
+    show_lines  := args.get_flag(s"lines")
+    show_words  := args.get_flag(s"words")
+    show_chars  := args.get_flag(s"chars")
+    show_unique := args.get_flag(s"unique-words")
+    ignore_case := args.get_flag(s"ignore-case")
+    do_sort     := args.get_flag(s"sort")
 
     // Default: show all standard counts if no specific flag given.
     if !show_lines && !show_words && !show_chars && !show_unique {
@@ -178,7 +176,7 @@ main(argc: CInt, argv: Ptr[CString]) {
     if files.size == 0 {
         // Read from stdin.
         content := _read_stdin()
-        c       := _count(content, _S("<stdin>"), show_unique, ignore_case)
+        c       := _count(content, s"<stdin>", show_unique, ignore_case)
         results.&.push(c)
     } else {
         fi: CSize := 0
@@ -218,7 +216,7 @@ main(argc: CInt, argv: Ptr[CString]) {
     }
 
     // Apply --top N limit.
-    when args.get_option(_S("top")) {
+    when args.get_option(s"top") {
         s: Some {
             top_n := c_atoi(String.cstr(s.v.&))
             if top_n > 0 {
@@ -239,7 +237,7 @@ main(argc: CInt, argv: Ptr[CString]) {
 
     // Print totals for multiple files.
     if results.size > 1 {
-        total := Counts(path = _S("total"), lines = 0, words = 0,
+        total := Counts(path = s"total", lines = 0, words = 0,
                         chars = 0, unique_words = 0)
         ti: CSize := 0
         while ti < results.size, ti += 1 {
