@@ -8,7 +8,7 @@ An ML-flavoured systems language that transpiles to C.
 // FIXME: Stdlib APIs not yet stabilized
 
 main() {
-    arena := Alloc.bump_create(1024)
+    arena := Alloc.BumpAllocator.create(1024)
     defer arena.destroy()
 
     map   := HashMap[String, String].create(arena)

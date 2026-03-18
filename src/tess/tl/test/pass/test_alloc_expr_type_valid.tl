@@ -5,7 +5,7 @@
 // In known_failures because Phase 4 codegen doesn't handle alloc closures yet.
 
 main() {
-    bump        := Alloc.bump_create(Alloc.context.transient, 1024zu)
+    bump        := Alloc.BumpAllocator.create(Alloc.context.transient, 1024zu)
     n           := 42
     f           := [[alloc(bump), capture(n)]] (x: Int) { x + n }
     error: CInt := 0

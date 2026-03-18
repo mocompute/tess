@@ -87,7 +87,7 @@ test_loop_creation() -> CInt {
 
 // Test explicit allocator in helper function
 test_explicit_allocator() -> CInt {
-    arena       := Alloc.bump_create(Alloc.context.default, 4096zu)
+    arena       := Alloc.BumpAllocator.create(Alloc.context.default, 4096zu)
     n           := 7
     f           := [[alloc(arena), capture(n)]] (x) { x + n }
     error: CInt := 0

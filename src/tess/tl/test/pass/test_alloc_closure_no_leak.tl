@@ -10,12 +10,12 @@ make_adder(n: Int, a: Ptr[Alloc.Allocator]) -> (Int) -> Int {
 }
 
 main() {
-    arena := Alloc.bump_create(Alloc.context.default, 4096zu)
+    arena := Alloc.BumpAllocator.create(Alloc.context.default, 4096zu)
 
     add10 := make_adder(10, arena)
 
     // Snapshot stats after closure creation
-    stats_before := Alloc.bump_get_stats(arena)
+    stats_before := Alloc.BumpAllocator.get_stats(arena)
 
     // Call the closure many times
     sum := 0
@@ -26,7 +26,7 @@ main() {
     }
 
     // Snapshot stats after calls
-    stats_after := Alloc.bump_get_stats(arena)
+    stats_after := Alloc.BumpAllocator.get_stats(arena)
 
     error := 0
 

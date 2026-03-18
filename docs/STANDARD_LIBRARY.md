@@ -265,11 +265,11 @@ Array functions that omit the allocator argument use `context.default` by defaul
 
 Override default bump allocator sizes by defining `TL_ALLOC_TRANSIENT_SIZE` via `-D` in CFLAGS before compilation.
 
-### Bump Allocator
+### Bump Allocator (`Alloc.BumpAllocator`)
 
 ```tl
-bump_create  (alloc: Ptr[Allocator], size: CSize) -> Ptr[Allocator]
-bump_destroy (alloc: Ptr[Allocator]) -> Void
+create  (alloc: Ptr[Allocator], size: CSize) -> Ptr[Allocator]
+destroy (alloc: Ptr[Allocator]) -> Void
 ```
 
 Creates a bump (arena) allocator backed by a parent allocator. Buckets grow geometrically. Freeing only reclaims the most recently allocated block.
