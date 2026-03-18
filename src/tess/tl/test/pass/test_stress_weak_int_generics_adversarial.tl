@@ -140,7 +140,7 @@ test_weak_int_nested_option() {
     error := 0
     // Some(42) where 42 is weak => Option[Int]
     o := Some(42)
-    error += if unwrap(o, 0) == 42 {0} else {1}
+    error += if (s: Some := o else { 0 }, s.v) == 42 {0} else {1}
     // Some(Some(42)) => Option[Option[Int]] with weak int at innermost
     nested := Some(Some(42))
     error += when nested {
@@ -154,7 +154,7 @@ test_weak_int_nested_option() {
     }
     // Unsigned single-level through builtin Option
     opt_u := Some(99u)
-    error += if unwrap(opt_u, 0u) == 99u {0} else {1}
+    error += if (s: Some := opt_u else { 0u }, s.v) == 99u {0} else {1}
     error
 }
 

@@ -95,7 +95,7 @@ test_tagged_union_weak_int() {
     }
     // Builtin Option with weak int
     opt3 := Some(123)
-    error += if unwrap(opt3, 0) == 123 {0} else {1}
+    error += if (s: Some := opt3 else { 0 }, s.v) == 123 {0} else {1}
     error
 }
 

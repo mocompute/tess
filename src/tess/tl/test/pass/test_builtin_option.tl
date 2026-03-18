@@ -261,15 +261,15 @@ test_option_returning_functions() {
 
     // find_first_positive: first is positive
     r := find_first_positive(5, -1, -2)
-    error += if unwrap(r, 0) == 5 {0} else {1}
+    error += if (s: Some := r else { 0 }, s.v) == 5 {0} else {1}
 
     // find_first_positive: second is positive
     r := find_first_positive(-1, 7, -2)
-    error += if unwrap(r, 0) == 7 {0} else {1}
+    error += if (s: Some := r else { 0 }, s.v) == 7 {0} else {1}
 
     // find_first_positive: third is positive
     r := find_first_positive(-1, -2, 3)
-    error += if unwrap(r, 0) == 3 {0} else {1}
+    error += if (s: Some := r else { 0 }, s.v) == 3 {0} else {1}
 
     // find_first_positive: none positive
     r := find_first_positive(-1, -2, -3)
@@ -354,7 +354,7 @@ test_conditional_option() {
     // if/else producing Option — type inference across branches
     x   := 10
     opt := if x > 5 { Some(x) } else { None() }
-    error += if unwrap(opt, 0) == 10 {0} else {1}
+    error += if (s: Some := opt else { 0 }, s.v) == 10 {0} else {1}
 
     // None branch taken
     x   := 3
@@ -366,8 +366,8 @@ test_conditional_option() {
 
     // Conditional inside a function returning Option
     r   := checked_sub(10, 3)
-    val := if unwrap(r, -1) > 0 { Some(unwrap(r, 0) * 2) } else { None() }
-    error += if unwrap(val, 0) == 14 {0} else {1}
+    val := when r { s: Some { if s.v > 0 { Some(s.v * 2) } else { None() } } else { None() } }
+    error += if (s: Some := val else { 0 }, s.v) == 14 {0} else {1}
 
     error
 }
@@ -397,7 +397,7 @@ test_option_in_struct() {
 
     // Access value field alongside Option field
     c     := Config(value = 42, limit = Some(99))
-    total := c.value + unwrap(c.limit, 0)
+    total := c.value + (s: Some := c.limit else { 0 }, s.v)
     error += if total == 141 {0} else {1}
 
     error
@@ -418,7 +418,7 @@ test_map_option() {
     // Map Some: transform inner value
     opt    := Some(3)
     mapped := map_option(opt, (x) { x * 2 })
-    error += if unwrap(mapped, 0) == 6 {0} else {1}
+    error += if (s: Some := mapped else { 0 }, s.v) == 6 {0} else {1}
 
     // Map None: stays None
     empty: Option[Int] := None()
@@ -454,12 +454,12 @@ test_first_some() {
     // First is Some — returns first
     a := Some(3)
     b := Some(5)
-    error += if unwrap(first_some(a, b), 0) == 3 {0} else {1}
+    error += if (s: Some := first_some(a, b) else { 0 }, s.v) == 3 {0} else {1}
 
     // First is None — returns second
     none_val: Option[Int] := None()
     b                     := Some(7)
-    error += if unwrap(first_some(none_val, b), 0) == 7 {0} else {1}
+    error += if (s: Some := first_some(none_val, b) else { 0 }, s.v) == 7 {0} else {1}
 
     // Both None
     none1: Option[Int] := None()
@@ -470,7 +470,7 @@ test_first_some() {
     }
 
     // Chain: first_some(None, first_some(None, Some(9)))
-    error += if unwrap(first_some(none1, first_some(none2, Some(9))), 0) == 9 {0} else {1}
+    error += if (s: Some := first_some(none1, first_some(none2, Some(9))) else { 0 }, s.v) == 9 {0} else {1}
 
     error
 }
@@ -582,7 +582,7 @@ test_bare_none() {
 
     // unwrap with bare None
     n2: Option[Int] := None
-    error += if unwrap(n2, 99) == 99 {0} else {1}
+    error += if (s: Some := n2 else { 99 }, s.v) == 99 {0} else {1}
 
     error
 }

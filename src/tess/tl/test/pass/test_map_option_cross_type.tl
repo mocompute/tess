@@ -17,7 +17,7 @@ main() {
     // Same-type map works: Int -> Int
     opt    := Some(3)
     mapped := map_option(opt, (x) { x * 2 })
-    error += if unwrap(mapped, 0) == 6 {0} else {1}
+    error += if (s: Some := mapped else { 0 }, s.v) == 6 {0} else {1}
 
     // Cross-type map: Int -> Float (explicit conversion)
     int_opt  := Some(5)

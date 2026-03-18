@@ -7,6 +7,6 @@ _NUL: Byte := 0u
 
 main() {
     s := String.from_cstr("abc")
-    b := unwrap(String.byte_at(s, 0zu), _NUL)
+    b := (r: Some := String.byte_at(s, 0zu) else { _NUL }, r.v)
     if b == 97u { 0 } else { 1 }
 }
