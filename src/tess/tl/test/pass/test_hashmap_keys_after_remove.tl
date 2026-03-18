@@ -12,17 +12,17 @@ main() {
     // Insert 10 entries
     i := 0
     while i < 10, i += 1 {
-        HashMap.set(m, i, i * 10)
+        m.set(i, i * 10)
     }
 
     // Remove 5 entries (0..4)
     i = 0
     while i < 5, i += 1 {
-        HashMap.remove(m, i)
+        m.remove(i)
     }
 
     // keys() should return exactly 5
-    ks := HashMap.keys(m)
+    ks := m.keys()
     if ks.size != 5zu { error += 1 }
 
     // Verify no removed keys leak through
@@ -32,8 +32,8 @@ main() {
     }
 
     // Insert after removal
-    HashMap.set(m, 100, 1000)
-    ks2 := HashMap.keys(m)
+    m.set(100, 1000)
+    ks2 := m.keys()
     if ks2.size != 6zu { error += 1 }
 
     // Verify 100 is in the keys
@@ -46,6 +46,6 @@ main() {
 
     Array.free(ks.&)
     Array.free(ks2.&)
-    HashMap.destroy(m)
+    m.destroy()
     error
 }

@@ -46,7 +46,7 @@ main() -> CInt {
                     when spec.kind {
                         fv: FlagValue {
                             c_fprintf(c_stderr, "matched FlagValue\n")
-                            HashMap.set(values, key, 1)
+                            values.set(key, 1)
                         }
                         else {
                             c_fprintf(c_stderr, "first\n")
@@ -69,9 +69,9 @@ main() -> CInt {
 
     // errors should be 0 (FlagValue matched), value should be stored
     if errors != 0 { error += 1 }
-    if HashMap.get(values, S("output")) == null { error += 1 }
+    if values.get(S("output")) == null { error += 1 }
 
-    HashMap.destroy(values)
+    values.destroy()
     Array.free(specs.&)
     ret: CInt := error
     ret

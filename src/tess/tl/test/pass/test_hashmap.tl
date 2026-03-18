@@ -39,9 +39,9 @@ CollidingKey = CollidingKey.CollidingKey
 test_create_destroy() {
     error := 0
     m     := HashMap.create[Int, Int]()
-    if HashMap.size(m) != 0zu { error += 1 }
-    if !HashMap.is_empty(m) { error += 1 }
-    HashMap.destroy(m)
+    if m.size() != 0zu { error += 1 }
+    if !m.is_empty() { error += 1 }
+    m.destroy()
     error
 }
 
@@ -49,15 +49,15 @@ test_set_get() {
     error := 0
     m     := HashMap.create[Int, Int]()
 
-    HashMap.set(m, 1, 100)
-    HashMap.set(m, 2, 200)
-    HashMap.set(m, 3, 300)
+    m.set(1, 100)
+    m.set(2, 200)
+    m.set(3, 300)
 
-    if HashMap.size(m) != 3zu { error += 1 }
+    if m.size() != 3zu { error += 1 }
 
-    p1 := HashMap.get(m, 1)
-    p2 := HashMap.get(m, 2)
-    p3 := HashMap.get(m, 3)
+    p1 := m.get(1)
+    p2 := m.get(2)
+    p3 := m.get(3)
 
     if p1 == null { error += 1 }
     if p2 == null { error += 1 }
@@ -68,45 +68,45 @@ test_set_get() {
     if p3 != null && p3.* != 300 { error += 1 }
 
     // Missing key returns null
-    p4 := HashMap.get(m, 999)
+    p4 := m.get(999)
     if p4 != null { error += 1 }
 
-    HashMap.destroy(m)
+    m.destroy()
     error
 }
 
 test_get_copy() {
     error := 0
     m     := HashMap.create[Int, Int]()
-    HashMap.set(m, 42, 84)
+    m.set(42, 84)
 
-    opt := HashMap.get_copy(m, 42)
+    opt := m.get_copy(42)
     when opt {
         s: Some { if s.v != 84 { error += 1 } }
         n: None { error += 1 }
     }
 
-    opt2 := HashMap.get_copy(m, 999)
+    opt2 := m.get_copy(999)
     when opt2 {
         s: Some { error += 1 }
         n: None { }
     }
 
-    HashMap.destroy(m)
+    m.destroy()
     error
 }
 
 test_contains() {
     error := 0
     m     := HashMap.create[Int, Int]()
-    HashMap.set(m, 10, 1)
-    HashMap.set(m, 20, 2)
+    m.set(10, 1)
+    m.set(20, 2)
 
-    if !HashMap.contains(m, 10) { error += 1 }
-    if !HashMap.contains(m, 20) { error += 1 }
-    if HashMap.contains(m, 30) { error += 1 }
+    if !m.contains(10) { error += 1 }
+    if !m.contains(20) { error += 1 }
+    if m.contains(30) { error += 1 }
 
-    HashMap.destroy(m)
+    m.destroy()
     error
 }
 
@@ -114,17 +114,17 @@ test_overwrite() {
     error := 0
     m     := HashMap.create[Int, Int]()
 
-    HashMap.set(m, 1, 100)
-    if HashMap.size(m) != 1zu { error += 1 }
+    m.set(1, 100)
+    if m.size() != 1zu { error += 1 }
 
-    HashMap.set(m, 1, 200)
-    if HashMap.size(m) != 1zu { error += 1 }
+    m.set(1, 200)
+    if m.size() != 1zu { error += 1 }
 
-    p := HashMap.get(m, 1)
+    p := m.get(1)
     if p == null { error += 1 }
     if p != null && p.* != 200 { error += 1 }
 
-    HashMap.destroy(m)
+    m.destroy()
     error
 }
 
@@ -132,32 +132,32 @@ test_remove() {
     error := 0
     m     := HashMap.create[Int, Int]()
 
-    HashMap.set(m, 1, 10)
-    HashMap.set(m, 2, 20)
-    HashMap.set(m, 3, 30)
+    m.set(1, 10)
+    m.set(2, 20)
+    m.set(3, 30)
 
-    if !HashMap.remove(m, 2) { error += 1 }
-    if HashMap.size(m) != 2zu { error += 1 }
-    if HashMap.contains(m, 2) { error += 1 }
+    if !m.remove(2) { error += 1 }
+    if m.size() != 2zu { error += 1 }
+    if m.contains(2) { error += 1 }
 
     // Remaining keys still accessible
-    if !HashMap.contains(m, 1) { error += 1 }
-    if !HashMap.contains(m, 3) { error += 1 }
+    if !m.contains(1) { error += 1 }
+    if !m.contains(3) { error += 1 }
 
-    p1 := HashMap.get(m, 1)
-    p3 := HashMap.get(m, 3)
+    p1 := m.get(1)
+    p3 := m.get(3)
     if p1 != null && p1.* != 10 { error += 1 }
     if p3 != null && p3.* != 30 { error += 1 }
 
     // Remove non-existent key
-    if HashMap.remove(m, 999) { error += 1 }
+    if m.remove(999) { error += 1 }
 
     // Remove remaining keys
-    if !HashMap.remove(m, 1) { error += 1 }
-    if !HashMap.remove(m, 3) { error += 1 }
-    if HashMap.size(m) != 0zu { error += 1 }
+    if !m.remove(1) { error += 1 }
+    if !m.remove(3) { error += 1 }
+    if m.size() != 0zu { error += 1 }
 
-    HashMap.destroy(m)
+    m.destroy()
     error
 }
 
@@ -169,20 +169,20 @@ test_grow() {
     n := 200
     i := 0
     while i < n, i += 1 {
-        HashMap.set(m, i, i * 10)
+        m.set(i, i * 10)
     }
 
-    if HashMap.size(m) != 200zu { error += 1 }
+    if m.size() != 200zu { error += 1 }
 
     // Verify all entries survived growth
     i = 0
     while i < n, i += 1 {
-        p := HashMap.get(m, i)
+        p := m.get(i)
         if p == null { error += 1 }
         if p != null && p.* != i * 10 { error += 1 }
     }
 
-    HashMap.destroy(m)
+    m.destroy()
     error
 }
 
@@ -190,23 +190,23 @@ test_clear() {
     error := 0
     m     := HashMap.create[Int, Int]()
 
-    HashMap.set(m, 1, 10)
-    HashMap.set(m, 2, 20)
-    HashMap.set(m, 3, 30)
+    m.set(1, 10)
+    m.set(2, 20)
+    m.set(3, 30)
 
-    HashMap.clear(m)
-    if HashMap.size(m) != 0zu { error += 1 }
-    if !HashMap.is_empty(m) { error += 1 }
-    if HashMap.contains(m, 1) { error += 1 }
+    m.clear()
+    if m.size() != 0zu { error += 1 }
+    if !m.is_empty() { error += 1 }
+    if m.contains(1) { error += 1 }
 
     // Can still insert after clear
-    HashMap.set(m, 4, 40)
-    if HashMap.size(m) != 1zu { error += 1 }
-    p := HashMap.get(m, 4)
+    m.set(4, 40)
+    if m.size() != 1zu { error += 1 }
+    p := m.get(4)
     if p == null { error += 1 }
     if p != null && p.* != 40 { error += 1 }
 
-    HashMap.destroy(m)
+    m.destroy()
     error
 }
 
@@ -214,12 +214,12 @@ test_keys_values() {
     error := 0
     m     := HashMap.create[Int, Int]()
 
-    HashMap.set(m, 1, 10)
-    HashMap.set(m, 2, 20)
-    HashMap.set(m, 3, 30)
+    m.set(1, 10)
+    m.set(2, 20)
+    m.set(3, 30)
 
-    ks := HashMap.keys(m)
-    vs := HashMap.values(m)
+    ks := m.keys()
+    vs := m.values()
 
     if ks.size != 3zu { error += 1 }
     if vs.size != 3zu { error += 1 }
@@ -253,7 +253,7 @@ test_keys_values() {
 
     Array.free(ks.&)
     Array.free(vs.&)
-    HashMap.destroy(m)
+    m.destroy()
     error
 }
 
@@ -261,26 +261,26 @@ test_empty_map() {
     error := 0
     m     := HashMap.create[Int, Int]()
 
-    if HashMap.get(m, 1) != null { error += 1 }
-    if HashMap.contains(m, 1) { error += 1 }
-    if HashMap.remove(m, 1) { error += 1 }
-    if HashMap.size(m) != 0zu { error += 1 }
-    if !HashMap.is_empty(m) { error += 1 }
+    if m.get(1) != null { error += 1 }
+    if m.contains(1) { error += 1 }
+    if m.remove(1) { error += 1 }
+    if m.size() != 0zu { error += 1 }
+    if !m.is_empty() { error += 1 }
 
-    opt := HashMap.get_copy(m, 1)
+    opt := m.get_copy(1)
     when opt {
         s: Some { error += 1 }
         n: None { }
     }
 
-    ks := HashMap.keys(m)
-    vs := HashMap.values(m)
+    ks := m.keys()
+    vs := m.values()
     if ks.size != 0zu { error += 1 }
     if vs.size != 0zu { error += 1 }
 
     Array.free(ks.&)
     Array.free(vs.&)
-    HashMap.destroy(m)
+    m.destroy()
     error
 }
 
@@ -292,25 +292,25 @@ test_struct_keys() {
     p2 := Point(x = 3, y = 4)
     p3 := Point(x = 5, y = 6)
 
-    HashMap.set(m, p1, 10)
-    HashMap.set(m, p2, 20)
-    HashMap.set(m, p3, 30)
+    m.set(p1, 10)
+    m.set(p2, 20)
+    m.set(p3, 30)
 
-    if HashMap.size(m) != 3zu { error += 1 }
+    if m.size() != 3zu { error += 1 }
 
-    v := HashMap.get(m, Point(x = 1, y = 2))
+    v := m.get(Point(x = 1, y = 2))
     if v == null { error += 1 }
     if v != null && v.* != 10 { error += 1 }
 
-    v = HashMap.get(m, Point(x = 3, y = 4))
+    v = m.get(Point(x = 3, y = 4))
     if v == null { error += 1 }
     if v != null && v.* != 20 { error += 1 }
 
     // Non-existent struct key
-    v = HashMap.get(m, Point(x = 7, y = 8))
+    v = m.get(Point(x = 7, y = 8))
     if v != null { error += 1 }
 
-    HashMap.destroy(m)
+    m.destroy()
     error
 }
 
@@ -318,19 +318,19 @@ test_remove_and_reinsert() {
     error := 0
     m     := HashMap.create[Int, Int]()
 
-    HashMap.set(m, 1, 10)
-    HashMap.set(m, 2, 20)
-    HashMap.remove(m, 1)
+    m.set(1, 10)
+    m.set(2, 20)
+    m.remove(1)
 
     // Re-insert with same key, different value
-    HashMap.set(m, 1, 99)
-    if HashMap.size(m) != 2zu { error += 1 }
+    m.set(1, 99)
+    if m.size() != 2zu { error += 1 }
 
-    p := HashMap.get(m, 1)
+    p := m.get(1)
     if p == null { error += 1 }
     if p != null && p.* != 99 { error += 1 }
 
-    HashMap.destroy(m)
+    m.destroy()
     error
 }
 
@@ -343,36 +343,36 @@ test_collision_stress() {
     n := 32
     i := 0
     while i < n, i += 1 {
-        HashMap.set(m, CollidingKey(v = i), i * 7)
+        m.set(CollidingKey(v = i), i * 7)
     }
-    if HashMap.size(m) != 32zu { error += 1 }
+    if m.size() != 32zu { error += 1 }
 
     // Verify all entries are accessible
     i = 0
     while i < n, i += 1 {
-        p := HashMap.get(m, CollidingKey(v = i))
+        p := m.get(CollidingKey(v = i))
         if p == null { error += 1 }
         if p != null && p.* != i * 7 { error += 1 }
     }
 
     // Overwrite in collision-heavy map
-    HashMap.set(m, CollidingKey(v = 4), 999)
-    if HashMap.size(m) != 32zu { error += 1 }
-    p := HashMap.get(m, CollidingKey(v = 4))
+    m.set(CollidingKey(v = 4), 999)
+    if m.size() != 32zu { error += 1 }
+    p := m.get(CollidingKey(v = 4))
     if p == null { error += 1 }
     if p != null && p.* != 999 { error += 1 }
 
     // Remove entries from the middle of collision chains
     i = 0
     while i < 16, i += 1 {
-        if !HashMap.remove(m, CollidingKey(v = i)) { error += 1 }
+        if !m.remove(CollidingKey(v = i)) { error += 1 }
     }
-    if HashMap.size(m) != 16zu { error += 1 }
+    if m.size() != 16zu { error += 1 }
 
     // Remaining entries (16..31) must still be accessible after backward-shift
     i = 16
     while i < n, i += 1 {
-        p2 := HashMap.get(m, CollidingKey(v = i))
+        p2 := m.get(CollidingKey(v = i))
         if p2 == null { error += 1 }
         if p2 != null && p2.* != i * 7 { error += 1 }
     }
@@ -380,10 +380,10 @@ test_collision_stress() {
     // Removed entries must be gone
     i = 0
     while i < 16, i += 1 {
-        if HashMap.contains(m, CollidingKey(v = i)) { error += 1 }
+        if m.contains(CollidingKey(v = i)) { error += 1 }
     }
 
-    HashMap.destroy(m)
+    m.destroy()
     error
 }
 
@@ -395,31 +395,31 @@ test_large_remove() {
     n := 200
     i := 0
     while i < n, i += 1 {
-        HashMap.set(m, i, i)
+        m.set(i, i)
     }
-    if HashMap.size(m) != 200zu { error += 1 }
+    if m.size() != 200zu { error += 1 }
 
     i = 0
     while i < n, i += 1 {
-        if !HashMap.remove(m, i) { error += 1 }
+        if !m.remove(i) { error += 1 }
     }
-    if HashMap.size(m) != 0zu { error += 1 }
-    if !HashMap.is_empty(m) { error += 1 }
+    if m.size() != 0zu { error += 1 }
+    if !m.is_empty() { error += 1 }
 
     // Re-insert after mass removal
     i = 0
     while i < 50, i += 1 {
-        HashMap.set(m, i, i * 3)
+        m.set(i, i * 3)
     }
-    if HashMap.size(m) != 50zu { error += 1 }
+    if m.size() != 50zu { error += 1 }
     i = 0
     while i < 50, i += 1 {
-        p := HashMap.get(m, i)
+        p := m.get(i)
         if p == null { error += 1 }
         if p != null && p.* != i * 3 { error += 1 }
     }
 
-    HashMap.destroy(m)
+    m.destroy()
     error
 }
 
@@ -427,30 +427,30 @@ test_zero_and_negative_keys() {
     error := 0
     m     := HashMap.create[Int, Int]()
 
-    HashMap.set(m, 0, 100)
-    HashMap.set(m, -1, 200)
-    HashMap.set(m, -999, 300)
+    m.set(0, 100)
+    m.set(-1, 200)
+    m.set(-999, 300)
 
-    if HashMap.size(m) != 3zu { error += 1 }
+    if m.size() != 3zu { error += 1 }
 
-    p := HashMap.get(m, 0)
+    p := m.get(0)
     if p == null { error += 1 }
     if p != null && p.* != 100 { error += 1 }
 
-    p = HashMap.get(m, -1)
+    p = m.get(-1)
     if p == null { error += 1 }
     if p != null && p.* != 200 { error += 1 }
 
-    p = HashMap.get(m, -999)
+    p = m.get(-999)
     if p == null { error += 1 }
     if p != null && p.* != 300 { error += 1 }
 
     // Remove key 0
-    if !HashMap.remove(m, 0) { error += 1 }
-    if HashMap.contains(m, 0) { error += 1 }
-    if HashMap.size(m) != 2zu { error += 1 }
+    if !m.remove(0) { error += 1 }
+    if m.contains(0) { error += 1 }
+    if m.size() != 2zu { error += 1 }
 
-    HashMap.destroy(m)
+    m.destroy()
     error
 }
 
@@ -458,28 +458,28 @@ test_struct_values() {
     error := 0
     m     := HashMap.create[Int, Point]()
 
-    HashMap.set(m, 1, Point(x = 10, y = 20))
-    HashMap.set(m, 2, Point(x = 30, y = 40))
-    HashMap.set(m, 3, Point(x = 50, y = 60))
+    m.set(1, Point(x = 10, y = 20))
+    m.set(2, Point(x = 30, y = 40))
+    m.set(3, Point(x = 50, y = 60))
 
-    if HashMap.size(m) != 3zu { error += 1 }
+    if m.size() != 3zu { error += 1 }
 
-    p := HashMap.get(m, 1)
+    p := m.get(1)
     if p == null { error += 1 }
     if p != null && (p->x != 10 || p->y != 20) { error += 1 }
 
-    p = HashMap.get(m, 2)
+    p = m.get(2)
     if p == null { error += 1 }
     if p != null && (p->x != 30 || p->y != 40) { error += 1 }
 
     // Overwrite with different struct value
-    HashMap.set(m, 1, Point(x = 99, y = 88))
-    if HashMap.size(m) != 3zu { error += 1 }
-    p = HashMap.get(m, 1)
+    m.set(1, Point(x = 99, y = 88))
+    if m.size() != 3zu { error += 1 }
+    p = m.get(1)
     if p == null { error += 1 }
     if p != null && (p->x != 99 || p->y != 88) { error += 1 }
 
-    HashMap.destroy(m)
+    m.destroy()
     error
 }
 
@@ -487,15 +487,15 @@ test_create_with_alloc() {
     error := 0
     m     := HashMap.create[Int, Int](Alloc.context.default)
 
-    HashMap.set(m, 1, 10)
-    HashMap.set(m, 2, 20)
+    m.set(1, 10)
+    m.set(2, 20)
 
-    if HashMap.size(m) != 2zu { error += 1 }
-    p := HashMap.get(m, 1)
+    if m.size() != 2zu { error += 1 }
+    p := m.get(1)
     if p == null { error += 1 }
     if p != null && p.* != 10 { error += 1 }
 
-    HashMap.destroy(m)
+    m.destroy()
     error
 }
 
@@ -503,12 +503,12 @@ test_keys_values_with_alloc() {
     error := 0
     m     := HashMap.create[Int, Int]()
 
-    HashMap.set(m, 1, 10)
-    HashMap.set(m, 2, 20)
+    m.set(1, 10)
+    m.set(2, 20)
 
     alloc := Alloc.context.default
-    ks    := HashMap.keys(m, alloc)
-    vs    := HashMap.values(m, alloc)
+    ks    := m.keys(alloc)
+    vs    := m.values(alloc)
 
     if ks.size != 2zu { error += 1 }
     if vs.size != 2zu { error += 1 }
@@ -535,7 +535,7 @@ test_keys_values_with_alloc() {
 
     Array.free(ks.&)
     Array.free(vs.&)
-    HashMap.destroy(m)
+    m.destroy()
     error
 }
 
@@ -546,26 +546,26 @@ test_remove_then_grow() {
     // Fill up, remove half, then insert enough to trigger growth
     i := 0
     while i < 100, i += 1 {
-        HashMap.set(m, i, i)
+        m.set(i, i)
     }
 
     i = 0
     while i < 50, i += 1 {
-        HashMap.remove(m, i)
+        m.remove(i)
     }
-    if HashMap.size(m) != 50zu { error += 1 }
+    if m.size() != 50zu { error += 1 }
 
     // Insert 200 more to trigger growth from a partially-removed state
     i = 1000
     while i < 1200, i += 1 {
-        HashMap.set(m, i, i * 2)
+        m.set(i, i * 2)
     }
-    if HashMap.size(m) != 250zu { error += 1 }
+    if m.size() != 250zu { error += 1 }
 
     // Verify surviving original entries
     i = 50
     while i < 100, i += 1 {
-        p := HashMap.get(m, i)
+        p := m.get(i)
         if p == null { error += 1 }
         if p != null && p.* != i { error += 1 }
     }
@@ -573,7 +573,7 @@ test_remove_then_grow() {
     // Verify new entries
     i = 1000
     while i < 1200, i += 1 {
-        p := HashMap.get(m, i)
+        p := m.get(i)
         if p == null { error += 1 }
         if p != null && p.* != i * 2 { error += 1 }
     }
@@ -581,10 +581,10 @@ test_remove_then_grow() {
     // Removed entries still gone
     i = 0
     while i < 50, i += 1 {
-        if HashMap.contains(m, i) { error += 1 }
+        if m.contains(i) { error += 1 }
     }
 
-    HashMap.destroy(m)
+    m.destroy()
     error
 }
 
@@ -594,38 +594,38 @@ test_default_eq() {
     // Use default hash/eq (exercises _default_eq via byte-level comparison)
     m := HashMap.create[Int, Int]()
 
-    HashMap.set(m, 42, 100)
+    m.set(42, 100)
 
     // Same key bytes must match (eq returns true)
-    p := HashMap.get(m, 42)
+    p := m.get(42)
     if p == null { error += 1 }
     if p != null && p.* != 100 { error += 1 }
 
     // Different key bytes must not match (eq returns false)
-    if HashMap.get(m, 43) != null { error += 1 }
+    if m.get(43) != null { error += 1 }
 
     // Overwrite: eq must return true for identical key so size stays 1
-    HashMap.set(m, 42, 200)
-    if HashMap.size(m) != 1zu { error += 1 }
-    p = HashMap.get(m, 42)
+    m.set(42, 200)
+    if m.size() != 1zu { error += 1 }
+    p = m.get(42)
     if p == null { error += 1 }
     if p != null && p.* != 200 { error += 1 }
 
     // Test with struct keys: byte-equal structs must match
     m2 := HashMap.create[Point, Int]()
-    HashMap.set(m2, Point(x = 10, y = 20), 999)
+    m2.set(Point(x = 10, y = 20), 999)
 
-    p2 := HashMap.get(m2, Point(x = 10, y = 20))
+    p2 := m2.get(Point(x = 10, y = 20))
     if p2 == null { error += 1 }
     if p2 != null && p2.* != 999 { error += 1 }
 
     // Structs with any different field must not match
-    if HashMap.get(m2, Point(x = 10, y = 21)) != null { error += 1 }
-    if HashMap.get(m2, Point(x = 11, y = 20)) != null { error += 1 }
-    if HashMap.get(m2, Point(x = 0, y = 0)) != null { error += 1 }
+    if m2.get(Point(x = 10, y = 21)) != null { error += 1 }
+    if m2.get(Point(x = 11, y = 20)) != null { error += 1 }
+    if m2.get(Point(x = 0, y = 0)) != null { error += 1 }
 
-    HashMap.destroy(m)
-    HashMap.destroy(m2)
+    m.destroy()
+    m2.destroy()
     error
 }
 
