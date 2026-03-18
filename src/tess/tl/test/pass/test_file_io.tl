@@ -1,16 +1,15 @@
 #module main
 #import <File.tl>
 
-_S(s) { String.from_cstr(s) }
 
 // Build a temp file path from a filename, platform-independently.
-_tmp(name) { File.Path.join(File.temp_dir(), _S(name)) }
+_tmp(name) { File.Path.join(File.temp_dir(), String.from_cstr(name)) }
 
 test_write_and_read() {
     fails := 0
     path  := _tmp("tess_test_file_io.txt")
 
-    content := _S("hello, file!\nsecond line\n")
+    content := s"hello, file!\nsecond line\n"
     _wr     := File.write_file(path, content)
 
     rd: Ok := File.read_file(path) else {
@@ -30,7 +29,7 @@ test_read_lines() {
     fails := 0
     path  := _tmp("tess_test_file_lines.txt")
 
-    _wr := File.write_file(path, _S("alpha\nbeta\ngamma\n"))
+    _wr := File.write_file(path, s"alpha\nbeta\ngamma\n")
 
     lr: Ok := File.read_lines(path) else {
         c_printf("FAIL read_lines\n")
@@ -42,15 +41,15 @@ test_read_lines() {
         return 1
     }
 
-    if !String.eq(lr.v.v.[0], _S("alpha")) {
+    if !String.eq(lr.v.v.[0], s"alpha") {
         c_printf("FAIL line 0\n")
         fails += 1
     }
-    if !String.eq(lr.v.v.[1], _S("beta")) {
+    if !String.eq(lr.v.v.[1], s"beta") {
         c_printf("FAIL line 1\n")
         fails += 1
     }
-    if !String.eq(lr.v.v.[2], _S("gamma")) {
+    if !String.eq(lr.v.v.[2], s"gamma") {
         c_printf("FAIL line 2\n")
         fails += 1
     }
@@ -62,7 +61,7 @@ test_streaming_read_line() {
     fails := 0
     path  := _tmp("tess_test_file_readline.txt")
 
-    _wr := File.write_file(path, _S("one\ntwo\nthree"))
+    _wr := File.write_file(path, s"one\ntwo\nthree")
 
     f: Ok := File.open(path, File.Read) else {
         c_printf("FAIL open for readline\n")
@@ -79,7 +78,7 @@ test_streaming_read_line() {
         c_printf("FAIL readline eof 1\n")
         return 1
     }
-    if !String.eq(l1.v, _S("one")) {
+    if !String.eq(l1.v, s"one") {
         c_printf("FAIL line 1: %s\n", String.cstr(l1.v.&))
         fails += 1
     }
@@ -93,7 +92,7 @@ test_streaming_read_line() {
         c_printf("FAIL readline eof 2\n")
         return 1
     }
-    if !String.eq(l2.v, _S("two")) {
+    if !String.eq(l2.v, s"two") {
         c_printf("FAIL line 2: %s\n", String.cstr(l2.v.&))
         fails += 1
     }
@@ -107,7 +106,7 @@ test_streaming_read_line() {
         c_printf("FAIL readline eof 3\n")
         return 1
     }
-    if !String.eq(l3.v, _S("three")) {
+    if !String.eq(l3.v, s"three") {
         c_printf("FAIL line 3: %s\n", String.cstr(l3.v.&))
         fails += 1
     }
@@ -136,7 +135,7 @@ test_streaming_write_read() {
         c_printf("FAIL open for write\n")
         return 1
     }
-    _we := File.write_str(wf.v, _S("stream test"))
+    _we := File.write_str(wf.v, s"stream test")
     File.close(wf.v)
 
     rf: Ok := File.open(path, File.Read) else {
@@ -150,7 +149,7 @@ test_streaming_write_read() {
         return 1
     }
 
-    if !String.eq(content.v, _S("stream test")) {
+    if !String.eq(content.v, s"stream test") {
         c_printf("FAIL stream content: %s\n", String.cstr(content.v.&))
         fails += 1
     }
@@ -202,15 +201,15 @@ test_append() {
     fails := 0
     path  := _tmp("tess_test_file_append.txt")
 
-    _w1 := File.write_file(path, _S("first"))
-    _w2 := File.append_file(path, _S(" second"))
+    _w1 := File.write_file(path, s"first")
+    _w2 := File.append_file(path, s" second")
 
     rd: Ok := File.read_file(path) else {
         c_printf("FAIL read after append\n")
         return 1
     }
 
-    if !String.eq(rd.v, _S("first second")) {
+    if !String.eq(rd.v, s"first second") {
         c_printf("FAIL append content: %s\n", String.cstr(rd.v.&))
         fails += 1
     }
@@ -223,7 +222,7 @@ test_exists_and_metadata() {
     path  := _tmp("tess_test_file_meta.txt")
     tmp   := File.temp_dir()
 
-    _wr := File.write_file(path, _S("metadata test"))
+    _wr := File.write_file(path, s"metadata test")
 
     if !File.exists(path) {
         c_printf("FAIL exists\n")
@@ -283,7 +282,7 @@ test_seek_tell() {
     fails := 0
     path  := _tmp("tess_test_file_seek.txt")
 
-    _wr := File.write_file(path, _S("abcdefghij"))
+    _wr := File.write_file(path, s"abcdefghij")
 
     f: Ok := File.open(path, File.Read) else {
         c_printf("FAIL open for seek\n")
@@ -306,7 +305,7 @@ test_seek_tell() {
         c_printf("FAIL read after seek\n")
         return 1
     }
-    if !String.eq(rest.v, _S("fghij")) {
+    if !String.eq(rest.v, s"fghij") {
         c_printf("FAIL read after seek: %s\n", String.cstr(rest.v.&))
         fails += 1
     }

@@ -41,8 +41,9 @@ String: { | big: _Big
 
 // Construction.
 empty     ()                                                      -> String
-from_cstr (alloc: Ptr[Allocator], s: Ptr[Const[CChar]])           -> String
-from_cstr (s: Ptr[Const[CChar]])                                  -> String
+from_cstr   (alloc: Ptr[Allocator], s: Ptr[Const[CChar]])          -> String
+from_cstr   (s: Ptr[Const[CChar]])                                 -> String
+from_literal(s: Ptr[Const[CChar]])                                 -> String
 from_bytes(alloc: Ptr[Allocator], s: Ptr[Const[CChar]], n: CSize) -> String
 from_bytes(s: Ptr[Const[CChar]], n: CSize)                        -> String
 copy      (alloc: Ptr[Allocator], s: String)                      -> String
@@ -213,6 +214,9 @@ from_cstr(s: Ptr[Const[CChar]]) {
     from_cstr(Alloc.context.default, s)
 }
 
+from_literal(s) {
+    from_cstr(s)
+}
 
 copy(alloc, s) {
     n := len  (s)

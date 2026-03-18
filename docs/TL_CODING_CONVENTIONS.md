@@ -271,14 +271,10 @@ log(msg) {
 
 ## Literals
 
-**Strings**: `"foo"` is `Ptr[CChar]` (a C string), not `String`. Convert with `String.from_cstr()`. For modules that do this frequently, define a private shorthand:
+**Strings**: `"foo"` is `Ptr[CChar]` (a C string), not `String`. To
+create a String from a literal, use the s-prefix: `s"foo"` is a
+`String`, not a `Ptr[CChar]`.
 
-```tl
-_S(s) { String.from_cstr(s) }
-
-dd           := _S("--")
-short_prefix := _S("-")
-```
 
 **Integers**: Do not use suffixes (`zu`, `z`, `u`) when the type is clear from context. Let inference resolve the type. Use suffixes only when inference genuinely cannot determine the type.
 

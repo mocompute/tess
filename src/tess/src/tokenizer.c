@@ -234,6 +234,7 @@ start:; // loop point for skip_depth > 0
         in_symbol,
         stop_symbol,
 
+        in_s,
         start_ident, // a symbol, with restricted character set
         in_ident,
 
@@ -255,6 +256,11 @@ start:; // loop point for skip_depth > 0
         num_hex,
         num_binary,
     } number_format  = num_decimal;
+
+    enum {
+        str_default,
+        str_s_prefix,
+    } string_format = str_default;
 
     size_t const end = self->input.size;
 
@@ -343,6 +349,8 @@ start:; // loop point for skip_depth > 0
                 replace_token(self->strings, &res, tok_close_curly);
                 state = stop;
                 break;
+
+            case 's': state = in_s; break;
 
             default:
                 if (c >= '0' && c <= '9') {
@@ -813,6 +821,20 @@ start:; // loop point for skip_depth > 0
             state         = in_symbol;
         } break;
 
+        case in_s: {
+            // 's' was consumed. If next char is '"', this is an s-string.
+            if (self->pos < end && '"' == peek_char(self, self->pos)) {
+                advance_pos(self); // skip the opening "
+                string_format = str_s_prefix;
+                state         = start_string;
+                continue;
+            }
+            // Not s"...", treat 's' as start of identifier
+            reverse_pos(self);
+            state = start_ident;
+            continue;
+        } break;
+
         case start_ident: {
             start_capture = self->pos;
             state         = in_ident;
@@ -1127,7 +1149,10 @@ start:; // loop point for skip_depth > 0
         } break;
 
         case stop_string: {
-            replace_token_sn(self->strings, &res, tok_string, self->buf.v, self->buf.size);
+            replace_token_sn(self->strings, &res,
+                             string_format == str_s_prefix ? tok_s_string : tok_string,
+                             self->buf.v, self->buf.size);
+            string_format = str_default;
             state = stop;
         } break;
 

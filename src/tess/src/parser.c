@@ -582,12 +582,25 @@ int the_symbol(parser *p, char const *const want) {
     return 1;
 }
 
-int a_string(parser *p) {
-    if (next_token(p)) return 1;
+int a_string(parser *self) {
+    if (next_token(self)) return 1;
 
-    if (tok_string == p->token.tag) return result_ast_str(p, ast_string, p->token.s);
+    if (tok_string == self->token.tag) return result_ast_str(self, ast_string, self->token.s);
 
-    p->error.tag = tl_err_expected_string;
+    if (tok_s_string == self->token.tag) {
+        // s"..." desugars to String.from_literal("...")
+        ast_node_sized args = {.size = 1, .v = alloc_malloc(self->ast_arena, sizeof(void *))};
+        args.v[0]           = ast_node_create_sym_c(self->ast_arena, self->token.s);
+        args.v[0]->tag      = ast_string;
+        set_node_file(self, args.v[0]);
+
+        ast_node *name = ast_node_create_sym_c(self->ast_arena, "from_literal__1");
+        mangle_name_for_module(self, name, S("String"));
+        ast_node *r    = ast_node_create_nfa(self->ast_arena, name, (ast_node_sized){0}, args);
+        return result_ast_node(self, r);
+    }
+
+    self->error.tag = tl_err_expected_string;
     return 1;
 }
 
