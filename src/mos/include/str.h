@@ -22,7 +22,7 @@ typedef struct {
             unsigned char len : 4;
             unsigned char tag : 4;
             // 1 if small, anything else if allocated (because it's the low bits of big.buf
-        } small;
+        } ss;
     };
 } str;
 

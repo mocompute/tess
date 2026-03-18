@@ -34,7 +34,7 @@ _Small: {
 }
 
 String: { | big: _Big
-          | small: _Small }
+          | ss: _Small }
 
 
 // -- Synopsis --
@@ -144,16 +144,16 @@ _init_big     (alloc: Ptr[Allocator], src: Ptr[Const[CChar]], n: CSize) -> Strin
 // -- Implementation --
 
 _is_small(s) {
-    (s.small.tag_len & _STR_SMALL_TAG) == _STR_SMALL_TAG
+    (s.ss.tag_len & _STR_SMALL_TAG) == _STR_SMALL_TAG
 }
 
 _small_len(s) {
-    tl: CSize := s.small.tag_len, (tl & 0xF0) >> 4
+    tl: CSize := s.ss.tag_len, (tl & 0xF0) >> 4
 
 }
 
 _buf(s) {
-    return if _is_small(s.*) { s->small.buf } else { s->big.buf }
+    return if _is_small(s.*) { s->ss.buf } else { s->big.buf }
 }
 
 _make_tag_len(n) {
@@ -169,9 +169,9 @@ _is_whitespace(b) {
 
 
 _init_small(src, n) {
-    s := String(small = _Small(buf = void, tag_len = _make_tag_len(n)))
+    s := String(ss = _Small(buf = void, tag_len = _make_tag_len(n)))
     if n > 0 {
-        dst: Ptr[CChar] := s.small.buf
+        dst: Ptr[CChar] := s.ss.buf
         c_memcpy(dst, src, n)
     }
     s
@@ -188,7 +188,7 @@ _init_big(alloc, src, n) {
 // -- Construction --
 
 empty() {
-    String(small = _Small(buf = void, tag_len = _make_tag_len(0)))
+    String(ss = _Small(buf = void, tag_len = _make_tag_len(0)))
 }
 
 from_bytes(alloc, s, n) {
@@ -396,8 +396,8 @@ _cat_impl(alloc: Ptr[Allocator], bufs: Ptr[Ptr[CChar]], lens: Ptr[CSize], count:
     while i < count, i += 1 { total += lens.[i] }
 
     if total <= _STR_MAX_SMALL {
-        s               := String(small = _Small(buf = void, tag_len = _make_tag_len(total)))
-        dst: Ptr[CChar] := s.small.buf
+        s               := String(ss = _Small(buf = void, tag_len = _make_tag_len(total)))
+        dst: Ptr[CChar] := s.ss.buf
         off: CSize      := 0
         j:   CSize        := 0
         while j < count, j += 1 {
@@ -720,8 +720,8 @@ repeat(alloc, s, count) {
     sp           := _buf(s.&)
 
     if total <= _STR_MAX_SMALL {
-        result          := String(small = _Small(buf = void, tag_len = _make_tag_len(total)))
-        dst: Ptr[CChar] := result.small.buf
+        result          := String(ss = _Small(buf = void, tag_len = _make_tag_len(total)))
+        dst: Ptr[CChar] := result.ss.buf
         off: CSize      := 0
         i:   CSize        := 0
         while i < count, i += 1 {
@@ -909,8 +909,8 @@ join(alloc, sep, arr) {
     if total == 0 { return empty() }
 
     if total <= _STR_MAX_SMALL {
-        result          := String(small = _Small(buf = void, tag_len = _make_tag_len(total)))
-        dst: Ptr[CChar] := result.small.buf
+        result          := String(ss = _Small(buf = void, tag_len = _make_tag_len(total)))
+        dst: Ptr[CChar] := result.ss.buf
         off: CSize      := 0
         j:   CSize        := 0
         while j < arr.size, j += 1 {

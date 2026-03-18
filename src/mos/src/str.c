@@ -17,29 +17,29 @@
 #define STR_SMALL 1
 
 str str_empty() {
-    str out       = {0};
-    out.small.tag = STR_SMALL;
+    str out    = {0};
+    out.ss.tag = STR_SMALL;
 
     return out;
 }
 
 str str_move(str *orig) {
-    str out         = *orig;
-    orig->small.len = 0;
-    orig->small.tag = STR_SMALL;
+    str out      = *orig;
+    orig->ss.len = 0;
+    orig->ss.tag = STR_SMALL;
     return out;
 }
 
 static void init_small(str *out, char const *in, size_t len) {
     if (len > MOS_STR_MAX_SMALL) fatal("out of range");
 
-    out->small.tag = STR_SMALL;
-    out->small.len = len;
-    if (len) memcpy(out->small.buf, in, len);
+    out->ss.tag = STR_SMALL;
+    out->ss.len = len;
+    if (len) memcpy(out->ss.buf, in, len);
 }
 
 static int is_small(str self) {
-    return self.small.tag == STR_SMALL;
+    return self.ss.tag == STR_SMALL;
 }
 
 str str_init_small(char const *in) {
@@ -126,7 +126,7 @@ str str_copy_span(allocator *alloc, span in) {
 
 void str_deinit(allocator *alloc, str *self) {
     if (is_small(*self)) {
-        self->small.len = 0;
+        self->ss.len = 0;
         return;
     }
 
@@ -167,10 +167,10 @@ str str_cat(allocator *alloc, str left, str right) {
     // str, so it can return the pre-memcpy (zeroed) value for small strings.
     str out;
     if (len <= MOS_STR_MAX_SMALL) {
-        out = (str){.small = {.tag = STR_SMALL}};
-        memcpy(out.small.buf, left_span.buf, left_span.len);
-        memcpy(&out.small.buf[left_span.len], right_span.buf, right_span.len);
-        out.small.len = len;
+        out = (str){.ss = {.tag = STR_SMALL}};
+        memcpy(out.ss.buf, left_span.buf, left_span.len);
+        memcpy(&out.ss.buf[left_span.len], right_span.buf, right_span.len);
+        out.ss.len = len;
     } else {
         out = (str){.big = {.len = len, .buf = alloc_malloc(alloc, len + 1)}};
         memcpy(out.big.buf, left_span.buf, left_span.len);
@@ -193,11 +193,11 @@ str str_cat_3(allocator *alloc, str one, str two, str three) {
     // see str_cat: avoid str_span alias for MSVC
     str out;
     if (len <= MOS_STR_MAX_SMALL) {
-        out = (str){.small = {.tag = STR_SMALL}};
-        memcpy(out.small.buf, s1.buf, s1.len);
-        memcpy(out.small.buf + s1.len, s2.buf, s2.len);
-        memcpy(out.small.buf + s1.len + s2.len, s3.buf, s3.len);
-        out.small.len = len;
+        out = (str){.ss = {.tag = STR_SMALL}};
+        memcpy(out.ss.buf, s1.buf, s1.len);
+        memcpy(out.ss.buf + s1.len, s2.buf, s2.len);
+        memcpy(out.ss.buf + s1.len + s2.len, s3.buf, s3.len);
+        out.ss.len = len;
     } else {
         out = (str){.big = {.len = len, .buf = alloc_malloc(alloc, len + 1)}};
         memcpy(out.big.buf, s1.buf, s1.len);
@@ -218,15 +218,15 @@ str str_cat_4(allocator *alloc, str one, str two, str three, str four) {
     // see str_cat: avoid str_span alias for MSVC
     str out;
     if (len <= MOS_STR_MAX_SMALL) {
-        out = (str){.small = {.tag = STR_SMALL}};
+        out = (str){.ss = {.tag = STR_SMALL}};
         // clang-format off
         size_t off = 0;
-        memcpy(out.small.buf + off, s1.buf, s1.len); off += s1.len;
-        memcpy(out.small.buf + off, s2.buf, s2.len); off += s2.len;
-        memcpy(out.small.buf + off, s3.buf, s3.len); off += s3.len;
-        memcpy(out.small.buf + off, s4.buf, s4.len);
+        memcpy(out.ss.buf + off, s1.buf, s1.len); off += s1.len;
+        memcpy(out.ss.buf + off, s2.buf, s2.len); off += s2.len;
+        memcpy(out.ss.buf + off, s3.buf, s3.len); off += s3.len;
+        memcpy(out.ss.buf + off, s4.buf, s4.len);
         // clang-format on
-        out.small.len = len;
+        out.ss.len = len;
     } else {
         out = (str){.big = {.len = len, .buf = alloc_malloc(alloc, len + 1)}};
         // clang-format off
@@ -252,16 +252,16 @@ str str_cat_5(allocator *alloc, str one, str two, str three, str four, str five)
     // see str_cat: avoid str_span alias for MSVC
     str out;
     if (len <= MOS_STR_MAX_SMALL) {
-        out = (str){.small = {.tag = STR_SMALL}};
+        out = (str){.ss = {.tag = STR_SMALL}};
         // clang-format off
         size_t off = 0;
-        memcpy(out.small.buf + off, s1.buf, s1.len); off += s1.len;
-        memcpy(out.small.buf + off, s2.buf, s2.len); off += s2.len;
-        memcpy(out.small.buf + off, s3.buf, s3.len); off += s3.len;
-        memcpy(out.small.buf + off, s4.buf, s4.len); off += s4.len;
-        memcpy(out.small.buf + off, s5.buf, s5.len);
+        memcpy(out.ss.buf + off, s1.buf, s1.len); off += s1.len;
+        memcpy(out.ss.buf + off, s2.buf, s2.len); off += s2.len;
+        memcpy(out.ss.buf + off, s3.buf, s3.len); off += s3.len;
+        memcpy(out.ss.buf + off, s4.buf, s4.len); off += s4.len;
+        memcpy(out.ss.buf + off, s5.buf, s5.len);
         // clang-format on
-        out.small.len = len;
+        out.ss.len = len;
     } else {
         out = (str){.big = {.len = len, .buf = alloc_malloc(alloc, len + 1)}};
         // clang-format off
@@ -289,17 +289,17 @@ str str_cat_6(allocator *alloc, str one, str two, str three, str four, str five,
     // see str_cat: avoid str_span alias for MSVC
     str out;
     if (len <= MOS_STR_MAX_SMALL) {
-        out = (str){.small = {.tag = STR_SMALL}};
+        out = (str){.ss = {.tag = STR_SMALL}};
         // clang-format off
         size_t off = 0;
-        memcpy(out.small.buf + off, s1.buf, s1.len); off += s1.len;
-        memcpy(out.small.buf + off, s2.buf, s2.len); off += s2.len;
-        memcpy(out.small.buf + off, s3.buf, s3.len); off += s3.len;
-        memcpy(out.small.buf + off, s4.buf, s4.len); off += s4.len;
-        memcpy(out.small.buf + off, s5.buf, s5.len); off += s5.len;
-        memcpy(out.small.buf + off, s6.buf, s6.len);
+        memcpy(out.ss.buf + off, s1.buf, s1.len); off += s1.len;
+        memcpy(out.ss.buf + off, s2.buf, s2.len); off += s2.len;
+        memcpy(out.ss.buf + off, s3.buf, s3.len); off += s3.len;
+        memcpy(out.ss.buf + off, s4.buf, s4.len); off += s4.len;
+        memcpy(out.ss.buf + off, s5.buf, s5.len); off += s5.len;
+        memcpy(out.ss.buf + off, s6.buf, s6.len);
         // clang-format on
-        out.small.len = len;
+        out.ss.len = len;
     } else {
         out = (str){.big = {.len = len, .buf = alloc_malloc(alloc, len + 1)}};
         // clang-format off
@@ -328,14 +328,14 @@ str str_cat_array(allocator *alloc, str_sized arr) {
     // see str_cat: avoid str_span alias for MSVC
     str out;
     if (total <= MOS_STR_MAX_SMALL) {
-        out        = (str){.small = {.tag = STR_SMALL}};
+        out        = (str){.ss = {.tag = STR_SMALL}};
         size_t off = 0;
         forall(i, arr) {
             span s = str_span(&arr.v[i]);
-            memcpy(&out.small.buf[off], s.buf, s.len);
+            memcpy(&out.ss.buf[off], s.buf, s.len);
             off += s.len;
         }
-        out.small.len = total;
+        out.ss.len = total;
         return out;
     }
     out        = (str){.big = {.len = total, .buf = alloc_malloc(alloc, total + 1)}};
@@ -375,12 +375,12 @@ void str_resize(allocator *alloc, str *self, size_t len) {
 
     if (len <= MOS_STR_MAX_SMALL) {
         if (!is_small(*self)) {
-            self->small.tag = STR_SMALL;
-            self->small.len = len;
-            memcpy(self->small.buf, old.buf, len);
+            self->ss.tag = STR_SMALL;
+            self->ss.len = len;
+            memcpy(self->ss.buf, old.buf, len);
             alloc_free(alloc, old.buf);
         }
-        self->small.len = len;
+        self->ss.len = len;
         return;
     }
 
@@ -407,9 +407,9 @@ str str_replace_char(allocator *alloc, str s, char find, char replace) {
     // see str_cat: avoid str_span alias for MSVC
     str out;
     if (len <= MOS_STR_MAX_SMALL) {
-        out = (str){.small = {.tag = STR_SMALL}};
-        for (size_t i = 0; i < len; ++i) out.small.buf[i] = src.buf[i] == find ? replace : src.buf[i];
-        out.small.len = len;
+        out = (str){.ss = {.tag = STR_SMALL}};
+        for (size_t i = 0; i < len; ++i) out.ss.buf[i] = src.buf[i] == find ? replace : src.buf[i];
+        out.ss.len = len;
     } else {
         out = (str){.big = {.len = len, .buf = alloc_malloc(alloc, len + 1)}};
         for (size_t i = 0; i < len; ++i) out.big.buf[i] = src.buf[i] == find ? replace : src.buf[i];
@@ -439,10 +439,9 @@ str str_make_c_identifier(allocator *alloc, str in) {
     size_t len = src.len;
 
     if (len <= MOS_STR_MAX_SMALL) {
-        str out       = {0};
-        out.small.tag = STR_SMALL;
-        out.small.len =
-          (unsigned char)platform_make_c_identifier(out.small.buf, src.buf, MOS_STR_MAX_SMALL + 1);
+        str out    = {0};
+        out.ss.tag = STR_SMALL;
+        out.ss.len = (unsigned char)platform_make_c_identifier(out.ss.buf, src.buf, MOS_STR_MAX_SMALL + 1);
         return out;
     }
 
@@ -450,10 +449,10 @@ str str_make_c_identifier(allocator *alloc, str in) {
     size_t out_len = platform_make_c_identifier(tmp, src.buf, len + 1);
 
     if (out_len <= MOS_STR_MAX_SMALL) {
-        str out       = {0};
-        out.small.tag = STR_SMALL;
-        out.small.len = (unsigned char)out_len;
-        memcpy(out.small.buf, tmp, out_len + 1);
+        str out    = {0};
+        out.ss.tag = STR_SMALL;
+        out.ss.len = (unsigned char)out_len;
+        memcpy(out.ss.buf, tmp, out_len + 1);
         alloc_free(alloc, tmp);
         return out;
     }
@@ -462,7 +461,7 @@ str str_make_c_identifier(allocator *alloc, str in) {
 }
 
 size_t str_len(str self) {
-    if (is_small(self)) return self.small.len;
+    if (is_small(self)) return self.ss.len;
     return self.big.len;
 }
 
@@ -568,12 +567,12 @@ int str_eq(str lhs, str rhs) {
 // Do not use str_span here: MSVC whole-program optimization (/GL + LTCG) mishandles the pointer
 // that str_span returns into the by-value parameter's small-string buffer.
 u32 str_hash32(str self) {
-    if (is_small(self)) return hash32(self.small.buf, self.small.len);
+    if (is_small(self)) return hash32(self.ss.buf, self.ss.len);
     return hash32(self.big.buf, self.big.len);
 }
 
 u64 str_hash64(str self) {
-    if (is_small(self)) return hash64(self.small.buf, self.small.len);
+    if (is_small(self)) return hash64(self.ss.buf, self.ss.len);
     return hash64(self.big.buf, self.big.len);
 }
 
@@ -592,12 +591,12 @@ u64 str_hash64_combine_sized(u64 hash, str_sized arr) {
 }
 
 span str_span(str *self) {
-    if (is_small(*self)) return (span){.len = self->small.len, .buf = self->small.buf};
+    if (is_small(*self)) return (span){.len = self->ss.len, .buf = self->ss.buf};
     else return (span){.len = self->big.len, .buf = self->big.buf};
 }
 
 cspan str_cspan(str const *self) {
-    if (is_small(*self)) return (cspan){.len = self->small.len, .buf = self->small.buf};
+    if (is_small(*self)) return (cspan){.len = self->ss.len, .buf = self->ss.buf};
     else return (cspan){.len = self->big.len, .buf = self->big.buf};
 }
 
@@ -623,23 +622,23 @@ span str_slice_left(str *self, size_t start) {
 ispan str_ispan(str *self) {
     size_t len;
     if (is_small(*self)) {
-        len = self->small.len;
+        len = self->ss.len;
     } else {
         len = self->big.len;
     }
     if (len > INT_MAX) fatal("overflow");
-    if (is_small(*self)) return (ispan){.len = (int)len, .buf = self->small.buf};
+    if (is_small(*self)) return (ispan){.len = (int)len, .buf = self->ss.buf};
     else return (ispan){.len = (int)len, .buf = self->big.buf};
 }
 
 char const *str_buf(str const *self) {
-    if (is_small(*self)) return self->small.buf;
+    if (is_small(*self)) return self->ss.buf;
     else return self->big.buf;
 }
 
 int str_ilen(str self) {
     size_t len;
-    if (is_small(self)) len = self.small.len;
+    if (is_small(self)) len = self.ss.len;
     else len = self.big.len;
     if (len > INT_MAX) fatal("overflow");
     return (int)len;
@@ -978,9 +977,9 @@ char *str_cstr_copy(allocator *alloc, str s) {
 
 char const *str_cstr(str *self) {
     if (is_small(*self)) {
-        unsigned len = self->small.len;
-        if (self->small.buf[len] != '\0') self->small.buf[len] = '\0';
-        return self->small.buf;
+        unsigned len = self->ss.len;
+        if (self->ss.buf[len] != '\0') self->ss.buf[len] = '\0';
+        return self->ss.buf;
     } else {
         size_t len = self->big.len;
 
