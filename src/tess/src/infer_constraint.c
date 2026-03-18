@@ -2640,19 +2640,34 @@ static int ufcs_rewrite_call(tl_infer *self, traverse_ctx *ctx, ast_node *node, 
             fn_poly         = lookup_poly(self, ufcs_name);
         }
     }
+    // Family fallback for standalone builtin types (CChar→Int, CSize→UInt, CPtrDiff→Int)
+    if (!fn_poly) {
+        tl_monotype *fb_type = struct_type;
+        if (tl_monotype_is_ptr(fb_type)) fb_type = tl_monotype_ptr_target(fb_type);
+        if (tl_monotype_is_inst(fb_type)) {
+            str family = builtin_trait_family_module(fb_type);
+            if (!str_is_empty(family)) {
+                str qualified = str_qualify(self->arena, family, field_name);
+                ufcs_name     = mangle_str_for_arity(self->arena, qualified, ufcs_arity);
+                fn_poly       = lookup_poly(self, ufcs_name);
+            }
+        }
+    }
     if (!fn_poly) {
         array_push(self->errors,
                    ((tl_infer_error){.tag = tl_err_field_not_found, .node = nfa->named_application.name}));
         return 1;
     }
 
-    // Receiver coercion: implicit address-of
-    tl_monotype *fn_mono            = fn_poly->type;
-    int          first_param_is_ptr = 0;
+    // Extract first parameter type (shared by address-of coercion and cross-chain widening)
+    tl_monotype      *fn_mono            = fn_poly->type;
+    int               first_param_is_ptr = 0;
+    tl_monotype      *param0             = null;
     if (tl_monotype_is_arrow(fn_mono)) {
         tl_monotype_sized params = tl_monotype_arrow_get_args(fn_mono);
         if (params.size > 0) {
-            first_param_is_ptr = tl_monotype_is_ptr(params.v[0]);
+            param0             = params.v[0];
+            first_param_is_ptr = tl_monotype_is_ptr(param0);
         }
     }
 
@@ -2676,6 +2691,35 @@ static int ufcs_rewrite_call(tl_infer *self, traverse_ctx *ctx, ast_node *node, 
                 if (constrain_pm(self, addr->type, ptr, addr, TL_UNIFY_SYMMETRIC)) return 1;
             }
             left = addr;
+        }
+    }
+
+    // Cross-chain integer widening for trait dispatch:
+    // If receiver is a concrete integer on a different subchain than the function's
+    // first parameter, wrap in a let-in cast: let _widen: ParamType = recv in _widen
+    if (!first_param_is_ptr && param0) {
+        tl_monotype *recv = left->type ? left->type->type : null;
+        if (recv) tl_monotype_substitute(self->arena, recv, self->subs, null);
+        if (recv &&
+            tl_monotype_is_inst(param0) && tl_monotype_is_integer_convertible(param0) &&
+            tl_monotype_is_inst(recv)   && tl_monotype_is_integer_convertible(recv) &&
+            !tl_monotype_same_integer_subchain(param0, recv)) {
+
+            str       var_name = next_variable_name(self, S("_widen"));
+            ast_node *name     = ast_node_create_sym(self->arena, var_name);
+            name->file = left->file; name->line = left->line; name->col = left->col;
+            ensure_tv(self, &name->type);
+            name->symbol.annotation_type = tl_polytype_absorb_mono(self->arena, param0);
+
+            ast_node *body = ast_node_create_sym(self->arena, var_name);
+            body->file = left->file; body->line = left->line; body->col = left->col;
+            ensure_tv(self, &body->type);
+
+            ast_node *let_in = ast_node_create_let_in(self->arena, name, left, body);
+            let_in->file = left->file; let_in->line = left->line; let_in->col = left->col;
+            ensure_tv(self, &let_in->type);
+
+            left = let_in;
         }
     }
 

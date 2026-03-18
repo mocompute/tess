@@ -917,7 +917,7 @@ static void rewrite_op_to_nfa(tl_infer *self, ast_node *node, str func_name, ast
 // For standalone builtin types (CChar, CSize, CPtrDiff), return the trait family canonical
 // module to try when a direct lookup in the type's own module fails. Returns empty for
 // user-defined types or builtins that already map directly to their family (e.g. CInt → "Int").
-static str builtin_trait_family_module(tl_monotype *type) {
+str builtin_trait_family_module(tl_monotype *type) {
     if (str_is_empty(type->cons_inst->def->c_type_name)) return str_empty();
     int sc = type->cons_inst->def->integer_subchain;
     if (sc == TL_INTEGER_SUBCHAIN_CCHAR || sc == TL_INTEGER_SUBCHAIN_CPTRDIFF) return S("Int");

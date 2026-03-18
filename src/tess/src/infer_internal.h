@@ -257,6 +257,7 @@ void promote_free_variables(str_array *, tl_monotype *);
 // Internal API: infer_specialize.c (Phase 5)
 // ============================================================================
 
+str           builtin_trait_family_module(tl_monotype *);
 str          *instance_lookup_arrow(tl_infer *, str, tl_monotype *, tl_monotype_sized);
 str           specialize_type_constructor(tl_infer *, str, tl_monotype_sized, tl_polytype **);
 str           specialize_arrow(tl_infer *, traverse_ctx *, str, tl_monotype *, tl_monotype_sized);
