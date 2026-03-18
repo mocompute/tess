@@ -34,12 +34,3 @@ hash[T](n: T) -> CSize { Hash.fnv1a(n.&, sizeof(n)) }
 
 #module Bool
 hash[T](n: T) -> CSize { Hash.fnv1a(n.&, sizeof(n)) }
-
-#module CSize
-hash[T](n: T) -> CSize { Hash.fnv1a(n.&, sizeof(n)) }
-
-#module CPtrDiff
-hash[T](n: T) -> CSize { Hash.fnv1a(n.&, sizeof(n)) }
-
-#module CChar
-hash(s: CString) -> CSize { Hash.fnv1a_cstring(s) }
