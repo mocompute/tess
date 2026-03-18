@@ -3,13 +3,14 @@
 // foo is defined for Point but not for Int, so Int should fail the Foo bound.
 
 #module Foo
-Foo[T] : {
+
+Foo[T]: {
     foo(x: T) -> CInt
 }
 
 #module Point
-Point : { x: CInt }
-foo(p) -> CInt { p.x }
+Point:         { x: CInt }
+foo(p) -> CInt { p.x     }
 
 #module main
 

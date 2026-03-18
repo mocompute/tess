@@ -142,14 +142,14 @@ test_cmp() {
 
     // Prefix relationship: shorter < longer when prefix matches
     d := String.from_cstr("abcd")
-    if a.cmp(d) >= 0 { error += 1 } // "abc" < "abcd"
-    if d.cmp(a) <= 0 { error += 1 } // "abcd" > "abc"
+    if a.cmp(d) >= 0 { error += 1 }     // "abc" < "abcd"
+    if d.cmp(a) <= 0 { error += 1 }     // "abcd" > "abc"
     d.&.free()
 
     // Empty vs non-empty
     e := String.empty()
-    if e.cmp(a) >= 0 { error += 1 } // "" < "abc"
-    if a.cmp(e) <= 0 { error += 1 } // "abc" > ""
+    if e.cmp(a) >= 0 { error += 1 }     // "" < "abc"
+    if a.cmp(e) <= 0 { error += 1 }     // "abc" > ""
 
     // Empty vs empty
     e2 := String.empty()
@@ -545,12 +545,12 @@ test_replace_byte() {
 
 test_from_byte() {
     error := 0
-    s     := String.from_byte(65u)                                // 'A'
+    s     := String.from_byte(65u)                                          // 'A'
     if s.len() != 1zu { error += 1 }
     if (b: Some := s.byte_at(0zu) else { _NUL }, b.v) != 65u { error += 1 } // 'A'
     s.&.free()
 
-    s2 := String.from_byte(122u)                                    // 'z'
+    s2 := String.from_byte(122u)                                              // 'z'
     if s2.len() != 1zu { error += 1 }
     if (b: Some := s2.byte_at(0zu) else { _NUL }, b.v) != 122u { error += 1 } // 'z'
     s2.&.free()
@@ -580,11 +580,11 @@ test_index_of() {
     xyz   := String.from_cstr("xyz")
     e     := String.empty()
 
-    if (r: Some := s.index_of(h) else { _NONE }, r.v) != 0zu { error += 1 }     // beginning
-    if (r: Some := s.index_of(w) else { _NONE }, r.v) != 6zu { error += 1 }     // end
-    if (r: Some := s.index_of(lo) else { _NONE }, r.v) != 3zu { error += 1 }    // middle
-    error += when s.index_of(xyz) { s: Some { 1 } else { 0 } }                  // not found
-    if (r: Some := s.index_of(e) else { _NONE }, r.v) != 0zu { error += 1 }     // empty needle -> 0
+    if (r: Some := s.index_of(h) else { _NONE }, r.v) != 0zu { error += 1 }  // beginning
+    if (r: Some := s.index_of(w) else { _NONE }, r.v) != 6zu { error += 1 }  // end
+    if (r: Some := s.index_of(lo) else { _NONE }, r.v) != 3zu { error += 1 } // middle
+    error += when s.index_of(xyz) { s: Some { 1 } else { 0 } }               // not found
+    if (r: Some := s.index_of(e) else { _NONE }, r.v) != 0zu { error += 1 }  // empty needle -> 0
 
     // Needle longer than haystack
     big := String.from_cstr("this is way too long")
@@ -613,7 +613,7 @@ test_index_of_char_from() {
     error += when s.index_of_char_from('l', 4zu) { s: Some { 1 } else { 0 } }
 
     // Start >= len
-    error += when s.index_of_char_from('l', 5zu) { s: Some { 1 } else { 0 } }
+    error += when s.index_of_char_from('l', 5zu) { s:   Some { 1 } else { 0 } }
     error += when s.index_of_char_from('l', 100zu) { s: Some { 1 } else { 0 } }
 
     s.&.free()
@@ -912,7 +912,7 @@ test_repeat() {
     s4 := String.from_cstr("12345")
     r4 := s4.repeat(3zu)
     if r4.len() != 15zu { error += 1 }
-    if r4._is_small() { error += 1 } // should be big
+    if r4._is_small() { error += 1 }    // should be big
     cs4 := r4.&.cstr()
     if c_strcmp(cs4, "123451234512345") != 0 { error += 1 }
     r4.&.free()
@@ -1216,7 +1216,7 @@ test_join() {
     arr7.&.push(a7)
     arr7.&.push(b7)
     sep7 := String.from_cstr("-----")
-    r7   := sep7.join(arr7)     // "hello-----world" = 15 bytes
+    r7   := sep7.join(arr7)             // "hello-----world" = 15 bytes
     if r7.len() != 15zu { error += 1 }
     if r7._is_small() { error += 1 }
     cs7 := r7.&.cstr()

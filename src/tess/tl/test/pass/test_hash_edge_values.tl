@@ -8,8 +8,8 @@ hash_from_other_function(v: Int) -> CSize { v.hash() }
 main() {
     error: CInt := 0
 
-    v0: Int  := 0
-    v1: Int  := 1
+    v0:  Int  := 0
+    v1:  Int  := 1
     vm1: Int := -1
     v42: Int := 42
 

@@ -526,7 +526,7 @@ get_option(args, name) {
     }
 }
 
-get_command(args)       { args->_command                        }
-positionals(args)       { args->_positional                     }
-rest       (args)       { args->_rest                           }
+get_command(args)       { args->_command               }
+positionals(args)       { args->_positional            }
+rest       (args)       { args->_rest                  }
 has        (args, name) { args->_values.contains(name) }

@@ -5,7 +5,8 @@
 // "expected_pointer" or segfaults.
 
 #module Mutate
-Mutate[T] : {
+
+Mutate[T]: {
     mutate(self: Ptr[T]) -> CInt
 }
 
@@ -18,7 +19,7 @@ modify[T: Mutate](x: Ptr[T]) -> CInt { x.mutate() }
 
 main() {
     a: Int := 10
-    error := if modify(a.&) == 1 { 0 } else { 1 }
+    error  := if modify(a.&) == 1 { 0 } else { 1 }
     error += if a == 11 { 0 } else { 1 }
     error
 }

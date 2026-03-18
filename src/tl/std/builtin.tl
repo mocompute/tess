@@ -34,10 +34,10 @@ static inline size_t tl_hash_cstring(const char *s) {
 #endc
 
 
-_tl_sizeof_[T] ()       -> CSize
-_tl_sizeof_[T] (x: T)   -> CSize
-_tl_alignof_[T]()       -> CSize
-_tl_alignof_[T](x: T)   -> CSize
+_tl_sizeof_[T]() -> CSize
+_tl_sizeof_[T](x: T) -> CSize
+_tl_alignof_[T]() -> CSize
+_tl_alignof_[T](x: T) -> CSize
 Int     = CLongLong
 UInt    = CUnsignedLongLong
 Float   = CDouble

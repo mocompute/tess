@@ -13,7 +13,7 @@ main() {
 
     // Int
     n: Int := 42
-    h1 := n.hash()
+    h1     := n.hash()
     error += if h1 != 0zu { 0 } else { 1 }
 
     // Same value, same hash
@@ -22,22 +22,22 @@ main() {
 
     // Different value, different hash
     m: Int := 43
-    h3 := m.hash()
+    h3     := m.hash()
     error += if h1 != h3 { 0 } else { 1 }
 
     // Bool
-    b := true
+    b  := true
     h4 := b.hash()
     error += if h4 != 0zu { 0 } else { 1 }
 
     // Float
     f: Float := 3.14
-    h5 := f.hash()
+    h5       := f.hash()
     error += if h5 != 0zu { 0 } else { 1 }
 
     // Narrow type (CShort) — should use Int family, preserving sizeof(CShort)
     s: CShort := 7
-    h6 := s.hash()
+    h6        := s.hash()
     error += if h6 != 0zu { 0 } else { 1 }
 
     // Via generic trait-bounded function

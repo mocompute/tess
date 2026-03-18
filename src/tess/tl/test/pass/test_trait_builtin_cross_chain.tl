@@ -3,7 +3,8 @@
 // (e.g. CInt8 in FIXED_SIGNED → Int in C_SIGNED).
 
 #module Describe
-Describe[T] : {
+
+Describe[T]: {
     describe(x: T) -> CInt
 }
 
@@ -15,8 +16,8 @@ describe(n) -> CInt { 2 }
 
 #module main
 
-show[T: Describe](x: T) -> CInt { x.describe() }
-id_ptr[T](p: Ptr[T]) -> T { p.* }
+show[T: Describe](x: T)      -> CInt   { x.describe() }
+id_ptr[T]        (p: Ptr[T]) -> T { p.*               }
 
 main() {
     error := 0
@@ -77,19 +78,19 @@ main() {
     // --- Pointer dereference then by-value dispatch ---
     // Ensures widening works on the dereferenced value, not on the pointer itself
 
-    v: CInt16 := 10
+    v:  CInt16       := 10
     vp: Ptr[CInt16] := v.&
     error += if show(vp.*) == 1 { 0 } else { 1 }
 
-    w: CUInt32 := 20
+    w:  CUInt32       := 20
     wp: Ptr[CUInt32] := w.&
     error += if show(wp.*) == 2 { 0 } else { 1 }
 
-    x: CChar := 65
+    x:  CChar       := 65
     xp: Ptr[CChar] := x.&
     error += if show(xp.*) == 1 { 0 } else { 1 }
 
-    y: CSize := 42
+    y:  CSize       := 42
     yp: Ptr[CSize] := y.&
     error += if show(yp.*) == 2 { 0 } else { 1 }
 

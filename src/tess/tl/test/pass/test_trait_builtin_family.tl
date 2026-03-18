@@ -4,7 +4,8 @@
 #import <String.tl>
 
 #module Describe
-Describe[T] : {
+
+Describe[T]: {
     describe(x: T) -> String
 }
 
@@ -20,12 +21,12 @@ main() {
 
     // CShort has module "Int" — finds Int__describe__1 directly
     n: CShort := 42
-    s := show(n)
+    s         := show(n)
     error += if String.eq(s, String.from_cstr("42")) { 0 } else { 1 }
 
     // CInt also has module "Int"
     m: CInt := 99
-    s2 := show(m)
+    s2      := show(m)
     error += if String.eq(s2, String.from_cstr("99")) { 0 } else { 1 }
 
     error

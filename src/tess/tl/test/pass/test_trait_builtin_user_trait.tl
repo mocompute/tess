@@ -6,7 +6,8 @@
 #import <String.tl>
 
 #module Describe
-Describe[T] : {
+
+Describe[T]: {
     describe(x: T) -> String
 }
 

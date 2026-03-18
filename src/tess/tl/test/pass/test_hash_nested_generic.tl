@@ -22,10 +22,10 @@ main() {
     error: CInt := 0
 
     // Basic wrapper hash
-    w   := Wrapper.wrap(42)
-    hw  := w.hash()
+    w        := Wrapper.wrap(42)
+    hw       := w.hash()
     n42: Int := 42
-    h42 := n42.hash()
+    h42      := n42.hash()
 
     // Transparent wrapping: hash(Wrapper(v=42)) == hash(42)
     if hw != h42 { error += 1 }
@@ -37,9 +37,9 @@ main() {
     if hww != h42 { error += 1 }
 
     // Multiple trait bounds
-    ch := combine_hash(10, 20)
-    a: Int := 10
-    b: Int := 20
+    ch       := combine_hash(10, 20)
+    a: Int   := 10
+    b: Int   := 20
     expected := a.hash() ^ b.hash()
     if ch != expected { error += 1 }
 
