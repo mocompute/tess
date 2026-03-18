@@ -10,7 +10,7 @@
 // Symbols in the builtin module are available without qualification.
 
 #ifc
-// Hash functions to support compiler codegen for hash/1 and _tl_hash_/1.
+// Hash functions used by Hash.tl (fnv1a / fnv1a_cstring wrappers).
 
 // Murmurhash3 fmix64 finalizer — mixes all bits so low bits (used for
 // bucket selection) reflect the full key, preventing clustering.
@@ -38,8 +38,6 @@ _tl_sizeof_[T] ()       -> CSize
 _tl_sizeof_[T] (x: T)   -> CSize
 _tl_alignof_[T]()       -> CSize
 _tl_alignof_[T](x: T)   -> CSize
-_tl_hash_[T]   (key: T) -> CSize
-
 Int     = CLongLong
 UInt    = CUnsignedLongLong
 Float   = CDouble

@@ -1,5 +1,7 @@
 // Test conditional conformance: a generic type with T: Hash can satisfy Hash.
 
+#import <Hash.tl>
+
 #module Wrapper
 
 Wrapper[T]: { v: T }
@@ -9,30 +11,30 @@ wrap[T](x: T) -> Wrapper[T] {
 }
 
 hash[T: Hash](w: Wrapper[T]) -> CSize {
-    hash(w.v)
+    w.v.hash()
 }
 
 #module main
 
 compute_hash[T: Hash](x: T) -> CSize {
-    hash(x)
+    x.hash()
 }
 
 main() -> CInt {
     error: CInt := 0
 
     w  := Wrapper.wrap(42)
-    h1 := hash(w)
+    h1 := w.hash()
     error += if h1 != 0zu { 0 } else { 1 }
 
     // Same value should produce same hash
     w2 := Wrapper.wrap(42)
-    h2 := hash(w2)
+    h2 := w2.hash()
     error += if h1 == h2 { 0 } else { 1 }
 
     // Different value should (likely) produce different hash
     w3 := Wrapper.wrap(99)
-    h3 := hash(w3)
+    h3 := w3.hash()
     error += if h1 != h3 { 0 } else { 1 }
 
     // Via trait-bounded generic

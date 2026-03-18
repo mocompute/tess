@@ -1,5 +1,7 @@
 // Test that a type without a hash() implementation fails the Hash trait bound.
 
+#import <Hash.tl>
+
 #module Foo
 
 Foo: { x: Int }
@@ -7,7 +9,7 @@ Foo: { x: Int }
 #module main
 
 compute_hash[T: Hash](x: T) -> CSize {
-    hash(x)
+    x.hash()
 }
 
 main() -> CInt {

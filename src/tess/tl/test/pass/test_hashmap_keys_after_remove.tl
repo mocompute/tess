@@ -1,4 +1,6 @@
 // Test HashMap.keys() after removals: no tombstone keys leak through.
+#import <Hash.tl>
+
 #module main
 #import <HashMap.tl>
 #import <Array.tl>

@@ -1,15 +1,22 @@
 // Test hash edge values: zero, adjacent, negative, cross-value collision resistance.
+#import <Hash.tl>
+
 #module main
 
-hash_from_other_function(v: Int) -> CSize { hash(v) }
+hash_from_other_function(v: Int) -> CSize { v.hash() }
 
 main() {
     error: CInt := 0
 
-    h0  := hash(0)
-    h1  := hash(1)
-    hm1 := hash(-1)
-    h42 := hash(42)
+    v0: Int  := 0
+    v1: Int  := 1
+    vm1: Int := -1
+    v42: Int := 42
+
+    h0  := v0.hash()
+    h1  := v1.hash()
+    hm1 := vm1.hash()
+    h42 := v42.hash()
 
     // hash(0) should be non-zero (FNV-1a offset basis)
     if h0 == 0zu { error += 1 }

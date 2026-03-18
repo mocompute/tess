@@ -1,3 +1,5 @@
+#import <Hash.tl>
+
 #module main
 #import <String.tl>
 #import <Array.tl>

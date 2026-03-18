@@ -81,7 +81,7 @@ These mistakes have caused repeated debugging sessions — avoid them:
 1. **Trait methods must be in a named module.** `hash(p: Point)` in `#module main` won't be found by trait dispatch. Define it in `#module Point`.
 2. **Don't alias types over module names.** `Str = Str.Str` inside a module shadows the `Str` module. Auto-collapse handles bare `Str` in type positions.
 3. **`:=` vs `=` confusion.** `n: Int = 10` (reassignment to undeclared `n`) is NOT a binding — it causes confusing downstream errors. Use `n: Int := 10`.
-4. **`Hash` and `Eq` traits are compiler builtins.** Defined in `infer.c`, not in any `.tl` file. `_tl_hash_[T]` (in `builtin.tl`) transpiles to `tl_hash_bytes(&(T){expr}, sizeof(T))` via `transpile.c`. To change hash behavior for all types, modify `tl_hash_bytes` in `builtin.tl`.
+4. **`Hash` trait requires `#import <Hash.tl>`.** Unlike operator traits (compiler builtins), `Hash` is defined in the standard library. Any file using `.hash()` or `HashMap` must `#import <Hash.tl>`. The `Eq` trait and other operator traits remain compiler builtins in `infer.c`.
 
 ## Source Architecture
 

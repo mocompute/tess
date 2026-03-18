@@ -189,7 +189,7 @@ _grow[K: HashEq, V](self: Ptr[HashMap[K, V]]) -> Void {
     while i < old_capacity, i += 1 {
         e := old_entries.[i].&
         if _is_occupied(e->meta) {
-            _insert_entry[K, V](new_entries, new_capacity, e->key, e->value, hash(e->key))
+            _insert_entry[K, V](new_entries, new_capacity, e->key, e->value, e->key.hash())
         }
     }
 
@@ -199,7 +199,7 @@ _grow[K: HashEq, V](self: Ptr[HashMap[K, V]]) -> Void {
 }
 
 set[K: HashEq, V](self: Ptr[HashMap[K, V]], key: K, value: V) -> Void {
-    hash  := hash(key)
+    hash  := key.hash()
     delta := _insert_entry[K, V](self->_entries, self->_capacity, key, value, hash)
     self->_size += delta
 
@@ -212,7 +212,7 @@ set[K: HashEq, V](self: Ptr[HashMap[K, V]], key: K, value: V) -> Void {
 get[K: HashEq, V](self: Ptr[HashMap[K, V]], key: K) -> Ptr[V] {
     if self->_size == 0 { return null }
 
-    hash        := hash(key)
+    hash        := key.hash()
     mask        := self->_capacity - 1
     bucket      := hash & mask
     tag         := _hash_tag(hash)
@@ -251,7 +251,7 @@ contains[K: HashEq, V](self: Ptr[HashMap[K, V]], key: K) -> Bool {
 remove[K: HashEq, V](self: Ptr[HashMap[K, V]], key: K) -> Bool {
     if self->_size == 0 { return false }
 
-    hash        := hash(key)
+    hash        := key.hash()
     mask        := self->_capacity - 1
     bucket      := hash & mask
     tag         := _hash_tag(hash)

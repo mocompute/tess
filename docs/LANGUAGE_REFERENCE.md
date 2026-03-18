@@ -1750,7 +1750,39 @@ do not need to be imported. User code cannot define types or traits with these n
 | `Neg[T]` | `neg(a: T) -> T` | `-` (unary) | |
 | `Not[T]` | `not(a: T) -> Bool` | `!` (unary) | |
 | `BitNot[T]` | `bit_not(a: T) -> T` | `~` (unary) | |
-| `Hash[T]` | `hash(a: T) -> CSize` | `hash()` | FNV-1a; builtins + `Ptr[CChar]` + user-defined |
+| `Hash[T]` | `hash(a: T) -> CSize` | `x.hash()` | Defined in `Hash.tl`; requires `#import <Hash.tl>` |
+
+**Hash trait:** Unlike the operator traits above (which are compiler builtins), `Hash` is
+defined in the standard library (`Hash.tl`). Files that use `.hash()` or depend on the `Hash`
+trait bound — including indirect use through `HashMap` — must `#import <Hash.tl>`:
+
+```tl
+#import <Hash.tl>       // Required: provides Hash trait + builtin hash implementations
+#import <HashMap.tl>    // HashMap requires Hash to be imported by the caller
+
+#module main
+main() {
+    n: Int := 42
+    h := n.hash()                          // UFCS call
+    m := HashMap.create[Int, Int]()        // Works because Hash.tl is imported
+    HashMap.set(m, 1, 100)
+    HashMap.destroy(m)
+    0
+}
+```
+
+`Hash.tl` provides hash implementations for all builtin type families (`Int`, `UInt`,
+`Float`, `Bool`, `CSize`, `CPtrDiff`) and `CString` (`Ptr[CChar]`). For user-defined types,
+define `hash` in the type's module:
+
+```tl
+#module Point
+hash(p: Point) -> CSize {
+    hx := p.x.hash()
+    hy := p.y.hash()
+    hx ^ (hy * 0x100000001b3zu)
+}
+```
 
 ### Limitations
 

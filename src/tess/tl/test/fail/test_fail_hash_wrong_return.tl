@@ -1,4 +1,6 @@
 // hash() returns Int instead of CSize — should fail trait satisfaction.
+#import <Hash.tl>
+
 #module MyType
 
 MyType: { x: CInt }
@@ -8,7 +10,7 @@ hash(m: MyType) -> Int { m.x }
 #module main
 
 needs_hash[T: Hash](x: T) -> CSize {
-    hash(x)
+    x.hash()
 }
 
 main() {

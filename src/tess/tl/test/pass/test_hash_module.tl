@@ -10,7 +10,7 @@ main() -> CInt {
 
     // Hash.fnv1a on a raw buffer matches hash for the same content.
     s      := String.from_cstr("hello")
-    h_str  := hash(s)
+    h_str  := s.hash()
     p      := String.cstr(s.&)
     h_hash := Hash.fnv1a(p, String.len(s))
     error += if h_str == h_hash { 0 } else { 1 }
@@ -20,14 +20,14 @@ main() -> CInt {
 
     // Different input produces different hash.
     s2     := String.from_cstr("world")
-    h2_str := hash(s2)
+    h2_str := s2.hash()
     h2_raw := Hash.fnv1a(String.cstr(s2.&), String.len(s2))
     error += if h2_str == h2_raw { 0 } else { 1 }
     error += if h_hash != h2_raw { 0 } else { 1 }
 
     // Empty buffer matches hash(String.empty()).
     e                  := String.empty()
-    h_empty            := hash(e)
+    h_empty            := e.hash()
     null_p: Ptr[CChar] := ""
     h_raw_empty        := Hash.fnv1a(null_p, 0zu)
     error += if h_empty == h_raw_empty { 0 } else { 1 }

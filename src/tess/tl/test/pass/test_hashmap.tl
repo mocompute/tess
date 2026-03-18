@@ -1,10 +1,12 @@
+#import <Hash.tl>
+
 #module Point
 
 Point: { x: Int, y: Int }
 
 hash(p: Point) -> CSize {
-    hx := hash(p.x)
-    hy := hash(p.y)
+    hx := p.x.hash()
+    hy := p.y.hash()
     hx ^ (hy * 0x100000001b3zu)
 }
 

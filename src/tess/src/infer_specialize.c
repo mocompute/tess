@@ -1108,24 +1108,6 @@ static void rewrite_operator_overloads(void *ctx, ast_node *node) {
         args[0]         = operand;
         rewrite_op_to_nfa(self, node, full_name, args, 1);
 
-    } else if (node->tag == ast_named_function_application) {
-        // Rewrite _tl_hash_(x) for user-defined types → Module__hash__1(x)
-        str name = ast_node_str(node->named_application.name);
-        if (0 != str_cmp_nc(name, "_tl_hash_", 9)) return;
-        if (node->named_application.n_arguments != 1) return;
-
-        ast_node *arg = node->named_application.arguments[0];
-        if (!arg->type) return;
-
-        tl_monotype *arg_type = arg->type->type;
-        // Builtin types and Ptr[CChar]: leave as _tl_hash_ for the transpiler
-        if (!is_user_defined_type(arg_type) || tl_monotype_is_ptr_to_char(arg_type)) return;
-
-        str full_name = find_overload_func(self, arg_type, "hash", 1);
-        if (str_is_empty(full_name)) return;
-
-        // Rewrite the NFA name in-place
-        ast_node_name_replace(node->named_application.name, full_name);
     }
 }
 
@@ -1355,7 +1337,6 @@ static int check_trait_bound_(tl_infer *self, ast_node *toplevel, tl_monotype *c
         int is_float    = tl_monotype_is_float_convertible(concrete_type);
         int is_numeric  = is_integer || is_float;
         int is_bool     = str_eq(concrete_type->cons_inst->def->name, S("Bool"));
-        int is_ptr_char = tl_monotype_is_ptr_to_char(concrete_type);
         for (u32 i = 0; i < trait->sigs.size; i++) {
             str fn = trait->sigs.v[i].name;
             int ok = 0;
@@ -1372,8 +1353,6 @@ static int check_trait_bound_(tl_infer *self, ast_node *toplevel, tl_monotype *c
             else if (str_eq(fn, S("eq")) || str_eq(fn, S("cmp"))) ok = is_numeric || is_bool;
             // Logical: not — Bool
             else if (str_eq(fn, S("not"))) ok = is_bool;
-            // Hash: hash — numeric types, Bool, and Ptr[CChar] (CString)
-            else if (str_eq(fn, S("hash"))) ok = is_numeric || is_bool || is_ptr_char;
             if (!ok)
                 return emit_trait_bound_error(self, toplevel, concrete_type, trait_name, fn,
                                               trait->sigs.v[i].arity);
@@ -1384,6 +1363,13 @@ static int check_trait_bound_(tl_infer *self, ast_node *toplevel, tl_monotype *c
         for (u32 i = 0; i < trait->sigs.size; i++) {
             tl_trait_sig *sig = &trait->sigs.v[i];
             str func_name     = find_overload_func(self, concrete_type, str_cstr(&sig->name), sig->arity);
+            // Ptr[T] auto-deref: if direct lookup failed and type is Ptr[T], try T's module.
+            // Mirrors ufcs_rewrite_call() which auto-derefs pointer receivers.
+            if (str_is_empty(func_name) && tl_monotype_is_ptr(concrete_type)) {
+                tl_monotype *target = tl_monotype_ptr_target(concrete_type);
+                if (tl_monotype_is_inst(target))
+                    func_name = find_overload_func(self, target, str_cstr(&sig->name), sig->arity);
+            }
             if (!str_is_empty(func_name)) {
                 // Direct implementation — check full arrow conformance.
                 if (check_trait_arrow(self, toplevel, concrete_type, trait_name, sig, trait, func_name))
