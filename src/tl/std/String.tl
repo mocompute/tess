@@ -353,18 +353,8 @@ ends_with(s, suffix) {
 }
 
 contains(haystack, needle) {
-    hn := len(haystack)
-    nn := len(needle)
-    if nn == 0 { return true  }
-    if nn > hn { return false }
-    hp       := _buf(haystack.&)
-    np       := _buf(needle.&)
-    i: CSize := 0
-    while i <= hn - nn, i += 1 {
-        candidate: Ptr[CChar] := Unsafe.pointer_add(hp, i)
-        if c_memcmp(candidate, np, nn) == 0 { return true }
-    }
-    false
+    s: Some := index_of(haystack, needle) else { false }
+    true
 }
 
 contains_char(s, b: CChar) {
@@ -757,16 +747,7 @@ replace(alloc, s, old, new_s) {
     sp := _buf(s.&)
     op := _buf(old.&)
 
-    // Count occurrences
-    occ: CSize := 0
-    i:   CSize   := 0
-    while i <= sn - on, i += 1 {
-        candidate: Ptr[CChar] := Unsafe.pointer_add(sp, i)
-        if c_memcmp(candidate, op, on) == 0 {
-            occ += 1
-            i += on - 1
-        }
-    }
+    occ := count(s, old)
 
     if occ == 0 { return copy(alloc, s) }
 
