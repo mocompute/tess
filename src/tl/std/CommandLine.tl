@@ -138,8 +138,8 @@ create(name, description) {
 
 destroy(self) {
     alloc := self->_alloc
-    Array.free(self->_specs.&)
-    Array.free(self->_commands.&)
+    self->_specs.&.free()
+    self->_commands.&.free()
     alloc->free(alloc, self)
 }
 
@@ -149,7 +149,7 @@ destroy(self) {
 flag(self, long_name: String, short_name: CChar, desc: String) {
     spec := ArgSpec(long_name = long_name, short_name = short_name,
                     description = desc, kind = FlagBool, required = false)
-    Array.push(self->_specs.&, spec)
+    self->_specs.&.push(spec)
 }
 
 flag(self, long_name: String, desc: String) {
@@ -159,13 +159,13 @@ flag(self, long_name: String, desc: String) {
 counter(self, long_name: String, short_name: CChar, desc: String) {
     spec := ArgSpec(long_name = long_name, short_name = short_name,
                     description = desc, kind = FlagCount, required = false)
-    Array.push(self->_specs.&, spec)
+    self->_specs.&.push(spec)
 }
 
 option(self, long_name: String, short_name: CChar, desc: String) {
     spec := ArgSpec(long_name = long_name, short_name = short_name,
                     description = desc, kind = FlagValue, required = false)
-    Array.push(self->_specs.&, spec)
+    self->_specs.&.push(spec)
 }
 
 option(self, long_name: String, desc: String) {
@@ -175,7 +175,7 @@ option(self, long_name: String, desc: String) {
 required(self, long_name: String, short_name: CChar, desc: String) {
     spec := ArgSpec(long_name = long_name, short_name = short_name,
                     description = desc, kind = FlagValue, required = true)
-    Array.push(self->_specs.&, spec)
+    self->_specs.&.push(spec)
 }
 
 required(self, long_name: String, desc: String) {
@@ -183,7 +183,7 @@ required(self, long_name: String, desc: String) {
 }
 
 command(self, name: String) {
-    Array.push(self->_commands.&, name)
+    self->_commands.&.push(name)
 }
 
 
@@ -192,7 +192,7 @@ command(self, name: String) {
 _find_spec_long(self, name) {
     i: CSize := 0
     while i < self->_specs.size, i += 1 {
-        if String.eq(self->_specs.v.[i].long_name, name) {
+        if self->_specs.v.[i].long_name.eq(name) {
             return Some(i)
         }
     }
@@ -211,29 +211,29 @@ _find_spec_short(self, ch) {
 }
 
 _store_bool(values, name) {
-    HashMap.set(values, name, Args.BoolVal(v = true))
+    values.set(name, Args.BoolVal(v = true))
 }
 
 _store_count(values, name) {
-    s: Some := HashMap.get_copy(values, name) else {
-        HashMap.set(values, name, Args.CountVal(v = 1))
+    s: Some := values.get_copy(name) else {
+        values.set(name, Args.CountVal(v = 1))
         return
     }
     when s.v {
-        c: CountVal { HashMap.set(values, name, Args.CountVal(v = c.v + 1)) }
-        else { HashMap.set(values, name, Args.CountVal(v = 1)) }
+        c: CountVal { values.set(name, Args.CountVal(v = c.v + 1)) }
+        else { values.set(name, Args.CountVal(v = 1)) }
     }
 }
 
 _store_str(values, name, val) {
-    HashMap.set(values, name, Args.StrVal(v = val))
+    values.set(name, Args.StrVal(v = val))
 }
 
 _parse_long(self, values, errors, name, arg, argc, argv, ip) {
-    when String.index_of_char(name, '=') {
+    when name.index_of_char('=') {
         eq_pos: Some {
-            key      := String.slice(name, 0, eq_pos.v)
-            val      := String.slice(name, eq_pos.v + 1, String.len(name))
+            key      := name.slice(0, eq_pos.v)
+            val      := name.slice(eq_pos.v + 1, name.len())
             si: Some := _find_spec_long(self, key) else {
                 Array.push(errors, UnknownFlag(flag = arg))
                 return
@@ -267,7 +267,7 @@ _parse_long(self, values, errors, name, arg, argc, argv, ip) {
 }
 
 _parse_short(self, values, errors, arg, argc, argv, ip) {
-    arg_len  := String.len(arg)
+    arg_len  := arg.len()
     j: CSize := 1
     while j < arg_len {
         bv: Some := String.byte_at(arg, j) else {
@@ -276,7 +276,7 @@ _parse_short(self, values, errors, arg, argc, argv, ip) {
         }
         ch: CChar := bv.v
         si: Some  := _find_spec_short(self, ch) else {
-            flag_str := String.cat(s"-", String.from_bytes(ch.&, 1))
+            flag_str := s"-".cat(String.from_bytes(ch.&, 1))
             Array.push(errors, UnknownFlag(flag = flag_str))
             j += 1
             continue
@@ -287,7 +287,7 @@ _parse_short(self, values, errors, arg, argc, argv, ip) {
             fc: FlagCount { _store_count(values, spec.long_name) }
             fv: FlagValue {
                 if j + 1 < arg_len {
-                    val := String.slice(arg, j + 1, arg_len)
+                    val := arg.slice(j + 1, arg_len)
                     _store_str(values, spec.long_name, val)
                     j = arg_len
                 } else if ip.* + 1 < argc {
@@ -321,28 +321,28 @@ parse(self, argc, argv) {
 
         // After --, everything is rest
         if past_separator {
-            Array.push(rest_args.&, arg)
+            rest_args.&.push(arg)
             i += 1
             continue
         }
 
         // Check for --
-        if String.eq(arg, dd) {
+        if arg.eq(dd) {
             past_separator = true
             i += 1
             continue
         }
 
         // Check for --long options
-        if String.starts_with(arg, dd) {
-            name := String.slice(arg, 2, String.len(arg))
+        if arg.starts_with(dd) {
+            name := arg.slice(2, arg.len())
             _parse_long(self, values, errors.&, name, arg, argc, argv, i.&)
             i += 1
             continue
         }
 
         // Check for -x (short options)
-        if String.starts_with(arg, short_prefix) && String.len(arg) > 1 {
+        if arg.starts_with(short_prefix) && arg.len() > 1 {
             _parse_short(self, values, errors.&, arg, argc, argv, i.&)
             i += 1
             continue
@@ -353,17 +353,17 @@ parse(self, argc, argv) {
             found_cmd := 0
             k: CSize  := 0
             while k < self->_commands.size, k += 1 {
-                if String.eq(self->_commands.v.[k], arg) {
+                if self->_commands.v.[k].eq(arg) {
                     cmd       = Some(arg)
                     found_cmd = 1
                     break
                 }
             }
             if found_cmd == 0 {
-                Array.push(positional.&, arg)
+                positional.&.push(arg)
             }
         } else {
-            Array.push(positional.&, arg)
+            positional.&.push(arg)
         }
 
         i += 1
@@ -374,8 +374,8 @@ parse(self, argc, argv) {
     while r < self->_specs.size, r += 1 {
         spec := self->_specs.v.[r]
         if spec.required {
-            if !HashMap.contains(values, spec.long_name) {
-                Array.push(errors.&, MissingRequired(name = spec.long_name))
+            if !values.contains(spec.long_name) {
+                errors.&.push(MissingRequired(name = spec.long_name))
             }
         }
     }
@@ -397,10 +397,10 @@ parse_or_exit(self, argc, argv) {
             i := 0
             while i < err.v.errors.size, i += 1 {
                 when err.v.errors.v.[i] {
-                    uf: UnknownFlag { c_printf("error: unknown flag '%s'\n", String.cstr(uf.flag.&)) }
-                    mv: MissingValue { c_printf("error: missing value for '%s'\n", String.cstr(mv.flag.&)) }
-                    mr: MissingRequired { c_printf("error: missing required option '%s'\n", String.cstr(mr.name.&)) }
-                    ic: InvalidCommand { c_printf("error: unknown command '%s'\n", String.cstr(ic.name.&)) }
+                    uf: UnknownFlag { c_printf("error: unknown flag '%s'\n", uf.flag.&.cstr()) }
+                    mv: MissingValue { c_printf("error: missing value for '%s'\n", mv.flag.&.cstr()) }
+                    mr: MissingRequired { c_printf("error: missing required option '%s'\n", mr.name.&.cstr()) }
+                    ic: InvalidCommand { c_printf("error: unknown command '%s'\n", ic.name.&.cstr()) }
                 }
             }
             c_printf("\n")
@@ -415,63 +415,63 @@ parse_or_exit(self, argc, argv) {
 // -- Help --
 
 help_text(self) {
-    result := String.cat(s"Usage: ", self->_name)
-    result = String.cat(result, s" [options]")
+    result := s"Usage: ".cat(self->_name)
+    result = result.cat(s" [options]")
 
     if self->_commands.size > 0 {
-        result = String.cat(result, s" <command>")
+        result = result.cat(s" <command>")
     }
 
-    result = String.cat(result, s" [args...]\n")
+    result = result.cat(s" [args...]\n")
 
-    if String.len(self->_description) > 0 {
-        result = String.cat(result, s"\n")
-        result = String.cat(result, self->_description)
-        result = String.cat(result, s"\n")
+    if self->_description.len() > 0 {
+        result = result.cat(s"\n")
+        result = result.cat(self->_description)
+        result = result.cat(s"\n")
     }
 
     if self->_specs.size > 0 {
-        result = String.cat(result, s"\nOptions:\n")
+        result = result.cat(s"\nOptions:\n")
 
         i: CSize := 0
         while i < self->_specs.size, i += 1 {
             spec := self->_specs.v.[i]
-            result = String.cat(result, s"  ")
+            result = result.cat(s"  ")
 
             if spec.short_name != '\0' {
-                result = String.cat(result, s"-")
-                result = String.cat(result, String.from_bytes(spec.short_name.&, 1))
-                result = String.cat(result, s", ")
+                result = result.cat(s"-")
+                result = result.cat(String.from_bytes(spec.short_name.&, 1))
+                result = result.cat(s", ")
             } else {
-                result = String.cat(result, s"    ")
+                result = result.cat(s"    ")
             }
 
-            result = String.cat(result, s"--")
-            result = String.cat(result, spec.long_name)
+            result = result.cat(s"--")
+            result = result.cat(spec.long_name)
 
             when spec.kind {
-                fv: FlagValue { result = String.cat(result, s" <value>") }
+                fv: FlagValue { result = result.cat(s" <value>") }
                 else { }
             }
 
-            result = String.cat(result, s"\t")
-            result = String.cat(result, spec.description)
+            result = result.cat(s"\t")
+            result = result.cat(spec.description)
 
             if spec.required {
-                result = String.cat(result, s" (required)")
+                result = result.cat(s" (required)")
             }
 
-            result = String.cat(result, s"\n")
+            result = result.cat(s"\n")
         }
     }
 
     if self->_commands.size > 0 {
-        result = String.cat(result, s"\nCommands:\n")
+        result = result.cat(s"\nCommands:\n")
         j: CSize := 0
         while j < self->_commands.size, j += 1 {
-            result = String.cat(result, s"  ")
-            result = String.cat(result, self->_commands.v.[j])
-            result = String.cat(result, s"\n")
+            result = result.cat(s"  ")
+            result = result.cat(self->_commands.v.[j])
+            result = result.cat(s"\n")
         }
     }
 
@@ -480,7 +480,7 @@ help_text(self) {
 
 print_help(self) {
     txt := help_text(self)
-    c_printf("%s", String.cstr(txt.&))
+    c_printf("%s", txt.&.cstr())
 }
 
 
@@ -490,7 +490,7 @@ from_argv(argc, argv) {
     result := Array.empty[String]()
     i      := 0
     while i < argc, i += 1 {
-        Array.push(result.&, String.from_cstr(argv.[i]))
+        result.&.push(String.from_cstr(argv.[i]))
     }
     result
 }
@@ -503,7 +503,7 @@ from_argv(argc, argv) {
 // -- Query --
 
 get_flag(args, name) {
-    s: Some := HashMap.get_copy(args->_values, name) else { return false }
+    s: Some := args->_values.get_copy(name) else { return false }
     when s.v {
         b: BoolVal { b.v }
         else { false }
@@ -511,7 +511,7 @@ get_flag(args, name) {
 }
 
 get_count(args, name) {
-    s: Some := HashMap.get_copy(args->_values, name) else { return 0 }
+    s: Some := args->_values.get_copy(name) else { return 0 }
     when s.v {
         c: CountVal { c.v }
         else { 0 }
@@ -519,7 +519,7 @@ get_count(args, name) {
 }
 
 get_option(args, name) {
-    s: Some := HashMap.get_copy(args->_values, name) else { return None }
+    s: Some := args->_values.get_copy(name) else { return None }
     when s.v {
         sv: StrVal { Some(sv.v) }
         else { None }
@@ -529,4 +529,4 @@ get_option(args, name) {
 get_command(args)       { args->_command                        }
 positionals(args)       { args->_positional                     }
 rest       (args)       { args->_rest                           }
-has        (args, name) { HashMap.contains(args->_values, name) }
+has        (args, name) { args->_values.contains(name) }

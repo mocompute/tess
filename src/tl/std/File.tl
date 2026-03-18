@@ -331,13 +331,13 @@ _is_sep(c) {
 }
 
 dirname(alloc, path) {
-    n := String.len(path)
+    n := path.len()
     if n == 0 { return s"." }
 
     // Strip trailing separators (but not the root "/")
     end := n
     while end > 1 {
-        ch: Some := String.char_at(path, end - 1) else { break }
+        ch: Some := path.char_at(end - 1) else { break }
         if !_is_sep(ch.v) { break }
         end -= 1
     }
@@ -346,7 +346,7 @@ dirname(alloc, path) {
     i: CSize := end
     while i > 0 {
         i -= 1
-        ch: Some := String.char_at(path, i) else { continue }
+        ch: Some := path.char_at(i) else { continue }
         if _is_sep(ch.v) {
             if i == 0 { return String.from_bytes(alloc, "/", 1) }
             return String.slice(alloc, path, 0, i)
@@ -360,13 +360,13 @@ dirname(path) {
 }
 
 basename(path) {
-    n := String.len(path)
+    n := path.len()
     if n == 0 { return String.empty() }
 
     // Strip trailing separators
     end := n
     while end > 0 {
-        ch: Some := String.char_at(path, end - 1) else { break }
+        ch: Some := path.char_at(end - 1) else { break }
         if !_is_sep(ch.v) { break }
         end -= 1
     }
@@ -377,46 +377,46 @@ basename(path) {
     i: CSize := end
     while i > 0 {
         i -= 1
-        ch: Some := String.char_at(path, i) else { continue }
+        ch: Some := path.char_at(i) else { continue }
         if _is_sep(ch.v) {
-            return String.slice(path, i + 1, end)
+            return path.slice(i + 1, end)
         }
     }
-    String.slice(path, 0, end)
+    path.slice(0, end)
 }
 
 extension(path) {
     base := basename(path)
-    n    := String.len(base)
+    n    := base.len()
     if n == 0 { return None }
 
-    dot: Some := String.last_index_of_char(base, '.') else { return None }
+    dot: Some := base.last_index_of_char('.') else { return None }
     if dot.v == 0 { return None }       // ".hidden" — dot at start is not an extension
-    Some(String.slice(base, dot.v, n))
+    Some(base.slice(dot.v, n))
 }
 
 stem(path) {
     base := basename(path)
-    n    := String.len(base)
+    n    := base.len()
     if n == 0 { return String.empty() }
 
-    dot: Some := String.last_index_of_char(base, '.') else { return base }
+    dot: Some := base.last_index_of_char('.') else { return base }
     if dot.v == 0 { return base }       // ".hidden" — the whole thing is the stem
-    String.slice(base, 0, dot.v)
+    base.slice(0, dot.v)
 }
 
 join(alloc, dir, file) {
     // If file is absolute, return file
     if is_absolute(file) { return String.copy(alloc, file) }
 
-    dn := String.len(dir)
+    dn := dir.len()
     if dn == 0 { return String.copy(alloc, file) }
 
-    fn := String.len(file)
+    fn := file.len()
     if fn == 0 { return String.copy(alloc, dir) }
 
     // Check if dir ends with separator
-    last_ch: Some := String.char_at(dir, dn - 1) else { return String.copy(alloc, file) }
+    last_ch: Some := dir.char_at(dn - 1) else { return String.copy(alloc, file) }
     if _is_sep(last_ch.v) {
         return String.cat(alloc, dir, file)
     }
@@ -430,10 +430,10 @@ join(dir, file) {
 }
 
 normalize(alloc, path) {
-    n := String.len(path)
+    n := path.len()
     if n == 0 { return String.empty() }
 
-    first_ch: Some := String.char_at(path, 0) else { return String.empty() }
+    first_ch: Some := path.char_at(0) else { return String.empty() }
     abs            := _is_sep(first_ch.v)
 
     // Split path into components
@@ -455,15 +455,15 @@ normalize(alloc, path) {
     k: CSize := 0
     while k < result.size, k += 1 {
         part := result.v.[k]
-        pn   := String.len(part)
+        pn   := part.len()
 
-        if pn == 0 || String.eq(part, s".") {
+        if pn == 0 || part.eq(s".") {
             continue
         }
 
-        if String.eq(part, s"..") {
-            if stack.size > 0 && !String.eq(stack.v.[stack.size - 1], s"..") {
-                Array.pop(stack.&)
+        if part.eq(s"..") {
+            if stack.size > 0 && !stack.v.[stack.size - 1].eq(s"..") {
+                stack.&.pop()
                 void
             } else if !abs {
                 Array.push(stack.&, alloc, part)
@@ -491,7 +491,7 @@ normalize(path) {
 }
 
 relative(alloc, from_dir, to_path) {
-    if String.is_empty(from_dir) || String.is_empty(to_path) {
+    if from_dir.is_empty() || to_path.is_empty() {
         return Err(File.IOFailed(path = String.empty(),
                                  message    = s"relative: empty input",
                                  errno_code = 0))
@@ -535,7 +535,7 @@ relative(alloc, from_dir, to_path) {
     common: CSize := 0
     max_common    := if from_parts.size < to_parts.size { from_parts.size } else { to_parts.size }
     while common < max_common {
-        if !String.eq(from_parts.v.[common], to_parts.v.[common]) { break }
+        if !from_parts.v.[common].eq(to_parts.v.[common]) { break }
         common += 1
     }
 
@@ -561,14 +561,14 @@ relative(from_dir, to_path) {
 }
 
 is_absolute(path) {
-    n := String.len(path)
+    n := path.len()
     if n == 0 { return false }
-    first: Some := String.char_at(path, 0) else { return false }
+    first: Some := path.char_at(0) else { return false }
     if _is_sep(first.v) { return true }
     // Windows drive letter: C:\ or C:/
     if n < 3 { return false }
-    second: Some := String.char_at(path, 1) else { return false }
-    third:  Some  := String.char_at(path, 2) else { return false }
+    second: Some := path.char_at(1) else { return false }
+    third:  Some  := path.char_at(2) else { return false }
     second.v == ':' && _is_sep(third.v)
 }
 
@@ -635,7 +635,7 @@ _remaining_bytes(self) {
 
 open(alloc, path, mode) {
     mode_cstr := _mode_str(mode)
-    path_cstr := String.cstr(path.&)
+    path_cstr := path.&.cstr()
 
     handle := c_fopen(path_cstr, mode_cstr)
     if handle == null { return Err(_errno_to_error(path)) }
@@ -784,9 +784,9 @@ write(self, buf, count) {
 }
 
 write_str(self, data) {
-    n := String.len(data)
+    n := data.len()
     if n == 0 { return Ok(void) }
-    ptr     := String.cstr(data.&)
+    ptr     := data.&.cstr()
     written := c_fwrite(ptr, 1, n, self->_handle)
     if written < n {
         return Err(_errno_to_error(self->_path))
@@ -892,9 +892,9 @@ read_lines(alloc, path) {
     i: CSize := 0
     while i < lines.size, i += 1 {
         line := lines.v.[i]
-        n    := String.len(line)
+        n    := line.len()
         if n > 0 {
-            last: Some := String.char_at(line, n - 1) else { continue }
+            last: Some := line.char_at(n - 1) else { continue }
             if last.v == '\r' {
                 lines.v.[i] = String.slice(alloc, line, 0, n - 1)
             }
@@ -902,7 +902,7 @@ read_lines(alloc, path) {
     }
 
     // Remove trailing empty line (split on "\n" produces one after final newline)
-    if lines.size > 0 && String.is_empty(lines.v.[lines.size - 1]) {
+    if lines.size > 0 && lines.v.[lines.size - 1].is_empty() {
         lines.size -= 1
     }
 
@@ -917,15 +917,15 @@ read_lines(path) {
 // -- File metadata --
 
 exists(path) {
-    c_tl_file_exists(String.cstr(path.&)) != 0
+    c_tl_file_exists(path.&.cstr()) != 0
 }
 
 is_directory(path) {
-    c_tl_file_is_dir(String.cstr(path.&)) != 0
+    c_tl_file_is_dir(path.&.cstr()) != 0
 }
 
 size(path) {
-    sz := c_tl_file_size(String.cstr(path.&))
+    sz := c_tl_file_size(path.&.cstr())
     if sz < 0 { return Err(_errno_to_error(path)) }
     Ok(sz)
 }
@@ -941,7 +941,7 @@ temp_dir() {
 // -- Directory operations --
 
 create_dir(path) {
-    if c_tl_file_mkdir(String.cstr(path.&)) != 0 {
+    if c_tl_file_mkdir(path.&.cstr()) != 0 {
         return Err(_errno_to_error(path))
     }
     Ok(void)
@@ -968,11 +968,11 @@ c_tl_scan_dir_cleanup(l: Ptr[c_struct_tl_path_list])                            
 
 scan_dir(alloc, path, ext) {
     list: c_struct_tl_path_list := void
-    path_cstr                   := String.cstr(path.&)
+    path_cstr                   := path.&.cstr()
 
     ext_cstr: CString := null
     when ext {
-        s: Some { ext_cstr = String.cstr(s.v.&) }
+        s: Some { ext_cstr = s.v.&.cstr() }
         n: None { }
     }
 
