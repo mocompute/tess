@@ -61,7 +61,7 @@ parser *parser_create(allocator *alloc, parser_opts const *opts) {
     self->prelude_consumed             = 0;
     self->expect_module                = 0;
     self->mode                         = mode_none;
-    self->variadic_symbols             = null;
+    self->variadic_symbols             = map_new(self->parent_alloc, str, variadic_symbol_info *, 16);
 
     self->tokenizer                    = null;
     self->tokens                       = (token_array){.alloc = self->tokens_arena};
@@ -598,7 +598,7 @@ int a_string(parser *self) {
 
         ast_node *name = ast_node_create_sym_c(self->ast_arena, "from_literal__1");
         mangle_name_for_module(self, name, S("String"));
-        ast_node *r    = ast_node_create_nfa(self->ast_arena, name, (ast_node_sized){0}, args);
+        ast_node *r = ast_node_create_nfa(self->ast_arena, name, (ast_node_sized){0}, args);
         return result_ast_node(self, r);
     }
 
@@ -805,12 +805,10 @@ int a_type_identifier(parser *self) {
             ast_node *trait_name = self->result;
             ast_node *dots       = ast_node_create_sym_c(self->ast_arena, "...");
             set_node_file(self, dots);
-            ast_node *r = ast_node_create_nfa(self->ast_arena, dots,
-                                              (ast_node_sized){.v = &trait_name, .size = 1},
-                                              (ast_node_sized){0});
+            ast_node *r = ast_node_create_nfa(
+              self->ast_arena, dots, (ast_node_sized){.v = &trait_name, .size = 1}, (ast_node_sized){0});
             // Clone the type_argument since it was on stack
-            r->named_application.type_arguments =
-              alloc_malloc(self->ast_arena, sizeof(ast_node *));
+            r->named_application.type_arguments    = alloc_malloc(self->ast_arena, sizeof(ast_node *));
             r->named_application.type_arguments[0] = trait_name;
             return result_ast_node(self, r);
         }
@@ -1137,14 +1135,11 @@ static str variadic_trait_name(ast_node *ann) {
 // module: current module name
 static void register_variadic_symbol(parser *self, str base_name, str mangled, u8 n_fixed, str trait,
                                      str module) {
-    if (!self->variadic_symbols) {
-        self->variadic_symbols = map_new(self->parent_alloc, str, variadic_symbol_info *, 16);
-    }
     variadic_symbol_info *info = alloc_malloc(self->parent_alloc, sizeof(variadic_symbol_info));
-    info->n_fixed_params = n_fixed;
-    info->mangled_name   = str_copy(self->parent_alloc, mangled);
-    info->trait_name     = str_copy(self->parent_alloc, trait);
-    info->module         = str_copy(self->parent_alloc, module);
+    info->n_fixed_params       = n_fixed;
+    info->mangled_name         = str_copy(self->parent_alloc, mangled);
+    info->trait_name           = str_copy(self->parent_alloc, trait);
+    info->module               = str_copy(self->parent_alloc, module);
     str_map_set_ptr(&self->variadic_symbols, base_name, info);
 }
 
@@ -1195,8 +1190,8 @@ int toplevel_defun(parser *self) {
     ast_node *body = create_body(self, exprs, defers);
 
     // Check for variadic parameter: last param must have ...TraitName annotation
-    int is_variadic  = 0;
-    u8  n_fixed      = (u8)params.size;
+    int is_variadic = 0;
+    u8  n_fixed     = (u8)params.size;
 
     if (params.size > 0) {
         ast_node *last_param = params.v[params.size - 1];
@@ -1221,8 +1216,7 @@ int toplevel_defun(parser *self) {
         ast_node *last_param = params.v[params.size - 1];
         str       trait      = variadic_trait_name(last_param->symbol.annotation);
         str       base_name  = name->symbol.original;
-        register_variadic_symbol(self, base_name, name->symbol.name, n_fixed, trait,
-                                 self->current_module);
+        register_variadic_symbol(self, base_name, name->symbol.name, n_fixed, trait, self->current_module);
     }
 
     mangle_name(self, name);
@@ -1230,9 +1224,9 @@ int toplevel_defun(parser *self) {
     ast_node *let = ast_node_create_let(self->ast_arena, name, (ast_node_sized)sized_all(type_params),
                                         (ast_node_sized)sized_all(params), body);
     set_node_parameters(self, let, &params);
-    let->let.name         = name;
-    let->let.body         = body;
-    let->let.is_variadic  = is_variadic;
+    let->let.name        = name;
+    let->let.body        = body;
+    let->let.is_variadic = is_variadic;
 
     result_ast_node(self, let);
 
@@ -1303,8 +1297,7 @@ int toplevel_forward(parser *self) {
         ast_node *last_param = params.v[params.size - 1];
         str       trait      = variadic_trait_name(last_param->symbol.annotation);
         str       base_name  = name->symbol.original;
-        register_variadic_symbol(self, base_name, name->symbol.name, n_fixed, trait,
-                                 self->current_module);
+        register_variadic_symbol(self, base_name, name->symbol.name, n_fixed, trait, self->current_module);
     }
 
     mangle_name(self, name);
