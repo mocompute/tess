@@ -30,17 +30,17 @@ c_tl_is_aligned    (p: Ptr[any], alignment: CSize) -> CInt
 
 // Define TL_ALLOC_TRANSIENT_SIZE and TL_ALLOC_STRINGS_SIZE before importing (e.g. with -D in CFLAGS) to
 // override default values.
-initialTransientSize:      CSize      := 0
+initialTransientSize:      CSize := 0
 initialStringLiteralsSize: CSize := 0
 
 Allocator: {
-    malloc:        (a: Ptr[Allocator], sz: CSize)                          -> Ptr[any],
-    calloc:        (a: Ptr[Allocator], num: CSize, sz: CSize)              -> Ptr[any],
-    realloc:       (a: Ptr[Allocator], p: Ptr[any], sz: CSize)            -> Ptr[any],
-    free:          (a: Ptr[Allocator], p: Ptr[any])                          -> Void,
+    malloc:        (a: Ptr[Allocator], sz: CSize)                   -> Ptr[any],
+    calloc:        (a: Ptr[Allocator], num: CSize, sz: CSize)       -> Ptr[any],
+    realloc:       (a: Ptr[Allocator], p: Ptr[any], sz: CSize)      -> Ptr[any],
+    free:          (a: Ptr[Allocator], p: Ptr[any])                 -> Void,
     aligned_alloc: (a: Ptr[Allocator], sz: CSize, alignment: CSize) -> Ptr[any],
-    aligned_free:  (a: Ptr[Allocator], p: Ptr[any])                  -> Void,
-    resize:        (a: Ptr[Allocator], p: Ptr[any], sz: CSize)             -> Ptr[any],
+    aligned_free:  (a: Ptr[Allocator], p: Ptr[any])                 -> Void,
+    resize:        (a: Ptr[Allocator], p: Ptr[any], sz: CSize)      -> Ptr[any],
 }
 
 Context: {
@@ -195,9 +195,9 @@ _find_bucket(arena: Ptr[BumpAllocator], p: Ptr[any]) {
 _malloc(a: Ptr[Allocator], sz: CSize) -> Ptr[any] {
     arena: Ptr[BumpAllocator] := a
 
-    bucket               := arena->head
-    last:          Ptr[_Header]   := null
-    last_capacity: CSize := 0
+    bucket                      := arena->head
+    last:          Ptr[_Header] := null
+    last_capacity: CSize        := 0
 
     sz = Alloc.align_max(sz)
     if 0 == sz { return null }
@@ -304,9 +304,9 @@ _aligned_alloc(a: Ptr[Allocator], sz: CSize, alignment: CSize) -> Ptr[any] {
     // Upper bound on space needed: sz + alignment covers worst-case padding
     total_needed := sz + alignment
 
-    bucket               := arena->head
-    last:          Ptr[_Header]   := null
-    last_capacity: CSize := 0
+    bucket                      := arena->head
+    last:          Ptr[_Header] := null
+    last_capacity: CSize        := 0
 
     c_assert(bucket != null)
     while bucket != null {
@@ -399,8 +399,8 @@ reset(a: Ptr[Allocator]) -> Void {
 get_stats(a: Ptr[Allocator]) -> Stats {
     arena: Ptr[BumpAllocator] := a
 
-    allocated:    CSize    := 0
-    capacity:     CSize     := 0
+    allocated:    CSize := 0
+    capacity:     CSize := 0
     bucket_count: CSize := 0
 
     bucket := arena->head

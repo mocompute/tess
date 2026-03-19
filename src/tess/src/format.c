@@ -687,8 +687,8 @@ static void align_group(allocator *alloc, char **lines, int start, int end, int 
     // Process outer structural tokens before inner tokens so that
     // brace/paren alignment doesn't disrupt inner value alignment.
     int order[] = {
-      ALIGN_OPEN_PAREN,  ALIGN_OPEN_BRACE, ALIGN_ARROW,       ALIGN_COLONEQ,
-      ALIGN_COLON_VALUE, ALIGN_EQ,         ALIGN_CLOSE_BRACE,
+      ALIGN_OPEN_PAREN,  ALIGN_OPEN_BRACE, ALIGN_COLON_VALUE, ALIGN_ARROW,
+      ALIGN_COLONEQ,     ALIGN_EQ,         ALIGN_CLOSE_BRACE,
     };
     for (int ti = 0; ti < (int)(sizeof(order) / sizeof(order[0])); ti++) {
         int t = order[ti];
@@ -825,9 +825,9 @@ static void align_comments(allocator *alloc, char **lines, int start, int end) {
 }
 
 static void align_pass(allocator *alloc, char **lines, int nlines) {
-    // Build a brace-depth array and track opener lines per depth level
-    int *depth_at    = alloc_calloc(alloc, nlines, sizeof(int));
-    int *opener_line = alloc_calloc(alloc, nlines + 1, sizeof(int)); // opener_line[depth] = line index
+    // Build brace-depth and net-brace arrays
+    int *depth_at   = alloc_calloc(alloc, nlines, sizeof(int));
+    int *net_braces = alloc_calloc(alloc, nlines, sizeof(int));
     int  cur_depth   = 0;
 
     int  in_c_block  = 0;
@@ -854,7 +854,8 @@ static void align_pass(allocator *alloc, char **lines, int nlines) {
             if (cur_depth < 0) cur_depth = 0;
         }
         depth_at[i] = cur_depth;
-        int net     = count_net_braces(lines[i]);
+        int net        = count_net_braces(lines[i]);
+        net_braces[i]  = net;
         int new_depth;
         if (cc > 0) {
             new_depth = cur_depth + net + cc;
@@ -862,10 +863,6 @@ static void align_pass(allocator *alloc, char **lines, int nlines) {
             new_depth = cur_depth + net;
         }
         if (new_depth < 0) new_depth = 0;
-        // If depth increased, record this line as the opener for the new depth
-        if (new_depth > cur_depth) {
-            for (int d = cur_depth + 1; d <= new_depth && d < nlines; d++) opener_line[d] = i;
-        }
         cur_depth = new_depth;
     }
 
@@ -897,12 +894,17 @@ static void align_pass(allocator *alloc, char **lines, int nlines) {
             i++;
         }
 
-        // Determine if this group is inside a function body
+        // Determine if this group is inside a function body.
+        // Scan backward to find the opener line for this scope.
         int in_function = 0;
         int d           = depth_at[group_start];
         if (d > 0) {
-            int ol = opener_line[d];
-            if (!is_struct_opener(lines[ol])) in_function = 1;
+            for (int j = group_start - 1; j >= 0; j--) {
+                if (depth_at[j] < d && net_braces[j] > 0) {
+                    if (!is_struct_opener(lines[j])) in_function = 1;
+                    break;
+                }
+            }
         }
 
         align_group(alloc, lines, group_start, i, in_function);
