@@ -52,6 +52,12 @@ alignof[T]()  -> CSize  { _tl_alignof_[T]() }
 alignof   (x) -> CSize { _tl_alignof_(x)    }
 
 
+// Slice type — lightweight view over a contiguous array of elements.
+// Used by variadic functions: the compiler packs variadic args into a stack-allocated
+// array and passes a Slice to the function body.
+
+Slice[T] : { v: Ptr[T], size: CSize }
+
 // Option type
 
 Option[T]: | Some { v: T }

@@ -74,6 +74,21 @@ static void do_tree_shake(void *ctx_, ast_node *node) {
             }
         }
 
+        // Variadic calls: the trait implementation functions are stored in variadic_impl_fns,
+        // not as AST NFA references. Mark them as used so they survive tree-shaking.
+        if (node->named_application.is_variadic_call && node->named_application.variadic_impl_fns) {
+            u32 n_va = node->named_application.n_arguments - node->named_application.n_fixed_args;
+            for (u32 vi = 0; vi < n_va; vi++) {
+                str impl = node->named_application.variadic_impl_fns[vi];
+                if (!str_is_empty(impl) && !str_hset_contains(ctx->recurs, impl)) {
+                    str_hset_insert(&ctx->recurs, impl);
+                    str_hset_insert(&ctx->names, impl);
+                    ast_node *next = toplevel_get(self, impl);
+                    if (next) ast_node_dfs(ctx, next, do_tree_shake);
+                }
+            }
+        }
+
         if (!str_hset_contains(ctx->recurs, name)) {
             str_hset_insert(&ctx->recurs, name);
 
@@ -205,6 +220,7 @@ tl_monotype *tl_infer_update_specialized_type_(tl_infer *self, tl_monotype *mono
     case tl_placeholder:
     case tl_any:
     case tl_ellipsis:
+    case tl_variadic:
     case tl_var:
     case tl_weak:
     case tl_weak_int_signed:
@@ -290,6 +306,7 @@ tl_monotype *tl_infer_update_specialized_type(tl_infer *self, tl_monotype *mono)
 
     case tl_any:
     case tl_ellipsis:
+    case tl_variadic:
     case tl_integer:
     case tl_weak:
     case tl_weak_int_signed:
@@ -321,6 +338,7 @@ static void update_types_one_type(tl_infer *self, update_types_ctx *ctx, tl_poly
     switch ((*poly)->type->tag) {
     case tl_any:
     case tl_ellipsis:
+    case tl_variadic:
     case tl_integer:
     case tl_var:
     case tl_weak:

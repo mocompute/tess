@@ -178,6 +178,35 @@ option  (self: Ptr[Parser], long_name: Str, desc: Str)                    -> Voi
 
 Functions that allocate memory are a common case: provide one overload taking an explicit `Ptr[Allocator]`, and a convenience version that uses `Alloc.context.default`.
 
+## Variadic Functions
+
+Use variadic functions (`...Trait`) when you need to accept heterogeneous arguments that share a common conversion. Use `Array[T]` or `Slice[T]` when all arguments have the same type.
+
+```tl
+// Good: heterogeneous args, each converted via ToString
+println(args: ...ToString.ToString) -> Void { ... }
+
+// Good: homogeneous collection — no variadics needed
+sum(numbers: Array.Array[Int]) -> Int { ... }
+```
+
+The variadic parameter must be last. Place fixed parameters before it:
+
+```tl
+// Fixed params first, variadic last
+log(level: Int, args: ...ToString.ToString) -> Void { ... }
+```
+
+When defining a custom trait for variadic bounds, keep it to a single unary function with a concrete return type:
+
+```tl
+// Good variadic trait
+Serialize[T] : { serialize(a: T) -> Bytes }
+
+// Bad: binary function — can't be used as variadic bound
+Compare[T] : { compare(a: T, b: T) -> CInt }
+```
+
 ## Tagged Unions
 
 Prefer tagged unions over integer codes, boolean flags, or sentinel values. Define variants inline, aligned with `|`:

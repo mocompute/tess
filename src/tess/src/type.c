@@ -70,6 +70,9 @@ static int monotype_contains_tv_(tl_monotype *self, tl_type_variable tv, hashmap
     case tl_placeholder:
     case tl_any:
     case tl_ellipsis:          return 0;
+    case tl_variadic:          return self->variadic.elem_type
+                                        ? monotype_contains_tv_(self->variadic.elem_type, tv, seen)
+                                        : 0;
     case tl_cons_inst:         {
         forall(i, self->cons_inst->args) if (monotype_contains_tv_(self->cons_inst->args.v[i], tv,
                                                                    seen)) return 1;
@@ -963,6 +966,14 @@ static tl_monotype *parse_type_nfa(tl_type_registry *self, tl_type_registry_pars
                                    ast_node const *node) {
     str name = ast_node_str(node->named_application.name);
 
+    // Variadic type annotation: NFA(name="...", type_args=[TraitName])
+    // Create tl_variadic monotype — elem_type resolved later during inference.
+    if (str_eq(name, S("..."))) {
+        if (node->named_application.n_type_arguments != 1) return null;
+        str trait_name = ast_node_str(node->named_application.type_arguments[0]);
+        return tl_monotype_create_variadic(self->alloc, trait_name, null);
+    }
+
     // Recursive types: check for indirection through Ptr (or any unary type) and defer it
 #if DEBUG_RECURSIVE_TYPES
     fprintf(stderr, "[DEBUG_RECURSIVE_TYPES] parse_type_: nfa '%s' n_type_args=%u\n", str_cstr(&name),
@@ -1516,6 +1527,7 @@ void tl_polytype_list_append(allocator *alloc, tl_polytype *lhs, tl_polytype *rh
     case tl_placeholder:
     case tl_any:
     case tl_ellipsis:
+    case tl_variadic:
     case tl_var:
     case tl_weak:
     case tl_weak_int_signed:
@@ -1576,7 +1588,8 @@ static void replace_tv(tl_monotype *self, tl_type_subs *subs, hashmap **map, has
     case tl_integer:
     case tl_placeholder:
     case tl_any:
-    case tl_ellipsis:    break;
+    case tl_ellipsis:
+    case tl_variadic:    break;
 
     case tl_var:         {
         tl_type_variable *replace = map_get(*map, &self->var, sizeof self->var);
@@ -1620,6 +1633,7 @@ static void replace_tv_mono(tl_monotype *self, tl_type_subs *subs, hashmap **map
     case tl_placeholder:
     case tl_any:
     case tl_ellipsis:
+    case tl_variadic:
     case tl_var:               break;
 
     case tl_weak:
@@ -1779,7 +1793,8 @@ static void generalize(tl_monotype *self, tl_type_variable_array *quant, hashmap
     case tl_integer:
     case tl_placeholder:
     case tl_any:
-    case tl_ellipsis:    break;
+    case tl_ellipsis:
+    case tl_variadic:    break;
 
     case tl_var:
         //
@@ -1857,6 +1872,12 @@ tl_monotype *tl_monotype_create_placeholder(allocator *alloc, str name) {
 tl_monotype *tl_monotype_create_ellipsis(allocator *alloc) {
     tl_monotype *self = alloc_malloc(alloc, sizeof *self);
     *self             = (tl_monotype){.tag = tl_ellipsis};
+    return self;
+}
+
+tl_monotype *tl_monotype_create_variadic(allocator *alloc, str trait_name, tl_monotype *elem_type) {
+    tl_monotype *self = alloc_malloc(alloc, sizeof *self);
+    *self             = (tl_monotype){.tag = tl_variadic, .variadic = {.trait_name = trait_name, .elem_type = elem_type}};
     return self;
 }
 
@@ -1999,6 +2020,12 @@ static tl_monotype *tl_monotype_clone_(allocator *alloc, tl_monotype *orig, hash
 
     case tl_any:
     case tl_ellipsis:    return clone;
+    case tl_variadic:
+        clone->variadic.trait_name = orig->variadic.trait_name;
+        clone->variadic.elem_type  = orig->variadic.elem_type
+                                         ? tl_monotype_clone_(alloc, orig->variadic.elem_type, mapping)
+                                         : 0;
+        return clone;
     case tl_placeholder: fatal("unreachable");
     }
 
@@ -2019,7 +2046,8 @@ int tl_monotype_is_concrete_(tl_monotype *self, hashmap **seen) {
 
     case tl_placeholder:
     case tl_var:
-    case tl_ellipsis:    return 0;
+    case tl_ellipsis:
+    case tl_variadic:    return 0;
 
     case tl_integer:
     case tl_any:
@@ -2071,7 +2099,8 @@ int tl_monotype_is_weak_(tl_monotype *self, hashmap **seen) {
     case tl_placeholder:
     case tl_any:
     case tl_var:
-    case tl_ellipsis:          return 0;
+    case tl_ellipsis:
+    case tl_variadic:          return 0;
 
     case tl_weak:
     case tl_weak_int_signed:
@@ -2141,6 +2170,9 @@ int tl_monotype_is_any_weak(tl_monotype *self) {
 }
 int tl_monotype_is_ellipsis(tl_monotype *self) {
     return self && tl_ellipsis == self->tag;
+}
+int tl_monotype_is_variadic(tl_monotype *self) {
+    return self && tl_variadic == self->tag;
 }
 
 int tl_monotype_is_arrow(tl_monotype *self) {
@@ -2477,6 +2509,7 @@ u64 tl_monotype_hash64_(tl_monotype *self, u32 gen, hash_cycle_stack *in_progres
 
     case tl_any:
     case tl_ellipsis:          break;
+    case tl_variadic:          hash = str_hash64_combine(hash, self->variadic.trait_name); break;
     case tl_var:
     case tl_weak:
     case tl_weak_int_signed:
@@ -2568,6 +2601,7 @@ u64 tl_monotype_hash64_(tl_monotype *self, u32 gen, hash_cycle_stack *in_progres
     } break;
     case tl_placeholder:
     case tl_ellipsis:
+    case tl_variadic:
     case tl_var:
     case tl_weak:
     case tl_weak_int_signed:
@@ -2610,6 +2644,11 @@ str tl_monotype_to_string_(allocator *alloc, tl_monotype *self, hashmap **map) {
     case tl_ellipsis:
         //
         str_build_cat(&b, S("..."));
+        break;
+
+    case tl_variadic:
+        str_build_cat(&b, S("..."));
+        str_build_cat(&b, self->variadic.trait_name);
         break;
 
     case tl_integer: {
@@ -2842,7 +2881,8 @@ int unify_type_constructor_union(tl_type_subs *subs, tl_monotype *left, tl_monot
     case tl_placeholder: return 1;
 
     case tl_any:
-    case tl_ellipsis:    return 0;
+    case tl_ellipsis:
+    case tl_variadic:    return 0;
 
     case tl_var:
         return tl_type_subs_unify_tv_mono(subs, right->var, left, cb, user, seen, TL_UNIFY_SYMMETRIC, 0);
@@ -2899,7 +2939,8 @@ int unify_type_constructor(tl_type_subs *subs, tl_monotype *left, tl_monotype *r
     case tl_placeholder: return 1;
 
     case tl_any:
-    case tl_ellipsis:    return 0;
+    case tl_ellipsis:
+    case tl_variadic:    return 0;
 
     // TV is on the opposite side from the cons_inst
     case tl_var:
@@ -2939,7 +2980,8 @@ static int unify_var_other(tl_type_subs *subs, tl_type_variable tv, tl_monotype 
     switch (other->tag) {
     case tl_placeholder:
     case tl_any:
-    case tl_ellipsis:    fatal("unreachable");
+    case tl_ellipsis:
+    case tl_variadic:    fatal("unreachable");
     case tl_integer:     return 1;
     case tl_var:
         // Preserve left/right ordering for directional unification
@@ -2962,7 +3004,8 @@ static int unify_weak_other(tl_type_subs *subs, tl_monotype *weak, tl_monotype *
     switch (other->tag) {
     case tl_placeholder:
     case tl_any:
-    case tl_ellipsis:    fatal("unreachable");
+    case tl_ellipsis:
+    case tl_variadic:    fatal("unreachable");
     case tl_integer:     return 1;
     case tl_var:         return tl_type_subs_unify_tv_weak(subs, other->var, weak, cb, user, seen);
     case tl_weak:
@@ -3032,7 +3075,9 @@ int tl_type_subs_unify_mono(tl_type_subs *subs, tl_monotype *left, tl_monotype *
 
     // `ellipsis` types unify with everything but are not concrete. In addition, when part of a tuple, they
     // act as if the correct number of `any` types are present as required to unify with the target tuple.
-    if (tl_monotype_is_ellipsis(left) || tl_monotype_is_ellipsis(right)) return 0;
+    if (tl_monotype_is_ellipsis(left) || tl_monotype_is_ellipsis(right) ||
+        tl_monotype_is_variadic(left) || tl_monotype_is_variadic(right))
+        return 0;
 
     // Same-family integer types: behavior depends on direction mode.
     // SYMMETRIC: legacy behavior — same-family unifies freely, non-narrow types canonicalized.
@@ -3109,6 +3154,7 @@ int tl_type_subs_unify_mono(tl_type_subs *subs, tl_monotype *left, tl_monotype *
     case tl_placeholder:
     case tl_any:
     case tl_ellipsis:
+    case tl_variadic:
     case tl_var:
     case tl_weak:
     case tl_weak_int_signed:
@@ -3143,8 +3189,9 @@ int unify_tuple(tl_type_subs *subs, tl_monotype_sized left, tl_monotype_sized ri
     // number of elements.
 
     forall(i, left) {
-        if (tl_monotype_is_ellipsis(left.v[i])) goto success;
-        if (i + 1 < right.size && tl_monotype_is_ellipsis(right.v[i])) goto success;
+        if (tl_monotype_is_ellipsis(left.v[i]) || tl_monotype_is_variadic(left.v[i])) goto success;
+        if (i + 1 < right.size && (tl_monotype_is_ellipsis(right.v[i]) || tl_monotype_is_variadic(right.v[i])))
+            goto success;
         if (i >= right.size || tl_type_subs_unify_mono(subs, left.v[i], right.v[i], cb, user, seen, dir)) {
             if (cb) cb(user, lhs, rhs);
             return 1;
@@ -3172,7 +3219,8 @@ static int tl_type_subs_monotype_occurs_(tl_type_subs *self, tl_type_variable tv
     case tl_integer:
     case tl_placeholder:
     case tl_any:
-    case tl_ellipsis:          return 0;
+    case tl_ellipsis:
+    case tl_variadic:          return 0;
 
     case tl_var:
     case tl_weak:
@@ -3379,7 +3427,8 @@ static int unify_weak_int_other(tl_type_subs *subs, tl_monotype *weak_int, tl_mo
     switch (other->tag) {
     case tl_placeholder: fatal("unreachable");
     case tl_any:
-    case tl_ellipsis:    return 0;
+    case tl_ellipsis:
+    case tl_variadic:    return 0;
     case tl_integer:     return 1; // type-level integer, not value integer
     case tl_var:         return tl_type_subs_unify_tv_weak_int(subs, other->var, weak_int, cb, user, seen);
     case tl_weak:        return 1; // error: pointer-weak meets integer-weak
@@ -3453,7 +3502,8 @@ static int unify_weak_float_other(tl_type_subs *subs, tl_monotype *weak_float, t
     switch (other->tag) {
     case tl_placeholder: fatal("unreachable");
     case tl_any:
-    case tl_ellipsis:    return 0;
+    case tl_ellipsis:
+    case tl_variadic:    return 0;
     case tl_integer:     return 1;
     case tl_var:         return tl_type_subs_unify_tv_weak_float(subs, other->var, weak_float, cb, user, seen);
     case tl_weak:        return 1; // error: pointer-weak meets float-weak
@@ -3488,6 +3538,7 @@ int tl_type_subs_unify_tv_mono(tl_type_subs *self, tl_type_variable tv, tl_monot
 
     case tl_any:
     case tl_ellipsis:
+    case tl_variadic:
         // unifies with everything, but does not resolve
         return 0;
 
@@ -3564,7 +3615,8 @@ static void tl_monotype_substitute_(allocator *alloc, tl_monotype *self, tl_type
     case tl_integer:
     case tl_placeholder:
     case tl_any:
-    case tl_ellipsis:          break;
+    case tl_ellipsis:
+    case tl_variadic:          break;
 
     case tl_var:
     case tl_weak:
@@ -3704,6 +3756,7 @@ static void tl_monotype_default_weak_ints_(tl_monotype *self, tl_monotype *int_t
     } break;
     case tl_any:
     case tl_ellipsis:
+    case tl_variadic:
     case tl_integer:
     case tl_var:
     case tl_weak:

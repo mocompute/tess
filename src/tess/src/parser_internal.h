@@ -38,6 +38,15 @@ typedef enum {
     mode_toplevel_funcall // for parsing package.tl
 } parser_mode;
 
+// Info about a variadic function, stored in parser's variadic_symbols map.
+// Key is the base (unmangled, unarity'd) function name.
+typedef struct {
+    u8  n_fixed_params; // number of non-variadic parameters
+    str mangled_name;   // arity-mangled name (e.g. "print__2")
+    str trait_name;     // trait bound name (e.g. "ToString")
+    str module;         // module where the variadic function is defined
+} variadic_symbol_info;
+
 struct parser {
     allocator          *parent_alloc;
     allocator          *file_arena;
@@ -83,6 +92,8 @@ struct parser {
     int                    prelude_consumed;        // prelude string has been parsed
     int         expect_module; // expect a module immediately after a #unity_file before any terms
     parser_mode mode;
+
+    hashmap    *variadic_symbols; // map str -> variadic_symbol_info: base name -> variadic info
 };
 
 // ============================================================================

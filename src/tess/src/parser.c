@@ -61,6 +61,7 @@ parser *parser_create(allocator *alloc, parser_opts const *opts) {
     self->prelude_consumed             = 0;
     self->expect_module                = 0;
     self->mode                         = mode_none;
+    self->variadic_symbols             = null;
 
     self->tokenizer                    = null;
     self->tokens                       = (token_array){.alloc = self->tokens_arena};
@@ -87,6 +88,7 @@ void parser_destroy(parser **self) {
     hset_destroy(&(*self)->nested_type_parents);
     hset_destroy(&(*self)->tagged_union_variant_parents);
     map_destroy(&(*self)->nullary_variant_parents);
+    if ((*self)->variadic_symbols) map_destroy(&(*self)->variadic_symbols);
     hset_destroy(&(*self)->module_preludes_seen);
     hset_destroy(&(*self)->modules_version_seen);
     hset_destroy(&(*self)->modules_seen);
@@ -795,7 +797,25 @@ int a_type_identifier_base(parser *self) {
 }
 
 int a_type_identifier(parser *self) {
-    if (0 == a_try(self, a_ellipsis)) return 0;
+    if (0 == a_try(self, a_ellipsis)) {
+        // Try to parse a following type identifier: ...TraitName
+        // If found, create NFA(name="...", type_args=[TraitName]) for variadic type.
+        // If not found, return bare "..." (C FFI ellipsis).
+        if (0 == a_try(self, a_type_identifier_base)) {
+            ast_node *trait_name = self->result;
+            ast_node *dots       = ast_node_create_sym_c(self->ast_arena, "...");
+            set_node_file(self, dots);
+            ast_node *r = ast_node_create_nfa(self->ast_arena, dots,
+                                              (ast_node_sized){.v = &trait_name, .size = 1},
+                                              (ast_node_sized){0});
+            // Clone the type_argument since it was on stack
+            r->named_application.type_arguments =
+              alloc_malloc(self->ast_arena, sizeof(ast_node *));
+            r->named_application.type_arguments[0] = trait_name;
+            return result_ast_node(self, r);
+        }
+        return 0;
+    }
     return a_type_identifier_base(self);
 }
 
@@ -1091,6 +1111,43 @@ int maybe_type_parameters(parser *self, ast_node_array *out) {
     return 0;
 }
 
+// Check if an annotation AST node is a variadic type: NFA(name="...", type_args=[TraitName])
+static int is_variadic_annotation(ast_node *ann) {
+    if (!ann) return 0;
+    if (!ast_node_is_nfa(ann)) return 0;
+    if (!ast_node_is_symbol(ann->named_application.name)) return 0;
+    return str_eq(ann->named_application.name->symbol.name, S("..."));
+}
+
+// Extract the trait name from a variadic type annotation
+static str variadic_trait_name(ast_node *ann) {
+    // ann is NFA(name="...", type_args=[TraitName])
+    assert(ann->named_application.n_type_arguments == 1);
+    ast_node *trait = ann->named_application.type_arguments[0];
+    if (ast_node_is_symbol(trait)) return trait->symbol.name;
+    if (ast_node_is_nfa(trait)) return ast_node_str(trait->named_application.name);
+    return str_empty();
+}
+
+// Register a variadic function in the variadic_symbols map.
+// base_name: unmangled function name (e.g. "print")
+// mangled: arity-mangled name (e.g. "print__2")
+// n_fixed: number of fixed (non-variadic) params
+// trait: trait name from the variadic bound
+// module: current module name
+static void register_variadic_symbol(parser *self, str base_name, str mangled, u8 n_fixed, str trait,
+                                     str module) {
+    if (!self->variadic_symbols) {
+        self->variadic_symbols = map_new(self->parent_alloc, str, variadic_symbol_info *, 16);
+    }
+    variadic_symbol_info *info = alloc_malloc(self->parent_alloc, sizeof(variadic_symbol_info));
+    info->n_fixed_params = n_fixed;
+    info->mangled_name   = str_copy(self->parent_alloc, mangled);
+    info->trait_name     = str_copy(self->parent_alloc, trait);
+    info->module         = str_copy(self->parent_alloc, module);
+    str_map_set_ptr(&self->variadic_symbols, base_name, info);
+}
+
 int toplevel_defun(parser *self) {
     if (a_try(self, a_attributed_identifier)) return 1;
     ast_node      *name = self->result;
@@ -1137,16 +1194,45 @@ int toplevel_defun(parser *self) {
 
     ast_node *body = create_body(self, exprs, defers);
 
+    // Check for variadic parameter: last param must have ...TraitName annotation
+    int is_variadic  = 0;
+    u8  n_fixed      = (u8)params.size;
+
+    if (params.size > 0) {
+        ast_node *last_param = params.v[params.size - 1];
+        if (ast_node_is_symbol(last_param) && is_variadic_annotation(last_param->symbol.annotation)) {
+            is_variadic = 1;
+            n_fixed     = (u8)(params.size - 1);
+
+            // Variadic param must be the last parameter — already enforced by position
+            // Reject if variadic param is not last (can't happen with current grammar,
+            // but guard anyway)
+        }
+    }
+
     // arity-mangle the name before recording it in module symbols
-    mangle_name_for_arity(self, name, params.size, 1); // 1 = function definition
+    // For variadic functions, arity = n_fixed_params + 1 (the slice counts as one)
+    u8 arity = is_variadic ? (u8)(n_fixed + 1) : (u8)params.size;
+    mangle_name_for_arity(self, name, arity, 1); // 1 = function definition
     add_module_symbol(self, name);
+
+    // Register variadic symbol info before module mangling
+    if (is_variadic) {
+        ast_node *last_param = params.v[params.size - 1];
+        str       trait      = variadic_trait_name(last_param->symbol.annotation);
+        str       base_name  = name->symbol.original;
+        register_variadic_symbol(self, base_name, name->symbol.name, n_fixed, trait,
+                                 self->current_module);
+    }
+
     mangle_name(self, name);
 
     ast_node *let = ast_node_create_let(self->ast_arena, name, (ast_node_sized)sized_all(type_params),
                                         (ast_node_sized)sized_all(params), body);
     set_node_parameters(self, let, &params);
-    let->let.name = name;
-    let->let.body = body;
+    let->let.name         = name;
+    let->let.body         = body;
+    let->let.is_variadic  = is_variadic;
 
     result_ast_node(self, let);
 
@@ -1195,9 +1281,32 @@ int toplevel_forward(parser *self) {
 
     // Get arity from the arrow's parameter tuple
     ast_node_sized params = ast_node_sized_from_ast_array_const(arrow->arrow.left);
-    mangle_name_for_arity(self, name, params.size, 1); // 1 = forward declaration (definition)
+
+    // Check for variadic parameter in forward declaration
+    int is_variadic = 0;
+    u8  n_fixed     = (u8)params.size;
+
+    if (params.size > 0) {
+        ast_node *last_param = params.v[params.size - 1];
+        if (ast_node_is_symbol(last_param) && is_variadic_annotation(last_param->symbol.annotation)) {
+            is_variadic = 1;
+            n_fixed     = (u8)(params.size - 1);
+        }
+    }
+
+    u8 arity = is_variadic ? (u8)(n_fixed + 1) : (u8)params.size;
+    mangle_name_for_arity(self, name, arity, 1); // 1 = forward declaration (definition)
 
     add_module_symbol(self, name);
+
+    if (is_variadic) {
+        ast_node *last_param = params.v[params.size - 1];
+        str       trait      = variadic_trait_name(last_param->symbol.annotation);
+        str       base_name  = name->symbol.original;
+        register_variadic_symbol(self, base_name, name->symbol.name, n_fixed, trait,
+                                 self->current_module);
+    }
+
     mangle_name(self, name);
 
     return result_ast_node(self, name);

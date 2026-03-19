@@ -99,6 +99,7 @@ static str         generate_let_in(transpile *, tl_monotype *, ast_node const *,
 static str         generate_if_then_else(transpile *, ast_node const *, eval_ctx *);
 static void        generate_main(transpile *);
 static str         generate_funcall(transpile *, ast_node const *, eval_ctx *);
+static str         generate_funcall_variadic(transpile *, ast_node const *, eval_ctx *);
 static str         generate_funcall_intrinsic(transpile *, ast_node const *, eval_ctx *);
 static void        generate_prototypes(transpile *, int);
 static void        generate_structs(transpile *);
@@ -1311,6 +1312,119 @@ static str generate_funcall_with_args(transpile *self, ast_node const *node, eva
     return res;
 }
 
+static str generate_funcall_variadic(transpile *self, ast_node const *node, eval_ctx *ctx) {
+    // Variadic call: emit trait function calls for each variadic arg, pack into stack array,
+    // construct Slice, and call the function with fixed args + slice.
+
+    str          name = ast_node_str(node->named_application.name);
+    tl_monotype *type = env_lookup(self, name);
+    assert(type && tl_monotype_is_list(type));
+
+    str res = generate_funcall_result(self, type);
+
+    u8  n_fixed    = node->named_application.n_fixed_args;
+    u32 n_total    = node->named_application.n_arguments;
+    u32 n_variadic = n_total - n_fixed;
+
+    // Extract arrow params: (fixed_types..., Slice[ElemType]) -> ResultType
+    tl_monotype      *params_tuple = type->list.xs.v[0];
+    tl_monotype_sized params       = params_tuple->list.xs;
+    assert(params.size == (u32)(n_fixed + 1));
+
+    tl_monotype *slice_param = params.v[n_fixed]; // Slice[ElemType]
+    // Slice[T] = { v: Ptr[T], size: CSize }, so args.v[0] = Ptr[T]; extract T.
+    tl_monotype *elem_type   = tl_monotype_ptr_target(slice_param->cons_inst->args.v[0]);
+
+    // Generate fixed args
+    str_array args_res = {.alloc = self->transient};
+    array_reserve(args_res, (u32)(n_fixed + 1));
+    for (u32 i = 0; i < n_fixed; i++) {
+        str arg = generate_expr(self, params.v[i], node->named_application.arguments[i], ctx);
+        array_push(args_res, arg);
+    }
+
+    // Generate variadic args: call trait function on each, collect temporaries
+    str elem_type_c  = type_to_c_mono(self, elem_type);
+    str slice_type_c = type_to_c_mono(self, slice_param);
+    str slice_arg;
+
+    if (n_variadic > 0) {
+        str_array va_temps = {.alloc = self->transient};
+        array_reserve(va_temps, n_variadic);
+
+        for (u32 i = 0; i < n_variadic; i++) {
+            ast_node const *arg_node = node->named_application.arguments[n_fixed + i];
+            tl_monotype    *arg_type = arg_node->type ? arg_node->type->type : null;
+            str             arg_val  = generate_expr(self, arg_type, arg_node, ctx);
+
+            str impl_fn = (node->named_application.variadic_impl_fns)
+                            ? node->named_application.variadic_impl_fns[i]
+                            : str_empty();
+
+            // Emit: ElemType tmpN = impl_fn(NULL, argN);
+            str tmp = next_res(self);
+            generate_decl(self, tmp, elem_type);
+            cat(self, tmp);
+            cat_assign(self);
+            cat(self, mangle_fun(self, impl_fn));
+            cat(self, S("(NULL, "));
+            cat(self, arg_val);
+            cat(self, S(");\n"));
+
+            array_push(va_temps, tmp);
+        }
+
+        // Build stack array: ElemType tl_va_arr[] = {tmp0, tmp1, ...};
+        str arr_name = next_res(self);
+        cat(self, elem_type_c);
+        cat(self, S(" "));
+        cat(self, arr_name);
+        cat(self, S("[] = {"));
+        for (u32 i = 0; i < n_variadic; i++) {
+            if (i) cat_commasp(self);
+            cat(self, va_temps.v[i]);
+        }
+        cat(self, S("};\n"));
+
+        // Construct Slice: (SliceType){arr_name, count}
+        slice_arg = str_fmt(self->transient, "(%s){%s, %u}", str_cstr(&slice_type_c),
+                            str_cstr(&arr_name), n_variadic);
+    } else {
+        // Zero variadic args: (SliceType){NULL, 0}
+        slice_arg = str_fmt(self->transient, "(%s){NULL, 0}", str_cstr(&slice_type_c));
+    }
+
+    array_push(args_res, slice_arg);
+
+    // Emit function call (same pattern as generate_funcall_with_args)
+    int is_direct = str_map_contains(self->toplevels, name);
+    int is_alloc  = is_direct && toplevel_closure_attrs(self, name).has_alloc;
+    is_direct     = is_direct && !is_alloc;
+
+    if (is_direct) {
+        str ctx_var = str_empty();
+        if (type->list.fvs.size) {
+            ctx_var = generate_context(self, type->list.fvs, ctx, 0, null);
+        }
+        if (!str_is_empty(res)) generate_assign_lhs(self, res);
+        generate_funcall_head(self, name, ctx_var, args_res.size);
+
+        str_build b = str_build_init(self->transient, 128);
+        str_build_join_array(&b, S(", "), args_res);
+        cat(self, str_build_finish(&b));
+        cat_close_round(self);
+        cat_semicolonln(self);
+    } else {
+        str closure_name =
+          generate_expr_symbol(self, type, name, ast_node_name_original(node->named_application.name), ctx);
+        if (!str_is_empty(res)) generate_assign_lhs(self, res);
+        generate_indirect_closure_call(self, closure_name, type, args_res);
+        cat_semicolonln(self);
+    }
+
+    return res;
+}
+
 static str generate_funcall(transpile *self, ast_node const *node, eval_ctx *ctx) {
     // Note: the main logic of this function is also duplicated in generate_binary_op.
 
@@ -1344,6 +1458,11 @@ static str generate_funcall(transpile *self, ast_node const *node, eval_ctx *ctx
 
     // type constructor?
     if (tl_monotype_is_inst(type)) return generate_type_constructor(self, node, ctx);
+
+    // Variadic call: divert to specialized codegen
+    if (node->named_application.is_variadic_call) {
+        return generate_funcall_variadic(self, node, ctx);
+    }
 
     // generate arguments: an array of variables will hold their values
     ast_node_sized args     = ast_node_sized_from_ast_array((ast_node *)node);

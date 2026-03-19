@@ -937,10 +937,33 @@ done:
     // symbol_is_module_function checks for the arity-mangled name (e.g., "foo__0") in
     // current_module_symbols. If we module-mangle first, we'd be checking for the wrong name.
     mangle_name_for_arity(self, name, args.size, 0); // 0 = function call, not definition
+
+    // Check variadic_symbols: a variadic function accepts >= n_fixed_params args and has a fixed
+    // mangled arity. We check using the original (pre-mangle) name, because arity-mangling may
+    // have matched the function's fixed arity (n_fixed + 1) even for variadic calls.
+    int is_variadic_call = 0;
+    u8  n_fixed_args     = 0;
+    if (self->variadic_symbols && ast_node_is_symbol(name)) {
+        str lookup_name = str_is_empty(name->symbol.original) ? name->symbol.name : name->symbol.original;
+        variadic_symbol_info *vinfo = str_map_get_ptr(self->variadic_symbols, lookup_name);
+        if (vinfo && args.size >= vinfo->n_fixed_params) {
+            // Use the variadic function's mangled name
+            ast_node_name_replace(name,
+                                  str_copy(self->ast_arena, vinfo->mangled_name));
+            is_variadic_call = 1;
+            n_fixed_args     = vinfo->n_fixed_params;
+            parser_dbg(self, "variadic call '%s' -> '%s' (n_fixed=%d, n_args=%d)\n",
+                       str_cstr(&name->symbol.original), str_cstr(&name->symbol.name),
+                       (int)n_fixed_args, (int)args.size);
+        }
+    }
+
     mangle_name(self, name);
 
     ast_node *node = ast_node_create_nfa(self->ast_arena, name, (ast_node_sized)sized_all(type_args),
                                          (ast_node_sized)sized_all(args));
+    node->named_application.is_variadic_call = is_variadic_call;
+    node->named_application.n_fixed_args     = n_fixed_args;
     return result_ast_node(self, node);
 }
 
@@ -1268,6 +1291,24 @@ int maybe_mangle_binop(parser *self, ast_node *op, ast_node **inout, ast_node *r
                 hashmap *module_syms  = resolve_module_symbols(self, target_module);
                 if (module_syms && str_hset_contains(module_syms, mangled_name)) {
                     to_mangle->symbol.name = mangled_name;
+                }
+                // Variadic fallback for cross-module calls: check variadic_symbols regardless
+                // of normal arity lookup (same as a_funcall — arity may match n_fixed + 1).
+                if (self->variadic_symbols && ast_node_is_nfa(right)) {
+                    variadic_symbol_info *vinfo = str_map_get_ptr(self->variadic_symbols, original_name);
+                    if (vinfo && str_eq(vinfo->module, target_module) &&
+                        arity >= vinfo->n_fixed_params) {
+                        to_mangle->symbol.name =
+                          str_copy(self->ast_arena, vinfo->mangled_name);
+                        right->named_application.is_variadic_call = 1;
+                        right->named_application.n_fixed_args     = vinfo->n_fixed_params;
+                        parser_dbg(self,
+                                   "variadic cross-module call '%s.%s' -> '%s' "
+                                   "(n_fixed=%d, n_args=%d)\n",
+                                   str_cstr(&target_module), str_cstr(&original_name),
+                                   str_cstr(&vinfo->mangled_name), (int)vinfo->n_fixed_params,
+                                   (int)arity);
+                    }
                 }
             }
             mangle_name_for_module(self, to_mangle, target_module);

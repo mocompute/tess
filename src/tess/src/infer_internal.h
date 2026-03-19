@@ -230,6 +230,7 @@ int          process_annotation(tl_infer *, traverse_ctx *, ast_node *, annotati
 int          infer_traverse_cb(tl_infer *, traverse_ctx *, ast_node *);
 int          add_generic(tl_infer *, ast_node *);
 int          check_missing_free_variables(tl_infer *);
+int          check_trait_bound(tl_infer *, ast_node *, tl_monotype *, str);
 void         sync_with_env(tl_infer *, traverse_ctx *, ast_node *, int);
 void         ensure_symbol_type_from_env(tl_infer *, ast_node *);
 int          check_is_pointer(tl_infer *, tl_polytype *, ast_node *);

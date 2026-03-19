@@ -700,6 +700,118 @@ When taking a pointer to an overloaded function, the `/arity` syntax disambiguat
 fp := add/2          // Pointer to the two-argument version
 ```
 
+### Variadic Functions
+
+Variadic functions accept a variable number of arguments through a **trait-bounded** mechanism. The last parameter uses `...Trait` syntax, where each extra argument must satisfy the named trait. The compiler applies the trait's function to each argument at the call site, packing the results into a `Slice`.
+
+#### Declaration
+
+```tl
+#import <ToString.tl>
+
+log(level: Int, args: ...ToString.ToString) -> Void {
+    // args is Slice[String] — the trait function to_string was applied to each arg
+    i: CSize := 0
+    while i < args.size, i += 1 {
+        s := args.v.[i]
+        c_printf("%s", s.&.cstr())
+    }
+    c_printf("\n")
+    void
+}
+```
+
+The variadic parameter must be the **last** parameter. The function body sees it as `Slice[R]` where `R` is the return type of the trait's function.
+
+#### Trait requirements
+
+A trait used as a variadic bound must:
+
+1. Declare exactly **one function** (excluding inherited parent functions)
+2. That function must be **unary** (one parameter of the trait's type `T`)
+3. The return type must be **concrete** (not `T`) — so all call-site results share one type
+
+Valid variadic traits:
+- `ToString[T] : { to_string(a: T) -> String }` — returns `String`
+- `Hash[T] : { hash(x: T) -> CSize }` — returns `CSize`
+
+Invalid variadic traits:
+- `Eq[T] : { eq(a: T, b: T) -> Bool }` — binary, not unary
+- `Neg[T] : { neg(a: T) -> T }` — return type is `T`, not concrete
+
+#### Call-site semantics
+
+```tl
+log(1, 42, "hello", 3.14)
+```
+
+The compiler:
+1. Checks each extra argument satisfies the trait bound (`ToString`)
+2. Applies `to_string()` to each argument at the call site
+3. Packs the results into a stack-allocated array
+4. Passes a `Slice` (pointer + count) to the function
+
+The generated C is equivalent to:
+```c
+String tmp0 = Int__to_string__1(NULL, 42);
+String tmp1 = CString__to_string__1(NULL, "hello");
+String tmp2 = Float__to_string__1(NULL, 3.14);
+String arr[] = {tmp0, tmp1, tmp2};
+log__2(NULL, 1, (Slice_String){arr, 3});
+```
+
+#### Body access
+
+Inside the function, the variadic parameter is a `Slice[T]`:
+
+- `args.size` — number of variadic arguments (`CSize`)
+- `args.v.[i]` — access the i-th element (pointer indexing)
+
+Iteration via `for x in Slice args { ... }` is supported when `Slice.tl` is imported.
+
+#### Zero arguments
+
+Calling with zero variadic arguments is valid:
+
+```tl
+log(1)    // args is empty: Slice with NULL pointer and size 0
+```
+
+#### Overloading restriction
+
+A variadic function precludes arity overloading for that name in the same module. If `print` is variadic, no other `print` with any arity can exist in the same module.
+
+#### Function pointers
+
+Variadic functions have a concrete type signature for pointer purposes:
+
+```tl
+// print : (Slice[String]) -> Void
+fp := Print.print/1
+```
+
+The caller must construct the `Slice` manually when calling through a pointer — the syntactic sugar only applies to direct calls.
+
+#### Restrictions
+
+- Variadic parameter must be the **last** parameter
+- **Not allowed** on: operator functions, lambdas/closures
+- C FFI functions (`c_` prefix) continue to use the existing untyped `...` mechanism
+
+#### Standard library
+
+`ToString.tl` provides the `ToString` trait with implementations for `Int`, `UInt`, `Float`, `Bool`, `CString`, and `String`. The `Print` module provides variadic `print` and `println`:
+
+```tl
+#import <ToString.tl>
+
+main() {
+    Print.println(42, " is the answer")
+    Print.print("x = ", 3.14, ", done = ", true)
+    0
+}
+```
+
 ### Tail Call Optimization
 
 Tess defines tail call optimization (TCO) as part of the language semantics. The generated C code is structured to enable TCO, and the underlying C compilers implement the optimization on all supported platforms. Tail-recursive functions are compiled to loops, allowing deep recursion without stack overflow:

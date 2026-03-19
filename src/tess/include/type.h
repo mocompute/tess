@@ -80,6 +80,11 @@ typedef struct {
     str special_name;
 } tl_type_constructor_inst;
 
+typedef struct {
+    str                   trait_name; // e.g. "ToString"
+    struct tl_monotype   *elem_type; // return type of the trait's unary function (e.g. String)
+} tl_variadic_info;
+
 typedef struct tl_monotype {
     union {
         tl_type_variable          var;
@@ -89,8 +94,9 @@ typedef struct tl_monotype {
             str_sized         fvs;
         } list;
 
-        i32 integer;
-        str placeholder;
+        i32               integer;
+        str               placeholder;
+        tl_variadic_info   variadic;
     };
     enum {
         tl_any,
@@ -104,7 +110,8 @@ typedef struct tl_monotype {
         tl_cons_inst,
         tl_arrow,
         tl_tuple,
-        tl_placeholder
+        tl_placeholder,
+        tl_variadic
     } tag;
     u32 visited_gen; // generation counter for cycle detection in traversals
     u32 hash_gen;    // generation when cached_hash was computed
@@ -162,6 +169,8 @@ void tl_type_env_log(tl_type_env *);
 nodiscard tl_monotype *tl_monotype_create_any(allocator *) mallocfun;
 nodiscard tl_monotype *tl_monotype_create_placeholder(allocator *, str) mallocfun;
 nodiscard tl_monotype *tl_monotype_create_ellipsis(allocator *) mallocfun;
+nodiscard tl_monotype *tl_monotype_create_variadic(allocator *, str trait_name,
+                                                    tl_monotype *elem_type) mallocfun;
 nodiscard tl_monotype *tl_monotype_create_integer(allocator *, i32) mallocfun;
 nodiscard tl_monotype *tl_monotype_create_tv(allocator *, tl_type_variable) mallocfun;
 nodiscard tl_monotype *tl_monotype_create_fresh_tv(tl_type_subs *) mallocfun;
@@ -198,6 +207,7 @@ int          tl_monotype_is_inst_specialized(tl_monotype *);
 int          tl_monotype_is_inst_of(tl_monotype *, str);
 int          tl_monotype_is_enum(tl_monotype *);
 int          tl_monotype_is_tuple(tl_monotype *);
+int          tl_monotype_is_variadic(tl_monotype *);
 int          tl_monotype_is_concrete(tl_monotype *);
 int          tl_monotype_arrow_is_concrete(tl_monotype *);
 int          tl_monotype_is_weak(tl_monotype *);

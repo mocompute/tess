@@ -102,6 +102,7 @@ typedef struct ast_node {
             struct ast_node  *name;
             struct ast_node  *body;
             int               is_specialized;
+            int               is_variadic;  // last param is variadic (...Trait)
         } let;
 
         struct ast_lambda_application {
@@ -120,6 +121,10 @@ typedef struct ast_node {
             int               is_specialized;
             int               is_type_constructor;
             int               is_function_reference;
+            int               is_variadic_call; // set by parser for variadic function calls
+            u8                n_fixed_args;     // number of fixed (non-variadic) arguments
+            str              *variadic_impl_fns; // per-variadic-arg: specialized trait fn name (set by specializer)
+            str               variadic_trait_fn;  // trait function base name, e.g. "hash" (set by specializer)
         } named_application;
 
         struct ast_tuple {

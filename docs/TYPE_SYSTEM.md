@@ -258,6 +258,27 @@ Tuples group multiple types:
 Tuples are a feature of the type system, not the Tess language. They
 are used to represent function parameter lists in arrow types.
 
+### Variadic Types
+
+The `tl_variadic` monotype represents a trait-bounded variadic parameter in the type system. It stores a trait name and the element type (the return type of the trait's single function).
+
+**During parsing:** `...TraitName` in a parameter type position creates a `tl_variadic` monotype with the trait name and a null element type.
+
+**During inference:** The `resolve_variadic_to_slice()` function:
+1. Looks up the trait in the trait registry
+2. Validates: exactly one signature, arity 1, concrete (non-generic) return type
+3. Extracts the return type as the element type
+4. Resolves to `Slice[ReturnType]` — the variadic parameter's actual type
+
+**At call sites:** When `is_variadic_call` is set on an NFA node, the inference engine:
+1. Resolves all argument types
+2. Checks each variadic argument's type against the trait bound via `check_trait_bound()`
+3. Builds a callsite arrow with `n_fixed + 1` elements (the last being `Slice[ReturnType]`)
+
+**Unification:** `tl_variadic` is treated like `tl_ellipsis` during tuple unification — it accepts zero or more remaining arguments. The `unify_tuple()` function handles both.
+
+**Slice type:** `Slice[T]` is defined in `builtin.tl` as `{ v: Ptr[T], size: CSize }`. It is a regular Tess type, not a compiler-internal construct. The transpiler generates stack-allocated arrays and `Slice` literals at variadic call sites.
+
 ## Constraint Satisfaction
 
 The type checker generates and solves constraints:

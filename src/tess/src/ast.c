@@ -374,8 +374,10 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
         for (u32 i = 0; i < vclone->n_type_parameters; ++i)
             vclone->type_parameters[i] = ast_node_clone(alloc, vorig->type_parameters[i]);
 
-        vclone->name = ast_node_clone(alloc, vorig->name);
-        vclone->body = ast_node_clone(alloc, vorig->body);
+        vclone->name           = ast_node_clone(alloc, vorig->name);
+        vclone->body           = ast_node_clone(alloc, vorig->body);
+        vclone->is_specialized = vorig->is_specialized;
+        vclone->is_variadic    = vorig->is_variadic;
     } break;
 
     case ast_if_then_else: {
@@ -413,6 +415,17 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
         vclone->is_specialized        = vorig->is_specialized;
         vclone->is_type_constructor   = vorig->is_type_constructor;
         vclone->is_function_reference = vorig->is_function_reference;
+        vclone->is_variadic_call      = vorig->is_variadic_call;
+        vclone->n_fixed_args          = vorig->n_fixed_args;
+        vclone->variadic_trait_fn     = vorig->variadic_trait_fn;
+        if (vorig->variadic_impl_fns && vorig->is_variadic_call && vorig->n_arguments > vorig->n_fixed_args) {
+            u32 n_va = vorig->n_arguments - vorig->n_fixed_args;
+            vclone->variadic_impl_fns = alloc_malloc(alloc, n_va * sizeof(str));
+            for (u32 vi = 0; vi < n_va; vi++)
+                vclone->variadic_impl_fns[vi] = vorig->variadic_impl_fns[vi];
+        } else {
+            vclone->variadic_impl_fns = null;
+        }
     } break;
 
     case ast_try:        clone->try_.operand = ast_node_clone(alloc, orig->try_.operand); break;

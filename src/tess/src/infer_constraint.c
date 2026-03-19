@@ -966,6 +966,70 @@ static int check_unknown_type_ann(tl_infer *self, traverse_ctx *ctx, ast_node_si
 }
 
 // ============================================================================
+// Variadic type resolution
+// ============================================================================
+
+// Resolve a tl_variadic monotype to Slice[RetType] by looking up the trait, validating it,
+// and instantiating Slice with the trait function's return type.
+// Returns the Slice monotype on success, null on failure (error pushed).
+static tl_monotype *resolve_variadic_to_slice(tl_infer *self, tl_monotype *variadic, ast_node *node) {
+    str trait_name = variadic->variadic.trait_name;
+
+    tl_trait_def *trait = str_map_get_ptr(self->traits, trait_name);
+    if (!trait) {
+        array_push(self->errors, ((tl_infer_error){
+          .tag = tl_err_expected_type, .node = node,
+          .message = str_fmt(self->arena, "'%s' is not a trait (required for variadic bound)", str_cstr(&trait_name))}));
+        return null;
+    }
+
+    // Validate: exactly one own signature
+    if (trait->sigs.size != 1) {
+        array_push(self->errors, ((tl_infer_error){
+          .tag = tl_err_trait_bound_not_satisfied, .node = node,
+          .message = str_fmt(self->arena, "variadic trait '%s' must have exactly one function (has %u)",
+                             str_cstr(&trait->generic_name), trait->sigs.size)}));
+        return null;
+    }
+
+    tl_trait_sig *sig = &trait->sigs.v[0];
+
+    // Validate: unary (arity == 1)
+    if (sig->arity != 1) {
+        array_push(self->errors, ((tl_infer_error){
+          .tag = tl_err_trait_bound_not_satisfied, .node = node,
+          .message = str_fmt(self->arena, "variadic trait '%s' function '%s' must be unary (has arity %u)",
+                             str_cstr(&trait->generic_name), str_cstr(&sig->name), sig->arity)}));
+        return null;
+    }
+
+    // Extract return type from the trait's arrow annotation
+    if (!sig->arrow || !ast_node_is_arrow(sig->arrow)) return null;
+    tl_monotype *ret_type = tl_type_registry_parse_type(self->registry, sig->arrow->arrow.right);
+    if (!ret_type) return null;
+
+    // Validate: return type is concrete (not the trait's type parameter T)
+    if (ret_type->tag == tl_var || tl_monotype_is_weak(ret_type)) {
+        array_push(self->errors, ((tl_infer_error){
+          .tag = tl_err_trait_bound_not_satisfied, .node = node,
+          .message = str_fmt(self->arena,
+                             "variadic trait '%s' function '%s' must return a concrete type, not a type parameter",
+                             str_cstr(&trait->generic_name), str_cstr(&sig->name))}));
+        return null;
+    }
+
+    // Store elem_type on the variadic for later use (e.g., transpiler)
+    variadic->variadic.elem_type = ret_type;
+
+    // Instantiate Slice[RetType]
+    tl_polytype *slice_poly = tl_type_registry_get(self->registry, S("Slice"));
+    if (!slice_poly) return null;
+    tl_monotype_sized args = {.v = alloc_malloc(self->arena, sizeof(tl_monotype *)), .size = 1};
+    args.v[0] = ret_type;
+    return tl_polytype_instantiate_with(self->arena, slice_poly, args, self->subs);
+}
+
+// ============================================================================
 // Inference handlers
 // ============================================================================
 
@@ -985,6 +1049,26 @@ int process_annotation(tl_infer *self, traverse_ctx *ctx, ast_node *node, annota
     }
 
     tl_monotype *mono = result.parsed;
+
+    // Resolve variadic annotation (...TraitName) to Slice[RetType].
+    // Case 1: the parsed type itself is variadic (parameter annotation).
+    if (tl_monotype_is_variadic(mono)) {
+        tl_monotype *resolved = resolve_variadic_to_slice(self, mono, node);
+        if (!resolved) return -1;
+        mono = resolved;
+    }
+    // Case 2: the parsed type is an arrow containing variadic in param tuple (function annotation).
+    if (tl_monotype_is_arrow(mono)) {
+        tl_monotype      *param_tuple = mono->list.xs.v[0];
+        tl_monotype_sized params      = param_tuple->list.xs;
+        for (u32 i = 0; i < params.size; i++) {
+            if (tl_monotype_is_variadic(params.v[i])) {
+                tl_monotype *resolved = resolve_variadic_to_slice(self, params.v[i], node);
+                if (!resolved) return -1;
+                params.v[i] = resolved;
+            }
+        }
+    }
 
     // Handle type argument self-reference (for formal parameters)
     if (opts.check_type_arg_self && ast_node_is_symbol(node)) {
@@ -2042,7 +2126,74 @@ static int infer_named_function_application(tl_infer *self, traverse_ctx *ctx, a
         }
 
         str          inst_str = tl_monotype_to_string(self->transient, inst);
-        tl_polytype *app      = make_arrow(self, ctx, iter.nodes, node, 0);
+        tl_polytype *app      = null;
+
+        // Variadic call: build a custom callsite arrow with n_fixed + 1 elements.
+        // The extra (variadic) args are resolved and trait-checked but don't appear in the arrow.
+        if (node->named_application.is_variadic_call) {
+            u8  n_fixed = node->named_application.n_fixed_args;
+            u32 n_total = iter.nodes.size;
+
+            // Resolve all argument nodes (both fixed and variadic)
+            for (u32 i = 0; i < n_total; i++) {
+                if (resolve_node(self, iter.nodes.v[i], ctx, npos_function_argument)) return 1;
+            }
+
+            // Extract the Slice type from the function's instantiated arrow (last param).
+            // The last param may still be tl_variadic if the env type wasn't resolved yet;
+            // in that case, resolve it to Slice[RetType] now.
+            tl_monotype *slice_type = null;
+            if (tl_monotype_is_arrow(inst)) {
+                tl_monotype      *param_tuple = inst->list.xs.v[0];
+                tl_monotype_sized params      = param_tuple->list.xs;
+                if (params.size > 0) {
+                    slice_type = params.v[params.size - 1];
+                    if (tl_monotype_is_variadic(slice_type)) {
+                        slice_type = resolve_variadic_to_slice(self, slice_type, node);
+                        if (!slice_type) return 1;
+                        // Update the arrow in place so unification sees the resolved type
+                        params.v[params.size - 1] = slice_type;
+                    }
+                }
+            }
+
+            // Check trait bounds on each variadic argument
+            ast_node *let_node = toplevel_get(self, name);
+            if (let_node && ast_node_is_let(let_node) && let_node->let.is_variadic) {
+                ast_node *last_param = let_node->let.parameters[let_node->let.n_parameters - 1];
+                ast_node *ann        = last_param->symbol.annotation;
+                if (ann && ast_node_is_nfa(ann) && ann->named_application.n_type_arguments == 1) {
+                    str trait_name = ast_node_str(ann->named_application.type_arguments[0]);
+                    for (u32 i = n_fixed; i < n_total; i++) {
+                        tl_monotype *arg_type = iter.nodes.v[i]->type->type;
+                        tl_monotype_substitute(self->arena, arg_type, self->subs, null);
+                        if (tl_monotype_is_inst(arg_type)) {
+                            check_trait_bound(self, node, arg_type, trait_name);
+                        }
+                    }
+                }
+            }
+
+            // Build callsite arrow: (fixed_arg_types..., Slice[RetType]) -> ResultTV
+            tl_monotype_array args_types = {.alloc = self->arena};
+            array_reserve(args_types, (u32)(n_fixed + 1));
+            for (u32 i = 0; i < n_fixed; i++) {
+                tl_monotype *mono = iter.nodes.v[i]->type->type;
+                tl_monotype_substitute(self->arena, mono, self->subs, null);
+                array_push(args_types, mono);
+            }
+            if (slice_type) {
+                array_push(args_types, slice_type);
+            }
+
+            tl_monotype *left = tl_monotype_create_tuple(self->arena, (tl_monotype_sized)sized_all(args_types));
+            ensure_tv(self, &node->type);
+            tl_monotype *right          = node->type->type;
+            tl_monotype *callsite_arrow = tl_type_registry_create_arrow(self->registry, left, right);
+            app                         = tl_polytype_absorb_mono(self->arena, callsite_arrow);
+        } else {
+            app = make_arrow(self, ctx, iter.nodes, node, 0);
+        }
         if (!app) return 1;
 
 #if DEBUG_EXPLICIT_TYPE_ARGS
