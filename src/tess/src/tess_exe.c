@@ -2534,6 +2534,10 @@ int main(int argc, char *argv[]) {
         result = init_package(&self);
     }
 
+    else {
+        usage(1, argv[0]);
+    }
+
 done:
     hires_timer_stop(&timer);
 
