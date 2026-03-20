@@ -8,7 +8,7 @@ When generating or editing `.tl` code, follow these rules:
 
 - **No `mut` keyword.** All bindings are reassignable. Do not write `mut` anywhere.
 - **`:=` declares, `=` assigns.** `x := 42` creates a new binding; `x = 42` mutates an existing one.
-- **String literals are C strings.** `"foo"` is `Ptr[CChar]`, not `String`. Use `String.from_cstr("foo")` to get a `String`.
+- **String literals are C strings.** `"foo"` is `Ptr[CChar]`, not `String`. Use `s"foo"` to get a `String`.
 - **`main()` returns `CInt`.** The compiler enforces this. No type annotation needed.
 - **Omit type annotations in implementations.** Synopsis has full types; implementations use parameter names only. Inference handles the rest.
 - **Omit integer suffixes.** Write `0`, not `0zu`. Use suffixes only when inference is ambiguous.
@@ -300,9 +300,9 @@ log(msg) {
 
 ## Literals
 
-**Strings**: `"foo"` is `Ptr[CChar]` (a C string), not `String`. To
-create a String from a literal, use the s-prefix: `s"foo"` is a
-`String`, not a `Ptr[CChar]`.
+**Strings**: `"foo"` is `Ptr[CChar]` (a C string), not `String`. Use
+the s-prefix for String literals: `s"foo"` is a `String`. Prefer
+`s"foo"` over `String.from_cstr("foo")`.
 
 
 **Integers**: Do not use suffixes (`zu`, `z`, `u`) when the type is clear from context. Let inference resolve the type. Use suffixes only when inference genuinely cannot determine the type.
