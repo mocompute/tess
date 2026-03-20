@@ -184,7 +184,7 @@ Use variadic functions (`...Trait`) when you need to accept heterogeneous argume
 
 ```tl
 // Good: heterogeneous args, each converted via ToString
-println(args: ...ToString.ToString) -> Void { ... }
+println(args: ...ToString) -> Void { ... }
 
 // Good: homogeneous collection — no variadics needed
 sum(numbers: Array.Array[Int]) -> Int { ... }
@@ -194,7 +194,7 @@ The variadic parameter must be last. Place fixed parameters before it:
 
 ```tl
 // Fixed params first, variadic last
-log(level: Int, args: ...ToString.ToString) -> Void { ... }
+log(level: Int, args: ...ToString) -> Void { ... }
 ```
 
 When defining a custom trait for variadic bounds, keep it to a single unary function with a concrete return type:

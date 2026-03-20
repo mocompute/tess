@@ -1,7 +1,7 @@
 #module main
 #import <Hash.tl>
 
-count_with_base(base: CSize, args: ...Hash.Hash) -> CSize {
+count_with_base(base: CSize, args: ...Hash) -> CSize {
     base + args.size
 }
 

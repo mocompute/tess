@@ -1,14 +1,14 @@
 // Test cross-module variadic functions with the same base name.
-// Two modules each define format_all(args: ...Hash.Hash) — verifies
+// Two modules each define format_all(args: ...Hash) — verifies
 // that module name mangling prevents collision in the variadic_symbols map.
 
 #import <Hash.tl>
 
 #module Foo
 
-format_all(args: ...Hash.Hash) -> CSize {
+format_all(args: ...Hash) -> CSize {
     result: CSize := 100
-    i := 0
+    i             := 0
     while i < args.size, i = i + 1 {
         result = result + args.v.[i]
     }
@@ -17,9 +17,9 @@ format_all(args: ...Hash.Hash) -> CSize {
 
 #module Bar
 
-format_all(args: ...Hash.Hash) -> CSize {
+format_all(args: ...Hash) -> CSize {
     result: CSize := 200
-    i := 0
+    i             := 0
     while i < args.size, i = i + 1 {
         result = result + args.v.[i]
     }

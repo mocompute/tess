@@ -31,7 +31,7 @@ main() {
     s2 := concat_all()
     if !s2.is_empty() { c_exit(2) }
 
-    hello := String.from_cstr("hello")
+    hello := s"hello"
     s3 := concat_all(hello, 99)
     if !s3.eq_cstr("hello99") { c_exit(3) }
 

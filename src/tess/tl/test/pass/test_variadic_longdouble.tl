@@ -4,8 +4,8 @@
 
 #module main
 
-concat_all(args: ...ToString.ToString) -> String {
-    result := String.empty()
+concat_all(args: ...ToString) -> String {
+    result   := String.empty()
     i: CSize := 0
     while i < args.size, i += 1 {
         result.&.push(args.v.[i])
@@ -15,7 +15,7 @@ concat_all(args: ...ToString.ToString) -> String {
 
 main() {
     x: CLongDouble := 3.14
-    s := concat_all(x)
+    s              := concat_all(x)
 
     if !s.eq_cstr("3.14") { c_exit(1) }
     0

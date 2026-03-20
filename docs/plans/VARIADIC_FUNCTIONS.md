@@ -11,7 +11,7 @@ Tess needed a way to write functions that accept a variable number of arguments 
 The `...Trait` syntax declares a variadic parameter bounded by a trait. The compiler applies the trait's single unary function to each argument at the call site, converting heterogeneous arguments into a homogeneous `Slice` the function body can work with.
 
 ```tl
-print(args: ...ToString.ToString) -> Void { ... }
+print(args: ...ToString) -> Void { ... }
 print(42, "hello", 3.14)
 // Desugars to: print([to_string(42), to_string("hello"), to_string(3.14)])
 ```

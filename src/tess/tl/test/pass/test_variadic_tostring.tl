@@ -3,8 +3,8 @@
 #module main
 #import <ToString.tl>
 
-concat_all(args: ...ToString.ToString) -> String {
-    result := String.empty()
+concat_all(args: ...ToString) -> String {
+    result   := String.empty()
     i: CSize := 0
     while i < args.size, i += 1 {
         result.&.push(args.v.[i])
@@ -23,7 +23,7 @@ main() {
 
     // String argument
     hello := String.from_cstr("hello")
-    s3 := concat_all(hello)
+    s3    := concat_all(hello)
     if !s3.eq_cstr("hello") { c_exit(3) }
 
     // Mixed: String + int

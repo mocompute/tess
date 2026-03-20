@@ -1,7 +1,7 @@
 #module main
 #import <Hash.tl>
 
-hash_count(args: ...Hash.Hash) -> CSize {
+hash_count(args: ...Hash) -> CSize {
     args.size
 }
 

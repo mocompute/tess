@@ -4,7 +4,7 @@
 #module main
 #import <Hash.tl>
 
-hash_all(args: ...Hash.Hash) -> CSize {
+hash_all(args: ...Hash) -> CSize {
     args.size
 }
 

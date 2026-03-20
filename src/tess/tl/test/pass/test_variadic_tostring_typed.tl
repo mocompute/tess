@@ -6,8 +6,8 @@
 
 #module main
 
-concat_all(args: ...ToString.ToString) -> String {
-    result := String.empty()
+concat_all(args: ...ToString) -> String {
+    result   := String.empty()
     i: CSize := 0
     while i < args.size, i += 1 {
         result.&.push(args.v.[i])
@@ -16,9 +16,9 @@ concat_all(args: ...ToString.ToString) -> String {
 }
 
 main() {
-    x: CLongDouble := 3.14
-    y: CFloat := 2.0
-    z: CInt := 42
+    x: CLongDouble  := 3.14
+    y: CFloat       := 2.0
+    z: CInt         := 42
     w: CUnsignedInt := 7
 
     s := concat_all(x, y, z, w)

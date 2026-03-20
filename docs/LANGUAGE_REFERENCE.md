@@ -709,7 +709,7 @@ Variadic functions accept a variable number of arguments through a **trait-bound
 ```tl
 #import <ToString.tl>
 
-log(level: Int, args: ...ToString.ToString) -> Void {
+log(level: Int, args: ...ToString) -> Void {
     // args is Slice[String] — the trait function to_string was applied to each arg
     i: CSize := 0
     while i < args.size, i += 1 {
