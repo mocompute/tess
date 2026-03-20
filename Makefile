@@ -578,12 +578,12 @@ test: build-tests
 # Tags
 # ------------------------------------------------------------------------------
 
-# Function definitions: name(...) ... {
-ETAGS_TL_RE_FUNC := --regex='/^\([a-zA-Z_][a-zA-Z0-9_]*\)[ \t]*(.*{/\1/'
+# Function definitions: name(...) ... { or name[T](...) ... {
+ETAGS_TL_RE_FUNC := --regex='/^\([a-zA-Z_][a-zA-Z0-9_]*\)\(\[[^]]*\]\)?[ \t]*(.*{/\1/'
 # Struct/union definitions without type params: Name : { or Name : |
 ETAGS_TL_RE_TYPE := --regex='/^\([a-zA-Z_][a-zA-Z0-9_]*\)[ \t]*:[ \t]*[{|]/\1/'
-# Struct/union definitions with type params: Name(T) : { or Name(T) : |
-ETAGS_TL_RE_GTYPE := --regex='/^\([a-zA-Z_][a-zA-Z0-9_]*\)([^)]*)[ \t]*:[ \t]*[{|]/\1/'
+# Struct/union definitions with type params: Name[T] : { or Name[T] : |
+ETAGS_TL_RE_GTYPE := --regex='/^\([a-zA-Z_][a-zA-Z0-9_]*\)\[[^]]*\][ \t]*:[ \t]*[{|]/\1/'
 # Type aliases: Name = Type (single =, not :=)
 ETAGS_TL_RE_ALIAS := --regex='/^\([a-zA-Z_][a-zA-Z0-9_]*\)[ \t]*=[^=]/\1/'
 # Module declarations: #module Name
