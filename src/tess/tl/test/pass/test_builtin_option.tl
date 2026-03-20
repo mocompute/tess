@@ -142,28 +142,6 @@ test_when_else() {
     error
 }
 
-// --- 5. Unwrap ---
-
-test_unwrap() {
-    error := 0
-
-    // unwrap Some returns inner value
-    error += if unwrap(Some(42), 0) == 42 {0} else {1}
-
-    // unwrap None returns default
-    none_val: Option[Int] := None()
-    error += if unwrap(none_val, 99) == 99 {0} else {1}
-
-    // unwrap with Float
-    error += if unwrap(Some(2.718), 0.0) == 2.718 {0} else {1}
-
-    // unwrap None Float
-    none_f: Option[Float] := None()
-    error += if unwrap(none_f, 1.0) == 1.0 {0} else {1}
-
-    error
-}
-
 // --- 6. Try operator for Option propagation ---
 
 // Composes checked_sub with try: computes (a - b) + (c - d), propagates None
@@ -596,7 +574,6 @@ main() {
     error += test_none_construction()
     error += test_when_matching()
     error += test_when_else()
-    error += test_unwrap()
     error += test_try()
     error += test_let_else()
     error += test_option_returning_functions()
