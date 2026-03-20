@@ -54,6 +54,18 @@ void tagged_union_case_syntax_error(tl_infer *self, ast_node const *node) {
                ((tl_infer_error){.tag = tl_err_tagged_union_case_syntax_error, .node = node}));
 }
 
+// Returns 1 if a module-mangled symbol's original name matches its module name,
+// either directly (Module__Module) or as a dotted suffix (Foo.Bar__Bar).
+static int symbol_module_matches_original(allocator *transient, str module, str original) {
+    if (str_is_empty(module)) return 0;
+    if (str_eq(original, module)) return 1;
+    if (str_contains_char(module, '.')) {
+        str dot_original = str_cat(transient, S("."), original);
+        return str_ends_with(module, dot_original);
+    }
+    return 0;
+}
+
 static void create_type_constructor_from_user_type(tl_infer *self, ast_node *node) {
     assert(ast_node_is_utd(node));
 
@@ -86,14 +98,10 @@ static void create_type_constructor_from_user_type(tl_infer *self, ast_node *nod
         poly->type->cons_inst->def->module = type_name_node->symbol.module;
     }
     if (ast_node_is_symbol(type_name_node) && type_name_node->symbol.is_module_mangled) {
-        str module         = type_name_node->symbol.module;
-        str original       = type_name_node->symbol.original;
-        int matches_module = str_eq(original, module);
-        if (!matches_module && str_contains_char(module, '.')) {
-            str dot_original = str_cat(self->transient, S("."), original);
-            matches_module   = str_ends_with(module, dot_original);
-        }
-        if (!str_is_empty(module) && (matches_module || str_eq(original, S("T")))) {
+        str module   = type_name_node->symbol.module;
+        str original = type_name_node->symbol.original;
+        if (symbol_module_matches_original(self->transient, module, original)
+            || str_eq(original, S("T"))) {
             if (!tl_type_registry_get(self->registry, module)) {
                 tl_type_registry_type_alias_insert(self->registry, module, poly);
             }
@@ -447,6 +455,19 @@ void load_toplevel(tl_infer *self, ast_node_sized nodes) {
                     }
 
                     str_map_set_ptr(&self->traits, name_str, def);
+
+                    // Auto-collapse: if trait is Module__Module (e.g. ToString__ToString),
+                    // also register under the bare module name so users can write
+                    // ...ToString instead of ...ToString.ToString.
+                    ast_node *trait_name_node = node->trait_def.name;
+                    if (ast_node_is_symbol(trait_name_node) && trait_name_node->symbol.is_module_mangled) {
+                        str module   = trait_name_node->symbol.module;
+                        str original = trait_name_node->symbol.original;
+                        if (symbol_module_matches_original(self->transient, module, original)) {
+                            if (!str_map_get_ptr(self->traits, module))
+                                str_map_set_ptr(&self->traits, module, def);
+                        }
+                    }
                 }
             }
         }
