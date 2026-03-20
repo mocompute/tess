@@ -69,6 +69,10 @@ ast_node *ast_node_create_nfa(allocator *alloc, ast_node *name, ast_node_sized t
     self->named_application.is_specialized        = 0;
     self->named_application.is_type_constructor   = 0;
     self->named_application.is_function_reference = 0;
+    self->named_application.is_variadic_call      = 0;
+    self->named_application.n_fixed_args          = 0;
+    self->named_application.variadic_impl_fns     = null;
+    self->named_application.variadic_trait_fn     = str_empty();
     return self;
 }
 ast_node *ast_node_create_nfa_tc(allocator *alloc, ast_node *name, ast_node_sized type_args,

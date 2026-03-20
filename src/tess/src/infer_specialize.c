@@ -2076,10 +2076,11 @@ int specialize_applications_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_n
                         tl_polytype *func_poly = tl_type_env_lookup(self->env, func_name);
                         tl_monotype *func_arrow = func_poly ? func_poly->type : null;
                         tl_monotype *elem_type  = null;
+                        tl_monotype *slice_mon  = null;
                         if (func_arrow && tl_monotype_is_arrow(func_arrow)) {
-                            tl_monotype      *ptuple    = func_arrow->list.xs.v[0];
-                            tl_monotype_sized pms       = ptuple->list.xs;
-                            tl_monotype      *slice_mon = (pms.size > 0) ? pms.v[pms.size - 1] : null;
+                            tl_monotype      *ptuple = func_arrow->list.xs.v[0];
+                            tl_monotype_sized pms    = ptuple->list.xs;
+                            slice_mon = (pms.size > 0) ? pms.v[pms.size - 1] : null;
                             if (slice_mon && tl_monotype_is_inst(slice_mon) &&
                                 slice_mon->cons_inst->args.size > 0 &&
                                 tl_monotype_is_ptr(slice_mon->cons_inst->args.v[0]))
@@ -2090,12 +2091,8 @@ int specialize_applications_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_n
                         if (elem_type) {
                             // Ensure Slice[ElemType] is specialized as a C struct.
                             // Pass the concrete field types from the arrow's Slice instance.
-                            {
-                                tl_monotype      *ptuple2   = func_arrow->list.xs.v[0];
-                                tl_monotype      *slice_mon2 = ptuple2->list.xs.v[ptuple2->list.xs.size - 1];
-                                specialize_type_constructor(self, S("Slice"),
-                                                            slice_mon2->cons_inst->args, null);
-                            }
+                            specialize_type_constructor(self, S("Slice"),
+                                                        slice_mon->cons_inst->args, null);
 
                             node->named_application.variadic_impl_fns =
                               alloc_malloc(self->arena, n_va * sizeof(str));

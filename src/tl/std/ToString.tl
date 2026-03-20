@@ -4,6 +4,7 @@
 // Used as a variadic bound: print(args: ...ToString.ToString) applies to_string to each arg.
 
 #import <String.tl>
+#import <Slice.tl>
 
 #module ToString
 
@@ -91,9 +92,8 @@ to_string(s: String) -> String { s }
 
 #module Print
 
-#import <Slice.tl>
-
-print(args: ...ToString.ToString) -> Void {
+_print_all(args: Slice[String]) -> Void
+_print_all(args) {
     i: CSize := 0
     while i < args.size, i += 1 {
         s := args.v.[i]
@@ -102,12 +102,10 @@ print(args: ...ToString.ToString) -> Void {
     void
 }
 
+print(args: ...ToString.ToString) -> Void { _print_all(args) }
+
 println(args: ...ToString.ToString) -> Void {
-    i: CSize := 0
-    while i < args.size, i += 1 {
-        s := args.v.[i]
-        c_printf("%s", s.&.cstr())
-    }
+    _print_all(args)
     c_printf("\n")
     void
 }

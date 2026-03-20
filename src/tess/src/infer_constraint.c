@@ -1003,13 +1003,13 @@ static tl_monotype *resolve_variadic_to_slice(tl_infer *self, tl_monotype *varia
         return null;
     }
 
-    // Extract return type from the trait's arrow annotation
+    // Extract element type from the trait's arrow annotation (the return type of the trait fn)
     if (!sig->arrow || !ast_node_is_arrow(sig->arrow)) return null;
-    tl_monotype *ret_type = tl_type_registry_parse_type(self->registry, sig->arrow->arrow.right);
-    if (!ret_type) return null;
+    tl_monotype *elem_type = tl_type_registry_parse_type(self->registry, sig->arrow->arrow.right);
+    if (!elem_type) return null;
 
-    // Validate: return type is concrete (not the trait's type parameter T)
-    if (ret_type->tag == tl_var || tl_monotype_is_weak(ret_type)) {
+    // Validate: element type is concrete (not the trait's type parameter T)
+    if (elem_type->tag == tl_var || tl_monotype_is_weak(elem_type)) {
         array_push(self->errors, ((tl_infer_error){
           .tag = tl_err_trait_bound_not_satisfied, .node = node,
           .message = str_fmt(self->arena,
@@ -1019,13 +1019,13 @@ static tl_monotype *resolve_variadic_to_slice(tl_infer *self, tl_monotype *varia
     }
 
     // Store elem_type on the variadic for later use (e.g., transpiler)
-    variadic->variadic.elem_type = ret_type;
+    variadic->variadic.elem_type = elem_type;
 
-    // Instantiate Slice[RetType]
+    // Instantiate Slice[ElemType]
     tl_polytype *slice_poly = tl_type_registry_get(self->registry, S("Slice"));
     if (!slice_poly) return null;
     tl_monotype_sized args = {.v = alloc_malloc(self->arena, sizeof(tl_monotype *)), .size = 1};
-    args.v[0] = ret_type;
+    args.v[0] = elem_type;
     return tl_polytype_instantiate_with(self->arena, slice_poly, args, self->subs);
 }
 

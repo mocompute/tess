@@ -1143,6 +1143,36 @@ static void register_variadic_symbol(parser *self, str base_name, str mangled, u
     str_map_set_ptr(&self->variadic_symbols, base_name, info);
 }
 
+// Detect whether the last parameter has a variadic annotation (...TraitName),
+// compute arity, mangle the name, and register the variadic symbol if found.
+// Returns 1 if variadic, 0 otherwise. *out_arity receives the mangled arity.
+static int detect_and_register_variadic(parser *self, ast_node *name,
+                                        ast_node_sized params, u8 *out_arity) {
+    int is_variadic = 0;
+    u8  n_fixed     = (u8)params.size;
+
+    if (params.size > 0) {
+        ast_node *last_param = params.v[params.size - 1];
+        if (ast_node_is_symbol(last_param) && is_variadic_annotation(last_param->symbol.annotation)) {
+            is_variadic = 1;
+            n_fixed     = (u8)(params.size - 1);
+        }
+    }
+
+    *out_arity = is_variadic ? (u8)(n_fixed + 1) : (u8)params.size;
+    mangle_name_for_arity(self, name, *out_arity, 1);
+    add_module_symbol(self, name);
+
+    if (is_variadic) {
+        ast_node *last_param = params.v[params.size - 1];
+        str       trait      = variadic_trait_name(last_param->symbol.annotation);
+        str       base_name  = name->symbol.original;
+        register_variadic_symbol(self, base_name, name->symbol.name, n_fixed, trait, self->current_module);
+    }
+
+    return is_variadic;
+}
+
 int toplevel_defun(parser *self) {
     if (a_try(self, a_attributed_identifier)) return 1;
     ast_node      *name = self->result;
@@ -1189,35 +1219,9 @@ int toplevel_defun(parser *self) {
 
     ast_node *body = create_body(self, exprs, defers);
 
-    // Check for variadic parameter: last param must have ...TraitName annotation
-    int is_variadic = 0;
-    u8  n_fixed     = (u8)params.size;
-
-    if (params.size > 0) {
-        ast_node *last_param = params.v[params.size - 1];
-        if (ast_node_is_symbol(last_param) && is_variadic_annotation(last_param->symbol.annotation)) {
-            is_variadic = 1;
-            n_fixed     = (u8)(params.size - 1);
-
-            // Variadic param must be the last parameter — already enforced by position
-            // Reject if variadic param is not last (can't happen with current grammar,
-            // but guard anyway)
-        }
-    }
-
-    // arity-mangle the name before recording it in module symbols
-    // For variadic functions, arity = n_fixed_params + 1 (the slice counts as one)
-    u8 arity = is_variadic ? (u8)(n_fixed + 1) : (u8)params.size;
-    mangle_name_for_arity(self, name, arity, 1); // 1 = function definition
-    add_module_symbol(self, name);
-
-    // Register variadic symbol info before module mangling
-    if (is_variadic) {
-        ast_node *last_param = params.v[params.size - 1];
-        str       trait      = variadic_trait_name(last_param->symbol.annotation);
-        str       base_name  = name->symbol.original;
-        register_variadic_symbol(self, base_name, name->symbol.name, n_fixed, trait, self->current_module);
-    }
+    u8  arity;
+    int is_variadic = detect_and_register_variadic(self, name,
+                        (ast_node_sized)array_sized(params), &arity);
 
     mangle_name(self, name);
 
@@ -1276,29 +1280,8 @@ int toplevel_forward(parser *self) {
     // Get arity from the arrow's parameter tuple
     ast_node_sized params = ast_node_sized_from_ast_array_const(arrow->arrow.left);
 
-    // Check for variadic parameter in forward declaration
-    int is_variadic = 0;
-    u8  n_fixed     = (u8)params.size;
-
-    if (params.size > 0) {
-        ast_node *last_param = params.v[params.size - 1];
-        if (ast_node_is_symbol(last_param) && is_variadic_annotation(last_param->symbol.annotation)) {
-            is_variadic = 1;
-            n_fixed     = (u8)(params.size - 1);
-        }
-    }
-
-    u8 arity = is_variadic ? (u8)(n_fixed + 1) : (u8)params.size;
-    mangle_name_for_arity(self, name, arity, 1); // 1 = forward declaration (definition)
-
-    add_module_symbol(self, name);
-
-    if (is_variadic) {
-        ast_node *last_param = params.v[params.size - 1];
-        str       trait      = variadic_trait_name(last_param->symbol.annotation);
-        str       base_name  = name->symbol.original;
-        register_variadic_symbol(self, base_name, name->symbol.name, n_fixed, trait, self->current_module);
-    }
+    u8 arity;
+    detect_and_register_variadic(self, name, params, &arity);
 
     mangle_name(self, name);
 

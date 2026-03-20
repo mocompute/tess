@@ -1,8 +1,8 @@
-#module Slice
-
 // Slice helpers and iterator interface.
 // The Slice[T] type itself is defined in builtin.tl (auto-available everywhere).
 // Import this module explicitly when iteration or helpers are needed.
+
+#module Slice
 
 get[T](s: Slice[T], i: CSize) -> T {
     s.v.[i]
