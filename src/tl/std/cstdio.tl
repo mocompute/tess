@@ -2,7 +2,7 @@
 #include <stdio.h>
 #include <errno.h>
 
-c_printf (fmt: Ptr[Const[CChar]], args: ...)                   -> Void
+c_printf (fmt: Ptr[Const[CChar]], args: ...)                   -> CInt
 c_fprintf(stream: Ptr[any], fmt: Ptr[Const[CChar]], args: ...) -> CInt
 
 // Standard streams.

@@ -481,6 +481,7 @@ help_text(self) {
 print_help(self) {
     txt := help_text(self)
     c_printf("%s", txt.&.cstr())
+    void
 }
 
 
