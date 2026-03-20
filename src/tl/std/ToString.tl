@@ -89,27 +89,3 @@ to_string(s: CString) -> String { String.from_cstr(s) }
 
 #module String
 to_string(s: String) -> String { s }
-
-
-// -- Print functions --
-
-#module Print
-
-_print_all(args: Slice[String]) -> Void
-
-_print_all(args) {
-    i: CSize := 0
-    while i < args.size, i += 1 {
-        s := args.v.[i]
-        c_printf("%s", s.&.cstr())
-    }
-    void
-}
-
-print(args: ...ToString) -> Void { _print_all(args) }
-
-println(args: ...ToString) -> Void {
-    _print_all(args)
-    c_printf("\n")
-    void
-}

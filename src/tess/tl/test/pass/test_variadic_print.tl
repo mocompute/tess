@@ -1,7 +1,7 @@
 // Test cross-module variadic calls: Print.print and Print.println.
 
 #module main
-#import <ToString.tl>
+#import <Print.tl>
 
 main() {
     // Print.print outputs without newline
