@@ -21,7 +21,7 @@ ToString[T]: { to_string(a: T) -> String }
 static size_t tl_signed_int_snprintf(char *buf, size_t bufsz, const void *p, size_t sz) {
     long long v;
     switch (sz) {
-        case 1: { signed char x;  memcpy(&x, p, 1); v = x; break; }
+        case 1:  { signed char x;  memcpy(&x, p, 1); v = x; break; }
         case 2:  { short x;        memcpy(&x, p, 2); v = x; break; }
         case 4:  { int x;          memcpy(&x, p, 4); v = x; break; }
         default: { memcpy(&v, p, sizeof(v)); break; }
