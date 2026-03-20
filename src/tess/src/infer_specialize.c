@@ -1278,7 +1278,12 @@ static int check_trait_arrow(tl_infer *self, ast_node *toplevel, tl_monotype *co
     // type's type arguments so that type parameters become concrete types.
     tl_monotype      *actual_resolved;
     tl_monotype_sized type_args = concrete_type->cons_inst->args;
-    if (poly->quantifiers.size > 0 && type_args.size > 0) {
+    if (poly->quantifiers.size > 0) {
+        if (type_args.size == 0 && poly->quantifiers.size == 1) {
+            // Generic trait function on a nullary type (e.g. Float.to_string[T] for CLongDouble):
+            // instantiate the single quantifier with the concrete type itself.
+            type_args = (tl_monotype_sized){.v = &concrete_type, .size = 1};
+        }
         actual_resolved = tl_polytype_instantiate_for_type(self->transient, poly, type_args, self->subs);
     } else {
         actual_resolved = tl_monotype_clone(self->transient, actual_arrow);

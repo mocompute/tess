@@ -1,6 +1,4 @@
 // Test CLongDouble -> to_string conversion via variadic ToString trait.
-// Currently fails: CLongDouble does not satisfy ToString trait bound —
-// trait dispatch doesn't find Float.to_string[T] for CLongDouble.
 
 #import <ToString.tl>
 
