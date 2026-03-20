@@ -948,13 +948,12 @@ done:
         variadic_symbol_info *vinfo = str_map_get_ptr(self->variadic_symbols, lookup_name);
         if (vinfo && args.size >= vinfo->n_fixed_params) {
             // Use the variadic function's mangled name
-            ast_node_name_replace(name,
-                                  str_copy(self->ast_arena, vinfo->mangled_name));
+            ast_node_name_replace(name, str_copy(self->ast_arena, vinfo->mangled_name));
             is_variadic_call = 1;
             n_fixed_args     = vinfo->n_fixed_params;
             parser_dbg(self, "variadic call '%s' -> '%s' (n_fixed=%d, n_args=%d)\n",
-                       str_cstr(&name->symbol.original), str_cstr(&name->symbol.name),
-                       (int)n_fixed_args, (int)args.size);
+                       str_cstr(&name->symbol.original), str_cstr(&name->symbol.name), (int)n_fixed_args,
+                       (int)args.size);
         }
     }
 
@@ -1296,18 +1295,15 @@ int maybe_mangle_binop(parser *self, ast_node *op, ast_node **inout, ast_node *r
                 // of normal arity lookup (same as a_funcall — arity may match n_fixed + 1).
                 if (self->variadic_symbols && ast_node_is_nfa(right)) {
                     variadic_symbol_info *vinfo = str_map_get_ptr(self->variadic_symbols, original_name);
-                    if (vinfo && str_eq(vinfo->module, target_module) &&
-                        arity >= vinfo->n_fixed_params) {
-                        to_mangle->symbol.name =
-                          str_copy(self->ast_arena, vinfo->mangled_name);
+                    if (vinfo && str_eq(vinfo->module, target_module) && arity >= vinfo->n_fixed_params) {
+                        to_mangle->symbol.name = str_copy(self->ast_arena, vinfo->mangled_name);
                         right->named_application.is_variadic_call = 1;
                         right->named_application.n_fixed_args     = vinfo->n_fixed_params;
                         parser_dbg(self,
                                    "variadic cross-module call '%s.%s' -> '%s' "
                                    "(n_fixed=%d, n_args=%d)\n",
                                    str_cstr(&target_module), str_cstr(&original_name),
-                                   str_cstr(&vinfo->mangled_name), (int)vinfo->n_fixed_params,
-                                   (int)arity);
+                                   str_cstr(&vinfo->mangled_name), (int)vinfo->n_fixed_params, (int)arity);
                     }
                 }
             }

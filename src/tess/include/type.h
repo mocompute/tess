@@ -81,8 +81,8 @@ typedef struct {
 } tl_type_constructor_inst;
 
 typedef struct {
-    str                   trait_name; // e.g. "ToString"
-    struct tl_monotype   *elem_type; // return type of the trait's unary function (e.g. String)
+    str                 trait_name; // e.g. "ToString"
+    struct tl_monotype *elem_type;  // return type of the trait's unary function (e.g. String)
 } tl_variadic_info;
 
 typedef struct tl_monotype {
@@ -94,9 +94,9 @@ typedef struct tl_monotype {
             str_sized         fvs;
         } list;
 
-        i32               integer;
-        str               placeholder;
-        tl_variadic_info   variadic;
+        i32              integer;
+        str              placeholder;
+        tl_variadic_info variadic;
     };
     enum {
         tl_any,
@@ -170,7 +170,7 @@ nodiscard tl_monotype *tl_monotype_create_any(allocator *) mallocfun;
 nodiscard tl_monotype *tl_monotype_create_placeholder(allocator *, str) mallocfun;
 nodiscard tl_monotype *tl_monotype_create_ellipsis(allocator *) mallocfun;
 nodiscard tl_monotype *tl_monotype_create_variadic(allocator *, str trait_name,
-                                                    tl_monotype *elem_type) mallocfun;
+                                                   tl_monotype *elem_type) mallocfun;
 nodiscard tl_monotype *tl_monotype_create_integer(allocator *, i32) mallocfun;
 nodiscard tl_monotype *tl_monotype_create_tv(allocator *, tl_type_variable) mallocfun;
 nodiscard tl_monotype *tl_monotype_create_fresh_tv(tl_type_subs *) mallocfun;

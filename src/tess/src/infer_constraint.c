@@ -100,8 +100,7 @@ static void create_type_constructor_from_user_type(tl_infer *self, ast_node *nod
     if (ast_node_is_symbol(type_name_node) && type_name_node->symbol.is_module_mangled) {
         str module   = type_name_node->symbol.module;
         str original = type_name_node->symbol.original;
-        if (symbol_module_matches_original(self->transient, module, original)
-            || str_eq(original, S("T"))) {
+        if (symbol_module_matches_original(self->transient, module, original) || str_eq(original, S("T"))) {
             if (!tl_type_registry_get(self->registry, module)) {
                 tl_type_registry_type_alias_insert(self->registry, module, poly);
             }
@@ -994,22 +993,28 @@ static int check_unknown_type_ann(tl_infer *self, traverse_ctx *ctx, ast_node_si
 // and instantiating Slice with the trait function's return type.
 // Returns the Slice monotype on success, null on failure (error pushed).
 static tl_monotype *resolve_variadic_to_slice(tl_infer *self, tl_monotype *variadic, ast_node *node) {
-    str trait_name = variadic->variadic.trait_name;
+    str           trait_name = variadic->variadic.trait_name;
 
-    tl_trait_def *trait = str_map_get_ptr(self->traits, trait_name);
+    tl_trait_def *trait      = str_map_get_ptr(self->traits, trait_name);
     if (!trait) {
-        array_push(self->errors, ((tl_infer_error){
-          .tag = tl_err_expected_type, .node = node,
-          .message = str_fmt(self->arena, "'%s' is not a trait (required for variadic bound)", str_cstr(&trait_name))}));
+        array_push(self->errors,
+                   ((tl_infer_error){.tag     = tl_err_expected_type,
+                                     .node    = node,
+                                     .message = str_fmt(self->arena,
+                                                        "'%s' is not a trait (required for variadic bound)",
+                                                        str_cstr(&trait_name))}));
         return null;
     }
 
     // Validate: exactly one own signature
     if (trait->sigs.size != 1) {
-        array_push(self->errors, ((tl_infer_error){
-          .tag = tl_err_trait_bound_not_satisfied, .node = node,
-          .message = str_fmt(self->arena, "variadic trait '%s' must have exactly one function (has %u)",
-                             str_cstr(&trait->generic_name), trait->sigs.size)}));
+        array_push(
+          self->errors,
+          ((tl_infer_error){
+            .tag     = tl_err_trait_bound_not_satisfied,
+            .node    = node,
+            .message = str_fmt(self->arena, "variadic trait '%s' must have exactly one function (has %u)",
+                               str_cstr(&trait->generic_name), trait->sigs.size)}));
         return null;
     }
 
@@ -1017,10 +1022,13 @@ static tl_monotype *resolve_variadic_to_slice(tl_infer *self, tl_monotype *varia
 
     // Validate: unary (arity == 1)
     if (sig->arity != 1) {
-        array_push(self->errors, ((tl_infer_error){
-          .tag = tl_err_trait_bound_not_satisfied, .node = node,
-          .message = str_fmt(self->arena, "variadic trait '%s' function '%s' must be unary (has arity %u)",
-                             str_cstr(&trait->generic_name), str_cstr(&sig->name), sig->arity)}));
+        array_push(
+          self->errors,
+          ((tl_infer_error){.tag     = tl_err_trait_bound_not_satisfied,
+                            .node    = node,
+                            .message = str_fmt(
+                              self->arena, "variadic trait '%s' function '%s' must be unary (has arity %u)",
+                              str_cstr(&trait->generic_name), str_cstr(&sig->name), sig->arity)}));
         return null;
     }
 
@@ -1031,11 +1039,15 @@ static tl_monotype *resolve_variadic_to_slice(tl_infer *self, tl_monotype *varia
 
     // Validate: element type is concrete (not the trait's type parameter T)
     if (elem_type->tag == tl_var || tl_monotype_is_weak(elem_type)) {
-        array_push(self->errors, ((tl_infer_error){
-          .tag = tl_err_trait_bound_not_satisfied, .node = node,
-          .message = str_fmt(self->arena,
-                             "variadic trait '%s' function '%s' must return a concrete type, not a type parameter",
-                             str_cstr(&trait->generic_name), str_cstr(&sig->name))}));
+        array_push(
+          self->errors,
+          ((tl_infer_error){
+            .tag  = tl_err_trait_bound_not_satisfied,
+            .node = node,
+            .message =
+              str_fmt(self->arena,
+                      "variadic trait '%s' function '%s' must return a concrete type, not a type parameter",
+                      str_cstr(&trait->generic_name), str_cstr(&sig->name))}));
         return null;
     }
 
@@ -1046,7 +1058,7 @@ static tl_monotype *resolve_variadic_to_slice(tl_infer *self, tl_monotype *varia
     tl_polytype *slice_poly = tl_type_registry_get(self->registry, S("Slice"));
     if (!slice_poly) return null;
     tl_monotype_sized args = {.v = alloc_malloc(self->arena, sizeof(tl_monotype *)), .size = 1};
-    args.v[0] = elem_type;
+    args.v[0]              = elem_type;
     return tl_polytype_instantiate_with(self->arena, slice_poly, args, self->subs);
 }
 
@@ -2207,7 +2219,8 @@ static int infer_named_function_application(tl_infer *self, traverse_ctx *ctx, a
                 array_push(args_types, slice_type);
             }
 
-            tl_monotype *left = tl_monotype_create_tuple(self->arena, (tl_monotype_sized)sized_all(args_types));
+            tl_monotype *left =
+              tl_monotype_create_tuple(self->arena, (tl_monotype_sized)sized_all(args_types));
             ensure_tv(self, &node->type);
             tl_monotype *right          = node->type->type;
             tl_monotype *callsite_arrow = tl_type_registry_create_arrow(self->registry, left, right);
@@ -2837,9 +2850,9 @@ static int ufcs_rewrite_call(tl_infer *self, traverse_ctx *ctx, ast_node *node, 
     }
 
     // Extract first parameter type (shared by address-of coercion and cross-chain widening)
-    tl_monotype      *fn_mono            = fn_poly->type;
-    int               first_param_is_ptr = 0;
-    tl_monotype      *param0             = null;
+    tl_monotype *fn_mono            = fn_poly->type;
+    int          first_param_is_ptr = 0;
+    tl_monotype *param0             = null;
     if (tl_monotype_is_arrow(fn_mono)) {
         tl_monotype_sized params = tl_monotype_arrow_get_args(fn_mono);
         if (params.size > 0) {
@@ -2877,23 +2890,28 @@ static int ufcs_rewrite_call(tl_infer *self, traverse_ctx *ctx, ast_node *node, 
     if (!first_param_is_ptr && param0) {
         tl_monotype *recv = left->type ? left->type->type : null;
         if (recv) tl_monotype_substitute(self->arena, recv, self->subs, null);
-        if (recv &&
-            tl_monotype_is_inst(param0) && tl_monotype_is_integer_convertible(param0) &&
-            tl_monotype_is_inst(recv)   && tl_monotype_is_integer_convertible(recv) &&
+        if (recv && tl_monotype_is_inst(param0) && tl_monotype_is_integer_convertible(param0) &&
+            tl_monotype_is_inst(recv) && tl_monotype_is_integer_convertible(recv) &&
             !tl_monotype_same_integer_subchain(param0, recv)) {
 
             str       var_name = next_variable_name(self, S("_widen"));
             ast_node *name     = ast_node_create_sym(self->arena, var_name);
-            name->file = left->file; name->line = left->line; name->col = left->col;
+            name->file         = left->file;
+            name->line         = left->line;
+            name->col          = left->col;
             ensure_tv(self, &name->type);
             name->symbol.annotation_type = tl_polytype_absorb_mono(self->arena, param0);
 
-            ast_node *body = ast_node_create_sym(self->arena, var_name);
-            body->file = left->file; body->line = left->line; body->col = left->col;
+            ast_node *body               = ast_node_create_sym(self->arena, var_name);
+            body->file                   = left->file;
+            body->line                   = left->line;
+            body->col                    = left->col;
             ensure_tv(self, &body->type);
 
             ast_node *let_in = ast_node_create_let_in(self->arena, name, left, body);
-            let_in->file = left->file; let_in->line = left->line; let_in->col = left->col;
+            let_in->file     = left->file;
+            let_in->line     = left->line;
+            let_in->col      = left->col;
             ensure_tv(self, &let_in->type);
 
             left = let_in;

@@ -7,7 +7,7 @@
 test_filter_then_map() {
     error          := 0
     threshold: Int := 2
-    offset:    Int    := 100
+    offset:    Int := 100
     arr            := Array.empty[Int]()
     Array.push(arr.&, 1)
     Array.push(arr.&, 2)
@@ -45,7 +45,7 @@ test_full_pipeline() {
     // filter > 2, map *10, reduce sum, all with captures
     error          := 0
     threshold: Int := 2
-    scale:     Int     := 10
+    scale:     Int := 10
     arr            := Array.empty[Int]()
     Array.push(arr.&, 1)
     Array.push(arr.&, 2)
@@ -67,7 +67,7 @@ test_pipeline_alloc_closures() {
     // Same pipeline but with allocated closures
     error          := 0
     threshold: Int := 2
-    scale:     Int     := 10
+    scale:     Int := 10
     pred           := [[alloc, capture(threshold)]] (x) { x > threshold }
     mapper         := [[alloc, capture(scale)]] (x) { x * scale }
     arr            := Array.empty[Int]()

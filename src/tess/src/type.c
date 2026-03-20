@@ -70,10 +70,9 @@ static int monotype_contains_tv_(tl_monotype *self, tl_type_variable tv, hashmap
     case tl_placeholder:
     case tl_any:
     case tl_ellipsis:          return 0;
-    case tl_variadic:          return self->variadic.elem_type
-                                        ? monotype_contains_tv_(self->variadic.elem_type, tv, seen)
-                                        : 0;
-    case tl_cons_inst:         {
+    case tl_variadic:
+        return self->variadic.elem_type ? monotype_contains_tv_(self->variadic.elem_type, tv, seen) : 0;
+    case tl_cons_inst: {
         forall(i, self->cons_inst->args) if (monotype_contains_tv_(self->cons_inst->args.v[i], tv,
                                                                    seen)) return 1;
         return 0;
@@ -232,7 +231,7 @@ tl_type_registry *tl_type_registry_create(allocator *alloc, allocator *transient
         assert(poly && tl_monotype_is_inst(poly->type));
         tl_type_constructor_def *def = poly->type->cons_inst->def;
         if (builtin_nullary[i].c_type) def->c_type_name = str_init_static(builtin_nullary[i].c_type);
-        if (builtin_nullary[i].module) def->module     = str_init_static(builtin_nullary[i].module);
+        if (builtin_nullary[i].module) def->module = str_init_static(builtin_nullary[i].module);
         def->c_min_macro       = builtin_nullary[i].c_min;
         def->c_max_macro       = builtin_nullary[i].c_max;
         def->integer_min_value = builtin_nullary[i].min_val;
@@ -1877,7 +1876,8 @@ tl_monotype *tl_monotype_create_ellipsis(allocator *alloc) {
 
 tl_monotype *tl_monotype_create_variadic(allocator *alloc, str trait_name, tl_monotype *elem_type) {
     tl_monotype *self = alloc_malloc(alloc, sizeof *self);
-    *self             = (tl_monotype){.tag = tl_variadic, .variadic = {.trait_name = trait_name, .elem_type = elem_type}};
+    *self =
+      (tl_monotype){.tag = tl_variadic, .variadic = {.trait_name = trait_name, .elem_type = elem_type}};
     return self;
 }
 
@@ -2016,15 +2016,14 @@ static tl_monotype *tl_monotype_clone_(allocator *alloc, tl_monotype *orig, hash
         clone->list.fvs = orig->list.fvs; // shallow copy
         break;
 
-    case tl_integer:     clone->integer = orig->integer; return clone;
+    case tl_integer:  clone->integer = orig->integer; return clone;
 
     case tl_any:
-    case tl_ellipsis:    return clone;
+    case tl_ellipsis: return clone;
     case tl_variadic:
         clone->variadic.trait_name = orig->variadic.trait_name;
-        clone->variadic.elem_type  = orig->variadic.elem_type
-                                         ? tl_monotype_clone_(alloc, orig->variadic.elem_type, mapping)
-                                         : 0;
+        clone->variadic.elem_type =
+          orig->variadic.elem_type ? tl_monotype_clone_(alloc, orig->variadic.elem_type, mapping) : 0;
         return clone;
     case tl_placeholder: fatal("unreachable");
     }
@@ -3075,8 +3074,8 @@ int tl_type_subs_unify_mono(tl_type_subs *subs, tl_monotype *left, tl_monotype *
 
     // `ellipsis` types unify with everything but are not concrete. In addition, when part of a tuple, they
     // act as if the correct number of `any` types are present as required to unify with the target tuple.
-    if (tl_monotype_is_ellipsis(left) || tl_monotype_is_ellipsis(right) ||
-        tl_monotype_is_variadic(left) || tl_monotype_is_variadic(right))
+    if (tl_monotype_is_ellipsis(left) || tl_monotype_is_ellipsis(right) || tl_monotype_is_variadic(left) ||
+        tl_monotype_is_variadic(right))
         return 0;
 
     // Same-family integer types: behavior depends on direction mode.
@@ -3190,7 +3189,8 @@ int unify_tuple(tl_type_subs *subs, tl_monotype_sized left, tl_monotype_sized ri
 
     forall(i, left) {
         if (tl_monotype_is_ellipsis(left.v[i]) || tl_monotype_is_variadic(left.v[i])) goto success;
-        if (i + 1 < right.size && (tl_monotype_is_ellipsis(right.v[i]) || tl_monotype_is_variadic(right.v[i])))
+        if (i + 1 < right.size &&
+            (tl_monotype_is_ellipsis(right.v[i]) || tl_monotype_is_variadic(right.v[i])))
             goto success;
         if (i >= right.size || tl_type_subs_unify_mono(subs, left.v[i], right.v[i], cb, user, seen, dir)) {
             if (cb) cb(user, lhs, rhs);

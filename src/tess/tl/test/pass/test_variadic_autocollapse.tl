@@ -6,7 +6,7 @@
 #import <Hash.tl>
 
 concat_all(args: ...ToString) -> String {
-    result := String.empty()
+    result   := String.empty()
     i: CSize := 0
     while i < args.size, i += 1 {
         result.&.push(args.v.[i])
@@ -32,7 +32,7 @@ main() {
     if !s2.is_empty() { c_exit(2) }
 
     hello := s"hello"
-    s3 := concat_all(hello, 99)
+    s3    := concat_all(hello, 99)
     if !s3.eq_cstr("hello99") { c_exit(3) }
 
     // Bare ...Hash works

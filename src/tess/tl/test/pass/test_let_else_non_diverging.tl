@@ -14,7 +14,7 @@ _test_match_path() {
 
 _no_match_helper() {
     val: MyOption.T[CInt] := MyOption.MyNone
-    s:   MySome             := val else { 99 }
+    s:   MySome           := val else { 99 }
     s.v + 1
 }
 
@@ -36,7 +36,7 @@ _test_match_continuation() {
 
 _test_diverging_still_works() {
     val: MyOption.T[CInt] := MyOption.MyNone
-    s:   MySome             := val else { return 0 }
+    s:   MySome           := val else { return 0 }
     1
 }
 

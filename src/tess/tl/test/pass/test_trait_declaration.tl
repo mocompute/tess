@@ -8,7 +8,7 @@ Comparable[T]: {
 // Trait with multiple functions
 Printable[T]: {
     to_string(a: T) -> CString
-    print(a: T)     -> CInt
+    print    (a: T) -> CInt
 }
 
 // Trait with inheritance (single parent)

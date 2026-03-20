@@ -16,8 +16,8 @@ big() -> CDouble {
 }
 
 main() {
-    d            := big()
-    f:      CFloat    := d
-    result: CInt := f
+    d              := big()
+    f:      CFloat := d
+    result: CInt   := f
     result
 }

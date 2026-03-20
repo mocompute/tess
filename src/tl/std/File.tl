@@ -542,7 +542,7 @@ relative(alloc, from_dir, to_path) {
     // Build relative path: ".." for each remaining from_part, then remaining to_parts
     result     := Array.empty[String]()
     ups: CSize := from_parts.size - common
-    u:   CSize   := 0
+    u:   CSize := 0
     while u < ups, u += 1 {
         Array.push(result.&, alloc, s"..")
     }
@@ -568,7 +568,7 @@ is_absolute(path) {
     // Windows drive letter: C:\ or C:/
     if n < 3 { return false }
     second: Some := path.char_at(1) else { return false }
-    third:  Some  := path.char_at(2) else { return false }
+    third:  Some := path.char_at(2) else { return false }
     second.v == ':' && _is_sep(third.v)
 }
 
@@ -684,10 +684,10 @@ read_line(self, alloc) {
 
     // Read characters into a growable buffer
     buf:      CArray[CChar, 256] := void
-    buf_ptr:  Ptr[CChar]     := buf
+    buf_ptr:  Ptr[CChar]         := buf
     len:      CSize              := 0
     cap:      CSize              := 256
-    heap_buf: Ptr[CChar]    := null
+    heap_buf: Ptr[CChar]         := null
 
     while ch != c_EOF {
         c: CChar := ch

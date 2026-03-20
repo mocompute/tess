@@ -1146,8 +1146,8 @@ static void register_variadic_symbol(parser *self, str base_name, str mangled, u
 // Detect whether the last parameter has a variadic annotation (...TraitName),
 // compute arity, mangle the name, and register the variadic symbol if found.
 // Returns 1 if variadic, 0 otherwise. *out_arity receives the mangled arity.
-static int detect_and_register_variadic(parser *self, ast_node *name,
-                                        ast_node_sized params, u8 *out_arity) {
+static int detect_and_register_variadic(parser *self, ast_node *name, ast_node_sized params,
+                                        u8 *out_arity) {
     int is_variadic = 0;
     u8  n_fixed     = (u8)params.size;
 
@@ -1219,9 +1219,8 @@ int toplevel_defun(parser *self) {
 
     ast_node *body = create_body(self, exprs, defers);
 
-    u8  arity;
-    int is_variadic = detect_and_register_variadic(self, name,
-                        (ast_node_sized)array_sized(params), &arity);
+    u8        arity;
+    int is_variadic = detect_and_register_variadic(self, name, (ast_node_sized)array_sized(params), &arity);
 
     mangle_name(self, name);
 
@@ -1280,7 +1279,7 @@ int toplevel_forward(parser *self) {
     // Get arity from the arrow's parameter tuple
     ast_node_sized params = ast_node_sized_from_ast_array_const(arrow->arrow.left);
 
-    u8 arity;
+    u8             arity;
     detect_and_register_variadic(self, name, params, &arity);
 
     mangle_name(self, name);

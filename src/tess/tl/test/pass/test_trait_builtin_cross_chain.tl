@@ -78,19 +78,19 @@ main() {
     // --- Pointer dereference then by-value dispatch ---
     // Ensures widening works on the dereferenced value, not on the pointer itself
 
-    v:  CInt16       := 10
+    v:  CInt16      := 10
     vp: Ptr[CInt16] := v.&
     error += if show(vp.*) == 1 { 0 } else { 1 }
 
-    w:  CUInt32       := 20
+    w:  CUInt32      := 20
     wp: Ptr[CUInt32] := w.&
     error += if show(wp.*) == 2 { 0 } else { 1 }
 
-    x:  CChar       := 65
+    x:  CChar      := 65
     xp: Ptr[CChar] := x.&
     error += if show(xp.*) == 1 { 0 } else { 1 }
 
-    y:  CSize       := 42
+    y:  CSize      := 42
     yp: Ptr[CSize] := y.&
     error += if show(yp.*) == 2 { 0 } else { 1 }
 

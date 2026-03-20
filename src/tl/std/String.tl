@@ -158,9 +158,9 @@ _buf(s) {
 }
 
 _make_tag_len(n) {
-    tag:    CSize   := _STR_SMALL_TAG
-    r:      CSize     := ((n & 0x0F) << 4) | tag
-    result: Byte := r
+    tag:    CSize := _STR_SMALL_TAG
+    r:      CSize := ((n & 0x0F) << 4) | tag
+    result: Byte  := r
     result
 }
 
@@ -181,7 +181,7 @@ _init_small(src, n) {
 _init_big(alloc, src, n) {
     buf: Ptr[CChar] := alloc->malloc(alloc, n + 1)
     if buf == null { _tl_fatal_("String: out of memory") }
-    if n > 0       { c_memcpy(buf, src, n)               }
+    if n > 0 { c_memcpy(buf, src, n) }
     String(big = _Big(len = n, buf = buf))
 }
 
@@ -207,7 +207,7 @@ from_bytes(s, n) {
 
 from_cstr(alloc, s) {
     n := c_strlen(s)
-    from_bytes   (alloc, s, n)
+    from_bytes (alloc, s, n)
 }
 
 from_cstr(s: Ptr[Const[CChar]]) {
@@ -219,7 +219,7 @@ from_literal(s) {
 }
 
 copy(alloc, s) {
-    n := len  (s)
+    n := len (s)
     p := _buf (s.&)
     from_bytes(alloc, p, n)
 }
@@ -328,7 +328,7 @@ cmp(a, b) {
     pa      := _buf(a.&)
     pb      := _buf(b.&)
     min_len := if la < lb { la } else { lb }
-    if min_len > 0        {
+    if min_len > 0 {
         r := c_memcmp(pa, pb, min_len)
         if r != 0 { return r }
     }
@@ -339,7 +339,7 @@ starts_with(s, prefix) {
     sn := len(s)
     pn := len(prefix)
     if pn > sn { return false }
-    if pn == 0 { return true  }
+    if pn == 0 { return true }
     sp := _buf(s.&)
     pp := _buf(prefix.&)
     c_memcmp(sp, pp, pn) == 0
@@ -349,7 +349,7 @@ ends_with(s, suffix) {
     sn := len(s)
     xn := len(suffix)
     if xn > sn { return false }
-    if xn == 0 { return true  }
+    if xn == 0 { return true }
     sp               := _buf(s.&)
     tail: Ptr[CChar] := Unsafe.pointer_add(sp, sn - xn)
     xp               := _buf(suffix.&)
@@ -376,7 +376,7 @@ eq_cstr(s, cs: CString) {
     sn := len(s)
     cn := c_strlen(cs)
     if sn != cn { return false }
-    if sn == 0  { return true  }
+    if sn == 0 { return true }
     sp := _buf(s.&)
     c_memcmp(sp, cs, sn) == 0
 }
@@ -386,14 +386,14 @@ eq_cstr(s, cs: CString) {
 
 _cat_impl(alloc: Ptr[Allocator], bufs: Ptr[Ptr[CChar]], lens: Ptr[CSize], count: CSize) {
     total: CSize := 0
-    i:     CSize     := 0
+    i:     CSize := 0
     while i < count, i += 1 { total += lens.[i] }
 
     if total <= _STR_MAX_SMALL {
         s               := String(ss = _Small(buf = void, tag_len = _make_tag_len(total)))
         dst: Ptr[CChar] := s.ss.buf
         off: CSize      := 0
-        j:   CSize        := 0
+        j:   CSize      := 0
         while j < count, j += 1 {
             if lens.[j] > 0 {
                 d: Ptr[CChar] := Unsafe.pointer_add(dst, off)
@@ -407,7 +407,7 @@ _cat_impl(alloc: Ptr[Allocator], bufs: Ptr[Ptr[CChar]], lens: Ptr[CSize], count:
     buf: Ptr[CChar] := alloc->malloc(alloc, total + 1)
     if buf == null { _tl_fatal_("String: out of memory") }
     off: CSize := 0
-    j:   CSize   := 0
+    j:   CSize := 0
     while j < count, j += 1 {
         if lens.[j] > 0 {
             d: Ptr[CChar] := Unsafe.pointer_add(buf, off)
@@ -536,7 +536,7 @@ index_of(s, needle) {
     nn       := len(needle)
     i: CSize := 0
     if nn == 0 { return Some(i) }
-    if nn > sn { return None    }
+    if nn > sn { return None }
     sp := _buf(s.&)
     np := _buf(needle.&)
     while i <= sn - nn, i += 1 {
@@ -550,7 +550,7 @@ last_index_of(s, needle) {
     sn := len(s)
     nn := len(needle)
     if nn == 0 { return Some(sn) }
-    if nn > sn { return None     }
+    if nn > sn { return None }
     sp       := _buf(s.&)
     np       := _buf(needle.&)
     i: CSize := sn - nn + 1
@@ -578,7 +578,7 @@ count(s, needle) {
     sn := len(s)
     nn := len(needle)
     if nn == 0 { _tl_fatal_("String.count: empty needle") }
-    if nn > sn { return 0                                 }
+    if nn > sn { return 0 }
     sp       := _buf(s.&)
     np       := _buf(needle.&)
     c: CSize := 0
@@ -717,7 +717,7 @@ repeat(alloc, s, count) {
         result          := String(ss = _Small(buf = void, tag_len = _make_tag_len(total)))
         dst: Ptr[CChar] := result.ss.buf
         off: CSize      := 0
-        i:   CSize        := 0
+        i:   CSize      := 0
         while i < count, i += 1 {
             d: Ptr[CChar] := Unsafe.pointer_add(dst, off)
             c_memcpy(d, sp, sn)
@@ -729,7 +729,7 @@ repeat(alloc, s, count) {
     buf: Ptr[CChar] := alloc->malloc(alloc, total + 1)
     if buf == null { _tl_fatal_("String.repeat: out of memory") }
     off: CSize := 0
-    i:   CSize   := 0
+    i:   CSize := 0
     while i < count, i += 1 {
         d: Ptr[CChar] := Unsafe.pointer_add(buf, off)
         c_memcpy(d, sp, sn)
@@ -746,7 +746,7 @@ replace(alloc, s, old, new_s) {
     sn := len(s)
     on := len(old)
     if on == 0 { _tl_fatal_("String.replace: empty search string") }
-    if on > sn { return copy(alloc, s)                             }
+    if on > sn { return copy(alloc, s) }
     nn := len(new_s)
     sp := _buf(s.&)
     op := _buf(old.&)
@@ -763,7 +763,7 @@ replace(alloc, s, old, new_s) {
     buf: Ptr[CChar] := alloc->malloc(alloc, total + 1)
     if buf == null { _tl_fatal_("String.replace: out of memory") }
     off: CSize := 0
-    j:   CSize   := 0
+    j:   CSize := 0
     while j < sn {
         if j <= sn - on {
             candidate: Ptr[CChar] := Unsafe.pointer_add(sp, j)
@@ -851,7 +851,7 @@ split(alloc, s, delimiter) {
     sp           := _buf(s.&)
     dp           := _buf(delimiter.&)
     start: CSize := 0
-    i:     CSize     := 0
+    i:     CSize := 0
     while i <= sn - dn, i += 1 {
         candidate: Ptr[CChar] := Unsafe.pointer_add(sp, i)
         if c_memcmp(candidate, dp, dn) == 0 {
@@ -865,7 +865,7 @@ split(alloc, s, delimiter) {
 
     // Push remaining segment
     src: Ptr[CChar] := Unsafe.pointer_add(sp, start)
-    part            := from_bytes                   (alloc, src, sn - start)
+    part            := from_bytes (alloc, src, sn - start)
 
     result.push(alloc, part)
     result
@@ -876,7 +876,7 @@ split(s, delimiter) {
 }
 
 join(alloc, sep, arr) {
-    if arr.size == 0 { return empty()                 }
+    if arr.size == 0 { return empty() }
     if arr.size == 1 { return copy(alloc, arr.get(0)) }
 
     sn := len (sep)
@@ -884,7 +884,7 @@ join(alloc, sep, arr) {
 
     // Calculate total length
     total: CSize := 0
-    i:     CSize     := 0
+    i:     CSize := 0
     while i < arr.size, i += 1 {
         total += len(arr.get(i))
     }
@@ -897,7 +897,7 @@ join(alloc, sep, arr) {
         result          := String(ss = _Small(buf = void, tag_len = _make_tag_len(total)))
         dst: Ptr[CChar] := result.ss.buf
         off: CSize      := 0
-        j:   CSize        := 0
+        j:   CSize      := 0
         while j < arr.size, j += 1 {
             elem := arr.get(j)
             en   := len(elem)
@@ -919,7 +919,7 @@ join(alloc, sep, arr) {
     buf: Ptr[CChar] := alloc->malloc(alloc, total + 1)
     if buf == null { _tl_fatal_("String.join: out of memory") }
     off: CSize := 0
-    j:   CSize   := 0
+    j:   CSize := 0
     while j < arr.size, j += 1 {
         elem := arr.get(j)
         en   := len(elem)

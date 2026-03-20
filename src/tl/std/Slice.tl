@@ -20,7 +20,7 @@ Iter[T]: {
     index: CSize,
 }
 
-iter_init[T]  (s: Ptr[Slice[T]]) -> Iter[T]
+iter_init[T]  (s: Ptr[Slice[T]])   -> Iter[T]
 iter_ptr[T]   (iter: Ptr[Iter[T]]) -> Ptr[T]
 iter_value[T] (iter: Ptr[Iter[T]]) -> T
 iter_cond[T]  (iter: Ptr[Iter[T]]) -> Bool
@@ -28,8 +28,8 @@ iter_update[T](iter: Ptr[Iter[T]]) -> Void
 iter_deinit[T](iter: Ptr[Iter[T]]) -> Void
 
 iter_init  (s)    { Iter(v = s->v, size = s->size, index = 0) }
-iter_ptr   (iter) { iter->v.[iter->index].&                    }
-iter_value (iter) { iter->v.[iter->index]                      }
-iter_cond  (iter) { iter->index < iter->size                   }
-iter_update(iter) { iter->index = iter->index + 1              }
-iter_deinit(iter) {                                            }
+iter_ptr   (iter) { iter->v.[iter->index].&                   }
+iter_value (iter) { iter->v.[iter->index]                     }
+iter_cond  (iter) { iter->index < iter->size                  }
+iter_update(iter) { iter->index = iter->index + 1             }
+iter_deinit(iter) {                                           }

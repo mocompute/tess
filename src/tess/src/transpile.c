@@ -1320,7 +1320,7 @@ static str generate_funcall_variadic(transpile *self, ast_node const *node, eval
     tl_monotype *type = env_lookup(self, name);
     assert(type && tl_monotype_is_list(type));
 
-    str res = generate_funcall_result(self, type);
+    str res        = generate_funcall_result(self, type);
 
     u8  n_fixed    = node->named_application.n_fixed_args;
     u32 n_total    = node->named_application.n_arguments;
@@ -1333,7 +1333,7 @@ static str generate_funcall_variadic(transpile *self, ast_node const *node, eval
 
     tl_monotype *slice_param = params.v[n_fixed]; // Slice[ElemType]
     // Slice[T] = { v: Ptr[T], size: CSize }, so args.v[0] = Ptr[T]; extract T.
-    tl_monotype *elem_type   = tl_monotype_ptr_target(slice_param->cons_inst->args.v[0]);
+    tl_monotype *elem_type = tl_monotype_ptr_target(slice_param->cons_inst->args.v[0]);
 
     // Generate fixed args
     str_array args_res = {.alloc = self->transient};
@@ -1357,9 +1357,9 @@ static str generate_funcall_variadic(transpile *self, ast_node const *node, eval
             tl_monotype    *arg_type = arg_node->type ? arg_node->type->type : null;
             str             arg_val  = generate_expr(self, arg_type, arg_node, ctx);
 
-            str impl_fn = (node->named_application.variadic_impl_fns)
-                            ? node->named_application.variadic_impl_fns[i]
-                            : str_empty();
+            str             impl_fn  = (node->named_application.variadic_impl_fns)
+                                         ? node->named_application.variadic_impl_fns[i]
+                                         : str_empty();
 
             // Emit: ElemType tmpN = impl_fn(NULL, argN);
             str tmp = next_res(self);
@@ -1387,8 +1387,8 @@ static str generate_funcall_variadic(transpile *self, ast_node const *node, eval
         cat(self, S("};\n"));
 
         // Construct Slice: (SliceType){arr_name, count}
-        slice_arg = str_fmt(self->transient, "(%s){%s, %u}", str_cstr(&slice_type_c),
-                            str_cstr(&arr_name), n_variadic);
+        slice_arg = str_fmt(self->transient, "(%s){%s, %u}", str_cstr(&slice_type_c), str_cstr(&arr_name),
+                            n_variadic);
     } else {
         // Zero variadic args: (SliceType){NULL, 0}
         slice_arg = str_fmt(self->transient, "(%s){NULL, 0}", str_cstr(&slice_type_c));

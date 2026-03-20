@@ -5,8 +5,8 @@
 // the target type's range must abort.
 
 main() {
-    a:      Int       := 100000
-    b:      CShort    := a              // CShort max is 32767 — this must abort
-    result: CInt := b
+    a:      Int    := 100000
+    b:      CShort := a                 // CShort max is 32767 — this must abort
+    result: CInt   := b
     result
 }

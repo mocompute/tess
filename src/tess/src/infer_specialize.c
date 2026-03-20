@@ -933,22 +933,19 @@ static str find_overload_func(tl_infer *self, tl_monotype *type, char const *fun
     // Use transient arena for the lookup key to avoid leaking on miss.
     if (!str_is_empty(module)) {
         str lookup = build_overload_func_name(self->transient, module, func_name, arity);
-        if (ast_node_str_map_get(self->toplevels, lookup))
-            return str_copy(self->arena, lookup);
+        if (ast_node_str_map_get(self->toplevels, lookup)) return str_copy(self->arena, lookup);
     }
     // Family fallback: standalone builtin types (CChar, CSize, CPtrDiff) fall back to their
     // canonical family module (Int, UInt).
     str family = builtin_trait_family_module(type);
     if (!str_is_empty(family)) {
         str lookup = build_overload_func_name(self->transient, family, func_name, arity);
-        if (ast_node_str_map_get(self->toplevels, lookup))
-            return str_copy(self->arena, lookup);
+        if (ast_node_str_map_get(self->toplevels, lookup)) return str_copy(self->arena, lookup);
     }
     // CString fallback: Ptr[CChar] (= CString) checks the "CString" module.
     if (tl_monotype_is_ptr_to_char(type)) {
         str lookup = build_overload_func_name(self->transient, S("CString"), func_name, arity);
-        if (ast_node_str_map_get(self->toplevels, lookup))
-            return str_copy(self->arena, lookup);
+        if (ast_node_str_map_get(self->toplevels, lookup)) return str_copy(self->arena, lookup);
     }
     return str_empty();
 }
@@ -1113,7 +1110,6 @@ static void rewrite_operator_overloads(void *ctx, ast_node *node) {
         ast_node **args = alloc_malloc(self->arena, sizeof(ast_node *));
         args[0]         = operand;
         rewrite_op_to_nfa(self, node, full_name, args, 1);
-
     }
 }
 
@@ -1339,15 +1335,15 @@ static int check_trait_bound_(tl_infer *self, ast_node *toplevel, tl_monotype *c
     // Branch on whether both the type AND the trait are builtins. Compiler-provided traits
     // (Add, Eq, Hash, etc.) on builtin types use the hardcoded capability table. All other
     // combinations (user-defined traits on builtins, any trait on user types) use function lookup.
-    int is_builtin_type  = !is_user_defined_type(concrete_type) || tl_monotype_is_ptr_to_char(concrete_type);
+    int is_builtin_type = !is_user_defined_type(concrete_type) || tl_monotype_is_ptr_to_char(concrete_type);
     int is_builtin_trait = !trait->source_node;
 
     if (is_builtin_type && is_builtin_trait) {
         // Built-in traits on built-in types: check intrinsic support per signature.
-        int is_integer  = tl_monotype_is_integer_convertible(concrete_type);
-        int is_float    = tl_monotype_is_float_convertible(concrete_type);
-        int is_numeric  = is_integer || is_float;
-        int is_bool     = str_eq(concrete_type->cons_inst->def->name, S("Bool"));
+        int is_integer = tl_monotype_is_integer_convertible(concrete_type);
+        int is_float   = tl_monotype_is_float_convertible(concrete_type);
+        int is_numeric = is_integer || is_float;
+        int is_bool    = str_eq(concrete_type->cons_inst->def->name, S("Bool"));
         for (u32 i = 0; i < trait->sigs.size; i++) {
             str fn = trait->sigs.v[i].name;
             int ok = 0;
@@ -1428,8 +1424,7 @@ static int check_trait_bound_(tl_infer *self, ast_node *toplevel, tl_monotype *c
     return 0;
 }
 
-int check_trait_bound(tl_infer *self, ast_node *toplevel, tl_monotype *concrete_type,
-                      str trait_name) {
+int check_trait_bound(tl_infer *self, ast_node *toplevel, tl_monotype *concrete_type, str trait_name) {
     return check_trait_bound_(self, toplevel, concrete_type, trait_name, 0);
 }
 
@@ -2061,12 +2056,12 @@ int specialize_applications_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_n
         // Variadic call: specialize the trait function implementation for each variadic arg.
         // This ensures the specialized function exists for the transpiler to emit trait fn calls.
         if (node->named_application.is_variadic_call) {
-            str func_name = ast_node_str(node->named_application.name);
-            u8  n_fixed   = node->named_application.n_fixed_args;
-            u32 n_total   = node->named_application.n_arguments;
-            u32 n_va      = n_total - n_fixed;
+            str       func_name = ast_node_str(node->named_application.name);
+            u8        n_fixed   = node->named_application.n_fixed_args;
+            u32       n_total   = node->named_application.n_arguments;
+            u32       n_va      = n_total - n_fixed;
 
-            ast_node *func_let = toplevel_get(self, func_name);
+            ast_node *func_let  = toplevel_get(self, func_name);
             if (func_let && ast_node_is_let(func_let) && func_let->let.is_variadic) {
                 ast_node *last_param = func_let->let.parameters[func_let->let.n_parameters - 1];
                 ast_node *ann        = last_param->symbol.annotation;
@@ -2078,26 +2073,24 @@ int specialize_applications_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_n
 
                         // Extract elem_type from Slice param (last param of function's arrow).
                         // Slice[T] = { v: Ptr[T], size: CSize }, so args.v[0] = Ptr[T].
-                        tl_polytype *func_poly = tl_type_env_lookup(self->env, func_name);
+                        tl_polytype *func_poly  = tl_type_env_lookup(self->env, func_name);
                         tl_monotype *func_arrow = func_poly ? func_poly->type : null;
                         tl_monotype *elem_type  = null;
                         tl_monotype *slice_mon  = null;
                         if (func_arrow && tl_monotype_is_arrow(func_arrow)) {
                             tl_monotype      *ptuple = func_arrow->list.xs.v[0];
                             tl_monotype_sized pms    = ptuple->list.xs;
-                            slice_mon = (pms.size > 0) ? pms.v[pms.size - 1] : null;
+                            slice_mon                = (pms.size > 0) ? pms.v[pms.size - 1] : null;
                             if (slice_mon && tl_monotype_is_inst(slice_mon) &&
                                 slice_mon->cons_inst->args.size > 0 &&
                                 tl_monotype_is_ptr(slice_mon->cons_inst->args.v[0]))
-                                elem_type =
-                                  tl_monotype_ptr_target(slice_mon->cons_inst->args.v[0]);
+                                elem_type = tl_monotype_ptr_target(slice_mon->cons_inst->args.v[0]);
                         }
 
                         if (elem_type) {
                             // Ensure Slice[ElemType] is specialized as a C struct.
                             // Pass the concrete field types from the arrow's Slice instance.
-                            specialize_type_constructor(self, S("Slice"),
-                                                        slice_mon->cons_inst->args, null);
+                            specialize_type_constructor(self, S("Slice"), slice_mon->cons_inst->args, null);
 
                             node->named_application.variadic_impl_fns =
                               alloc_malloc(self->arena, n_va * sizeof(str));
@@ -2111,18 +2104,18 @@ int specialize_applications_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_n
 
                                 str impl = str_empty();
                                 if (arg_type && tl_monotype_is_inst(arg_type))
-                                    impl = find_overload_func(self, arg_type, str_cstr(&sig->name),
-                                                              sig->arity);
+                                    impl =
+                                      find_overload_func(self, arg_type, str_cstr(&sig->name), sig->arity);
 
                                 if (!str_is_empty(impl)) {
                                     // Build callsite arrow: (arg_type) -> elem_type
                                     tl_monotype **param_vs =
                                       alloc_malloc(self->arena, sizeof(tl_monotype *));
-                                    param_vs[0]          = arg_type;
-                                    tl_monotype *ptup    = tl_monotype_create_tuple(
+                                    param_vs[0]       = arg_type;
+                                    tl_monotype *ptup = tl_monotype_create_tuple(
                                       self->arena, (tl_monotype_sized){.v = param_vs, .size = 1});
-                                    tl_monotype *va_arrow = tl_type_registry_create_arrow(
-                                      self->registry, ptup, elem_type);
+                                    tl_monotype *va_arrow =
+                                      tl_type_registry_create_arrow(self->registry, ptup, elem_type);
 
                                     str spec = specialize_arrow(self, traverse_ctx, impl, va_arrow,
                                                                 (tl_monotype_sized){0});

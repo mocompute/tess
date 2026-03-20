@@ -9,7 +9,7 @@ main() {
     floats.[0].x = 0.5
 
     floats_ptr: Ptr[Bar] := floats
-    ints:       Ptr[Foo]       := floats_ptr
+    ints:       Ptr[Foo] := floats_ptr
     c_printf("val = %lli\n", ints.[0].x)
     0
 }

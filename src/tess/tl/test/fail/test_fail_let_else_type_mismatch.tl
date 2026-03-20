@@ -7,6 +7,6 @@ T[a]: | MySome { v: a }
 
 main() {
     val: MyOption.T[CInt] := MyOption.MyNone
-    s:   MySome             := val else { 3.14 }
+    s:   MySome           := val else { 3.14 }
     0
 }
