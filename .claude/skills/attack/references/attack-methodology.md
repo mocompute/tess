@@ -28,9 +28,31 @@ Use file paths to identify the compiler phase:
 
 If the commit touches `.tl` standard library code, also read the relevant file to understand the API being changed.
 
+## Surveying Existing Coverage
+
+Before devising attacks, check what the test suite already covers for the feature area touched by this commit. This project has an extensive test suite — the goal is to find genuinely uncovered angles, not duplicate existing tests.
+
+1. **Tests included in the commit itself**: The commit may add or modify tests. Read them to understand what the author already covered.
+
+2. **Related tests by feature keyword**: Search for existing tests that exercise the same feature. Use the feature name, type name, or language construct as search terms:
+   ```bash
+   ls src/tess/tl/test/pass/test_*<feature>*.tl 2>/dev/null
+   ls src/tess/tl/test/fail/test_fail_*<feature>*.tl 2>/dev/null
+   ```
+   Read the most relevant matches (at least skim them) to understand what's already tested.
+
+3. **Existing adversarial tests for this commit**:
+   ```bash
+   ls src/tess/tl/test/*/test_*adversarial_<short_hash>* 2>/dev/null
+   ```
+
+Build a mental picture of what IS covered so you can target what ISN'T. If the existing tests cover basic usage, target feature interactions. If they cover happy paths, target error paths. If they test single features, target combinations.
+
 ## Devising Three Adversarial Attacks
 
 Come up with three different test ideas that target plausible weaknesses in the changed code. The goal is to find real bugs, not just write more tests — think like an attacker trying to break the code.
+
+**Each attack must cover a genuinely different angle from existing tests.** If an existing test already exercises the same edge case or combination, don't propose it — find something the test suite doesn't cover yet.
 
 Good adversarial angles:
 
@@ -46,7 +68,8 @@ Good adversarial angles:
 For each attack, write:
 1. A one-line description of what it tests
 2. Why it might break (what assumption in the code it challenges)
-3. Whether it's **should_pass** (valid code that should compile and run) or **should_fail** (invalid code the compiler should reject)
+3. Why it isn't already covered by existing tests
+4. Whether it's **should_pass** (valid code that should compile and run) or **should_fail** (invalid code the compiler should reject)
 
 Then **randomly pick one** to implement. Don't pick the easiest or most obvious — a random choice ensures coverage diversity over repeated invocations.
 
