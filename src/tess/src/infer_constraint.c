@@ -951,6 +951,8 @@ static int check_unknown_type_ann(tl_infer *self, traverse_ctx *ctx, ast_node_si
         tl_polytype *in_reg = tl_type_registry_get_nullary(self->registry, name);
         if (in_reg) return 0;
 
+        if (is_c_symbol(name)) return 0;
+
         hashmap     *ta    = ctx ? ctx->type_arguments : self->load_type_arguments;
         tl_monotype *in_ta = ta ? str_map_get_ptr(ta, name) : null;
         if (in_ta) return 0;

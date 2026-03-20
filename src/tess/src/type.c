@@ -1192,6 +1192,18 @@ static tl_monotype *tl_type_registry_parse_type_(tl_type_registry               
             goto top_success;
         }
 
+        // Unknown c_ prefixed names are opaque C types — auto-register.
+        // Only when the symbol has no annotation: annotated c_ symbols are
+        // function/variable declarations (e.g. c_fclose(...) -> CInt), not types.
+        if (is_c_symbol(name) && !node->symbol.annotation) {
+            make_nullary_inst(self, name);
+            poly = tl_type_registry_get_nullary(self, name);
+            if (poly) {
+                result = poly->type;
+                goto top_success;
+            }
+        }
+
         // or else is it a type argument previously defined?
         result = get_type_argument(ctx, name);
         if (result) {
