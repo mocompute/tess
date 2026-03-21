@@ -2253,8 +2253,9 @@ static int init_package(state *self) {
     fprintf(f, "// export(ModuleOne, ModuleTwo, ...)");
     fclose(f);
 
-    // Scaffold src/ directory and starter main program
+    // Scaffold src/ and libs/ directories and starter main program
     platform_mkdir("src");
+    platform_mkdir("libs");
     str main_path = str_init_static("src/main.tl");
     if (!file_exists(main_path)) {
         f = fopen("src/main.tl", "wb");
