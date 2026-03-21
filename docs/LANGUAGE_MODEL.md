@@ -7,7 +7,7 @@ and scoping work, and why the language behaves the way it does.
 You don't need this document to write Tess. The [Language
 Reference](LANGUAGE_REFERENCE.md) covers the practical syntax. But if you're wondering
 *why* `:=` works the way it does, why there are two assignment operators, or what
-"let-else" really means, this is the right place.
+"variant binding" really means, this is the right place.
 
 ## Expressions and Values
 
@@ -204,12 +204,14 @@ ptr: Ptr[Byte] := some_other_ptr     // pointer cast
 Every conversion point in Tess is a `:=` binding with a type annotation, making casts
 visually prominent and easy to find.
 
-## Let-Else
+## Variant Binding
 
-With binding expressions understood, **let-else** is a natural extension.
+Also known as let-else in ML-family languages.
 
-A let-else binding tries to match a value against a tagged union variant. If the match
-succeeds, the unwrapped value is bound for the rest of the scope (the "in" part). If it
+With binding expressions understood, **variant binding** is a natural extension.
+
+A variant binding tries to match a value against a tagged union variant. If the match
+succeeds, the unwrapped value is bound for the rest of the scope. If it
 fails, the `else` block executes. The else block may either **diverge** (`return`,
 `break`, `continue`) or **produce a fallback value**:
 
@@ -228,21 +230,22 @@ s: Some := val else { 0 }
 When the else block diverges, `s` is guaranteed to be bound for the rest of the scope —
 the body (everything after the binding) only runs when the match succeeded.
 
-When the else block produces a value, the overall let-else expression evaluates to that
-value if the match fails, and the continuation after the let-else is not reached.
+When the else block produces a value, the overall variant binding expression evaluates to
+that value if the match fails, and the continuation after the variant binding is not
+reached.
 
-The let-else pattern replaces a common `when` (pattern match) idiom where you only care
+The variant binding replaces a common `when` (pattern match) idiom where you only care
 about one variant:
 
 ```tl
-// Without let-else: the unwrapped value is trapped inside the arm
+// Without variant binding: the unwrapped value is trapped inside the arm
 when val {
     s: Some { use(s.v) }
     _: None { return 0 }
 }
 // can't use s here — it was scoped to the when arm
 
-// With let-else: the unwrapped value is available in the surrounding scope
+// With variant binding: the unwrapped value is available in the surrounding scope
 s: Some := val else { return 0 }
 use(s.v)   // s is in scope for the rest of the block
 ```
@@ -455,7 +458,7 @@ can also take a custom predicate function instead of using `==`.
 scrutinee alone — see the [Language
 Reference](LANGUAGE_REFERENCE.md#explicit-type-annotation-case-expression) for details.
 
-### Arm scoping and let-else
+### Arm scoping and variant binding
 
 The scoping of `when` arms creates a practical problem. If you only care about one
 variant and want its value for the rest of the function, `when` traps it inside the arm:
@@ -468,7 +471,7 @@ when val {
 // s is gone — it was scoped to the arm
 ```
 
-Let-else solves this by creating the binding in the **enclosing** scope instead:
+Variant binding solves this by creating the binding in the **enclosing** scope instead:
 
 ```tl
 s: Some := val else { return 0 }
@@ -502,10 +505,10 @@ The core ideas:
   of the original scope.
 - **Pattern matching arms are scopes.** Each arm's binding is a binding expression whose
   body is the arm's block.
-- **Let-else extends binding expressions with pattern matching.** The binding succeeds or
-  the else block diverges, guaranteeing the name is always valid in the body. It exists
-  because `when` arms scope their bindings too tightly for the common "unwrap or bail
-  out" pattern.
+- **Variant binding extends binding expressions with pattern matching.** The binding
+  succeeds or the else block diverges, guaranteeing the name is always valid in the body.
+  It exists because `when` arms scope their bindings too tightly for the common "unwrap
+  or bail out" pattern.
 
 ## Further Reading
 

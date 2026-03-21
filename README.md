@@ -126,6 +126,7 @@ tess exe -o myapp    # standalone binary
 - [Type System](docs/TYPE_SYSTEM.md): inference, generics, and integer types
 - [Standard Library](docs/STANDARD_LIBRARY.md): Array, String, HashMap, and more
 - [Packages](docs/PACKAGES.md): creating and consuming `.tpkg` libraries
+- [Glossary](docs/GLOSSARY.md): definitions of Tess-specific terms
 
 ## Examples
 

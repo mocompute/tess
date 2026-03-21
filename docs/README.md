@@ -6,7 +6,7 @@ This directory contains technical documentation for the Tess programming languag
 
 | Document | Description |
 |----------|-------------|
-| [LANGUAGE_MODEL.md](LANGUAGE_MODEL.md) | Conceptual foundations: binding expressions, mutation, scoping, shadowing, and let-else |
+| [LANGUAGE_MODEL.md](LANGUAGE_MODEL.md) | Conceptual foundations: binding expressions, mutation, scoping, shadowing, and variant binding |
 | [LANGUAGE_REFERENCE.md](LANGUAGE_REFERENCE.md) | Language syntax reference covering modules, types, variables, functions, control flow, traits, operator overloading, and C interoperability |
 | [TYPE_SYSTEM.md](TYPE_SYSTEM.md) | Conceptual overview of the Hindley-Milner type system, type inference, and generics |
 | [SPECIALIZATION.md](SPECIALIZATION.md) | Deep dive into generic specialization (monomorphization) in the compiler |
@@ -15,6 +15,7 @@ This directory contains technical documentation for the Tess programming languag
 | [PACKAGES.md](PACKAGES.md) | Package system for distributing reusable `.tpkg` libraries |
 | [TAGGED_UNION_PARSER.md](TAGGED_UNION_PARSER.md) | Parser internals for tagged union variant construction and auto-wrapping |
 | [STANDARD_LIBRARY.md](STANDARD_LIBRARY.md) | Standard library API reference (Array, String, File, HashMap, Alloc, Unsafe, C bindings) |
+| [GLOSSARY.md](GLOSSARY.md) | Definitions of Tess-specific terms, with notes on conventional equivalents |
 | [FAQ.md](FAQ.md) | Historical background, motivations and miscellaneous |
 
 ## Suggested Reading Order

@@ -14,8 +14,8 @@ When generating or editing `.tl` code, follow these rules:
 - **Omit integer suffixes.** Write `0`, not `0zu`. Use suffixes only when inference is ambiguous.
 - **Use `Option` for absence, `Result` for errors.** Not null, not sentinel values.
 - **Use tagged unions for alternatives.** Not integer codes or boolean flags.
-- **`when`/`else` for multiple variants; let-else for a single expected variant.**
-- **Keep code flat.** Early returns and let-else instead of deep nesting.
+- **`when`/`else` for multiple variants; variant binding for a single expected variant.**
+- **Keep code flat.** Early returns and variant binding instead of deep nesting.
 - **`self` is the receiver.** `Ptr[T]` for mutating methods, `T` by value for read-only.
 - **Allocator overloads.** Provide explicit `Ptr[Allocator]` version + convenience version using default.
 - **Private helpers start with `_`.** Types are PascalCase, functions are snake_case.
@@ -243,7 +243,7 @@ when spec.kind {
 }
 ```
 
-Use **let-else** when a single variant is expected and all others should diverge or produce a fallback:
+Use a **variant binding** when a single variant is expected and all others should diverge or produce a fallback:
 
 ```tl
 s: Some := HashMap.get_copy(values, name) else { return 0 }
@@ -253,7 +253,7 @@ s: Some := HashMap.get_copy(values, name) else { return 0 }
 
 ### Keeping Code Flat
 
-Prefer early `return` and let-else over deep nesting:
+Prefer early `return` and variant binding over deep nesting:
 
 ```tl
 // Avoid: nesting pushes the main logic rightward
@@ -267,7 +267,7 @@ when _find_spec_long(self, name) {
     }
 }
 
-// Prefer: let-else keeps the main logic flat
+// Prefer: variant binding keeps the main logic flat
 si: Some := _find_spec_long(self, name) else {
     Array.push(errors, UnknownFlag(flag = arg))
     return

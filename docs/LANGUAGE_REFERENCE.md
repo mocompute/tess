@@ -1728,7 +1728,7 @@ n := v.the_int
 ```tl
 Shape : | Circle    { radius: Float }
         | Square    { length: Float }
-        | None
+        | Empty
 ```
 
 ### Construction
@@ -1739,7 +1739,7 @@ All construction forms return the tagged union type.
 
 ```tl
 s := Circle(2.0)              // returns Shape
-n := None()                   // returns Shape
+n := Empty()                  // returns Shape
 ```
 
 **Unscoped named:** Named arguments also return the tagged union:
@@ -1760,7 +1760,7 @@ s := Shape.Circle(2.0)       // returns Shape
 s := Shape.Circle(radius = 2.0)   // returns Shape
 ```
 
-**Bare None sugar:** Variants with no fields (like `None`) can omit the parentheses. Bare `None` is promoted to `None()` automatically. Since `None` carries no data, the type must be inferrable from context (type annotation, function return type, if/else branch, etc.):
+**Bare nullary variant sugar:** Variants with no fields (like `Empty` or `None`) can omit the parentheses. Bare `Empty` is promoted to `Empty()` automatically. Since nullary variants carry no data, the type must be inferrable from context (type annotation, function return type, if/else branch, etc.):
 
 ```tl
 empty: Option[Int] := None    // type annotation provides context
@@ -1784,6 +1784,7 @@ The `when` keyword provides tagged union pattern matching with type inference. T
 area := when s {
   c:  Circle { c.radius * c.radius * 3.14159  }
   sq: Square { sq.length * sq.length }
+  e:  Empty  { 0.0 }
 }
 ```
 
@@ -1794,7 +1795,7 @@ circle := Foo.Circle(2.0)
 area := when circle {
   c:  Circle { c.radius * c.radius * 3.14159 }
   sq: Square { sq.length * sq.length }
-  n:  None   { 0.0 }
+  e:  Empty  { 0.0 }
 }
 ```
 
@@ -1853,11 +1854,11 @@ when s.& {
 
 Use the `.&` suffix on the scrutinee to get pointers to each variant. This is the same syntax used to access mutable iterators with the `for` statement.
 
-### Let-else
+### Variant Binding
 
-> See [Language Model: Let-Else](LANGUAGE_MODEL.md#let-else) for why let-else exists and how it connects to binding expression scoping.
+Also known as let-else. See [Language Model: Variant Binding](LANGUAGE_MODEL.md#variant-binding) for how this connects to binding expression scoping.
 
-When you need a single variant's value for the rest of a scope, use let-else to unwrap it or diverge:
+When you need a single variant's value for the rest of a scope, use a variant binding to unwrap it or diverge:
 
 ```tl
 s: MySome := val else { return 0 }
@@ -1865,7 +1866,7 @@ s: MySome := val else { return 0 }
 s.v + 1
 ```
 
-The `else` block may either diverge (`return`, `break`, `continue`) or produce a value. When it produces a value, the overall expression evaluates to that value if the match fails — the continuation after let-else is not reached:
+The `else` block may either diverge (`return`, `break`, `continue`) or produce a value. When it produces a value, the overall expression evaluates to that value if the match fails — the continuation after the variant binding is not reached:
 
 ```tl
 // Diverging: exit the function if no match
@@ -1881,14 +1882,14 @@ s: MySome := val else { 0 }
 This avoids trapping the unwrapped value inside a `when` arm when subsequent code needs it:
 
 ```tl
-// Without let-else — value is trapped inside the arm
+// Without variant binding — value is trapped inside the arm
 when val {
     s: MySome { use(s.v) }
     n: MyNone { return 0 }
 }
 // can't use s here
 
-// With let-else — value available in the rest of the scope
+// With variant binding — value available in the rest of the scope
 s: MySome := val else { return 0 }
 use(s.v)
 ```
