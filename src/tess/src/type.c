@@ -1192,6 +1192,17 @@ static tl_monotype *tl_type_registry_parse_type_(tl_type_registry               
             goto top_success;
         }
 
+        // Bare generic type name (e.g. `Option` without type args in `Foo = Option`).
+        // Instantiate with fresh type variables so the alias generalizes correctly.
+        if (!node->symbol.annotation) {
+            tl_polytype *poly_generic = tl_type_registry_get(self, name);
+            if (poly_generic && tl_monotype_is_inst(poly_generic->type)
+                && !tl_polytype_is_nullary(poly_generic)) {
+                result = tl_polytype_instantiate(self->alloc, poly_generic, self->subs);
+                goto top_success;
+            }
+        }
+
         // Unknown c_ prefixed names are opaque C types — auto-register.
         // Only when the symbol has no annotation: annotated c_ symbols are
         // function/variable declarations (e.g. c_fclose(...) -> CInt), not types.

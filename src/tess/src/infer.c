@@ -631,7 +631,7 @@ void tl_infer_report_errors(tl_infer *self) {
         forall(i, self->errors) {
             tl_infer_error *err     = &self->errors.v[i];
             ast_node const *node    = err->node;
-            str             message = err->message;
+            str             message = str_is_empty(err->message) ? str_empty() : err->message;
 
             if (node) {
                 char const *tag = tl_error_tag_to_string(err->tag);
