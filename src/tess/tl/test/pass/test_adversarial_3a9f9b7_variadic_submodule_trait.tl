@@ -23,8 +23,8 @@ concat_descriptions(args: ...Util.Describe) -> String {
     result   := String.empty()
     i: CSize := 0
     while i < args.size, i += 1 {
-        if i > 0 { result.&.push(s",") }
-        result.&.push(args.v.[i])
+        if i > 0 { result.push(s",") }
+        result.push(args.v.[i])
     }
     result
 }

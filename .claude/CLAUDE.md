@@ -69,6 +69,7 @@ Rules for writing `.tl` code (inlined from `docs/TL_CODING_CONVENTIONS.md`):
 - **Run `tess fmt` before committing.**
 - **One module, one type.** Name the type the same as the module (or `T`). Callers use UFCS.
 - **Named fields in struct construction.** `ArgSpec(long_name = name, kind = FlagBool)`
+- **Implicit address-of in UFCS.** Write `arr.push(x)`, not `arr.&.push(x)` — the compiler automatically takes the address when UFCS dispatches a value to a `Ptr[T]` parameter.
 - **Full C-style operators.** `&`, `|`, `^`, `<<`, `>>`, `~` and compound forms (`<<=`, `>>=`, etc.) all work on integer types.
 - **`#ifc`/`#endc` for inline C.** Embeds raw C code in `.tl` files (used in `builtin.tl` for FFI primitives like hash functions).
 
@@ -82,6 +83,7 @@ These mistakes have caused repeated debugging sessions — avoid them:
 2. **Don't alias types over module names.** `Str = Str.Str` inside a module shadows the `Str` module. Auto-collapse handles bare `Str` in type positions.
 3. **`:=` vs `=` confusion.** `n: Int = 10` (reassignment to undeclared `n`) is NOT a binding — it causes confusing downstream errors. Use `n: Int := 10`.
 4. **`Hash` trait requires `#import <Hash.tl>`.** Unlike operator traits (compiler builtins), `Hash` is defined in the standard library. Any file using `.hash()` or `HashMap` must `#import <Hash.tl>`. The `Eq` trait and other operator traits remain compiler builtins in `infer.c`.
+5. **Don't use explicit `.&` in UFCS calls.** `arr.&.push(x)` works but is redundant — implicit address-of means `arr.push(x)` is sufficient when `push` expects `Ptr[T]`.
 
 ## Source Architecture
 

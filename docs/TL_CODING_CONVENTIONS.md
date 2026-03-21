@@ -22,6 +22,7 @@ When generating or editing `.tl` code, follow these rules:
 - **Run `tess fmt` before committing.**
 - **One module, one type.** Name the type the same as the module (or `T`). Callers use UFCS.
 - **Named fields in struct construction.** `ArgSpec(long_name = name, kind = FlagBool)`
+- **Implicit address-of in UFCS.** Write `arr.push(x)`, not `arr.&.push(x)` — the compiler automatically takes the address when UFCS dispatches a value to a `Ptr[T]` parameter.
 
 See the sections below for detailed explanations and examples.
 
