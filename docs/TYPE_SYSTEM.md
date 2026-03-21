@@ -365,7 +365,7 @@ fixed: CInt32 := some_cint_value      // Cross-chain: C-named → fixed-width
 size: CSize := some_uint_value        // Standalone: UInt → CSize
 ```
 
-The let-in annotation is the only syntax for explicit conversion — there is
+The declaration annotation is the only syntax for explicit conversion — there is
 no `as` keyword or cast function. This makes every conversion point visually
 prominent when scanning code.
 
@@ -412,7 +412,7 @@ a diagnostic message.
 
 ### Pointer Types
 
-Pointers can be explicitly cast using a let-in type annotation:
+Pointers can be explicitly cast using a declaration type annotation:
 ```tl
 p: Ptr[Int] := c_malloc(...)
 q: Ptr[Byte] := p   // Explicit pointer cast
@@ -447,7 +447,7 @@ Const stripping is also rejected through nested pointer levels:
 
 Const stripping is also rejected in struct constructor fields and return statements.
 
-**Explicit cast:** Const can be stripped using an annotated let binding:
+**Explicit cast:** Const can be stripped using an annotated declaration:
 
 ```tl
 mp: Ptr[Int] := const_ptr    // explicit cast, allowed
@@ -475,7 +475,7 @@ This is why the standard library `mem*` bindings (`c_memcpy`, `c_memmove`, `c_me
 ### Float/Integer Conversion
 
 `Int` and `Float` are not implicitly convertible. Conversion requires an
-explicit let-in type annotation (the same cast syntax used for integer
+explicit declaration type annotation (the same cast syntax used for integer
 narrowing and pointer casts):
 
 ```tl

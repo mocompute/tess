@@ -20,6 +20,8 @@ main() { 0 }
 
 The entry point is the `main` function in the `main` module.
 
+A source file may contain one or more modules.
+
 ## Modules and Imports
 
 ```tl
@@ -30,9 +32,41 @@ The entry point is the `main` function in the `main` module.
 
 Access module members with dot notation: `ModuleName.function()` or `ModuleName.Type`
 
+### Submodules
+
+A dotted module name declares a submodule:
+
+```tl
+#module Outer
+T: { value: Int }
+
+#module Outer.Inner
+U: { name: CString }
+```
+
+`Outer.Inner` is a submodule of `Outer`. Access its members as `Outer.Inner.U(...)`. Submodules are
+independent namespaces — the parent-child relationship is purely organizational. However, parent modules
+must be declared before their children:
+
+```tl
+// Error: Outer.Nested has not been declared
+#module Outer
+#module Outer.Nested.Inner
+```
+
+Each level must be declared in order:
+
+```tl
+#module Outer
+#module Outer.Nested
+#module Outer.Nested.Inner    // OK
+```
+
 ### One Module, One Type
 
-A module is the natural organisational unit for a single type and its associated functions. Operator overloads are resolved by looking up a function name and arity in the operand's module (e.g., `add` with arity 2 for `+`). Because function identity within a module is determined by name and arity — not parameter types — defining two types with same-signature operator overloads in the same module would create a name conflict. Instead, give each type its own module:
+A module typically defines a single type and its associated functions. Operators like `+` are resolved by
+looking up `add` in the operand's module, so two types with the same operator signatures in one module would
+conflict. Give each type its own module:
 
 ```tl
 // Good: separate modules for separate types
@@ -45,17 +79,21 @@ T : { x: Int, y: Int, z: Int }
 add(a: T, b: T) -> T { T(x = a.x + b.x, y = a.y + b.y, z = a.z + b.z) }
 ```
 
-This convention also makes [auto-collapse](#auto-collapse-for-same-name-types) work naturally: naming the type `T` (or the same as the module) lets users write `Vec2.T(...)` or just `Vec2(...)`.
+This convention also makes [auto-collapse](#auto-collapse-for-same-name-types) work naturally: naming the
+type `T` (or the same as the module, e.g. Vec2, Vec3) lets users write `Vec2.T(...)` or just `Vec2(...)`.
 
 ### Packages
 
-Modules can be distributed as `.tpkg` packages. When a package is declared as a dependency via `depend()` in `package.tl`, all its modules are loaded automatically -- no `#import` needed. Consumer code accesses package modules with the same qualified syntax: `Module.function()`.
+Modules can be distributed as `.tpkg` packages. When a package is declared as a dependency via `depend()` in
+`package.tl`, all its modules are loaded automatically -- no `#import` needed. Consumer code accesses
+package modules with the same qualified syntax: `Module.function()`.
 
 See [PACKAGES.md](PACKAGES.md) for the full package system reference.
 
 ### Module Initialization
 
-Modules can define a `__init()` function that runs automatically when the module is loaded:
+Modules can define a `__init()` function that runs automatically at
+the start of the program:
 
 ```tl
 #module Config
@@ -104,7 +142,8 @@ HM.insert(map, key, value)   // Same as Collections.HashMap.insert(...)
 
 ### Re-opening Modules
 
-A module can be re-opened after other modules have been defined. This is useful when defining a submodule requires interrupting the parent module:
+A module can be re-opened after other modules have been defined. This is useful when defining a submodule
+requires interrupting the parent module:
 
 ```tl
 #module Foo
@@ -123,11 +162,15 @@ create_pair(x: CInt, y: CInt) -> FooData {
 }
 ```
 
-When a module is re-opened, all symbols from the original definition are restored. New definitions are added normally. If a symbol is defined more than once (e.g., when the same file is parsed twice through different import paths), the first definition wins and duplicates are silently skipped.
+When a module is re-opened, all symbols from the original definition are restored. New definitions are added
+normally. If a symbol is defined more than once (e.g., when the same file is parsed twice through different
+import paths), the first definition wins and duplicates are silently skipped.
 
 ### Auto-Collapse for Same-Name Types
 
-When a module defines a type with the same name as the module itself, the compiler automatically registers the bare module name as a type alias. This means you can use the short form in type positions without an explicit `#alias`:
+When a module defines a type with the same name as the module itself, or a type named `T`, the compiler
+automatically registers the bare module name as a type alias. This means you can use the short form in
+type positions without an explicit `#alias`:
 
 ```tl
 #import <Array.tl>
@@ -155,9 +198,25 @@ make_map() -> Ptr[HashMap[Int, Int]] {
 }
 ```
 
-**Note:** Auto-collapse only affects type positions. Functions must still be called with the module prefix (`Array.push(...)`, `HashMap.set(...)`).
+Both conventions work:
 
-**Precedence:** If the bare name is already registered as a type (e.g., by another module or an explicit type alias), auto-collapse does not override it.
+```tl
+#module Vec2
+Vec2[T]: { x: T, y: T }     // Same name as module
+
+#module Point
+T[a]: { x: a, y: a }         // Named T
+```
+
+In both cases, callers write `Vec2(x = 1, y = 2)` or `Point(x = 1, y = 2)`. Defining both a same-named type
+and a `T` type in the same module is an error.
+
+**Note:** Auto-collapse only affects type positions. Functions must still be called with the module prefix
+(`Array.push(...)`, `HashMap.set(...)`), or more commonly with method syntax on the first argument:
+`arr.push(x)`, `map.set(k, v)`. See [Dot-Call Syntax](#dot-call-syntax).
+
+**Precedence:** If the bare name is already registered as a type (e.g., by another module or an explicit
+type alias), auto-collapse does not override it.
 
 ## Types
 
@@ -167,7 +226,6 @@ make_map() -> Ptr[HashMap[Int, Int]] {
 - `Float` - 64-bit floating point
 - `Bool` - Boolean (`true` or `false`)
 - `Void` - No value
-- `Type` - Type values (used with `sizeof`, `alignof`)
 
 ### C-compatible Types
 
@@ -210,15 +268,15 @@ take_int(x)               // OK: CShort widens to Int
 to_int(n: CShort) -> Int { n }  // OK: CShort return widens to Int
 ```
 
-**Narrowing** (wide → narrow), **cross-family** (signed ↔ unsigned), **cross-chain** (C-named ↔ fixed-width), and **standalone** (`CSize`, `CPtrDiff`, `CChar`) conversions require an explicit let-in type annotation:
+**Narrowing** (wide → narrow), **cross-family** (signed ↔ unsigned), **cross-chain** (C-named ↔ fixed-width), and **standalone** (`CSize`, `CPtrDiff`, `CChar`) conversions require an explicit declaration type annotation:
 ```tl
-narrow: CInt := some_int_value        // Narrowing: Int → CInt
-unsigned: UInt := some_int_value      // Cross-family: signed → unsigned
-fixed: CInt32 := some_cint_value      // Cross-chain: C-named → fixed-width
-size: CSize := some_uint_value        // Standalone: UInt → CSize
+narrow:   CInt   := some_int_value      // Narrowing: Int → CInt
+unsigned: UInt   := some_int_value      // Cross-family: signed → unsigned
+fixed:    CInt32 := some_cint_value     // Cross-chain: C-named → fixed-width
+size:     CSize  := some_uint_value     // Standalone: UInt → CSize
 ```
 
-The let-in annotation is the only cast syntax — there is no `as` keyword. This makes every conversion point visually prominent.
+The declaration annotation is the only cast syntax — there is no `as` keyword.
 
 **Operators and generics require exact type match:**
 ```tl
@@ -240,20 +298,28 @@ Ptr[Const[T]]       // Const pointer to type T (read-only)
 CArray[T, N]        // C-style fixed-size array
 ```
 
-`Const[T]` is a built-in type qualifier. See [Const Pointers](#const-pointers) for details.
+See [Pointers](#pointers) for operations, const semantics, array decay, and a C-to-Tess reference table.
 
 ### Generic Types
 
 Types can have type parameters:
 
 ```tl
-Point[a] : { x: a, y: a }
+Point[T] : { x: T, y: T }
 ```
 
 ### Type Aliases
 
 ```tl
 Pt = Point[Int]    // Creates a type alias
+```
+
+An alias can refer to a fully specialized generic or to the unspecialized generic itself. Partial specialization is not supported:
+
+```tl
+Pt = Point[Int]           // OK: fully specialized
+Pt = Point                // OK: alias for the unspecialized generic
+StringMap[V] = HashMap[String, V]  // Error: partial specialization
 ```
 
 ### Explicit Type Parameters
@@ -272,6 +338,172 @@ floats := empty[Float]()      // Creates Array[Float]
 ```
 
 This pattern is commonly used in the standard library for functions that need to create values of a generic type.
+
+## Pointers
+
+### Address-of and Dereference
+
+```tl
+ptr := obj.&          // Address-of (get pointer to obj)
+val := ptr.*          // Dereference (get value at pointer)
+```
+
+### Arrow Operator
+
+```tl
+ptr->field            // Equivalent to ptr.*.field
+```
+
+### Pointer Indexing
+
+```tl
+ptr.[i]               // Index into pointer (pointer arithmetic)
+ptr.[i] = value       // Write through pointer index
+```
+
+### Type Casts via Declaration Annotation
+
+The declaration type annotation is the universal cast syntax in Tess. It covers both pointer casts and integer conversions:
+
+```tl
+// Pointer casts
+p: Ptr[Int] := c_malloc(sizeof[Int]() * 10zu)
+b: Ptr[Byte] := p     // Cast to different pointer type
+
+// Integer conversions (narrowing, cross-family, cross-chain, standalone)
+narrow: CInt := some_int_value
+size: CSize := some_uint_value
+```
+
+See [Integer Type Conversions](#integer-type-conversions) for the full conversion rules.
+
+### Const Pointers
+
+`Ptr[Const[T]]` declares a pointer through which the target cannot be modified.
+It transpiles to `const T*` in C.
+
+```tl
+read_value(p: Ptr[Const[Int]]) {
+    p.*                       // OK: reading through const pointer
+}
+
+read_point(p: Ptr[Const[Point]]) {
+    p->x + p->y              // OK: reading struct fields through const pointer
+}
+```
+
+**Implicit coercion:** A mutable pointer can be passed where a const pointer is expected:
+
+```tl
+p: Ptr[Int] := c_malloc(8)
+p.* = 42
+val := read_value(p)         // OK: Ptr[Int] -> Ptr[Const[Int]]
+```
+
+**Mutation through const pointers is rejected:**
+
+```tl
+mutate(p: Ptr[Const[Int]]) {
+    p.* = 10                  // Error: const violation
+}
+```
+
+**Stripping const is rejected.** A const pointer cannot be passed where a mutable pointer is expected:
+
+```tl
+write(p: Ptr[Int]) { p.* = 10  0 }
+
+pass(p: Ptr[Const[Int]]) {
+    write(p)                  // Error: const violation
+}
+```
+
+This also applies to struct constructor fields and return statements — any implicit context where a mutable pointer is expected will reject a const pointer.
+
+This applies at any pointer nesting level: `Ptr[Ptr[Const[T]]]` cannot be passed where `Ptr[Ptr[T]]` is expected.
+
+**Casting away const:** When necessary, const can be explicitly stripped using an annotated declaration (the language's general cast mechanism):
+
+```tl
+unsafe_strip(p: Ptr[Const[Int]]) -> Ptr[Int] {
+    mp: Ptr[Int] := p            // OK: explicit cast strips const
+    mp
+}
+```
+
+**Limitation:** `Const[T]` cannot be used with generic type parameters. A function like `f(dst: Ptr[T], src: Ptr[Const[T]])` will fail because `T` cannot unify with both `X` and `Const[X]`. Use `Ptr[T]` for both parameters when `T` is generic, and reserve `Const` for concrete types like `Ptr[Const[CChar]]`.
+
+### Fixed-Size Arrays (CArray)
+
+`CArray[T, N]` declares a fixed-size C array. It can be used as a local variable or a struct field.
+
+```tl
+// Local variable
+arr: CArray[Int, 5] := void
+arr.[0] = 42                          // Direct indexing
+
+// Struct field
+Buffer: { data: CArray[CChar, 256], len: CInt }
+b := Buffer(data = void, len = 0)
+```
+
+**Decay to pointer:** Local CArrays require explicit decay. Struct field CArrays decay automatically on access:
+
+```tl
+// Local: explicit decay
+buffer: CArray[CChar, 256] := void
+ptr: Ptr[CChar] := buffer             // Must be explicit
+c_strcpy(ptr, "hello")
+
+// Struct field: automatic decay
+data_ptr: Ptr[CChar] := b.data        // Decays automatically
+```
+
+j### Pointers and Arrays for C Programmers
+
+Quick reference for common C patterns and their Tess equivalents:
+
+| C | Tess |
+|---|------|
+| `ptr[n]` | `ptr.[n]` |
+| `ptr[n] = x` | `ptr.[n] = x` |
+| `*ptr` | `ptr.*` |
+| `&obj` | `obj.&` |
+| `ptr->field` | `ptr->field` |
+| `NULL` | `null` |
+| `if (ptr != NULL)` | `if ptr != null { ... }` |
+| `void*` | `Ptr[any]` |
+| `int arr[5]` | `arr: CArray[Int, 5] := void` |
+| `struct { char buf[256]; }` | `T: { buf: CArray[CChar, 256] }` |
+| `malloc(n)` / `free(p)` | `c_malloc(n)` / `c_free(p)` |
+
+**Pointer arithmetic** goes through the `Unsafe` module, which operates in bytes (not elements):
+
+```tl
+#import <Unsafe.tl>
+
+base: Ptr[Int] := c_malloc(sizeof[Int]() * 10zu)
+
+// Byte-level arithmetic
+next := Unsafe.pointer_add(base, sizeof[Int]())       // advance by one Int
+dist := Unsafe.pointer_difference(next, base)          // byte distance
+cmp  := Unsafe.pointer_compare(base, next)             // -1, 0, or 1
+```
+
+For element-level access, use pointer indexing instead:
+
+```tl
+base.[0] = 10       // first element
+base.[1] = 20       // second element (advances by sizeof[Int](), not 1 byte)
+```
+
+**Allocating memory** uses `c_malloc` with a pointer cast:
+
+```tl
+p: Ptr[Int] := c_malloc(sizeof[Int]() * 10zu)
+defer c_free(p)
+p.[0] = 42
+```
 
 ## Type Annotations
 
@@ -312,10 +544,7 @@ c_printf(fmt: CString, ...) -> CInt
 
 #### Pointer Casts
 
-```tl
-p: Ptr[Int] := some_ptr               // Casting from different pointer type
-bytes: Ptr[CUnsignedChar] := int_ptr  // Explicit cast required
-```
+See [Type Casts via Declaration Annotation](#type-casts-via-declaration-annotation) in the Pointers section.
 
 #### C Type Disambiguation
 
@@ -331,12 +560,7 @@ See [Integer Literals](#integer-literals) for the full set of literal suffixes.
 
 #### c_malloc Return Type
 
-`c_malloc` returns `Ptr[any]` which must be annotated:
-
-```tl
-p: Ptr[Int] := c_malloc(sizeof[Int]() * 10)     // Required
-buffer: Ptr[CChar] := c_malloc(256)             // Required
-```
+See [Pointers and Arrays for C Programmers](#pointers-and-arrays-for-c-programmers) for `c_malloc` usage.
 
 #### Functions Only Used as Function Pointers
 
@@ -403,7 +627,7 @@ foo() -> Ptr[any] { return null }     // Required - null has no type
 | CArray decay to pointer | **Yes** (explicit `Ptr[T]` annotation) |
 | Pointer cast to different type | **Yes** |
 | C type via literal suffix (`42u`, `42zu`) | No (suffix determines type) |
-| C type via narrowing/cross-chain cast | **Yes** (let-in annotation) |
+| C type via narrowing/cross-chain cast | **Yes** (declaration annotation) |
 | C float type (CFloat, etc.) | **Yes** |
 | c_malloc result | **Yes** |
 | C FFI function declaration | **Yes** |
@@ -491,7 +715,8 @@ This distinction makes code intent explicit:
 - `:=` signals "I'm introducing a new name" (expression with a value)
 - `=` signals "I'm changing an existing value" (statement with no value)
 
-It also enables functional patterns where rebinding is preferred over mutation, while still allowing imperative style when needed.
+It also enables functional patterns where rebinding is preferred over mutation, while still allowing
+imperative style when needed.
 
 ## Functions
 
@@ -504,7 +729,9 @@ log(msg) { c_printf("%s\n", msg), void }  // void needed after expression
 update(v) { value = v }                // No void needed - assignment has no value
 ```
 
-The last expression in the function body is the return value. Use `void` as the final expression when the last statement is an expression (like a function call) but the function should return nothing. If the function ends with an assignment (`=`), no `void` is needed.
+The last expression in the function body is the return value. Use `void` as the final expression when the
+last statement is an expression (like a function call) but the function should return nothing. If the
+function ends with an assignment (`=`), no `void` is needed.
 
 ### Lambdas
 
@@ -524,7 +751,8 @@ f := () { val }    // Captures val
 f()                // Returns 10
 ```
 
-**Capture by reference:** Closures capture variables by reference, not by value. This means mutations after the lambda is created are visible inside the lambda:
+**Capture by reference:** Closures capture variables by reference, not by value. This means mutations after
+the lambda is created are visible inside the lambda:
 
 ```tl
 x := 1
@@ -542,9 +770,13 @@ increment()        // counter is now 1
 increment()        // counter is now 2
 ```
 
-**Lambdas do not support explicit type parameters:** Lambdas can be generic through type inference (un-annotated parameters are inferred from usage), but cannot declare explicit type parameters with `[T]` syntax. If you need explicit type parameters, use a named function instead.
+**Lambdas do not support explicit type parameters:** Lambdas can be generic through type inference
+(un-annotated parameters are inferred from usage), but cannot declare explicit type parameters with `[T]`
+syntax. If you need explicit type parameters, use a named function instead.
 
-**Stack closures cannot be returned from functions:** Because stack closures capture variables by reference, returning one would create dangling pointers to stack variables that no longer exist. The compiler prohibits this:
+**Stack closures cannot be returned from functions:** Because stack closures capture variables by reference,
+returning one would create dangling pointers to stack variables that no longer exist. The compiler prohibits
+this:
 
 ```tl
 // ERROR: Cannot return lambda from function
@@ -561,7 +793,9 @@ get_adder() { add1/1 }     // OK: returns function pointer, not lambda
 
 #### Allocated Closures
 
-To return a closure from a function or store it in a struct, use an **allocated closure**. The `[[alloc]]` attribute allocates the captured state on the heap, and `[[capture(...)]]` explicitly lists which variables to capture by value:
+To return a closure from a function or store it in a struct, use an **allocated closure**. The `[[alloc]]`
+attribute allocates the captured state on the heap, and `[[capture(...)]]` explicitly lists which variables
+to capture by value:
 
 ```tl
 make_adder(n: Int) {
@@ -639,7 +873,7 @@ ctx.callback()       // Call through struct field
 ### Generic Function Signatures
 
 ```tl
-map[a, b](f: (a) -> b, arr: Arr[a]) -> Arr[b]
+map[T, U](f: (T) -> U, arr: Arr[T]) -> Arr[U]
 ```
 
 Type parameters can have trait bounds that constrain them to types satisfying a trait:
@@ -678,7 +912,9 @@ fp := add/2          // Pointer to the two-argument version
 
 ### Variadic Functions
 
-Variadic functions accept a variable number of arguments through a **trait-bounded** mechanism. The last parameter uses `...Trait` syntax, where each extra argument must satisfy the named trait. The compiler applies the trait's function to each argument at the call site, packing the results into a `Slice`.
+Variadic functions accept a variable number of arguments through a **trait-bounded** mechanism. The last
+parameter uses `...Trait` syntax, where each extra argument must satisfy the named trait. The compiler
+applies the trait's function to each argument at the call site, packing the results into a `Slice`.
 
 #### Declaration
 
@@ -697,7 +933,8 @@ log(level: Int, args: ...ToString) -> Void {
 }
 ```
 
-The variadic parameter must be the **last** parameter. The function body sees it as `Slice[R]` where `R` is the return type of the trait's function.
+The variadic parameter must be the **last** parameter. The function body sees it as `Slice[R]` where `R` is
+the return type of the trait's function.
 
 #### Trait requirements
 
@@ -801,7 +1038,9 @@ sum_to(n, acc) {
 result := sum_to(1000000, 0)       // Works without stack overflow
 ```
 
-### Uniform Function Call Syntax (UFCS)
+### Dot-Call Syntax
+
+Also known as uniform function call syntax (UFCS).
 
 Any function can be called using dot syntax on its first argument. If `x.foo(a, b)` does not match a struct field named `foo`, the compiler rewrites it to `foo(x, a, b)`:
 
@@ -820,7 +1059,7 @@ main() {
 }
 ```
 
-**Priority:** Struct fields always take priority over UFCS. If a struct has a field `foo`, then `x.foo(...)` calls the field's function pointer, not a free function named `foo`.
+**Priority:** Struct fields always take priority over dot-call syntax. If a struct has a field `foo`, then `x.foo(...)` calls the field's function pointer, not a free function named `foo`.
 
 **Pointer receiver:** The `.` operator auto-dereferences pointer receivers. If a function takes `Ptr[T]` and the receiver is a value of type `T`, the address is taken implicitly. If the receiver is already a pointer, it is passed as-is:
 
@@ -830,16 +1069,16 @@ reset(p: Ptr[Vec2]) { p->x = 0, p->y = 0, void }
 v.reset()                    // calls reset(v.&) — implicit address-of
 ```
 
-Note: The `->` operator is reserved for struct field access through pointers (`ptr->field`) and does not support UFCS.
+Note: The `->` operator is reserved for struct field access through pointers (`ptr->field`) and does not support dot-call syntax.
 
-**Cross-module UFCS:** For struct types, the compiler looks up functions in the module that defines the struct's type — no module qualifier is needed. For non-struct values (e.g., integers, pointers), include the module name after the dot as a fallback:
+**Cross-module dot-call syntax:** For struct types, the compiler looks up functions in the module that defines the struct's type — no module qualifier is needed. For non-struct values (e.g., integers, pointers), include the module name after the dot as a fallback:
 
 ```tl
 v.length_sq()                // v is Vec2 — looks up length_sq in Vec2's module
 n.mymath.square()            // n is Int — module qualifier needed for non-struct types
 ```
 
-**Generics:** UFCS works with generic structs and generic functions. Inside generic function bodies, UFCS resolution is deferred to specialization, when the receiver's type is known.
+**Generics:** dot-call syntax works with generic structs and generic functions. Inside generic function bodies, dot-call syntax resolution is deferred to specialization, when the receiver's type is known.
 
 ### The `main` Function
 
@@ -1862,7 +2101,7 @@ trait bound — including indirect use through `HashMap` — must `#import <Hash
 #module main
 main() {
     n: Int := 42
-    h := n.hash()                          // UFCS call
+    h := n.hash()                          // dot-call syntax call
     m := HashMap.create[Int, Int]()        // Works because Hash.tl is imported
     HashMap.set(m, 1, 100)
     HashMap.destroy(m)
@@ -1895,125 +2134,6 @@ hash(p: Point) -> CSize {
 - **Same-type operators only.** Both operands must be the same type `T`.
 - **Accidental conformance.** Structural conformance means a type can unintentionally satisfy
   a trait. Mitigated by `[[no_conform(Trait)]]` — see *Opting Out of Conformance* above.
-
-## Pointers
-
-### Address-of and Dereference
-
-```tl
-ptr := obj.&          // Address-of (get pointer to obj)
-val := ptr.*          // Dereference (get value at pointer)
-```
-
-### Arrow Operator
-
-```tl
-ptr->field            // Equivalent to ptr.*.field
-```
-
-### Pointer Indexing
-
-```tl
-ptr.[i]               // Index into pointer (pointer arithmetic)
-ptr.[i] = value       // Write through pointer index
-```
-
-### Type Casts via Let-In Annotation
-
-The let-in type annotation is the universal cast syntax in Tess. It covers both pointer casts and integer conversions:
-
-```tl
-// Pointer casts
-p: Ptr[Int] := c_malloc(sizeof[Int]() * 10zu)
-b: Ptr[Byte] := p     // Cast to different pointer type
-
-// Integer conversions (narrowing, cross-family, cross-chain, standalone)
-narrow: CInt := some_int_value
-size: CSize := some_uint_value
-```
-
-See [Integer Type Conversions](#integer-type-conversions) for the full conversion rules.
-
-### Const Pointers
-
-`Ptr[Const[T]]` declares a pointer through which the target cannot be modified.
-It transpiles to `const T*` in C.
-
-```tl
-read_value(p: Ptr[Const[Int]]) {
-    p.*                       // OK: reading through const pointer
-}
-
-read_point(p: Ptr[Const[Point]]) {
-    p->x + p->y              // OK: reading struct fields through const pointer
-}
-```
-
-**Implicit coercion:** A mutable pointer can be passed where a const pointer is expected:
-
-```tl
-p: Ptr[Int] := c_malloc(8)
-p.* = 42
-val := read_value(p)         // OK: Ptr[Int] -> Ptr[Const[Int]]
-```
-
-**Mutation through const pointers is rejected:**
-
-```tl
-mutate(p: Ptr[Const[Int]]) {
-    p.* = 10                  // Error: const violation
-}
-```
-
-**Stripping const is rejected.** A const pointer cannot be passed where a mutable pointer is expected:
-
-```tl
-write(p: Ptr[Int]) { p.* = 10  0 }
-
-pass(p: Ptr[Const[Int]]) {
-    write(p)                  // Error: const violation
-}
-```
-
-This also applies to struct constructor fields and return statements — any implicit context where a mutable pointer is expected will reject a const pointer.
-
-This applies at any pointer nesting level: `Ptr[Ptr[Const[T]]]` cannot be passed where `Ptr[Ptr[T]]` is expected.
-
-**Casting away const:** When necessary, const can be explicitly stripped using an annotated let binding (the language's general cast mechanism):
-
-```tl
-unsafe_strip(p: Ptr[Const[Int]]) -> Ptr[Int] {
-    mp: Ptr[Int] := p            // OK: explicit cast strips const
-    mp
-}
-```
-
-**Limitation:** `Const[T]` cannot be used with generic type parameters. A function like `f(dst: Ptr[T], src: Ptr[Const[T]])` will fail because `T` cannot unify with both `X` and `Const[X]`. Use `Ptr[T]` for both parameters when `T` is generic, and reserve `Const` for concrete types like `Ptr[Const[CChar]]`.
-
-### Array Decay
-
-`CArray` is used as a type annotation to declare fixed-size C arrays. Decay to pointer must be explicit:
-
-```tl
-buffer: CArray[CChar, 256] := void    // Declare a fixed-size array
-ptr: Ptr[CChar] := buffer             // Explicit decay to pointer
-c_strcpy(ptr, "hello")                // Pass pointer to C functions
-```
-
-CArray supports direct indexing without decay:
-
-```tl
-arr: CArray[Int, 5] := void
-arr.[0] = 42                          // Direct indexing on CArray
-```
-
-CArray fields in structs automatically decay to pointers on access:
-
-```tl
-Buffer: { data: CArray[CChar, 256], len: CInt }
-b := Buffer(data = void, len = 0)
-data_ptr: Ptr[CChar] := b.data        // Struct field access decays to Ptr
-```
 
 ## C Interoperability
 
@@ -2215,4 +2335,6 @@ The standard library follows these conventions:
 
 Single-letter names like `a`, `b`, `T` are conventionally used for type parameters in generic definitions.
 
-**Note:** Identifiers containing `__` (double underscore) are reserved for compiler name mangling and will be rejected by the parser. The only exceptions are `__init` (module initialization) and `c_` prefixed C interop symbols (e.g., `c__Exit`).
+**Note:** Identifiers containing `__` (double underscore) are reserved for compiler name mangling and will
+be rejected by the parser. The only exceptions are `__init` (module initialization) and `c_` prefixed C
+interop symbols (e.g., `c__Exit`).

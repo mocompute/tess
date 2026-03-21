@@ -92,7 +92,7 @@ read_config(path) {
 }
 ```
 
-Tess also has closures, defer, operator overloading, function overloading, method syntax, and conditional compilation.
+Tess also has closures, defer, operator overloading, function overloading, dot-call syntax, and conditional compilation.
 
 ## Build
 

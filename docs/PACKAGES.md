@@ -1,15 +1,23 @@
 # Packages
 
-Tess supports distributing reusable libraries as `.tpkg` **packages**. A package bundles one or more modules as a compressed source archive. Consumers declare dependencies in a `package.tl` file, and the compiler loads, version-checks, and compiles everything together via whole-program compilation.
+Tess supports distributing reusable libraries as `.tpkg` **packages**. A package bundles one or more modules
+as a compressed source archive. Consumers declare dependencies in a `package.tl` file, and the compiler
+loads, version-checks, and compiles everything together via whole-program compilation.
 
-This is distinct from C-compatible libraries (`tess lib` producing `.so`/`.dll`, or `tess lib --static` producing `.a`/`.lib`), which remain unchanged.
+This is distinct from C-compatible libraries (`tess lib` producing `.so`/`.dll`, or `tess lib --static`
+producing `.a`/`.lib`).
 
 ## Concepts
 
-- **Module**: A namespace declared with `#module Name` in a `.tl` source file. Members are accessed as `Module.function()`. See [LANGUAGE_REFERENCE.md](LANGUAGE_REFERENCE.md).
-- **Package**: A `.tpkg` archive containing one or more modules plus metadata. Packages have a name (declared in `package.tl`) that is independent of the module names inside. Only the module names are visible in source code.
+- **Module**: A namespace declared with `#module Name` in a `.tl` source file. Members are accessed as
+  `Module.function()`. See [LANGUAGE_REFERENCE.md](LANGUAGE_REFERENCE.md).
+- **Package**: A `.tpkg` archive containing one or more modules plus metadata. Packages have a name
+  (declared in `package.tl`) that is independent of the module names inside. Only the module names are
+  visible in source code.
 
-Packages are source-only archives. There is no pre-compilation or IR. The consumer extracts source and compiles everything together, which preserves whole-program compilation semantics and ensures generic functions specialize correctly.
+Packages are source-only archives. There is no pre-compilation or IR. The consumer extracts source and
+compiles everything together, which preserves whole-program compilation semantics and ensures generic
+functions specialize correctly.
 
 ## Quick Start
 
@@ -43,14 +51,18 @@ export(MathUtils)
 source("src/")
 ```
 
-Note that the package name (`mylib`) and the module name (`MathUtils`) are independent. The package name appears in `package.tl` and dependency declarations; the module name appears in source code.
+Note that the package name (`mylib`) and the module name (`MathUtils`) are independent. The package name
+appears in `package.tl` and dependency declarations; the module name appears in source code.
 
 **Build the package:**
 ```bash
 tess pack -o mylib.tpkg
 ```
 
-Note that `package.tl` is found automatically in the current working directory. The `source("src/")` declaration tells the compiler where to find source files, so no file arguments are needed on the command line. You can still list files explicitly (`tess pack src/math.tl -o mylib.tpkg`), which overrides `source()`.
+Note that `package.tl` is found automatically in the current working directory. The `source("src/")`
+declaration tells the compiler where to find source files, so no file arguments are needed on the command
+line. You can still list files explicitly (`tess pack src/math.tl -o mylib.tpkg`), which overrides
+`source()`.
 
 ### Consuming a package
 
@@ -91,15 +103,19 @@ depend_path("./libs")
 tess exe -o myapp
 ```
 
-The compiler auto-discovers `package.tl` in the current working directory, resolves `source("src/")` to find source files, loads `mylib.tpkg` from the `libs/` directory, verifies the version matches, and compiles everything together. Consumer code uses the *module* name (`MathUtils.clamp`), not the package name.
+The compiler auto-discovers `package.tl` in the current working directory, resolves `source("src/")` to find
+source files, loads `mylib.tpkg` from the `libs/` directory, verifies the version matches, and compiles
+everything together. Consumer code uses the *module* name (`MathUtils.clamp`), not the package name.
 
 ---
 
 ## `package.tl` Reference
 
-Every project that produces or consumes packages needs a `package.tl` file at its root. The file uses a function-call DSL that is valid TL syntax. The compiler auto-discovers it in the current working directory.
+Every project that produces or consumes packages needs a `package.tl` file at its root. The file uses a
+function-call DSL that is valid TL syntax. The compiler auto-discovers it in the current working directory.
 
-Builds that do not use packages work without `package.tl` -- the compiler simply skips dependency loading when none is found.
+Builds that do not use packages work without `package.tl` -- the compiler simply skips dependency loading
+when `package.tl` is not found.
 
 ### DSL Functions
 
@@ -166,8 +182,6 @@ tess validate               # uses source() from package.tl
 tess exe -o myapp src/main.tl   # ignores source(), warns on stderr
 ```
 
-Projects without `package.tl` or without `source()` work as before — files must be listed on the command line.
-
 ---
 
 ## Creating Packages
@@ -179,7 +193,8 @@ tess pack -o output.tpkg [-v]
 tess pack <file1.tl> [file2.tl ...] -o output.tpkg [-v]
 ```
 
-When no files are listed on the command line, `tess pack` uses `source()` entries from `package.tl` to find source files automatically. If files are given explicitly, they override `source()` (a warning is printed).
+When no files are listed on the command line, `tess pack` uses `source()` entries from `package.tl` to find
+source files automatically. If files are given explicitly, they override `source()` (a warning is printed).
 
 The command:
 1. Reads `package.tl` from the current working directory
@@ -192,7 +207,8 @@ The command:
 
 ### Multi-file packages
 
-A package can contain multiple modules across multiple files. With `source()` in `package.tl`, all files are discovered automatically. Imported files are also included automatically via `#import` resolution:
+A package can contain multiple modules across multiple files. With `source()` in `package.tl`, all files are
+discovered automatically. Imported files are also included automatically via `#import` resolution:
 
 ```
 mylib/
@@ -206,7 +222,8 @@ mylib/
 tess pack -o MathUtils.tpkg
 ```
 
-Both `math.tl` and `internal.tl` are included -- `math.tl` is found via `source("src/")` and `internal.tl` is found because `math.tl` imports it.
+Both `math.tl` and `internal.tl` are included -- `math.tl` is found via `source("src/")` and `internal.tl`
+is found because `math.tl` imports it.
 
 ### Validating a package
 
@@ -214,7 +231,9 @@ Both `math.tl` and `internal.tl` are included -- `math.tl` is found via `source(
 tess validate
 ```
 
-Runs the same checks as `tess pack` without producing an archive. Reads `package.tl` from the current working directory and uses `source()` entries to discover files. Like `tess pack`, files can be listed explicitly on the command line to override `source()`.
+Runs the same checks as `tess pack` without producing an archive. Reads `package.tl` from the current
+working directory and uses `source()` entries to discover files. Like `tess pack`, files can be listed
+explicitly on the command line to override `source()`.
 
 ### Inspecting and extracting an archive
 
@@ -276,7 +295,9 @@ depend_path("./libs")
 
 ### Transitive dependencies
 
-The compiler automatically resolves transitive dependencies. If `mylib` depends on `logging_lib`, the compiler reads that from the `mylib.tpkg` metadata and searches the consumer's `depend_path()` directories for `logging_lib.tpkg`.
+The compiler automatically resolves transitive dependencies. If `mylib` depends on `logging_lib`, the
+compiler reads that from the `mylib.tpkg` metadata and searches the consumer's `depend_path()` directories
+for `logging_lib.tpkg`.
 
 ```
 MyApp
@@ -284,11 +305,17 @@ MyApp
     depends on logging_lib (resolved automatically from mylib.tpkg metadata)
 ```
 
-The consumer must have all transitive dependencies available in their `depend_path()` directories. If a transitive dependency cannot be found, the compiler emits an error naming the missing package and which package requires it.
+The consumer must have all transitive dependencies available in their `depend_path()` directories. If a
+transitive dependency cannot be found, the compiler emits an error naming the missing package and which
+package requires it.
 
 ### Multi-version coexistence
 
-Different versions of the same package can coexist in the same build. If package A requires `BaseLib=1.0.0` and package B requires `BaseLib=2.0.0`, the compiler loads both. This works because package-versioned name mangling gives each version distinct C symbols (e.g., `BaseLib__1_0_0__Base__val__0` vs `BaseLib__2_0_0__Base__val__0`), and the compiler maintains per-file prefix maps so each library's source resolves module references to the correct version.
+Different versions of the same package can coexist in the same build. If package A requires `BaseLib=1.0.0`
+and package B requires `BaseLib=2.0.0`, the compiler loads both. This works because package-versioned name
+mangling gives each version distinct C symbols (e.g., `BaseLib__1_0_0__Base__val__0` vs
+`BaseLib__2_0_0__Base__val__0`), and the compiler maintains per-file prefix maps so each library's source
+resolves module references to the correct version.
 
 Version strings use strict equality -- `"1.0.0"` must match exactly. There is no semver range resolution.
 

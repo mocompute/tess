@@ -20,9 +20,9 @@ When generating or editing `.tl` code, follow these rules:
 - **Allocator overloads.** Provide explicit `Ptr[Allocator]` version + convenience version using default.
 - **Private helpers start with `_`.** Types are PascalCase, functions are snake_case.
 - **Run `tess fmt` before committing.**
-- **One module, one type.** Name the type the same as the module (or `T`). Callers use UFCS.
+- **One module, one type.** Name the type the same as the module (or `T`). Callers use dot-call syntax.
 - **Named fields in struct construction.** `ArgSpec(long_name = name, kind = FlagBool)`
-- **Implicit address-of in UFCS.** Write `arr.push(x)`, not `arr.&.push(x)` — the compiler automatically takes the address when UFCS dispatches a value to a `Ptr[T]` parameter.
+- **Implicit address-of in dot-call syntax.** Write `arr.push(x)`, not `arr.&.push(x)` — the compiler automatically takes the address when dispatching a value to a `Ptr[T]` parameter.
 
 See the sections below for detailed explanations and examples.
 
@@ -43,7 +43,7 @@ Array[T]: {
 }
 ```
 
-Callers should prefer **UFCS** (uniform function call syntax) to access methods, which reads naturally as method calls:
+Callers should prefer **dot-call syntax** to access functions, which reads naturally as method calls:
 
 ```tl
 arr := Array.empty[Int]()
@@ -51,7 +51,7 @@ arr := Array.empty[Int]()
 // Direct call: verbose
 Array.push(arr.&, 42)
 
-// UFCS:  preferred, implicit address-of
+// Dot-call syntax: preferred, implicit address-of
 arr.push(42)
 ```
 
@@ -119,7 +119,7 @@ get_flag(args: Args, name: Str) -> Bool
 has     (args: Args, name: Str) -> Bool
 ```
 
-This convention enables UFCS: `parser.flag("verbose", "Be verbose")` desugars to `CommandLine.flag(parser, ...)`.
+This convention enables dot-call syntax: `parser.flag("verbose", "Be verbose")` desugars to `CommandLine.flag(parser, ...)`.
 
 ## Pointers
 
