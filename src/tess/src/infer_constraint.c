@@ -100,9 +100,23 @@ static void create_type_constructor_from_user_type(tl_infer *self, ast_node *nod
     if (ast_node_is_symbol(type_name_node) && type_name_node->symbol.is_module_mangled) {
         str module   = type_name_node->symbol.module;
         str original = type_name_node->symbol.original;
-        if (symbol_module_matches_original(self->transient, module, original) || str_eq(original, S("T"))) {
+        int is_same_name = symbol_module_matches_original(self->transient, module, original);
+        int is_t         = str_eq(original, S("T"));
+        if (is_same_name || is_t) {
             if (!tl_type_registry_get(self->registry, module)) {
                 tl_type_registry_type_alias_insert(self->registry, module, poly);
+            } else if (tl_type_registry_is_type_alias(self->registry, module)) {
+                // Another auto-collapse candidate already claimed this alias —
+                // the module defines both a same-named type and a T type.
+                array_push(self->errors,
+                           ((tl_infer_error){
+                               .tag     = tl_err_auto_collapse_ambiguous,
+                               .node    = type_name_node,
+                               .message = str_fmt(self->arena,
+                                   "module '%s' defines both a same-named type and a type named 'T'; "
+                                   "auto-collapse cannot determine which '%s' should refer to — "
+                                   "rename one of them to disambiguate",
+                                   str_cstr(&module), str_cstr(&module))}));
             }
         }
     }
