@@ -1309,6 +1309,7 @@ int compile(state *self) {
       .verbose           = self->verbose,
       .lib_name          = lib_name,
       .bounds_check      = self->effective_bounds_check,
+      .version           = str_init_static(TESS_VERSION),
     };
     transpile *transpile = transpile_create(self->arena, &transpile_opts);
 

@@ -13,6 +13,7 @@ typedef struct {
     int             is_library;
     int             bounds_check;
     str             lib_name; // library name for namespaced init (e.g., "foo" -> tl_init_foo)
+    str             version;  // compiler version string for generated file header
 } transpile_opts;
 
 nodiscard transpile *transpile_create(allocator *, transpile_opts const *) mallocfun;
