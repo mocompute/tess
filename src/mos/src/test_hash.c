@@ -8,8 +8,8 @@
 #include <stdnoreturn.h>
 #include <time.h>
 
-#define ERR(FMT, ...) fprintf(stderr, FMT "\n", ##__VA_ARGS__)
-#define OUT(FMT, ...) printf(FMT "\n", ##__VA_ARGS__)
+#define ERR(FMT, ...)    fprintf(stderr, FMT "\n", ##__VA_ARGS__)
+#define OUTPUT(FMT, ...) printf(FMT "\n", ##__VA_ARGS__)
 
 // static noreturn void fatal(char const *msg) {
 //     ERR("%s\n", msg);
@@ -49,7 +49,7 @@ void test_hash32(int n, int word_size) {
         ptr += word_size + 1;
     }
 
-    OUT("%i strings of size %i, collisions = %u", n, word_size, collisions);
+    OUTPUT("%i strings of size %i, collisions = %u", n, word_size, collisions);
 
     arena_destroy(&alloc);
 }

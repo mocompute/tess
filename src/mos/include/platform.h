@@ -20,9 +20,6 @@
 #ifdef MOS_WINDOWS
 #include <direct.h>
 #include <windows.h>
-// windows.h defines macros that conflict with common identifiers
-#undef small
-#undef OUT
 #else
 #include <sys/wait.h>
 #include <time.h>
