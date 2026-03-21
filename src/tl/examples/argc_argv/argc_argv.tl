@@ -8,7 +8,7 @@
 #module main
 #import <cstdio.tl>
 
-main(argc: Int, argv: Ptr[CString]) {
+main(argc: CInt, argv: Ptr[CString]) {
     c_printf("argc = %i\n", argc)
 
     i := 0

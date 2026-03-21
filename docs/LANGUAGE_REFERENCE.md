@@ -841,6 +841,17 @@ n.mymath.square()            // n is Int — module qualifier needed for non-str
 
 **Generics:** UFCS works with generic structs and generic functions. Inside generic function bodies, UFCS resolution is deferred to specialization, when the receiver's type is known.
 
+### The `main` Function
+
+The entry point is `main()` in the `main` module. It must return `CInt`. The compiler accepts two forms:
+
+```tl
+main() { 0 }                                     // no arguments
+main(argc, argv: Ptr[CString]) { 0 }             // with command-line arguments
+```
+
+The compiler provides `argc` and `argv` from C's `int argc, char const* argv[]`.
+
 ## Expressions
 
 ### Operators
