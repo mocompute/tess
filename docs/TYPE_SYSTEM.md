@@ -355,7 +355,7 @@ to_int(n: CInt) -> Int { n }  // OK: CInt return widens to Int
 #### Explicit Narrowing and Cross-Chain Conversion
 
 Narrowing (wide → narrow), cross-chain (e.g., signed ↔ unsigned, C-named ↔
-fixed-width), and standalone type conversions require an explicit **let-in
+fixed-width), and standalone type conversions require an explicit **declaration
 type annotation**:
 
 ```tl

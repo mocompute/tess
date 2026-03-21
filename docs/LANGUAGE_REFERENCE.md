@@ -638,13 +638,13 @@ foo() -> Ptr[any] { return null }     // Required - null has no type
 
 ## Variables and Assignment
 
-> See [Language Model: Bindings](LANGUAGE_MODEL.md#bindings-the-let-in-expression) for the conceptual foundation of let-in expressions and scoping.
+> See [Language Model: Bindings](LANGUAGE_MODEL.md#bindings-the-binding-expression) for the conceptual foundation of binding expressions and scoping.
 
 Tess distinguishes between **binding** (`:=`) and **mutation** (`=`):
 
 ### Binding with `:=`
 
-The `:=` operator introduces a new name with ML-style let-in semantics. Each use of `:=` creates a fresh binding that shadows any previous use of the same name in an outer scope. The binding's scope extends to the end of the enclosing block, and the entire expression evaluates to the block's final value:
+The `:=` operator introduces a new name. Each use of `:=` creates a fresh binding that shadows any previous use of the same name in an outer scope. The binding's scope extends to the end of the enclosing block, and the entire construct is an expression:
 
 ```tl
 x := 42              // Introduce new binding 'x'
@@ -655,7 +655,7 @@ x := x + 1           // New binding shadows the previous one; x is now 2
 x := x * 2           // Another new binding; x is now 4
 ```
 
-Since bindings are expressions, you can capture the result of a let-in block using parentheses:
+Since bindings are expressions, you can capture the result of a binding block using parentheses:
 
 ```tl
 result := (
@@ -1241,7 +1241,7 @@ total := base_cost + ({
 })
 ```
 
-Block expressions combine naturally with let-in bindings:
+Block expressions combine naturally with binding expressions:
 
 ```tl
 value := ({
@@ -1776,7 +1776,7 @@ s := Foo.Shape.Circle(radius = 2.0)  // also returns Foo.Shape
 
 ### Pattern Matching (When Expression)
 
-> See [Language Model: Pattern Matching and Scope](LANGUAGE_MODEL.md#pattern-matching-and-scope) for how arm scoping relates to let-in expressions.
+> See [Language Model: Pattern Matching and Scope](LANGUAGE_MODEL.md#pattern-matching-and-scope) for how arm scoping relates to binding expressions.
 
 The `when` keyword provides tagged union pattern matching with type inference. The tagged union type is inferred from the scrutinee — no type annotation needed:
 
@@ -1855,7 +1855,7 @@ Use the `.&` suffix on the scrutinee to get pointers to each variant. This is th
 
 ### Let-else
 
-> See [Language Model: Let-Else](LANGUAGE_MODEL.md#let-else) for why let-else exists and how it connects to let-in scoping.
+> See [Language Model: Let-Else](LANGUAGE_MODEL.md#let-else) for why let-else exists and how it connects to binding expression scoping.
 
 When you need a single variant's value for the rest of a scope, use let-else to unwrap it or diverge:
 

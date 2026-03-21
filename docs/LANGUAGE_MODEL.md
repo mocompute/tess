@@ -28,21 +28,21 @@ expression. It has no value. This is a design choice — it prevents accidental 
 where `==` was intended, and it makes mutation visually distinct from expressions that
 produce values. (More on this in [Mutation](#mutation-with-).)
 
-## Bindings: The Let-In Expression
+## Bindings: The Binding Expression
 
-The central concept in Tess is the **let-in expression**. Understanding it makes
+The central concept in Tess is the **binding expression**. Understanding it makes
 everything else fall into place.
 
-### What is a let-in expression?
+### What is a binding expression?
 
-A let-in expression does two things:
+A binding expression does two things:
 
 1. It **binds** a name to a value.
 2. It defines a **body** where that name is available.
 
 The simplest way to think about it: "let *x* be *value* in *the rest of the code*."
 
-In Tess, the `:=` operator creates a let-in expression:
+In Tess, the `:=` operator creates a binding expression:
 
 ```tl
 x := 5
@@ -54,10 +54,7 @@ This means: "let `x` be `5` in the expression `x + 1`." The entire thing — the
 
 ### The implicit "in"
 
-Many languages with let-in expressions use an explicit keyword to separate the binding
-from the body. For example, in OCaml you write `let x = 5 in x + 1`. In Tess, the "in"
-is implicit: everything after the `:=` line, up to the end of the enclosing block, is
-the body.
+In ML-family languages, these are called *let-in expressions*, and use an explicit keyword to separate the binding from the body. For example, in OCaml you write `let x = 5 in x + 1`. In Tess, the "in" is implicit: everything after the `:=` line, up to the end of the enclosing block, is the body.
 
 ```tl
 // Tess
@@ -71,7 +68,7 @@ x + 1
 This implicit "in" makes Tess code look like conventional imperative code, but the
 semantics are precise: each `:=` opens a new scope that extends to the end of the block.
 
-### Sequential bindings are nested let-in expressions
+### Sequential bindings are nested binding expressions
 
 When you write multiple bindings in sequence, each one nests inside the previous:
 
@@ -94,7 +91,7 @@ see all of them. The entire construct produces the value `3`.
 
 ### Blocks delimit scope
 
-Curly braces `{ }` define where a let-in body ends. A name introduced with `:=` inside a
+Curly braces `{ }` define where a binding's body ends. A name introduced with `:=` inside a
 block is not visible outside it:
 
 ```tl
@@ -105,10 +102,10 @@ if true {
 // x is not visible here
 ```
 
-### Parenthesized let-in
+### Parenthesized bindings
 
 You can make the scoping explicit by using parentheses. This is especially useful when
-you want to use a let-in expression in the middle of a larger expression:
+you want to use a binding expression in the middle of a larger expression:
 
 ```tl
 result := (
@@ -133,7 +130,7 @@ This is **not** mutation. Each `:=` introduces a fresh name that happens to have
 same spelling. The previous binding still exists — it's just no longer visible. This is
 called **shadowing**.
 
-Shadowing is a natural consequence of let-in nesting. The code above is equivalent to:
+Shadowing is a natural consequence of binding expression nesting. The code above is equivalent to:
 
 ```
 let x = 1 in
@@ -192,7 +189,7 @@ name: String := "hello"
 ```
 
 This annotates the binding with a type — the compiler checks that the value matches. It
-is part of the let-in expression, not a separate construct.
+is part of the binding expression, not a separate construct.
 
 ### Type annotations as casts
 
@@ -209,7 +206,7 @@ visually prominent and easy to find.
 
 ## Let-Else
 
-With the let-in model understood, **let-else** is a natural extension.
+With binding expressions understood, **let-else** is a natural extension.
 
 A let-else binding tries to match a value against a tagged union variant. If the match
 succeeds, the unwrapped value is bound for the rest of the scope (the "in" part). If it
@@ -219,7 +216,7 @@ fails, the `else` block executes. The else block may either **diverge** (`return
 ```tl
 // Diverging: exit the function if no match
 s: Some := val else { return 0 }
-// s is available here — this is the "in" part of the let-in
+// s is available here — this is the body of the binding expression
 s.v + 1
 
 // Non-diverging: use a fallback value if no match
@@ -260,12 +257,12 @@ f(5)                   // 6
 ```
 
 A lambda becomes a **closure** when it references bindings from an enclosing scope. In
-the let-in model, this means the lambda's body can see names introduced by `:=` in outer
+this means the lambda's body can see names introduced by `:=` in outer
 scopes:
 
 ```tl
 offset := 10
-f := (x) { x + offset }   // captures 'offset' from the enclosing let-in
+f := (x) { x + offset }   // captures 'offset' from the enclosing scope
 f(5)                       // 15
 ```
 
@@ -312,8 +309,8 @@ make_adder(n) { (x) { x + n } }
 ```
 
 This restriction follows directly from the scoping model. The binding `n` exists in the
-let-in scope of `make_adder`'s parameter. When `make_adder` returns, that scope ends, so
-any closure capturing `n` must not escape.
+scope of `make_adder`'s parameter. When `make_adder` returns, that scope ends, so any
+closure capturing `n` must not escape.
 
 ### Allocated closures: capture by value
 
@@ -420,7 +417,7 @@ Tess has two pattern matching expressions: `when` for tagged union destructuring
 ### `when`: tagged union destructuring
 
 The `when` expression matches a tagged union value against its variants. Each arm
-**binds** the unwrapped variant and introduces a **new scope** — the binding is a let-in
+**binds** the unwrapped variant and introduces a **new scope** — the binding is a binding
 expression whose body is the arm's block:
 
 ```tl
@@ -431,7 +428,7 @@ area := when shape {
 // c and s are not visible here — each was scoped to its arm
 ```
 
-This is the standard let-in behavior: `c: Circle` binds `c` for the duration of the `{
+This is the standard binding behavior: `c: Circle` binds `c` for the duration of the `{
 ... }` block, and then the binding ends. The `when` expression as a whole evaluates to
 the value of the matched arm.
 
@@ -479,16 +476,16 @@ s: Some := val else { return 0 }
 use(s.v)
 ```
 
-The connection to let-in is direct: `s: Some := val else { return 0 }` is a let-in
-expression where the binding either succeeds (and the body is the rest of the block) or
-the else block executes (diverging so the body is never reached, or producing a fallback
-value for the overall expression).
+The connection is direct: `s: Some := val else { return 0 }` is a binding expression
+where the binding either succeeds (and the body is the rest of the block) or the else
+block executes (diverging so the body is never reached, or producing a fallback value for
+the overall expression).
 
 ## Summary
 
 The core ideas:
 
-- **`:=` is a let-in expression.** It binds a name and opens a scope that extends to the
+- **`:=` is a binding expression.** It binds a name and opens a scope that extends to the
   end of the enclosing block.
 - **Sequential `:=` statements nest.** Each new binding creates a new scope inside the
   previous one.
@@ -496,19 +493,19 @@ The core ideas:
   binding; the old one is hidden but unchanged.
 - **`=` is mutation.** It changes an existing binding in place, reaches across scopes,
   and is a statement with no value.
-- **Type annotations live on bindings.** The `:` in `x: Int := v` annotates the let-in
+- **Type annotations live on bindings.** The `:` in `x: Int := v` annotates the binding
   expression, which is also why casts use the same syntax.
 - **Stack closures capture by reference and cannot escape.** Because bindings live on
   the stack, a stack closure cannot outlive the scope that owns the captured bindings.
 - **Allocated closures capture by value and can escape.** With `[[alloc,
   capture(...)]]`, captured values are copied to the heap, so the closure is independent
   of the original scope.
-- **Pattern matching arms are scopes.** Each arm's binding is a let-in whose body is the
-  arm's block.
-- **Let-else extends let-in with pattern matching.** The binding succeeds or the else
-  block diverges, guaranteeing the name is always valid in the body. It exists because
-  `when` arms scope their bindings too tightly for the common "unwrap or bail out"
-  pattern.
+- **Pattern matching arms are scopes.** Each arm's binding is a binding expression whose
+  body is the arm's block.
+- **Let-else extends binding expressions with pattern matching.** The binding succeeds or
+  the else block diverges, guaranteeing the name is always valid in the body. It exists
+  because `when` arms scope their bindings too tightly for the common "unwrap or bail
+  out" pattern.
 
 ## Further Reading
 
