@@ -199,17 +199,20 @@ VERSION := $(shell cat VERSION)
 HOST_ARCH := $(shell uname -m | sed 's/^arm64$$/aarch64/')
 HOST_OS   := $(shell uname -s | tr '[:upper:]' '[:lower:]')
 
-$(VERSION_HEADER): VERSION $(wildcard .git/HEAD .git/packed-refs)
+$(VERSION_HEADER): VERSION $(wildcard .git/HEAD .git/packed-refs .git/refs/heads/*)
 	@mkdir -p $(dir $@)
 	$(MSG_GEN) $@
 	$(Q)( \
 		if [ -n "$$GIT_HASH" ]; then HASH="$$GIT_HASH"; \
 		else HASH=$$(git rev-parse --short=7 HEAD 2>/dev/null || echo "nogit"); fi; \
+		if [ -n "$$GIT_BRANCH" ]; then BRANCH="$$GIT_BRANCH"; \
+		else BRANCH=$$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo ""); fi; \
+		if [ -n "$$BRANCH" ]; then BRANCH_SEG="$$BRANCH-"; else BRANCH_SEG=""; fi; \
 		echo "/* Auto-generated version header */" > $@; \
 		echo "#ifndef TESS_VERSION_H" >> $@; \
 		echo "#define TESS_VERSION_H" >> $@; \
 		echo "" >> $@; \
-		echo "#define TESS_VERSION \"$(VERSION)-$$HASH-$(HOST_ARCH)-$(HOST_OS)\"" >> $@; \
+		echo "#define TESS_VERSION \"$(VERSION)-$$BRANCH_SEG$$HASH-$(HOST_ARCH)-$(HOST_OS)\"" >> $@; \
 		echo "" >> $@; \
 		echo "#endif /* TESS_VERSION_H */" >> $@; \
 	)

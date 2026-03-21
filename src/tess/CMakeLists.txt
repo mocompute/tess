@@ -22,6 +22,29 @@ else()
   endif()
 endif()
 
+# Get git branch — accept GIT_BRANCH env var, else try git, else omit
+if(DEFINED ENV{GIT_BRANCH})
+  set(GIT_BRANCH $ENV{GIT_BRANCH})
+else()
+  execute_process(
+    COMMAND git rev-parse --abbrev-ref HEAD
+    WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
+    OUTPUT_VARIABLE GIT_BRANCH
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+    ERROR_QUIET
+    RESULT_VARIABLE GIT_BRANCH_RESULT
+  )
+  if(NOT GIT_BRANCH_RESULT EQUAL 0)
+    set(GIT_BRANCH "")
+  endif()
+endif()
+
+if(GIT_BRANCH)
+  set(BRANCH_SEG "${GIT_BRANCH}-")
+else()
+  set(BRANCH_SEG "")
+endif()
+
 # System info
 set(TESS_ARCH ${CMAKE_SYSTEM_PROCESSOR})
 string(TOLOWER ${CMAKE_SYSTEM_NAME} TESS_OS)
@@ -32,7 +55,7 @@ file(WRITE ${VERSION_HEADER}
 #ifndef TESS_VERSION_H
 #define TESS_VERSION_H
 
-#define TESS_VERSION \"${TESS_VERSION}-${GIT_HASH}-${TESS_ARCH}-${TESS_OS}\"
+#define TESS_VERSION \"${TESS_VERSION}-${BRANCH_SEG}${GIT_HASH}-${TESS_ARCH}-${TESS_OS}\"
 
 #endif /* TESS_VERSION_H */
 ")
