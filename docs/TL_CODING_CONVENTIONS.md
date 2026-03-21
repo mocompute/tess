@@ -131,7 +131,9 @@ Use `Ptr[T]` for mutable, long-lived, or heap-allocated data. Use value types fo
 
 ## Synopsis and Type Annotations
 
-The **synopsis** declares every public function with full type annotations. This serves as the module's API documentation. **Implementations omit type annotations** — use parameter names only:
+The **synopsis** declares every public function with full type annotations. This serves as the module's API
+documentation. It is not required by the compiler, but it is helpful. **Implementations omit type
+annotations** — use parameter names only:
 
 ```tl
 // Synopsis
