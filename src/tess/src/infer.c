@@ -605,6 +605,27 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *out_resu
 // Error reporting and debug logging
 // ============================================================================
 
+static void report_error_hints(tl_infer *self, tl_infer_error *err) {
+    if (err->tag == tl_err_free_variable_not_found) {
+        // If the free variable name matches a trait method, suggest parenthesizing
+        // number literals (e.g., 42.hash() should be (42).hash())
+        hashmap_iterator iter = {0};
+        while (map_iter(self->traits, &iter)) {
+            tl_trait_def *def = *(tl_trait_def **)iter.data;
+            forall(s, def->sigs) {
+                if (str_eq(def->sigs.v[s].name, err->message)) {
+                    fprintf(stderr,
+                            "  hint: '%s' is a trait method (trait '%s'). "
+                            "If calling on a number literal, parenthesize it: (42).%s()\n",
+                            str_cstr(&err->message), str_cstr(&def->generic_name),
+                            str_cstr(&err->message));
+                    return;
+                }
+            }
+        }
+    }
+}
+
 void tl_infer_report_errors(tl_infer *self) {
     if (self->errors.size) {
         forall(i, self->errors) {
@@ -613,29 +634,27 @@ void tl_infer_report_errors(tl_infer *self) {
             str             message = err->message;
 
             if (node) {
-                if (err->tag == tl_err_free_variable_not_found) {
-                    if (node->file && *node->file)
-                        fprintf(stderr, "%s:%u: %s: %.*s\n", node->file, node->line,
-                                tl_error_tag_to_string(err->tag), str_ilen(message), str_buf(&message));
-                    else
-                        fprintf(stderr, "%s: %.*s\n", tl_error_tag_to_string(err->tag), str_ilen(message),
-                                str_buf(&message));
-                } else {
-                    str node_str = v2_ast_node_to_string(self->transient, node);
-                    if (node->file && *node->file)
-                        fprintf(stderr, "%s:%u: %s: %.*s: %.*s\n", node->file, node->line,
-                                tl_error_tag_to_string(err->tag), str_ilen(message), str_buf(&message),
-                                str_ilen(node_str), str_buf(&node_str));
-                    else
-                        fprintf(stderr, "%s: %.*s: %.*s\n", tl_error_tag_to_string(err->tag),
-                                str_ilen(message), str_buf(&message), str_ilen(node_str),
-                                str_buf(&node_str));
-                }
-            }
+                char const *tag = tl_error_tag_to_string(err->tag);
+                int has_node_str = err->tag != tl_err_free_variable_not_found;
+                str node_str = has_node_str ? v2_ast_node_to_string(self->transient, node) : str_empty();
 
-            else
-                fprintf(stderr, "error: %s: %.*s\n", tl_error_tag_to_string(err->tag), str_ilen(message),
-                        str_buf(&message));
+                if (node->file && *node->file) {
+                    if (has_node_str)
+                        fprintf(stderr, "%s:%u: %s: %s: %s\n", node->file, node->line,
+                                tag, str_cstr(&message), str_cstr(&node_str));
+                    else
+                        fprintf(stderr, "%s:%u: %s: %s\n", node->file, node->line,
+                                tag, str_cstr(&message));
+                } else {
+                    if (has_node_str)
+                        fprintf(stderr, "%s: %s: %s\n", tag, str_cstr(&message), str_cstr(&node_str));
+                    else
+                        fprintf(stderr, "%s: %s\n", tag, str_cstr(&message));
+                }
+                report_error_hints(self, err);
+            } else {
+                fprintf(stderr, "error: %s: %s\n", tl_error_tag_to_string(err->tag), str_cstr(&message));
+            }
         }
     }
 }

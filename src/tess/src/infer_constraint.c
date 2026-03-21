@@ -2080,13 +2080,39 @@ static int infer_type_constructor_nfa(tl_infer *self, traverse_ctx *ctx, ast_nod
     return constrain_pm(self, node->type, inst, node, TL_UNIFY_SYMMETRIC);
 }
 
+// Check for common mistakes when a named function application can't be resolved.
+// Returns 1 if an error was reported, 0 if the caller should silently defer.
+static int check_unresolved_nfa(tl_infer *self, ast_node *node) {
+    ast_node *name_node = node->named_application.name;
+    if (!ast_node_is_symbol(name_node) || !name_node->symbol.is_module_mangled) return 0;
+    if (str_is_empty(name_node->symbol.module) || str_is_empty(name_node->symbol.original)) return 0;
+
+    str module   = name_node->symbol.module;
+    str original = name_node->symbol.original;
+
+    // Trait-qualified call: Hash.hash(42) where Hash is a trait module
+    tl_trait_def *trait = str_map_get_ptr(self->traits, module);
+    if (trait) {
+        str msg = str_fmt(self->arena,
+            "'%s' is not a function in module '%s'. "
+            "'%s' is a trait — use UFCS instead: value.%s()",
+            str_cstr(&original), str_cstr(&module),
+            str_cstr(&module), str_cstr(&original));
+        array_push(self->errors,
+                   ((tl_infer_error){.tag = tl_err_function_not_found, .node = name_node, .message = msg}));
+        return 1;
+    }
+
+    return 0;
+}
+
 static int infer_named_function_application(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
     if (resolve_node(self, node, ctx, ctx->node_pos)) return 1;
 
     str          name     = ast_node_str(node->named_application.name);
     str          original = ast_node_name_original(node->named_application.name);
     tl_polytype *type     = lookup_poly(self, name);
-    if (!type) return 0;
+    if (!type) return check_unresolved_nfa(self, node);
 
     if (is_type_literal(self, ctx, node)) return 0;
 
