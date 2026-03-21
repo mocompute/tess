@@ -1,25 +1,12 @@
 # Tess Type System
 
-Tess features a Hindley-Milner style type system with full type inference, parametric polymorphism (generics), and monomorphization. This document describes how the type system works.
+The compiler infers types from usage, so most code needs no annotations. Generic functions and types are specialized to concrete types at compile time: no runtime dispatch, no overhead.
 
-## Overview
-
-The Tess type system provides:
-
-- **Type Inference** - Types are inferred from usage; explicit annotations are rarely required
-- **Parametric Polymorphism** - Generic functions and types with type parameters
-- **Monomorphization** - Generic code is specialized to concrete types at compile time
-- **Structural Typing** - Types are compared by structure, not by name
-- **C Interoperability** - Seamless integration with C types
+This document covers how inference works, when you need annotations, and how generics and traits interact.
 
 ## Type Inference
 
-Tess uses constraint-based type inference. The compiler:
-
-1. Assigns fresh type variables to all expressions
-2. Collects constraints from the program structure
-3. Solves constraints via unification
-4. Produces concrete types for all expressions
+The compiler determines types by looking at how values are used. Write `add(a, b) { a + b }` and the compiler figures out that `a` and `b` must support `+` and infers the return type accordingly.
 
 ### Inference in Action
 
@@ -49,39 +36,32 @@ Type annotations are needed when:
 
 3. **Functions only used through pointers** - Without a direct call site, the compiler cannot specialize:
    ```tl
-   // Annotation required: malloc is only stored in a struct, never called directly
+   // Annotation required: malloc is only stored, never called directly
    malloc(count: CSize) -> Ptr[Int] {
      c_malloc(count)
    }
+   alloc := Allocator(malloc_fn = malloc/1)
    ```
 
-4. **Disambiguation** - When multiple types would be valid:
-   ```tl
-   x: CInt := 42     // Force CInt instead of Int
-   ch := 'a'         // Character literal: CChar
-   ```
-
-## Generics (Parametric Polymorphism)
+## Generics
 
 ### Generic Types
 
 Types can have type parameters, written in square brackets:
 
 ```tl
-Point[a] : { x: a, y: a }           // One type parameter
+Point[T] : { x: T, y: T }           // One type parameter
 Map[K, V] : { keys: Ptr[K], values: Ptr[V], size: Int }  // Multiple parameters
 ```
-
-Type parameters are conventionally single lowercase letters (`a`, `b`, `T`, etc.).
 
 ### Generic Functions
 
 Functions are automatically generic when they work with any type:
 
 ```tl
-id(x) { x }                         // Inferred: (a) -> a
-swap(a, b) { (b, a) }               // Inferred: (a, b) -> (b, a)
-apply(f, x) { f(x) }                // Inferred: ((a) -> b, a) -> b
+id(x) { x }                         // Inferred: (T) -> T
+swap(x, y) { (y, x) }               // Inferred: (T, U) -> (U, T)
+apply(f, x) { f(x) }                // Inferred: ((T) -> U, T) -> U
 ```
 
 ### Explicit Type Parameters
@@ -91,7 +71,7 @@ Generic functions declare type parameters using square brackets. Square brackets
 ```tl
 empty[T]() -> Array[T] { ... }
 with_capacity[T](n: Int) -> Array[T] { ... }
-map[a, b](f: (a) -> b, arr: Array[a]) -> Array[b] { ... }
+map[T, U](f: (T) -> U, arr: Array[T]) -> Array[U] { ... }
 
 // Usage
 arr := empty[Int]()
@@ -136,7 +116,7 @@ The compiler generates three specialized versions of `id`, each with concrete ty
 Generic structs are also specialized:
 
 ```tl
-Point[a] : { x: a, y: a }
+Point[T] : { x: T, y: T }
 
 main() {
   p1 := Point(x = 1, y = 2)       // Creates Point_Int
@@ -225,7 +205,7 @@ User-defined types (structs, unions, enums) introduce **type constructors**.
 ### Struct Type Constructors
 
 ```tl
-Point[a] : { x: a, y: a }
+Point[T] : { x: T, y: T }
 ```
 
 `Point` is a type constructor that takes one type argument. `Point[Int]` and `Point[Float]` are distinct concrete types.
@@ -234,7 +214,7 @@ Point[a] : { x: a, y: a }
 
 - **Type Variables** - Placeholders during inference (`t0`, `t1`, etc.)
 - **Monotypes** - Concrete types without quantifiers (`Int`, `Point[Float]`)
-- **Polytypes** - Type schemes with quantified variables (`forall a. a -> a`)
+- **Polytypes** - Type schemes with quantified variables (`forall T. T -> T`)
 
 ### Arrow Types (Function Types)
 
@@ -243,7 +223,7 @@ Function types use arrow notation:
 ```tl
 (Int) -> Int                    // Function taking Int, returning Int
 (Int, Int) -> Int               // Function taking two Ints
-((a) -> b, a) -> b              // Higher-order function
+((T) -> U, T) -> U              // Higher-order function
 ```
 
 ### Tuple Types
@@ -517,7 +497,7 @@ x: Float := 0.0     // OK: 0.0 is Float
 Types can reference themselves through pointers:
 
 ```tl
-Node[a] : { value: a, next: Ptr[Node[a]] }
+Node[T] : { value: T, next: Ptr[Node[T]] }
 
 // Usage
 n1 := Node(value = 1, next = null)
@@ -529,8 +509,8 @@ n2 := Node(value = 2, next = n1.&)
 Types can reference each other:
 
 ```tl
-Tree[a] : { value: a, children: Ptr[Forest[a]] }
-Forest[a] : { trees: Ptr[Tree[a]], count: Int }
+Tree[T] : { value: T, children: Ptr[Forest[T]] }
+Forest[T] : { trees: Ptr[Tree[T]], count: Int }
 ```
 
 ## Polymorphic Recursion

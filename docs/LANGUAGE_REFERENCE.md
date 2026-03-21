@@ -1,37 +1,13 @@
 # Tess Language Reference
 
-Tess is a statically-typed, compiled programming language that transpiles to C. It features type inference (Hindley-Milner style), generic types and functions, lambdas, closures, and C interoperability.
+This is the complete syntax guide for Tess. For the design rationale behind the syntax, see the [Language Model](LANGUAGE_MODEL.md).
 
-> For the conceptual foundations behind the syntax — let-in expressions, scoping, closures, and pattern matching — see the [Language Model](LANGUAGE_MODEL.md).
+If you're coming from C, most of Tess will look familiar: braces for blocks, parentheses for calls, the same operators. The main differences:
 
-## Key Language Characteristics
-
-**Expression-based:** Nearly everything in Tess is an expression that produces a value. Control flow constructs like `if`, `case`, and `when` can be used anywhere an expression is expected. Functions implicitly return the value of their final expression—no `return` keyword needed (though early `return` is supported). Note: assignment with `=` is a statement, not an expression, and has no value.
-
-**Implicit returns:** Functions return their last expression automatically. For functions that should return nothing, use `void` as the final expression after an expression that produces a value:
-
-```tl
-greet(name) { c_printf("Hello, %s\n", name), void }
-```
-
-If a function ends with an assignment statement (`=`), it returns `Void` since assignments have no value:
-
-```tl
-set_name(n) { name = n }   // returns Void - assignment has no value
-```
-
-**Parentheses for grouping:** Use `( )` to group expressions and control evaluation order, or to introduce local bindings with let-in style:
-
-```tl
-result := (x := compute()
-           x * x + 1)
-```
-
-**Curly braces for blocks:** Code blocks use `{ }` and contain one or more expressions. The block's value is its final expression.
-
-**Minimal syntax:** Tess favors consistency over special-purpose constructs. A colon (`:`) always introduces a type—whether annotating a variable (`x: Int`), defining a type (`Point : { ... }`), or declaring a field. Parentheses (`()`) always mean application: calling a function, constructing a value, or instantiating a generic. Braces (`{ }`) delimit bodies uniformly across functions, types, and blocks. Statements and expressions are separated by whitespace (conventionally newlines). A comma (`,`) or semicolon (`;`) can optionally be placed between expressions to explicitly mark expression boundaries (see [Expression Separators](#expression-separators)). Pointer operators are postfix (`.&`, `.*`, `->`) rather than prefix, reading left-to-right like field access. The result is a small grammar with few special cases.
-
-**Distinct declaration vs assignment:** `:=` declares a new binding (expression with value); `=` mutates an existing one (statement with no value). This enables predictable scoping and intentional shadowing.
+- `:=` declares a variable, `=` assigns to an existing one
+- Type annotations are usually optional: the compiler infers them
+- Functions return their last expression: no `return` needed
+- `if`, `case`, and `when` produce values
 
 ## Program Structure
 
