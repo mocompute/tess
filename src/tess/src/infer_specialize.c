@@ -52,7 +52,7 @@ tl_polytype *make_arrow_result_type(tl_infer *self, traverse_ctx *ctx, ast_node_
 
         tl_monotype *out = tl_type_registry_create_arrow(self->registry, left, right);
 
-        {
+        if (self->verbose >= 3) {
             str str = tl_monotype_to_string(self->transient, out);
             dbg(self, "arrow: %.*s", str_ilen(str), str_buf(&str));
             str_deinit(self->transient, &str);
