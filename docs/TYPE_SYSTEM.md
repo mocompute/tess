@@ -200,7 +200,7 @@ User-defined types (structs, unions, enums) introduce **type constructors**.
 
 ### Built-in Type Constructors
 
-`Ptr[T]` and `Const[T]` are built-in unary type constructors. `Const[T]` is a type qualifier primarily used inside `Ptr` to express read-only pointer access: `Ptr[Const[T]]`. The compiler enforces const correctness by rejecting mutation through const pointers and preventing implicit removal of const qualifiers.
+`Ptr[T]` and `Const[T]` are built-in unary type constructors. `Const[T]` serves two roles: inside `Ptr` it expresses read-only pointer access (`Ptr[Const[T]]`), and on value bindings it prevents reassignment (`x: Const[Int] := 5`). `Const` without a type argument is sugar for `Const[T]` with a fresh type variable (`x: Const := 5`). The compiler enforces const correctness by rejecting mutation through const pointers, preventing implicit removal of const qualifiers, and rejecting reassignment of const value bindings.
 
 ### Struct Type Constructors
 
@@ -454,6 +454,16 @@ mp: Ptr[Int] := const_ptr    // explicit cast, allowed
 ```
 
 In the generated C code, `Ptr[Const[T]]` transpiles to `const T*`.
+
+### Const Value Bindings
+
+`Const[T]` on a value binding prevents reassignment. During unification, `Const[T]` strips freely for value types — a `Const[Int]` value can be passed to a function expecting `Int` because the value is copied. This matches C semantics where `const int x` can be passed by value to functions expecting `int`.
+
+Taking the address of a `Const[T]` binding produces `Ptr[Const[T]]`, preserving const safety through pointers. This means UFCS methods that take `Ptr[T]` (mutating) are rejected on const bindings, while methods taking `Ptr[Const[T]]` (read-only) are accepted.
+
+`Const` on a binding and `Const` inside `Ptr` are orthogonal: `Const[Ptr[Int]]` transpiles to `int* const` (can't reassign pointer, can mutate pointee), while `Ptr[Const[Int]]` transpiles to `const int*` (can reassign pointer, can't mutate pointee).
+
+For-loop variables are implicitly `Const`.
 
 ### Const and Generic Type Parameters
 

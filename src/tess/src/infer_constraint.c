@@ -1573,11 +1573,12 @@ static int check_const_strip_in_call(tl_infer *self, tl_monotype *func_type, tl_
     return 0;
 }
 
-// Check if the LHS of a reassignment involves dereferencing a Ptr(Const(T)).
+// Check if the LHS of a reassignment involves a const violation:
+// - Dereferencing a Ptr(Const(T))
+// - Mutating a field of a Const(T) value binding
 // Returns 1 if a const violation is detected.
 static int check_const_violation(tl_infer *self, ast_node *lhs) {
     if (!lhs) return 0;
-    (void)self;
 
     // ptr.* = value: unary dereference of a const pointer
     if (lhs->tag == ast_unary_op && str_eq(ast_node_str(lhs->unary_op.op), S("*"))) {
@@ -1601,6 +1602,25 @@ static int check_const_violation(tl_infer *self, ast_node *lhs) {
         }
     }
 
+    // Walk binary-op chain (struct access / index) to root symbol.
+    // If the root binding is Const[T], reject the mutation.
+    {
+        ast_node *cur = lhs;
+        while (cur && cur->tag == ast_binary_op) {
+            str         op   = ast_node_str(cur->binary_op.op);
+            char const *op_s = str_cstr(&op);
+            if (is_struct_access_operator(op_s) || is_index_operator(op_s))
+                cur = cur->binary_op.left;
+            else
+                break;
+        }
+        if (cur && cur != lhs && cur->type && cur->type->type) {
+            tl_polytype_substitute(self->arena, cur->type, self->subs);
+            tl_monotype *root_type = cur->type->type;
+            if (tl_monotype_is_const(root_type)) return 1;
+        }
+    }
+
     return 0;
 }
 
@@ -1617,6 +1637,18 @@ static int infer_reassignment(tl_infer *self, traverse_ctx *ctx, ast_node *node)
     if (check_const_violation(self, node->assignment.name)) {
         array_push(self->errors, ((tl_infer_error){.tag = tl_err_const_violation, .node = node}));
         return 1;
+    }
+
+    // Check for const value reassignment: the LHS binding itself is Const[T]
+    if (ast_node_is_symbol(node->assignment.name)) {
+        tl_polytype *env_type = tl_type_env_lookup(self->env, ast_node_str(node->assignment.name));
+        if (env_type) {
+            tl_polytype_substitute(self->arena, env_type, self->subs);
+            if (tl_monotype_is_const(env_type->type)) {
+                array_push(self->errors, ((tl_infer_error){.tag = tl_err_const_violation, .node = node}));
+                return 1;
+            }
+        }
     }
 
     // reassignment nodes have void type
@@ -1672,11 +1704,14 @@ static int infer_binary_op(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
         tl_monotype_substitute(self->arena, left->type->type, self->subs, null);
         tl_monotype_substitute(self->arena, right->type->type, self->subs, null);
 
-        if (tl_monotype_has_ptr(left->type->type)) {
-            tl_monotype *target = tl_monotype_ptr_target(left->type->type);
+        tl_monotype *left_mono = left->type->type;
+        // Look through Const wrapper for index operator
+        if (tl_monotype_is_const(left_mono)) left_mono = tl_monotype_const_target(left_mono);
+        if (tl_monotype_has_ptr(left_mono)) {
+            tl_monotype *target = tl_monotype_ptr_target(left_mono);
             if (constrain_pm(self, node->type, target, node, TL_UNIFY_SYMMETRIC)) return 1;
-        } else if (tl_monotype_is_carray(left->type->type)) {
-            tl_monotype *target = tl_monotype_carray_element(left->type->type);
+        } else if (tl_monotype_is_carray(left_mono)) {
+            tl_monotype *target = tl_monotype_carray_element(left_mono);
             if (constrain_pm(self, node->type, target, node, TL_UNIFY_SYMMETRIC)) return 1;
         }
 
@@ -1697,9 +1732,12 @@ static int infer_unary_op(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
     str op = ast_node_str(node->unary_op.op);
     if (str_eq(op, S("*"))) {
         tl_polytype_substitute(self->arena, operand->type, self->subs); // needed
-        if (tl_monotype_has_ptr(operand->type->type)) {
+        tl_monotype *operand_mono = operand->type->type;
+        // Look through Const wrapper: Const[Ptr[T]].* yields T
+        if (tl_monotype_is_const(operand_mono)) operand_mono = tl_monotype_const_target(operand_mono);
+        if (tl_monotype_has_ptr(operand_mono)) {
             assert(!tl_polytype_is_scheme(operand->type));
-            tl_monotype *target = tl_monotype_ptr_target(operand->type->type);
+            tl_monotype *target = tl_monotype_ptr_target(operand_mono);
             if (constrain_pm(self, node->type, target, node, TL_UNIFY_SYMMETRIC)) return 1;
         } else if (tl_polytype_is_concrete(operand->type)) {
             array_push(self->errors, ((tl_infer_error){.tag = tl_err_expected_pointer, .node = node}));
@@ -1778,6 +1816,9 @@ static int infer_tagged_union_case(tl_infer *self, traverse_ctx *ctx, ast_node *
             tl_monotype_substitute(self->arena, wrapper_type, self->subs, null);
         }
     }
+
+    // Look through Const wrapper for tagged union matching
+    if (tl_monotype_is_const(wrapper_type)) wrapper_type = tl_monotype_const_target(wrapper_type);
 
     if (!tl_monotype_is_inst(wrapper_type)) {
         expected_tagged_union(self, node->case_.expression);
@@ -1952,7 +1993,14 @@ static int infer_let_in(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
         if (is_cast_annotation(node->let_in.name)) {
             if (cast_constrain_let_in(self, node)) return 1;
         } else {
-            if (constrain(self, name_type, value_type, node, TL_UNIFY_DIRECTED)) return 1;
+            // For Const[T] bindings, constrain value against unwrapped T so the Const
+            // wrapper does not back-propagate onto the value expression's type.
+            if (name_type && tl_monotype_is_const(name_type->type)) {
+                tl_polytype unwrapped = tl_polytype_wrap(tl_monotype_const_target(name_type->type));
+                if (constrain(self, &unwrapped, value_type, node, TL_UNIFY_DIRECTED)) return 1;
+            } else {
+                if (constrain(self, name_type, value_type, node, TL_UNIFY_DIRECTED)) return 1;
+            }
         }
 
         env_insert_constrain(self, node->let_in.name->symbol.name, name_type, node->let_in.name);
@@ -2341,6 +2389,9 @@ static void prepare_tagged_union_bindings(tl_infer *self, traverse_ctx *ctx, ast
             tl_monotype_substitute(self->arena, wrapper_type, self->subs, null);
         }
     }
+
+    // Look through Const wrapper for tagged union matching
+    if (tl_monotype_is_const(wrapper_type)) wrapper_type = tl_monotype_const_target(wrapper_type);
 
     if (!tl_monotype_is_inst(wrapper_type))
         return; // type not yet resolved; defer to infer_tagged_union_case

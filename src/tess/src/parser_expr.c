@@ -495,7 +495,11 @@ int a_for_statement(parser *self) {
 
     ast_node *while_body = null;
     {
-        ast_node *lhs      = variable;
+        ast_node *lhs = variable;
+        // Make loop variables const: attach Const annotation
+        if (!lhs->symbol.annotation) {
+            lhs->symbol.annotation = ast_node_create_sym_c(self->ast_arena, "Const");
+        }
         ast_node *rhs      = is_pointer ? call_iter_ptr : call_iter_value;
         ast_node *for_body = ast_node_create_let_in(self->ast_arena, lhs, rhs, user_body);
         while_body         = for_body;

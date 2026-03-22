@@ -377,6 +377,77 @@ size: CSize := some_uint_value
 
 See [Integer Type Conversions](#integer-type-conversions) for the full conversion rules.
 
+### Const Values
+
+`Const[T]` declares a binding that cannot be reassigned. It transpiles to `const T` in C.
+
+```tl
+x: Const[Int] := 42         // Cannot reassign x
+x: Const := 42              // Same, with type inference
+```
+
+**Reassignment and compound assignment are rejected:**
+
+```tl
+x: Const[Int] := 5
+x = 10                       // Error: const violation
+x += 1                       // Error: const violation
+```
+
+**Shadowing with `:=` is allowed** — it creates a new binding, not a reassignment:
+
+```tl
+x: Const := 5
+x := 10                      // OK: new binding shadows the const one
+```
+
+**Struct field mutation is rejected:**
+
+```tl
+p: Const[Point] := Point(x = 1, y = 2)
+p.x = 10                     // Error: const violation
+```
+
+**Function parameters** can be const:
+
+```tl
+add_one(x: Const[Int]) {
+    x + 1                     // OK: reading
+}
+
+add_one(42)                   // OK: Int unifies with Const[Int]
+```
+
+**For-loop variables** are implicitly const. Value iterators produce `Const[T]`, pointer iterators produce `Const[Ptr[T]]` (cannot reassign the pointer, but can mutate through it):
+
+```tl
+for x in arr {
+    x = 99                    // Error: const violation
+}
+
+for p.& in arr {
+    p.* = p.* + 1             // OK: can mutate through Const[Ptr[T]]
+}
+```
+
+**Address-of a const binding** produces `Ptr[Const[T]]`, preserving const safety:
+
+```tl
+x: Const[Int] := 42
+mutate(x.&)                   // Error if mutate expects Ptr[Int]
+```
+
+#### Const and Pointers
+
+`Const` on a binding and `Const` inside `Ptr` are orthogonal, matching C semantics:
+
+| Tess | C | Reassign | Mutate pointee |
+|------|---|:---:|:---:|
+| `Ptr[Int]` | `int*` | yes | yes |
+| `Ptr[Const[Int]]` | `const int*` | yes | no |
+| `Const[Ptr[Int]]` | `int* const` | no | yes |
+| `Const[Ptr[Const[Int]]]` | `const int* const` | no | no |
+
 ### Const Pointers
 
 `Ptr[Const[T]]` declares a pointer through which the target cannot be modified.
@@ -640,7 +711,7 @@ foo() -> Ptr[any] { return null }     // Required - null has no type
 
 > See [Language Model: Bindings](LANGUAGE_MODEL.md#bindings-the-binding-expression) for the conceptual foundation of binding expressions and scoping.
 
-Tess distinguishes between **binding** (`:=`) and **mutation** (`=`):
+Tess distinguishes between **binding** (`:=`) and **mutation** (`=`). All bindings are reassignable by default; use `Const[T]` or `Const` to prevent reassignment (see [Const Values](#const-values)).
 
 ### Binding with `:=`
 
@@ -1451,13 +1522,15 @@ The statement `for x in Module xs { body }` desugars to:
 ```tl
 iter := Module.iter_init(xs.&)
 while Module.iter_cond(iter.&), Module.iter_update(iter.&) {
-  x := Module.iter_value(iter.&)
+  x: Const := Module.iter_value(iter.&)
   body
 }
 Module.iter_deinit(iter.&)
 ```
 
 With `.&`, `iter_ptr` is called instead of `iter_value`.
+
+Loop variables are implicitly `Const` — they cannot be reassigned within the loop body. For pointer iterators, the variable is `Const[Ptr[T]]`: the pointer itself cannot be reassigned, but the pointee can be mutated through it.
 
 ### Break and Continue
 

@@ -48,8 +48,9 @@ Compiler: `./tess <command> <file.tl>` — commands: `c` (transpile to C), `exe`
 
 Rules for writing `.tl` code (inlined from `docs/TL_CODING_CONVENTIONS.md`):
 
-- **No `mut` keyword.** All bindings are reassignable. Do not write `mut` anywhere.
+- **No `mut` keyword.** Bindings are reassignable by default. Do not write `mut` anywhere.
 - **`:=` declares, `=` assigns.** `x := 42` creates a new binding; `x = 42` mutates an existing one.
+- **Use `Const` for immutable bindings.** `x: Const := 5` or `x: Const[Int] := 5`. Prevents reassignment, transpiles to C `const`. For-loop variables are implicitly `Const`.
 - **String literals are C strings.** `"foo"` is `Ptr[CChar]`, not `String`. Use `s"foo"` to get a `String`.
 - **`main()` returns `CInt`.** The compiler enforces this. No type annotation needed.
 - **Omit type annotations in implementations.** Synopsis has full types; implementations use parameter names only. Inference handles the rest.
