@@ -234,6 +234,7 @@ start:; // loop point for skip_depth > 0
         in_symbol,
         stop_symbol,
 
+        in_c,
         in_s,
         start_ident, // a symbol, with restricted character set
         in_ident,
@@ -259,6 +260,7 @@ start:; // loop point for skip_depth > 0
 
     enum {
         str_default,
+        str_c_prefix,
         str_s_prefix,
     } string_format  = str_default;
 
@@ -307,6 +309,7 @@ start:; // loop point for skip_depth > 0
             case '\r':
             case '\n': continue;
 
+            case 'c':  state = in_c; continue;
             case 's':  state = in_s; continue;
             case '.':  state = in_dot; continue;
             case ':':  state = in_colon; continue;
@@ -820,6 +823,20 @@ start:; // loop point for skip_depth > 0
             state         = in_symbol;
         } break;
 
+        case in_c: {
+            // 'c' was consumed. If next char is '"', this is a c-string.
+            if (self->pos < end && '"' == peek_char(self, self->pos)) {
+                advance_pos(self); // skip the opening "
+                string_format = str_c_prefix;
+                state         = start_string;
+                continue;
+            }
+            // Not c"...", treat 'c' as start of identifier
+            reverse_pos(self);
+            state = start_ident;
+            continue;
+        } break;
+
         case in_s: {
             // 's' was consumed. If next char is '"', this is an s-string.
             if (self->pos < end && '"' == peek_char(self, self->pos)) {
@@ -1148,7 +1165,10 @@ start:; // loop point for skip_depth > 0
         } break;
 
         case stop_string: {
-            replace_token_sn(self->strings, &res, string_format == str_s_prefix ? tok_s_string : tok_string,
+            replace_token_sn(self->strings, &res,
+                             string_format == str_s_prefix   ? tok_s_string
+                             : string_format == str_c_prefix ? tok_c_string
+                                                             : tok_string,
                              self->buf.v, self->buf.size);
             string_format = str_default;
             state         = stop;
