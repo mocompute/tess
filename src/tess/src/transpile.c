@@ -1685,50 +1685,51 @@ static str generate_let_in(transpile *self, tl_monotype *result_type, ast_node c
                 }
             } else if (tl_monotype_is_concrete(type)) {
                 if (should_assign_result(ctx, type)) {
-                    if (tl_monotype_is_const(type) && should_assign_value(node->let_in.value)) {
-                        // Const types require combined declaration+initialization in C.
-                        generate_decl_init(self, name, type, value);
-                    } else {
-                        generate_decl(self, name, type);
+                    int is_const_bind = tl_monotype_is_const(type);
+                    tl_monotype *inner_type = tl_monotype_strip_const(type);
 
-                        // Note: special case: if we are assigning to a pointer type, cast the rhs to that
-                        // type. This allows C pointer casts without a warning.
-                        if (should_assign_value(node->let_in.value)) {
-                            if (tl_monotype_is_ptr(type)) {
+                    if (should_assign_value(node->let_in.value)) {
+                        str emit_value = value;
+
+                        if (tl_monotype_is_ptr(inner_type)) {
+                            // Pointer cast: (T*)value — suppresses C pointer-cast warnings.
+                            emit_value = str_cat_4(self->transient, S("("),
+                                                   type_to_c_mono(self, inner_type), S(")"), value);
+                        } else if (tl_monotype_is_integer_convertible(inner_type) ||
+                                   tl_monotype_is_float_convertible(inner_type)) {
+                            // Numeric cast with bounds check.
+                            tl_monotype *val_type = let_in_val_type(self, node);
+                            if (tl_monotype_is_integer_convertible(inner_type)) {
+                                if (is_integer_narrowing_cast(inner_type, val_type))
+                                    emit_bounds_check(self, inner_type, val_type, value, node);
+                                else if (is_float_to_int_val(val_type))
+                                    emit_float_to_int_bounds_check(self, inner_type, val_type, value,
+                                                                   node);
+                            } else {
+                                if (is_float_narrowing_cast(inner_type, val_type))
+                                    emit_float_narrowing_bounds_check(self, inner_type, val_type, value,
+                                                                     node);
+                            }
+                            emit_value = str_cat_4(self->transient, S("("),
+                                                   type_to_c_mono(self, inner_type), S(")"), value);
+                        }
+
+                        if (is_const_bind) {
+                            // Const types require combined declaration+initialization in C.
+                            generate_decl_init(self, name, type, emit_value);
+                        } else {
+                            generate_decl(self, name, type);
+                            if (!str_eq(emit_value, value)) {
                                 cat(self, name);
                                 cat_assign(self);
-
-                                cat_open_round(self);
-                                cat(self, type_to_c_mono(self, type));
-                                cat_close_round(self);
-
-                                cat(self, value);
-                                cat_semicolonln(self);
-                            } else if (tl_monotype_is_integer_convertible(type) ||
-                                       tl_monotype_is_float_convertible(type)) {
-                                // Numeric cast: emit (target_type)value for all numeric let-in bindings.
-                                // Silences -Wconversion for narrowing and makes casts explicit.
-                                tl_monotype *val_type = let_in_val_type(self, node);
-                                if (tl_monotype_is_integer_convertible(type)) {
-                                    if (is_integer_narrowing_cast(type, val_type))
-                                        emit_bounds_check(self, type, val_type, value, node);
-                                    else if (is_float_to_int_val(val_type))
-                                        emit_float_to_int_bounds_check(self, type, val_type, value, node);
-                                } else {
-                                    if (is_float_narrowing_cast(type, val_type))
-                                        emit_float_narrowing_bounds_check(self, type, val_type, value, node);
-                                }
-                                cat(self, name);
-                                cat_assign(self);
-                                cat_open_round(self);
-                                cat(self, type_to_c_mono(self, type));
-                                cat_close_round(self);
-                                cat(self, value);
+                                cat(self, emit_value);
                                 cat_semicolonln(self);
                             } else {
                                 generate_assign(self, name, value);
                             }
                         }
+                    } else {
+                        generate_decl(self, name, type);
                     }
                 }
             } else {
@@ -1999,8 +2000,7 @@ static str generate_tagged_union_case(transpile *self, ast_node const *node, eva
     }
 
     // Get the wrapper type (Shape), looking through Const wrapper
-    tl_monotype *wrapper_type = node->case_.expression->type->type;
-    if (tl_monotype_is_const(wrapper_type)) wrapper_type = tl_monotype_const_target(wrapper_type);
+    tl_monotype *wrapper_type = tl_monotype_strip_const(node->case_.expression->type->type);
     if (!tl_monotype_is_inst(wrapper_type))
         exit_error(node->file, node->line, "expected tagged union type in case expression");
 
@@ -2853,7 +2853,7 @@ static int ptr_depth_to_arrow(tl_monotype *type, tl_monotype **out_arrow) {
         type = tl_monotype_ptr_target(type);
     }
     // Skip Const wrapper (e.g. Ptr(Const(Arrow(...))))
-    if (tl_monotype_is_const(type)) type = tl_monotype_const_target(type);
+    type = tl_monotype_strip_const(type);
     if (tl_monotype_is_arrow(type)) {
         if (out_arrow) *out_arrow = type;
         return depth;
@@ -2906,7 +2906,7 @@ static void generate_decl(transpile *self, str name, tl_monotype *type) {
     // Strip Const wrapper: generate_decl emits a declaration without initializer,
     // and C requires const variables to be initialized at declaration. Callers that
     // need const use generate_decl_init instead.
-    if (tl_monotype_is_const(type)) type = tl_monotype_const_target(type);
+    type = tl_monotype_strip_const(type);
     name = escape_c_keyword(self->transient, name);
     if (tl_arrow == type->tag) {
         // arrow
@@ -3731,7 +3731,7 @@ static int is_c_exportable_type(tl_monotype *type) {
 
     if (tl_monotype_is_ptr(type)) {
         tl_monotype *target = tl_monotype_ptr_target(type);
-        if (tl_monotype_is_const(target)) target = tl_monotype_const_target(target);
+        target = tl_monotype_strip_const(target);
         if (tl_monotype_is_any(target)) return 1; // Ptr[any] is opaque, ok
         return is_c_exportable_type(target);
     }

@@ -236,6 +236,7 @@ int tl_monotype_is_arrow(tl_monotype *);
 int          tl_monotype_is_ptr(tl_monotype *);
 int          tl_monotype_is_const(tl_monotype *);
 tl_monotype *tl_monotype_const_target(tl_monotype *);
+tl_monotype *tl_monotype_strip_const(tl_monotype *);
 int          tl_monotype_is_ptr_to_const(tl_monotype *);
 int          tl_monotype_is_carray(tl_monotype *);
 tl_monotype *tl_monotype_carray_element(tl_monotype *);

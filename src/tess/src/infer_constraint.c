@@ -1544,8 +1544,8 @@ static int types_strip_const(tl_monotype *param, tl_monotype *arg) {
         tl_monotype *at = tl_monotype_ptr_target(arg);
         if (tl_monotype_is_const(at) && !tl_monotype_is_const(pt)) return 1;
         // Unwrap Const if present on both sides before continuing
-        if (tl_monotype_is_const(pt)) pt = tl_monotype_const_target(pt);
-        if (tl_monotype_is_const(at)) at = tl_monotype_const_target(at);
+        pt = tl_monotype_strip_const(pt);
+        at = tl_monotype_strip_const(at);
         param = pt;
         arg   = at;
     }
@@ -1704,9 +1704,7 @@ static int infer_binary_op(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
         tl_monotype_substitute(self->arena, left->type->type, self->subs, null);
         tl_monotype_substitute(self->arena, right->type->type, self->subs, null);
 
-        tl_monotype *left_mono = left->type->type;
-        // Look through Const wrapper for index operator
-        if (tl_monotype_is_const(left_mono)) left_mono = tl_monotype_const_target(left_mono);
+        tl_monotype *left_mono = tl_monotype_strip_const(left->type->type);
         if (tl_monotype_has_ptr(left_mono)) {
             tl_monotype *target = tl_monotype_ptr_target(left_mono);
             if (constrain_pm(self, node->type, target, node, TL_UNIFY_SYMMETRIC)) return 1;
@@ -1732,9 +1730,7 @@ static int infer_unary_op(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
     str op = ast_node_str(node->unary_op.op);
     if (str_eq(op, S("*"))) {
         tl_polytype_substitute(self->arena, operand->type, self->subs); // needed
-        tl_monotype *operand_mono = operand->type->type;
-        // Look through Const wrapper: Const[Ptr[T]].* yields T
-        if (tl_monotype_is_const(operand_mono)) operand_mono = tl_monotype_const_target(operand_mono);
+        tl_monotype *operand_mono = tl_monotype_strip_const(operand->type->type);
         if (tl_monotype_has_ptr(operand_mono)) {
             assert(!tl_polytype_is_scheme(operand->type));
             tl_monotype *target = tl_monotype_ptr_target(operand_mono);
@@ -1817,8 +1813,7 @@ static int infer_tagged_union_case(tl_infer *self, traverse_ctx *ctx, ast_node *
         }
     }
 
-    // Look through Const wrapper for tagged union matching
-    if (tl_monotype_is_const(wrapper_type)) wrapper_type = tl_monotype_const_target(wrapper_type);
+    wrapper_type = tl_monotype_strip_const(wrapper_type);
 
     if (!tl_monotype_is_inst(wrapper_type)) {
         expected_tagged_union(self, node->case_.expression);
@@ -2390,8 +2385,7 @@ static void prepare_tagged_union_bindings(tl_infer *self, traverse_ctx *ctx, ast
         }
     }
 
-    // Look through Const wrapper for tagged union matching
-    if (tl_monotype_is_const(wrapper_type)) wrapper_type = tl_monotype_const_target(wrapper_type);
+    wrapper_type = tl_monotype_strip_const(wrapper_type);
 
     if (!tl_monotype_is_inst(wrapper_type))
         return; // type not yet resolved; defer to infer_tagged_union_case

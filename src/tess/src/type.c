@@ -2261,6 +2261,10 @@ tl_monotype *tl_monotype_const_target(tl_monotype *self) {
     return self->cons_inst->args.v[0];
 }
 
+tl_monotype *tl_monotype_strip_const(tl_monotype *self) {
+    return tl_monotype_is_const(self) ? tl_monotype_const_target(self) : self;
+}
+
 int tl_monotype_is_ptr_to_const(tl_monotype *self) {
     if (!tl_monotype_is_ptr(self)) return 0;
     tl_monotype *target = tl_monotype_ptr_target(self);
@@ -3089,8 +3093,8 @@ int tl_type_subs_unify_mono(tl_type_subs *subs, tl_monotype *left, tl_monotype *
     hset_insert(seen, &pair, sizeof(pair));
 
     // Unification ignores Const type wrapper
-    if (tl_monotype_is_const(left)) left = tl_monotype_const_target(left);
-    if (tl_monotype_is_const(right)) right = tl_monotype_const_target(right);
+    left  = tl_monotype_strip_const(left);
+    right = tl_monotype_strip_const(right);
 
     // `any` types unify with everything but are not concrete, so they don't resolve type variables
     if (tl_monotype_is_any(left) || tl_monotype_is_any(right)) return 0;
