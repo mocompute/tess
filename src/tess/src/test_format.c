@@ -532,6 +532,23 @@ static int test_align_paren_brace(void) {
 }
 
 // ---------------------------------------------------------------------------
+// 13b. Align { } on single-line function definitions with inline bodies
+// ---------------------------------------------------------------------------
+static int test_align_inline_body(void) {
+    int        error = 0;
+    allocator *alloc = arena_create(default_allocator(), 4096);
+
+    error += check(alloc, "inline body { } aligned with ( and ->",
+                   "_a(x: Int) -> Int { x }\n"
+                   "_bb(x: Int, y: Int) -> Bool { longer_body }",
+                   "_a (x: Int)         -> Int  { x           }\n"
+                   "_bb(x: Int, y: Int) -> Bool { longer_body }\n");
+
+    arena_destroy(&alloc);
+    return error;
+}
+
+// ---------------------------------------------------------------------------
 // 14. Align same-line comments
 // ---------------------------------------------------------------------------
 static int test_align_comments(void) {
@@ -717,6 +734,7 @@ int main(void) {
     T(test_align_eq);
     T(test_align_arrow);
     T(test_align_paren_brace);
+    T(test_align_inline_body);
     T(test_align_comments);
     T(test_align_bracket_constraints);
     T(test_idempotency);

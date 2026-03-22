@@ -524,10 +524,10 @@ is_aligned(p: Ptr[any], alignment: CSize) -> Bool {
 // -- wrappers around stdlib allocator --
 // Access them via managed_alloc, etc.
 
-_malloc  (a: Ptr[Allocator], sz: CSize)              -> Ptr[any]              { c_malloc(sz) }
-_calloc  (a: Ptr[Allocator], num: CSize, sz: CSize)  -> Ptr[any]  { c_calloc(num, sz)        }
-_realloc (a: Ptr[Allocator], p: Ptr[any], sz: CSize) -> Ptr[any] { c_realloc(p, sz)          }
-_free    (a: Ptr[Allocator], p: Ptr[any])            -> Void                { c_free(p)      }
+_malloc  (a: Ptr[Allocator], sz: CSize)              -> Ptr[any] { c_malloc(sz)      }
+_calloc  (a: Ptr[Allocator], num: CSize, sz: CSize)  -> Ptr[any] { c_calloc(num, sz) }
+_realloc (a: Ptr[Allocator], p: Ptr[any], sz: CSize) -> Ptr[any] { c_realloc(p, sz)  }
+_free    (a: Ptr[Allocator], p: Ptr[any])            -> Void     { c_free(p)         }
 
 _aligned_alloc (a: Ptr[Allocator], sz: CSize, alignment: CSize) -> Ptr[any] {
     c_aligned_alloc(alignment, sz)
