@@ -55,15 +55,22 @@ Context: {
 // ============================================================================
 
 #module Alloc.BumpAllocator
-
 Allocator = Alloc.Allocator
 
+
 // Bump allocator bucket header. A bucket is a header followed by zero or more _Blocks.
+#module Alloc.BumpAllocator._Header
+Allocator = Alloc.Allocator
+
 _Header: {
     next:     Ptr[_Header],
     capacity: CSize,
     size:     CSize,
 }
+
+create(alloc: Ptr[Allocator], capacity: CSize) -> Ptr[_Header]
+
+#module Alloc.BumpAllocator
 
 // Bump allocator block allocated by a client. Client data follows the size field.
 _Block: {
@@ -89,7 +96,7 @@ State: {
     size:   CSize,
 }
 
-//
+// -- Synopsis --
 
 create    (alloc: Ptr[Allocator], size: CSize) -> Ptr[Allocator]
 destroy   (alloc: Ptr[Allocator])              -> Void
@@ -98,16 +105,11 @@ save      (a: Ptr[Allocator])                  -> State
 restore   (a: Ptr[Allocator], state: State)    -> Void
 get_stats (a: Ptr[Allocator])                  -> Stats
 
-_malloc        (a: Ptr[Allocator], sz: CSize)                   -> Ptr[any]
-_calloc        (a: Ptr[Allocator], num: CSize, sz: CSize)       -> Ptr[any]
-_realloc       (a: Ptr[Allocator], p: Ptr[any], sz: CSize)      -> Ptr[any]
-_free          (a: Ptr[Allocator], p: Ptr[any])                 -> Void
-_aligned_alloc (a: Ptr[Allocator], sz: CSize, alignment: CSize) -> Ptr[any]
-_resize        (a: Ptr[Allocator], p: Ptr[any], sz: CSize)      -> Ptr[any]
-
 // -- Implementation --
 
-_Header_create(alloc, capacity) {
+#module Alloc.BumpAllocator._Header
+
+create(alloc, capacity) {
     c_assert(capacity > sizeof[_Header]())
     out: Ptr[_Header] := alloc->malloc(alloc, capacity)
     out->next     = null
@@ -116,6 +118,16 @@ _Header_create(alloc, capacity) {
     out
 }
 
+#module Alloc.BumpAllocator
+
+_malloc        (a: Ptr[Allocator], sz: CSize)                   -> Ptr[any]
+_calloc        (a: Ptr[Allocator], num: CSize, sz: CSize)       -> Ptr[any]
+_realloc       (a: Ptr[Allocator], p: Ptr[any], sz: CSize)      -> Ptr[any]
+_free          (a: Ptr[Allocator], p: Ptr[any])                 -> Void
+_aligned_alloc (a: Ptr[Allocator], sz: CSize, alignment: CSize) -> Ptr[any]
+_resize        (a: Ptr[Allocator], p: Ptr[any], sz: CSize)      -> Ptr[any]
+
+
 create(alloc: Ptr[Allocator], size: CSize) -> Ptr[Allocator] {
     out: Ptr[BumpAllocator] := alloc->malloc(alloc, sizeof[BumpAllocator]())
     out->parent         = alloc
@@ -123,7 +135,7 @@ create(alloc: Ptr[Allocator], size: CSize) -> Ptr[Allocator] {
     size := Alloc.next_power_of_two(size)
     size = if size == 0 { 16 } else { size }
 
-    out->head                    = _Header_create(alloc, size)
+    out->head                    = _Header.create(alloc, size)
     out->allocator.malloc        = _malloc/2
     out->allocator.calloc        = _calloc/3
     out->allocator.realloc       = _realloc/3
@@ -219,7 +231,7 @@ _malloc(a: Ptr[Allocator], sz: CSize) -> Ptr[any] {
     if new_capacity < needed { new_capacity = Alloc.next_power_of_two(needed) }
     if new_capacity == 0 { return null } // overflow
 
-    last->next = _Header_create(arena->parent, new_capacity)
+    last->next = _Header.create(arena->parent, new_capacity)
     if last->next == null { return null }
     bucket = last->next
     _alloc_assume_capacity(bucket, sz)
@@ -329,7 +341,7 @@ _aligned_alloc(a: Ptr[Allocator], sz: CSize, alignment: CSize) -> Ptr[any] {
     if new_capacity < needed { new_capacity = Alloc.next_power_of_two(needed) }
     if new_capacity == 0 { return null }
 
-    last->next = _Header_create(arena->parent, new_capacity)
+    last->next = _Header.create(arena->parent, new_capacity)
     if last->next == null { return null }
     bucket = last->next
 
