@@ -1,10 +1,5 @@
 # CLAUDE.md
 
-## Git Rules
-
-- NEVER commit on your own initiative. Always ask permission before committing, every time.
-- NEVER edit NEWS.md — it's a historical record of past releases, not a living document.
-
 ## Project Overview
 
 Tess is a statically-typed, compiled programming language that transpiles to C. It features type inference (Hindley-Milner-style), generic types/functions, lambdas, closures, and C interoperability.
@@ -15,7 +10,7 @@ Tess is a statically-typed, compiled programming language that transpiles to C. 
 
 Key docs:
 - `docs/LANGUAGE_REFERENCE.md` — Complete syntax reference
-- `docs/LANGUAGE_MODEL.md` — Core semantics (let-in expressions, closures, scoping)
+- `docs/LANGUAGE_MODEL.md` — Core semantics (binding expressions, closures, scoping)
 - `docs/TL_CODING_CONVENTIONS.md` — Full coding conventions (quick reference is inlined below)
 - `docs/TYPE_SYSTEM.md` — Type inference, generics, constraints
 - `docs/SPECIALIZATION.md` — Monomorphisation pipeline
@@ -61,8 +56,8 @@ Rules for writing `.tl` code (inlined from `docs/TL_CODING_CONVENTIONS.md`):
 - **Omit integer suffixes.** Write `0`, not `0zu`. Use suffixes only when inference is ambiguous.
 - **Use `Option` for absence, `Result` for errors.** Not null, not sentinel values.
 - **Use tagged unions for alternatives.** Not integer codes or boolean flags.
-- **`when`/`else` for multiple variants; let-else for a single expected variant.**
-- **Keep code flat.** Early returns and let-else instead of deep nesting.
+- **`when`/`else` for multiple variants; variant binding for a single expected variant.**
+- **Keep code flat.** Early returns and variant bindings instead of deep nesting.
 - **`self` is the receiver.** `Ptr[T]` for mutating methods, `T` by value for read-only.
 - **Allocator overloads.** Provide explicit `Ptr[Allocator]` version + convenience version using default.
 - **Private helpers start with `_`.** Types are PascalCase, functions are snake_case.
