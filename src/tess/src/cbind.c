@@ -1778,10 +1778,9 @@ static str type_to_tess(allocator *a, c_type const *t, hashmap *typedefs) {
         inner = str_fmt(a, "Const[%.*s]", str_ilen(inner), str_buf(&inner));
     }
     for (int i = 0; i < t->pointer_depth; i++) {
+        inner = str_fmt(a, "Ptr[%.*s]", str_ilen(inner), str_buf(&inner));
         if (i < 4 && t->const_at[i]) {
-            inner = str_fmt(a, "Ptr[Const[%.*s]]", str_ilen(inner), str_buf(&inner));
-        } else {
-            inner = str_fmt(a, "Ptr[%.*s]", str_ilen(inner), str_buf(&inner));
+            inner = str_fmt(a, "Const[%.*s]", str_ilen(inner), str_buf(&inner));
         }
     }
     return inner;
