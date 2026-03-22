@@ -118,7 +118,7 @@
          (builtins '("sizeof" "alignof"))
 
          ;; Types (comprehensive list)
-         (types '("Int" "Float" "Bool" "Byte"
+         (types '("Int" "UInt" "Float" "Bool" "Byte"
                   ;; C types
                   "CChar" "CSignedChar" "CShort" "CInt" "CLong" "CLongLong"
                   "CSize" "CPtrDiff"
@@ -131,7 +131,7 @@
                   ;; C floating point
                   "CFloat" "CDouble" "CLongDouble"
                   ;; Common generic types
-                  "Ptr" "Const" "CArray" "Array" "Iter" "String"
+                  "Ptr" "Const" "CArray" "Array" "Iter" "String" "CString"
                   ;; Traits
                   "Add" "Sub" "Mul" "Div" "Mod"
                   "BitAnd" "BitOr" "BitXor" "Shl" "Shr"
