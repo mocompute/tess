@@ -213,9 +213,9 @@ Mode: | Read                            // "rb"
       | AppendRead                      // "a+b"
 
 IOError: | NotFound         { path: String }
-         | PermissionDenied { path: String                                            }
-         | AlreadyExists    { path:    String                                         }
-         | IOFailed         { path:         String, message: String, errno_code: CInt }
+         | PermissionDenied { path: String }
+         | AlreadyExists    { path: String }
+         | IOFailed         { path: String, message: String, errno_code: CInt }
 
 SeekFrom: | Start | Current | End
 

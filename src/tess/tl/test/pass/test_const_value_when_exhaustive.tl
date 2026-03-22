@@ -5,7 +5,7 @@
 
 main() {
     x: Const[Result[Int, Int]] := Ok(42)
-    result := when x {
+    result                     := when x {
         o: Ok { o.v }
         e: Err { e.v }
     }

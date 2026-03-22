@@ -2,9 +2,9 @@
 
 // Tagged union with 6 variants
 Token: | IntLit    { v: Int }
-       | FloatLit  { v:    Float   }
-       | BoolLit   { v:    Bool    }
-       | StringLit { v:    CString }
+       | FloatLit  { v: Float }
+       | BoolLit   { v: Bool }
+       | StringLit { v: CString }
        | Ident     { name: CString }
        | Eof
 

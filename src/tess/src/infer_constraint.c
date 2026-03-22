@@ -98,8 +98,8 @@ static void create_type_constructor_from_user_type(tl_infer *self, ast_node *nod
         poly->type->cons_inst->def->module = type_name_node->symbol.module;
     }
     if (ast_node_is_symbol(type_name_node) && type_name_node->symbol.is_module_mangled) {
-        str module   = type_name_node->symbol.module;
-        str original = type_name_node->symbol.original;
+        str module       = type_name_node->symbol.module;
+        str original     = type_name_node->symbol.original;
         int is_same_name = symbol_module_matches_original(self->transient, module, original);
         int is_t         = str_eq(original, S("T"));
         if (is_same_name || is_t) {
@@ -108,15 +108,16 @@ static void create_type_constructor_from_user_type(tl_infer *self, ast_node *nod
             } else if (tl_type_registry_is_type_alias(self->registry, module)) {
                 // Another auto-collapse candidate already claimed this alias —
                 // the module defines both a same-named type and a T type.
-                array_push(self->errors,
-                           ((tl_infer_error){
-                               .tag     = tl_err_auto_collapse_ambiguous,
-                               .node    = type_name_node,
-                               .message = str_fmt(self->arena,
-                                   "module '%s' defines both a same-named type and a type named 'T'; "
-                                   "auto-collapse cannot determine which '%s' should refer to — "
-                                   "rename one of them to disambiguate",
-                                   str_cstr(&module), str_cstr(&module))}));
+                array_push(
+                  self->errors,
+                  ((tl_infer_error){
+                    .tag     = tl_err_auto_collapse_ambiguous,
+                    .node    = type_name_node,
+                    .message = str_fmt(self->arena,
+                                       "module '%s' defines both a same-named type and a type named 'T'; "
+                                       "auto-collapse cannot determine which '%s' should refer to — "
+                                       "rename one of them to disambiguate",
+                                       str_cstr(&module), str_cstr(&module))}));
             }
         }
     }
@@ -1544,8 +1545,8 @@ static int types_strip_const(tl_monotype *param, tl_monotype *arg) {
         tl_monotype *at = tl_monotype_ptr_target(arg);
         if (tl_monotype_is_const(at) && !tl_monotype_is_const(pt)) return 1;
         // Unwrap Const if present on both sides before continuing
-        pt = tl_monotype_strip_const(pt);
-        at = tl_monotype_strip_const(at);
+        pt    = tl_monotype_strip_const(pt);
+        at    = tl_monotype_strip_const(at);
         param = pt;
         arg   = at;
     }
@@ -1609,10 +1610,8 @@ static int check_const_violation(tl_infer *self, ast_node *lhs) {
         while (cur && cur->tag == ast_binary_op) {
             str         op   = ast_node_str(cur->binary_op.op);
             char const *op_s = str_cstr(&op);
-            if (is_struct_access_operator(op_s) || is_index_operator(op_s))
-                cur = cur->binary_op.left;
-            else
-                break;
+            if (is_struct_access_operator(op_s) || is_index_operator(op_s)) cur = cur->binary_op.left;
+            else break;
         }
         if (cur && cur != lhs && cur->type && cur->type->type) {
             tl_polytype_substitute(self->arena, cur->type, self->subs);
@@ -2151,10 +2150,9 @@ static int check_unresolved_nfa(tl_infer *self, ast_node *node) {
     tl_trait_def *trait = str_map_get_ptr(self->traits, module);
     if (trait) {
         str msg = str_fmt(self->arena,
-            "'%s' is not a function in module '%s'. "
-            "'%s' is a trait — use UFCS instead: value.%s()",
-            str_cstr(&original), str_cstr(&module),
-            str_cstr(&module), str_cstr(&original));
+                          "'%s' is not a function in module '%s'. "
+                          "'%s' is a trait — use UFCS instead: value.%s()",
+                          str_cstr(&original), str_cstr(&module), str_cstr(&module), str_cstr(&original));
         array_push(self->errors,
                    ((tl_infer_error){.tag = tl_err_function_not_found, .node = name_node, .message = msg}));
         return 1;

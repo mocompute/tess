@@ -4,13 +4,13 @@
 
 Mask: { val: Int }
 
-bit_and(a: Mask, b: Mask) -> Mask { Mask(val = a.val & b.val)   }
-bit_or (a: Mask, b: Mask) -> Mask { Mask(val = a.val | b.val)   }
-bit_xor(a: Mask, b: Mask) -> Mask { Mask(val = a.val ^ b.val)   }
-shl    (a: Mask, b: Mask) -> Mask { Mask(val = a.val << b.val)  }
-shr    (a: Mask, b: Mask) -> Mask { Mask(val = a.val >> b.val)  }
-bit_not(v: Mask)          -> Mask          { Mask(val = ~v.val) }
-eq     (a: Mask, b: Mask) -> Bool { a.val == b.val              }
+bit_and(a: Mask, b: Mask) -> Mask { Mask(val = a.val & b.val)  }
+bit_or (a: Mask, b: Mask) -> Mask { Mask(val = a.val | b.val)  }
+bit_xor(a: Mask, b: Mask) -> Mask { Mask(val = a.val ^ b.val)  }
+shl    (a: Mask, b: Mask) -> Mask { Mask(val = a.val << b.val) }
+shr    (a: Mask, b: Mask) -> Mask { Mask(val = a.val >> b.val) }
+bit_not(v: Mask)          -> Mask { Mask(val = ~v.val)         }
+eq     (a: Mask, b: Mask) -> Bool { a.val == b.val             }
 
 #module main
 

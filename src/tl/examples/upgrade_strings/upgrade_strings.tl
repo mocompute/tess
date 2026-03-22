@@ -73,7 +73,7 @@ _process_line(line) {
         // Found a double quote — start of a string literal.
         if c == '"' {
             // Determine if there is a prefix character.
-            has_prefix := false
+            has_prefix    := false
             prefix: CChar := 0
 
             if out.size > 0 {
@@ -82,7 +82,7 @@ _process_line(line) {
                     // Check that the letter is standalone (not part of an identifier).
                     if out.size == 1 || !_is_alnum_or_under(out.v.[out.size - 2]) {
                         has_prefix = true
-                        prefix = prev
+                        prefix     = prev
                     }
                 }
             }
@@ -105,7 +105,7 @@ _process_line(line) {
             // Copy string body until closing quote, handling escapes.
             while i < n {
                 sc: Some := String.char_at(line, i) else { break }
-                sv := sc.v
+                sv       := sc.v
 
                 if sv == '\\' {
                     // Escape sequence — copy backslash and next char.
@@ -153,7 +153,7 @@ _process_file(path, in_place) {
             content := ok.v
             lines   := String.split(content, "\n")
 
-            output := Array.empty[String]()
+            output    := Array.empty[String]()
             li: CSize := 0
             while li < lines.size, li += 1 {
                 transformed := _process_line(lines.v.[li])
@@ -164,7 +164,7 @@ _process_file(path, in_place) {
 
             if in_place {
                 when File.write_file(path, result) {
-                    ok: Ok { }
+                    ok:  Ok { }
                     err: Err {
                         c_fprintf(c_stderr, c"error: could not write %s\n",
                                   String.cstr(path.&))
@@ -205,7 +205,7 @@ _process_file(path, in_place) {
 
 main(argc: CInt, argv: Ptr[CString]) {
     cl := CommandLine.create("upgrade_strings",
-              "Upgrade Tess string literal prefixes")
+                             "Upgrade Tess string literal prefixes")
     cl.flag("in-place", 'i', "Modify files in place")
     cl.flag("help", 'h', "Show this help message")
 
@@ -227,7 +227,7 @@ main(argc: CInt, argv: Ptr[CString]) {
         return 1
     }
 
-    errors := 0
+    errors    := 0
     fi: CSize := 0
     while fi < files.size, fi += 1 {
         errors += _process_file(files.v.[fi], in_place)

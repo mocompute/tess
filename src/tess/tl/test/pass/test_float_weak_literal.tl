@@ -3,9 +3,9 @@
 
 // Test: weak float literal resolves to CFloat from context.
 
-take_cfloat     (x: CFloat)      -> CFloat           { x }
-take_cdouble    (x: CDouble)     -> CDouble         { x  }
-take_clongdouble(x: CLongDouble) -> CLongDouble { x      }
+take_cfloat     (x: CFloat)      -> CFloat      { x }
+take_cdouble    (x: CDouble)     -> CDouble     { x }
+take_clongdouble(x: CLongDouble) -> CLongDouble { x }
 
 main() {
     error := 0

@@ -57,7 +57,7 @@ CommandLine: {
 
 // Parsed value for a single argument.
 ArgValue: | BoolVal  { v: Bool }
-          | CountVal { v: Int    }
+          | CountVal { v: Int }
           | StrVal   { v: String }
           | Absent
 

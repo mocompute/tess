@@ -3,6 +3,6 @@
 
 main() {
     stream := c_tmpfile()
-    _ := c_fclose(stream)
+    _      := c_fclose(stream)
     0
 }

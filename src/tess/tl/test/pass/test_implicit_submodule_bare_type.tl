@@ -10,7 +10,7 @@ create(v: CInt) -> Child { Child(x = v) }
 
 // Bare c"Child" in type position resolves to Parent.Child.Child
 wrap (v: CInt)  -> Child { Child.create(v) }
-get_x(c: Child) -> CInt { c.x              }
+get_x(c: Child) -> CInt  { c.x             }
 
 #module main
 

@@ -617,8 +617,7 @@ static void report_error_hints(tl_infer *self, tl_infer_error *err) {
                     fprintf(stderr,
                             "  hint: '%s' is a trait method (trait '%s'). "
                             "If calling on a number literal, parenthesize it: (42).%s()\n",
-                            str_cstr(&err->message), str_cstr(&def->generic_name),
-                            str_cstr(&err->message));
+                            str_cstr(&err->message), str_cstr(&def->generic_name), str_cstr(&err->message));
                     return;
                 }
             }
@@ -634,22 +633,20 @@ void tl_infer_report_errors(tl_infer *self) {
             str             message = str_is_empty(err->message) ? str_empty() : err->message;
 
             if (node) {
-                char const *tag = tl_error_tag_to_string(err->tag);
-                int has_node_str = err->tag != tl_err_free_variable_not_found;
+                char const *tag          = tl_error_tag_to_string(err->tag);
+                int         has_node_str = err->tag != tl_err_free_variable_not_found;
                 str node_str = has_node_str ? v2_ast_node_to_string(self->transient, node) : str_empty();
 
                 if (node->file && *node->file) {
                     if (has_node_str)
-                        fprintf(stderr, "%s:%u: %s: %s: %s\n", node->file, node->line,
-                                tag, str_cstr(&message), str_cstr(&node_str));
+                        fprintf(stderr, "%s:%u: %s: %s: %s\n", node->file, node->line, tag,
+                                str_cstr(&message), str_cstr(&node_str));
                     else
-                        fprintf(stderr, "%s:%u: %s: %s\n", node->file, node->line,
-                                tag, str_cstr(&message));
+                        fprintf(stderr, "%s:%u: %s: %s\n", node->file, node->line, tag, str_cstr(&message));
                 } else {
                     if (has_node_str)
                         fprintf(stderr, "%s: %s: %s\n", tag, str_cstr(&message), str_cstr(&node_str));
-                    else
-                        fprintf(stderr, "%s: %s\n", tag, str_cstr(&message));
+                    else fprintf(stderr, "%s: %s\n", tag, str_cstr(&message));
                 }
                 report_error_hints(self, err);
             } else {

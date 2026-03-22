@@ -58,9 +58,9 @@ apply_or_default[T](o: Opt[T], f, def: T) -> T {
     }
 }
 
-double_int(x: Int)         -> Int         { x * 2 }
-add_ints  (a: Int, b: Int) -> Int { a + b         }
-not_bool  (b: Bool)        -> Bool       { !b     }
+double_int(x: Int)         -> Int  { x * 2 }
+add_ints  (a: Int, b: Int) -> Int  { a + b }
+not_bool  (b: Bool)        -> Bool { !b    }
 
 // ============================================================
 // unwrap helpers

@@ -2,7 +2,7 @@
 #module Shape
 
 Shape: | Circle   { r: CInt }
-       | Square   { s: CInt          }
+       | Square   { s: CInt }
        | Triangle { b: CInt, h: CInt }
 
 #module main

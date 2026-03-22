@@ -2,11 +2,11 @@
 
 Vec2: { x: Int, y: Int }
 
-add(a: Vec2, b: Vec2) -> Vec2 { Vec2(x = a.x + b.x, y = a.y + b.y)      }
-sub(a: Vec2, b: Vec2) -> Vec2 { Vec2(x = a.x - b.x, y = a.y - b.y)      }
-mul(a: Vec2, b: Vec2) -> Vec2 { Vec2(x = a.x * b.x, y = a.y * b.y)      }
-neg(v: Vec2)          -> Vec2          { Vec2(x = 0 - v.x, y = 0 - v.y) }
-eq (a: Vec2, b: Vec2) -> Bool { a.x == b.x && a.y == b.y                }
+add(a: Vec2, b: Vec2) -> Vec2 { Vec2(x = a.x + b.x, y = a.y + b.y) }
+sub(a: Vec2, b: Vec2) -> Vec2 { Vec2(x = a.x - b.x, y = a.y - b.y) }
+mul(a: Vec2, b: Vec2) -> Vec2 { Vec2(x = a.x * b.x, y = a.y * b.y) }
+neg(v: Vec2)          -> Vec2 { Vec2(x = 0 - v.x, y = 0 - v.y)     }
+eq (a: Vec2, b: Vec2) -> Bool { a.x == b.x && a.y == b.y           }
 
 
 #module Color

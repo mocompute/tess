@@ -613,7 +613,7 @@ test_index_of_char_from() {
     error += when s.index_of_char_from('l', 4zu) { s: Some { 1 } else { 0 } }
 
     // Start >= len
-    error += when s.index_of_char_from('l', 5zu) { s:   Some { 1 } else { 0 } }
+    error += when s.index_of_char_from('l', 5zu) { s: Some { 1 } else { 0 } }
     error += when s.index_of_char_from('l', 100zu) { s: Some { 1 } else { 0 } }
 
     s.free()

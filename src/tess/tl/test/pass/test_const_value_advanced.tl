@@ -20,7 +20,7 @@ main() {
 
     // Closure capturing const
     val: Const := 10
-    f := () { val }
+    f          := () { val }
     c_printf(c"closure = %lld\n", f())
 
     0

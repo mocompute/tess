@@ -985,7 +985,7 @@ static void generate_assign(transpile *self, str lhs, str rhs) {
 // Required for const types where C doesn't allow separate decl then assign.
 static void generate_decl_init(transpile *self, str name, tl_monotype *type, str value) {
     if (str_is_empty(value) || str_is_empty(name)) return;
-    name = escape_c_keyword(self->transient, name);
+    name      = escape_c_keyword(self->transient, name);
     str typec = type_to_c_mono(self, type);
     cat(self, typec);
     cat_sp(self);
@@ -1685,8 +1685,8 @@ static str generate_let_in(transpile *self, tl_monotype *result_type, ast_node c
                 }
             } else if (tl_monotype_is_concrete(type)) {
                 if (should_assign_result(ctx, type)) {
-                    int is_const_bind = tl_monotype_is_const(type);
-                    tl_monotype *inner_type = tl_monotype_strip_const(type);
+                    int          is_const_bind = tl_monotype_is_const(type);
+                    tl_monotype *inner_type    = tl_monotype_strip_const(type);
 
                     if (should_assign_value(node->let_in.value)) {
                         str emit_value = value;
@@ -1703,12 +1703,11 @@ static str generate_let_in(transpile *self, tl_monotype *result_type, ast_node c
                                 if (is_integer_narrowing_cast(inner_type, val_type))
                                     emit_bounds_check(self, inner_type, val_type, value, node);
                                 else if (is_float_to_int_val(val_type))
-                                    emit_float_to_int_bounds_check(self, inner_type, val_type, value,
-                                                                   node);
+                                    emit_float_to_int_bounds_check(self, inner_type, val_type, value, node);
                             } else {
                                 if (is_float_narrowing_cast(inner_type, val_type))
                                     emit_float_narrowing_bounds_check(self, inner_type, val_type, value,
-                                                                     node);
+                                                                      node);
                             }
                             emit_value = str_cat_4(self->transient, S("("),
                                                    type_to_c_mono(self, inner_type), S(")"), value);
@@ -3731,7 +3730,7 @@ static int is_c_exportable_type(tl_monotype *type) {
 
     if (tl_monotype_is_ptr(type)) {
         tl_monotype *target = tl_monotype_ptr_target(type);
-        target = tl_monotype_strip_const(target);
+        target              = tl_monotype_strip_const(target);
         if (tl_monotype_is_any(target)) return 1; // Ptr[any] is opaque, ok
         return is_c_exportable_type(target);
     }

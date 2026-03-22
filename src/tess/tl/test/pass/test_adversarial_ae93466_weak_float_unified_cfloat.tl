@@ -32,7 +32,7 @@ make_float_pair(x: CFloat) -> Pair[CFloat, CFloat] {
 }
 
 test_pair_cfloat() -> CInt {
-    p := make_float_pair(1.0)
+    p     := make_float_pair(1.0)
     error := 0
     error += if sizeof(p.a) == sizeof[CFloat]() { 0 } else { 1 }
     error += if sizeof(p.b) == sizeof[CFloat]() { 0 } else { 1 }

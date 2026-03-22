@@ -6,18 +6,18 @@
 
 Handler[T]: { process: (T) -> T, tag: Int }
 
-double_int(x: Int)  -> Int   { x * 2 }
-negate_int(x: Int)  -> Int   { 0 - x }
-not_bool  (x: Bool) -> Bool { !x     }
+double_int(x: Int)  -> Int  { x * 2 }
+negate_int(x: Int)  -> Int  { 0 - x }
+not_bool  (x: Bool) -> Bool { !x    }
 
 // --- Test 2: Generic struct with TWO fn ptr fields of different signatures ---
 
 DualHandler[T]: { transform: (T) -> T, predicate: (T) -> Bool }
 
-is_positive(x: Int)  -> Bool  { x > 0  }
-is_true    (x: Bool) -> Bool { x       }
-add_ten    (x: Int)  -> Int   { x + 10 }
-flip       (x: Bool) -> Bool { !x      }
+is_positive(x: Int)  -> Bool { x > 0  }
+is_true    (x: Bool) -> Bool { x      }
+add_ten    (x: Int)  -> Int  { x + 10 }
+flip       (x: Bool) -> Bool { !x     }
 
 // --- Test 3: Generic struct with fn ptr that takes/returns same generic as another field ---
 

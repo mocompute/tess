@@ -127,7 +127,7 @@ empty[T]() {
 
 init[T](alloc, val: T, count) {
     arr := with_capacity[T](alloc, count)
-    arr.size             = count
+    arr.size = count
     for p.& in arr { p.* = val }
     arr
 }
@@ -626,8 +626,8 @@ iter_init(arr) { Iter (v = arr->v,
                        iv    = IterValue (value = void, index = 0),
                        ivp   = IterValuePtr(ptr = null, index = 0)) }
 
-iter_ptr   (iter) { iter->ivp.ptr  = iter->v.[iter->index].& iter->ivp.index = iter->index iter->ivp }
-iter_value (iter) { iter->iv.value = iter->v.[iter->index] iter->iv.index = iter->index iter->iv     }
-iter_cond  (iter) { iter->index < iter->size                                                         }
-iter_update(iter) { iter->index = iter->index + 1                                                    }
-iter_deinit(iter) {                                                                                  }
+iter_ptr   (iter) { iter->ivp.ptr = iter->v.[iter->index].& iter->ivp.index = iter->index iter->ivp }
+iter_value (iter) { iter->iv.value = iter->v.[iter->index] iter->iv.index = iter->index iter->iv    }
+iter_cond  (iter) { iter->index < iter->size                                                        }
+iter_update(iter) { iter->index = iter->index + 1                                                   }
+iter_deinit(iter) {                                                                                 }

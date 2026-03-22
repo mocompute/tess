@@ -5,8 +5,8 @@
 #import <Slice.tl>
 
 sum_while(args: ...ToInt) -> Int {
-    total: Int := 0
-    i: CSize   := 0
+    total: Int   := 0
+    i:     CSize := 0
     while i < args.size, i += 1 {
         total += args.v.[i]
     }
@@ -23,9 +23,9 @@ sum_for(args: ...ToInt) -> Int {
 
 main() {
     // Direct to_int calls
-    if (42).to_int()    != 42 { c_exit(1) }
-    if (true).to_int()  != 1  { c_exit(2) }
-    if (false).to_int() != 0  { c_exit(3) }
+    if (42).to_int() != 42 { c_exit(1) }
+    if (true).to_int() != 1 { c_exit(2) }
+    if (false).to_int() != 0 { c_exit(3) }
 
     // Variadic sum via while loop: single int
     if sum_while(10) != 10 { c_exit(4) }

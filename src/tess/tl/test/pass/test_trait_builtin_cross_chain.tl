@@ -16,8 +16,8 @@ describe(n) -> CInt { 2 }
 
 #module main
 
-show[T: Describe](x: T)      -> CInt   { x.describe() }
-id_ptr[T]        (p: Ptr[T]) -> T { p.*               }
+show[T: Describe](x: T)      -> CInt { x.describe() }
+id_ptr[T]        (p: Ptr[T]) -> T    { p.*          }
 
 main() {
     error := 0

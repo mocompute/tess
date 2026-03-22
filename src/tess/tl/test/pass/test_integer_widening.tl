@@ -3,8 +3,8 @@
 
 // Implicit widening within a sub-chain (narrow -> wide) should succeed.
 
-take_int (x: Int)  -> Int   { x }
-take_uint(x: UInt) -> UInt { x  }
+take_int (x: Int)  -> Int  { x }
+take_uint(x: UInt) -> UInt { x }
 
 // --- Widening within C-signed sub-chain ---
 

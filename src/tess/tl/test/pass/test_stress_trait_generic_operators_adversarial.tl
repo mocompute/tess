@@ -72,8 +72,8 @@ full_ord_test[T: Ord](a: T, b: T) -> Int {
 }
 
 // --- 3. Combined traits ---
-AddEq[T]:  Add[T], Eq[T]   { }
-AddSub[T]: Add[T], Sub[T] {  }
+AddEq[T]:  Add[T], Eq[T]  { }
+AddSub[T]: Add[T], Sub[T] { }
 
 // Uses both + and == in one function
 add_if_different[T: AddEq](a: T, b: T) -> T {

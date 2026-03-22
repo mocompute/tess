@@ -7,6 +7,6 @@ Foo = Option
 #module main
 
 main() {
-    x:          App.Foo[CInt] := Some(42)
+    x: App.Foo[CInt] := Some(42)
     when x { s: Some { s.v - 42 } else { 0 } }
 }

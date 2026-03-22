@@ -12,19 +12,19 @@ Processor[T]: { run: (T) -> T }
 
 Maker[T]: { make: (T) -> Box[T] }
 
-wrap_int (x: Int)  -> Box[Int]   { Box(value = x) }
-wrap_bool(x: Bool) -> Box[Bool] { Box(value = x)  }
+wrap_int (x: Int)  -> Box[Int]  { Box(value = x) }
+wrap_bool(x: Bool) -> Box[Bool] { Box(value = x) }
 
 // --- Test 2: Generic struct with fn ptr inside tagged union ---
 
 MaybeProcessor[T]: | Active { proc: Processor[T] }
                    | Inactive
 
-double_int(x: Int)  -> Int   { x * 2 }
-triple_int(x: Int)  -> Int   { x * 3 }
-negate_int(x: Int)  -> Int   { 0 - x }
-not_bool  (x: Bool) -> Bool { !x     }
-id_bool   (x: Bool) -> Bool { x      }
+double_int(x: Int)  -> Int  { x * 2 }
+triple_int(x: Int)  -> Int  { x * 3 }
+negate_int(x: Int)  -> Int  { 0 - x }
+not_bool  (x: Bool) -> Bool { !x    }
+id_bool   (x: Bool) -> Bool { x     }
 
 try_process[T](mp: MaybeProcessor[T], val: T, fallback: T) -> T {
     when mp {

@@ -4,7 +4,7 @@
 main() {
     // Tagged union destructuring: when-bindings are mutable
     x: Const[Option[Int]] := Some(42)
-    result := when x {
+    result                := when x {
         s: Some {
             val := s.v
             val = val + 1

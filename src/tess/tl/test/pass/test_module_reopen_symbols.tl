@@ -1,6 +1,6 @@
 #module M
-f(x: CInt)          -> CInt          { x }
-f(x: CInt, y: CInt) -> CInt { x + y      }
+f(x: CInt)          -> CInt { x     }
+f(x: CInt, y: CInt) -> CInt { x + y }
 
 #module M.Sub
 g() -> CInt { 1 }

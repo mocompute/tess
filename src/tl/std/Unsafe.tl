@@ -22,9 +22,9 @@ c_tl_unsigned_to_signed(u: CUnsignedLongLong) -> CLongLong
 c_tl_signed_to_unsigned(s: CLongLong)         -> CUnsignedLongLong
 
 
-pointer_add      (ptr: Ptr[any], n: CSize)      -> Ptr[any]  { c_tl_unsafe_pointer_add(ptr, n)      }
-pointer_subtract (ptr: Ptr[any], n: CSize)      -> Ptr[any]  { c_tl_unsafe_pointer_subtract(ptr, n) }
-pointer_compare  (lhs: Ptr[any], rhs: Ptr[any]) -> CInt { c_tl_unsafe_pointer_compare(lhs, rhs)     }
+pointer_add      (ptr: Ptr[any], n: CSize)      -> Ptr[any] { c_tl_unsafe_pointer_add(ptr, n)       }
+pointer_subtract (ptr: Ptr[any], n: CSize)      -> Ptr[any] { c_tl_unsafe_pointer_subtract(ptr, n)  }
+pointer_compare  (lhs: Ptr[any], rhs: Ptr[any]) -> CInt     { c_tl_unsafe_pointer_compare(lhs, rhs) }
 
 pointer_difference(lhs: Ptr[any], rhs: Ptr[any]) -> CPtrDiff {
     c_tl_unsafe_pointer_difference(lhs, rhs)

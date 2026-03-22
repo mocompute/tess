@@ -695,8 +695,8 @@ static void align_group(allocator *alloc, char **lines, int start, int end, int 
     // shifts everything to the right of a token, so earlier (leftward) tokens
     // must be aligned first to avoid disrupting later (rightward) ones.
     int order[] = {
-      ALIGN_OPEN_PAREN, ALIGN_COLON_VALUE, ALIGN_ARROW,
-      ALIGN_COLONEQ,    ALIGN_EQ,          ALIGN_OPEN_BRACE, ALIGN_CLOSE_BRACE,
+      ALIGN_OPEN_PAREN, ALIGN_COLON_VALUE, ALIGN_ARROW,       ALIGN_COLONEQ,
+      ALIGN_EQ,         ALIGN_OPEN_BRACE,  ALIGN_CLOSE_BRACE,
     };
     for (int ti = 0; ti < (int)(sizeof(order) / sizeof(order[0])); ti++) {
         int t = order[ti];
