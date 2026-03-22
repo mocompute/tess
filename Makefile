@@ -8,6 +8,7 @@
 
 CONFIG ?= release
 ASAN_OPTIONS ?= detect_leaks=1
+COV_EXPORT =
 
 ifeq ($(CONFIG),release)
   CFLAGS_CONFIG = -O2 -DNDEBUG -flto=auto
@@ -21,8 +22,14 @@ else ifeq ($(CONFIG),asan)
   CFLAGS_CONFIG = -O -g -DDEBUG -fsanitize=address,undefined -fno-omit-frame-pointer
   LDFLAGS_CONFIG = -fsanitize=address,undefined
   BUILD_DIR = build-asan
+else ifeq ($(CONFIG),coverage)
+  CC := clang
+  CFLAGS_CONFIG = -g -O1 -DDEBUG -fprofile-instr-generate -fcoverage-mapping -fno-omit-frame-pointer
+  LDFLAGS_CONFIG = -fprofile-instr-generate
+  BUILD_DIR = build-coverage
+  COV_EXPORT = export LLVM_PROFILE_FILE="$(CURDIR)/build-coverage/profiles/prof_%p_%m.profraw";
 else
-  $(error Unknown CONFIG: $(CONFIG). Valid options: release, debug, asan)
+  $(error Unknown CONFIG: $(CONFIG). Valid options: release, debug, asan, coverage)
 endif
 
 # ------------------------------------------------------------------------------
@@ -317,7 +324,7 @@ clean:
 	rm -rf $(BUILD_DIR) tess
 
 cleanall:
-	rm -rf build-release build-debug build-asan tess
+	rm -rf build-release build-debug build-asan build-coverage tess
 
 # ==============================================================================
 # Tests
@@ -327,8 +334,9 @@ cleanall:
 # $(2): list of test executables
 # $(3): test count
 define run_test_suite
-	@failed=0; \
-	export ASAN_OPTIONS=$(ASAN_OPTIONS); \
+	@mkdir -p $(COV_PROF_DIR); \
+	failed=0; \
+	export ASAN_OPTIONS=$(ASAN_OPTIONS); $(COV_EXPORT) \
 	for test in $(2); do \
 		name=$$(basename $$test); \
 		$(MSG_TEST) $$name; \
@@ -435,10 +443,10 @@ TL_TEST_OPT_EXES = $(patsubst %,$(TL_BUILD_DIR)/test_opt_%,$(TL_TESTS_OPTIMIZED)
 
 # Special rule for test_import_relative_dotdot (needs to run from fixtures directory)
 $(TL_BUILD_DIR)/test_import_relative_dotdot: $(TL_TEST_DIR)/fixtures/test_import_relative_dotdot.tl $(TESS_EXE) $(TL_STD_SOURCES)
-	@mkdir -p $(dir $@)
+	@mkdir -p $(dir $@) $(COV_PROF_DIR)
 	$(MSG_GEN) $@
 	@cd $(TL_TEST_DIR)/fixtures && \
-	export ASAN_OPTIONS=$(ASAN_OPTIONS) && \
+	export ASAN_OPTIONS=$(ASAN_OPTIONS) && $(COV_EXPORT) \
 	if ! $(CURDIR)/$(TESS_EXE) exe --no-standard-includes -S $(CURDIR)/$(TL_STD_DIR) -o $(CURDIR)/$@ test_import_relative_dotdot.tl ; then \
 		rm -f $(CURDIR)/$@; \
 		$(MSG_FAIL) $@; \
@@ -446,9 +454,9 @@ $(TL_BUILD_DIR)/test_import_relative_dotdot: $(TL_TEST_DIR)/fixtures/test_import
 
 # Pass tests (from test/pass/)
 $(TL_BUILD_DIR)/test_%: $(TL_DIR_PASS)/test_%.tl $(TESS_EXE) $(TL_STD_SOURCES)
-	@mkdir -p $(dir $@)
+	@mkdir -p $(dir $@) $(COV_PROF_DIR)
 	$(MSG_GEN) $@
-	@export ASAN_OPTIONS=$(ASAN_OPTIONS); \
+	@$(COV_EXPORT) export ASAN_OPTIONS=$(ASAN_OPTIONS); \
 	if ! ./$(TESS_EXE) exe --no-standard-includes -S $(TL_STD_DIR) -o $@ $< ; then \
 		rm -f $@; \
 		$(MSG_FAIL) $@; \
@@ -456,9 +464,9 @@ $(TL_BUILD_DIR)/test_%: $(TL_DIR_PASS)/test_%.tl $(TESS_EXE) $(TL_STD_SOURCES)
 
 # Optimized pass tests (from test/pass_optimized/, need default -O2 optimization)
 $(TL_BUILD_DIR)/test_opt_%: $(TL_DIR_PASS_OPT)/test_%.tl $(TESS_EXE) $(TL_STD_SOURCES)
-	@mkdir -p $(dir $@)
+	@mkdir -p $(dir $@) $(COV_PROF_DIR)
 	$(MSG_GEN) $@
-	@export ASAN_OPTIONS=$(ASAN_OPTIONS); \
+	@$(COV_EXPORT) export ASAN_OPTIONS=$(ASAN_OPTIONS); \
 	if ! ./$(TESS_EXE) exe --no-standard-includes -S $(TL_STD_DIR) -o $@ $< ; then \
 		rm -f $@; \
 		$(MSG_FAIL) $@; \
@@ -467,8 +475,9 @@ $(TL_BUILD_DIR)/test_opt_%: $(TL_DIR_PASS_OPT)/test_%.tl $(TESS_EXE) $(TL_STD_SO
 build-tl-tests: $(TESS_EXE) $(TL_TEST_EXES) $(TL_TEST_OPT_EXES)
 
 test-tl: build-tl-tests
-	@failed=0; \
-	export ASAN_OPTIONS=$(ASAN_OPTIONS); \
+	@mkdir -p $(COV_PROF_DIR); \
+	failed=0; \
+	export ASAN_OPTIONS=$(ASAN_OPTIONS); $(COV_EXPORT) \
 	count_pass=0; \
 	count_fail=0; \
 	count_known=0; \
@@ -601,7 +610,41 @@ tags:
 	    `find src -name '*.tl'`
 	etags --append src/mos/src/*.[ch] src/tess/src/*.[ch]
 
-.PHONY: clean cleanall install test tags
+# ------------------------------------------------------------------------------
+# Coverage (CONFIG=coverage only, requires clang + llvm-cov + llvm-profdata)
+# ------------------------------------------------------------------------------
+
+COV_PROF_DIR  = $(BUILD_DIR)/profiles
+COV_MERGED    = $(BUILD_DIR)/default.profdata
+COV_REPORT    = $(BUILD_DIR)/coverage-report
+
+# Run all tests with coverage instrumentation and generate reports.
+# Usage: make CONFIG=coverage coverage
+coverage:
+ifeq ($(CONFIG),coverage)
+	$(Q)rm -rf $(COV_PROF_DIR) $(COV_MERGED) $(COV_REPORT)
+	$(Q)mkdir -p $(COV_PROF_DIR)
+	@$(MAKE) --no-print-directory CONFIG=coverage test
+	@printf "\n  \033[1;33m[COV]\033[0m  Merging profile data...\n"
+	$(Q)llvm-profdata merge -sparse $(COV_PROF_DIR)/*.profraw -o $(COV_MERGED)
+	@printf "  \033[1;33m[COV]\033[0m  Generating report...\n\n"
+	$(Q)llvm-cov report $(TESS_EXE) \
+		$(patsubst %,-object %,$(MOS_TEST_EXES) $(TESS_TEST_EXES)) \
+		-instr-profile=$(COV_MERGED) \
+		-ignore-filename-regex='vendor/|test_'
+	@printf "\n  \033[1;33m[COV]\033[0m  Generating HTML report...\n"
+	$(Q)llvm-cov show $(TESS_EXE) \
+		$(patsubst %,-object %,$(MOS_TEST_EXES) $(TESS_TEST_EXES)) \
+		-instr-profile=$(COV_MERGED) \
+		-format=html -output-dir=$(COV_REPORT) \
+		-ignore-filename-regex='vendor/|test_' \
+		-show-line-counts-or-regions -show-expansions
+	@printf "  \033[1;32m[COV]\033[0m  HTML report: %s/index.html\n\n" "$(COV_REPORT)"
+else
+	@printf "  \033[1;31m[ERROR]\033[0m coverage target requires CONFIG=coverage\n"; exit 1
+endif
+
+.PHONY: clean cleanall install test tags coverage
 .PHONY: test-mos test-tess test-tl
 .PHONY: build-mos-benchmarks bench-mos
 .DEFAULT_GOAL := all

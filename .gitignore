@@ -1,7 +1,11 @@
 /.cache/
 /build/
 /build-asan/
+/build-coverage/
+/build-debug/
 /build-release/
 /TAGS
 /out/
 /.clangd
+*.profraw
+*.profdata
