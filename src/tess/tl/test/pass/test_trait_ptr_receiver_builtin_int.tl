@@ -2,7 +2,7 @@
 // When a trait defines `mutate(self: Ptr[T])` and `#module Int` implements
 // `mutate(self)`, the parameter `self` is inferred as `CLongLong` (by-value)
 // instead of `Ptr[CLongLong]`. Dereferencing `self.*` then fails with
-// "expected_pointer" or segfaults.
+// c"expected_pointer" or segfaults.
 
 #module Mutate
 

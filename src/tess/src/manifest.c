@@ -17,6 +17,12 @@
 // Returns the string value, or an empty str on failure (with error printed).
 static str extract_string(allocator *alloc, ast_node *node, char const *func_name, int arg_index) {
 
+    if (ast_node_is_nfa(node) && node->named_application.n_arguments == 1) {
+        // accept any unary NFA with a string as first argument: This will accept
+        // String literals which are mangled to String.from_literal/1 calls by the parser.
+        node = node->named_application.arguments[0];
+    }
+
     if (!ast_node_is_string(node)) goto fail;
     str out = ast_node_str(node);
     if (str_is_empty(out)) goto fail;

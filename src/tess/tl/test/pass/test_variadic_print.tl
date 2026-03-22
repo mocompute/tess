@@ -5,10 +5,10 @@
 
 main() {
     // Print.print outputs without newline
-    Print.print(42, " hello ", true)
+    Print.print(42, c" hello ", true)
 
     // Print.println appends a newline
-    Print.println(" world")
+    Print.println(c" world")
 
     // Zero args
     Print.print()

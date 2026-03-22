@@ -13,9 +13,9 @@ Describable[T]: { describe(a: T) -> String }
 
 describe[T](n: T) -> String {
     s      := to_string(n)
-    result := s"["
+    result := "["
     result.push(s)
-    result.push(s"]")
+    result.push("]")
     result
 }
 
@@ -23,9 +23,9 @@ describe[T](n: T) -> String {
 
 describe(b: Bool) -> String {
     s      := to_string(b)
-    result := s"["
+    result := "["
     result.push(s)
-    result.push(s"]")
+    result.push("]")
     result
 }
 
@@ -43,7 +43,7 @@ join_all(args: ...Helpers.Describable) -> String {
 
 main() {
     s1 := join_all(42, true)
-    if !s1.eq_cstr("[42][true]") { c_exit(1) }
+    if !s1.eq_cstr(c"[42][true]") { c_exit(1) }
 
     s2 := join_all()
     if !s2.is_empty() { c_exit(2) }

@@ -180,7 +180,7 @@ _init_small(src, n) {
 
 _init_big(alloc, src, n) {
     buf: Ptr[CChar] := alloc->malloc(alloc, n + 1)
-    if buf == null { _tl_fatal_("String: out of memory") }
+    if buf == null { _tl_fatal_(c"String: out of memory") }
     if n > 0 { c_memcpy(buf, src, n) }
     String(big = _Big(len = n, buf = buf))
 }
@@ -271,8 +271,8 @@ from_byte(b: Byte) {
 }
 
 from_bool(b: Bool) {
-    if b { return from_cstr("true") }
-    from_cstr("false")
+    if b { return from_cstr(c"true") }
+    from_cstr(c"false")
 }
 
 
@@ -405,7 +405,7 @@ _cat_impl(alloc: Ptr[Allocator], bufs: Ptr[Ptr[CChar]], lens: Ptr[CSize], count:
     }
 
     buf: Ptr[CChar] := alloc->malloc(alloc, total + 1)
-    if buf == null { _tl_fatal_("String: out of memory") }
+    if buf == null { _tl_fatal_(c"String: out of memory") }
     off: CSize := 0
     j:   CSize := 0
     while j < count, j += 1 {
@@ -480,7 +480,7 @@ push(self, other) {
 
 slice(alloc, s, start, end) {
     n := len(s)
-    if start > end || end > n { _tl_fatal_("String.slice: index out of bounds") }
+    if start > end || end > n { _tl_fatal_(c"String.slice: index out of bounds") }
     slen := end - start
     if slen == 0 { return empty() }
     sp              := _buf(s.&)
@@ -577,7 +577,7 @@ count_byte(s, b) {
 count(s, needle) {
     sn := len(s)
     nn := len(needle)
-    if nn == 0 { _tl_fatal_("String.count: empty needle") }
+    if nn == 0 { _tl_fatal_(c"String.count: empty needle") }
     if nn > sn { return 0 }
     sp       := _buf(s.&)
     np       := _buf(needle.&)
@@ -727,7 +727,7 @@ repeat(alloc, s, count) {
     }
 
     buf: Ptr[CChar] := alloc->malloc(alloc, total + 1)
-    if buf == null { _tl_fatal_("String.repeat: out of memory") }
+    if buf == null { _tl_fatal_(c"String.repeat: out of memory") }
     off: CSize := 0
     i:   CSize := 0
     while i < count, i += 1 {
@@ -745,7 +745,7 @@ repeat(s, count) {
 replace(alloc, s, old, new_s) {
     sn := len(s)
     on := len(old)
-    if on == 0 { _tl_fatal_("String.replace: empty search string") }
+    if on == 0 { _tl_fatal_(c"String.replace: empty search string") }
     if on > sn { return copy(alloc, s) }
     nn := len(new_s)
     sp := _buf(s.&)
@@ -761,7 +761,7 @@ replace(alloc, s, old, new_s) {
 
     // Build result into heap buffer, then decide SSO
     buf: Ptr[CChar] := alloc->malloc(alloc, total + 1)
-    if buf == null { _tl_fatal_("String.replace: out of memory") }
+    if buf == null { _tl_fatal_(c"String.replace: out of memory") }
     off: CSize := 0
     j:   CSize := 0
     while j < sn {
@@ -832,7 +832,7 @@ strip_suffix(s, suffix) {
 
 split(alloc, s, delimiter) {
     dn := len(delimiter)
-    if dn == 0 { _tl_fatal_("String.split: empty delimiter") }
+    if dn == 0 { _tl_fatal_(c"String.split: empty delimiter") }
     sn     := len(s)
     result := Array.empty[String]()
 
@@ -917,7 +917,7 @@ join(alloc, sep, arr) {
     }
 
     buf: Ptr[CChar] := alloc->malloc(alloc, total + 1)
-    if buf == null { _tl_fatal_("String.join: out of memory") }
+    if buf == null { _tl_fatal_(c"String.join: out of memory") }
     off: CSize := 0
     j:   CSize := 0
     while j < arr.size, j += 1 {

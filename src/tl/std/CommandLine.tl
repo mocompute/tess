@@ -123,7 +123,7 @@ _store_str      (values: Ptr[HashMap[String, ArgValue]], name: String, val: Stri
 
 create(alloc, name, description) {
     p: Ptr[CommandLine] := alloc->malloc(alloc, sizeof[CommandLine]())
-    if p == null { _tl_fatal_("CommandLine: oom") }
+    if p == null { _tl_fatal_(c"CommandLine: oom") }
     p->_alloc       = alloc
     p->_name        = name
     p->_description = description
@@ -276,7 +276,7 @@ _parse_short(self, values, errors, arg, argc, argv, ip) {
         }
         ch: CChar := bv.v
         si: Some  := _find_spec_short(self, ch) else {
-            flag_str := s"-".cat(String.from_bytes(ch.&, 1))
+            flag_str := "-".cat(String.from_bytes(ch.&, 1))
             Array.push(errors, UnknownFlag(flag = flag_str))
             j += 1
             continue
@@ -312,8 +312,8 @@ parse(self, argc, argv) {
     errors              := Array.empty[ParseError]()
     cmd: Option[String] := None
 
-    dd           := s"--"
-    short_prefix := s"-"
+    dd           := "--"
+    short_prefix := "-"
 
     i := 1; past_separator := false
     while i < argc {
@@ -397,16 +397,16 @@ parse_or_exit(self, argc, argv) {
             i := 0
             while i < err.v.errors.size, i += 1 {
                 when err.v.errors.v.[i] {
-                    uf: UnknownFlag { c_printf("error: unknown flag '%s'\n", uf.flag.&.cstr()) }
-                    mv: MissingValue { c_printf("error: missing value for '%s'\n", mv.flag.&.cstr()) }
-                    mr: MissingRequired { c_printf("error: missing required option '%s'\n", mr.name.&.cstr()) }
-                    ic: InvalidCommand { c_printf("error: unknown command '%s'\n", ic.name.&.cstr()) }
+                    uf: UnknownFlag { c_printf(c"error: unknown flag '%s'\n", uf.flag.&.cstr()) }
+                    mv: MissingValue { c_printf(c"error: missing value for '%s'\n", mv.flag.&.cstr()) }
+                    mr: MissingRequired { c_printf(c"error: missing required option '%s'\n", mr.name.&.cstr()) }
+                    ic: InvalidCommand { c_printf(c"error: unknown command '%s'\n", ic.name.&.cstr()) }
                 }
             }
-            c_printf("\n")
+            c_printf(c"\n")
             print_help(self)
             c_exit(1)
-            _tl_fatal_("unreachable")
+            _tl_fatal_(c"unreachable")
         }
     }
 }
@@ -415,63 +415,63 @@ parse_or_exit(self, argc, argv) {
 // -- Help --
 
 help_text(self) {
-    result := s"Usage: ".cat(self->_name)
-    result = result.cat(s" [options]")
+    result := "Usage: ".cat(self->_name)
+    result = result.cat(" [options]")
 
     if self->_commands.size > 0 {
-        result = result.cat(s" <command>")
+        result = result.cat(" <command>")
     }
 
-    result = result.cat(s" [args...]\n")
+    result = result.cat(" [args...]\n")
 
     if self->_description.len() > 0 {
-        result = result.cat(s"\n")
+        result = result.cat("\n")
         result = result.cat(self->_description)
-        result = result.cat(s"\n")
+        result = result.cat("\n")
     }
 
     if self->_specs.size > 0 {
-        result = result.cat(s"\nOptions:\n")
+        result = result.cat("\nOptions:\n")
 
         i: CSize := 0
         while i < self->_specs.size, i += 1 {
             spec := self->_specs.v.[i]
-            result = result.cat(s"  ")
+            result = result.cat("  ")
 
             if spec.short_name != '\0' {
-                result = result.cat(s"-")
+                result = result.cat("-")
                 result = result.cat(String.from_bytes(spec.short_name.&, 1))
-                result = result.cat(s", ")
+                result = result.cat(", ")
             } else {
-                result = result.cat(s"    ")
+                result = result.cat("    ")
             }
 
-            result = result.cat(s"--")
+            result = result.cat("--")
             result = result.cat(spec.long_name)
 
             when spec.kind {
-                fv: FlagValue { result = result.cat(s" <value>") }
+                fv: FlagValue { result = result.cat(" <value>") }
                 else { }
             }
 
-            result = result.cat(s"\t")
+            result = result.cat("\t")
             result = result.cat(spec.description)
 
             if spec.required {
-                result = result.cat(s" (required)")
+                result = result.cat(" (required)")
             }
 
-            result = result.cat(s"\n")
+            result = result.cat("\n")
         }
     }
 
     if self->_commands.size > 0 {
-        result = result.cat(s"\nCommands:\n")
+        result = result.cat("\nCommands:\n")
         j: CSize := 0
         while j < self->_commands.size, j += 1 {
-            result = result.cat(s"  ")
+            result = result.cat("  ")
             result = result.cat(self->_commands.v.[j])
-            result = result.cat(s"\n")
+            result = result.cat("\n")
         }
     }
 
@@ -480,7 +480,7 @@ help_text(self) {
 
 print_help(self) {
     txt := help_text(self)
-    c_printf("%s", txt.&.cstr())
+    c_printf(c"%s", txt.&.cstr())
     void
 }
 

@@ -2,18 +2,18 @@
 #import <cstring.tl>
 
 main() {
-    s1 := "hello"
+    s1 := c"hello"
     case s1, (a, b) { 0 == c_strcmp(a, b) } {
-        "world" { 1 }
-        "there" { 1 }
-        "hello" { 0 }
+        c"world" { 1 }
+        c"there" { 1 }
+        c"hello" { 0 }
     }
 }
 
 
 // ./tess c src/tess/tl/test_case_pred_lambda.tl | cc -O -x c - -S -masm=intel -o -
 //      .intel_syntax noprefix
-//      .file	"-"
+//      .file	c"-"
 //      .text
 //      .globl	main                            # -- Begin function main
 //      .p2align	4
@@ -27,6 +27,6 @@ main() {
 //      .size	main, .Lfunc_end0-main
 //      .cfi_endproc
 //                                         # -- End function
-//      .ident	"clang version 20.1.8"
-//      .section	".note.GNU-stack","",@progbits
+//      .ident	c"clang version 20.1.8"
+//      .section	c".note.GNU-stack",c"",@progbits
 //      .addrsig

@@ -17,6 +17,6 @@ main() {
     x: CLongDouble := 3.14
     s              := concat_all(x)
 
-    if !s.eq_cstr("3.14") { c_exit(1) }
+    if !s.eq_cstr(c"3.14") { c_exit(1) }
     0
 }

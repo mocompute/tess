@@ -5,8 +5,8 @@
 //
 // Usage:
 //   #import <File.tl>
-//   content := try File.read_file("data.txt")
-//   try File.write_file("out.txt", content)
+//   content := try File.read_file(c"data.txt")
+//   try File.write_file(c"out.txt", content)
 #module File
 #import <Alloc.tl>
 #import <Array.tl>
@@ -213,9 +213,9 @@ Mode: | Read                            // "rb"
       | AppendRead                      // "a+b"
 
 IOError: | NotFound         { path: String }
-         | PermissionDenied { path: String                                    }
-         | AlreadyExists    { path: String                                    }
-         | IOFailed         { path: String, message: String, errno_code: CInt }
+         | PermissionDenied { path: String                                            }
+         | AlreadyExists    { path:    String                                         }
+         | IOFailed         { path:         String, message: String, errno_code: CInt }
 
 SeekFrom: | Start | Current | End
 
@@ -331,9 +331,9 @@ _is_sep(c) {
 
 dirname(alloc, path) {
     n := path.len()
-    if n == 0 { return s"." }
+    if n == 0 { return "." }
 
-    // Strip trailing separators (but not the root "/")
+    // Strip trailing separators (but not the root c"/")
     end := n
     while end > 1 {
         ch: Some := path.char_at(end - 1) else { break }
@@ -347,11 +347,11 @@ dirname(alloc, path) {
         i -= 1
         ch: Some := path.char_at(i) else { continue }
         if _is_sep(ch.v) {
-            if i == 0 { return String.from_bytes(alloc, "/", 1) }
+            if i == 0 { return String.from_bytes(alloc, c"/", 1) }
             return String.slice(alloc, path, 0, i)
         }
     }
-    s"."
+    "."
 }
 
 dirname(path) {
@@ -370,7 +370,7 @@ basename(path) {
         end -= 1
     }
 
-    if end == 0 { return String.from_bytes("/", 1) }
+    if end == 0 { return String.from_bytes(c"/", 1) }
 
     // Find last separator before end
     i: CSize := end
@@ -390,7 +390,7 @@ extension(path) {
     if n == 0 { return None }
 
     dot: Some := base.last_index_of_char('.') else { return None }
-    if dot.v == 0 { return None }       // ".hidden" — dot at start is not an extension
+    if dot.v == 0 { return None }       // c".hidden" — dot at start is not an extension
     Some(base.slice(dot.v, n))
 }
 
@@ -400,7 +400,7 @@ stem(path) {
     if n == 0 { return String.empty() }
 
     dot: Some := base.last_index_of_char('.') else { return base }
-    if dot.v == 0 { return base }       // ".hidden" — the whole thing is the stem
+    if dot.v == 0 { return base }       // c".hidden" — the whole thing is the stem
     base.slice(0, dot.v)
 }
 
@@ -420,7 +420,7 @@ join(alloc, dir, file) {
         return String.cat(alloc, dir, file)
     }
 
-    sep := String.from_bytes("/", 1)
+    sep := String.from_bytes(c"/", 1)
     String.cat_3(alloc, dir, sep, file)
 }
 
@@ -436,13 +436,13 @@ normalize(alloc, path) {
     abs            := _is_sep(first_ch.v)
 
     // Split path into components
-    parts := String.split(alloc, path, s"/")
+    parts := String.split(alloc, path, "/")
 
     // Also handle backslash-separated paths
     result   := Array.empty[String]()
     i: CSize := 0
     while i < parts.size, i += 1 {
-        sub      := String.split(alloc, parts.v.[i], s"\\")
+        sub      := String.split(alloc, parts.v.[i], "\\")
         j: CSize := 0
         while j < sub.size, j += 1 {
             Array.push(result.&, alloc, sub.v.[j])
@@ -456,12 +456,12 @@ normalize(alloc, path) {
         part := result.v.[k]
         pn   := part.len()
 
-        if pn == 0 || part.eq(s".") {
+        if pn == 0 || part.eq(".") {
             continue
         }
 
-        if part.eq(s"..") {
-            if stack.size > 0 && !stack.v.[stack.size - 1].eq(s"..") {
+        if part.eq("..") {
+            if stack.size > 0 && !stack.v.[stack.size - 1].eq("..") {
                 stack.&.pop()
                 void
             } else if !abs {
@@ -474,13 +474,13 @@ normalize(alloc, path) {
     }
 
     if stack.size == 0 {
-        if abs { return s"/" }
-        return s"."
+        if abs { return "/" }
+        return "."
     }
 
-    out := String.join(alloc, s"/", stack)
+    out := String.join(alloc, "/", stack)
     if abs {
-        return String.cat(alloc, s"/", out)
+        return String.cat(alloc, "/", out)
     }
     out
 }
@@ -492,7 +492,7 @@ normalize(path) {
 relative(alloc, from_dir, to_path) {
     if from_dir.is_empty() || to_path.is_empty() {
         return Err(File.IOFailed(path = String.empty(),
-                                 message    = s"relative: empty input",
+                                 message    = "relative: empty input",
                                  errno_code = 0))
     }
 
@@ -505,7 +505,7 @@ relative(alloc, from_dir, to_path) {
         cwd_ptr: Ptr[CChar]          := cwd_buf
         if c_tl_file_getcwd(cwd_ptr, 4096) != 0 {
             return Err(File.IOFailed(path = from_dir,
-                                     message    = s"relative: getcwd failed",
+                                     message    = "relative: getcwd failed",
                                      errno_code = c_errno))
         }
         cwd := String.from_cstr(alloc, cwd_ptr)
@@ -518,7 +518,7 @@ relative(alloc, from_dir, to_path) {
         cwd_ptr: Ptr[CChar]          := cwd_buf
         if c_tl_file_getcwd(cwd_ptr, 4096) != 0 {
             return Err(File.IOFailed(path = to_path,
-                                     message    = s"relative: getcwd failed",
+                                     message    = "relative: getcwd failed",
                                      errno_code = c_errno))
         }
         cwd := String.from_cstr(alloc, cwd_ptr)
@@ -527,8 +527,8 @@ relative(alloc, from_dir, to_path) {
     }
 
     // Split into components
-    from_parts := String.split(alloc, norm_from, s"/")
-    to_parts   := String.split(alloc, norm_to, s"/")
+    from_parts := String.split(alloc, norm_from, "/")
+    to_parts   := String.split(alloc, norm_to, "/")
 
     // Find common prefix length
     common: CSize := 0
@@ -538,12 +538,12 @@ relative(alloc, from_dir, to_path) {
         common += 1
     }
 
-    // Build relative path: ".." for each remaining from_part, then remaining to_parts
+    // Build relative path: c".." for each remaining from_part, then remaining to_parts
     result     := Array.empty[String]()
     ups: CSize := from_parts.size - common
     u:   CSize := 0
     while u < ups, u += 1 {
-        Array.push(result.&, alloc, s"..")
+        Array.push(result.&, alloc, "..")
     }
 
     d: CSize := common
@@ -551,8 +551,8 @@ relative(alloc, from_dir, to_path) {
         Array.push(result.&, alloc, to_parts.v.[d])
     }
 
-    if result.size == 0 { return Ok(s".") }
-    Ok(String.join(alloc, s"/", result))
+    if result.size == 0 { return Ok(".") }
+    Ok(String.join(alloc, "/", result))
 }
 
 relative(from_dir, to_path) {
@@ -591,12 +591,12 @@ separator() {
 
 _mode_str(mode) {
     when mode {
-        r:  Read { "rb" }
-        w:  Write { "wb" }
-        a:  Append { "ab" }
-        rw: ReadWrite { "r+b" }
-        wr: WriteRead { "w+b" }
-        ar: AppendRead { "a+b" }
+        r:  Read { c"rb" }
+        w:  Write { c"wb" }
+        a:  Append { c"ab" }
+        rw: ReadWrite { c"r+b" }
+        wr: WriteRead { c"w+b" }
+        ar: AppendRead { c"a+b" }
     }
 }
 
@@ -640,7 +640,7 @@ open(alloc, path, mode) {
     if handle == null { return Err(_errno_to_error(path)) }
 
     f: Ptr[File] := alloc->malloc(alloc, sizeof[File]())
-    if f == null { _tl_fatal_("File.open: out of memory") }
+    if f == null { _tl_fatal_(c"File.open: out of memory") }
     f->_handle = handle
     f->_alloc  = alloc
     f->_path   = path
@@ -697,7 +697,7 @@ read_line(self, alloc) {
             new_buf: Ptr[CChar] := alloc->malloc(alloc, new_cap)
             if new_buf == null {
                 if heap_buf != null { alloc->free(alloc, heap_buf) }
-                _tl_fatal_("File.read_line: out of memory")
+                _tl_fatal_(c"File.read_line: out of memory")
             }
             c_memcpy(new_buf, buf_ptr, len)
             if heap_buf != null { alloc->free(alloc, heap_buf) }
@@ -736,7 +736,7 @@ read_all(self, alloc) {
     if remaining == 0 { return Ok(String.empty()) }
 
     tmp: Ptr[CChar] := alloc->malloc(alloc, remaining + 1)
-    if tmp == null { _tl_fatal_("File.read_all: out of memory") }
+    if tmp == null { _tl_fatal_(c"File.read_all: out of memory") }
 
     bytes_read := c_fread(tmp, 1, remaining, self->_handle)
     if bytes_read < remaining && c_ferror(self->_handle) != 0 {
@@ -885,7 +885,7 @@ append_file(path, content) {
 
 read_lines(alloc, path) {
     content := try read_file(alloc, path)
-    lines   := String.split(alloc, content, s"\n")
+    lines   := String.split(alloc, content, "\n")
 
     // Strip \r from each line (Windows line endings)
     i: CSize := 0
@@ -900,7 +900,7 @@ read_lines(alloc, path) {
         }
     }
 
-    // Remove trailing empty line (split on "\n" produces one after final newline)
+    // Remove trailing empty line (split on c"\n" produces one after final newline)
     if lines.size > 0 && lines.v.[lines.size - 1].is_empty() {
         lines.size -= 1
     }
@@ -932,7 +932,7 @@ size(path) {
 temp_dir() {
     buf: CArray[CChar, 4096] := void
     ptr: Ptr[CChar]          := buf
-    if c_tl_file_tmpdir(ptr, 4096) != 0 { return s"/tmp/" }
+    if c_tl_file_tmpdir(ptr, 4096) != 0 { return "/tmp/" }
     String.from_cstr(ptr)
 }
 

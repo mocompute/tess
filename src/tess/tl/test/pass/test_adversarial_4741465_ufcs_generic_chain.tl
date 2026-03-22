@@ -38,7 +38,7 @@ main() {
 
     // Chain with String: sarr.first().len() — generic return feeds into module method
     sarr := Array.empty[String]()
-    sarr.push(s"hello")
+    sarr.push("hello")
     slen := sarr.first().len()
     error += if slen == 5zu { 0 } else { 1 }
 

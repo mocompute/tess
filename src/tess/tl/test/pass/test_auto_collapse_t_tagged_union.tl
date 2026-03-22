@@ -17,7 +17,7 @@ my_unwrap[a](opt: T[a], default: a) -> a {
 main() {
     error := 0
 
-    // Use auto-collapsed alias "Opt" for "Opt.T"
+    // Use auto-collapsed alias c"Opt" for c"Opt.T"
     a           := Opt.Has(42)
     b: Opt[Int] := Opt.Empty
 

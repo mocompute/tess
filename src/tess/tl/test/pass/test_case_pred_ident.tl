@@ -4,10 +4,10 @@
 streq(a, b) { 0 == c_strcmp(a, b) }
 
 main() {
-    s1 := "hello"
+    s1 := c"hello"
     case s1, streq/2 {
-        "world" { 1 }
-        "hello" { 0 }
-        "there" { 1 }
+        c"world" { 1 }
+        c"hello" { 0 }
+        c"there" { 1 }
     }
 }

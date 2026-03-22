@@ -5,7 +5,7 @@
 
 conditionally_fail(should_fail: Bool) {
     if should_fail {
-        _tl_fatal_("This error should never be reached")
+        _tl_fatal_(c"This error should never be reached")
     }
     void
 }

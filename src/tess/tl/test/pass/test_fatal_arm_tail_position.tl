@@ -11,7 +11,7 @@ if_else_fatal(x) {
     if x > 0 { x * 2 }
     else {
         c_exit(1)
-        _tl_fatal_("unreachable")
+        _tl_fatal_(c"unreachable")
     }
 }
 
@@ -19,7 +19,7 @@ if_else_fatal(x) {
 if_else_fatal_reverse(x) {
     if x < 0 {
         c_exit(1)
-        _tl_fatal_("unreachable")
+        _tl_fatal_(c"unreachable")
     }
     else { x + 1 }
 }
@@ -31,7 +31,7 @@ case_fatal(x) {
         2 { 20 }
         else {
             c_exit(1)
-            _tl_fatal_("unreachable")
+            _tl_fatal_(c"unreachable")
         }
     }
 }

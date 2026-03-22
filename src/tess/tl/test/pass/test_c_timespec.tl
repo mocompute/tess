@@ -2,7 +2,7 @@
 #import <cstdio.tl>
 #include <time.h>
 
-// c_struct_ prefix indicates the type must be rendered in C as "struct <name>"
+// c_struct_ prefix indicates the type must be rendered in C as c"struct <name>"
 c_struct_timespec: {
 
     // must provide concrete type for any field that will be referenced, but the struct need not include all
@@ -15,6 +15,6 @@ main() {
     // initializing it.
     ts: c_struct_timespec := void
     c_timespec_get(ts.&, c_TIME_UTC)
-    c_printf("Current tv_sec = %i\n", ts.tv_sec)
+    c_printf(c"Current tv_sec = %i\n", ts.tv_sec)
     0
 }

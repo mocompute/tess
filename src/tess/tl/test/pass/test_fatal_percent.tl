@@ -5,7 +5,7 @@
 
 conditionally_fail(should_fail: Bool) {
     if should_fail {
-        _tl_fatal_("100% done")
+        _tl_fatal_(c"100% done")
     }
     void
 }

@@ -10,7 +10,7 @@ main() {
 
 // ./tess c src/tess/tl/test_tail_call.tl | cc -x c - -O -S -o - -masm=intel
 //      .intel_syntax noprefix
-//      .file	"-"
+//      .file	c"-"
 //      .text
 //      .globl	main                            # -- Begin function main
 //      .p2align	4
@@ -44,14 +44,14 @@ main() {
 //      .size	tl_fun_f_0, .Lfunc_end1-tl_fun_f_0
 //      .cfi_endproc
 //                                         # -- End function
-//      .ident	"clang version 20.1.8"
-//      .section	".note.GNU-stack","",@progbits
+//      .ident	c"clang version 20.1.8"
+//      .section	c".note.GNU-stack",c"",@progbits
 //      .addrsig
 
 
 // ./tess c src/tess/tl/test_tail_call.tl | cc -x c - -O2 -S -o - -masm=intel
 //      .intel_syntax noprefix
-//      .file	"-"
+//      .file	c"-"
 //      .text
 //      .globl	main                            # -- Begin function main
 //      .p2align	4
@@ -65,6 +65,6 @@ main() {
 //      .size	main, .Lfunc_end0-main
 //      .cfi_endproc
 //                                         # -- End function
-//      .ident	"clang version 20.1.8"
-//      .section	".note.GNU-stack","",@progbits
+//      .ident	c"clang version 20.1.8"
+//      .section	c".note.GNU-stack",c"",@progbits
 //      .addrsig

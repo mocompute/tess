@@ -39,7 +39,7 @@ main() -> CInt {
     error += if h6 != 0 { 0 } else { 1 }
 
     // CString (Ptr[CChar])
-    s: CString := "hello"
+    s: CString := c"hello"
     h7         := s.hash()
     error += if h7 != 0 { 0 } else { 1 }
 

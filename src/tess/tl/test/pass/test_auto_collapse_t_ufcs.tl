@@ -1,5 +1,5 @@
 // Test UFCS dispatch on auto-collapsed generic types.
-// The auto-collapsed alias "Point" must unify with "Point__T" in
+// The auto-collapsed alias c"Point" must unify with c"Point__T" in
 // UFCS-rewritten function calls.
 
 #module Point

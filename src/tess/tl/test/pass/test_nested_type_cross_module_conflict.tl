@@ -1,13 +1,13 @@
 #module A
 
-// Tagged union: registers "Shape" in nested_type_parents
+// Tagged union: registers c"Shape" in nested_type_parents
 Shape: | Circle { radius: Float }
        | Square { length: Float }
 
 #module B
 
-// B defines "Shape" as a plain struct — NOT a nested type parent.
-// But because A's Shape registered "Shape" in the global
+// B defines c"Shape" as a plain struct — NOT a nested type parent.
+// But because A's Shape registered c"Shape" in the global
 // nested_type_parents set, B.Shape.Circle would be misinterpreted
 // if someone tried it (even though B.Shape has no Circle child).
 Shape: { x: Int, y: Int }

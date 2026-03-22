@@ -1,8 +1,8 @@
 // upgrade_strings — Upgrade Tess string literal prefixes.
 //
 // Transforms string prefixes to match new Tess conventions:
-//   "hello"  → c"hello"    (bare strings become explicit C strings)
-//   s"hello" → "hello"     (s-prefix strings become bare strings)
+//   c"hello"  → c"hello"    (bare strings become explicit C strings)
+//   "hello" → c"hello"     (s-prefix strings become bare strings)
 //
 // Build with:
 //   tess exe -o upgrade_strings upgrade_strings.tl
@@ -151,7 +151,7 @@ _process_file(path, in_place) {
     when File.read_file(path) {
         ok: Ok {
             content := ok.v
-            lines   := String.split(content, s"\n")
+            lines   := String.split(content, "\n")
 
             output := Array.empty[String]()
             li: CSize := 0
@@ -160,19 +160,19 @@ _process_file(path, in_place) {
                 output.push(transformed)
             }
 
-            result := String.join(s"\n", output)
+            result := String.join("\n", output)
 
             if in_place {
                 when File.write_file(path, result) {
                     ok: Ok { }
                     err: Err {
-                        c_fprintf(c_stderr, "error: could not write %s\n",
+                        c_fprintf(c_stderr, c"error: could not write %s\n",
                                   String.cstr(path.&))
                         return 1
                     }
                 }
             } else {
-                c_printf("%s", String.cstr(result.&))
+                c_printf(c"%s", String.cstr(result.&))
                 void
             }
             return 0
@@ -180,17 +180,17 @@ _process_file(path, in_place) {
         err: Err {
             when err.v {
                 nf: NotFound {
-                    c_fprintf(c_stderr, "error: %s: no such file\n",
+                    c_fprintf(c_stderr, c"error: %s: no such file\n",
                               String.cstr(nf.path.&))
                     void
                 }
                 pd: PermissionDenied {
-                    c_fprintf(c_stderr, "error: %s: permission denied\n",
+                    c_fprintf(c_stderr, c"error: %s: permission denied\n",
                               String.cstr(pd.path.&))
                     void
                 }
                 else {
-                    c_fprintf(c_stderr, "error: %s: read error\n",
+                    c_fprintf(c_stderr, c"error: %s: read error\n",
                               String.cstr(path.&))
                     void
                 }
@@ -204,24 +204,24 @@ _process_file(path, in_place) {
 // -- Entry point --
 
 main(argc: CInt, argv: Ptr[CString]) {
-    cl := CommandLine.create(s"upgrade_strings",
-              s"Upgrade Tess string literal prefixes")
-    cl.flag(s"in-place", 'i', s"Modify files in place")
-    cl.flag(s"help", 'h', s"Show this help message")
+    cl := CommandLine.create("upgrade_strings",
+              "Upgrade Tess string literal prefixes")
+    cl.flag("in-place", 'i', "Modify files in place")
+    cl.flag("help", 'h', "Show this help message")
 
     args := cl.parse_or_exit(argc, argv)
 
-    if args.get_flag(s"help") {
+    if args.get_flag("help") {
         cl.print_help()
         cl.destroy()
         return 0
     }
 
-    in_place := args.get_flag(s"in-place")
+    in_place := args.get_flag("in-place")
     files    := args.positionals()
 
     if files.size == 0 {
-        c_fprintf(c_stderr, "error: no input files\n")
+        c_fprintf(c_stderr, c"error: no input files\n")
         cl.print_help()
         cl.destroy()
         return 1

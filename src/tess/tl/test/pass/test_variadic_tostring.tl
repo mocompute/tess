@@ -15,20 +15,20 @@ concat_all(args: ...ToString) -> String {
 main() {
     // Basic: int + bool
     s1 := concat_all(42, true)
-    if !s1.eq_cstr("42true") { c_exit(1) }
+    if !s1.eq_cstr(c"42true") { c_exit(1) }
 
     // Multiple types: int + bool + float
     s2 := concat_all(100, false, 3.14)
-    if !s2.eq_cstr("100false3.14") { c_exit(2) }
+    if !s2.eq_cstr(c"100false3.14") { c_exit(2) }
 
     // String argument
-    hello := String.from_cstr("hello")
+    hello := String.from_cstr(c"hello")
     s3    := concat_all(hello)
-    if !s3.eq_cstr("hello") { c_exit(3) }
+    if !s3.eq_cstr(c"hello") { c_exit(3) }
 
     // Mixed: String + int
     s4 := concat_all(hello, 42)
-    if !s4.eq_cstr("hello42") { c_exit(4) }
+    if !s4.eq_cstr(c"hello42") { c_exit(4) }
 
     // Zero variadic args
     s5 := concat_all()

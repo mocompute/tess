@@ -12,7 +12,7 @@ main() {
     error := 0
     error = error + if type_id(42) == 1 { 0 } else { 1 }
     error = error + if type_id(3.14) == 2 { 0 } else { 1 }
-    error = error + if type_id("hey") == 0 { 0 } else { 1 }
+    error = error + if type_id(c"hey") == 0 { 0 } else { 1 }
     error
 }
 
@@ -21,7 +21,7 @@ main() {
 // ./tess c src/tess/tl/test_type_predicate_branch.tl | cc -x c - -O -S -masm=intel -o -
 //      .text
 //      .intel_syntax noprefix
-//      .file	"-"
+//      .file	c"-"
 //      .globl	main                            # -- Begin function main
 //      .p2align	4, 0x90
 //      .type	main,@function
@@ -34,6 +34,6 @@ main() {
 //      .size	main, .Lfunc_end0-main
 //      .cfi_endproc
 //                                         # -- End function
-//      .ident	"clang version 19.1.7"
-//      .section	".note.GNU-stack","",@progbits
+//      .ident	c"clang version 19.1.7"
+//      .section	c".note.GNU-stack",c"",@progbits
 //      .addrsig

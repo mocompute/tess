@@ -23,7 +23,7 @@ main() {
     error += if data_ptr.[1] == 'i' {0} else {1}
 
     // Test 2: CArray field decay to pointer (pass to C function)
-    c_strcpy(data_ptr, "Hello")
+    c_strcpy(data_ptr, c"Hello")
     b.len = c_strlen(data_ptr)
     error += if b.len == 5zu {0} else {1}
 
@@ -46,7 +46,7 @@ main() {
     b2                    := Buffer(data = void, len = 0zu)
     bp                    := b2.&
     field_ptr: Ptr[CChar] := bp->data
-    c_strcpy(field_ptr, "World")
+    c_strcpy(field_ptr, c"World")
     error += if c_strlen(field_ptr) == 5zu {0} else {1}
     // Verify the write went into b2, not a dead temporary
     check_ptr: Ptr[CChar] := b2.data

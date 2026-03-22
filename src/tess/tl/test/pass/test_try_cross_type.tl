@@ -61,7 +61,7 @@ main() {
     when test_cross_ok() {
         ok:  Ok { fails += 0 }
         err: Err {
-            c_printf("FAIL test_cross_ok: got Err(%d)\n", err.v)
+            c_printf(c"FAIL test_cross_ok: got Err(%d)\n", err.v)
             fails += 1
         }
     }
@@ -69,12 +69,12 @@ main() {
     // Test 2: cross-type try, Err path — error value preserved
     when test_cross_err() {
         ok: Ok {
-            c_printf("FAIL test_cross_err: expected Err\n")
+            c_printf(c"FAIL test_cross_err: expected Err\n")
             fails += 1
         }
         err: Err {
             if err.v != 99 {
-                c_printf("FAIL test_cross_err: expected 99, got %d\n", err.v)
+                c_printf(c"FAIL test_cross_err: expected 99, got %d\n", err.v)
                 fails += 1
             }
         }
@@ -84,12 +84,12 @@ main() {
     when test_cross_ok_different_success() {
         ok: Ok {
             if ok.v != 7 {
-                c_printf("FAIL test_cross_ok_different_success: expected 7, got %d\n", ok.v)
+                c_printf(c"FAIL test_cross_ok_different_success: expected 7, got %d\n", ok.v)
                 fails += 1
             }
         }
         err: Err {
-            c_printf("FAIL test_cross_ok_different_success: got Err\n")
+            c_printf(c"FAIL test_cross_ok_different_success: got Err\n")
             fails += 1
         }
     }
@@ -98,7 +98,7 @@ main() {
     when test_multi_try() {
         ok:  Ok { fails += 0 }
         err: Err {
-            c_printf("FAIL test_multi_try: got Err(%d)\n", err.v)
+            c_printf(c"FAIL test_multi_try: got Err(%d)\n", err.v)
             fails += 1
         }
     }
@@ -106,12 +106,12 @@ main() {
     // Test 5: error propagates through cross-type try
     when outer(-5) {
         ok: Ok {
-            c_printf("FAIL outer(-5): expected Err\n")
+            c_printf(c"FAIL outer(-5): expected Err\n")
             fails += 1
         }
         err: Err {
             if err.v != -5 {
-                c_printf("FAIL outer(-5): expected -5, got %d\n", err.v)
+                c_printf(c"FAIL outer(-5): expected -5, got %d\n", err.v)
                 fails += 1
             }
         }
@@ -120,13 +120,13 @@ main() {
     when outer(10) {
         ok:  Ok { fails += 0 }
         err: Err {
-            c_printf("FAIL outer(10): got Err(%d)\n", err.v)
+            c_printf(c"FAIL outer(10): got Err(%d)\n", err.v)
             fails += 1
         }
     }
 
-    if fails == 0 { c_printf("All cross-type try tests passed.\n") }
-    else { c_printf("%d cross-type try test(s) failed.\n", fails) }
+    if fails == 0 { c_printf(c"All cross-type try tests passed.\n") }
+    else { c_printf(c"%d cross-type try test(s) failed.\n", fails) }
 
     fails
 }

@@ -8,7 +8,7 @@ Arr[a]: {
     capacity: CSize,
 }
 
-// This annotation is not required, but it is helpful for documentation: it reads: "`map` is a function of two arguments.
+// This annotation is not required, but it is helpful for documentation: it reads: c"`map` is a function of two arguments.
 // The first argument `f` is a generic unary function that maps a value of one type (`a`) to a value of another type (`b`).
 // The second argument `arr` is an `Arr` struct with elements of type `a`, passed by value.
 // The function returns an `Arr` struct with elements of type `b`.

@@ -59,7 +59,7 @@ main() {
     when test_try_ok() {
         ok:  Ok { fails += 0 }
         err: Err {
-            c_printf("FAIL test_try_ok: expected Ok\n")
+            c_printf(c"FAIL test_try_ok: expected Ok\n")
             fails += 1
         }
     }
@@ -67,12 +67,12 @@ main() {
     // Test 4: try Err — should propagate error
     when test_try_err() {
         ok: Ok {
-            c_printf("FAIL test_try_err: expected Err\n")
+            c_printf(c"FAIL test_try_err: expected Err\n")
             fails += 1
         }
         err: Err {
             if err.v != 99 {
-                c_printf("FAIL test_try_err: wrong error value %d\n", err.v)
+                c_printf(c"FAIL test_try_err: wrong error value %d\n", err.v)
                 fails += 1
             }
         }
@@ -80,8 +80,8 @@ main() {
 
     fails += test_let_else()
 
-    if fails == 0 { c_printf("All Result[Void] tests passed.\n") }
-    else { c_printf("%d Result[Void] test(s) failed.\n", fails) }
+    if fails == 0 { c_printf(c"All Result[Void] tests passed.\n") }
+    else { c_printf(c"%d Result[Void] test(s) failed.\n", fails) }
 
     fails
 }

@@ -1,5 +1,5 @@
 // Top-level module should take precedence over implicit submodule resolution.
-// Bare "Foo" in #module Parent should resolve to the top-level Foo.Foo,
+// Bare c"Foo" in #module Parent should resolve to the top-level Foo.Foo,
 // not Parent.Foo.Foo.
 
 #module Foo

@@ -10,7 +10,7 @@
 //   tess run wordcount.tl -- file.tl                # lines, words, chars
 //   tess run wordcount.tl -- -u -i file.tl          # + unique words, case-insensitive
 //   tess run wordcount.tl -- -s -t 5 src/*.tl       # sort by words, top 5
-//   echo "hello world" | tess run wordcount.tl      # read from stdin
+//   echo c"hello world" | tess run wordcount.tl      # read from stdin
 
 
 #module main
@@ -127,41 +127,41 @@ _read_stdin() {
 
 // Print counts for one input.
 _print_line(c, show_lines, show_words, show_chars, show_unique) {
-    if show_lines { c_printf("%8d", c.lines) }
-    if show_words { c_printf("%8d", c.words) }
-    if show_chars { c_printf("%8d", c.chars) }
-    if show_unique { c_printf("%8d", c.unique_words) }
-    c_printf("  %s\n", String.cstr(c.path.&))
+    if show_lines { c_printf(c"%8d", c.lines) }
+    if show_words { c_printf(c"%8d", c.words) }
+    if show_chars { c_printf(c"%8d", c.chars) }
+    if show_unique { c_printf(c"%8d", c.unique_words) }
+    c_printf(c"  %s\n", String.cstr(c.path.&))
 }
 
 
 // -- Entry point --
 
 main(argc: CInt, argv: Ptr[CString]) {
-    cl := CommandLine.create(s"wc", s"Count lines, words, and characters in files")
-    cl.flag(s"lines", 'l', s"Show line count")
-    cl.flag(s"words", 'w', s"Show word count")
-    cl.flag(s"chars", 'c', s"Show character/byte count")
-    cl.flag(s"unique-words", 'u', s"Show unique word count")
-    cl.flag(s"ignore-case", 'i', s"Case-insensitive unique words (use with -u)")
-    cl.flag(s"sort", 's', s"Sort output by word count (descending)")
-    cl.option(s"top", 't', s"Show only top N files")
-    cl.flag(s"help", 'h', s"Show this help message")
+    cl := CommandLine.create("wc", "Count lines, words, and characters in files")
+    cl.flag("lines", 'l', "Show line count")
+    cl.flag("words", 'w', "Show word count")
+    cl.flag("chars", 'c', "Show character/byte count")
+    cl.flag("unique-words", 'u', "Show unique word count")
+    cl.flag("ignore-case", 'i', "Case-insensitive unique words (use with -u)")
+    cl.flag("sort", 's', "Sort output by word count (descending)")
+    cl.option("top", 't', "Show only top N files")
+    cl.flag("help", 'h', "Show this help message")
 
     args := cl.parse_or_exit(argc, argv)
 
-    if args.get_flag(s"help") {
+    if args.get_flag("help") {
         cl.print_help()
         cl.destroy()
         return 0
     }
 
-    show_lines  := args.get_flag(s"lines")
-    show_words  := args.get_flag(s"words")
-    show_chars  := args.get_flag(s"chars")
-    show_unique := args.get_flag(s"unique-words")
-    ignore_case := args.get_flag(s"ignore-case")
-    do_sort     := args.get_flag(s"sort")
+    show_lines  := args.get_flag("lines")
+    show_words  := args.get_flag("words")
+    show_chars  := args.get_flag("chars")
+    show_unique := args.get_flag("unique-words")
+    ignore_case := args.get_flag("ignore-case")
+    do_sort     := args.get_flag("sort")
 
     // Default: show all standard counts if no specific flag given.
     if !show_lines && !show_words && !show_chars && !show_unique {
@@ -176,7 +176,7 @@ main(argc: CInt, argv: Ptr[CString]) {
     if files.size == 0 {
         // Read from stdin.
         content := _read_stdin()
-        c       := _count(content, s"<stdin>", show_unique, ignore_case)
+        c       := _count(content, "<stdin>", show_unique, ignore_case)
         results.&.push(c)
     } else {
         fi: CSize := 0
@@ -190,17 +190,17 @@ main(argc: CInt, argv: Ptr[CString]) {
                 err: Err {
                     when err.v {
                         nf: NotFound {
-                            c_fprintf(c_stderr, "wc: %s: no such file or directory\n",
+                            c_fprintf(c_stderr, c"wc: %s: no such file or directory\n",
                                       String.cstr(nf.path.&))
                             void
                         }
                         pd: PermissionDenied {
-                            c_fprintf(c_stderr, "wc: %s: permission denied\n",
+                            c_fprintf(c_stderr, c"wc: %s: permission denied\n",
                                       String.cstr(pd.path.&))
                             void
                         }
                         else {
-                            c_fprintf(c_stderr, "wc: %s: read error\n",
+                            c_fprintf(c_stderr, c"wc: %s: read error\n",
                                       String.cstr(path.&))
                             void
                         }
@@ -216,7 +216,7 @@ main(argc: CInt, argv: Ptr[CString]) {
     }
 
     // Apply --top N limit.
-    when args.get_option(s"top") {
+    when args.get_option("top") {
         s: Some {
             top_n := c_atoi(String.cstr(s.v.&))
             if top_n > 0 {
@@ -237,7 +237,7 @@ main(argc: CInt, argv: Ptr[CString]) {
 
     // Print totals for multiple files.
     if results.size > 1 {
-        total := Counts(path = s"total", lines = 0, words = 0,
+        total := Counts(path = "total", lines = 0, words = 0,
                         chars = 0, unique_words = 0)
         ti: CSize := 0
         while ti < results.size, ti += 1 {

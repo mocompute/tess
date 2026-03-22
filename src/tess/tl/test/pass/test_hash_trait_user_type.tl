@@ -13,17 +13,17 @@ main() -> CInt {
     error: CInt := 0
 
     // String has a hash() implementation
-    s  := String.from_cstr("hello")
+    s  := String.from_cstr(c"hello")
     h1 := s.hash()
     error += if h1 != 0zu { 0 } else { 1 }
 
     // Same string should produce same hash
-    s2 := String.from_cstr("hello")
+    s2 := String.from_cstr(c"hello")
     h2 := s2.hash()
     error += if h1 == h2 { 0 } else { 1 }
 
     // Different string should (likely) produce different hash
-    s3 := String.from_cstr("world")
+    s3 := String.from_cstr(c"world")
     h3 := s3.hash()
     error += if h1 != h3 { 0 } else { 1 }
 

@@ -29,11 +29,11 @@ main() {
 
     // Int satisfies Describe
     s := show(42)
-    error += if String.eq(s, String.from_cstr("42")) { 0 } else { 1 }
+    error += if String.eq(s, String.from_cstr(c"42")) { 0 } else { 1 }
 
     // Bool satisfies Describe
     sb := show(true)
-    error += if String.eq(sb, String.from_cstr("true")) { 0 } else { 1 }
+    error += if String.eq(sb, String.from_cstr(c"true")) { 0 } else { 1 }
 
     // Float satisfies Describe
     sf := show(3.14)

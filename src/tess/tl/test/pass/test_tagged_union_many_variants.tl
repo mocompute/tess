@@ -26,12 +26,12 @@ main() {
     error += if classify(IntLit(42)) == 1 {0} else {1}
     error += if classify(FloatLit(3.14)) == 2 {0} else {1}
     error += if classify(BoolLit(true)) == 3 {0} else {1}
-    error += if classify(StringLit("hi")) == 4 {0} else {1}
-    error += if classify(Ident("foo")) == 5 {0} else {1}
+    error += if classify(StringLit(c"hi")) == 4 {0} else {1}
+    error += if classify(Ident(c"foo")) == 5 {0} else {1}
     error += if classify(Eof()) == 0 {0} else {1}
 
     // Test else arm with many variants
-    tok        := Ident("x")
+    tok        := Ident(c"x")
     is_literal := when tok {
         i: IntLit { 1 }
         f: FloatLit { 1 }

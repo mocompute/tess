@@ -3,14 +3,14 @@ format(1)
 
 // Package name — determines the output filename and init function name
 package(mylib)
-author ("anonymous")
-version("0.0.1")
+author (c"anonymous")
+version(c"0.0.1")
 
 // Directory containing .tl source files (searched recursively)
-source("src/")
+source(c"src/")
 
 // Modules to export from the static library
 export(MyLib)
 
 // Search path for local package dependencies (not needed here)
-// depend_path("libs/")
+// depend_path(c"libs/")

@@ -23,6 +23,6 @@ main() {
 
     s := concat_all(x, y, z, w)
 
-    if !s.eq_cstr("3.142427") { c_exit(1) }
+    if !s.eq_cstr(c"3.142427") { c_exit(1) }
     0
 }

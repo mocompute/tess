@@ -16,13 +16,13 @@ main() {
     a := Point(x = 1, y = 2)
     b := Point(x = 3, y = 4)
     c := a + b
-    c_printf("(%d, %d)\n", c.x, c.y)
+    c_printf(c"(%d, %d)\n", c.x, c.y)
 
-    if a != b { c_printf("different\n") }
+    if a != b { c_printf(c"different\n") }
 
     af := Point(x = 1.2, y = 2.3)
     bf := Point(x = 3.4, y = 4.5)
     cf := af + bf
-    c_printf("(%f, %f)\n", cf.x, cf.y)
+    c_printf(c"(%f, %f)\n", cf.x, cf.y)
     0
 }

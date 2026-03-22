@@ -11,7 +11,7 @@ unwrap_or_die(opt: Option[Int]) -> Int {
         s: Some { s.v }
         n: None {
             c_exit(1)
-            _tl_fatal_("unreachable")
+            _tl_fatal_(c"unreachable")
         }
     }
 }

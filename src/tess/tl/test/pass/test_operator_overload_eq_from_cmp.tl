@@ -1,6 +1,6 @@
 // Test that == and != can fall back to cmp when eq is not defined.
-// The design says: "For == and !=: the compiler first checks for eq. If absent,
-// falls back to deriving from cmp (i.e., cmp(a, b) == 0)."
+// The design says: c"For == and !=: the compiler first checks for eq. If absent,
+// falls back to deriving from cmp (i.e., cmp(a, b) == 0).c"
 
 #module Val
 

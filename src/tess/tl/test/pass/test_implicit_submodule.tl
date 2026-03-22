@@ -1,5 +1,5 @@
 // Test implicit submodule visibility in parent modules.
-// In #module Outer, bare "Inner" resolves to "Outer.Inner" for dotted access
+// In #module Outer, bare c"Inner" resolves to c"Outer.Inner" for dotted access
 // and as a type (auto-collapse).
 #module Outer
 

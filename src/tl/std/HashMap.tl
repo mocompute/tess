@@ -88,7 +88,7 @@ _entry_width[K, V]() -> CSize { Alloc.align(sizeof[_Entry[K, V]](), alignof[_Ent
 
 _alloc_entries[K, V](alloc, capacity) {
     p: Ptr[_Entry[K, V]] := alloc->calloc(alloc, capacity, _entry_width[K, V]())
-    if p == null { _tl_fatal_("HashMap: oom") }
+    if p == null { _tl_fatal_(c"HashMap: oom") }
     p
 }
 
@@ -99,7 +99,7 @@ create[K, V](alloc: Ptr[Allocator], opts: HashMapOpts) -> Ptr[HashMap[K, V]] {
     cap := if opts.capacity == 0 { 16 } else { Alloc.next_power_of_two(opts.capacity) }
 
     m: Ptr[HashMap[K, V]] := alloc->malloc(alloc, sizeof[HashMap[K, V]]())
-    if m == null { _tl_fatal_("HashMap: oom") }
+    if m == null { _tl_fatal_(c"HashMap: oom") }
 
     m->_entries  = _alloc_entries[K, V](alloc, cap)
     m->_capacity = cap

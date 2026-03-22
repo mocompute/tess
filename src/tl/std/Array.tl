@@ -169,7 +169,7 @@ with_capacity_undefined[T](count) {
 reserve[T](self, alloc, count) {
     if self->capacity < count {
         p := alloc->realloc(alloc, self->v, count * _type_width_aligned[T]())
-        if p == null { _tl_fatal_("oom") }
+        if p == null { _tl_fatal_(c"oom") }
         self->v        = p
         self->capacity = count
     }
@@ -193,17 +193,17 @@ push(self, x) {
 // -- Element access --
 
 get[T](arr, index: CSize) -> T {
-    if index >= arr.size { _tl_fatal_("Array.get: index out of bounds") }
+    if index >= arr.size { _tl_fatal_(c"Array.get: index out of bounds") }
     arr.v.[index]
 }
 
 front[T](arr) -> T {
-    if arr.size == 0 { _tl_fatal_("Array.front: empty array") }
+    if arr.size == 0 { _tl_fatal_(c"Array.front: empty array") }
     arr.v.[0]
 }
 
 back[T](arr) -> T {
-    if arr.size == 0 { _tl_fatal_("Array.back: empty array") }
+    if arr.size == 0 { _tl_fatal_(c"Array.back: empty array") }
     arr.v.[arr.size - 1]
 }
 
@@ -211,7 +211,7 @@ back[T](arr) -> T {
 // -- Removal / mutation --
 
 pop[T](self) -> T {
-    if self->size == 0 { _tl_fatal_("Array.pop: empty array") }
+    if self->size == 0 { _tl_fatal_(c"Array.pop: empty array") }
     self->size = self->size - 1
     self->v.[self->size]
 }
@@ -221,7 +221,7 @@ clear[T](self) {
 }
 
 insert[T](self, alloc, index, val: T) {
-    if index > self->size { _tl_fatal_("Array.insert: index out of bounds") }
+    if index > self->size { _tl_fatal_(c"Array.insert: index out of bounds") }
     if _is_full(self) { _grow(self, alloc, self->capacity + 1) }
     if index < self->size {
         width       := _type_width_aligned[T]()
@@ -238,7 +238,7 @@ insert[T](self, index, val: T) {
 }
 
 remove[T](self, index) -> T {
-    if index >= self->size { _tl_fatal_("Array.remove: index out of bounds") }
+    if index >= self->size { _tl_fatal_(c"Array.remove: index out of bounds") }
     val := self->v.[index]
     self->size = self->size - 1
     if index < self->size {
@@ -251,7 +251,7 @@ remove[T](self, index) -> T {
 }
 
 swap_remove[T](self, index) -> T {
-    if index >= self->size { _tl_fatal_("Array.swap_remove: index out of bounds") }
+    if index >= self->size { _tl_fatal_(c"Array.swap_remove: index out of bounds") }
     val := self->v.[index]
     self->size = self->size - 1
     if index < self->size {
@@ -309,8 +309,8 @@ truncate[T](self, count) {
 // -- Reordering --
 
 swap[T](self, i, j) {
-    if i >= self->size { _tl_fatal_("Array.swap: index out of bounds") }
-    if j >= self->size { _tl_fatal_("Array.swap: index out of bounds") }
+    if i >= self->size { _tl_fatal_(c"Array.swap: index out of bounds") }
+    if j >= self->size { _tl_fatal_(c"Array.swap: index out of bounds") }
     tmp := self->v.[i]
     self->v.[i] = self->v.[j]
     self->v.[j] = tmp
@@ -356,7 +356,7 @@ clone[T](arr) {
 }
 
 slice[T](alloc, arr, start, end) {
-    if end > arr.size || start > end { _tl_fatal_("Array.slice: index out of bounds") }
+    if end > arr.size || start > end { _tl_fatal_(c"Array.slice: index out of bounds") }
     len := end - start
     if len == 0 { return empty[T]() }
     result := with_capacity[T](alloc, len)
@@ -512,7 +512,7 @@ sort[T](self, tmp_alloc, cmp: (T, T) -> Int) {
     if n <= 1 { return void }
     width       := _type_width_aligned[T]()
     tmp: Ptr[T] := tmp_alloc->malloc(tmp_alloc, n * width)
-    if tmp == null { _tl_fatal_("Array.sort: oom") }
+    if tmp == null { _tl_fatal_(c"Array.sort: oom") }
     w: CSize := 1
     while w < n {
         i: CSize := 0

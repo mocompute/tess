@@ -4,7 +4,7 @@
 [[c_export]] mul(a: CInt, b: CInt) -> CInt { a * b }
 
 // Test c_export with custom name
-[[c_export("my_add")]] add(x: CInt, y: CInt) -> CInt { x + y }
+[[c_export(c"my_add")]] add(x: CInt, y: CInt) -> CInt { x + y }
 
 // Test c_export with void return
 [[c_export]] noop() -> Void { }

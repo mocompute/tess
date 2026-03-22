@@ -6,7 +6,7 @@
 
 // Test: HashMap via implicit module UFCS
 // HashMap.create() returns Ptr[HashMap], so receiver is already a pointer.
-// This tests the "no double-wrap" path — no implicit & needed.
+// This tests the c"no double-wrap" path — no implicit & needed.
 main() {
     error := 0
 

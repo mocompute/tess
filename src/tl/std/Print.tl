@@ -10,7 +10,7 @@ _print_all(args) {
     i: CSize := 0
     while i < args.size, i += 1 {
         s := args.v.[i]
-        c_printf("%s", s.&.cstr())
+        c_printf(c"%s", s.&.cstr())
     }
     void
 }
@@ -19,6 +19,6 @@ print(args: ...ToString) -> Void { _print_all(args) }
 
 println(args: ...ToString) -> Void {
     _print_all(args)
-    c_printf("\n")
+    c_printf(c"\n")
     void
 }

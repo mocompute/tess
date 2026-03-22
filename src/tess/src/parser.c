@@ -587,9 +587,9 @@ int the_symbol(parser *p, char const *const want) {
 int a_string(parser *self) {
     if (next_token(self)) return 1;
 
-    if (tok_string == self->token.tag) return result_ast_str(self, ast_string, self->token.s);
+    if (tok_c_string == self->token.tag) return result_ast_str(self, ast_string, self->token.s);
 
-    if (tok_s_string == self->token.tag) {
+    if (tok_string == self->token.tag || tok_s_string == self->token.tag) {
         // s"..." desugars to String.from_literal("...")
         ast_node_sized args = {.size = 1, .v = alloc_malloc(self->ast_arena, sizeof(void *))};
         args.v[0]           = ast_node_create_sym_c(self->ast_arena, self->token.s);

@@ -1,5 +1,5 @@
 // Test bare submodule type constructor in expression position.
-// In #module Parent, bare "Child(...)" resolves to Parent.Child.Child(...).
+// In #module Parent, bare c"Child(...)" resolves to Parent.Child.Child(...).
 #module Parent
 
 #module Parent.Child

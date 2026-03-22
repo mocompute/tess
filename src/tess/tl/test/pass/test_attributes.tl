@@ -58,7 +58,7 @@ main() {
 
     // lambda parameter
     l1 := ([[param_attr]] x) { x :: [[param_attr]] }
-    error += if l1("hello") {0} else {1}
+    error += if l1(c"hello") {0} else {1}
 
     error += if 123 == has_param_attr(123) {0} else {1}
 

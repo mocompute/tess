@@ -75,8 +75,8 @@ main() {
     fails += test_when_multi_diverge()
     fails += test_when_break()
 
-    if fails == 0 { c_printf("All diverging arm tests passed.\n") }
-    else { c_printf("%d diverging arm test(s) failed.\n", fails) }
+    if fails == 0 { c_printf(c"All diverging arm tests passed.\n") }
+    else { c_printf(c"%d diverging arm test(s) failed.\n", fails) }
 
     fails
 }

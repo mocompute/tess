@@ -32,44 +32,44 @@ main() -> CInt {
     error := 0
 
     specs := Array.empty[Spec]()
-    Array.push(specs.&, Spec(name = S("output"), kind = FlagValue))
+    Array.push(specs.&, Spec(name = S(c"output"), kind = FlagValue))
 
     values := HashMap.create[String, Int]()
     errors := 0
 
-    when String.index_of_char(S("output=bar"), '=') {
+    when String.index_of_char(S(c"output=bar"), '=') {
         eq: Some {
-            key := String.slice(S("output=bar"), 0zu, eq.v)
+            key := String.slice(S(c"output=bar"), 0zu, eq.v)
             when find(specs, key) {
                 si: Some {
                     spec := specs.v.[si.v]
                     when spec.kind {
                         fv: FlagValue {
-                            c_fprintf(c_stderr, "matched FlagValue\n")
+                            c_fprintf(c_stderr, c"matched FlagValue\n")
                             values.set(key, 1)
                         }
                         else {
-                            c_fprintf(c_stderr, "first\n")
+                            c_fprintf(c_stderr, c"first\n")
                             errors += 1
 
                         }
                     }
                 }
                 n: None {
-                    c_fprintf(c_stderr, "second\n")
+                    c_fprintf(c_stderr, c"second\n")
                     errors += 1
                 }
             }
         }
         no: None {
-            c_fprintf(c_stderr, "third\n")
+            c_fprintf(c_stderr, c"third\n")
             errors += 1
         }
     }
 
     // errors should be 0 (FlagValue matched), value should be stored
     if errors != 0 { error += 1 }
-    if values.get(S("output")) == null { error += 1 }
+    if values.get(S(c"output")) == null { error += 1 }
 
     values.destroy()
     Array.free(specs.&)
