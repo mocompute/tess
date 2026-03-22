@@ -408,6 +408,26 @@ static int test_pipe_alignment(void) {
                    "         | B\n"
                    "         | C\n");
 
+    error += check(alloc, "variant struct fields not cross-aligned",
+                   "ParseError: | UnknownFlag { flag: String }\n"
+                   "| MissingValue { flag: String }\n"
+                   "| MissingRequired { name: String }\n"
+                   "| InvalidCommand { name: String }",
+                   "ParseError: | UnknownFlag     { flag: String }\n"
+                   "            | MissingValue    { flag: String }\n"
+                   "            | MissingRequired { name: String }\n"
+                   "            | InvalidCommand  { name: String }\n");
+
+    error += check(alloc, "variant close braces not cross-aligned",
+                   "ArgValue: | BoolVal { v: Bool }\n"
+                   "| CountVal { v: Int }\n"
+                   "| StrVal { v: String }\n"
+                   "| Absent",
+                   "ArgValue: | BoolVal  { v: Bool }\n"
+                   "          | CountVal { v: Int }\n"
+                   "          | StrVal   { v: String }\n"
+                   "          | Absent\n");
+
     error += check(alloc, "blank line resets pipe alignment",
                    "Option(T): | Some { v: T }\n           | None\n\n// Result type\n\nResult(T, E): | "
                    "Ok(T)\n              | Err(E)\n",
@@ -622,6 +642,14 @@ static int test_idempotency(void) {
       "Point: {\n    x:  int\n    yy: int\n}\n",
       "a() {\n    b() {\n        x\n}}\n",
       "Name: | A\n      // comment\n      | B\n",
+      "ParseError: | UnknownFlag     { flag: String }\n"
+      "            | MissingValue    { flag: String }\n"
+      "            | MissingRequired { name: String }\n"
+      "            | InvalidCommand  { name: String }\n",
+      "ArgValue: | BoolVal  { v: Bool }\n"
+      "          | CountVal { v: Int }\n"
+      "          | StrVal   { v: String }\n"
+      "          | Absent\n",
       "set[K: HashEq, V]     (self: Ptr[T], key: K, value: V) -> Void\n"
       "get[K: HashEq, V]     (self: Ptr[T], key: K)           -> Ptr[V]\n"
       "get_copy[K: HashEq, V](self: Ptr[T], key: K)           -> Option[V]\n"

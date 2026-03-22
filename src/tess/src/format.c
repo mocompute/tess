@@ -460,6 +460,13 @@ enum {
 static int find_align_token(char const *line, int token_type) {
     int in_str = 0, in_chr = 0, paren = 0, brace = 0, bracket = 0;
     int len = (int)strlen(line);
+
+    // Don't align close-brace on tagged union variant lines — each variant
+    // has its own { } width, and aligning } adds distracting trailing space.
+    if (token_type == ALIGN_CLOSE_BRACE && ltrim(line)[0] == '|') {
+        return -1;
+    }
+
     for (int i = 0; i < len; i++) {
         char c = line[i];
         if (in_str) {
@@ -529,7 +536,7 @@ static int find_align_token(char const *line, int token_type) {
             continue;
         }
 
-        if (paren != 0 || bracket != 0) continue;
+        if (paren != 0 || bracket != 0 || brace != 0) continue;
 
         char next = (i + 1 < len) ? line[i + 1] : '\0';
         char prev = (i > 0) ? line[i - 1] : '\0';
