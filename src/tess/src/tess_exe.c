@@ -67,6 +67,7 @@ typedef struct {
     int               is_library;
     int               is_static_library;
     int               is_executable;
+    int               needs_pthread;
 
     int               dashdash_at; // index in words where '--' args begin; -1 if not set
 
@@ -175,6 +176,7 @@ void state_init(state *self) {
     self->is_library             = 0;
     self->is_static_library      = 0;
     self->is_executable          = 0;
+    self->needs_pthread          = 0;
     self->dashdash_at            = -1;
     self->stdin_data             = null;
     self->stdin_size             = 0;
@@ -1182,6 +1184,11 @@ int compile(state *self) {
 
     str_sized     ordered_files = files_in_order(self, paths, (str_sized)array_sized(pkg_files));
 
+    // Detect threading library usage for -lpthread linking
+#ifndef MOS_WINDOWS
+    self->needs_pthread = str_map_contains(self->scanner.modules_seen, S("ThreadError"));
+#endif
+
     // Add current package's modules to the prefix map
     if (!str_is_empty(cur_pkg_name) && !str_is_empty(cur_pkg_version)) {
         if (!module_prefixes) {
@@ -1479,6 +1486,13 @@ static c_string_array build_gcc_argv(state *self, char const **extra_flags, int 
         { char const *_t = "-"; array_push(argv, _t); }
         // clang-format on
     }
+
+#ifndef MOS_WINDOWS
+    if (self->needs_pthread) {
+        char const *_t = "-lpthread";
+        array_push(argv, _t);
+    }
+#endif
 
     {
         char const *_t = null;
