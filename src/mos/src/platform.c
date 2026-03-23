@@ -111,6 +111,9 @@ int platform_temp_file_create(platform_temp_file *tf, char const *suffix) {
     }
     DWORD pid = GetCurrentProcessId();
     snprintf(tf->path, PLATFORM_PATH_MAX, "%stess_%lu%s", temp_path, (unsigned long)pid, suffix);
+    FILE *f = fopen(tf->path, "wb");
+    if (!f) return 1;
+    fclose(f);
     return 0;
 }
 
@@ -129,6 +132,9 @@ static char const *get_temp_dir(void) {
 int platform_temp_file_create(platform_temp_file *tf, char const *suffix) {
     pid_t pid = getpid();
     snprintf(tf->path, PLATFORM_PATH_MAX, "%s/tess_%ld%s", get_temp_dir(), (long)pid, suffix);
+    FILE *f = fopen(tf->path, "wb");
+    if (!f) return 1;
+    fclose(f);
     return 0;
 }
 
