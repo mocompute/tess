@@ -66,6 +66,12 @@ tl_source_scanner_validate_result tl_source_scanner_validate(tl_source_scanner *
 // Appends to *imports (caller initializes the array).
 void tl_source_scanner_collect_imports(allocator *alloc, char_csized input, str_array *imports);
 
+// Extract all #define symbols from text (intended for parsing `cc -dM -E` or `cl /PD /E` output).
+// For each `#define NAME ...` line, appends NAME to *defines (value is discarded).
+// Does NOT apply conditional compilation — all defines are collected unconditionally.
+// Appends to *defines (caller initializes the array).
+void tl_source_scanner_collect_defines(allocator *alloc, char_csized input, str_array *defines);
+
 // Extract all #module and #module_prelude directives from source text.
 // Uses the scanner state machine for correct string/comment handling.
 // Does NOT apply conditional compilation — all modules are collected unconditionally.

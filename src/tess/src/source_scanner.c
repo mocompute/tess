@@ -42,7 +42,7 @@ static int process_hash_directive(tl_source_scanner *self, str file_path, str_ar
     // and #import are only processed at depth 0.
     if (words.size == 1 && str_eq(words.v[0], S("endif"))) {
         if (self->conditional_skip_depth) self->conditional_skip_depth -= 1;
-    } else if (words.size == 2) {
+    } else if (words.size >= 2) {
         if (0 == self->conditional_skip_depth && str_eq(words.v[0], S("define"))) {
             str_hset_insert(&self->import_defines, words.v[1]);
         } else if (0 == self->conditional_skip_depth && str_eq(words.v[0], S("undef"))) {
@@ -235,6 +235,39 @@ static int collect_modules_callback(void *raw_ctx, char const *data, u32 start, 
 void tl_source_scanner_collect_modules(allocator *alloc, char_csized input, str_array *modules) {
     collect_modules_ctx ctx = {.alloc = alloc, .modules = modules};
     scan_directives(input, collect_modules_callback, &ctx);
+}
+
+// Context and callback for collect_defines (no conditionals, defines only).
+typedef struct {
+    allocator *alloc;
+    str_array *defines;
+} collect_defines_ctx;
+
+static int collect_defines_callback(void *raw_ctx, char const *data, u32 start, u32 end) {
+    collect_defines_ctx *ctx = raw_ctx;
+
+    u32                  len = end - start;
+    if (len > 0 && data[end - 1] == '\n') len -= 1;
+    if (len > 0 && data[end - 2] == '\r') len -= 1;
+
+    str       command = str_init_n(ctx->alloc, &data[start], len);
+    str_array words   = {.alloc = ctx->alloc};
+    str_parse_words(command, &words);
+
+    if (words.size >= 2 && str_eq(words.v[0], S("define"))) {
+        str name = str_copy(ctx->alloc, words.v[1]);
+        array_push(*ctx->defines, name);
+    }
+
+    forall(i, words) str_deinit(ctx->alloc, &words.v[i]);
+    array_free(words);
+
+    return 0;
+}
+
+void tl_source_scanner_collect_defines(allocator *alloc, char_csized input, str_array *defines) {
+    collect_defines_ctx ctx = {.alloc = alloc, .defines = defines};
+    scan_directives(input, collect_defines_callback, &ctx);
 }
 
 tl_source_scanner_validate_result tl_source_scanner_validate(tl_source_scanner *self,

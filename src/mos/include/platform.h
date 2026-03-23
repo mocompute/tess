@@ -93,6 +93,8 @@ typedef struct {
     char const        *stdin_data; // Data to pipe to stdin (can be NULL)
     size_t             stdin_len;  // Length of stdin_data
     int                verbose;    // If non-zero, print command before executing
+    char             **captured_output;     // If non-NULL, output stored here (caller must free())
+    size_t            *captured_output_len;  // If non-NULL, output length stored here
 } platform_exec_opts;
 
 // Execute process, pipe stdin_data to it, forward stderr to parent

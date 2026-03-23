@@ -1049,6 +1049,58 @@ static void get_c_compiler(state *self) {
     }
 }
 
+// Query the C compiler for predefined macros and add them to the defines list.
+// gcc/clang: cc -dM -E -x c /dev/null   (or NUL on Windows)
+// MSVC:      cl /Zc:preprocessor /PD /E <empty.c>
+// Gracefully does nothing if the compiler doesn't support macro dumping.
+static void query_c_compiler_defines(state *self) {
+    char const *cc = str_cstr(&self->cc);
+
+#ifdef MOS_WINDOWS
+    // MSVC needs an actual empty .c file (NUL doesn't work as C source input).
+    platform_temp_file empty_file = {0};
+    if (is_msvc_compiler(self)) {
+        if (platform_temp_file_create(&empty_file, ".c")) return;
+    }
+
+    char const *argv_msvc[] = {cc, "/Zc:preprocessor", "/PD", "/E", empty_file.path, NULL};
+    char const *argv_gcc[]  = {cc, "-dM", "-E", "-x", "c", "NUL", NULL};
+    char const **argv       = is_msvc_compiler(self) ? argv_msvc : argv_gcc;
+#else
+    char const *argv[]      = {cc, "-dM", "-E", "-x", "c", "/dev/null", NULL};
+#endif
+
+    char              *output     = NULL;
+    size_t             output_len = 0;
+
+    platform_exec_opts opts       = {
+              .argv                = argv,
+              .captured_output     = &output,
+              .captured_output_len = &output_len,
+    };
+
+    int rc = platform_exec(&opts);
+
+#ifdef MOS_WINDOWS
+    if (is_msvc_compiler(self)) platform_temp_file_delete(&empty_file);
+#endif
+
+    if (rc != 0 || !output) { free(output); return; }
+
+    // Feed CC output through source scanner directive parser to extract define names
+    // gcc/clang emit ~400 predefined macros, MSVC ~16.
+    array_reserve(self->defines, self->defines.size + 400);
+    u32         before = self->defines.size;
+    char_csized input  = {.v = output, .size = (u32)output_len};
+    tl_source_scanner_collect_defines(self->arena, input, &self->defines);
+
+    if (self->verbose) {
+        fprintf(stderr, "Loaded %u C compiler predefined macros\n", self->defines.size - before);
+    }
+
+    free(output);
+}
+
 // -- stats formatting helpers --
 
 static void format_memory(char *buf, size_t sz, size_t bytes) {
@@ -2342,11 +2394,6 @@ int main(int argc, char *argv[]) {
     str auto_def = str_init(self.arena, self.no_optimize ? "NDEBUG" : "DEBUG");
     array_push(self.defines, auto_def);
 
-    // Populate scanner defines from -D flags
-    forall(i, self.defines) {
-        tl_source_scanner_define(&self.scanner, self.defines.v[i]);
-    }
-
     if (!self.no_standard_includes) {
         add_standard_include_paths(&self, buf);
         extract_embedded_stdlib(&self);
@@ -2357,6 +2404,14 @@ int main(int argc, char *argv[]) {
         fprintf(stderr, "Could not locate a working C compiler. Set CC environment "
                         "variable and try again.");
         exit(1);
+    }
+
+    // Query C compiler for predefined macros (e.g. __linux__, _WIN32, __APPLE__)
+    query_c_compiler_defines(&self);
+
+    // Populate scanner defines from -D flags + auto-defines + CC predefined macros
+    forall(i, self.defines) {
+        tl_source_scanner_define(&self.scanner, self.defines.v[i]);
     }
 
     if (self.verbose) {

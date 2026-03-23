@@ -405,11 +405,16 @@ int platform_exec(platform_exec_opts const *opts) {
     CloseHandle(pi.hProcess);
     CloseHandle(pi.hThread);
 
-    // Print captured output only on error
-    if (!opts->verbose && exit_code != 0 && captured_len > 0) {
-        fwrite(captured, 1, captured_len, stderr);
+    // Return or free captured output
+    if (opts->captured_output) {
+        *opts->captured_output = captured;
+        if (opts->captured_output_len) *opts->captured_output_len = captured_len;
+    } else {
+        if (!opts->verbose && exit_code != 0 && captured_len > 0) {
+            fwrite(captured, 1, captured_len, stderr);
+        }
+        free(captured);
     }
-    free(captured);
 
     return (int)exit_code;
 }
@@ -512,11 +517,16 @@ int platform_exec(platform_exec_opts const *opts) {
         exit_code = WEXITSTATUS(status);
     }
 
-    // Print captured output only on error
-    if (!opts->verbose && exit_code != 0 && captured_len > 0) {
-        fwrite(captured, 1, captured_len, stderr);
+    // Return or free captured output
+    if (opts->captured_output) {
+        *opts->captured_output = captured;
+        if (opts->captured_output_len) *opts->captured_output_len = captured_len;
+    } else {
+        if (!opts->verbose && exit_code != 0 && captured_len > 0) {
+            fwrite(captured, 1, captured_len, stderr);
+        }
+        free(captured);
     }
-    free(captured);
 
     return exit_code;
 }

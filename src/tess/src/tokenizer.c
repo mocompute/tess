@@ -1010,7 +1010,7 @@ start:; // loop point for skip_depth > 0
             // When skip_depth > 0, tokens are skipped. #ifdef/#ifndef always increment
             // skip_depth when already skipping (to match #endif pairs), but #define/#undef
             // are only processed at depth 0.
-            if (words.size == 2) {
+            if (words.size >= 2) {
                 if (0 == skip_depth && str_eq(words.v[0], S("define"))) {
                     str_hset_insert(&self->defines, words.v[1]);
                 } else if (0 == skip_depth && str_eq(words.v[0], S("undef"))) {
