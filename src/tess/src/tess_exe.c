@@ -86,6 +86,8 @@ typedef struct {
         double               infer_time_ms;
         size_t               infer_peak_mem;
         size_t               infer_final_mem;
+        double               stdlib_extract_time_ms;
+        double               cc_defines_time_ms;
         double               transpile_time_ms;
         size_t               transpile_peak_mem;
         size_t               transpile_final_mem;
@@ -2396,7 +2398,12 @@ int main(int argc, char *argv[]) {
 
     if (!self.no_standard_includes) {
         add_standard_include_paths(&self, buf);
+        hires_timer_start(&timer);
         extract_embedded_stdlib(&self);
+        hires_timer_stop(&timer);
+        if (self.report_stats) {
+            self.stats.stdlib_extract_time_ms = hires_timer_elapsed_sec(&timer) * 1000.0;
+        }
     }
 
     get_c_compiler(&self);
@@ -2407,7 +2414,12 @@ int main(int argc, char *argv[]) {
     }
 
     // Query C compiler for predefined macros (e.g. __linux__, _WIN32, __APPLE__)
+    hires_timer_start(&timer);
     query_c_compiler_defines(&self);
+    hires_timer_stop(&timer);
+    if (self.report_stats) {
+        self.stats.cc_defines_time_ms = hires_timer_elapsed_sec(&timer) * 1000.0;
+    }
 
     // Populate scanner defines from -D flags + auto-defines + CC predefined macros
     forall(i, self.defines) {
@@ -2614,6 +2626,10 @@ done:
 
     if (self.report_stats && !result) {
         print_stats_header();
+        fprintf(stderr, "%-20s %12.3f %12s %12s\n", "Stdlib Extract",
+                self.stats.stdlib_extract_time_ms, "-", "-");
+        fprintf(stderr, "%-20s %12.3f %12s %12s\n", "CC Defines",
+                self.stats.cc_defines_time_ms, "-", "-");
         print_stats_row("Parsing", self.stats.parse_time_ms, self.stats.parse_peak_mem,
                         self.stats.parse_final_mem);
         print_stats_row("Type Inference", self.stats.infer_time_ms, self.stats.infer_peak_mem,
@@ -2622,6 +2638,7 @@ done:
                         self.stats.transpile_final_mem);
 
         double total_ms =
+          self.stats.stdlib_extract_time_ms + self.stats.cc_defines_time_ms +
           self.stats.parse_time_ms + self.stats.infer_time_ms + self.stats.transpile_time_ms;
         size_t total_peak =
           self.stats.parse_peak_mem + self.stats.infer_peak_mem + self.stats.transpile_peak_mem;
