@@ -8,14 +8,14 @@
 
 main() {
     x := 1
-    #ifdef __linux__
+#ifdef __linux__
     x = 0
-    #endif
-    #ifdef __APPLE__
+#endif
+#ifdef __APPLE__
     x = 0
-    #endif
-    #ifdef _WIN32
+#endif
+#ifdef _WIN32
     x = 0
-    #endif
+#endif
     return x
 }

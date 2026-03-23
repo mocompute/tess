@@ -12,7 +12,7 @@ _thread_fn(arg: Ptr[_ThreadArg]) -> Ptr[any] {
 test_spawn_fn_ptr() {
     fails := 0
 
-    arg := _ThreadArg(value = 0)
+    arg   := _ThreadArg(value = 0)
     t: Ok := Thread.spawn(_thread_fn/1, arg.&) else {
         c_printf(c"FAIL spawn fn ptr\n")
         return 1

@@ -1,6 +1,6 @@
 #module main
 
-add(a, b) { a + b }
+add  (a, b)    { a + b   }
 apply(f, x, y) { f(x, y) }
 
 main() {

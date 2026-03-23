@@ -159,13 +159,13 @@ static int tl_thread_equal(void *a, void *b) {
 #endc
 
 c_tl_thread_spawn_fn      (thread_buf: Ptr[any], fn: Ptr[any], arg: Ptr[any]) -> CInt
-c_tl_thread_spawn_closure (thread_buf: Ptr[any], closure: Ptr[any])          -> CInt
-c_tl_thread_join          (thread_buf: Ptr[any], retval: Ptr[Ptr[any]]) -> CInt
-c_tl_thread_detach        (thread_buf: Ptr[any])                        -> CInt
-c_tl_thread_yield         ()                                            -> Void
-c_tl_thread_sleep         (sec: CUnsignedInt, nsec: CLong)              -> Void
-c_tl_thread_current       (thread_buf: Ptr[any])                        -> Void
-c_tl_thread_equal         (a: Ptr[any], b: Ptr[any])                    -> CInt
+c_tl_thread_spawn_closure (thread_buf: Ptr[any], closure: Ptr[any])           -> CInt
+c_tl_thread_join          (thread_buf: Ptr[any], retval: Ptr[Ptr[any]])       -> CInt
+c_tl_thread_detach        (thread_buf: Ptr[any])                              -> CInt
+c_tl_thread_yield         ()                                                  -> Void
+c_tl_thread_sleep         (sec: CUnsignedInt, nsec: CLong)                    -> Void
+c_tl_thread_current       (thread_buf: Ptr[any])                              -> Void
+c_tl_thread_equal         (a: Ptr[any], b: Ptr[any])                          -> CInt
 
 
 // -- Types --
@@ -177,12 +177,12 @@ T: { _buf: CArray[Byte, 8] }
 
 spawn[A](fn: (Ptr[A]) -> Ptr[any], arg: Ptr[A]) -> Result[T, ThreadError.T]
 spawn   (fn: () -> Void)                        -> Result[T, ThreadError.T]
-join    (self: T)                        -> Result[Ptr[any], ThreadError.T]
-detach  (self: T)                        -> Result[Void, ThreadError.T]
-current ()                               -> T
-eq      (a: T, b: T)                     -> Bool
-yield   ()                               -> Void
-sleep   (sec: CUnsignedInt, nsec: CLong) -> Void
+join    (self: T)                               -> Result[Ptr[any], ThreadError.T]
+detach  (self: T)                               -> Result[Void, ThreadError.T]
+current ()                                      -> T
+eq      (a: T, b: T)                            -> Bool
+yield   ()                                      -> Void
+sleep   (sec: CUnsignedInt, nsec: CLong)        -> Void
 
 
 // -- Implementation --

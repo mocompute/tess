@@ -134,12 +134,12 @@ T: {
 
 // -- Synopsis --
 
-init     (kind: Kind)      -> Result[T, ThreadError.T]
-init     ()                -> Result[T, ThreadError.T]
-lock     (self: Ptr[T])    -> Result[Void, ThreadError.T]
-unlock   (self: Ptr[T])    -> Result[Void, ThreadError.T]
-try_lock (self: Ptr[T])    -> Result[Bool, ThreadError.T]
-destroy  (self: Ptr[T])    -> Void
+init     (kind: Kind)   -> Result[T, ThreadError.T]
+init     ()             -> Result[T, ThreadError.T]
+lock     (self: Ptr[T]) -> Result[Void, ThreadError.T]
+unlock   (self: Ptr[T]) -> Result[Void, ThreadError.T]
+try_lock (self: Ptr[T]) -> Result[Bool, ThreadError.T]
+destroy  (self: Ptr[T]) -> Void
 
 
 // -- Implementation --
@@ -149,8 +149,8 @@ init(kind) {
     c_memset(mtx.&, 0, sizeof[T]())
 
     k: CInt := when kind {
-        _p: Plain      { 0 }
-        _r: Recursive  { 1 }
+        _p: Plain { 0 }
+        _r: Recursive { 1 }
         _e: ErrorCheck { 2 }
     }
 

@@ -79,11 +79,11 @@ static void tl_cond_destroy(void *buf) {
 _Static_assert(TL_COND_SIZE <= 48, "TL_COND_SIZE exceeds opaque buffer");
 #endc
 
-c_tl_cond_init      (buf: Ptr[any])                        -> CInt
+c_tl_cond_init      (buf: Ptr[any])                         -> CInt
 c_tl_cond_wait      (cond_buf: Ptr[any], mtx_buf: Ptr[any]) -> CInt
-c_tl_cond_signal    (buf: Ptr[any])                        -> CInt
-c_tl_cond_broadcast (buf: Ptr[any])                        -> CInt
-c_tl_cond_destroy   (buf: Ptr[any])                        -> Void
+c_tl_cond_signal    (buf: Ptr[any])                         -> CInt
+c_tl_cond_broadcast (buf: Ptr[any])                         -> CInt
+c_tl_cond_destroy   (buf: Ptr[any])                         -> Void
 
 
 // -- Types --
@@ -95,11 +95,11 @@ T: {
 
 // -- Synopsis --
 
-init      ()                          -> Result[T, ThreadError.T]
+init      ()                                -> Result[T, ThreadError.T]
 wait      (self: Ptr[T], mtx: Ptr[Mutex.T]) -> Result[Void, ThreadError.T]
-signal    (self: Ptr[T])              -> Result[Void, ThreadError.T]
-broadcast (self: Ptr[T])              -> Result[Void, ThreadError.T]
-destroy   (self: Ptr[T])              -> Void
+signal    (self: Ptr[T])                    -> Result[Void, ThreadError.T]
+broadcast (self: Ptr[T])                    -> Result[Void, ThreadError.T]
+destroy   (self: Ptr[T])                    -> Void
 
 
 // -- Implementation --

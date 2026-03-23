@@ -17,20 +17,20 @@ test_signal_wait() {
 
     ready: CInt := 0
     value: CInt := 0
-    ready_p := ready.&
-    value_p := value.&
-    mtx_p := mtx.v.&
-    cv_p := cv.v.&
+    ready_p     := ready.&
+    value_p     := value.&
+    mtx_p       := mtx.v.&
+    cv_p        := cv.v.&
 
     // Producer thread
     t: Ok := Thread.spawn([[alloc, capture(ready_p, value_p, mtx_p, cv_p)]] () {
-        _l := Mutex.lock(mtx_p)
-        value_p.* = 42
-        ready_p.* = 1
-        _s := Cond.signal(cv_p)
-        _u := Mutex.unlock(mtx_p)
-        void
-    }) else {
+                          _l := Mutex.lock(mtx_p)
+                          value_p.* = 42
+                          ready_p.* = 1
+                          _s := Cond.signal(cv_p)
+                          _u := Mutex.unlock(mtx_p)
+                          void
+                          }) else {
         c_printf(c"FAIL spawn\n")
         return 1
     }
@@ -66,44 +66,44 @@ test_broadcast() {
         return 1
     }
 
-    go: CInt := 0
+    go:    CInt := 0
     count: CInt := 0
-    go_p := go.&
-    count_p := count.&
-    mtx_p := mtx.v.&
-    cv_p := cv.v.&
+    go_p        := go.&
+    count_p     := count.&
+    mtx_p       := mtx.v.&
+    cv_p        := cv.v.&
 
     // Two waiting threads
     t1: Ok := Thread.spawn([[alloc, capture(go_p, count_p, mtx_p, cv_p)]] () {
-        _l := Mutex.lock(mtx_p)
-        while go_p.* == 0 {
-            _w := Cond.wait(cv_p, mtx_p)
-            void
-        }
-        count_p.* += 1
-        _u := Mutex.unlock(mtx_p)
-        void
-    }) else {
+                           _l := Mutex.lock(mtx_p)
+                           while go_p.* == 0 {
+                           _w := Cond.wait(cv_p, mtx_p)
+                           void
+                           }
+                           count_p.* += 1
+                           _u := Mutex.unlock(mtx_p)
+                           void
+                           }) else {
         c_printf(c"FAIL spawn t1\n")
         return 1
     }
 
     t2: Ok := Thread.spawn([[alloc, capture(go_p, count_p, mtx_p, cv_p)]] () {
-        _l := Mutex.lock(mtx_p)
-        while go_p.* == 0 {
-            _w := Cond.wait(cv_p, mtx_p)
-            void
-        }
-        count_p.* += 1
-        _u := Mutex.unlock(mtx_p)
-        void
-    }) else {
+                           _l := Mutex.lock(mtx_p)
+                           while go_p.* == 0 {
+                           _w := Cond.wait(cv_p, mtx_p)
+                           void
+                           }
+                           count_p.* += 1
+                           _u := Mutex.unlock(mtx_p)
+                           void
+                           }) else {
         c_printf(c"FAIL spawn t2\n")
         return 1
     }
 
     // Give threads time to start waiting
-    Thread.sleep(0, 50000000)  // 50ms
+    Thread.sleep(0, 50000000)           // 50ms
 
     // Broadcast
     _l := Mutex.lock(mtx_p)

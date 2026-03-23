@@ -50,7 +50,7 @@ test_recursive() {
     }
 
     _l1 := Mutex.lock(mtx.v.&)
-    _l2 := Mutex.lock(mtx.v.&)   // should not deadlock
+    _l2 := Mutex.lock(mtx.v.&)          // should not deadlock
     _u1 := Mutex.unlock(mtx.v.&)
     _u2 := Mutex.unlock(mtx.v.&)
     Mutex.destroy(mtx.v.&)
@@ -66,33 +66,33 @@ test_contention() {
         return 1
     }
 
-    counter: CInt := 0
+    counter:    CInt := 0
     iterations: CInt := 10000
-    counter_p := counter.&
-    mtx_p := mtx.v.&
+    counter_p        := counter.&
+    mtx_p            := mtx.v.&
 
     t1: Ok := Thread.spawn([[alloc, capture(counter_p, mtx_p, iterations)]] () {
-        i: CInt := 0
-        while i < iterations {
-            _l := Mutex.lock(mtx_p)
-            counter_p.* += 1
-            _u := Mutex.unlock(mtx_p)
-            i += 1
-        }
-    }) else {
+                           i: CInt := 0
+                           while i < iterations {
+                           _l := Mutex.lock(mtx_p)
+                           counter_p.* += 1
+                           _u := Mutex.unlock(mtx_p)
+                           i += 1
+                           }
+                           }) else {
         c_printf(c"FAIL spawn t1\n")
         return 1
     }
 
     t2: Ok := Thread.spawn([[alloc, capture(counter_p, mtx_p, iterations)]] () {
-        i: CInt := 0
-        while i < iterations {
-            _l := Mutex.lock(mtx_p)
-            counter_p.* += 1
-            _u := Mutex.unlock(mtx_p)
-            i += 1
-        }
-    }) else {
+                           i: CInt := 0
+                           while i < iterations {
+                           _l := Mutex.lock(mtx_p)
+                           counter_p.* += 1
+                           _u := Mutex.unlock(mtx_p)
+                           i += 1
+                           }
+                           }) else {
         c_printf(c"FAIL spawn t2\n")
         return 1
     }
