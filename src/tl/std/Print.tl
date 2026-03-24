@@ -2,23 +2,34 @@
 #module Print
 #import <ToString.tl>
 #import <String.tl>
+#import <Slice.tl>
 #import <cstdio.tl>
 
-_print_all(args: Slice[String]) -> Void
+_fprint_all(stream: Ptr[c_FILE], args: Slice[String]) -> Void
+print      (args: ...ToString)                        -> Void
+println    (args: ...ToString)                        -> Void
+fprint     (stream: Ptr[c_FILE], args: ...ToString)   -> Void
+fprintln   (stream: Ptr[c_FILE], args: ...ToString)   -> Void
 
-_print_all(args) {
-    i: CSize := 0
-    while i < args.size, i += 1 {
-        s := args.v.[i]
-        c_printf(c"%s", s.&.cstr())
+_fprint_all(stream, args) {
+    for s in Slice args {
+        c_fprintf(stream, c"%s", s.&.cstr())
     }
     void
 }
 
-print(args: ...ToString) -> Void { _print_all(args) }
+print(args) { _fprint_all(c_stdout, args) }
 
-println(args: ...ToString) -> Void {
-    _print_all(args)
-    c_printf(c"\n")
+println(args) {
+    _fprint_all(c_stdout, args)
+    c_fprintf(c_stdout, c"\n")
+    void
+}
+
+fprint(stream, args) { _fprint_all(stream, args) }
+
+fprintln(stream, args) {
+    _fprint_all(stream, args)
+    c_fprintf(stream, c"\n")
     void
 }

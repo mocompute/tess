@@ -2382,6 +2382,7 @@ void remove_generic_toplevels(tl_infer *self) {
     ast_node        *node;
     hashmap_iterator iter = {0};
     while ((node = toplevel_iter(self, &iter))) {
+        if (ast_node_is_utd(node)) continue; // preserve type definitions as specialization templates
 
         str name = ast_node_str(toplevel_name_node(node));
         if (is_main_function(name)) continue;

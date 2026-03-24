@@ -330,6 +330,20 @@ static void load_toplevel_let(tl_infer *self, ast_node *node) {
             }
         }
 
+        // Propagate is_variadic from the forward declaration's last parameter.
+        // When synopsis and implementation are separate (e.g. "print(args: ...ToString) -> Void"
+        // as synopsis, "print(args) { ... }" as implementation), the let node from the parser
+        // won't have is_variadic set because the impl's params lack the ...Trait annotation.
+        if (!node->let.is_variadic && node->let.n_parameters > 0) {
+            ast_node *last = node->let.parameters[node->let.n_parameters - 1];
+            if (ast_node_is_symbol(last) && last->symbol.annotation) {
+                ast_node *ann = last->symbol.annotation;
+                if (ast_node_is_nfa(ann) && ast_node_is_symbol(ann->named_application.name) &&
+                    str_eq(ann->named_application.name->symbol.name, S("...")))
+                    node->let.is_variadic = 1;
+            }
+        }
+
         // replace prior symbol entry with let node
         *p = node;
     } else {
