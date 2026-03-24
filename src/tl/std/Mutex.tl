@@ -110,7 +110,6 @@ static void tl_mutex_destroy(void *buf) {
 
 #endif
 
-_Static_assert(TL_MUTEX_SIZE <= 64, "TL_MUTEX_SIZE exceeds opaque buffer");
 #endc
 
 c_tl_mutex_init    (buf: Ptr[any], kind: CInt) -> CInt
@@ -127,7 +126,7 @@ Kind: | Plain
       | ErrorCheck
 
 T: {
-    _buf:  CArray[Byte, 64],
+    _buf:  CArray[Byte, c_TL_MUTEX_SIZE],
     _kind: Kind,
 }
 

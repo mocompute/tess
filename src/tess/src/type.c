@@ -67,6 +67,7 @@ static int monotype_contains_tv_(tl_monotype *self, tl_type_variable tv, hashmap
     case tl_weak_int_unsigned:
     case tl_weak_float:        return self->var == tv;
     case tl_integer:
+    case tl_c_macro:
     case tl_placeholder:
     case tl_any:
     case tl_ellipsis:          return 0;
@@ -491,10 +492,16 @@ tl_monotype *tl_type_registry_instantiate_union(tl_type_registry *self, tl_monot
 
 tl_monotype *tl_type_registry_instantiate_carray(tl_type_registry *self, tl_monotype *type, i32 count) {
     if (count < 0) return null;
+    return tl_type_registry_instantiate_carray_mono(self, type,
+                                                    tl_monotype_create_integer(self->alloc, count));
+}
+
+tl_monotype *tl_type_registry_instantiate_carray_mono(tl_type_registry *self, tl_monotype *elem,
+                                                      tl_monotype *count) {
     tl_polytype *poly          = str_map_get_ptr(self->definitions, S("CArray"));
     tl_monotype *inst          = tl_polytype_instantiate(self->alloc, poly, self->subs);
-    inst->cons_inst->args.v[0] = type;
-    inst->cons_inst->args.v[1] = tl_monotype_create_integer(self->alloc, count);
+    inst->cons_inst->args.v[0] = elem;
+    inst->cons_inst->args.v[1] = count;
     return inst;
 }
 
@@ -1049,7 +1056,15 @@ static tl_monotype *parse_type_nfa(tl_type_registry *self, tl_type_registry_pars
                                .v    = node->named_application.type_arguments};
 
     forall(i, nodes) {
-        tl_monotype *mono = tl_type_registry_parse_type_(self, ctx, nodes.v[i]);
+        tl_monotype *mono;
+        // CArray second arg: if it's a c_ prefixed symbol, create a c_macro monotype directly
+        // instead of letting it be auto-registered as an opaque nullary type.
+        if (str_eq(name, S("CArray")) && i == 1 && ast_node_is_symbol(nodes.v[i]) &&
+            is_c_symbol(nodes.v[i]->symbol.name)) {
+            mono = tl_monotype_create_c_macro(self->alloc, nodes.v[i]->symbol.name);
+        } else {
+            mono = tl_type_registry_parse_type_(self, ctx, nodes.v[i]);
+        }
 
         // If the type constructor argument produces nothing, and it's a symbol, it's sugar for a type
         // variable - not a type argument. Otherwise, it's an error
@@ -1066,6 +1081,9 @@ static tl_monotype *parse_type_nfa(tl_type_registry *self, tl_type_registry_pars
         return tl_type_registry_instantiate_union(self, (tl_monotype_sized)array_sized(args));
     } else if (str_eq(name, S("CArray")) && args.size == 2) {
         // CArray(T, N) has 1 quantifier but 2 args (element type + integer count)
+        if (tl_monotype_is_c_macro(args.v[1])) {
+            return tl_type_registry_instantiate_carray_mono(self, args.v[0], args.v[1]);
+        }
         return tl_type_registry_instantiate_carray(self, args.v[0], tl_monotype_integer(args.v[1]));
     } else if (type_constructor->quantifiers.size != args.size) {
         // Arg count doesn't match quantifier count — not a valid type instantiation
@@ -1546,6 +1564,7 @@ void tl_polytype_list_append(allocator *alloc, tl_polytype *lhs, tl_polytype *rh
 
     switch (right->tag) {
     case tl_integer:
+    case tl_c_macro:
     case tl_placeholder:
     case tl_any:
     case tl_ellipsis:
@@ -1608,6 +1627,7 @@ static void replace_tv(tl_monotype *self, tl_type_subs *subs, hashmap **map, has
 
     switch (self->tag) {
     case tl_integer:
+    case tl_c_macro:
     case tl_placeholder:
     case tl_any:
     case tl_ellipsis:
@@ -1652,6 +1672,7 @@ static void replace_tv_mono(tl_monotype *self, tl_type_subs *subs, hashmap **map
 
     switch (self->tag) {
     case tl_integer:
+    case tl_c_macro:
     case tl_placeholder:
     case tl_any:
     case tl_ellipsis:
@@ -1813,6 +1834,7 @@ static void generalize(tl_monotype *self, tl_type_variable_array *quant, hashmap
 
     switch (self->tag) {
     case tl_integer:
+    case tl_c_macro:
     case tl_placeholder:
     case tl_any:
     case tl_ellipsis:
@@ -1913,6 +1935,12 @@ tl_monotype *tl_monotype_create_tv(allocator *alloc, tl_type_variable tv) {
 tl_monotype *tl_monotype_create_integer(allocator *alloc, i32 integer) {
     tl_monotype *self = alloc_malloc(alloc, sizeof *self);
     *self             = (tl_monotype){.tag = tl_integer, .integer = integer};
+    return self;
+}
+
+tl_monotype *tl_monotype_create_c_macro(allocator *alloc, str name) {
+    tl_monotype *self = alloc_malloc(alloc, sizeof *self);
+    *self             = (tl_monotype){.tag = tl_c_macro, .c_macro_name = name};
     return self;
 }
 
@@ -2040,6 +2068,7 @@ static tl_monotype *tl_monotype_clone_(allocator *alloc, tl_monotype *orig, hash
         break;
 
     case tl_integer:  clone->integer = orig->integer; return clone;
+    case tl_c_macro:  clone->c_macro_name = orig->c_macro_name; return clone;
 
     case tl_any:
     case tl_ellipsis: return clone;
@@ -2072,6 +2101,7 @@ int tl_monotype_is_concrete_(tl_monotype *self, hashmap **seen) {
     case tl_variadic:    return 0;
 
     case tl_integer:
+    case tl_c_macro:
     case tl_any:
         //
         return 1;
@@ -2118,6 +2148,7 @@ int tl_monotype_is_weak_(tl_monotype *self, hashmap **seen) {
 
     switch (self->tag) {
     case tl_integer:
+    case tl_c_macro:
     case tl_placeholder:
     case tl_any:
     case tl_var:
@@ -2171,6 +2202,13 @@ int tl_monotype_is_any(tl_monotype *self) {
 }
 int tl_monotype_is_integer(tl_monotype *self) {
     return self && tl_integer == self->tag;
+}
+int tl_monotype_is_c_macro(tl_monotype *self) {
+    return self && tl_c_macro == self->tag;
+}
+str tl_monotype_c_macro_name(tl_monotype *self) {
+    assert(tl_monotype_is_c_macro(self));
+    return self->c_macro_name;
 }
 int tl_monotype_is_weak(tl_monotype *self) {
     return self && tl_weak == self->tag;
@@ -2289,6 +2327,14 @@ i32 tl_monotype_carray_count(tl_monotype *self) {
     assert(tl_monotype_is_carray(self));
     assert(self->cons_inst->args.size == 2);
     return tl_monotype_integer(self->cons_inst->args.v[1]);
+}
+int tl_monotype_carray_count_is_macro(tl_monotype *self) {
+    assert(tl_monotype_is_carray(self));
+    return tl_monotype_is_c_macro(self->cons_inst->args.v[1]);
+}
+str tl_monotype_carray_count_macro_name(tl_monotype *self) {
+    assert(tl_monotype_carray_count_is_macro(self));
+    return tl_monotype_c_macro_name(self->cons_inst->args.v[1]);
 }
 int tl_monotype_has_ptr(tl_monotype *self) {
     if (!tl_monotype_is_inst(self)) return 0;
@@ -2543,6 +2589,7 @@ u64 tl_monotype_hash64_(tl_monotype *self, u32 gen, hash_cycle_stack *in_progres
     case tl_weak_float:        hash = hash64_combine(hash, &self->var, sizeof self->var); break;
 
     case tl_integer:           hash = hash64_combine(hash, &self->integer, sizeof self->integer); break;
+    case tl_c_macro:           hash = str_hash64_combine(hash, self->c_macro_name); break;
 
     case tl_cons_inst:         {
         tl_type_constructor_def *def      = self->cons_inst->def;
@@ -2610,6 +2657,7 @@ u64 tl_monotype_hash64_(tl_monotype *self, u32 gen, hash_cycle_stack *in_progres
     int permanent = 0;
     switch (self->tag) {
     case tl_integer:
+    case tl_c_macro:
     case tl_any:       permanent = 1; break;
     case tl_cons_inst: {
         permanent = 1;
@@ -2683,7 +2731,9 @@ str tl_monotype_to_string_(allocator *alloc, tl_monotype *self, hashmap **map) {
         str_build_cat_n(&b, buf, (u32)n);
     } break;
 
-    case tl_var: {
+    case tl_c_macro: str_build_cat(&b, self->c_macro_name); break;
+
+    case tl_var:     {
         char buf[64];
         int  n = snprintf(buf, sizeof buf, "t%u", self->var);
         str_build_cat_n(&b, buf, (u32)n);
@@ -2904,6 +2954,7 @@ int unify_type_constructor_union(tl_type_subs *subs, tl_monotype *left, tl_monot
 
     switch (right->tag) {
     case tl_integer:
+    case tl_c_macro:
     case tl_placeholder: return 1;
 
     case tl_any:
@@ -2961,6 +3012,7 @@ int unify_type_constructor(tl_type_subs *subs, tl_monotype *left, tl_monotype *r
 
     switch (right->tag) {
     case tl_integer:     return !tl_monotype_is_integer_convertible(left);
+    case tl_c_macro:     return 1;
 
     case tl_placeholder: return 1;
 
@@ -3008,7 +3060,8 @@ static int unify_var_other(tl_type_subs *subs, tl_type_variable tv, tl_monotype 
     case tl_any:
     case tl_ellipsis:
     case tl_variadic:    fatal("unreachable");
-    case tl_integer:     return 1;
+    case tl_integer:
+    case tl_c_macro:     return 1;
     case tl_var:
         // Preserve left/right ordering for directional unification
         if (tv_is_left) return tl_type_subs_unify_tv_tv(subs, tv, other->var, cb, user, seen, dir);
@@ -3032,7 +3085,8 @@ static int unify_weak_other(tl_type_subs *subs, tl_monotype *weak, tl_monotype *
     case tl_any:
     case tl_ellipsis:
     case tl_variadic:    fatal("unreachable");
-    case tl_integer:     return 1;
+    case tl_integer:
+    case tl_c_macro:     return 1;
     case tl_var:         return tl_type_subs_unify_tv_weak(subs, other->var, weak, cb, user, seen);
     case tl_weak:
         return tl_type_subs_unify_tv_tv(subs, weak->var, other->var, cb, user, seen, TL_UNIFY_SYMMETRIC);
@@ -3173,6 +3227,7 @@ int tl_type_subs_unify_mono(tl_type_subs *subs, tl_monotype *left, tl_monotype *
 
     switch (left->tag) {
     case tl_integer: return !(left->integer == right->integer);
+    case tl_c_macro: return !str_eq(left->c_macro_name, right->c_macro_name);
     case tl_arrow:   return unify_list(subs, left->list.xs, right->list.xs, left, right, cb, user, seen, dir);
     case tl_tuple:
         return unify_tuple(subs, left->list.xs, right->list.xs, left, right, cb, user, seen, dir);
@@ -3244,6 +3299,7 @@ static int tl_type_subs_monotype_occurs_(tl_type_subs *self, tl_type_variable tv
 
     switch (mono->tag) {
     case tl_integer:
+    case tl_c_macro:
     case tl_placeholder:
     case tl_any:
     case tl_ellipsis:
@@ -3456,7 +3512,8 @@ static int unify_weak_int_other(tl_type_subs *subs, tl_monotype *weak_int, tl_mo
     case tl_any:
     case tl_ellipsis:
     case tl_variadic:    return 0;
-    case tl_integer:     return 1; // type-level integer, not value integer
+    case tl_integer:
+    case tl_c_macro:     return 1; // type-level integer, not value integer
     case tl_var:         return tl_type_subs_unify_tv_weak_int(subs, other->var, weak_int, cb, user, seen);
     case tl_weak:        return 1; // error: pointer-weak meets integer-weak
     case tl_weak_int_signed:
@@ -3531,7 +3588,8 @@ static int unify_weak_float_other(tl_type_subs *subs, tl_monotype *weak_float, t
     case tl_any:
     case tl_ellipsis:
     case tl_variadic:    return 0;
-    case tl_integer:     return 1;
+    case tl_integer:
+    case tl_c_macro:     return 1;
     case tl_var:         return tl_type_subs_unify_tv_weak_float(subs, other->var, weak_float, cb, user, seen);
     case tl_weak:        return 1; // error: pointer-weak meets float-weak
     case tl_weak_int_signed:
@@ -3584,6 +3642,7 @@ int tl_type_subs_unify_tv_mono(tl_type_subs *self, tl_type_variable tv, tl_monot
         return tl_type_subs_unify_tv_weak_float(self, tv, mono, cb, user, seen);
 
     case tl_integer:
+    case tl_c_macro:
     case tl_cons_inst:
     case tl_arrow:
     case tl_tuple:     {
@@ -3640,6 +3699,7 @@ static void tl_monotype_substitute_(allocator *alloc, tl_monotype *self, tl_type
 
     switch (self->tag) {
     case tl_integer:
+    case tl_c_macro:
     case tl_placeholder:
     case tl_any:
     case tl_ellipsis:
@@ -3785,6 +3845,7 @@ static void tl_monotype_default_weak_ints_(tl_monotype *self, tl_monotype *int_t
     case tl_ellipsis:
     case tl_variadic:
     case tl_integer:
+    case tl_c_macro:
     case tl_var:
     case tl_weak:
     case tl_placeholder: break;

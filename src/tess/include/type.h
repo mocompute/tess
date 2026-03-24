@@ -95,6 +95,7 @@ typedef struct tl_monotype {
         } list;
 
         i32              integer;
+        str              c_macro_name; // for tl_c_macro: stored verbatim with c_ prefix
         str              placeholder;
         tl_variadic_info variadic;
     };
@@ -102,6 +103,7 @@ typedef struct tl_monotype {
         tl_any,
         tl_ellipsis,
         tl_integer,
+        tl_c_macro, // C preprocessor macro used as type-level integer (e.g. c_TL_ONCE_SIZE)
         tl_var,
         tl_weak,
         tl_weak_int_signed,
@@ -172,6 +174,7 @@ nodiscard tl_monotype *tl_monotype_create_ellipsis(allocator *) mallocfun;
 nodiscard tl_monotype *tl_monotype_create_variadic(allocator *, str trait_name,
                                                    tl_monotype *elem_type) mallocfun;
 nodiscard tl_monotype *tl_monotype_create_integer(allocator *, i32) mallocfun;
+nodiscard tl_monotype *tl_monotype_create_c_macro(allocator *, str name) mallocfun;
 nodiscard tl_monotype *tl_monotype_create_tv(allocator *, tl_type_variable) mallocfun;
 nodiscard tl_monotype *tl_monotype_create_fresh_tv(tl_type_subs *) mallocfun;
 nodiscard tl_monotype *tl_monotype_create_weak(allocator *, tl_type_variable) mallocfun;
@@ -200,6 +203,8 @@ tl_monotype *tl_monotype_arrow_result(tl_monotype *);
 str          tl_monotype_to_string(allocator *, tl_monotype *);
 int          tl_monotype_is_any(tl_monotype *);
 int          tl_monotype_is_integer(tl_monotype *);
+int          tl_monotype_is_c_macro(tl_monotype *);
+str          tl_monotype_c_macro_name(tl_monotype *);
 int          tl_monotype_is_void(tl_monotype *);
 int          tl_monotype_is_list(tl_monotype *);
 int          tl_monotype_is_inst(tl_monotype *);
@@ -241,6 +246,8 @@ int          tl_monotype_is_ptr_to_const(tl_monotype *);
 int          tl_monotype_is_carray(tl_monotype *);
 tl_monotype *tl_monotype_carray_element(tl_monotype *);
 i32          tl_monotype_carray_count(tl_monotype *);
+int          tl_monotype_carray_count_is_macro(tl_monotype *);
+str          tl_monotype_carray_count_macro_name(tl_monotype *);
 int          tl_monotype_is_unary(tl_monotype *);
 int          tl_monotype_arrow_has_arrow(tl_monotype *);
 int          tl_monotype_has_ptr(tl_monotype *);

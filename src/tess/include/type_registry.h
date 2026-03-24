@@ -58,6 +58,8 @@ tl_monotype *tl_type_registry_instantiate(tl_type_registry *, str);
 tl_monotype *tl_type_registry_instantiate_with(tl_type_registry *, str, tl_monotype_sized);
 tl_monotype *tl_type_registry_instantiate_union(tl_type_registry *, tl_monotype_sized);
 tl_monotype *tl_type_registry_instantiate_carray(tl_type_registry *, tl_monotype *, i32);
+tl_monotype *tl_type_registry_instantiate_carray_mono(tl_type_registry *, tl_monotype *elem,
+                                                      tl_monotype *count);
 tl_type_registry_specialize_ctx tl_type_registry_specialize_begin(tl_type_registry *, str, str,
                                                                   tl_monotype_sized);
 tl_monotype *tl_type_registry_specialize_commit(tl_type_registry *, tl_type_registry_specialize_ctx);

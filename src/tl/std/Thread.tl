@@ -33,7 +33,6 @@ int nanosleep(const struct timespec *req, struct timespec *rem);
 #define TL_THREAD_SIZE sizeof(pthread_t)
 #endif
 
-_Static_assert(TL_THREAD_SIZE <= 8, "TL_THREAD_SIZE exceeds opaque buffer");
 
 // Forward-declare tl_init so that we can initialize the allocator context
 // (and any other TL_THREAD_LOCAL state) in newly-spawned threads.
@@ -170,7 +169,7 @@ c_tl_thread_equal         (a: Ptr[any], b: Ptr[any])                          ->
 
 // -- Types --
 
-T: { _buf: CArray[Byte, 8] }
+T: { _buf: CArray[Byte, c_TL_THREAD_SIZE] }
 
 
 // -- Synopsis --

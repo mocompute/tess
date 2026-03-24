@@ -76,7 +76,6 @@ static void tl_cond_destroy(void *buf) {
 
 #endif
 
-_Static_assert(TL_COND_SIZE <= 48, "TL_COND_SIZE exceeds opaque buffer");
 #endc
 
 c_tl_cond_init      (buf: Ptr[any])                         -> CInt
@@ -89,7 +88,7 @@ c_tl_cond_destroy   (buf: Ptr[any])                         -> Void
 // -- Types --
 
 T: {
-    _buf: CArray[Byte, 48],
+    _buf: CArray[Byte, c_TL_COND_SIZE],
 }
 
 

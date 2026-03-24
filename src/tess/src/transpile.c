@@ -83,7 +83,7 @@ typedef struct {
     defer_scope *loop_defer_boundary; // snapshot at loop entry; break/continue stop here
     tl_monotype *func_return_type;    // return type of enclosing function (for cross-type try)
 
-    int is_struct_field;              // suppress bare-function-name check for struct field access
+    int          is_struct_field; // suppress bare-function-name check for struct field access
 
 } eval_ctx;
 
@@ -439,6 +439,11 @@ static void generate_user_types(transpile *self) {
         if (!ast_node_is_enum_def(node)) continue;
         generate_one_user_type(self, node);
     }
+
+    // Emit #ifc blocks before struct bodies — they may contain #define macros
+    // used by CArray sizes (e.g. TL_ONCE_SIZE) or #include directives needed
+    // by inline C helpers.
+    generate_ifc_blocks(self);
 
     // Then emit concrete user types because they won't have been specialized.
     forall(i, self->nodes) {
@@ -2337,7 +2342,7 @@ static str generate_binary_op(transpile *self, tl_monotype *type, ast_node const
     // the struct into a temporary. Otherwise the CArray decays to a pointer into the dead temporary.
     int is_struct_access = is_struct_access_operator(str_cstr(&op));
     int carray_field     = is_struct_access && node->binary_op.right->type &&
-                           tl_monotype_is_carray(node->binary_op.right->type->type);
+                       tl_monotype_is_carray(node->binary_op.right->type->type);
 
     int save_lvalue = ctx->want_lvalue;
     if (carray_field) ctx->want_lvalue = 1;
@@ -2350,9 +2355,10 @@ static str generate_binary_op(transpile *self, tl_monotype *type, ast_node const
         // To handle obj.fun() and obj->fun(), we first load the function pointer from the field `fun`,
         // then invoke the funcall logic. The named_application.name node holds the function type.
 
-        int save_sf      = ctx->is_struct_field; ctx->is_struct_field = 1;
-        str          fun = generate_expr(self, null, node->binary_op.right->named_application.name, ctx);
-        ctx->is_struct_field = save_sf;
+        int save_sf          = ctx->is_struct_field;
+        ctx->is_struct_field = 1;
+        str fun = generate_expr(self, null, node->binary_op.right->named_application.name, ctx);
+        ctx->is_struct_field  = save_sf;
         tl_monotype *fun_type = node->binary_op.right->named_application.name->type->type;
 
         str          fun_res  = next_res(self);
@@ -2394,7 +2400,7 @@ static str generate_binary_op(transpile *self, tl_monotype *type, ast_node const
     } else {
         int save_sf = ctx->is_struct_field;
         if (is_struct_access) ctx->is_struct_field = 1;
-        right = generate_expr(self, null, node->binary_op.right, ctx);
+        right                = generate_expr(self, null, node->binary_op.right, ctx);
         ctx->is_struct_field = save_sf;
     }
 
@@ -2800,15 +2806,14 @@ static str generate_expr(transpile *self, tl_monotype *type, ast_node const *nod
         // Bare function name without /N arity suffix: an arrow-typed symbol that isn't a tl_-prefixed
         // local variable, a c_ FFI symbol, or a struct field access. This will emit a bare C
         // identifier that doesn't resolve.
-        if (type && tl_monotype_is_arrow(type) && !(ctx && ctx->is_struct_field)
-            && 0 != str_cmp_nc(name, "tl_", 3) && !is_c_symbol(name)
-            && !str_contains(name, S("__"))) {
+        if (type && tl_monotype_is_arrow(type) && !(ctx && ctx->is_struct_field) &&
+            0 != str_cmp_nc(name, "tl_", 3) && !is_c_symbol(name) && !str_contains(name, S("__"))) {
             u32 arity   = type->list.xs.v[0]->list.xs.size;
             str display = ast_node_name_original(node);
             if (str_is_empty(display)) display = name;
             exit_error(node->file, node->line,
-                       "'%s' is a function — to create a function pointer, use '%s/%u'",
-                       str_cstr(&display), str_cstr(&display), arity);
+                       "'%s' is a function — to create a function pointer, use '%s/%u'", str_cstr(&display),
+                       str_cstr(&display), arity);
         }
 
         return generate_expr_symbol(self, type, name, ast_node_name_original(node), ctx);
@@ -2944,9 +2949,18 @@ static void generate_decl(transpile *self, str name, tl_monotype *type) {
         // Special case for CArray(T, N) - emit as T name[N]
         if (tl_monotype_is_carray(type)) {
             str typec = type_to_c_mono(self, tl_monotype_carray_element(type));
-            i32 count = tl_monotype_carray_count(type);
-            str line  = str_fmt(self->transient, "%s %s[%i];\n", str_cstr(&typec), str_cstr(&name), count);
-            cat(self, line);
+            if (tl_monotype_carray_count_is_macro(type)) {
+                str macro  = tl_monotype_carray_count_macro_name(type);
+                str c_name = remove_c_prefix(self->transient, macro);
+                str line   = str_fmt(self->transient, "%s %s[%.*s];\n", str_cstr(&typec), str_cstr(&name),
+                                     str_ilen(c_name), str_buf(&c_name));
+                cat(self, line);
+            } else {
+                i32 count = tl_monotype_carray_count(type);
+                str line =
+                  str_fmt(self->transient, "%s %s[%i];\n", str_cstr(&typec), str_cstr(&name), count);
+                cat(self, line);
+            }
             return;
         }
 
@@ -3062,7 +3076,6 @@ int transpile_compile(transpile *self, str_build *out_build) {
     generate_structs(self);
     generate_toplevel_contexts(self);
 
-    generate_ifc_blocks(self);
     generate_prototypes(self, 1);
     cat_nl(self);
 

@@ -55,7 +55,6 @@ static void tl_once_call(void *buf, tl_closure *closure) {
 
 #endif
 
-_Static_assert(TL_ONCE_SIZE <= 8, "TL_ONCE_SIZE exceeds opaque buffer");
 #endc
 
 c_tl_once_init (buf: Ptr[any])                    -> Void
@@ -64,7 +63,7 @@ c_tl_once_call (buf: Ptr[any], closure: Ptr[any]) -> Void
 
 // -- Types --
 
-T: { _buf: CArray[Byte, 8] }
+T: { _buf: CArray[Byte, c_TL_ONCE_SIZE] }
 
 
 // -- Synopsis --

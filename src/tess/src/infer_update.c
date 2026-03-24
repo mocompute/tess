@@ -217,6 +217,7 @@ tl_monotype *tl_infer_update_specialized_type_(tl_infer *self, tl_monotype *mono
 
     switch (mono->tag) {
     case tl_integer:
+    case tl_c_macro:
     case tl_placeholder:
     case tl_any:
     case tl_ellipsis:
@@ -308,6 +309,7 @@ tl_monotype *tl_infer_update_specialized_type(tl_infer *self, tl_monotype *mono)
     case tl_ellipsis:
     case tl_variadic:
     case tl_integer:
+    case tl_c_macro:
     case tl_weak:
     case tl_weak_int_signed:
     case tl_weak_int_unsigned:
@@ -340,6 +342,7 @@ static void update_types_one_type(tl_infer *self, update_types_ctx *ctx, tl_poly
     case tl_ellipsis:
     case tl_variadic:
     case tl_integer:
+    case tl_c_macro:
     case tl_var:
     case tl_weak:
     case tl_weak_int_signed:
