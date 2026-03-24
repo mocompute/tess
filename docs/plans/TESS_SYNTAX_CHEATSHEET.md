@@ -136,6 +136,15 @@ Pt = Point[Int]       // Concrete alias
 p := Foo.Pt(x = 10, y = 20)
 ```
 
+## Function Aliases
+
+```tess
+#import <Print.tl>
+println = Print.println   // Alias for cross-module function
+println(42, " hello")     // Direct call (all arities available)
+apply(println/1, "hi")    // Function reference via alias/N
+```
+
 ## Weak Integer Literals
 
 ```tess

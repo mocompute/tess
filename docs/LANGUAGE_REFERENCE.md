@@ -322,6 +322,33 @@ Pt = Point                // OK: alias for the unspecialized generic
 StringMap[V] = HashMap[String, V]  // Error: partial specialization
 ```
 
+### Function Aliases
+
+Function aliases create a local shorthand for a module-qualified function:
+
+```tl
+print   = Print.print
+println = Print.println
+my_add  = Math.add
+```
+
+An alias can be called directly — all arity overloads of the target function are accessible:
+
+```tl
+my_add(1, 2)       // calls Math.add/2
+my_add(1, 2, 3)    // calls Math.add/3
+```
+
+Function references via the `/N` syntax also work through aliases:
+
+```tl
+apply(my_add/2, 10, 20)   // passes Math.add/2 as a function pointer
+```
+
+Function aliases are a parse-time name rewrite — they are not first-class values and cannot be used in UFCS position (`value.alias(args)` does not resolve aliases).
+
+The compiler distinguishes function aliases from type aliases automatically: if the target has arity-mangled entries in the module's symbol table, it is a function; otherwise it is a type.
+
 ### Explicit Type Parameters
 
 Generic functions declare type parameters using square brackets. Square brackets always denote type arguments; parentheses always denote value arguments or constructors:

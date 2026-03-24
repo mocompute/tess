@@ -551,6 +551,20 @@ int a_identifier_optional_arity(parser *p) {
     if (arity != -1) {
         str base = unmangle_arity_qualified_name(p->ast_arena, name);
         assert(!str_is_empty(base));
+
+        // Resolve function alias: alias_name/2 → Module__func__2
+        if (p->function_aliases) {
+            function_alias_info *alias = str_map_get_ptr(p->function_aliases, base);
+            if (alias) {
+                str mangled = mangle_str_for_arity(p->ast_arena, alias->base_name, (u8)arity);
+                mangled     = mangle_str_for_module(p, mangled, alias->module);
+                result_ast_str_(p, ast_symbol, mangled);
+                p->result->symbol.is_module_mangled = 1;
+                p->result->symbol.module            = str_copy(p->ast_arena, alias->module);
+                return 0;
+            }
+        }
+
         str mangled = mangle_str_for_arity(p->ast_arena, base, (u8)arity);
         return result_ast_str_(p, ast_symbol, mangled);
     }

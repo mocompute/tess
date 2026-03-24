@@ -63,7 +63,7 @@ Organize files in this order:
 1. **Header comment**: brief description of the module's purpose
 2. **`#module` declaration**
 3. **`#import` directives**
-4. **Type aliases**: shorthand for commonly used types
+4. **Type and function aliases**: shorthand for commonly used types and functions
 5. **Type definitions**: structs and tagged unions
 6. **Synopsis**: all public function signatures with full type annotations
 7. **Private helper signatures**: under a separate `// -- Private helpers --` heading
@@ -105,6 +105,7 @@ Use `// -- Section Name --` to divide the file into logical groups.
 - **Functions**: snake_case: `get_flag`, `parse_or_exit`, `help_text`
 - **Private helpers**: underscore prefix: `_find_spec_long`, `_store_bool`, `_S`
 - **Type aliases**: PascalCase, matching the original: `Allocator = Alloc.Allocator`
+- **Function aliases**: snake_case, matching the original: `println = Print.println`
 
 ## The `self` Convention
 
