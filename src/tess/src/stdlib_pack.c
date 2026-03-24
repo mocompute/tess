@@ -13,6 +13,8 @@
 
 #include <stdio.h>
 
+#define STDLIB_PACK_VERBOSE 0
+
 int main(int argc, char *argv[]) {
     if (argc != 3) {
         fprintf(stderr, "Usage: %s <stdlib_dir> <output.c>\n", argv[0]);
@@ -59,7 +61,9 @@ int main(int argc, char *argv[]) {
         entries[i].data     = (byte const *)data;
         entries[i].data_len = data_len;
 
+#if STDLIB_PACK_VERBOSE
         fprintf(stderr, "stdlib_pack: packing %s (%u bytes)\n", entries[i].name, data_len);
+#endif
     }
 
     // Write tpkg archive to a temp file
@@ -111,8 +115,10 @@ int main(int argc, char *argv[]) {
 
     fclose(out);
 
+#if STDLIB_PACK_VERBOSE
     fprintf(stderr, "stdlib_pack: generated %s (%u bytes archive, %u files)\n", output_path, tpkg_data_len,
             name_count);
+#endif
 
     arena_destroy(&alloc);
     return 0;
