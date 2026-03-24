@@ -5,6 +5,86 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased] - 2026-03-15 to 2026-03-24 (c259bf19..49b0fde6)
+
+### Highlights
+
+- **Default string literals changed to `String`** *(breaking)*: `"foo"` now produces a `String`; use `c"foo"` for C strings (`Ptr[CChar]`)
+- **Variadic functions with `...Trait` syntax**: last parameter accepts variable arguments dispatched through a trait bound
+- **Threading standard library**: `Thread`, `Mutex`, `Cond`, and `Once` modules for cross-platform concurrency
+- **`tess cbind` command**: generates `.tl` bindings from C headers automatically
+- **`tess fetch` with lockfile support**: downloads package dependencies with SHA-256 verification
+
+### Added
+
+- **Variadic Functions**: The last parameter of a function can use `...Trait` syntax; the compiler applies the trait's unary function to each argument at the call site and packs results into a homogeneous `Slice`. Ships with `ToString` trait and variadic `Print.print`/`Print.println` built on it.
+- **Threading Standard Library**: New modules `Thread` (spawn, join, detach, yield, sleep), `Mutex` (plain, recursive, error-check kinds), `Cond` (condition variables), and `Once` (one-time initialization). Cross-platform via pthreads (Unix) / Win32 (Windows). The compiler auto-links `-lpthread` when threading modules are imported.
+- **File I/O Standard Library**: `File.tl` provides streaming I/O (open/close/read/write/seek/tell), whole-file convenience functions (`read_file`, `write_file`, `read_lines`), file metadata (`exists`, `is_directory`, `size`, `temp_dir`), and directory operations (`create_dir`, `scan_dir`). `File.Path` submodule handles cross-platform path manipulation.
+- **`tess cbind` Command**: Generates `.tl` binding declarations from C headers by preprocessing with `cc -E -dD` and parsing the output. Handles multi-word type specifiers, pointer chains, const qualifiers, function pointers, variadic C functions, opaque structs, typedef aliases, anonymous structs, enums, and `#define` constants.
+- **`tess fetch` Command**: Fetches package dependencies declared in `package.tl`, downloads `.tpkg` archives from URLs, and generates/verifies `package.tl.lock` files with SHA-256 hash verification.
+- **Const Value Bindings**: `x: Const := 5` or `x: Const[Int] := 5` prevents reassignment and transpiles to C `const`. For-loop variables are implicitly `Const`.
+- **C Compiler Predefined Macros**: The compiler queries `cc -dM -E` at startup, making platform macros like `__linux__`, `_WIN32`, and `__APPLE__` available to `#ifdef`/`#ifndef` without manual `-D` flags.
+- **C Preprocessor Macros as CArray Sizes**: `CArray[Byte, c_TL_ONCE_SIZE]` uses platform-specific `#define` values for opaque type sizing via a new `tl_c_macro` monotype tag.
+- **Opaque C Type Support**: Symbols with `c_` prefix are auto-registered as opaque nullary types, so `Ptr[c_FILE]` works without manual type definitions.
+- **User-Defined Traits on Builtin Types**: Builtin types (Int, UInt, Float, Bool, etc.) now have module names, allowing user code to define trait implementations that dispatch correctly.
+- **`s"..."` String Literal Prefix**: Convenient `String` construction — `s"hello"` instead of `String.from_cstr(c"hello")`.
+- **`Result[Void, E]` Support**: Void fields in structs now transpile correctly, enabling the natural return type for fallible operations that produce no value.
+- **Cross-Type `try`**: `try` now only requires matching error variant types between the operand and the enclosing function's return type, allowing `try` across different success types.
+- **`ToInt` Trait**: Standard library trait for unary integer conversion, with implementations for Int, UInt, Float, Bool, CString, and String.
+- **Non-Diverging Else in Variant Bindings**: The `else` branch of a variant binding can now produce a fallback value instead of requiring divergence.
+- **Cross-Kind Function/Type Name Sharing**: Functions and types can share the same user-visible name within a module, since they occupy separate namespaces.
+- **Cross-Chain Integer Widening for UFCS**: When UFCS resolves a trait method whose parameter is on a different integer subchain from the receiver, the compiler inserts a synthetic cast.
+- **`CONFIG=coverage` Build**: LLVM source-based code coverage support.
+- **Improved Error Messages**: Trait-qualified calls like `Hash.hash(42)` now suggest UFCS syntax; bare function names missing `/N` arity suffix are detected and reported.
+- **Version/Date Comment in Transpiled Output**: Generated C files now include the tess version, git branch, and timestamp.
+
+### Changed
+
+- **Default String Literals are Now `String`** *(breaking)*: `"foo"` produces a `String` value; use `c"foo"` for C strings (`Ptr[CChar]`). An `upgrade_strings` migration tool was provided.
+- **`Str` Renamed to `String`**: Throughout the language, standard library, tests, and documentation.
+- **`Cmdline` Renamed to `CommandLine`**.
+- **`std*.tl` Wrappers Renamed to `cstd*.tl`**: e.g., `stdlib.tl` to `cstdlib.tl`, `string.tl` to `cstring.tl`.
+- **"Let-else" Renamed to "Variant Binding"**: and "let-in expression" renamed to "binding expression" in all user-facing documentation.
+- **Hash Trait Moved to Userland**: `Hash` is now defined in `Hash.tl` with UFCS-based implementations. Callers use `x.hash()` instead of `hash(x)` and must `#import <Hash.tl>`.
+- **`print()` Moved to `Print.tl`**: Now built on the variadic `...ToString` mechanism instead of being a builtin.
+- **Bump Allocator Moved to `Alloc.BumpAllocator` Submodule**.
+- **Versioned `.tpkg` Filenames Required**: Only `<Name>-<Version>.tpkg` is accepted; the unversioned fallback was removed.
+- **`tess validate` Merged into `tess pack --validate`**: The standalone validate command was removed.
+- **HashMap Performance**: Robin Hood hashing with backwards-shift deletion, murmurhash3 finalizer, hash-tag fast-reject in lookups, and compact entry metadata. Permanent hash caching for concrete monotypes.
+- **`cstdio.tl` Expanded to Full C11 Coverage**: Type-safe `Ptr[c_FILE]` stream parameters throughout.
+- **Formatter Improvements**: Fixed cross-alignment inside tagged union variant bodies, alignment for single-line function defs, type parameter constraint colons, arrow alignment, and binary operator spacing.
+- **Documentation Overhaul**: Major updates to Language Reference (pointers, submodules, terminology, `main()` forms, bitwise operators, `#ifc`/`#endc`, builtin traits) and expanded CLAUDE.md.
+
+### Removed
+
+- **`unwrap()` Removed**: Variant bindings are the preferred pattern for extracting values.
+- **`depend_optional()` Removed**: Optional dependencies had no mechanical effect; documentation handles that use case better.
+- **Unused Sexp Parser Removed**.
+- **Redundant `.&` in UFCS Calls Removed**: Implicit address-of makes explicit `.&` unnecessary throughout tests and stdlib.
+- **Unnecessary `zu` Integer Suffixes Removed**: Type inference handles them automatically.
+
+### Fixed
+
+- Fixed fully-generic type alias segfault (`Foo = Option` without type parameters no longer crashes).
+- Fixed `c_printf` declaration to return `CInt` instead of `Void`.
+- Fixed trait dispatch for generic functions on nullary types (e.g., `CLongDouble`).
+- Fixed `CLongDouble` truncation in float formatting.
+- Fixed `Ptr`-receiver trait methods on builtin types.
+- Fixed weak int defaulting overriding resolved type bindings.
+- Fixed Windows `small` macro from `Windows.h` breaking `String` field access.
+- Fixed missing return for `when`-expression with diverging arm.
+- Fixed diverging `when`/`if-else` arms in tail position not detected correctly.
+- Fixed parse type dropping return type on partially-annotated arrows.
+- Fixed `if-then-else` divergence detection.
+- Fixed `cbind` const pointer handling (`T * const` now correctly wraps `Const` outside `Ptr`).
+- Fixed `needs_pthread` uninitialized in `state_init` (debug builds always linked `-lpthread`).
+- Fixed stdlib path normalization preventing `tess pack` failures with installed tess.
+
+### Security
+
+- Version string validation now rejects `=` characters to prevent ambiguous dependency encoding in `.tpkg` archives.
+- SHA-256 hash verification for downloaded `.tpkg` packages in the `tess fetch` pipeline.
+
 ## [Unreleased] - 2026-03-11 to 2026-03-15 (ec70d2ab..c259bf19)
 
 ### Highlights
