@@ -18,14 +18,17 @@ eq(p1, p2) {
 }
 
 #module main
+#import <Print.tl>
+
+println = Print.println
 
 main() {
     a := Point(x = 1, y = 2)
     b := Point(x = 3, y = 4)
     c := a + b
-    c_printf("(%d, %d)\n", c.x, c.y)
+    println("(", c.x, ", ", c.y, ")")
 
-    if a != b { c_printf("different\n") }
+    if a != b { println("different") }
     0
 }
 ```
@@ -108,7 +111,8 @@ Run a single file: no project setup needed:
 
 ```bash
 echo '#module main
-main() { c_printf("Hello, world!\n"), 0 }' > hello.tl
+#import <Print.tl>
+main() { Print.println("Hello, world!"), 0 }' > hello.tl
 tess run hello.tl
 ```
 
