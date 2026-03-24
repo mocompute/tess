@@ -56,12 +56,12 @@ appears in `package.tl` and dependency declarations; the module name appears in 
 
 **Build the package:**
 ```bash
-tess pack -o mylib.tpkg
+tess pack -o mylib-1.0.0.tpkg
 ```
 
 Note that `package.tl` is found automatically in the current working directory. The `source("src/")`
 declaration tells the compiler where to find source files, so no file arguments are needed on the command
-line. You can still list files explicitly (`tess pack src/math.tl -o mylib.tpkg`), which overrides
+line. You can still list files explicitly (`tess pack src/math.tl -o mylib-1.0.0.tpkg`), which overrides
 `source()`.
 
 ### Consuming a package
@@ -70,7 +70,7 @@ line. You can still list files explicitly (`tess pack src/math.tl -o mylib.tpkg`
 myapp/
   package.tl
   libs/
-    mylib.tpkg
+    mylib-1.0.0.tpkg
   src/
     main.tl
 ```
@@ -104,7 +104,7 @@ tess exe -o myapp
 ```
 
 The compiler auto-discovers `package.tl` in the current working directory, resolves `source("src/")` to find
-source files, loads `mylib.tpkg` from the `libs/` directory, verifies the version matches, and compiles
+source files, loads `mylib-1.0.0.tpkg` from the `libs/` directory, verifies the version matches, and compiles
 everything together. Consumer code uses the *module* name (`MathUtils.clamp`), not the package name.
 
 ---
@@ -172,7 +172,7 @@ When `source()` is declared, commands like `tess run`, `tess exe`, `tess pack`, 
 ```bash
 tess run                    # uses source() from package.tl
 tess exe -o myapp           # uses source() from package.tl
-tess pack -o mylib.tpkg     # uses source() from package.tl
+tess pack -o mylib-1.0.0.tpkg     # uses source() from package.tl
 tess validate               # uses source() from package.tl
 ```
 
@@ -219,7 +219,7 @@ mylib/
 ```
 
 ```bash
-tess pack -o MathUtils.tpkg
+tess pack -o MathUtils-1.0.0.tpkg
 ```
 
 Both `math.tl` and `internal.tl` are included -- `math.tl` is found via `source("src/")` and `internal.tl`
@@ -252,7 +252,7 @@ When you run `tess exe` (or `tess run`, `tess c`, `tess lib`), the compiler:
 
 1. Looks for `package.tl` in the current working directory
 2. Discovers local source files from `source()` entries (if no files given on the command line)
-3. For each `depend()` declaration, searches `depend_path()` directories for `<PackageName>-<Version>.tpkg`, then `<PackageName>.tpkg`
+3. For each `depend()` declaration, searches `depend_path()` directories for `<PackageName>-<Version>.tpkg`
 4. Reads the archive and verifies the version matches exactly
 5. Extracts source files to a temporary directory
 6. Recursively loads transitive dependencies from the archive's metadata
@@ -296,13 +296,13 @@ depend_path("./libs")
 ### Transitive dependencies
 
 The compiler automatically resolves transitive dependencies. If `mylib` depends on `logging_lib`, the
-compiler reads that from the `mylib.tpkg` metadata and searches the consumer's `depend_path()` directories
-for `logging_lib.tpkg`.
+compiler reads that from the `mylib-1.0.0.tpkg` metadata and searches the consumer's `depend_path()` directories
+for `logging_lib-2.0.0.tpkg`.
 
 ```
 MyApp
   depends on mylib (declared in package.tl)
-    depends on logging_lib (resolved automatically from mylib.tpkg metadata)
+    depends on logging_lib (resolved automatically from mylib-1.0.0.tpkg metadata)
 ```
 
 The consumer must have all transitive dependencies available in their `depend_path()` directories. If a
@@ -319,14 +319,14 @@ resolves module references to the correct version.
 
 Version strings use strict equality -- `"1.0.0"` must match exactly. There is no semver range resolution.
 
-To make multiple versions available, use versioned `.tpkg` filenames. The compiler searches for `<PackageName>-<Version>.tpkg` first, then falls back to `<PackageName>.tpkg`:
+All `.tpkg` files must use versioned filenames: `<PackageName>-<Version>.tpkg`. The compiler uses this naming convention to locate the correct archive:
 
 ```
 libs/
-  BaseLib.tpkg          # BaseLib v1.0.0 (unversioned fallback)
-  BaseLib-2.0.0.tpkg    # BaseLib v2.0.0 (versioned)
-  LibA.tpkg
-  LibB.tpkg
+  BaseLib-1.0.0.tpkg    # BaseLib v1.0.0
+  BaseLib-2.0.0.tpkg    # BaseLib v2.0.0
+  LibA-1.0.0.tpkg
+  LibB-1.0.0.tpkg
 ```
 
 ### Diamond dependencies
@@ -367,9 +367,11 @@ Tree shaking removes unused internal modules from the final binary.
 
 ## Module Naming
 
-### Single global namespace
+### Package-scoped module resolution
 
-All modules -- whether from local source or packages -- share a single global namespace. If two different packages define a module with the same name, the compiler emits an error. However, different versions of the *same* package may export the same module name -- package-versioned name mangling ensures they get distinct C symbols.
+All symbols are mangled to include the source package name and version before the module name (e.g., `BaseLib__1_0_0__Base__val__0`). This means modules from different packages are isolated from each other, even if they share the same module name. When the compiler parses a source file, it knows which package (and version) the file belongs to, and resolves module references using that context.
+
+Different packages can define modules with the same name without conflict. For example, both `LibA` and `LibB` could define a `#module Utils` internally -- each resolves to distinct mangled symbols because of the package prefix.
 
 ### Package names vs module names
 
@@ -380,7 +382,7 @@ Package names (in `package.tl`) and module names (in source code) are independen
 | **In `package.tl`** | `package(logging_lib)` | `export(Logger)` |
 | **In source code** | not visible | `Logger.warn(...)` |
 | **In `depend()`** | `depend(logging_lib, "2.0.0")` | -- |
-| **In `.tpkg` filename** | `logging_lib.tpkg` | -- |
+| **In `.tpkg` filename** | `logging_lib-2.0.0.tpkg` | -- |
 
 Package names appear in `package.tl`, dependency declarations, and archive filenames. Module names appear in source code.
 
@@ -419,7 +421,7 @@ source("logger.tl")
 ```
 
 ```bash
-tess pack -o logging_lib.tpkg
+tess pack -o logging_lib-2.0.0.tpkg
 ```
 
 ### 2. mylib package (depends on logging_lib)
@@ -470,7 +472,7 @@ depend_path("./libs")
 ```
 
 ```bash
-tess pack -o mylib.tpkg
+tess pack -o mylib-1.0.0.tpkg
 ```
 
 The archive contains `math.tl` and `internal.tl` but not logging_lib's source. The metadata records the dependency: `logging_lib=2.0.0`.
@@ -507,7 +509,7 @@ depend_path("./libs")
 tess exe -o myapp
 ```
 
-The compiler auto-discovers `src/main.tl` via `source("src/")`, loads `mylib.tpkg`, sees it requires `logging_lib=2.0.0`, finds `logging_lib.tpkg` in `./libs`, verifies the version, and compiles everything together.
+The compiler auto-discovers `src/main.tl` via `source("src/")`, loads `mylib-1.0.0.tpkg`, sees it requires `logging_lib=2.0.0`, finds `logging_lib-2.0.0.tpkg` in `./libs`, verifies the version, and compiles everything together.
 
 ---
 

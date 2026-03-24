@@ -275,6 +275,10 @@ void state_gather_options(state *self, int argc, char *argv[]) {
 
 // Try to derive a default output path from package.tl.
 // Returns empty string if package.tl doesn't exist or can't be parsed.
+static str tpkg_filename(allocator *alloc, str name, str version) {
+    return str_cat_4(alloc, name, S("-"), version, S(".tpkg"));
+}
+
 // mode: 0=exe, 1=lib (shared), 2=pack, 3=lib (static)
 // If pkg_name is non-NULL, writes the bare package name (without prefix/suffix).
 static str default_out_path(allocator *alloc, int mode, str *pkg_name) {
@@ -303,7 +307,9 @@ static str default_out_path(allocator *alloc, int mode, str *pkg_name) {
         suffix = str_init_static(".a");
     }
 #endif
-    if (mode == 2) suffix = str_init_static(".tpkg");
+    if (mode == 2) {
+        return tpkg_filename(alloc, pkg.info.name, pkg.info.version);
+    }
 
     return str_cat_3(alloc, prefix, pkg.info.name, suffix);
 }
@@ -452,27 +458,15 @@ static void scan_file_directives(state *self, str path, str_array *resolved_path
 
 // Find a .tpkg file for a dependency.
 // If dep->path is non-empty (3-arg depend()), use it directly.
-// Otherwise, search depend_path() directories for:
-//   1. <Name>-<Version>.tpkg  (versioned, preferred)
-//   2. <Name>.tpkg            (unversioned fallback)
+// Otherwise, search depend_path() directories for <Name>-<Version>.tpkg.
 static str resolve_tpkg_path(state *self, tl_package_dep const *dep, tl_package_info const *info) {
     if (!str_is_empty(dep->path)) {
         return dep->path;
     }
 
-    str versioned_name = str_empty();
-    if (!str_is_empty(dep->version)) {
-        versioned_name = str_cat_4(self->arena, dep->name, S("-"), dep->version, S(".tpkg"));
-    }
-    str tpkg_name = str_cat_c(self->arena, dep->name, ".tpkg");
+    str tpkg_name = tpkg_filename(self->arena, dep->name, dep->version);
 
     for (u32 i = 0; i < info->depend_path_count; i++) {
-        if (!str_is_empty(versioned_name)) {
-            str candidate = str_cat_3(self->arena, info->depend_paths[i], S("/"), versioned_name);
-            if (file_exists(candidate)) {
-                return candidate;
-            }
-        }
         str candidate = str_cat_3(self->arena, info->depend_paths[i], S("/"), tpkg_name);
         if (file_exists(candidate)) {
             return candidate;
