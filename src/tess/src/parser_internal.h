@@ -47,6 +47,14 @@ typedef struct {
     str module;         // module where the variadic function is defined
 } variadic_symbol_info;
 
+// Info about a function alias created by `name = Module.func` at the top level.
+// Key is the alias name (e.g. "print"). Call sites using the alias are rewritten
+// at parse time to call the target function directly.
+typedef struct {
+    str module;    // target module name (e.g. "Print")
+    str base_name; // target function's base name (e.g. "print")
+} function_alias_info;
+
 struct parser {
     allocator          *parent_alloc;
     allocator          *file_arena;
@@ -93,7 +101,8 @@ struct parser {
     int         expect_module; // expect a module immediately after a #unity_file before any terms
     parser_mode mode;
 
-    hashmap    *variadic_symbols; // map str -> variadic_symbol_info: base name -> variadic info
+    hashmap    *variadic_symbols;  // map str -> variadic_symbol_info: base name -> variadic info
+    hashmap    *function_aliases;  // map str -> function_alias_info: alias name -> target info
 };
 
 // ============================================================================
@@ -107,6 +116,7 @@ typedef int (*parse_fun_int)(parser *, int);
 
 int toplevel_defun(parser *);
 int toplevel_enum(parser *self);
+int toplevel_function_alias(parser *self);
 int toplevel_struct(parser *self);
 int toplevel_trait(parser *self);
 int toplevel_type_alias(parser *self);

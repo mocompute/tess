@@ -940,6 +940,19 @@ int a_funcall(parser *self) {
 done:
     array_shrink(args);
 
+    // Function alias resolution: rewrite alias name to target function's name and module
+    // BEFORE arity/variadic resolution, so that the target module's symbols are used.
+    function_alias_info *alias = null;
+    if (self->function_aliases && ast_node_is_symbol(name)) {
+        alias = str_map_get_ptr(self->function_aliases, name->symbol.name);
+        if (alias) {
+            name->symbol.name   = str_copy(self->ast_arena, alias->base_name);
+            name->symbol.module = str_copy(self->ast_arena, alias->module);
+            parser_dbg(self, "function alias call '%s' -> '%s.%s'\n", str_cstr(&name->symbol.name),
+                       str_cstr(&alias->module), str_cstr(&alias->base_name));
+        }
+    }
+
     // IMPORTANT: arity-mangle FIRST, then module-mangle.
     // symbol_is_module_function checks for the arity-mangled name (e.g., "foo__0") in
     // current_module_symbols. If we module-mangle first, we'd be checking for the wrong name.
@@ -964,7 +977,12 @@ done:
         }
     }
 
-    mangle_name(self, name);
+    // mangle_name uses current_module (empty for main), so aliases need explicit target module.
+    if (alias) {
+        mangle_name_for_module(self, name, alias->module);
+    } else {
+        mangle_name(self, name);
+    }
 
     ast_node *node = ast_node_create_nfa(self->ast_arena, name, (ast_node_sized)sized_all(type_args),
                                          (ast_node_sized)sized_all(args));

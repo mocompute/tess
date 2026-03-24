@@ -62,6 +62,7 @@ parser *parser_create(allocator *alloc, parser_opts const *opts) {
     self->expect_module                = 0;
     self->mode                         = mode_none;
     self->variadic_symbols             = map_new(self->parent_alloc, str, variadic_symbol_info *, 16);
+    self->function_aliases             = null; // lazy-init on first alias registration
 
     self->tokenizer                    = null;
     self->tokens                       = (token_array){.alloc = self->tokens_arena};
@@ -89,6 +90,7 @@ void parser_destroy(parser **self) {
     hset_destroy(&(*self)->tagged_union_variant_parents);
     map_destroy(&(*self)->nullary_variant_parents);
     if ((*self)->variadic_symbols) map_destroy(&(*self)->variadic_symbols);
+    if ((*self)->function_aliases) map_destroy(&(*self)->function_aliases);
     hset_destroy(&(*self)->module_preludes_seen);
     hset_destroy(&(*self)->modules_version_seen);
     hset_destroy(&(*self)->modules_seen);
@@ -1236,6 +1238,84 @@ int toplevel_defun(parser *self) {
     return 0;
 }
 
+// Check whether a module's symbol table contains any arity-mangled variant of `name`
+// (e.g. "func__0", "func__1", ...). Functions always have arity-mangled entries; types don't.
+static int module_has_function(parser *self, hashmap *mod_syms, str name) {
+    for (u8 a = 0; a <= 32; a++) {
+        str mangled = mangle_str_for_arity(self->transient, name, a);
+        if (str_hset_contains(mod_syms, mangled)) return 1;
+    }
+    return 0;
+}
+
+int toplevel_function_alias(parser *self) {
+    // Parses: name = Module.func
+    // Registers the alias so call sites are rewritten to the target function.
+    // No AST node is emitted — the alias is purely a parse-time name rewrite.
+    //
+    // Distinguished from type aliases by checking whether the target is a function
+    // (has arity-mangled entries in the module's symbol table) or a variadic function.
+
+    if (a_try(self, a_identifier)) return 1;
+    ast_node *alias_name = self->result;
+    if (!ast_node_is_symbol(alias_name)) return 1;
+
+    str alias_str = ast_node_str(alias_name);
+
+    if (a_try(self, a_equal_sign)) return 1;
+
+    // RHS: Module.func
+    if (a_try(self, a_identifier)) return 1;
+    ast_node *module_node = self->result;
+    if (!ast_node_is_symbol(module_node)) return 1;
+
+    if (a_try(self, a_dot)) return 1;
+
+    if (a_try(self, a_identifier)) return 1;
+    ast_node *func_node = self->result;
+    if (!ast_node_is_symbol(func_node)) return 1;
+
+    str module_name = ast_node_str(module_node);
+    str func_name   = ast_node_str(func_node);
+
+    // Verify the target module exists (its symbols must have been collected in pass 1)
+    hashmap *mod_syms = resolve_module_symbols(self, module_name);
+    if (!mod_syms) return 1;
+
+    // Verify the target is a function, not a type. Functions have arity-mangled entries
+    // (e.g. "func__0") in the module's symbol table; types have bare names (e.g. "Allocator").
+    // Also check variadic_symbols for variadic functions.
+    int                   is_function = module_has_function(self, mod_syms, func_name);
+    variadic_symbol_info *vinfo       = null;
+    if (!is_function && self->variadic_symbols) {
+        vinfo = str_map_get_ptr(self->variadic_symbols, func_name);
+        if (vinfo && str_eq(vinfo->module, module_name)) is_function = 1;
+        else vinfo = null;
+    }
+    if (!is_function) return 1;
+
+    // Register the alias
+    function_alias_info *info = alloc_malloc(self->parent_alloc, sizeof(function_alias_info));
+    info->module              = str_copy(self->parent_alloc, module_name);
+    info->base_name           = str_copy(self->parent_alloc, func_name);
+    if (!self->function_aliases)
+        self->function_aliases = map_new(self->parent_alloc, str, function_alias_info *, 16);
+    str_map_set_ptr(&self->function_aliases, alias_str, info);
+
+    // Propagate variadic info
+    if (vinfo) {
+        register_variadic_symbol(self, alias_str, vinfo->mangled_name, vinfo->n_fixed_params,
+                                 vinfo->trait_name, vinfo->module);
+    }
+
+    parser_dbg(self, "function alias '%s' -> '%s.%s'\n", str_cstr(&alias_str), str_cstr(&module_name),
+               str_cstr(&func_name));
+
+    // Emit a dummy result node (required by the parser framework).
+    // In mode_source (pass 2), toplevel() will skip this node.
+    return result_ast_node(self, alias_name);
+}
+
 int toplevel_assign(parser *self) {
     // cannot use parse_lvalue here
     if (a_try(self, a_param)) return 1;
@@ -1551,6 +1631,17 @@ int toplevel(parser *self) {
         if (0 == a_try(self, toplevel_c_chunk)) goto success_hash;
         if (0 == (res = a_try(self, toplevel_hash))) goto success_hash;
         else if (ERROR_STOP == res) goto error;
+        // Function alias: name = Module.func — must come before type alias
+        // (a_type_identifier_base greedily parses dotted names like "Print.print").
+        // In pass 2, skip the node — call sites are already rewritten.
+        if (0 == a_try(self, toplevel_function_alias)) {
+            if (self->mode == mode_source) {
+                arena_reset(self->speculative);
+                continue; // skip — no AST node needed
+            }
+            goto success;
+        }
+
         if (0 == a_try(self, toplevel_type_alias)) goto success;
 
         // Tagged union must come before enum/struct since both start with identifier
