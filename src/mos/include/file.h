@@ -9,6 +9,7 @@
 int         file_exists(str);
 int         file_is_directory(str path);
 void        file_read(allocator *, char const *, char **, u32 *);
+void        file_url_get(allocator *, char const *url, char **out, u32 *out_size);
 char const *file_basename(char const *);
 
 char       *file_current_working_directory(span);

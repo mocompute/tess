@@ -92,6 +92,44 @@ cleanup:
     *out_size = (u32)size;
 }
 
+void file_url_get(allocator *alloc, char const *url, char **out, u32 *out_size) {
+
+    *out      = null;
+    *out_size = 0;
+
+    char const *argv[] = {"curl", "-sSfL", url, NULL};
+
+    char  *captured     = null;
+    size_t captured_len = 0;
+
+    platform_exec_opts opts = {
+        .argv                = argv,
+        .captured_output     = &captured,
+        .captured_output_len = &captured_len,
+    };
+
+    int rc = platform_exec(&opts);
+    if (rc != 0) {
+        free(captured);
+        return;
+    }
+
+    if (captured_len > UINT32_MAX) {
+        free(captured);
+        return;
+    }
+
+    char *buf = null;
+    if (captured_len > 0) {
+        buf = alloc_malloc(alloc, captured_len);
+        memcpy(buf, captured, captured_len);
+    }
+    free(captured);
+
+    *out      = buf;
+    *out_size = (u32)captured_len;
+}
+
 char const *file_basename(char const *input) {
     char const *p1 = strrchr(input, '/');
     char const *p2 = strrchr(input, '\\');
