@@ -44,7 +44,7 @@ main() {
     b := Geo.Vec2(x = 1, y = 2)
 
     c := a + b
-    c_printf("a + b = (%d, %d)\n", c.x, c.y)
+    c_printf(c"a + b = (%d, %d)\n", c.x, c.y)
     0
 }
 ```
@@ -108,11 +108,11 @@ main() {
     a := Geo.Vec2(x = 3, y = 4)
     b := Geo.Vec2(x = 1, y = 2)
 
-    c_printf("a + b  = (%d, %d)\n", (a + b).x, (a + b).y)
-    c_printf("a - b  = (%d, %d)\n", (a - b).x, (a - b).y)
-    c_printf("-a     = (%d, %d)\n", (-a).x, (-a).y)
-    c_printf("a == a: %d\n", a == a)
-    c_printf("a != b: %d\n", a != b)
+    c_printf(c"a + b  = (%d, %d)\n", (a + b).x, (a + b).y)
+    c_printf(c"a - b  = (%d, %d)\n", (a - b).x, (a - b).y)
+    c_printf(c"-a     = (%d, %d)\n", (-a).x, (-a).y)
+    c_printf(c"a == a: %d\n", a == a)
+    c_printf(c"a != b: %d\n", a != b)
     0
 }
 ```
@@ -155,11 +155,11 @@ main() {
     c := Geo.Vec2(x = 3, y = 4)
 
 
-    c_printf("a == b: %d\n", a == b)
-    c_printf("a != c: %d\n", a != c)
-    c_printf("a < c:  %d\n", a < c)
-    c_printf("c > a:  %d\n", c > a)
-    c_printf("a >= b: %d\n", a >= b)
+    c_printf(c"a == b: %d\n", a == b)
+    c_printf(c"a != c: %d\n", a != c)
+    c_printf(c"a < c:  %d\n", a < c)
+    c_printf(c"c > a:  %d\n", c > a)
+    c_printf(c"a >= b: %d\n", a >= b)
     0
 }
 ```
@@ -202,13 +202,13 @@ main() {
     vel := Geo.Vec2(x = 3, y = 4)
 
     pos += vel
-    c_printf("after += : (%d, %d)\n", pos.x, pos.y)
+    c_printf(c"after += : (%d, %d)\n", pos.x, pos.y)
 
     pos += vel
-    c_printf("after += : (%d, %d)\n", pos.x, pos.y)
+    c_printf(c"after += : (%d, %d)\n", pos.x, pos.y)
 
     pos -= Geo.Vec2(x = 1, y = 1)
-    c_printf("after -= : (%d, %d)\n", pos.x, pos.y)
+    c_printf(c"after -= : (%d, %d)\n", pos.x, pos.y)
     0
 }
 ```
@@ -275,13 +275,13 @@ main() {
     b := Geo.Vec2(x = 1, y = 2)
 
     d := double(a)
-    c_printf("double(a) = (%d, %d)\n", d.x, d.y)
+    c_printf(c"double(a) = (%d, %d)\n", d.x, d.y)
 
-    c_printf("are_equal(a, a): %d\n", are_equal(a, a))
-    c_printf("are_equal(a, b): %d\n", are_equal(a, b))
+    c_printf(c"are_equal(a, a): %d\n", are_equal(a, a))
+    c_printf(c"are_equal(a, b): %d\n", are_equal(a, b))
 
     s := smallest(a, b)
-    c_printf("smallest(a, b) = (%d, %d)\n", s.x, s.y)
+    c_printf(c"smallest(a, b) = (%d, %d)\n", s.x, s.y)
     0
 }
 ```
@@ -361,7 +361,7 @@ main() {
     c := Geo.Vec2(x = 5, y = 6)
 
     r := evaluate(a, b, c)
-    c_printf("a + b * c - a = (%d, %d)\n", r.x, r.y)
+    c_printf(c"a + b * c - a = (%d, %d)\n", r.x, r.y)
     0
 }
 ```
@@ -431,12 +431,12 @@ main() {
     p2 := Wrapper.Pair(fst = Geo.Vec2(x = 1, y = 2), snd = Geo.Vec2(x = 3, y = 4))
     p3 := Wrapper.Pair(fst = Geo.Vec2(x = 5, y = 6), snd = Geo.Vec2(x = 7, y = 8))
 
-    c_printf("p1 == p2: %d\n", p1 == p2)
-    c_printf("p1 == p3: %d\n", p1 == p3)
-    c_printf("are_equal(p1, p2): %d\n", are_equal(p1, p2))
+    c_printf(c"p1 == p2: %d\n", p1 == p2)
+    c_printf(c"p1 == p3: %d\n", p1 == p3)
+    c_printf(c"are_equal(p1, p2): %d\n", are_equal(p1, p2))
 
     p4 := p1 + p3
-    c_printf("(p1 + p3).fst = (%d, %d)\n", p4.fst.x, p4.fst.y)
+    c_printf(c"(p1 + p3).fst = (%d, %d)\n", p4.fst.x, p4.fst.y)
     0
 }
 ```

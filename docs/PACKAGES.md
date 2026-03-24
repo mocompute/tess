@@ -83,7 +83,7 @@ myapp/
 
 main() {
   x := MathUtils.clamp(150, 0, 100)
-  c_printf("clamped: %d\n", x)
+  c_printf(c"clamped: %d\n", x)
   0
 }
 ```
@@ -505,10 +505,10 @@ The archive contains `math.tl` and `internal.tl` but not logging_lib's source. T
 
 main() {
   x := MathUtils.clamp(150, 0, 100)
-  c_printf("clamped: %d\n", x)
+  c_printf(c"clamped: %d\n", x)
 
   y := MathUtils.lerp(0.0, 10.0, 0.5)
-  c_printf("lerp: %f\n", y)
+  c_printf(c"lerp: %f\n", y)
   0
 }
 ```

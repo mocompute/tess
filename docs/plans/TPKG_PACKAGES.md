@@ -229,10 +229,10 @@ myapp/
 
 main() {
   x := MathUtils.clamp(150, 0, 100)
-  c_printf("clamped: %d\n", x)    // prints "clamped: 100"
+  c_printf(c"clamped: %d\n", x)    // prints "clamped: 100"
 
   y := MathUtils.lerp(0.0, 10.0, 0.5)
-  c_printf("lerp: %f\n", y)       // prints "lerp: 5.0"
+  c_printf(c"lerp: %f\n", y)       // prints "lerp: 5.0"
 
   0
 }

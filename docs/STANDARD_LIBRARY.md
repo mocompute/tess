@@ -139,7 +139,7 @@ Arrays support `for` loop iteration via the iterator protocol:
 arr := Array.init(0, 10)
 
 // Iterate by value
-for x in arr { c_printf("%d\n", x) }
+for x in arr { c_printf(c"%d\n", x) }
 
 // Iterate by pointer (allows mutation)
 for p.& in arr { p.* = p.* + 1 }
@@ -150,7 +150,7 @@ The `Array.Indexed` sub-module provides indexed iteration, yielding both the ele
 ```tl
 // By value: it.value and it.index
 for it in Array.Indexed arr {
-    c_printf("arr[%d] = %d\n", it.index, it.value)
+    c_printf(c"arr[%d] = %d\n", it.index, it.value)
 }
 
 // By pointer: it.ptr and it.index
@@ -173,7 +173,7 @@ main() {
     Array.sort(arr.&, (a, b) { a - b })
 
     sum := Array.reduce(arr, 0, (acc, x) { acc + x })
-    c_printf("sum = %d\n", sum)  // sum = 6
+    c_printf(c"sum = %d\n", sum)  // sum = 6
     0
 }
 ```
@@ -210,7 +210,7 @@ The same aliasing applies to `Array` and any struct containing pointers. See [Va
 
 ```tl
 s := String.from_cstr("hello")
-c_printf("%s\n", String.cstr(s.&))
+c_printf(c"%s\n", String.cstr(s.&))
 ```
 
 ### Allocator-aware overloads
@@ -318,7 +318,7 @@ Hashing functions using the FNV-1a algorithm.
 main() {
     s := "hello"
     h := Hash.fnv1a_cstring(s)
-    c_printf("hash = %zu\n", h)
+    c_printf(c"hash = %zu\n", h)
     0
 }
 ```

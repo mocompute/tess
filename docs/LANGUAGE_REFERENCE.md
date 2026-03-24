@@ -823,7 +823,7 @@ imperative style when needed.
 ```tl
 add(a, b) { a + b }                    // Types inferred
 add(a: Int, b: Int) -> Int { a + b }   // Explicit type annotations
-log(msg) { c_printf("%s\n", msg), void }  // void needed after expression
+log(msg) { c_printf(c"%s\n", msg), void }  // void needed after expression
 update(v) { value = v }                // No void needed - assignment has no value
 ```
 
@@ -1024,9 +1024,9 @@ log(level: Int, args: ...ToString) -> Void {
     i: CSize := 0
     while i < args.size, i += 1 {
         s := args.v.[i]
-        c_printf("%s", s.&.cstr())
+        c_printf(c"%s", s.&.cstr())
     }
-    c_printf("\n")
+    c_printf(c"\n")
     void
 }
 ```
@@ -1276,7 +1276,8 @@ the conformance rules.
 0377                // Octal
 3.14                // Float
 1.5e-10             // Scientific notation
-"hello"             // Ptr[CChar] (C string)
+"hello"             // String (SSO)
+c"hello"            // Ptr[CChar] (C string)
 'a'                 // Character literal (CChar)
 '\n'                // Character with escape sequence
 true, false         // Boolean
@@ -1519,7 +1520,7 @@ For example, `Array.Indexed` provides both the value and its index:
 
 ```tl
 for it in Array.Indexed xs {
-  c_printf("index=%d value=%d\n", it.index, it.value)
+  c_printf(c"index=%d value=%d\n", it.index, it.value)
 }
 
 for it.& in Array.Indexed xs {
@@ -1567,7 +1568,7 @@ Use `break` to exit a loop early, and `continue` to skip to the next iteration:
 while i < 10, i = i + 1 {
   if i == 5 { break }       // Exit loop when i reaches 5
   if i % 2 == 0 { continue } // Skip even numbers
-  c_printf("%d\n", i)
+  c_printf(c"%d\n", i)
 }
 
 for x in collection {

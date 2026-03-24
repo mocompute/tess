@@ -100,7 +100,7 @@ Key rules:
 - `main()` returns `CInt` (inferred, no annotation needed)
 - Use the `error` accumulator pattern: return 0 on success
 - `:=` to declare, `=` to reassign. No `mut` keyword.
-- String literals are `Ptr[CChar]`; use `s"..."` for `String`
+- String literals are `String` (SSO); use `c"..."` for `Ptr[CChar]` (C strings)
 - Omit type annotations unless needed for disambiguation
 - Keep it focused — one edge case per test
 - **Imports**: Standard library modules need explicit `#import` to use their qualified names. Common ones: `#import <String.tl>` (for `String.*` calls), `#import <HashMap.tl>`, `#import <Array.tl>`, `#import <Hash.tl>` (for `hash()`), `#import <Alloc.tl>` (for explicit allocators). Check existing tests in `src/tess/tl/test/pass/` if unsure.

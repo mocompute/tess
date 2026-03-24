@@ -589,7 +589,7 @@ Like type predicates, attribute predicates are resolved at compile time and prod
 
 ```tl
 print(x) {
-  c_printf("%d\n", x)
+  c_printf(c"%d\n", x)
   void    // Explicit void return
 }
 ```
