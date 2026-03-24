@@ -37,6 +37,7 @@ defarray(array_t, void);
 defsized(array_sized_t, void);
 
 defarray(byte_array, byte);
+defslice(byte_slice, byte);
 defarray(char_array, char);
 defarray(char_carray, char const);
 defsized(char_sized, char);
