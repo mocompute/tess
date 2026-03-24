@@ -92,13 +92,14 @@ read_config(path) {
 }
 ```
 
-Tess also has closures, defer, operator overloading, function overloading, dot-call syntax, and conditional compilation.
+Tess also has closures, defer, operator overloading, function overloading, dot-call syntax, conditional compilation, and a package manager.
 
 ## Build
 
 ```bash
-make -j              # Build the compiler
-make -j test         # Run tests
+make -j              # Build the compiler (~5 seconds)
+make -j test         # Run tests (~30 seconds)
+make install         # Install to /usr/local (see docs/BUILD.md)
 ```
 
 ## Quick Start
@@ -126,6 +127,7 @@ tess exe -o myapp    # standalone binary
 - [Type System](docs/TYPE_SYSTEM.md): inference, generics, and integer types
 - [Standard Library](docs/STANDARD_LIBRARY.md): Array, String, HashMap, and more
 - [Packages](docs/PACKAGES.md): creating and consuming `.tpkg` libraries
+- [Building](docs/BUILD.md): build configurations, installation, and standalone binary
 - [Glossary](docs/GLOSSARY.md): definitions of Tess-specific terms
 
 ## Examples
