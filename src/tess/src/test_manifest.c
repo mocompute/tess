@@ -680,6 +680,69 @@ static int test_source_non_string_arg(void) {
     return error;
 }
 
+static int test_version_rejects_equals(void) {
+    int        error = 0;
+    allocator *alloc = arena_create(default_allocator(), 1024);
+    tl_package pkg;
+
+    int        rc = parse_pkg(alloc,
+                              "format(1)\n"
+                                     "package(Foo)\n"
+                                     "version(\"1.0=beta\")\n",
+                              &pkg);
+
+    // Should fail: '=' not allowed in version strings
+    error += rc != 1;
+
+    if (error) fprintf(stderr, "  %d check(s) failed in test_version_rejects_equals\n", error);
+
+    arena_destroy(&alloc);
+    return error;
+}
+
+static int test_depend_version_rejects_equals(void) {
+    int        error = 0;
+    allocator *alloc = arena_create(default_allocator(), 1024);
+    tl_package pkg;
+
+    int        rc = parse_pkg(alloc,
+                              "format(1)\n"
+                                     "package(Foo)\n"
+                                     "version(\"1.0\")\n"
+                                     "depend(Bar, \"2.0=rc1\")\n",
+                              &pkg);
+
+    // Should fail: '=' not allowed in dependency version strings
+    error += rc != 1;
+
+    if (error) fprintf(stderr, "  %d check(s) failed in test_depend_version_rejects_equals\n", error);
+
+    arena_destroy(&alloc);
+    return error;
+}
+
+static int test_depend_optional_version_rejects_equals(void) {
+    int        error = 0;
+    allocator *alloc = arena_create(default_allocator(), 1024);
+    tl_package pkg;
+
+    int        rc = parse_pkg(alloc,
+                              "format(1)\n"
+                                     "package(Foo)\n"
+                                     "version(\"1.0\")\n"
+                                     "depend_optional(Bar, \"2.0=rc1\")\n",
+                              &pkg);
+
+    // Should fail: '=' not allowed in dependency version strings
+    error += rc != 1;
+
+    if (error)
+        fprintf(stderr, "  %d check(s) failed in test_depend_optional_version_rejects_equals\n", error);
+
+    arena_destroy(&alloc);
+    return error;
+}
+
 // ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
@@ -714,6 +777,9 @@ int main(void) {
     T(test_source_empty)
     T(test_source_no_source)
     T(test_source_non_string_arg)
+    T(test_version_rejects_equals)
+    T(test_depend_version_rejects_equals)
+    T(test_depend_optional_version_rejects_equals)
 
     if (error) fprintf(stderr, "manifest tests: %d FAILED\n", error);
     return error;

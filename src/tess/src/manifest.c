@@ -225,6 +225,11 @@ int tl_package_parse_file(allocator *alloc, char const *path, tl_package *out) {
                 error = 1;
                 continue;
             }
+            if (str_contains_char(out->info.version, '=')) {
+                fprintf(stderr, "package.tl: error: version string must not contain '='\n");
+                error = 1;
+                continue;
+            }
             version_seen = 1;
 
         } else if (str_eq(func_name, S("author"))) {
@@ -273,6 +278,11 @@ int tl_package_parse_file(allocator *alloc, char const *path, tl_package *out) {
                 error = 1;
                 continue;
             }
+            if (str_contains_char(dep.version, '=')) {
+                fprintf(stderr, "package.tl: error: depend() version must not contain '='\n");
+                error = 1;
+                continue;
+            }
             dep.path = str_empty();
             if (argc == 3) {
                 dep.path = extract_string(alloc, nfa->arguments[2], "depend", 2);
@@ -298,6 +308,11 @@ int tl_package_parse_file(allocator *alloc, char const *path, tl_package *out) {
             }
             dep.version = extract_string(alloc, nfa->arguments[1], "depend_optional", 1);
             if (str_is_empty(dep.version)) {
+                error = 1;
+                continue;
+            }
+            if (str_contains_char(dep.version, '=')) {
+                fprintf(stderr, "package.tl: error: depend_optional() version must not contain '='\n");
                 error = 1;
                 continue;
             }
