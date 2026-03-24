@@ -38,6 +38,8 @@ void import_resolver_add_user_path(import_resolver *self, str path) {
 }
 
 void import_resolver_add_standard_path(import_resolver *self, str path) {
+    str normed = file_path_normalize(self->arena, path);
+    if (!str_is_empty(normed)) path = normed;
     array_push(self->standard_include_paths, path);
 }
 

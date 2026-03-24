@@ -286,10 +286,6 @@ For each module:
 For each required dependency:
     [2 bytes]  Dependency string length (big-endian uint16)
     [N bytes]  Dependency string (UTF-8, format: "PackageName=Version")
-[2 bytes]  depends-optional count (big-endian uint16)
-For each optional dependency:
-    [2 bytes]  Dependency string length (big-endian uint16)
-    [N bytes]  Dependency string (UTF-8, format: "PackageName=Version")
 [4 bytes]  Uncompressed payload size (big-endian uint32)
 [4 bytes]  Compressed payload size (big-endian uint32)
 [N bytes]  Deflate-compressed payload
@@ -309,7 +305,6 @@ A CRC32 checksum is stored at the end of the archive, covering all bytes from th
 | Version | u16-prefixed string | Yes | Version string, free-form (compared as literal string) |
 | Modules | u16 count + u16-prefixed strings | Yes | Array of public module names |
 | depends | u16 count + u16-prefixed strings | No | Array of required versioned dependencies |
-| depends-optional | u16 count + u16-prefixed strings | No | Array of optional versioned dependencies |
 
 All metadata fields use u16 (big-endian) for lengths and counts, giving a maximum of 65535 bytes per string and 65535 entries per array -- more than sufficient for metadata. Only the payload sizes (uncompressed and compressed) use u32, since source archives can be large.
 
@@ -434,8 +429,6 @@ typedef struct {
     u16  module_count;
     str *depends;         // array of required dependencies ("Name=Version")
     u16  depends_count;
-    str *depends_optional; // array of optional dependencies ("Name=Version")
-    u16  depends_optional_count;
 } tl_tpkg_metadata;
 
 typedef struct {
@@ -452,7 +445,7 @@ typedef struct {
 } tl_tpkg_archive;
 ```
 
-**Target binary format:** Metadata is stored uncompressed after the fixed header (magic + version) and before the payload sizes. All metadata uses u16 lengths: scalar fields (name, author, version) are u16 length-prefixed UTF-8 strings, and array fields (modules, depends, depends-optional) use a u16 element count followed by u16 length-prefixed strings. Only payload sizes use u32. This allows metadata inspection without decompressing the archive. A CRC32 checksum at the end covers the entire archive for corruption detection.
+**Target binary format:** Metadata is stored uncompressed after the fixed header (magic + version) and before the payload sizes. All metadata uses u16 lengths: scalar fields (name, author, version) are u16 length-prefixed UTF-8 strings, and array fields (modules, depends) use a u16 element count followed by u16 length-prefixed strings. Only payload sizes use u32. This allows metadata inspection without decompressing the archive. A CRC32 checksum at the end covers the entire archive for corruption detection.
 
 **CLI flags for testing** (temporary until `package.tl` support in Phase 5):
 
@@ -487,7 +480,6 @@ Implemented in `src/tess/src/manifest.c` with header `src/tess/include/manifest.
 | `author(name)` | 1 string | No | Author name or email |
 | `export(mod, ...)` | 1+ strings | For `tess pack` | Exported module names (public API) |
 | `depend(name, ver [, path])` | 2-3 strings | No | Required dependency |
-| `depend_optional(name, ver [, path])` | 2-3 strings | No | Optional dependency |
 | `depend_path(dir)` | 1 string | No | Dependency search path (accumulates) |
 
 **Data structures** (in `manifest.h`): `tl_package_info`, `tl_package_dep`, `tl_package`
@@ -584,7 +576,6 @@ E2E tests in `test_tpkg.c`: `test_e2e_basic_package`, `test_e2e_version_mismatch
 **During pack (`pack_files()` in `tess_exe.c`):**
 1. Validate declared dependencies exist and versions match before writing the archive
 2. Write all `depend()` declarations to the archive's `depends` field
-3. Optional dependencies (`depend_optional()`) are written to the `depends-optional` field
 
 Dependencies are declared in `package.tl`, not auto-detected from source. If a producer declares a `depend()` they don't actually use, it is still recorded in the archive — consumers will need to provide it. This is accepted for simplicity; a future lint pass could warn about unused declarations.
 
@@ -709,13 +700,6 @@ Each phase can be merged independently, allowing incremental progress and early 
   This is not blocking—hash verification is a future extension.
 
 - **Module naming conflicts**: What error message when two packages define the same module? Should we include package paths in the error? Example: "module 'Utils' defined in both 'libs/A.tpkg' and 'libs/B.tpkg'"
-
-- **Optional dependencies for consumers**: How are `depend_optional()` declarations used during compilation? Options:
-  1. Consumer must explicitly enable them (e.g., `-D USE_WINAPI`)
-  2. Auto-detect based on platform
-  3. They're "optional" only for the producer — consumer provides what the package actually needs via their own `depend()`
-
-  Recommendation: Option 3 for simplicity. Optional means "producer doesn't always use this dep"; consumer provides what the package actually needs.
 
 ---
 

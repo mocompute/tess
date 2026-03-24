@@ -106,6 +106,7 @@ MOS_SOURCES =					\
 	$(MOS_SRC_DIR)/src/file.c		\
 	$(MOS_SRC_DIR)/src/hashmap.c		\
 	$(MOS_SRC_DIR)/src/platform.c		\
+	$(MOS_SRC_DIR)/src/sha256.c		\
 	$(MOS_SRC_DIR)/src/str.c
 
 MOS_OBJECTS = $(patsubst $(MOS_SRC_DIR)/src/%.c,$(BUILD_DIR)/mos/%.o,$(MOS_SOURCES))
@@ -120,6 +121,7 @@ MOS_HEADERS =					\
 	$(MOS_SRC_DIR)/include/hashmap.h	\
 	$(MOS_SRC_DIR)/include/nodiscard.h	\
 	$(MOS_SRC_DIR)/include/platform.h	\
+	$(MOS_SRC_DIR)/include/sha256.h		\
 	$(MOS_SRC_DIR)/include/str.h		\
 	$(MOS_SRC_DIR)/include/types.h		\
 	$(MOS_SRC_DIR)/include/util.h
@@ -139,6 +141,7 @@ $(BUILD_DIR)/mos/%.o: $(MOS_SRC_DIR)/src/%.c $(MOS_HEADERS)
 TESS_SOURCES =				\
 	$(TESS_SRC_DIR)/src/ast.c	\
 	$(TESS_SRC_DIR)/src/error.c	\
+	$(TESS_SRC_DIR)/src/fetch.c	\
 	$(TESS_SRC_DIR)/src/format.c	\
 	$(TESS_SRC_DIR)/src/import_resolver.c \
 	$(TESS_SRC_DIR)/src/parser.c	\
@@ -158,6 +161,7 @@ TESS_SOURCES =				\
 	$(TESS_SRC_DIR)/src/manifest.c \
 	$(TESS_SRC_DIR)/src/source_scanner.c \
 	$(TESS_SRC_DIR)/src/tpkg.c	\
+	$(TESS_SRC_DIR)/src/lockfile.c	\
 	$(TESS_SRC_DIR)/src/cbind.c	\
 	$(TESS_SRC_DIR)/src/type.c
 
@@ -168,6 +172,7 @@ TESS_HEADERS =						\
 	$(TESS_SRC_DIR)/include/ast.h			\
 	$(TESS_SRC_DIR)/include/ast_tags.h		\
 	$(TESS_SRC_DIR)/include/error.h			\
+	$(TESS_SRC_DIR)/include/fetch.h			\
 	$(TESS_SRC_DIR)/include/format.h		\
 	$(TESS_SRC_DIR)/include/import_resolver.h	\
 	$(TESS_SRC_DIR)/include/infer.h			\
@@ -177,6 +182,7 @@ TESS_HEADERS =						\
 	$(TESS_SRC_DIR)/include/syntax.h		\
 	$(TESS_SRC_DIR)/include/tess.h			\
 	$(TESS_SRC_DIR)/include/tpkg.h			\
+	$(TESS_SRC_DIR)/include/lockfile.h		\
 	$(TESS_SRC_DIR)/include/token.h			\
 	$(TESS_SRC_DIR)/include/tokenizer.h		\
 	$(TESS_SRC_DIR)/include/transpile.h		\
@@ -359,7 +365,7 @@ endef
 # mos Library Tests
 # ------------------------------------------------------------------------------
 
-MOS_TESTS      = alloc array file map str types util
+MOS_TESTS      = alloc array file map sha256 str types util
 MOS_BENCHMARKS = hash
 MOS_TEST_EXES      = $(patsubst %,$(BUILD_DIR)/test_mos_%,$(MOS_TESTS))
 MOS_BENCHMARK_EXES = $(patsubst %,$(BUILD_DIR)/test_mos_%,$(MOS_BENCHMARKS))
@@ -383,7 +389,7 @@ test-mos: build-mos-tests
 # tess Compiler Tests
 # ------------------------------------------------------------------------------
 
-TESS_TESTS     = tess type_v2 format tpkg import_resolver manifest source_scanner cbind
+TESS_TESTS     = tess type_v2 format tpkg import_resolver manifest source_scanner cbind lockfile fetch
 TESS_TEST_EXES = $(patsubst %,$(BUILD_DIR)/test_%,$(TESS_TESTS))
 
 $(BUILD_DIR)/test_%: $(TESS_SRC_DIR)/src/test_%.c $(TESS_OBJECTS) $(TESS_EMBED_OBJ) $(MOS_OBJECTS) $(LIBDEFLATE_OBJECTS) | $(TESS_EXE)

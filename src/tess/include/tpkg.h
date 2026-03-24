@@ -17,8 +17,6 @@ typedef struct {
     u16  module_count;
     str *depends; // array of required dependencies ("Name=Version")
     u16  depends_count;
-    str *depends_optional; // array of optional dependencies ("Name=Version")
-    u16  depends_optional_count;
 } tl_tpkg_metadata;
 
 // Single file entry in the archive
@@ -66,8 +64,6 @@ typedef struct {
     // Dependencies (from package.tl)
     str *depends;
     u16  depends_count;
-    str *depends_optional;
-    u16  depends_optional_count;
 } tl_tpkg_pack_opts;
 
 // Pack resolved files into a .tpkg archive.
@@ -95,5 +91,12 @@ typedef struct {
 // Returns 0 on success.
 int tl_tpkg_unpack(allocator *alloc, char const *archive_path, char const *output_dir,
                    tl_tpkg_unpack_opts opts);
+
+// Parse "Name=Version" dependency string into components.
+// Returns 0 on success, 1 on malformed input.
+int tl_tpkg_parse_dep_string(allocator *alloc, str dep_str, str *out_name, str *out_version);
+
+// Build filename for a package archive: "Name-Version.tpkg"
+str tl_tpkg_filename(allocator *alloc, str name, str version);
 
 #endif

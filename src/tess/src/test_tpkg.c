@@ -75,8 +75,6 @@ static tl_tpkg_metadata make_test_metadata(allocator *alloc) {
       .module_count           = 2,
       .depends                = null,
       .depends_count          = 0,
-      .depends_optional       = null,
-      .depends_optional_count = 0,
     };
 }
 
@@ -305,19 +303,14 @@ static int test_metadata_roundtrip(void) {
     str depends[1];
     depends[0] = str_init(alloc, "Lib=1.0.0");
 
-    str depends_opt[1];
-    depends_opt[0]        = str_init(alloc, "Debug=0.5.0");
-
     tl_tpkg_metadata meta = {
-      .name                   = str_init(alloc, "MetaTest"),
-      .author                 = str_init(alloc, "Alice"),
-      .version                = str_init(alloc, "2.3.4"),
-      .modules                = modules,
-      .module_count           = 3,
-      .depends                = depends,
-      .depends_count          = 1,
-      .depends_optional       = depends_opt,
-      .depends_optional_count = 1,
+      .name          = str_init(alloc, "MetaTest"),
+      .author        = str_init(alloc, "Alice"),
+      .version       = str_init(alloc, "2.3.4"),
+      .modules       = modules,
+      .module_count  = 3,
+      .depends       = depends,
+      .depends_count = 1,
     };
 
     tl_tpkg_entry entry = {"test.tl", 7, (byte const *)"content", 7};
@@ -346,11 +339,6 @@ static int test_metadata_roundtrip(void) {
     if (arc.metadata.depends_count >= 1) {
         error += !str_eq(arc.metadata.depends[0], depends[0]);
     }
-    error += (arc.metadata.depends_optional_count != 1);
-    if (arc.metadata.depends_optional_count >= 1) {
-        error += !str_eq(arc.metadata.depends_optional[0], depends_opt[0]);
-    }
-
     if (error) {
         fprintf(stderr, "  metadata mismatch (%d fields)\n", error);
     }
@@ -374,8 +362,6 @@ static int test_metadata_empty_fields(void) {
       .module_count           = 0,
       .depends                = null,
       .depends_count          = 0,
-      .depends_optional       = null,
-      .depends_optional_count = 0,
     };
 
     tl_tpkg_entry entry = {"a.tl", 4, (byte const *)"x", 1};
@@ -399,7 +385,6 @@ static int test_metadata_empty_fields(void) {
     error += (arc.metadata.module_count != 0);
     error += (arc.metadata.modules != null);
     error += (arc.metadata.depends_count != 0);
-    error += (arc.metadata.depends_optional_count != 0);
 
     if (error) {
         fprintf(stderr, "  empty field handling failed (%d errors)\n", error);
@@ -428,8 +413,6 @@ static int test_metadata_unicode(void) {
       .module_count           = 2,
       .depends                = null,
       .depends_count          = 0,
-      .depends_optional       = null,
-      .depends_optional_count = 0,
     };
 
     tl_tpkg_entry entry = {"test.tl", 7, (byte const *)"content", 7};
@@ -481,8 +464,6 @@ static int test_corrupted_metadata(void) {
       .module_count           = 1,
       .depends                = null,
       .depends_count          = 0,
-      .depends_optional       = null,
-      .depends_optional_count = 0,
     };
 
     tl_tpkg_entry entry = {"test.tl", 7, (byte const *)"content", 7};
@@ -644,8 +625,7 @@ static int test_pack_with_manifest(void) {
                               "version(\"1.0.0\")\n"
                               "author(\"Tester\")\n"
                               "export(Foo)\n"
-                              "depend(Logger, \"2.0.0\")\n"
-                              "depend_optional(Debug, \"0.1.0\")\n";
+                              "depend(Logger, \"2.0.0\")\n";
     if (write_file(pkg_path, pkg_content)) {
         fprintf(stderr, "  failed to write package.tl file\n");
         error = 1;
@@ -681,15 +661,6 @@ static int test_pack_with_manifest(void) {
         }
     }
 
-    // Build depends_optional
-    if (pkg.optional_dep_count > 0) {
-        opts.depends_optional       = alloc_malloc(alloc, pkg.optional_dep_count * sizeof(str));
-        opts.depends_optional_count = (u16)pkg.optional_dep_count;
-        for (u32 i = 0; i < pkg.optional_dep_count; i++) {
-            opts.depends_optional[i] =
-              str_cat_3(alloc, pkg.optional_deps[i].name, S("="), pkg.optional_deps[i].version);
-        }
-    }
 
     // Set up files array with the source file (normalized path)
     str       file_str = file_path_normalize(alloc, str_init(alloc, src_path));
@@ -733,12 +704,6 @@ static int test_pack_with_manifest(void) {
     error += (arc.metadata.depends_count != 1);
     if (arc.metadata.depends_count >= 1) {
         error += !str_eq(arc.metadata.depends[0], S("Logger=2.0.0"));
-    }
-
-    // Verify depends_optional
-    error += (arc.metadata.depends_optional_count != 1);
-    if (arc.metadata.depends_optional_count >= 1) {
-        error += !str_eq(arc.metadata.depends_optional[0], S("Debug=0.1.0"));
     }
 
     // Verify file entries (source file + package.tl)
@@ -2799,7 +2764,7 @@ static int test_e2e_source_validate(void) {
     }
 
     char cmd[2048];
-    snprintf(cmd, sizeof(cmd), CD_CMD " \"%s\" && \"%s\" validate --no-standard-includes -S \"%s\" 2>&1",
+    snprintf(cmd, sizeof(cmd), CD_CMD " \"%s\" && \"%s\" pack --validate --no-standard-includes -S \"%s\" 2>&1",
              dir, e2e_tess_exe, e2e_stdlib_dir);
     if (run_cmd(cmd) != 0) {
         fprintf(stderr, "  tess validate with source() failed\n");
@@ -3975,6 +3940,209 @@ static int test_e2e_pkg_prefix_multi_version(void) {
     return 0;
 }
 
+// Test: tess fetch creates a lock file for a local dependency.
+// Sets up a library, packs it, copies .tpkg to consumer's libs/,
+// then runs "tess fetch" and verifies package.tl.lock is created.
+static int test_e2e_fetch_creates_lockfile(void) {
+    // -- Set up library --
+    char lib_dir[512];
+    make_temp_path(lib_dir, sizeof(lib_dir), "e2e_fetch_lib/");
+    test_mkdir_p(lib_dir);
+
+    char path[512];
+    snprintf(path, sizeof(path), "%spackage.tl", lib_dir);
+    if (write_file(path, "format(1)\npackage(FetchLib)\nversion(\"1.0.0\")\nexport(FetchMod)\n")) {
+        fprintf(stderr, "  failed to write lib package.tl\n");
+        return 1;
+    }
+
+    snprintf(path, sizeof(path), "%sfetchmod.tl", lib_dir);
+    if (write_file(path, "#module FetchMod\n\nval() { 99 }\n")) {
+        fprintf(stderr, "  failed to write fetchmod.tl\n");
+        return 1;
+    }
+
+    // Pack library
+    char tpkg_path[512];
+    snprintf(tpkg_path, sizeof(tpkg_path), "%sFetchLib-1.0.0.tpkg", lib_dir);
+    char cmd[2048];
+    snprintf(cmd, sizeof(cmd),
+             CD_CMD " \"%s\" && \"%s\" pack --no-standard-includes -S \"%s\""
+                    " fetchmod.tl -o FetchLib-1.0.0.tpkg 2>&1",
+             lib_dir, e2e_tess_exe, e2e_stdlib_dir);
+    if (run_cmd(cmd) != 0) {
+        fprintf(stderr, "  tess pack failed\n");
+        return 1;
+    }
+
+    // -- Set up consumer --
+    char app_dir[512], libs_dir[512];
+    make_temp_path(app_dir, sizeof(app_dir), "e2e_fetch_app/");
+    snprintf(libs_dir, sizeof(libs_dir), "%slibs" SEP_STR, app_dir);
+    test_mkdir_p(app_dir);
+    test_mkdir_p(libs_dir);
+
+    snprintf(path, sizeof(path), "%spackage.tl", app_dir);
+    if (write_file(path, "format(1)\n"
+                         "package(FetchApp)\n"
+                         "version(\"0.1.0\")\n"
+                         "depend(FetchLib, \"1.0.0\")\n"
+                         "depend_path(\"./libs\")\n")) {
+        fprintf(stderr, "  failed to write app package.tl\n");
+        return 1;
+    }
+
+    // Copy .tpkg to libs/
+    char dst_tpkg[512];
+    snprintf(dst_tpkg, sizeof(dst_tpkg), "%sFetchLib-1.0.0.tpkg", libs_dir);
+    if (copy_file(tpkg_path, dst_tpkg)) {
+        fprintf(stderr, "  failed to copy FetchLib-1.0.0.tpkg\n");
+        return 1;
+    }
+
+    // Remove stale lock file from previous runs
+    {
+        char stale[512];
+        snprintf(stale, sizeof(stale), "%spackage.tl.lock", app_dir);
+        remove(stale);
+    }
+
+    // Run tess fetch
+    snprintf(cmd, sizeof(cmd),
+             CD_CMD " \"%s\" && \"%s\" fetch --no-standard-includes -S \"%s\" 2>&1",
+             app_dir, e2e_tess_exe, e2e_stdlib_dir);
+    if (run_cmd(cmd) != 0) {
+        fprintf(stderr, "  tess fetch failed\n");
+        return 1;
+    }
+
+    // Verify lock file exists
+    char lock_path[512];
+    snprintf(lock_path, sizeof(lock_path), "%spackage.tl.lock", app_dir);
+    char *lock_content = read_file_contents(lock_path, null);
+    if (!lock_content) {
+        fprintf(stderr, "  package.tl.lock not created\n");
+        return 1;
+    }
+
+    // Verify lock file contains expected entries
+    if (!strstr(lock_content, "lock_format(1)")) {
+        fprintf(stderr, "  lock file missing lock_format(1)\n");
+        return 1;
+    }
+    if (!strstr(lock_content, "locked(FetchLib")) {
+        fprintf(stderr, "  lock file missing locked(FetchLib ...)\n");
+        return 1;
+    }
+    if (!strstr(lock_content, "\"1.0.0\"")) {
+        fprintf(stderr, "  lock file missing version \"1.0.0\"\n");
+        return 1;
+    }
+    if (!strstr(lock_content, "sha256:")) {
+        fprintf(stderr, "  lock file missing sha256 hash\n");
+        return 1;
+    }
+
+    return 0;
+}
+
+// Test: tess fetch with existing lock file verifies and reports status.
+static int test_e2e_fetch_verify_existing(void) {
+    // -- Set up library --
+    char lib_dir[512];
+    make_temp_path(lib_dir, sizeof(lib_dir), "e2e_fetch_verify_lib/");
+    test_mkdir_p(lib_dir);
+
+    char path[512];
+    snprintf(path, sizeof(path), "%spackage.tl", lib_dir);
+    if (write_file(path, "format(1)\npackage(VerifyLib)\nversion(\"2.0.0\")\nexport(VMod)\n")) {
+        fprintf(stderr, "  failed to write lib package.tl\n");
+        return 1;
+    }
+
+    snprintf(path, sizeof(path), "%svmod.tl", lib_dir);
+    if (write_file(path, "#module VMod\n\ncheck() { 7 }\n")) {
+        fprintf(stderr, "  failed to write vmod.tl\n");
+        return 1;
+    }
+
+    char tpkg_path[512];
+    snprintf(tpkg_path, sizeof(tpkg_path), "%sVerifyLib-2.0.0.tpkg", lib_dir);
+    char cmd[2048];
+    snprintf(cmd, sizeof(cmd),
+             CD_CMD " \"%s\" && \"%s\" pack --no-standard-includes -S \"%s\""
+                    " vmod.tl -o VerifyLib-2.0.0.tpkg 2>&1",
+             lib_dir, e2e_tess_exe, e2e_stdlib_dir);
+    if (run_cmd(cmd) != 0) {
+        fprintf(stderr, "  tess pack failed\n");
+        return 1;
+    }
+
+    // -- Set up consumer --
+    char app_dir[512], libs_dir[512];
+    make_temp_path(app_dir, sizeof(app_dir), "e2e_fetch_verify_app/");
+    snprintf(libs_dir, sizeof(libs_dir), "%slibs" SEP_STR, app_dir);
+    test_mkdir_p(app_dir);
+    test_mkdir_p(libs_dir);
+
+    snprintf(path, sizeof(path), "%spackage.tl", app_dir);
+    if (write_file(path, "format(1)\n"
+                         "package(VerifyApp)\n"
+                         "version(\"0.1.0\")\n"
+                         "depend(VerifyLib, \"2.0.0\")\n"
+                         "depend_path(\"./libs\")\n")) {
+        fprintf(stderr, "  failed to write app package.tl\n");
+        return 1;
+    }
+
+    char dst_tpkg[512];
+    snprintf(dst_tpkg, sizeof(dst_tpkg), "%sVerifyLib-2.0.0.tpkg", libs_dir);
+    if (copy_file(tpkg_path, dst_tpkg)) {
+        fprintf(stderr, "  failed to copy VerifyLib-2.0.0.tpkg\n");
+        return 1;
+    }
+
+    // Remove stale lock file from previous runs
+    {
+        char stale[512];
+        snprintf(stale, sizeof(stale), "%spackage.tl.lock", app_dir);
+        remove(stale);
+    }
+
+    // First fetch — creates lock file
+    snprintf(cmd, sizeof(cmd),
+             CD_CMD " \"%s\" && \"%s\" fetch --no-standard-includes -S \"%s\" 2>&1",
+             app_dir, e2e_tess_exe, e2e_stdlib_dir);
+    if (run_cmd(cmd) != 0) {
+        fprintf(stderr, "  first tess fetch failed\n");
+        return 1;
+    }
+
+    // Second fetch — should verify existing (lock file matches)
+    char out_log[512];
+    snprintf(out_log, sizeof(out_log), "%sfetch_log.txt", app_dir);
+    snprintf(cmd, sizeof(cmd),
+             CD_CMD " \"%s\" && \"%s\" fetch --no-standard-includes -S \"%s\" 2>\"%s\"",
+             app_dir, e2e_tess_exe, e2e_stdlib_dir, out_log);
+    if (run_cmd(cmd) != 0) {
+        fprintf(stderr, "  second tess fetch failed\n");
+        return 1;
+    }
+
+    char *log = read_file_contents(out_log, null);
+    if (!log) {
+        fprintf(stderr, "  failed to read fetch log\n");
+        return 1;
+    }
+
+    if (!strstr(log, "1 verified")) {
+        fprintf(stderr, "  expected '1 verified' in fetch output, got:\n%s\n", log);
+        return 1;
+    }
+
+    return 0;
+}
+
 int main(void) {
     init_temp_dir();
     init_e2e_paths();
@@ -4039,5 +4207,7 @@ int main(void) {
     T(test_e2e_pkg_prefix_same_module_name)
     T(test_e2e_pkg_prefix_transitive)
     T(test_e2e_pkg_prefix_multi_version)
+    T(test_e2e_fetch_creates_lockfile)
+    T(test_e2e_fetch_verify_existing)
     return error;
 }

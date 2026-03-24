@@ -56,12 +56,12 @@ appears in `package.tl` and dependency declarations; the module name appears in 
 
 **Build the package:**
 ```bash
-tess pack -o mylib-1.0.0.tpkg
+tess pack
 ```
 
 Note that `package.tl` is found automatically in the current working directory. The `source("src/")`
 declaration tells the compiler where to find source files, so no file arguments are needed on the command
-line. You can still list files explicitly (`tess pack src/math.tl -o mylib-1.0.0.tpkg`), which overrides
+line. You can still list files explicitly (`tess pack src/math.tl`), which overrides
 `source()`.
 
 ### Consuming a package
@@ -128,7 +128,6 @@ when `package.tl` is not found.
 | `export(mod, ...)` | 1+ identifiers | For `tess pack` | Modules that are part of the public API |
 | `source(path, ...)` | 1+ strings | No | Source files or directories (directories scanned recursively for `*.tl`) |
 | `depend(name, ver)` | identifier + string | No | Required dependency with version |
-| `depend_optional(name, ver)` | identifier + string | No | Optional dependency with version |
 | `depend_path(dir)` | 1 string | No | Directory to search for `.tpkg` files (accumulates) |
 
 ### Example
@@ -149,7 +148,7 @@ depend_path("./libs")
 
 - `format(1)` must appear first.
 - `package()` and `version()` cannot be declared more than once.
-- Multiple `export()`, `source()`, `depend()`, `depend_optional()`, and `depend_path()` calls accumulate.
+- Multiple `export()`, `source()`, `depend()`, and `depend_path()` calls accumulate.
 - `export()` accepts multiple arguments: `export(Mod1, Mod2)`.
 - `source()` accepts multiple arguments: `source("src/", "extra/util.tl")`. Directory arguments are scanned recursively for `*.tl` files.
 - Version strings are compared as literal strings, not as semantic versions. `"1.0.0"` and `"1.0"` are different versions.
@@ -167,13 +166,13 @@ source("src/", "extra.tl")  // multiple args, mix of dirs and files
 
 Multiple `source()` calls accumulate. Directories are scanned recursively for files ending in `.tl`.
 
-When `source()` is declared, commands like `tess run`, `tess exe`, `tess pack`, and `tess validate` can be run without listing files on the command line:
+When `source()` is declared, commands like `tess run`, `tess exe`, and `tess pack` can be run without listing files on the command line:
 
 ```bash
 tess run                    # uses source() from package.tl
 tess exe -o myapp           # uses source() from package.tl
-tess pack -o mylib-1.0.0.tpkg     # uses source() from package.tl
-tess validate               # uses source() from package.tl
+tess pack                   # uses source() from package.tl
+tess pack --validate        # validate source files against exports
 ```
 
 **CLI override**: If files are given on the command line, they take priority and `source()` entries are ignored. A warning is printed to stderr:
@@ -189,6 +188,7 @@ tess exe -o myapp src/main.tl   # ignores source(), warns on stderr
 ### The `tess pack` command
 
 ```bash
+tess pack
 tess pack -o output.tpkg [-v]
 tess pack <file1.tl> [file2.tl ...] -o output.tpkg [-v]
 ```
@@ -228,12 +228,11 @@ is found because `math.tl` imports it.
 ### Validating a package
 
 ```bash
-tess validate
+tess pack --validate
 ```
 
 Runs the same checks as `tess pack` without producing an archive. Reads `package.tl` from the current
-working directory and uses `source()` entries to discover files. Like `tess pack`, files can be listed
-explicitly on the command line to override `source()`.
+working directory and uses `source()` entries to discover files.
 
 ### Inspecting and extracting an archive
 
@@ -421,7 +420,7 @@ source("logger.tl")
 ```
 
 ```bash
-tess pack -o logging_lib-2.0.0.tpkg
+tess pack
 ```
 
 ### 2. mylib package (depends on logging_lib)
@@ -472,7 +471,7 @@ depend_path("./libs")
 ```
 
 ```bash
-tess pack -o mylib-1.0.0.tpkg
+tess pack
 ```
 
 The archive contains `math.tl` and `internal.tl` but not logging_lib's source. The metadata records the dependency: `logging_lib=2.0.0`.

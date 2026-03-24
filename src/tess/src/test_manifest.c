@@ -125,7 +125,6 @@ static int test_minimal_package(void) {
     error += pkg.info.export_count != 0;
     error += pkg.info.depend_path_count != 0;
     error += pkg.dep_count != 0;
-    error += pkg.optional_dep_count != 0;
 
     if (error) fprintf(stderr, "  %d check(s) failed in test_minimal_package\n", error);
 
@@ -144,8 +143,7 @@ static int test_multiple_depends(void) {
                                      "package(App)\n"
                                      "version(\"0.1\")\n"
                                      "depend(Lib1, \"1.0\")\n"
-                                     "depend(Lib2, \"2.0\")\n"
-                                     "depend_optional(OptLib, \"3.0\")\n",
+                                     "depend(Lib2, \"2.0\")\n",
                               &pkg);
 
     error += rc != 0;
@@ -158,12 +156,6 @@ static int test_multiple_depends(void) {
         error += !str_eq(pkg.deps[1].name, S("Lib2"));
         error += !str_eq(pkg.deps[1].version, S("2.0"));
     }
-    error += pkg.optional_dep_count != 1;
-    if (pkg.optional_dep_count == 1) {
-        error += !str_eq(pkg.optional_deps[0].name, S("OptLib"));
-        error += !str_eq(pkg.optional_deps[0].version, S("3.0"));
-    }
-
     if (error) fprintf(stderr, "  %d check(s) failed in test_multiple_depends\n", error);
 error:
     arena_destroy(&alloc);
@@ -721,24 +713,66 @@ static int test_depend_version_rejects_equals(void) {
     return error;
 }
 
-static int test_depend_optional_version_rejects_equals(void) {
+// ---------------------------------------------------------------------------
+// URL detection tests
+// ---------------------------------------------------------------------------
+
+static int test_depend_url(void) {
     int        error = 0;
     allocator *alloc = arena_create(default_allocator(), 1024);
     tl_package pkg;
 
     int        rc = parse_pkg(alloc,
                               "format(1)\n"
-                                     "package(Foo)\n"
-                                     "version(\"1.0\")\n"
-                                     "depend_optional(Bar, \"2.0=rc1\")\n",
+                                     "package(App)\n"
+                                     "version(\"0.1\")\n"
+                                     "depend(Foo, \"1.0.0\", \"https://example.com/packages/\")\n",
                               &pkg);
 
-    // Should fail: '=' not allowed in dependency version strings
-    error += rc != 1;
+    error += rc != 0;
+    if (rc) goto error;
 
-    if (error)
-        fprintf(stderr, "  %d check(s) failed in test_depend_optional_version_rejects_equals\n", error);
+    error += pkg.dep_count != 1;
+    if (pkg.dep_count == 1) {
+        error += !str_eq(pkg.deps[0].name, S("Foo"));
+        error += !str_eq(pkg.deps[0].version, S("1.0.0"));
+        error += !str_eq(pkg.deps[0].url, S("https://example.com/packages/"));
+        error += !str_is_empty(pkg.deps[0].path);
+    }
 
+    if (error) fprintf(stderr, "  %d check(s) failed in test_depend_url\n", error);
+
+error:
+    arena_destroy(&alloc);
+    return error;
+}
+
+static int test_depend_local_path(void) {
+    int        error = 0;
+    allocator *alloc = arena_create(default_allocator(), 1024);
+    tl_package pkg;
+
+    int        rc = parse_pkg(alloc,
+                              "format(1)\n"
+                                     "package(App)\n"
+                                     "version(\"0.1\")\n"
+                                     "depend(Foo, \"1.0.0\", \"./libs/Foo-1.0.0.tpkg\")\n",
+                              &pkg);
+
+    error += rc != 0;
+    if (rc) goto error;
+
+    error += pkg.dep_count != 1;
+    if (pkg.dep_count == 1) {
+        error += !str_eq(pkg.deps[0].name, S("Foo"));
+        error += !str_eq(pkg.deps[0].version, S("1.0.0"));
+        error += !str_eq(pkg.deps[0].path, S("./libs/Foo-1.0.0.tpkg"));
+        error += !str_is_empty(pkg.deps[0].url);
+    }
+
+    if (error) fprintf(stderr, "  %d check(s) failed in test_depend_local_path\n", error);
+
+error:
     arena_destroy(&alloc);
     return error;
 }
@@ -779,7 +813,8 @@ int main(void) {
     T(test_source_non_string_arg)
     T(test_version_rejects_equals)
     T(test_depend_version_rejects_equals)
-    T(test_depend_optional_version_rejects_equals)
+    T(test_depend_url)
+    T(test_depend_local_path)
 
     if (error) fprintf(stderr, "manifest tests: %d FAILED\n", error);
     return error;

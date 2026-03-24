@@ -1,6 +1,7 @@
 #include "alloc.h"
 #include "array.h"
 #include "cbind.h"
+#include "fetch.h"
 #include "file.h"
 #include "format.h"
 #include "hashmap.h"
@@ -61,8 +62,9 @@ typedef struct {
     int               effective_bounds_check; // computed from the above + no_optimize
 
     int               in_place;
-    int               pack_list;   // --list option for pack command
-    int               pack_unpack; // --unpack option for pack command
+    int               pack_list;     // --list option for pack command
+    int               pack_unpack;   // --unpack option for pack command
+    int               pack_validate; // --validate option for pack command
 
     int               is_library;
     int               is_static_library;
@@ -108,12 +110,12 @@ noreturn void usage(int status, char const *argv0) {
     printf("    exe                    compile and create executable (use - for stdin)\n");
     printf("    run                    compile and run (use - for stdin; -- to pass args)\n");
     printf("    fmt                    format source file (reads stdin if no file given)\n");
+    printf("    fetch                  download/verify dependencies using package.tl.lock\n");
     printf("    init                   create a package.tl in the current directory\n");
     printf("    lib                    compile and create library (-o or package.tl required)\n");
     printf("    lib-emit-c             transpile input files to C as library source code\n");
-    printf("    pack                   create .tpkg archive, or extract with --unpack\n");
+    printf("    pack                   create .tpkg archive (--unpack, --list, --validate)\n");
     printf("    cbind                  generate .tl bindings from a C header file\n");
-    printf("    validate               validate source files against package.tl\n");
     printf("\nOptions:\n");
     printf("    -h                     print usage and exit\n");
     printf("    -V, --version          print version and exit\n");
@@ -124,6 +126,7 @@ noreturn void usage(int status, char const *argv0) {
     printf("    -i, --in-place         overwrite file in place (fmt command only)\n");
     printf("    --list                 list archive contents (pack command only)\n");
     printf("    --unpack               extract .tpkg archive (-o for output dir, default .)\n");
+    printf("    --validate             validate source files against package.tl exports\n");
     printf("    -v                     verbose logging (-v phase markers, -vv key decisions, -vvv full "
            "detail)\n");
     printf("    --no-line-directive    suppress output of #line directives in C file\n");
@@ -224,6 +227,7 @@ void state_gather_long_option(state *self, char *str) {
     else if (0 == strcmp("--in-place", str)) self->in_place = 1;
     else if (0 == strcmp("--list", str)) self->pack_list = 1;
     else if (0 == strcmp("--unpack", str)) self->pack_unpack = 1;
+    else if (0 == strcmp("--validate", str)) self->pack_validate = 1;
     else if (0 == strcmp("--time", str)) self->report_time = 1;
     else if (0 == strcmp("--stats", str)) self->report_stats = 1;
     else if (0 == strcmp("--static", str)) self->is_static_library = 1;
@@ -275,10 +279,6 @@ void state_gather_options(state *self, int argc, char *argv[]) {
 
 // Try to derive a default output path from package.tl.
 // Returns empty string if package.tl doesn't exist or can't be parsed.
-static str tpkg_filename(allocator *alloc, str name, str version) {
-    return str_cat_4(alloc, name, S("-"), version, S(".tpkg"));
-}
-
 // mode: 0=exe, 1=lib (shared), 2=pack, 3=lib (static)
 // If pkg_name is non-NULL, writes the bare package name (without prefix/suffix).
 static str default_out_path(allocator *alloc, int mode, str *pkg_name) {
@@ -308,7 +308,7 @@ static str default_out_path(allocator *alloc, int mode, str *pkg_name) {
     }
 #endif
     if (mode == 2) {
-        return tpkg_filename(alloc, pkg.info.name, pkg.info.version);
+        return tl_tpkg_filename(alloc, pkg.info.name, pkg.info.version);
     }
 
     return str_cat_3(alloc, prefix, pkg.info.name, suffix);
@@ -464,7 +464,7 @@ static str resolve_tpkg_path(state *self, tl_package_dep const *dep, tl_package_
         return dep->path;
     }
 
-    str tpkg_name = tpkg_filename(self->arena, dep->name, dep->version);
+    str tpkg_name = tl_tpkg_filename(self->arena, dep->name, dep->version);
 
     for (u32 i = 0; i < info->depend_path_count; i++) {
         str candidate = str_cat_3(self->arena, info->depend_paths[i], S("/"), tpkg_name);
@@ -474,17 +474,6 @@ static str resolve_tpkg_path(state *self, tl_package_dep const *dep, tl_package_
     }
 
     return str_empty();
-}
-
-// Parse "Name=Version" dependency string from archive metadata into components.
-// Returns 0 on success, 1 on malformed input.
-static int parse_dep_string(allocator *alloc, str dep_str, str *out_name, str *out_version) {
-    char const *s  = str_cstr(&dep_str);
-    char const *eq = strchr(s, '=');
-    if (!eq || eq == s || !eq[1]) return 1;
-    *out_name    = str_init_n(alloc, s, (size_t)(eq - s));
-    *out_version = str_init_n(alloc, eq + 1, str_len(dep_str) - (size_t)(eq - s) - 1);
-    return 0;
 }
 
 // Info about which package exported a module (for duplicate detection).
@@ -569,7 +558,7 @@ static hashmap *build_file_prefix_map(allocator *alloc, tl_tpkg_metadata *meta, 
     // Add modules from each dependency
     for (u16 i = 0; i < meta->depends_count; i++) {
         str dep_name = str_empty(), dep_version = str_empty();
-        if (parse_dep_string(alloc, meta->depends[i], &dep_name, &dep_version)) continue;
+        if (tl_tpkg_parse_dep_string(alloc, meta->depends[i], &dep_name, &dep_version)) continue;
 
         str        dep_key  = make_dep_key(alloc, dep_name, dep_version);
         str_array *dep_mods = str_map_get(ctx->pkg_modules, dep_key);
@@ -703,7 +692,7 @@ static int resolve_dep_recursive(state *self, str dep_name, str dep_version,
     for (u16 i = 0; i < archive.metadata.depends_count; i++) {
         str trans_name    = str_empty();
         str trans_version = str_empty();
-        if (parse_dep_string(self->arena, archive.metadata.depends[i], &trans_name, &trans_version)) {
+        if (tl_tpkg_parse_dep_string(self->arena, archive.metadata.depends[i], &trans_name, &trans_version)) {
             fprintf(stderr, "error: malformed dependency string '%s' in package '%s'\n",
                     str_cstr(&archive.metadata.depends[i]), str_cstr(&dep_name));
             return 1;
@@ -841,7 +830,7 @@ static int load_package_deps(state *self, str_array *out_pkg_files, hashmap **ou
         for (u16 j = 0; j < archive.metadata.depends_count; j++) {
             str trans_name    = str_empty();
             str trans_version = str_empty();
-            if (parse_dep_string(self->arena, archive.metadata.depends[j], &trans_name, &trans_version)) {
+            if (tl_tpkg_parse_dep_string(self->arena, archive.metadata.depends[j], &trans_name, &trans_version)) {
                 fprintf(stderr, "error: malformed dependency string '%s' in package '%s'\n",
                         str_cstr(&archive.metadata.depends[j]), str_cstr(&dep->name));
                 return 1;
@@ -2085,8 +2074,26 @@ static int unpack_files(state *self) {
     return tl_tpkg_unpack(self->arena, archive_path, self->out_path, opts);
 }
 
+// ---------------------------------------------------------------------------
+// tess fetch — thin wrapper around tl_fetch (see fetch.c)
+// ---------------------------------------------------------------------------
+
+static int fetch_deps(state *self) {
+    tl_fetch_opts opts = {
+        .package_tl_path = "package.tl",
+        .lock_path       = "package.tl.lock",
+        .work_dir        = ".",
+        .url_opts        = null,
+        .verbose         = self->verbose,
+    };
+    return tl_fetch(self->arena, &opts);
+}
+
+static int validate_files(state *self);
+
 static int pack_files(state *self) {
     if (self->pack_unpack || self->pack_list) return unpack_files(self);
+    if (self->pack_validate) return validate_files(self);
 
     // Derive output path from package.tl if -o not given
     if (!self->out_path) {
@@ -2217,21 +2224,6 @@ static int pack_files(state *self) {
         }
     }
 
-    // Build depends_optional array
-    if (pkg.optional_dep_count > 0) {
-        if (pkg.optional_dep_count > UINT16_MAX) {
-            fprintf(stderr, "error: too many optional dependencies (%u, max %u)\n", pkg.optional_dep_count,
-                    (unsigned)UINT16_MAX);
-            return 1;
-        }
-        opts.depends_optional       = alloc_malloc(self->arena, pkg.optional_dep_count * sizeof(str));
-        opts.depends_optional_count = (u16)pkg.optional_dep_count;
-        for (u32 i = 0; i < pkg.optional_dep_count; i++) {
-            opts.depends_optional[i] =
-              make_dep_key(self->arena, pkg.optional_deps[i].name, pkg.optional_deps[i].version);
-        }
-    }
-
     return tl_tpkg_pack(self->arena, self->out_path, all_files, base_dir, self->resolver, opts);
 }
 
@@ -2247,15 +2239,13 @@ static int validate_files(state *self) {
     c_string_csized input_files;
 
     if (self->words.size >= 2) {
-        input_files = (c_string_csized){.v = self->words.v + 1, .size = self->words.size - 1};
-        if (pkg.info.source_count > 0) {
-            fprintf(stderr, "warning: CLI file arguments override source() in package.tl\n");
-        }
+        fprintf(stderr, "error: validate does not accept file arguments; use source() in package.tl\n");
+        return 1;
     } else if (pkg.info.source_count > 0) {
         if (resolve_source_entries(self, &pkg.info, &source_files)) return 1;
         input_files = (c_string_csized){.v = source_files.v, .size = source_files.size};
     } else {
-        fprintf(stderr, "error: validate command requires input file(s)\n");
+        fprintf(stderr, "error: validate requires source() in package.tl\n");
         usage(1, self->argv0);
         return 1;
     }
@@ -2352,6 +2342,7 @@ static char const *validate_command_flags(state const *self, char const *cmd) {
     if (self->in_place && 0 != strcmp(cmd, "fmt")) return "--in-place";
     if (self->pack_unpack && 0 != strcmp(cmd, "pack")) return "--unpack";
     if (self->pack_list && 0 != strcmp(cmd, "pack")) return "--list";
+    if (self->pack_validate && 0 != strcmp(cmd, "pack")) return "--validate";
     if (self->is_static_library && 0 != strcmp(cmd, "lib")) return "--static";
     if (self->report_stats && !has_stats) return "--stats";
     if (self->report_time && !has_stats) return "--time";
@@ -2599,16 +2590,16 @@ int main(int argc, char *argv[]) {
         result = pack_files(&self);
     }
 
-    else if (0 == strcmp("validate", self.words.v[0])) {
-        result = validate_files(&self);
-    }
-
     else if (0 == strcmp("cbind", self.words.v[0])) {
         result = generate_cbindings(&self);
     }
 
     else if (0 == strcmp("init", self.words.v[0])) {
         result = init_package(&self);
+    }
+
+    else if (0 == strcmp("fetch", self.words.v[0])) {
+        result = fetch_deps(&self);
     }
 
     else {

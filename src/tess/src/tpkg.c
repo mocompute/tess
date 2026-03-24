@@ -214,8 +214,6 @@ int tl_tpkg_write(allocator *alloc, char const *output_path, tl_tpkg_metadata co
       meta_ok && write_str16(f, str_buf(&metadata->version), (u16)str_len(metadata->version), &crc) == 0;
     meta_ok = meta_ok && write_str16_array(f, metadata->modules, metadata->module_count, &crc) == 0;
     meta_ok = meta_ok && write_str16_array(f, metadata->depends, metadata->depends_count, &crc) == 0;
-    meta_ok = meta_ok &&
-              write_str16_array(f, metadata->depends_optional, metadata->depends_optional_count, &crc) == 0;
 
     if (!meta_ok) {
         fclose(f);
@@ -302,9 +300,6 @@ static int tl_tpkg_parse(allocator *alloc, byte const *raw_buf, u32 raw_size, tl
     if (read_str16_array(&p, end, alloc, &out->metadata.modules, &out->metadata.module_count))
         goto corrupt_meta;
     if (read_str16_array(&p, end, alloc, &out->metadata.depends, &out->metadata.depends_count))
-        goto corrupt_meta;
-    if (read_str16_array(&p, end, alloc, &out->metadata.depends_optional,
-                         &out->metadata.depends_optional_count))
         goto corrupt_meta;
 
     /* read payload sizes */
@@ -625,8 +620,6 @@ int tl_tpkg_pack(allocator *alloc, char const *output_path, str_sized files, str
       .module_count           = opts.module_count,
       .depends                = opts.depends,
       .depends_count          = opts.depends_count,
-      .depends_optional       = opts.depends_optional,
-      .depends_optional_count = opts.depends_optional_count,
     };
 
     // Write archive
@@ -776,12 +769,6 @@ int tl_tpkg_unpack(allocator *alloc, char const *archive_path, char const *outpu
                 printf("  %s\n", str_cstr(&m->depends[i]));
             }
         }
-        if (m->depends_optional_count > 0) {
-            printf("Optional:\n");
-            for (u16 i = 0; i < m->depends_optional_count; i++) {
-                printf("  %s\n", str_cstr(&m->depends_optional[i]));
-            }
-        }
         printf("\nFiles:\n");
         for (u32 i = 0; i < archive.entries_count; i++) {
             printf("  %.*s\n", archive.entries[i].name_len, archive.entries[i].name);
@@ -851,4 +838,17 @@ int tl_tpkg_unpack(allocator *alloc, char const *archive_path, char const *outpu
     }
 
     return 0;
+}
+
+int tl_tpkg_parse_dep_string(allocator *alloc, str dep_str, str *out_name, str *out_version) {
+    char const *s  = str_cstr(&dep_str);
+    char const *eq = strchr(s, '=');
+    if (!eq || eq == s || !eq[1]) return 1;
+    *out_name    = str_init_n(alloc, s, (size_t)(eq - s));
+    *out_version = str_init_n(alloc, eq + 1, str_len(dep_str) - (size_t)(eq - s) - 1);
+    return 0;
+}
+
+str tl_tpkg_filename(allocator *alloc, str name, str version) {
+    return str_cat_4(alloc, name, S("-"), version, S(".tpkg"));
 }

@@ -10,6 +10,7 @@ set(HEADERS
   ${PROJECT_SOURCE_DIR}/src/mos/include/hash.h
   ${PROJECT_SOURCE_DIR}/src/mos/include/hashmap.h
   ${PROJECT_SOURCE_DIR}/src/mos/include/nodiscard.h
+  ${PROJECT_SOURCE_DIR}/src/mos/include/sha256.h
   ${PROJECT_SOURCE_DIR}/src/mos/include/str.h
   ${PROJECT_SOURCE_DIR}/src/mos/include/util.h
 )
@@ -22,6 +23,7 @@ set(SOURCES
   src/file.c
   src/hashmap.c
   src/platform.c
+  src/sha256.c
   src/str.c
   )
 target_sources(mos PRIVATE ${HEADERS} ${SOURCES})
@@ -60,5 +62,6 @@ mos_create_test(map)
 mos_create_test(str)
 mos_create_test(types)
 mos_create_test(util)
+mos_create_test(sha256)
 
 mos_create_exe(hash)

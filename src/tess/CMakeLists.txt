@@ -96,6 +96,8 @@ set(HEADERS
   ${PROJECT_SOURCE_DIR}/src/tess/include/cbind.h
   ${PROJECT_SOURCE_DIR}/src/tess/include/type.h
   ${PROJECT_SOURCE_DIR}/src/tess/include/type_registry.h
+  ${PROJECT_SOURCE_DIR}/src/tess/include/lockfile.h
+  ${PROJECT_SOURCE_DIR}/src/tess/include/fetch.h
 )
 
 set(SOURCES
@@ -121,6 +123,8 @@ set(SOURCES
   src/infer_update.c
   src/transpile.c
   src/tpkg.c
+  src/lockfile.c
+  src/fetch.c
   src/cbind.c
   src/type.c
 
@@ -182,6 +186,8 @@ tess_create_test(import_resolver)
 tess_create_test(manifest)
 tess_create_test(source_scanner)
 tess_create_test(cbind)
+tess_create_test(lockfile)
+tess_create_test(fetch)
 
 # -- vendor tests --
 

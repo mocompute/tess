@@ -1,4 +1,5 @@
 #include "file.h"
+#include "hashmap.h"
 #include "platform.h"
 #include "str.h"
 #include "types.h"
@@ -93,22 +94,41 @@ cleanup:
 }
 
 void file_url_get(allocator *alloc, char const *url, char **out, u32 *out_size) {
+    file_url_get_ext(alloc, url, out, out_size, null);
+}
+
+void file_url_get_ext(allocator *alloc, char const *url, char **out, u32 *out_size,
+                      file_url_get_opts *opts) {
 
     *out      = null;
     *out_size = 0;
+
+    if (opts && opts->mock_responses) {
+        size_t url_len = strlen(url);
+        if (url_len > HASHMAP_MAX_KEY_LEN) return;
+        byte_sized *entry = map_get(opts->mock_responses, url, (u8)url_len);
+        if (!entry) return;
+        if (entry->size > 0) {
+            char *buf = alloc_malloc(alloc, entry->size);
+            memcpy(buf, entry->v, entry->size);
+            *out      = buf;
+            *out_size = entry->size;
+        }
+        return;
+    }
 
     char const *argv[] = {"curl", "-sSfL", url, NULL};
 
     char  *captured     = null;
     size_t captured_len = 0;
 
-    platform_exec_opts opts = {
+    platform_exec_opts exec_opts = {
         .argv                = argv,
         .captured_output     = &captured,
         .captured_output_len = &captured_len,
     };
 
-    int rc = platform_exec(&opts);
+    int rc = platform_exec(&exec_opts);
     if (rc != 0) {
         free(captured);
         return;
@@ -128,6 +148,17 @@ void file_url_get(allocator *alloc, char const *url, char **out, u32 *out_size) 
 
     *out      = buf;
     *out_size = (u32)captured_len;
+}
+
+int file_write(char const *path, void const *data, u32 size) {
+    FILE *f = fopen(path, "wb");
+    if (!f) return 1;
+    if (size > 0 && fwrite(data, 1, size, f) != size) {
+        fclose(f);
+        return 1;
+    }
+    fclose(f);
+    return 0;
 }
 
 char const *file_basename(char const *input) {

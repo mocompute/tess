@@ -22,14 +22,13 @@ typedef struct {
     str name;    // dependency package name
     str version; // required version
     str path;    // optional explicit path override (may be empty)
+    str url;     // optional base URL for downloading (may be empty)
 } tl_package_dep;
 
 typedef struct {
     tl_package_info info;
     tl_package_dep *deps;
     u32             dep_count;
-    tl_package_dep *optional_deps;
-    u32             optional_dep_count;
 } tl_package;
 
 // Parse a package.tl file. Returns 0 on success, 1 on error.

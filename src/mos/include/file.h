@@ -6,10 +6,19 @@
 #include "str.h"
 #include "types.h"
 
+typedef struct hashmap hashmap;
+
 int         file_exists(str);
 int         file_is_directory(str path);
 void        file_read(allocator *, char const *, char **, u32 *);
 void        file_url_get(allocator *, char const *url, char **out, u32 *out_size);
+
+typedef struct {
+    hashmap *mock_responses; // URL (C string key) -> byte_sized value; may be null
+} file_url_get_opts;
+
+void file_url_get_ext(allocator *, char const *url, char **out, u32 *out_size, file_url_get_opts *);
+int         file_write(char const *path, void const *data, u32 size);
 char const *file_basename(char const *);
 
 char       *file_current_working_directory(span);

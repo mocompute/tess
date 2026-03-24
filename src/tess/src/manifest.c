@@ -142,7 +142,6 @@ int tl_package_parse_file(allocator *alloc, char const *path, tl_package *out) {
     str_array depend_paths = {.alloc = alloc};
     str_array sources      = {.alloc = alloc};
     dep_array deps         = {.alloc = alloc};
-    dep_array opt_deps     = {.alloc = alloc};
 
     int       error        = 0;
     int       format_seen  = 0;
@@ -284,47 +283,20 @@ int tl_package_parse_file(allocator *alloc, char const *path, tl_package *out) {
                 continue;
             }
             dep.path = str_empty();
+            dep.url  = str_empty();
             if (argc == 3) {
-                dep.path = extract_string(alloc, nfa->arguments[2], "depend", 2);
-                if (str_is_empty(dep.path)) {
+                str val = extract_string(alloc, nfa->arguments[2], "depend", 2);
+                if (str_is_empty(val)) {
                     error = 1;
                     continue;
+                }
+                if (str_starts_with(val, S("http://")) || str_starts_with(val, S("https://"))) {
+                    dep.url = val;
+                } else {
+                    dep.path = val;
                 }
             }
             dep_array_push(&deps, dep);
-
-        } else if (str_eq(func_name, S("depend_optional"))) {
-            if (argc < 2 || argc > 3) {
-                fprintf(stderr, "package.tl: error: depend_optional() expects 2-3 arguments, got %d\n",
-                        (int)argc);
-                error = 1;
-                continue;
-            }
-            tl_package_dep dep = {0};
-            dep.name           = extract_identifier(alloc, nfa->arguments[0], "depend_optional", 0);
-            if (str_is_empty(dep.name)) {
-                error = 1;
-                continue;
-            }
-            dep.version = extract_string(alloc, nfa->arguments[1], "depend_optional", 1);
-            if (str_is_empty(dep.version)) {
-                error = 1;
-                continue;
-            }
-            if (str_contains_char(dep.version, '=')) {
-                fprintf(stderr, "package.tl: error: depend_optional() version must not contain '='\n");
-                error = 1;
-                continue;
-            }
-            dep.path = str_empty();
-            if (argc == 3) {
-                dep.path = extract_string(alloc, nfa->arguments[2], "depend_optional", 2);
-                if (str_is_empty(dep.path)) {
-                    error = 1;
-                    continue;
-                }
-            }
-            dep_array_push(&opt_deps, dep);
 
         } else if (str_eq(func_name, S("depend_path"))) {
             if (argc != 1) {
@@ -389,11 +361,6 @@ int tl_package_parse_file(allocator *alloc, char const *path, tl_package *out) {
         out->deps      = deps.v;
         out->dep_count = deps.size;
     }
-    if (opt_deps.size > 0) {
-        out->optional_deps      = opt_deps.v;
-        out->optional_dep_count = opt_deps.size;
-    }
-
     // Cleanup parser
     parser_destroy(&p);
     arena_destroy(&parse_arena);
