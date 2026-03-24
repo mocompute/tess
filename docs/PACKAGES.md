@@ -127,7 +127,7 @@ when `package.tl` is not found.
 | `author(name)` | 1 string | No | Author name or email |
 | `export(mod, ...)` | 1+ identifiers | For `tess pack` | Modules that are part of the public API |
 | `source(path, ...)` | 1+ strings | No | Source files or directories (directories scanned recursively for `*.tl`) |
-| `depend(name, ver)` | identifier + string | No | Required dependency with version |
+| `depend(name, ver [, path])` | identifier + 1-2 strings | No | Required dependency with version; optional path override |
 | `depend_path(dir)` | 1 string | No | Directory to search for `.tpkg` files (accumulates) |
 
 ### Example
@@ -152,6 +152,7 @@ depend_path("./libs")
 - `export()` accepts multiple arguments: `export(Mod1, Mod2)`.
 - `source()` accepts multiple arguments: `source("src/", "extra/util.tl")`. Directory arguments are scanned recursively for `*.tl` files.
 - Version strings are compared as literal strings, not as semantic versions. `"1.0.0"` and `"1.0"` are different versions.
+- `depend()` accepts an optional third string argument: a local path to the `.tpkg` file. When provided, the compiler uses it directly instead of searching `depend_path()` directories. If the string starts with `http://` or `https://`, it is treated as a download URL instead (see `tess fetch`).
 - Unknown function calls are silently ignored. This allows `package.tl` to contain fields that older compiler versions do not recognize.
 
 ### Source Files
@@ -291,6 +292,26 @@ Consumers only declare their **direct** dependencies in `package.tl`:
 depend(mylib, "1.0.0")
 depend_path("./libs")
 ```
+
+### Local path overrides
+
+By default, the compiler searches `depend_path()` directories for `<Name>-<Version>.tpkg`. You can bypass
+this search by passing the path to the `.tpkg` file directly as a third argument to `depend()`:
+
+```tl
+depend(mylib, "1.0.0", "./vendor/mylib-1.0.0.tpkg")
+```
+
+When a path override is provided, the compiler uses it as-is and does not consult `depend_path()` directories
+for that dependency. This is useful for:
+- Pinning a dependency to a specific location outside the normal search paths
+- Using a local development build of a package without copying it into `depend_path()` directories
+- Overriding a single dependency while letting others resolve normally
+
+The path is relative to the current working directory (where `tess` is invoked).
+
+If the third argument starts with `http://` or `https://`, it is treated as a URL instead of a local path.
+See `tess fetch` for details on downloading dependencies.
 
 ### Transitive dependencies
 
