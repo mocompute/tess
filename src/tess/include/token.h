@@ -45,6 +45,9 @@
     X(tok_string, "string")                                                                                \
     X(tok_c_string, "c_string")                                                                            \
     X(tok_s_string, "s_string")                                                                            \
+    X(tok_f_string_start, "f_string_start")                                                                \
+    X(tok_f_string_mid, "f_string_mid")                                                                    \
+    X(tok_f_string_end, "f_string_end")                                                                    \
     X(tok_char, "char")                                                                                    \
     X(tok_comment, "comment")
 

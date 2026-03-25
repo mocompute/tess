@@ -32,6 +32,11 @@ struct tokenizer {
     token_array    backtrack;
     char_array     buf;
     u32            square_depth; // nesting depth of [ ] (to avoid greedy ]] inside type args)
+
+    // f-string state (persists across tokenizer_next calls)
+    u32            f_string_depth;       // >0 when inside f-string expression hole
+    u32            f_string_brace_depth; // tracks nested {} within expression hole
+    int            f_string_is_first;    // next literal segment is the first (start vs mid)
 };
 
 // -- statics --
@@ -236,8 +241,13 @@ start:; // loop point for skip_depth > 0
 
         in_c,
         in_s,
+        in_f,
         start_ident, // a symbol, with restricted character set
         in_ident,
+
+        in_f_string,
+        in_f_string_backslash,
+        stop_f_string_segment,
 
         start_comment,
         in_comment,
@@ -310,6 +320,7 @@ start:; // loop point for skip_depth > 0
             case '\n': continue;
 
             case 'c':  state = in_c; continue;
+            case 'f':  state = in_f; continue;
             case 's':  state = in_s; continue;
             case '.':  state = in_dot; continue;
             case ':':  state = in_colon; continue;
@@ -337,6 +348,7 @@ start:; // loop point for skip_depth > 0
                 break;
 
             case '{':
+                if (self->f_string_depth > 0) self->f_string_brace_depth++;
                 replace_token(self->strings, &res, tok_open_curly);
                 state = stop;
                 break;
@@ -350,6 +362,13 @@ start:; // loop point for skip_depth > 0
                 break;
 
             case '}':
+                if (self->f_string_depth > 0 && self->f_string_brace_depth == 0) {
+                    // End of f-string expression hole — resume scanning literal
+                    self->buf.size = 0;
+                    state          = in_f_string;
+                    continue;
+                }
+                if (self->f_string_depth > 0) self->f_string_brace_depth--;
                 replace_token(self->strings, &res, tok_close_curly);
                 state = stop;
                 break;
@@ -851,6 +870,25 @@ start:; // loop point for skip_depth > 0
             continue;
         } break;
 
+        case in_f: {
+            // 'f' was consumed. If next char is '"', this is an f-string.
+            // Nested f-strings (f_string_depth > 0) are not supported — fall through
+            // to identifier parsing so the parser reports the error cleanly.
+            if (self->f_string_depth == 0 && self->pos < end && '"' == peek_char(self, self->pos)) {
+                advance_pos(self); // skip the opening "
+                self->f_string_depth++;
+                self->f_string_brace_depth = 0;
+                self->f_string_is_first    = 1;
+                self->buf.size             = 0;
+                state                      = in_f_string;
+                continue;
+            }
+            // Not f"...", treat 'f' as start of identifier
+            reverse_pos(self);
+            state = start_ident;
+            continue;
+        } break;
+
         case start_ident: {
             start_capture = self->pos;
             state         = in_ident;
@@ -1172,6 +1210,80 @@ start:; // loop point for skip_depth > 0
                              self->buf.v, self->buf.size);
             string_format = str_default;
             state         = stop;
+        } break;
+
+        // -- f-string literal scanning --
+
+        case in_f_string: {
+            if (self->pos == end) {
+                tok_error(self, out_err, tl_err_eof);
+                state = error;
+                continue;
+            }
+            char const c = next_char(self);
+            switch (c) {
+            case '\\': state = in_f_string_backslash; break;
+            case '{':
+                // {{ is escaped literal brace
+                if (self->pos < end && '{' == peek_char(self, self->pos)) {
+                    advance_pos(self);
+                    char brace = '{';
+                    array_push(self->buf, brace);
+                } else {
+                    // Start of interpolation hole — emit literal segment
+                    state = stop_f_string_segment;
+                }
+                break;
+            case '}':
+                // }} is escaped literal brace
+                if (self->pos < end && '}' == peek_char(self, self->pos)) {
+                    advance_pos(self);
+                    char brace = '}';
+                    array_push(self->buf, brace);
+                } else {
+                    // Lone } in literal — error
+                    tok_error(self, out_err, tl_err_invalid_token);
+                    state = error;
+                }
+                break;
+            case '"':
+                // End of f-string
+                if (self->f_string_is_first) {
+                    // No interpolation holes — emit as plain string
+                    replace_token_sn(self->strings, &res, tok_string, self->buf.v, self->buf.size);
+                } else {
+                    replace_token_sn(self->strings, &res, tok_f_string_end, self->buf.v, self->buf.size);
+                }
+                self->f_string_depth--;
+                state = stop;
+                break;
+            default:
+                array_push(self->buf, c);
+                break;
+            }
+        } break;
+
+        case in_f_string_backslash: {
+            if (self->pos == end) {
+                tok_error(self, out_err, tl_err_eof);
+                state = error;
+                continue;
+            }
+            char const c = next_char(self);
+
+            // keep it literal (same as in_string_backslash)
+            char backslash = '\\';
+            array_push(self->buf, backslash);
+            array_push(self->buf, c);
+
+            state = in_f_string;
+        } break;
+
+        case stop_f_string_segment: {
+            token_tag tag = self->f_string_is_first ? tok_f_string_start : tok_f_string_mid;
+            replace_token_sn(self->strings, &res, tag, self->buf.v, self->buf.size);
+            self->f_string_is_first = 0;
+            state                   = stop;
         } break;
 
         case error:

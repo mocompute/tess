@@ -598,21 +598,78 @@ int the_symbol(parser *p, char const *const want) {
     return 1;
 }
 
+// Create a String.from_literal(s) NFA node.
+static ast_node *make_from_literal(parser *self, char const *s) {
+    ast_node_sized args = {.size = 1, .v = alloc_malloc(self->ast_arena, sizeof(void *))};
+    args.v[0]           = ast_node_create_sym_c(self->ast_arena, s);
+    args.v[0]->tag      = ast_string;
+    set_node_file(self, args.v[0]);
+
+    ast_node *name = ast_node_create_sym_c(self->ast_arena, "from_literal__1");
+    mangle_name_for_module(self, name, S("String"));
+    return ast_node_create_nfa(self->ast_arena, name, (ast_node_sized){0}, args);
+}
+
 int a_string(parser *self) {
     if (next_token(self)) return 1;
 
     if (tok_c_string == self->token.tag) return result_ast_str(self, ast_string, self->token.s);
 
     if (tok_string == self->token.tag || tok_s_string == self->token.tag) {
-        // s"..." desugars to String.from_literal("...")
-        ast_node_sized args = {.size = 1, .v = alloc_malloc(self->ast_arena, sizeof(void *))};
-        args.v[0]           = ast_node_create_sym_c(self->ast_arena, self->token.s);
-        args.v[0]->tag      = ast_string;
-        set_node_file(self, args.v[0]);
+        ast_node *r = make_from_literal(self, self->token.s);
+        return result_ast_node(self, r);
+    }
 
-        ast_node *name = ast_node_create_sym_c(self->ast_arena, "from_literal__1");
-        mangle_name_for_module(self, name, S("String"));
-        ast_node *r = ast_node_create_nfa(self->ast_arena, name, (ast_node_sized){0}, args);
+    if (tok_f_string_start == self->token.tag) {
+        // Committed parse — no backtracking after this point.
+        // Collect interleaved literal parts and expressions.
+        ast_node_array parts = {.alloc = self->ast_arena};
+
+        // Add first literal segment (if non-empty)
+        if (self->token.s[0] != '\0') {
+            ast_node *lit = make_from_literal(self, self->token.s);
+            array_push(parts, lit);
+        }
+
+        while (1) {
+            // Parse the expression inside { }
+            ast_node *expr = parse_expression(self, INT_MIN);
+            if (!expr) {
+                self->error.tag = tl_err_expected_expression;
+                return ERROR_STOP;
+            }
+            array_push(parts, expr);
+
+            // Next token must be tok_f_string_mid or tok_f_string_end
+            if (next_token(self)) return ERROR_STOP;
+
+            if (tok_f_string_mid == self->token.tag) {
+                if (self->token.s[0] != '\0') {
+                    ast_node *mid = make_from_literal(self, self->token.s);
+                    array_push(parts, mid);
+                }
+                continue;
+            }
+            if (tok_f_string_end == self->token.tag) {
+                if (self->token.s[0] != '\0') {
+                    ast_node *end = make_from_literal(self, self->token.s);
+                    array_push(parts, end);
+                }
+                break;
+            }
+
+            // Unexpected token
+            self->error.tag = tl_err_expected_expression;
+            return ERROR_STOP;
+        }
+
+        // Construct Print.format(...parts) NFA
+        ast_node *name = ast_node_create_sym_c(self->ast_arena, "format__1");
+        mangle_name_for_module(self, name, S("Print"));
+        ast_node_sized args = {.size = parts.size, .v = parts.v};
+        ast_node      *r    = ast_node_create_nfa(self->ast_arena, name, (ast_node_sized){0}, args);
+        r->named_application.is_variadic_call = 1;
+        r->named_application.n_fixed_args     = 0;
         return result_ast_node(self, r);
     }
 

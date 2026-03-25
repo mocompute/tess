@@ -11,6 +11,7 @@ print    (args: ...ToString)                      -> Void
 println  (args: ...ToString)                      -> Void
 fprint   (stream: Ptr[c_FILE], args: ...ToString) -> Void
 fprintln (stream: Ptr[c_FILE], args: ...ToString) -> Void
+format   (args: ...ToString)                      -> String
 
 // -- Implementation --
 
@@ -28,6 +29,14 @@ fprintln(stream, args) {
     _fprint_all(stream, args)
     c_fprintf(stream, c"\n")
     void
+}
+
+format(args) {
+    result := ""
+    for s in Slice args {
+        result.push(s)
+    }
+    result
 }
 
 _fprint_all(stream, args) {
