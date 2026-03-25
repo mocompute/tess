@@ -40,20 +40,19 @@ String: { | big: _Big
 // -- Synopsis --
 
 // Construction.
-empty       ()                                                      -> String
-from_cstr   (alloc: Ptr[Allocator], s: Ptr[Const[CChar]])           -> String
-from_cstr   (s: Ptr[Const[CChar]])                                  -> String
-from_literal(s: Ptr[Const[CChar]])                                  -> String
-from_bytes  (alloc: Ptr[Allocator], s: Ptr[Const[CChar]], n: CSize) -> String
-from_bytes  (s: Ptr[Const[CChar]], n: CSize)                        -> String
-copy        (alloc: Ptr[Allocator], s: String)                      -> String
-copy        (s: String)                                             -> String
-from_int    (alloc: Ptr[Allocator], n: Int)                         -> String
-from_int    (n: Int)                                                -> String
-from_float  (alloc: Ptr[Allocator], f: Float)                       -> String
-from_float  (f: Float)                                              -> String
-from_byte   (b: Byte)                                               -> String
-from_bool   (b: Bool)                                               -> String
+empty      ()                                                      -> String
+from_cstr  (alloc: Ptr[Allocator], s: Ptr[Const[CChar]])           -> String
+from_cstr  (s: Ptr[Const[CChar]])                                  -> String
+from_bytes (alloc: Ptr[Allocator], s: Ptr[Const[CChar]], n: CSize) -> String
+from_bytes (s: Ptr[Const[CChar]], n: CSize)                        -> String
+copy       (alloc: Ptr[Allocator], s: String)                      -> String
+copy       (s: String)                                             -> String
+from_int   (alloc: Ptr[Allocator], n: Int)                         -> String
+from_int   (n: Int)                                                -> String
+from_float (alloc: Ptr[Allocator], f: Float)                       -> String
+from_float (f: Float)                                              -> String
+from_byte  (b: Byte)                                               -> String
+from_bool  (b: Bool)                                               -> String
 
 // Queries.
 len      (s: String)               -> CSize
@@ -214,9 +213,10 @@ from_cstr(s: Ptr[Const[CChar]]) {
     from_cstr(Alloc.context.default, s)
 }
 
-from_literal(s) {
-    from_cstr(Alloc.context.string_literals, s)
-}
+// Note: from_literal/1 is now a pseudo-function that is inlined at the transpiler phase. It still needs to
+// have a type though.
+from_literal(s: Ptr[Const[CChar]]) -> String
+
 
 copy(alloc, s) {
     n := len (s)

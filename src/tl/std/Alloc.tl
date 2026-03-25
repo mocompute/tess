@@ -28,10 +28,9 @@ c_tl_is_aligned    (p: Ptr[any], alignment: CSize) -> CInt
 
 // -- Types --
 
-// Define TL_ALLOC_TRANSIENT_SIZE and TL_ALLOC_STRINGS_SIZE before importing (e.g. with -D in CFLAGS) to
+// Define TL_ALLOC_TRANSIENT_SIZE before importing (e.g. with -D in CFLAGS) to
 // override default values.
-initialTransientSize:      CSize := 0
-initialStringLiteralsSize: CSize := 0
+initialTransientSize: CSize := 0
 
 Allocator: {
     malloc:        (a: Ptr[Allocator], sz: CSize)                   -> Ptr[any],
@@ -44,10 +43,9 @@ Allocator: {
 }
 
 Context: {
-    transient:       Ptr[Allocator],
-    managed:         Ptr[Allocator],
-    string_literals: Ptr[Allocator],    // used by default by String.from_literal/1
-    default:         Ptr[Allocator],
+    transient: Ptr[Allocator],
+    managed:   Ptr[Allocator],
+    default:   Ptr[Allocator],
 }
 
 // ============================================================================
@@ -587,13 +585,9 @@ managed_resize        (p, sz)         { context.managed->resize(context.managed,
 #ifndef TL_ALLOC_TRANSIENT_SIZE
 #define TL_ALLOC_TRANSIENT_SIZE 4096
 #endif
-#ifndef TL_ALLOC_STRINGS_SIZE
-#define TL_ALLOC_STRINGS_SIZE 1024
-#endif
 #endc
 
 c_TL_ALLOC_TRANSIENT_SIZE: CSize
-c_TL_ALLOC_STRINGS_SIZE:   CSize
 
 _managed := Allocator(
                       malloc        = _malloc/2,
@@ -607,17 +601,14 @@ _managed := Allocator(
 
 // Allocation Context. Public so that user code can (carefully) install its own allocators dynamically.
 context := Context(
-                   transient       = void, // initialized in __init()
-                   string_literals = void, // initialized in __init()
-                   managed         = _managed.&,
-                   default         = _managed.&
+                   transient = void,    // initialized in __init()
+                   managed   = _managed.&,
+                   default   = _managed.&
                    )
 
 
 // Module init
 __init() {
-    initialTransientSize      = c_TL_ALLOC_TRANSIENT_SIZE
-    initialStringLiteralsSize = c_TL_ALLOC_STRINGS_SIZE
-    context.transient         = BumpAllocator.create(context.managed, initialTransientSize)
-    context.string_literals   = BumpAllocator.create(context.managed, initialStringLiteralsSize)
+    initialTransientSize = c_TL_ALLOC_TRANSIENT_SIZE
+    context.transient    = BumpAllocator.create(context.managed, initialTransientSize)
 }
