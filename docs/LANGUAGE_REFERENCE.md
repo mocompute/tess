@@ -561,19 +561,19 @@ j### Pointers and Arrays for C Programmers
 
 Quick reference for common C patterns and their Tess equivalents:
 
-| C | Tess |
-|---|------|
-| `ptr[n]` | `ptr.[n]` |
-| `ptr[n] = x` | `ptr.[n] = x` |
-| `*ptr` | `ptr.*` |
-| `&obj` | `obj.&` |
-| `ptr->field` | `ptr->field` |
-| `NULL` | `null` |
-| `if (ptr != NULL)` | `if ptr != null { ... }` |
-| `void*` | `Ptr[any]` |
-| `int arr[5]` | `arr: CArray[Int, 5] := void` |
+| C                           | Tess                             |
+|-----------------------------|----------------------------------|
+| `ptr[n]`                    | `ptr.[n]`                        |
+| `ptr[n] = x`                | `ptr.[n] = x`                    |
+| `*ptr`                      | `ptr.*`                          |
+| `&obj`                      | `obj.&`                          |
+| `ptr->field`                | `ptr->field`                     |
+| `NULL`                      | `null`                           |
+| `if (ptr != NULL)`          | `if ptr != null { ... }`         |
+| `void*`                     | `Ptr[any]`                       |
+| `int arr[5]`                | `arr: CArray[Int, 5] := void`    |
 | `struct { char buf[256]; }` | `T: { buf: CArray[CChar, 256] }` |
-| `malloc(n)` / `free(p)` | `c_malloc(n)` / `c_free(p)` |
+| `malloc(n)` / `free(p)`     | `c_malloc(n)` / `c_free(p)`      |
 
 **Pointer arithmetic** goes through the `Unsafe` module, which operates in bytes (not elements):
 
@@ -611,14 +611,14 @@ The Tess compiler uses Hindley-Milner style type inference. Annotations are opti
 
 #### Variable Bindings with Inferrable RHS
 
-| Pattern | Example | Reason |
-|---------|---------|--------|
-| Integer literals | `x := 42` | Weak signed, defaults to `Int` |
-| Float literals | `x := 3.14` | Literal type is `Float` |
-| Struct constructors | `p := Point(x = 1, y = 2)` | Type inferred from constructor |
-| Tagged union constructors (with constraining fields) | `opt := Some(42)` | Type parameter inferred from argument value |
-| CArray declaration | `arr: CArray[Int, 10] := void` | CArray is a type annotation |
-| Function calls | `result := add(1, 2)` | Return type inferred from function |
+| Pattern                                              | Example                        | Reason                                      |
+|------------------------------------------------------|--------------------------------|---------------------------------------------|
+| Integer literals                                     | `x := 42`                      | Weak signed, defaults to `Int`              |
+| Float literals                                       | `x := 3.14`                    | Literal type is `Float`                     |
+| Struct constructors                                  | `p := Point(x = 1, y = 2)`     | Type inferred from constructor              |
+| Tagged union constructors (with constraining fields) | `opt := Some(42)`              | Type parameter inferred from argument value |
+| CArray declaration                                   | `arr: CArray[Int, 10] := void` | CArray is a type annotation                 |
+| Function calls                                       | `result := add(1, 2)`          | Return type inferred from function          |
 
 #### Function Parameters and Return Types
 
@@ -712,27 +712,27 @@ foo() -> Ptr[any] { return null }     // Required - null has no type
 
 ### Quick Reference Table
 
-| Scenario | Annotation Required? |
-|----------|---------------------|
-| Integer literal `42` | No (weak signed, defaults to `Int`) |
-| Float literal `3.14` | No (inferred as `Float`) |
-| Struct constructor | No (inferred from constructor) |
-| Tagged union with constraining field | No |
-| Tagged union without constraining field | **Yes** (at binding site) |
-| Tagged union `when` expression | No (type inferred from scrutinee) |
-| Tagged union `case` expression | **Yes** (when type not inferrable) |
-| CArray declaration | **Yes** (type annotation required) |
-| CArray decay to pointer | **Yes** (explicit `Ptr[T]` annotation) |
-| Pointer cast to different type | **Yes** |
-| C type via literal suffix (`42u`, `42zu`) | No (suffix determines type) |
-| C type via narrowing/cross-chain cast | **Yes** (declaration annotation) |
-| C float type (CFloat, etc.) | **Yes** |
-| c_malloc result | **Yes** |
-| C FFI function declaration | **Yes** |
-| Function called directly | No (params and return inferred) |
-| Function only used as pointer | **Yes** |
-| Function with struct param containing fn pointer | **Yes** |
-| Return null | **Yes** |
+| Scenario                                         | Annotation Required?                   |
+|--------------------------------------------------|----------------------------------------|
+| Integer literal `42`                             | No (weak signed, defaults to `Int`)    |
+| Float literal `3.14`                             | No (inferred as `Float`)               |
+| Struct constructor                               | No (inferred from constructor)         |
+| Tagged union with constraining field             | No                                     |
+| Tagged union without constraining field          | **Yes** (at binding site)              |
+| Tagged union `when` expression                   | No (type inferred from scrutinee)      |
+| Tagged union `case` expression                   | **Yes** (when type not inferrable)     |
+| CArray declaration                               | **Yes** (type annotation required)     |
+| CArray decay to pointer                          | **Yes** (explicit `Ptr[T]` annotation) |
+| Pointer cast to different type                   | **Yes**                                |
+| C type via literal suffix (`42u`, `42zu`)        | No (suffix determines type)            |
+| C type via narrowing/cross-chain cast            | **Yes** (declaration annotation)       |
+| C float type (CFloat, etc.)                      | **Yes**                                |
+| c_malloc result                                  | **Yes**                                |
+| C FFI function declaration                       | **Yes**                                |
+| Function called directly                         | No (params and return inferred)        |
+| Function only used as pointer                    | **Yes**                                |
+| Function with struct param containing fn pointer | **Yes**                                |
+| Return null                                      | **Yes**                                |
 
 ## Variables and Assignment
 
@@ -1208,16 +1208,16 @@ The compiler provides `argc` and `argv` from C's `int argc, char const* argv[]`.
 Arithmetic, comparison, and bitwise operators can be overloaded for user-defined types (structs
 and tagged unions). Define a function with the corresponding name in the type's module:
 
-| Operator | Function | Operator | Function |
-|----------|----------|----------|----------|
-| `+` | `add(a: T, b: T) -> T` | `==` | `eq(a: T, b: T) -> Bool` |
-| `-` | `sub(a: T, b: T) -> T` | `!=` | derived from `eq` |
-| `*` | `mul(a: T, b: T) -> T` | `<` `<=` `>` `>=` | derived from `cmp(a: T, b: T) -> CInt` |
-| `/` | `div(a: T, b: T) -> T` | `-` (unary) | `neg(a: T) -> T` |
-| `%` | `mod(a: T, b: T) -> T` | `!` (unary) | `not(a: T) -> Bool` |
-| `&` | `bit_and(a: T, b: T) -> T` | `~` (unary) | `bit_not(a: T) -> T` |
-| `\|` | `bit_or(a: T, b: T) -> T` | `<<` | `shl(a: T, b: T) -> T` |
-| `^` | `bit_xor(a: T, b: T) -> T` | `>>` | `shr(a: T, b: T) -> T` |
+| Operator | Function                   | Operator          | Function                               |
+|----------|----------------------------|-------------------|----------------------------------------|
+| `+`      | `add(a: T, b: T) -> T`     | `==`              | `eq(a: T, b: T) -> Bool`               |
+| `-`      | `sub(a: T, b: T) -> T`     | `!=`              | derived from `eq`                      |
+| `*`      | `mul(a: T, b: T) -> T`     | `<` `<=` `>` `>=` | derived from `cmp(a: T, b: T) -> CInt` |
+| `/`      | `div(a: T, b: T) -> T`     | `-` (unary)       | `neg(a: T) -> T`                       |
+| `%`      | `mod(a: T, b: T) -> T`     | `!` (unary)       | `not(a: T) -> Bool`                    |
+| `&`      | `bit_and(a: T, b: T) -> T` | `~` (unary)       | `bit_not(a: T) -> T`                   |
+| `\|`     | `bit_or(a: T, b: T) -> T`  | `<<`              | `shl(a: T, b: T) -> T`                 |
+| `^`      | `bit_xor(a: T, b: T) -> T` | `>>`              | `shr(a: T, b: T) -> T`                 |
 
 ```tl
 #module Vec
@@ -1291,12 +1291,12 @@ Character literals use C syntax: single-quoted characters with the same escape s
 
 Integer literals have a **polymorphic (weak) type** that adapts to context. The suffix determines which family of integer types the literal can become:
 
-| Suffix | Type | Polymorphic? |
-|--------|------|-------------|
-| (none) | Weak signed | Yes — resolves to any signed integer; defaults to `Int` |
-| `u`/`U` | Weak unsigned | Yes — resolves to any unsigned integer; defaults to `UInt` |
-| `z`/`Z` | `CPtrDiff` | No — always exactly `CPtrDiff` |
-| `zu`/`ZU` | `CSize` | No — always exactly `CSize` |
+| Suffix    | Type          | Polymorphic?                                               |
+|-----------|---------------|------------------------------------------------------------|
+| (none)    | Weak signed   | Yes — resolves to any signed integer; defaults to `Int`    |
+| `u`/`U`   | Weak unsigned | Yes — resolves to any unsigned integer; defaults to `UInt` |
+| `z`/`Z`   | `CPtrDiff`    | No — always exactly `CPtrDiff`                             |
+| `zu`/`ZU` | `CSize`       | No — always exactly `CSize`                                |
 
 ```tl
 f(x: CInt) { x }
@@ -1532,14 +1532,14 @@ for it.& in Array.Indexed xs {
 
 Iterator modules must implement these functions:
 
-| Function | Signature | Purpose |
-|----------|-----------|---------|
-| `iter_init` | `(Ptr[T]) -> Iter` | Initialize iterator from collection pointer |
-| `iter_value` | `(Ptr[Iter]) -> TValue` | Get current element value |
-| `iter_ptr` | `(Ptr[Iter]) -> Ptr[TValue]` | Get pointer to current element |
-| `iter_cond` | `(Ptr[Iter]) -> Bool` | Check if iteration should continue |
-| `iter_update` | `(Ptr[Iter]) -> Void` | Advance to next element |
-| `iter_deinit` | `(Ptr[Iter]) -> Void` | Clean up iterator resources |
+| Function      | Signature                    | Purpose                                     |
+|---------------|------------------------------|---------------------------------------------|
+| `iter_init`   | `(Ptr[T]) -> Iter`           | Initialize iterator from collection pointer |
+| `iter_value`  | `(Ptr[Iter]) -> TValue`      | Get current element value                   |
+| `iter_ptr`    | `(Ptr[Iter]) -> Ptr[TValue]` | Get pointer to current element              |
+| `iter_cond`   | `(Ptr[Iter]) -> Bool`        | Check if iteration should continue          |
+| `iter_update` | `(Ptr[Iter]) -> Void`        | Advance to next element                     |
+| `iter_deinit` | `(Ptr[Iter]) -> Void`        | Clean up iterator resources                 |
 
 The `Iter` type can contain arbitrary fields accessible in the loop body (like `index` in `Array.Indexed`).
 
@@ -2173,24 +2173,24 @@ Node :: [[no_conform(Eq)]]     // false (only Ord is blocked)
 The compiler provides built-in traits for operator overloading. These are always visible and
 do not need to be imported. User code cannot define types or traits with these names.
 
-| Trait | Function signature | Operator | Notes |
-|-------|--------------------|----------|-------|
-| `Add[T]` | `add(a: T, b: T) -> T` | `+`, `+=` | |
-| `Sub[T]` | `sub(a: T, b: T) -> T` | `-`, `-=` | |
-| `Mul[T]` | `mul(a: T, b: T) -> T` | `*`, `*=` | |
-| `Div[T]` | `div(a: T, b: T) -> T` | `/`, `/=` | |
-| `Mod[T]` | `mod(a: T, b: T) -> T` | `%`, `%=` | |
-| `BitAnd[T]` | `bit_and(a: T, b: T) -> T` | `&`, `&=` | Bitwise AND |
-| `BitOr[T]` | `bit_or(a: T, b: T) -> T` | `\|`, `\|=` | Bitwise OR |
-| `BitXor[T]` | `bit_xor(a: T, b: T) -> T` | `^`, `^=` | Bitwise XOR |
-| `Shl[T]` | `shl(a: T, b: T) -> T` | `<<`, `<<=` | Shift left |
-| `Shr[T]` | `shr(a: T, b: T) -> T` | `>>`, `>>=` | Shift right |
-| `Eq[T]` | `eq(a: T, b: T) -> Bool` | `==`, `!=` | `!=` is `!eq(a, b)` |
-| `Ord[T]` | `cmp(a: T, b: T) -> CInt` | `<`, `<=`, `>`, `>=` | Inherits from `Eq`; `eq` derived from `cmp` if absent |
-| `Neg[T]` | `neg(a: T) -> T` | `-` (unary) | |
-| `Not[T]` | `not(a: T) -> Bool` | `!` (unary) | |
-| `BitNot[T]` | `bit_not(a: T) -> T` | `~` (unary) | |
-| `Hash[T]` | `hash(a: T) -> CSize` | `x.hash()` | Defined in `Hash.tl`; requires `#import <Hash.tl>` |
+| Trait       | Function signature         | Operator             | Notes                                                 |
+|-------------|----------------------------|----------------------|-------------------------------------------------------|
+| `Add[T]`    | `add(a: T, b: T) -> T`     | `+`, `+=`            |                                                       |
+| `Sub[T]`    | `sub(a: T, b: T) -> T`     | `-`, `-=`            |                                                       |
+| `Mul[T]`    | `mul(a: T, b: T) -> T`     | `*`, `*=`            |                                                       |
+| `Div[T]`    | `div(a: T, b: T) -> T`     | `/`, `/=`            |                                                       |
+| `Mod[T]`    | `mod(a: T, b: T) -> T`     | `%`, `%=`            |                                                       |
+| `BitAnd[T]` | `bit_and(a: T, b: T) -> T` | `&`, `&=`            | Bitwise AND                                           |
+| `BitOr[T]`  | `bit_or(a: T, b: T) -> T`  | `\|`, `\|=`          | Bitwise OR                                            |
+| `BitXor[T]` | `bit_xor(a: T, b: T) -> T` | `^`, `^=`            | Bitwise XOR                                           |
+| `Shl[T]`    | `shl(a: T, b: T) -> T`     | `<<`, `<<=`          | Shift left                                            |
+| `Shr[T]`    | `shr(a: T, b: T) -> T`     | `>>`, `>>=`          | Shift right                                           |
+| `Eq[T]`     | `eq(a: T, b: T) -> Bool`   | `==`, `!=`           | `!=` is `!eq(a, b)`                                   |
+| `Ord[T]`    | `cmp(a: T, b: T) -> CInt`  | `<`, `<=`, `>`, `>=` | Inherits from `Eq`; `eq` derived from `cmp` if absent |
+| `Neg[T]`    | `neg(a: T) -> T`           | `-` (unary)          |                                                       |
+| `Not[T]`    | `not(a: T) -> Bool`        | `!` (unary)          |                                                       |
+| `BitNot[T]` | `bit_not(a: T) -> T`       | `~` (unary)          |                                                       |
+| `Hash[T]`   | `hash(a: T) -> CSize`      | `x.hash()`           | Defined in `Hash.tl`; requires `#import <Hash.tl>`    |
 
 **Hash trait:** Unlike the operator traits above (which are compiler builtins), `Hash` is
 defined in the standard library (`Hash.tl`). Files that use `.hash()` or depend on the `Hash`
@@ -2425,15 +2425,15 @@ Note that functions do not have this restriction—they can call each other rega
 
 The standard library follows these conventions:
 
-| Pattern | Meaning | Example |
-|---------|---------|---------|
-| `lowercase_snake` | Public functions | `with_capacity`, `iter_init` |
-| `_leading_underscore` | Private/internal functions | `_bump_malloc`, `_find_bucket` |
-| `c_name` | C function binding | `c_malloc`, `c_printf` |
-| `c_struct_name` | C struct type annotation | `c_struct_timespec` |
-| `PascalCase` | Types and modules | `Array`, `Alloc`, `Point` |
-| `__double_underscore` | Special functions | `__init` (module initialization) |
-| `_tl_name_` | Compiler intrinsics | `_tl_sizeof_`, `_tl_fatal_` |
+| Pattern               | Meaning                    | Example                          |
+|-----------------------|----------------------------|----------------------------------|
+| `lowercase_snake`     | Public functions           | `with_capacity`, `iter_init`     |
+| `_leading_underscore` | Private/internal functions | `_bump_malloc`, `_find_bucket`   |
+| `c_name`              | C function binding         | `c_malloc`, `c_printf`           |
+| `c_struct_name`       | C struct type annotation   | `c_struct_timespec`              |
+| `PascalCase`          | Types and modules          | `Array`, `Alloc`, `Point`        |
+| `__double_underscore` | Special functions          | `__init` (module initialization) |
+| `_tl_name_`           | Compiler intrinsics        | `_tl_sizeof_`, `_tl_fatal_`      |
 
 Single-letter names like `a`, `b`, `T` are conventionally used for type parameters in generic definitions.
 
