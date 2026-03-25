@@ -131,6 +131,33 @@ test_eq() {
     error
 }
 
+test_eq_operator() {
+    error := 0
+    a     := "hello"
+    b     := "hello"
+    c     := "world"
+
+    // == works
+    if !(a == b) { error += 1 }
+    if a == c { error += 1 }
+
+    // != works
+    if a != b { error += 1 }
+    if !(a != c) { error += 1 }
+
+    // Empty strings
+    e1 := String.empty()
+    e2 := String.empty()
+    if !(e1 == e2) { error += 1 }
+    if e1 != e2 { error += 1 }
+
+    // String literal operands
+    if !(a == "hello") { error += 1 }
+    if a == "world" { error += 1 }
+
+    error
+}
+
 test_cmp() {
     error := 0
     a     := String.from_cstr(c"abc")
@@ -1470,6 +1497,7 @@ main() {
     error += _check(c"copy_empty", test_copy_empty())
     error += _check(c"cstr", test_cstr())
     error += _check(c"eq", test_eq())
+    error += _check(c"eq_operator", test_eq_operator())
     error += _check(c"cmp", test_cmp())
     error += _check(c"starts_with", test_starts_with())
     error += _check(c"ends_with", test_ends_with())
