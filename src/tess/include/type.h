@@ -78,6 +78,7 @@ typedef struct {
     tl_monotype_sized        args;
     // name of specialized instance, e.g. Point(a) => Point_0(Int).
     str special_name;
+    int from_variadic; // non-zero if resolved from a tl_variadic annotation
 } tl_type_constructor_inst;
 
 typedef struct {

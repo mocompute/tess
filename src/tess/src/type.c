@@ -371,6 +371,7 @@ static tl_type_constructor_inst *make_tc_inst_args(tl_type_registry *self, tl_ty
     inst->def                      = def;
     inst->args                     = args;
     inst->special_name             = str_empty();
+    inst->from_variadic            = 0;
     return inst;
 }
 

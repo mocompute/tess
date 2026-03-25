@@ -328,19 +328,20 @@ static void load_toplevel_let(tl_infer *self, ast_node *node) {
             next:
                 j++;
             }
-        }
 
-        // Propagate is_variadic from the forward declaration's last parameter.
-        // When synopsis and implementation are separate (e.g. "print(args: ...ToString) -> Void"
-        // as synopsis, "print(args) { ... }" as implementation), the let node from the parser
-        // won't have is_variadic set because the impl's params lack the ...Trait annotation.
-        if (!node->let.is_variadic && node->let.n_parameters > 0) {
-            ast_node *last = node->let.parameters[node->let.n_parameters - 1];
-            if (ast_node_is_symbol(last) && last->symbol.annotation) {
-                ast_node *ann = last->symbol.annotation;
-                if (ast_node_is_nfa(ann) && ast_node_is_symbol(ann->named_application.name) &&
-                    str_eq(ann->named_application.name->symbol.name, S("...")))
+            // Propagate is_variadic from the forward declaration's resolved type.
+            // When synopsis and implementation are separate (e.g. "print(args: ...ToString) -> Void"
+            // as synopsis, "print(args) { ... }" as implementation), the let node from the parser
+            // won't have is_variadic set because the impl's params lack the ...Trait annotation.
+            // The resolved Slice type carries a from_variadic flag set during variadic-to-Slice
+            // resolution, so we check that instead of string-matching the AST annotation.
+
+            if (!node->let.is_variadic) {
+                tl_monotype_sized params = param_tuple->list.xs;
+                if (params.size > 0 && tl_monotype_is_inst(params.v[params.size - 1]) &&
+                    params.v[params.size - 1]->cons_inst->from_variadic) {
                     node->let.is_variadic = 1;
+                }
             }
         }
 
@@ -1090,7 +1091,9 @@ static tl_monotype *resolve_variadic_to_slice(tl_infer *self, tl_monotype *varia
     if (!slice_poly) return null;
     tl_monotype_sized args = {.v = alloc_malloc(self->arena, sizeof(tl_monotype *)), .size = 1};
     args.v[0]              = elem_type;
-    return tl_polytype_instantiate_with(self->arena, slice_poly, args, self->subs);
+    tl_monotype *slice     = tl_polytype_instantiate_with(self->arena, slice_poly, args, self->subs);
+    if (slice && tl_monotype_is_inst(slice)) slice->cons_inst->from_variadic = 1;
+    return slice;
 }
 
 // ============================================================================
