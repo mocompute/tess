@@ -3,7 +3,6 @@
 
 #include "alloc.h"
 #include "array.h"
-#include "platform.h"
 #include "types.h"
 
 #define MOS_STR_MAX_SMALL (sizeof(size_t) + sizeof(char *) - 2)
