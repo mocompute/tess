@@ -37,7 +37,6 @@ parser *parser_create(allocator *alloc, parser_opts const *opts) {
     self->current_file_data.size       = 0;
     self->modules_seen                 = hset_create(self->parent_alloc, 32);
     self->modules_version_seen         = hset_create(self->parent_alloc, 32);
-    self->module_preludes_seen         = hset_create(self->parent_alloc, 32);
     self->nested_type_parents          = hset_create(self->parent_alloc, 1024);
     self->tagged_union_variant_parents = hset_create(self->parent_alloc, 256);
     self->module_aliases               = map_new(self->parent_alloc, str, str, 32);
@@ -91,7 +90,6 @@ void parser_destroy(parser **self) {
     map_destroy(&(*self)->nullary_variant_parents);
     if ((*self)->variadic_symbols) map_destroy(&(*self)->variadic_symbols);
     if ((*self)->function_aliases) map_destroy(&(*self)->function_aliases);
-    hset_destroy(&(*self)->module_preludes_seen);
     hset_destroy(&(*self)->modules_version_seen);
     hset_destroy(&(*self)->modules_seen);
     arena_destroy(&(*self)->transient);
@@ -1464,10 +1462,9 @@ void toplevel_hash_unity_file(parser *self, str argument) {
     map_reset(self->module_aliases);
 }
 
-int toplevel_hash_module(parser *self, str cmd, str module) {
+int toplevel_hash_module(parser *self, str module) {
     // Modules can be re-opened: if #module Foo appears again after #module Foo.Bar, parsing
     // resumes in Foo with its previously collected symbols intact.
-    int is_prelude      = str_eq(cmd, S("module_prelude"));
     self->skip_module   = 0;
     self->expect_module = 0;
 
@@ -1507,7 +1504,7 @@ int toplevel_hash_module(parser *self, str cmd, str module) {
     // save current module symbols, if any
     save_current_module_symbols(self);
 
-    if (!already_seen && !is_prelude) {
+    if (!already_seen) {
         str_hset_insert(&self->modules_seen, module);
     }
 
@@ -1529,9 +1526,6 @@ int toplevel_hash_module(parser *self, str cmd, str module) {
     // collected symbols
     load_module_symbols(self);
 
-    if (is_prelude) {
-        str_hset_insert(&self->module_preludes_seen, module);
-    }
     return 0;
 }
 
@@ -1616,8 +1610,7 @@ int toplevel_hash(parser *self) {
         parser_dbg(self, "hash: %s %s", str_cstr(&cmd), str_cstr(&argument));
 
         if (str_eq(cmd, S("unity_file"))) toplevel_hash_unity_file(self, argument);
-        else if (str_eq(cmd, S("module_prelude")) || str_eq(cmd, S("module")))
-            res = toplevel_hash_module(self, cmd, argument);
+        else if (str_eq(cmd, S("module"))) res = toplevel_hash_module(self, argument);
         else if (str_eq(cmd, S("alias"))) res = toplevel_hash_alias(self, words);
         else if (str_eq(cmd, S("unalias"))) res = toplevel_hash_unalias(self, argument);
 

@@ -72,7 +72,6 @@ struct parser {
     char_csized         current_file_data;
     hashmap            *modules_seen;                 // str hset
     hashmap            *modules_version_seen;         // str hset: "prefix::module" for version-aware dedup
-    hashmap            *module_preludes_seen;         // str hset: modules declared with #module_prelude
     hashmap            *nested_type_parents;          // str hset: types that have nested types
     hashmap            *tagged_union_variant_parents; // str hset: type names that are tagged union parents
     hashmap            *module_aliases;               // map str -> str: alias name -> original module name
@@ -101,8 +100,8 @@ struct parser {
     int         expect_module; // expect a module immediately after a #unity_file before any terms
     parser_mode mode;
 
-    hashmap    *variadic_symbols;  // map str -> variadic_symbol_info: base name -> variadic info
-    hashmap    *function_aliases;  // map str -> function_alias_info: alias name -> target info
+    hashmap    *variadic_symbols; // map str -> variadic_symbol_info: base name -> variadic info
+    hashmap    *function_aliases; // map str -> function_alias_info: alias name -> target info
 };
 
 // ============================================================================

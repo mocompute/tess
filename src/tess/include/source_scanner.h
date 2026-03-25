@@ -72,7 +72,7 @@ void tl_source_scanner_collect_imports(allocator *alloc, char_csized input, str_
 // Appends to *defines (caller initializes the array).
 void tl_source_scanner_collect_defines(allocator *alloc, char_csized input, str_array *defines);
 
-// Extract all #module and #module_prelude directives from source text.
+// Extract all #module directives from source text.
 // Uses the scanner state machine for correct string/comment handling.
 // Does NOT apply conditional compilation — all modules are collected unconditionally.
 // Appends module names to *modules (caller initializes the array).

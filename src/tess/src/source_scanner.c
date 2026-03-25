@@ -221,7 +221,7 @@ static int collect_modules_callback(void *raw_ctx, char const *data, u32 start, 
     str_array words   = {.alloc = ctx->alloc};
     str_parse_words(command, &words);
 
-    if (words.size >= 2 && (str_eq(words.v[0], S("module")) || str_eq(words.v[0], S("module_prelude")))) {
+    if (words.size >= 2 && (str_eq(words.v[0], S("module")))) {
         str _t = str_copy(ctx->alloc, words.v[1]);
         array_push(*ctx->modules, _t);
     }

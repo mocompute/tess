@@ -149,8 +149,6 @@ static int toplevel_hash_command(tl_infer *self, ast_node *node) {
         return 0;
     } else if (str_eq(words.v[0], S("module"))) {
         return 0;
-    } else if (str_eq(words.v[0], S("module_prelude"))) {
-        return 0;
     } else if (str_eq(words.v[0], S("alias"))) {
         return 0;
     } else if (str_eq(words.v[0], S("unalias"))) {

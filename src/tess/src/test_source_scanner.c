@@ -594,11 +594,10 @@ static str_array collect_modules(allocator *alloc, char const *content) {
     return modules;
 }
 
-// Both #module and #module_prelude detected
 static int test_collect_modules_basic(void) {
     int        error   = 0;
     allocator *alloc   = arena_create(default_allocator(), 1024);
-    str_array  modules = collect_modules(alloc, "#module Foo\n#module_prelude Bar\n");
+    str_array  modules = collect_modules(alloc, "#module Foo\n#module Bar\n");
 
     error += modules.size != 2;
     if (modules.size >= 2) {
