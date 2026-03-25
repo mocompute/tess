@@ -1442,9 +1442,10 @@ int tl_type_env_check_missing_fvs(tl_type_env *self, missing_fv_cb cb, void *use
     int              error = 0;
 
     hashmap_iterator iter  = {0};
-    while (map_iter(self->map, &iter)) {
-        str          name = str_init_n(transient_allocator, iter.key_ptr, iter.key_size);
-        tl_polytype *type = *(tl_polytype **)iter.data;
+    str              name;
+    void            *data;
+    while (str_map_iter(self->map, &iter, &name, &data)) {
+        tl_polytype *type = *(tl_polytype **)data;
 
         // FIXME: observed a valid type with a null monotype here
         if (!type || !type->type) continue;
@@ -1464,8 +1465,9 @@ void tl_type_env_remove_unknown_symbols(tl_type_env *self, hashmap *known) {
     str_array        remove = {.alloc = transient_allocator};
 
     hashmap_iterator iter   = {0};
-    while (map_iter(self->map, &iter)) {
-        str name = str_init_n(transient_allocator, iter.key_ptr, iter.key_size);
+    str              name;
+    void            *data;
+    while (str_map_iter(self->map, &iter, &name, &data)) {
         if (!str_hset_contains(known, name)) array_push(remove, name);
     }
 

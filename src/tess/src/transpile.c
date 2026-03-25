@@ -793,11 +793,12 @@ static lambda_closure_attrs toplevel_closure_attrs(transpile *self, str name) {
 static void generate_toplevel_contexts(transpile *self) {
 
     hashmap_iterator iter = {0};
-    while (map_iter(self->env->map, &iter)) {
-        tl_polytype *type = *(tl_polytype **)iter.data;
+    str              name;
+    void            *data;
+    while (str_map_iter(self->env->map, &iter, &name, &data)) {
+        tl_polytype *type = *(tl_polytype **)data;
 
         if (type->type->tag == tl_arrow && type->type->list.fvs.size) {
-            str name     = str_init_n(self->transient, iter.key_ptr, iter.key_size);
             int is_alloc = toplevel_closure_attrs(self, name).has_alloc;
             generate_context_struct(self, type->type->list.fvs, is_alloc);
         }

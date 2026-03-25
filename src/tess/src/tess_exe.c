@@ -741,9 +741,10 @@ static int resolve_dep_recursive(state *self, str dep_name, str dep_version,
 static hashmap *build_module_prefix_map(allocator *alloc, dep_resolve_ctx *ctx) {
     hashmap         *prefixes = map_new(alloc, str, str, 16);
     hashmap_iterator iter     = {0};
-    while (map_iter(ctx->module_owners, &iter)) {
-        str              mod    = str_init_n(alloc, iter.key_ptr, iter.key_size);
-        module_pkg_info *info   = iter.data;
+    str              mod;
+    void            *data;
+    while (str_map_iter(ctx->module_owners, &iter, &mod, &data)) {
+        module_pkg_info *info   = data;
         str              prefix = build_pkg_prefix(alloc, info->pkg_name, info->version);
         str_map_set(&prefixes, mod, &prefix);
     }
@@ -1233,8 +1234,9 @@ int compile(state *self) {
         }
         str              cur_prefix = build_pkg_prefix(self->arena, cur_pkg_name, cur_pkg_version);
         hashmap_iterator iter       = {0};
-        while (map_iter(self->scanner.modules_seen, &iter)) {
-            str mod = str_init_n(self->arena, iter.key_ptr, iter.key_size);
+        str              mod;
+        void            *mdata;
+        while (str_map_iter(self->scanner.modules_seen, &iter, &mod, &mdata)) {
             if (str_eq(mod, S("builtin")) || str_eq(mod, S("main"))) continue;
             if (!str_map_contains(module_prefixes, mod)) {
                 str_map_set(&module_prefixes, mod, &cur_prefix);
