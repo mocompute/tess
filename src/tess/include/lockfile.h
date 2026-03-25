@@ -13,18 +13,18 @@ typedef struct {
 } tl_locked_dep;
 
 typedef struct {
-    str name;         // source package name
-    str version;      // source package version
-    str dep_name;     // dependency package name
-    str dep_version;  // dependency version
+    str name;        // source package name
+    str version;     // source package version
+    str dep_name;    // dependency package name
+    str dep_version; // dependency version
 } tl_lock_edge;
 
 typedef struct {
-    u32             format;     // lock_format version
-    tl_locked_dep  *deps;
-    u32             dep_count;
-    tl_lock_edge   *edges;
-    u32             edge_count;
+    u32            format; // lock_format version
+    tl_locked_dep *deps;
+    u32            dep_count;
+    tl_lock_edge  *edges;
+    u32            edge_count;
 } tl_lockfile;
 
 // Parse a package.tl.lock file. Returns 0 on success.
@@ -35,7 +35,7 @@ int tl_lockfile_parse(allocator *alloc, char const *content, u32 content_len, tl
 
 // Write a package.tl.lock file. Returns 0 on success.
 // Deps and edges should already be sorted.
-int tl_lockfile_write(char const *path, tl_locked_dep const *deps, u32 dep_count,
-                      tl_lock_edge const *edges, u32 edge_count);
+int tl_lockfile_write(char const *path, tl_locked_dep const *deps, u32 dep_count, tl_lock_edge const *edges,
+                      u32 edge_count);
 
 #endif

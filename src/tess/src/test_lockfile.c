@@ -61,18 +61,19 @@ static int parse_lock(allocator *alloc, char const *content, tl_lockfile *out) {
 // ---------------------------------------------------------------------------
 
 static int test_basic_lockfile(void) {
-    int        error = 0;
-    allocator *alloc = arena_create(default_allocator(), 1024);
+    int         error = 0;
+    allocator  *alloc = arena_create(default_allocator(), 1024);
     tl_lockfile lf;
 
-    int        rc = parse_lock(alloc,
-                               "lock_format(1)\n"
-                               "\n"
-                               "locked(MathUtils,  \"1.0.0\", \"https://example.com/packages/\", \"sha256:abc123\")\n"
-                               "locked(LoggingLib, \"2.0.0\", \"https://example.com/packages/\", \"sha256:def456\")\n"
-                               "\n"
-                               "needs(MathUtils, \"1.0.0\", LoggingLib, \"2.0.0\")\n",
-                               &lf);
+    int         rc =
+      parse_lock(alloc,
+                 "lock_format(1)\n"
+                 "\n"
+                 "locked(MathUtils,  \"1.0.0\", \"https://example.com/packages/\", \"sha256:abc123\")\n"
+                 "locked(LoggingLib, \"2.0.0\", \"https://example.com/packages/\", \"sha256:def456\")\n"
+                 "\n"
+                 "needs(MathUtils, \"1.0.0\", LoggingLib, \"2.0.0\")\n",
+                 &lf);
 
     error += rc != 0;
     if (rc) goto done;
@@ -106,15 +107,15 @@ done:
 }
 
 static int test_lockfile_no_edges(void) {
-    int        error = 0;
-    allocator *alloc = arena_create(default_allocator(), 1024);
+    int         error = 0;
+    allocator  *alloc = arena_create(default_allocator(), 1024);
     tl_lockfile lf;
 
-    int        rc = parse_lock(alloc,
-                               "lock_format(1)\n"
-                               "locked(Foo, \"1.0.0\", \"https://example.com/\", \"sha256:aabbcc\")\n"
-                               "locked(Bar, \"2.0.0\", \"https://example.com/\", \"sha256:ddeeff\")\n",
-                               &lf);
+    int         rc = parse_lock(alloc,
+                                "lock_format(1)\n"
+                                        "locked(Foo, \"1.0.0\", \"https://example.com/\", \"sha256:aabbcc\")\n"
+                                        "locked(Bar, \"2.0.0\", \"https://example.com/\", \"sha256:ddeeff\")\n",
+                                &lf);
 
     error += rc != 0;
     if (rc) goto done;
@@ -131,13 +132,11 @@ done:
 }
 
 static int test_lockfile_missing_format(void) {
-    int        error = 0;
-    allocator *alloc = arena_create(default_allocator(), 1024);
+    int         error = 0;
+    allocator  *alloc = arena_create(default_allocator(), 1024);
     tl_lockfile lf;
 
-    int        rc = parse_lock(alloc,
-                               "locked(Foo, \"1.0.0\", \"https://example.com/\", \"sha256:abc\")\n",
-                               &lf);
+    int rc = parse_lock(alloc, "locked(Foo, \"1.0.0\", \"https://example.com/\", \"sha256:abc\")\n", &lf);
 
     // Should fail: no lock_format()
     error += rc != 1;
@@ -149,14 +148,14 @@ static int test_lockfile_missing_format(void) {
 }
 
 static int test_lockfile_wrong_format(void) {
-    int        error = 0;
-    allocator *alloc = arena_create(default_allocator(), 1024);
+    int         error = 0;
+    allocator  *alloc = arena_create(default_allocator(), 1024);
     tl_lockfile lf;
 
-    int        rc = parse_lock(alloc,
-                               "lock_format(2)\n"
-                               "locked(Foo, \"1.0.0\", \"https://example.com/\", \"sha256:abc\")\n",
-                               &lf);
+    int         rc = parse_lock(alloc,
+                                "lock_format(2)\n"
+                                        "locked(Foo, \"1.0.0\", \"https://example.com/\", \"sha256:abc\")\n",
+                                &lf);
 
     // Should fail: unsupported format version
     error += rc != 1;
@@ -168,14 +167,14 @@ static int test_lockfile_wrong_format(void) {
 }
 
 static int test_lockfile_bad_locked_argc(void) {
-    int        error = 0;
-    allocator *alloc = arena_create(default_allocator(), 1024);
+    int         error = 0;
+    allocator  *alloc = arena_create(default_allocator(), 1024);
     tl_lockfile lf;
 
-    int        rc = parse_lock(alloc,
-                               "lock_format(1)\n"
-                               "locked(Foo, \"1.0\")\n",
-                               &lf);
+    int         rc = parse_lock(alloc,
+                                "lock_format(1)\n"
+                                        "locked(Foo, \"1.0\")\n",
+                                &lf);
 
     // Should fail: too few args
     error += rc != 1;
@@ -187,14 +186,14 @@ static int test_lockfile_bad_locked_argc(void) {
 }
 
 static int test_lockfile_bad_needs_argc(void) {
-    int        error = 0;
-    allocator *alloc = arena_create(default_allocator(), 1024);
+    int         error = 0;
+    allocator  *alloc = arena_create(default_allocator(), 1024);
     tl_lockfile lf;
 
-    int        rc = parse_lock(alloc,
-                               "lock_format(1)\n"
-                               "needs(Foo, \"1.0\", Bar)\n",
-                               &lf);
+    int         rc = parse_lock(alloc,
+                                "lock_format(1)\n"
+                                        "needs(Foo, \"1.0\", Bar)\n",
+                                &lf);
 
     // Should fail: too few args
     error += rc != 1;
@@ -211,27 +210,27 @@ static int test_lockfile_roundtrip(void) {
 
     // Build test data
     tl_locked_dep deps[2] = {
-        {
-            .name     = S("Alpha"),
-            .version  = S("1.0.0"),
-            .base_url = S("https://example.com/packages/"),
-            .hash     = S("sha256:1111111111111111111111111111111111111111111111111111111111111111"),
-        },
-        {
-            .name     = S("Beta"),
-            .version  = S("2.0.0"),
-            .base_url = S("https://example.com/packages/"),
-            .hash     = S("sha256:2222222222222222222222222222222222222222222222222222222222222222"),
-        },
+      {
+        .name     = S("Alpha"),
+        .version  = S("1.0.0"),
+        .base_url = S("https://example.com/packages/"),
+        .hash     = S("sha256:1111111111111111111111111111111111111111111111111111111111111111"),
+      },
+      {
+        .name     = S("Beta"),
+        .version  = S("2.0.0"),
+        .base_url = S("https://example.com/packages/"),
+        .hash     = S("sha256:2222222222222222222222222222222222222222222222222222222222222222"),
+      },
     };
 
     tl_lock_edge edges[1] = {
-        {
-            .name        = S("Alpha"),
-            .version     = S("1.0.0"),
-            .dep_name    = S("Beta"),
-            .dep_version = S("2.0.0"),
-        },
+      {
+        .name        = S("Alpha"),
+        .version     = S("1.0.0"),
+        .dep_name    = S("Beta"),
+        .dep_version = S("2.0.0"),
+      },
     };
 
     // Write lock file
@@ -255,12 +254,14 @@ static int test_lockfile_roundtrip(void) {
         error += !str_eq(lf.deps[0].name, S("Alpha"));
         error += !str_eq(lf.deps[0].version, S("1.0.0"));
         error += !str_eq(lf.deps[0].base_url, S("https://example.com/packages/"));
-        error += !str_eq(lf.deps[0].hash, S("sha256:1111111111111111111111111111111111111111111111111111111111111111"));
+        error += !str_eq(lf.deps[0].hash,
+                         S("sha256:1111111111111111111111111111111111111111111111111111111111111111"));
 
         error += !str_eq(lf.deps[1].name, S("Beta"));
         error += !str_eq(lf.deps[1].version, S("2.0.0"));
         error += !str_eq(lf.deps[1].base_url, S("https://example.com/packages/"));
-        error += !str_eq(lf.deps[1].hash, S("sha256:2222222222222222222222222222222222222222222222222222222222222222"));
+        error += !str_eq(lf.deps[1].hash,
+                         S("sha256:2222222222222222222222222222222222222222222222222222222222222222"));
     }
     error += lf.edge_count != 1;
     if (lf.edge_count == 1) {

@@ -28,8 +28,7 @@ static str build_download_url(allocator *alloc, str base_url, str name, str vers
 
 static int parse_embedded_package_tl(allocator *alloc, tl_tpkg_archive *archive, tl_package *out) {
     for (u32 i = 0; i < archive->entries_count; i++) {
-        if (archive->entries[i].name_len == 10 &&
-            memcmp(archive->entries[i].name, "package.tl", 10) == 0) {
+        if (archive->entries[i].name_len == 10 && memcmp(archive->entries[i].name, "package.tl", 10) == 0) {
             platform_temp_file tf;
             if (platform_temp_file_create(&tf, ".tl")) return 1;
             if (file_write(tf.path, archive->entries[i].data, archive->entries[i].data_len)) {
@@ -59,9 +58,8 @@ static str resolve_dep_path(allocator *alloc, char const *work_dir, str dep_path
     return file_path_join(alloc, str_init_static(work_dir), dep_path);
 }
 
-static int resolve_dep(allocator *alloc, str name, str version, str base_url,
-                       str parent_name, str parent_version,
-                       tl_package_info const *pkg_info, tl_fetch_opts const *opts,
+static int resolve_dep(allocator *alloc, str name, str version, str base_url, str parent_name,
+                       str parent_version, tl_package_info const *pkg_info, tl_fetch_opts const *opts,
                        locked_dep_array *out_deps, lock_edge_array *out_edges) {
     // Skip if already resolved
     if (locked_dep_contains(out_deps, name, version)) {
@@ -78,10 +76,10 @@ static int resolve_dep(allocator *alloc, str name, str version, str base_url,
         return 0;
     }
 
-    str    tpkg_name = tl_tpkg_filename(alloc, name, version);
-    char  *data      = null;
-    u32    data_size = 0;
-    str    hash      = str_empty();
+    str   tpkg_name = tl_tpkg_filename(alloc, name, version);
+    char *data      = null;
+    u32   data_size = 0;
+    str   hash      = str_empty();
 
     if (!str_is_empty(base_url)) {
         // Download from URL
@@ -178,8 +176,8 @@ static int resolve_dep(allocator *alloc, str name, str version, str base_url,
         for (u32 i = 0; i < trans_pkg.dep_count; i++) {
             tl_package_dep *tdep = &trans_pkg.deps[i];
             str             turl = tdep->url;
-            if (resolve_dep(alloc, tdep->name, tdep->version, turl, name, version, pkg_info, opts,
-                            out_deps, out_edges)) {
+            if (resolve_dep(alloc, tdep->name, tdep->version, turl, name, version, pkg_info, opts, out_deps,
+                            out_edges)) {
                 return 1;
             }
         }
@@ -252,8 +250,8 @@ int tl_fetch(allocator *alloc, tl_fetch_opts const *opts) {
     // Try to parse existing lock file
     str         lock_path_str = str_init_static(opts->lock_path);
     tl_lockfile lockfile      = {0};
-    int         have_lock     = file_exists(lock_path_str) &&
-                                tl_lockfile_parse_file(alloc, opts->lock_path, &lockfile) == 0;
+    int         have_lock =
+      file_exists(lock_path_str) && tl_lockfile_parse_file(alloc, opts->lock_path, &lockfile) == 0;
 
     // Check if package.tl matches the lock file
     int lock_matches = 1;
@@ -354,10 +352,8 @@ int tl_fetch(allocator *alloc, tl_fetch_opts const *opts) {
 
     // Case: No lock file, or lock file out of date — resolve from scratch
     if (opts->verbose) {
-        if (!have_lock)
-            fprintf(stderr, "No lock file found, resolving dependencies...\n");
-        else
-            fprintf(stderr, "Lock file out of date, re-resolving dependencies...\n");
+        if (!have_lock) fprintf(stderr, "No lock file found, resolving dependencies...\n");
+        else fprintf(stderr, "Lock file out of date, re-resolving dependencies...\n");
     }
 
     // Create depend_path directory if it doesn't exist
@@ -384,8 +380,8 @@ int tl_fetch(allocator *alloc, tl_fetch_opts const *opts) {
             }
         }
 
-        if (resolve_dep(alloc, dep->name, dep->version, url, str_empty(), str_empty(),
-                        &pkg.info, opts, &resolved_deps, &resolved_edges)) {
+        if (resolve_dep(alloc, dep->name, dep->version, url, str_empty(), str_empty(), &pkg.info, opts,
+                        &resolved_deps, &resolved_edges)) {
             return 1;
         }
     }

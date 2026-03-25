@@ -117,15 +117,15 @@ void file_url_get_ext(allocator *alloc, char const *url, char **out, u32 *out_si
         return;
     }
 
-    char const *argv[] = {"curl", "-sSfL", url, NULL};
+    char const        *argv[]       = {"curl", "-sSfL", url, NULL};
 
-    char  *captured     = null;
-    size_t captured_len = 0;
+    char              *captured     = null;
+    size_t             captured_len = 0;
 
-    platform_exec_opts exec_opts = {
-        .argv                = argv,
-        .captured_output     = &captured,
-        .captured_output_len = &captured_len,
+    platform_exec_opts exec_opts    = {
+         .argv                = argv,
+         .captured_output     = &captured,
+         .captured_output_len = &captured_len,
     };
 
     int rc = platform_exec(&exec_opts);

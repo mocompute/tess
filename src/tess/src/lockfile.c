@@ -1,6 +1,6 @@
 #include "lockfile.h"
-#include "ast.h"
 #include "array.h"
+#include "ast.h"
 #include "file.h"
 #include "parser.h"
 #include "platform.h"
@@ -34,8 +34,8 @@ fail:
 
 // Like extract_string but allows empty strings (for optional base_url field).
 // Returns 0 on success (including empty string), 1 on error (not a string node).
-static int extract_string_or_empty(allocator *alloc, ast_node *node, char const *func_name,
-                                   int arg_index, str *out) {
+static int extract_string_or_empty(allocator *alloc, ast_node *node, char const *func_name, int arg_index,
+                                   str *out) {
     if (ast_node_is_nfa(node) && node->named_application.n_arguments == 1) {
         node = node->named_application.arguments[0];
     }
@@ -122,8 +122,8 @@ int tl_lockfile_parse_file(allocator *alloc, char const *path, tl_lockfile *out)
     }
 
     // Dynamic arrays for building results
-    locked_dep_array deps  = {.alloc = alloc};
-    lock_edge_array  edges = {.alloc = alloc};
+    locked_dep_array deps        = {.alloc = alloc};
+    lock_edge_array  edges       = {.alloc = alloc};
 
     int              error       = 0;
     int              format_seen = 0;
@@ -161,8 +161,7 @@ int tl_lockfile_parse_file(allocator *alloc, char const *path, tl_lockfile *out)
                 continue;
             }
             if (val != 1) {
-                fprintf(stderr,
-                        "package.tl.lock: error: unsupported lock_format version %d (expected 1)\n",
+                fprintf(stderr, "package.tl.lock: error: unsupported lock_format version %d (expected 1)\n",
                         (int)val);
                 error = 1;
                 continue;
@@ -206,8 +205,7 @@ int tl_lockfile_parse_file(allocator *alloc, char const *path, tl_lockfile *out)
 
         } else if (str_eq(func_name, S("needs"))) {
             if (argc != 4) {
-                fprintf(stderr, "package.tl.lock: error: needs() expects 4 arguments, got %d\n",
-                        (int)argc);
+                fprintf(stderr, "package.tl.lock: error: needs() expects 4 arguments, got %d\n", (int)argc);
                 error = 1;
                 continue;
             }
@@ -281,8 +279,8 @@ int tl_lockfile_parse(allocator *alloc, char const *content, u32 content_len, tl
 // Writer
 // ---------------------------------------------------------------------------
 
-int tl_lockfile_write(char const *path, tl_locked_dep const *deps, u32 dep_count,
-                      tl_lock_edge const *edges, u32 edge_count) {
+int tl_lockfile_write(char const *path, tl_locked_dep const *deps, u32 dep_count, tl_lock_edge const *edges,
+                      u32 edge_count) {
     FILE *f = fopen(path, "w");
     if (!f) {
         perror("lockfile: failed to open output file");
@@ -292,19 +290,17 @@ int tl_lockfile_write(char const *path, tl_locked_dep const *deps, u32 dep_count
     fprintf(f, "lock_format(1)\n\n");
 
     for (u32 i = 0; i < dep_count; i++) {
-        fprintf(f, "locked(%.*s, \"%.*s\", \"%.*s\", \"%.*s\")\n",
-                (int)str_len(deps[i].name), str_buf(&deps[i].name),
-                (int)str_len(deps[i].version), str_buf(&deps[i].version),
-                (int)str_len(deps[i].base_url), str_buf(&deps[i].base_url),
-                (int)str_len(deps[i].hash), str_buf(&deps[i].hash));
+        fprintf(f, "locked(%.*s, \"%.*s\", \"%.*s\", \"%.*s\")\n", (int)str_len(deps[i].name),
+                str_buf(&deps[i].name), (int)str_len(deps[i].version), str_buf(&deps[i].version),
+                (int)str_len(deps[i].base_url), str_buf(&deps[i].base_url), (int)str_len(deps[i].hash),
+                str_buf(&deps[i].hash));
     }
 
     if (edge_count > 0) {
         fprintf(f, "\n");
         for (u32 i = 0; i < edge_count; i++) {
-            fprintf(f, "needs(%.*s, \"%.*s\", %.*s, \"%.*s\")\n",
-                    (int)str_len(edges[i].name), str_buf(&edges[i].name),
-                    (int)str_len(edges[i].version), str_buf(&edges[i].version),
+            fprintf(f, "needs(%.*s, \"%.*s\", %.*s, \"%.*s\")\n", (int)str_len(edges[i].name),
+                    str_buf(&edges[i].name), (int)str_len(edges[i].version), str_buf(&edges[i].version),
                     (int)str_len(edges[i].dep_name), str_buf(&edges[i].dep_name),
                     (int)str_len(edges[i].dep_version), str_buf(&edges[i].dep_version));
         }

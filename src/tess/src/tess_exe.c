@@ -692,7 +692,8 @@ static int resolve_dep_recursive(state *self, str dep_name, str dep_version,
     for (u16 i = 0; i < archive.metadata.depends_count; i++) {
         str trans_name    = str_empty();
         str trans_version = str_empty();
-        if (tl_tpkg_parse_dep_string(self->arena, archive.metadata.depends[i], &trans_name, &trans_version)) {
+        if (tl_tpkg_parse_dep_string(self->arena, archive.metadata.depends[i], &trans_name,
+                                     &trans_version)) {
             fprintf(stderr, "error: malformed dependency string '%s' in package '%s'\n",
                     str_cstr(&archive.metadata.depends[i]), str_cstr(&dep_name));
             return 1;
@@ -831,7 +832,8 @@ static int load_package_deps(state *self, str_array *out_pkg_files, hashmap **ou
         for (u16 j = 0; j < archive.metadata.depends_count; j++) {
             str trans_name    = str_empty();
             str trans_version = str_empty();
-            if (tl_tpkg_parse_dep_string(self->arena, archive.metadata.depends[j], &trans_name, &trans_version)) {
+            if (tl_tpkg_parse_dep_string(self->arena, archive.metadata.depends[j], &trans_name,
+                                         &trans_version)) {
                 fprintf(stderr, "error: malformed dependency string '%s' in package '%s'\n",
                         str_cstr(&archive.metadata.depends[j]), str_cstr(&dep->name));
                 return 1;
@@ -1049,20 +1051,20 @@ static void query_c_compiler_defines(state *self) {
         if (platform_temp_file_create(&empty_file, ".c")) return;
     }
 
-    char const *argv_msvc[] = {cc, "/Zc:preprocessor", "/PD", "/E", empty_file.path, NULL};
-    char const *argv_gcc[]  = {cc, "-dM", "-E", "-x", "c", "NUL", NULL};
-    char const **argv       = is_msvc_compiler(self) ? argv_msvc : argv_gcc;
+    char const  *argv_msvc[] = {cc, "/Zc:preprocessor", "/PD", "/E", empty_file.path, NULL};
+    char const  *argv_gcc[]  = {cc, "-dM", "-E", "-x", "c", "NUL", NULL};
+    char const **argv        = is_msvc_compiler(self) ? argv_msvc : argv_gcc;
 #else
-    char const *argv[]      = {cc, "-dM", "-E", "-x", "c", "/dev/null", NULL};
+    char const *argv[] = {cc, "-dM", "-E", "-x", "c", "/dev/null", NULL};
 #endif
 
     char              *output     = NULL;
     size_t             output_len = 0;
 
     platform_exec_opts opts       = {
-              .argv                = argv,
-              .captured_output     = &output,
-              .captured_output_len = &output_len,
+            .argv                = argv,
+            .captured_output     = &output,
+            .captured_output_len = &output_len,
     };
 
     int rc = platform_exec(&opts);
@@ -1071,7 +1073,10 @@ static void query_c_compiler_defines(state *self) {
     if (is_msvc_compiler(self)) platform_temp_file_delete(&empty_file);
 #endif
 
-    if (rc != 0 || !output) { free(output); return; }
+    if (rc != 0 || !output) {
+        free(output);
+        return;
+    }
 
     // Feed CC output through source scanner directive parser to extract define names
     // gcc/clang emit ~400 predefined macros, MSVC ~16.
@@ -2082,11 +2087,11 @@ static int unpack_files(state *self) {
 
 static int fetch_deps(state *self) {
     tl_fetch_opts opts = {
-        .package_tl_path = "package.tl",
-        .lock_path       = "package.tl.lock",
-        .work_dir        = ".",
-        .url_opts        = null,
-        .verbose         = self->verbose,
+      .package_tl_path = "package.tl",
+      .lock_path       = "package.tl.lock",
+      .work_dir        = ".",
+      .url_opts        = null,
+      .verbose         = self->verbose,
     };
     return tl_fetch(self->arena, &opts);
 }
@@ -2613,10 +2618,9 @@ done:
 
     if (self.report_stats && !result) {
         print_stats_header();
-        fprintf(stderr, "%-20s %12.3f %12s %12s\n", "Stdlib Extract",
-                self.stats.stdlib_extract_time_ms, "-", "-");
-        fprintf(stderr, "%-20s %12.3f %12s %12s\n", "CC Defines",
-                self.stats.cc_defines_time_ms, "-", "-");
+        fprintf(stderr, "%-20s %12.3f %12s %12s\n", "Stdlib Extract", self.stats.stdlib_extract_time_ms,
+                "-", "-");
+        fprintf(stderr, "%-20s %12.3f %12s %12s\n", "CC Defines", self.stats.cc_defines_time_ms, "-", "-");
         print_stats_row("Parsing", self.stats.parse_time_ms, self.stats.parse_peak_mem,
                         self.stats.parse_final_mem);
         print_stats_row("Type Inference", self.stats.infer_time_ms, self.stats.infer_peak_mem,
@@ -2624,9 +2628,9 @@ done:
         print_stats_row("Transpilation", self.stats.transpile_time_ms, self.stats.transpile_peak_mem,
                         self.stats.transpile_final_mem);
 
-        double total_ms =
-          self.stats.stdlib_extract_time_ms + self.stats.cc_defines_time_ms +
-          self.stats.parse_time_ms + self.stats.infer_time_ms + self.stats.transpile_time_ms;
+        double total_ms = self.stats.stdlib_extract_time_ms + self.stats.cc_defines_time_ms +
+                          self.stats.parse_time_ms + self.stats.infer_time_ms +
+                          self.stats.transpile_time_ms;
         size_t total_peak =
           self.stats.parse_peak_mem + self.stats.infer_peak_mem + self.stats.transpile_peak_mem;
 

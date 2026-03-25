@@ -613,13 +613,13 @@ int tl_tpkg_pack(allocator *alloc, char const *output_path, str_sized files, str
 
     // Build metadata
     tl_tpkg_metadata meta = {
-      .name                   = str_init(alloc, opts.name),
-      .author                 = opts.author ? str_init(alloc, opts.author) : str_empty(),
-      .version                = str_init(alloc, opts.version),
-      .modules                = opts.modules,
-      .module_count           = opts.module_count,
-      .depends                = opts.depends,
-      .depends_count          = opts.depends_count,
+      .name          = str_init(alloc, opts.name),
+      .author        = opts.author ? str_init(alloc, opts.author) : str_empty(),
+      .version       = str_init(alloc, opts.version),
+      .modules       = opts.modules,
+      .module_count  = opts.module_count,
+      .depends       = opts.depends,
+      .depends_count = opts.depends_count,
     };
 
     // Write archive

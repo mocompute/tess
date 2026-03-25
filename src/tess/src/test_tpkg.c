@@ -68,13 +68,13 @@ static tl_tpkg_metadata make_test_metadata(allocator *alloc) {
     test_modules[0] = str_init(alloc, "Foo");
     test_modules[1] = str_init(alloc, "Bar");
     return (tl_tpkg_metadata){
-      .name                   = str_init(alloc, "TestLib"),
-      .author                 = str_init(alloc, "Tester"),
-      .version                = str_init(alloc, "1.0.0"),
-      .modules                = test_modules,
-      .module_count           = 2,
-      .depends                = null,
-      .depends_count          = 0,
+      .name          = str_init(alloc, "TestLib"),
+      .author        = str_init(alloc, "Tester"),
+      .version       = str_init(alloc, "1.0.0"),
+      .modules       = test_modules,
+      .module_count  = 2,
+      .depends       = null,
+      .depends_count = 0,
     };
 }
 
@@ -301,7 +301,7 @@ static int test_metadata_roundtrip(void) {
     modules[2] = str_init(alloc, "Helper");
 
     str depends[1];
-    depends[0] = str_init(alloc, "Lib=1.0.0");
+    depends[0]            = str_init(alloc, "Lib=1.0.0");
 
     tl_tpkg_metadata meta = {
       .name          = str_init(alloc, "MetaTest"),
@@ -355,13 +355,13 @@ static int test_metadata_empty_fields(void) {
     make_temp_path(path, sizeof(path), "test_tpkg_metadata_empty.tpkg");
 
     tl_tpkg_metadata meta = {
-      .name                   = str_init(alloc, "MinimalLib"),
-      .author                 = str_empty(),
-      .version                = str_init(alloc, "0.1"),
-      .modules                = null,
-      .module_count           = 0,
-      .depends                = null,
-      .depends_count          = 0,
+      .name          = str_init(alloc, "MinimalLib"),
+      .author        = str_empty(),
+      .version       = str_init(alloc, "0.1"),
+      .modules       = null,
+      .module_count  = 0,
+      .depends       = null,
+      .depends_count = 0,
     };
 
     tl_tpkg_entry entry = {"a.tl", 4, (byte const *)"x", 1};
@@ -406,13 +406,13 @@ static int test_metadata_unicode(void) {
     unicode_modules[1]    = str_init(alloc, "Функция");
 
     tl_tpkg_metadata meta = {
-      .name                   = str_init(alloc, "Bibliothèque"),
-      .author                 = str_init(alloc, "日本語 Author™"),
-      .version                = str_init(alloc, "1.0.0-β"),
-      .modules                = unicode_modules,
-      .module_count           = 2,
-      .depends                = null,
-      .depends_count          = 0,
+      .name          = str_init(alloc, "Bibliothèque"),
+      .author        = str_init(alloc, "日本語 Author™"),
+      .version       = str_init(alloc, "1.0.0-β"),
+      .modules       = unicode_modules,
+      .module_count  = 2,
+      .depends       = null,
+      .depends_count = 0,
     };
 
     tl_tpkg_entry entry = {"test.tl", 7, (byte const *)"content", 7};
@@ -457,13 +457,13 @@ static int test_corrupted_metadata(void) {
     test_mods[0]          = str_init(alloc, "Foo");
 
     tl_tpkg_metadata meta = {
-      .name                   = str_init(alloc, "TestLib"),
-      .author                 = str_init(alloc, "Author"),
-      .version                = str_init(alloc, "1.0.0"),
-      .modules                = test_mods,
-      .module_count           = 1,
-      .depends                = null,
-      .depends_count          = 0,
+      .name          = str_init(alloc, "TestLib"),
+      .author        = str_init(alloc, "Author"),
+      .version       = str_init(alloc, "1.0.0"),
+      .modules       = test_mods,
+      .module_count  = 1,
+      .depends       = null,
+      .depends_count = 0,
     };
 
     tl_tpkg_entry entry = {"test.tl", 7, (byte const *)"content", 7};
@@ -660,7 +660,6 @@ static int test_pack_with_manifest(void) {
             opts.depends[i] = str_cat_3(alloc, pkg.deps[i].name, S("="), pkg.deps[i].version);
         }
     }
-
 
     // Set up files array with the source file (normalized path)
     str       file_str = file_path_normalize(alloc, str_init(alloc, src_path));
@@ -1203,16 +1202,16 @@ static int setup_consumer_and_compile(char const *dir_suffix, char const *packag
 // Library has one module (Greeter) with greet() returning 42.
 // Consumer calls Greeter.greet() from main() and returns the result.
 static int test_e2e_basic_package(void) {
-    char         tpkg_path[512];
-    char const  *files[] = {"greeter.tl"};
-    char const  *srcs[]  = {"#module Greeter\n\ngreet() { 42 }\n"};
-    if (pack_lib("e2e_basic_lib/", "format(1)\npackage(Greeter)\nversion(\"1.0.0\")\nexport(Greeter)\n", files,
-                 srcs, 1, "Greeter-1.0.0.tpkg", "greeter.tl", tpkg_path, null))
+    char        tpkg_path[512];
+    char const *files[] = {"greeter.tl"};
+    char const *srcs[]  = {"#module Greeter\n\ngreet() { 42 }\n"};
+    if (pack_lib("e2e_basic_lib/", "format(1)\npackage(Greeter)\nversion(\"1.0.0\")\nexport(Greeter)\n",
+                 files, srcs, 1, "Greeter-1.0.0.tpkg", "greeter.tl", tpkg_path, null))
         return 1;
 
-    char         out_exe[512];
-    char const  *dep_srcs[]  = {tpkg_path};
-    char const  *dep_names[] = {"Greeter-1.0.0.tpkg"};
+    char        out_exe[512];
+    char const *dep_srcs[]  = {tpkg_path};
+    char const *dep_names[] = {"Greeter-1.0.0.tpkg"};
     if (setup_consumer_and_compile("e2e_basic_app/",
                                    "format(1)\npackage(App)\nversion(\"0.1.0\")\n"
                                    "depend(Greeter, \"1.0.0\")\ndepend_path(\"./libs\")\n",
@@ -1234,8 +1233,8 @@ static int test_e2e_version_mismatch(void) {
     char        tpkg_path[512];
     char const *files[] = {"greeter.tl"};
     char const *srcs[]  = {"#module Greeter\n\ngreet() { 42 }\n"};
-    if (pack_lib("e2e_vermis_lib/", "format(1)\npackage(Greeter)\nversion(\"1.0.0\")\nexport(Greeter)\n", files,
-                 srcs, 1, "Greeter-1.0.0.tpkg", "greeter.tl", tpkg_path, null))
+    if (pack_lib("e2e_vermis_lib/", "format(1)\npackage(Greeter)\nversion(\"1.0.0\")\nexport(Greeter)\n",
+                 files, srcs, 1, "Greeter-1.0.0.tpkg", "greeter.tl", tpkg_path, null))
         return 1;
 
     // Consumer expects version 2.0.0 — should fail
@@ -1270,26 +1269,27 @@ static int test_e2e_dep_not_found(void) {
 // Library has MathLib (public, imports internal.tl) and MathLib.Internal (nested).
 // Consumer uses MathLib.add() which internally calls MathLib.Internal.check().
 static int test_e2e_multi_file_library(void) {
-    char        tpkg_path[512];
+    char tpkg_path[512];
     // internal.tl is resolved automatically via #import in math.tl
     char const *files[] = {"math.tl", "internal.tl"};
     char const *srcs[]  = {
       "#module MathLib\n#import \"internal.tl\"\n\n"
-      "add(a, b) {\n  MathLib.Internal.check(a)\n  MathLib.Internal.check(b)\n  a + b\n}\n",
+       "add(a, b) {\n  MathLib.Internal.check(a)\n  MathLib.Internal.check(b)\n  a + b\n}\n",
       "#module MathLib.Internal\n\ncheck(x) {\n  if x < 0 { 0 - x }\n  else { x }\n}\n",
     };
-    if (pack_lib("e2e_multi_lib/", "format(1)\npackage(MathLib)\nversion(\"1.0.0\")\nexport(MathLib)\n", files,
-                 srcs, 2, "MathLib-1.0.0.tpkg", "math.tl", tpkg_path, null))
+    if (pack_lib("e2e_multi_lib/", "format(1)\npackage(MathLib)\nversion(\"1.0.0\")\nexport(MathLib)\n",
+                 files, srcs, 2, "MathLib-1.0.0.tpkg", "math.tl", tpkg_path, null))
         return 1;
 
     char        out_exe[512];
     char const *dep_srcs[]  = {tpkg_path};
     char const *dep_names[] = {"MathLib-1.0.0.tpkg"};
     if (setup_consumer_and_compile(
-            "e2e_multi_app/",
-            "format(1)\npackage(App)\nversion(\"0.1.0\")\ndepend(MathLib, \"1.0.0\")\ndepend_path(\"./libs\")\n",
-            "#module main\n\nmain() {\n  result := MathLib.add(17, 25)\n  result\n}\n", "main.tl", dep_srcs,
-            dep_names, 1, out_exe) != 0)
+          "e2e_multi_app/",
+          "format(1)\npackage(App)\nversion(\"0.1.0\")\ndepend(MathLib, "
+          "\"1.0.0\")\ndepend_path(\"./libs\")\n",
+          "#module main\n\nmain() {\n  result := MathLib.add(17, 25)\n  result\n}\n", "main.tl", dep_srcs,
+          dep_names, 1, out_exe) != 0)
         return 1;
 
     int exit_code = run_exe(out_exe);
@@ -1316,7 +1316,8 @@ static int test_e2e_transitive_deps(void) {
 
     char cmd[2048];
     snprintf(cmd, sizeof(cmd),
-             CD_CMD " \"%s\" && \"%s\" pack --no-standard-includes -S \"%s\" logger.tl -o LogLib-1.0.0.tpkg 2>&1",
+             CD_CMD
+             " \"%s\" && \"%s\" pack --no-standard-includes -S \"%s\" logger.tl -o LogLib-1.0.0.tpkg 2>&1",
              loglib_dir, e2e_tess_exe, e2e_stdlib_dir);
     if (run_cmd(cmd) != 0) {
         fprintf(stderr, "  tess pack LogLib failed\n");
@@ -1351,7 +1352,8 @@ static int test_e2e_transitive_deps(void) {
     copy_file(src_tpkg, dst_tpkg);
 
     snprintf(cmd, sizeof(cmd),
-             CD_CMD " \"%s\" && \"%s\" pack --no-standard-includes -S \"%s\" math.tl -o MathLib-2.0.0.tpkg 2>&1",
+             CD_CMD
+             " \"%s\" && \"%s\" pack --no-standard-includes -S \"%s\" math.tl -o MathLib-2.0.0.tpkg 2>&1",
              mathlib_dir, e2e_tess_exe, e2e_stdlib_dir);
     if (run_cmd(cmd) != 0) {
         fprintf(stderr, "  tess pack MathLib failed\n");
@@ -1452,7 +1454,8 @@ static int test_e2e_diamond_deps(void) {
     copy_file(src_tpkg, dst_tpkg);
 
     snprintf(cmd, sizeof(cmd),
-             CD_CMD " \"%s\" && \"%s\" pack --no-standard-includes -S \"%s\" moda.tl -o LibA-1.0.0.tpkg 2>&1",
+             CD_CMD
+             " \"%s\" && \"%s\" pack --no-standard-includes -S \"%s\" moda.tl -o LibA-1.0.0.tpkg 2>&1",
              liba_dir, e2e_tess_exe, e2e_stdlib_dir);
     if (run_cmd(cmd) != 0) {
         fprintf(stderr, "  tess pack LibA failed\n");
@@ -1481,7 +1484,8 @@ static int test_e2e_diamond_deps(void) {
     copy_file(src_tpkg, dst_tpkg);
 
     snprintf(cmd, sizeof(cmd),
-             CD_CMD " \"%s\" && \"%s\" pack --no-standard-includes -S \"%s\" modb.tl -o LibB-1.0.0.tpkg 2>&1",
+             CD_CMD
+             " \"%s\" && \"%s\" pack --no-standard-includes -S \"%s\" modb.tl -o LibB-1.0.0.tpkg 2>&1",
              libb_dir, e2e_tess_exe, e2e_stdlib_dir);
     if (run_cmd(cmd) != 0) {
         fprintf(stderr, "  tess pack LibB failed\n");
@@ -1850,19 +1854,18 @@ static int test_e2e_internal_module_accessible(void) {
     char const *files[] = {"mathpub.tl", "mathint.tl"};
     char const *srcs[]  = {"#module MathPub\n#import \"mathint.tl\"\n\npub_val() { 10 }\n",
                            "#module MathInt\n\nint_val() { 32 }\n"};
-    if (pack_lib("e2e_internal_lib/",
-                 "format(1)\npackage(MathPkg)\nversion(\"1.0.0\")\nexport(MathPub)\n", files, srcs, 2,
-                 "MathPkg-1.0.0.tpkg", "mathpub.tl", tpkg_path, null))
+    if (pack_lib("e2e_internal_lib/", "format(1)\npackage(MathPkg)\nversion(\"1.0.0\")\nexport(MathPub)\n",
+                 files, srcs, 2, "MathPkg-1.0.0.tpkg", "mathpub.tl", tpkg_path, null))
         return 1;
 
     char        out_exe[512];
     char const *dep_srcs[]  = {tpkg_path};
     char const *dep_names[] = {"MathPkg-1.0.0.tpkg"};
-    if (setup_consumer_and_compile(
-            "e2e_internal_app/",
-            "format(1)\npackage(App)\nversion(\"0.1.0\")\ndepend(MathPkg, \"1.0.0\")\ndepend_path(\"./libs\")\n",
-            "#module main\n\nmain() {\n  MathPub.pub_val() + MathInt.int_val()\n}\n", "main.tl", dep_srcs,
-            dep_names, 1, out_exe) != 0)
+    if (setup_consumer_and_compile("e2e_internal_app/",
+                                   "format(1)\npackage(App)\nversion(\"0.1.0\")\ndepend(MathPkg, "
+                                   "\"1.0.0\")\ndepend_path(\"./libs\")\n",
+                                   "#module main\n\nmain() {\n  MathPub.pub_val() + MathInt.int_val()\n}\n",
+                                   "main.tl", dep_srcs, dep_names, 1, out_exe) != 0)
         return 1;
 
     int exit_code = run_exe(out_exe);
@@ -1878,18 +1881,19 @@ static int test_e2e_generic_package(void) {
     char        tpkg_path[512];
     char const *files[] = {"genlib.tl"};
     char const *srcs[]  = {"#module GenLib\n\nidentity(x) { x }\nadd(a, b) { a + b }\n"};
-    if (pack_lib("e2e_generic_lib/", "format(1)\npackage(GenLib)\nversion(\"1.0.0\")\nexport(GenLib)\n", files,
-                 srcs, 1, "GenLib-1.0.0.tpkg", "genlib.tl", tpkg_path, null))
+    if (pack_lib("e2e_generic_lib/", "format(1)\npackage(GenLib)\nversion(\"1.0.0\")\nexport(GenLib)\n",
+                 files, srcs, 1, "GenLib-1.0.0.tpkg", "genlib.tl", tpkg_path, null))
         return 1;
 
     char        out_exe[512];
     char const *dep_srcs[]  = {tpkg_path};
     char const *dep_names[] = {"GenLib-1.0.0.tpkg"};
     if (setup_consumer_and_compile(
-            "e2e_generic_app/",
-            "format(1)\npackage(App)\nversion(\"0.1.0\")\ndepend(GenLib, \"1.0.0\")\ndepend_path(\"./libs\")\n",
-            "#module main\n\nmain() {\n  x := GenLib.identity(40)\n  GenLib.add(x, 2)\n}\n", "main.tl",
-            dep_srcs, dep_names, 1, out_exe) != 0)
+          "e2e_generic_app/",
+          "format(1)\npackage(App)\nversion(\"0.1.0\")\ndepend(GenLib, "
+          "\"1.0.0\")\ndepend_path(\"./libs\")\n",
+          "#module main\n\nmain() {\n  x := GenLib.identity(40)\n  GenLib.add(x, 2)\n}\n", "main.tl",
+          dep_srcs, dep_names, 1, out_exe) != 0)
         return 1;
 
     int exit_code = run_exe(out_exe);
@@ -2511,8 +2515,8 @@ static int test_e2e_source_pack(void) {
 
     char cmd[2048];
     snprintf(cmd, sizeof(cmd),
-             CD_CMD " \"%s\" && \"%s\" pack --no-standard-includes -S \"%s\" -o MyLib-1.0.0.tpkg 2>&1", lib_dir,
-             e2e_tess_exe, e2e_stdlib_dir);
+             CD_CMD " \"%s\" && \"%s\" pack --no-standard-includes -S \"%s\" -o MyLib-1.0.0.tpkg 2>&1",
+             lib_dir, e2e_tess_exe, e2e_stdlib_dir);
     if (run_cmd(cmd) != 0) {
         fprintf(stderr, "  tess pack with source() failed\n");
         return 1;
@@ -2587,8 +2591,9 @@ static int test_e2e_source_validate(void) {
     }
 
     char cmd[2048];
-    snprintf(cmd, sizeof(cmd), CD_CMD " \"%s\" && \"%s\" pack --validate --no-standard-includes -S \"%s\" 2>&1",
-             dir, e2e_tess_exe, e2e_stdlib_dir);
+    snprintf(cmd, sizeof(cmd),
+             CD_CMD " \"%s\" && \"%s\" pack --validate --no-standard-includes -S \"%s\" 2>&1", dir,
+             e2e_tess_exe, e2e_stdlib_dir);
     if (run_cmd(cmd) != 0) {
         fprintf(stderr, "  tess validate with source() failed\n");
         return 1;
@@ -2825,9 +2830,9 @@ static int test_e2e_source_cli_override_warning(void) {
 // Test: package-versioned name mangling.
 // Transpiled C output must contain "pkg__ver__Module__fn" prefix for module symbols.
 static int test_e2e_pkg_prefix_mangling(void) {
-    char *output = lib_emit_c_output("e2e_pkg_prefix/",
-                                     "format(1)\npackage(mylib)\nversion(\"1.2.0\")\nexport(Math)\n", "math.tl",
-                                     "#module Math\n\nadd(x: Int, y: Int) -> Int { x + y }\n");
+    char *output =
+      lib_emit_c_output("e2e_pkg_prefix/", "format(1)\npackage(mylib)\nversion(\"1.2.0\")\nexport(Math)\n",
+                        "math.tl", "#module Math\n\nadd(x: Int, y: Int) -> Int { x + y }\n");
     if (!output) return 1;
     if (!strstr(output, "mylib__1_2_0__Math__add__2")) {
         fprintf(stderr, "  expected 'mylib__1_2_0__Math__add__2' in transpiled output\n");
@@ -2843,18 +2848,19 @@ static int test_e2e_pkg_prefix_cross_module(void) {
     char const *srcs[]  = {"#module Helper\n\nfoo() -> Int { 10 }\n",
                            "#module Greeter\n\ngreet() -> Int { Helper.foo() + 32 }\n"};
     if (pack_lib("e2e_pkg_xmod_lib/",
-                 "format(1)\npackage(Greeter)\nversion(\"2.0.0\")\nexport(Greeter)\nexport(Helper)\n", files,
-                 srcs, 2, "Greeter-2.0.0.tpkg", "helper.tl greeter.tl", tpkg_path, null))
+                 "format(1)\npackage(Greeter)\nversion(\"2.0.0\")\nexport(Greeter)\nexport(Helper)\n",
+                 files, srcs, 2, "Greeter-2.0.0.tpkg", "helper.tl greeter.tl", tpkg_path, null))
         return 1;
 
     char        out_exe[512];
     char const *dep_srcs[]  = {tpkg_path};
     char const *dep_names[] = {"Greeter-2.0.0.tpkg"};
     if (setup_consumer_and_compile(
-            "e2e_pkg_xmod_app/",
-            "format(1)\npackage(App)\nversion(\"0.1.0\")\ndepend(Greeter, \"2.0.0\")\ndepend_path(\"./libs\")\n",
-            "#module main\n\nmain() {\n  r := Greeter.greet()\n  if r == 42 { 0 } else { 1 }\n}\n", "main.tl",
-            dep_srcs, dep_names, 1, out_exe) != 0)
+          "e2e_pkg_xmod_app/",
+          "format(1)\npackage(App)\nversion(\"0.1.0\")\ndepend(Greeter, "
+          "\"2.0.0\")\ndepend_path(\"./libs\")\n",
+          "#module main\n\nmain() {\n  r := Greeter.greet()\n  if r == 42 { 0 } else { 1 }\n}\n", "main.tl",
+          dep_srcs, dep_names, 1, out_exe) != 0)
         return 1;
 
     int exit_code = run_exe(out_exe);
@@ -2867,10 +2873,10 @@ static int test_e2e_pkg_prefix_cross_module(void) {
 
 // Test: c_export wrapper keeps clean C name while internal call uses pkg-prefixed name.
 static int test_e2e_pkg_prefix_c_export(void) {
-    char *output = lib_emit_c_output("e2e_pkg_cexport/",
-                                     "format(1)\npackage(mylib)\nversion(\"3.0.0\")\nexport(Api)\n", "api.tl",
-                                     "#module Api\n"
-                                     "[[c_export]] add(x: CInt, y: CInt) -> CInt { x + y }\n");
+    char *output = lib_emit_c_output(
+      "e2e_pkg_cexport/", "format(1)\npackage(mylib)\nversion(\"3.0.0\")\nexport(Api)\n", "api.tl",
+      "#module Api\n"
+      "[[c_export]] add(x: CInt, y: CInt) -> CInt { x + y }\n");
     if (!output) return 1;
 
     int error = 0;
@@ -2907,9 +2913,9 @@ static int test_e2e_pkg_prefix_no_package(void) {
 
 // Test: special characters in version string are converted to valid C identifiers.
 static int test_e2e_pkg_prefix_special_version(void) {
-    char *output = lib_emit_c_output("e2e_pkg_special_ver/",
-                                     "format(1)\npackage(mylib)\nversion(\"1.0.0-beta+build.42\")\nexport(Api)\n",
-                                     "api.tl", "#module Api\n\nfoo() -> Int { 1 }\n");
+    char *output = lib_emit_c_output(
+      "e2e_pkg_special_ver/", "format(1)\npackage(mylib)\nversion(\"1.0.0-beta+build.42\")\nexport(Api)\n",
+      "api.tl", "#module Api\n\nfoo() -> Int { 1 }\n");
     if (!output) return 1;
     // Version "1.0.0-beta+build.42" → "1_0_0_beta_build_42"
     if (!strstr(output, "mylib__1_0_0_beta_build_42__Api__foo__0")) {
@@ -2921,13 +2927,13 @@ static int test_e2e_pkg_prefix_special_version(void) {
 
 // Test: struct type definitions get package-versioned prefix in C output.
 static int test_e2e_pkg_prefix_struct(void) {
-    char *output = lib_emit_c_output("e2e_pkg_struct/",
-                                     "format(1)\npackage(geom)\nversion(\"1.0.0\")\nexport(Geom)\n", "geom.tl",
-                                     "#module Geom\n\n"
-                                     "Point : { x: Int, y: Int }\n\n"
-                                     "make_point(x: Int, y: Int) -> Point {\n"
-                                     "  Point(x = x, y = y)\n"
-                                     "}\n");
+    char *output = lib_emit_c_output(
+      "e2e_pkg_struct/", "format(1)\npackage(geom)\nversion(\"1.0.0\")\nexport(Geom)\n", "geom.tl",
+      "#module Geom\n\n"
+      "Point : { x: Int, y: Int }\n\n"
+      "make_point(x: Int, y: Int) -> Point {\n"
+      "  Point(x = x, y = y)\n"
+      "}\n");
     if (!output) return 1;
 
     int error = 0;
@@ -2944,17 +2950,16 @@ static int test_e2e_pkg_prefix_struct(void) {
 
 // Test: tagged union type and constructors get package-versioned prefix in C output.
 static int test_e2e_pkg_prefix_tagged_union(void) {
-    char *output = lib_emit_c_output("e2e_pkg_tagged/",
-                                     "format(1)\npackage(shapes)\nversion(\"2.0.0\")\nexport(Shapes)\n",
-                                     "shapes.tl",
-                                     "#module Shapes\n\n"
-                                     "Shape : | Circle { radius: Int } | Square { side: Int }\n\n"
-                                     "area(s: Shape) -> Int {\n"
-                                     "  when s {\n"
-                                     "    c: Circle { c.radius * c.radius }\n"
-                                     "    q: Square { q.side * q.side }\n"
-                                     "  }\n"
-                                     "}\n");
+    char *output = lib_emit_c_output(
+      "e2e_pkg_tagged/", "format(1)\npackage(shapes)\nversion(\"2.0.0\")\nexport(Shapes)\n", "shapes.tl",
+      "#module Shapes\n\n"
+      "Shape : | Circle { radius: Int } | Square { side: Int }\n\n"
+      "area(s: Shape) -> Int {\n"
+      "  when s {\n"
+      "    c: Circle { c.radius * c.radius }\n"
+      "    q: Square { q.side * q.side }\n"
+      "  }\n"
+      "}\n");
     if (!output) return 1;
 
     int error = 0;
@@ -3077,14 +3082,14 @@ static int test_e2e_pkg_prefix_generic(void) {
 
 // Test: __init function gets package-versioned prefix in C output.
 static int test_e2e_pkg_prefix_init_fn(void) {
-    char *output = lib_emit_c_output("e2e_pkg_init/",
-                                     "format(1)\npackage(mylib)\nversion(\"1.0.0\")\nexport(Mod)\n", "mod.tl",
-                                     "#module Mod\n\n"
-                                     "counter := 0\n\n"
-                                     "__init() {\n"
-                                     "  counter = 42\n"
-                                     "}\n\n"
-                                     "get_counter() { counter }\n");
+    char *output = lib_emit_c_output(
+      "e2e_pkg_init/", "format(1)\npackage(mylib)\nversion(\"1.0.0\")\nexport(Mod)\n", "mod.tl",
+      "#module Mod\n\n"
+      "counter := 0\n\n"
+      "__init() {\n"
+      "  counter = 42\n"
+      "}\n\n"
+      "get_counter() { counter }\n");
     if (!output) return 1;
     if (!strstr(output, "mylib__1_0_0__Mod____init__0")) {
         fprintf(stderr, "  expected 'mylib__1_0_0__Mod____init__0' in output\n");
@@ -3483,8 +3488,8 @@ static int test_e2e_fetch(void) {
 
     // -- First fetch: creates lock file --
     char cmd[2048];
-    snprintf(cmd, sizeof(cmd), CD_CMD " \"%s\" && \"%s\" fetch --no-standard-includes -S \"%s\" 2>&1", app_dir,
-             e2e_tess_exe, e2e_stdlib_dir);
+    snprintf(cmd, sizeof(cmd), CD_CMD " \"%s\" && \"%s\" fetch --no-standard-includes -S \"%s\" 2>&1",
+             app_dir, e2e_tess_exe, e2e_stdlib_dir);
     if (run_cmd(cmd) != 0) {
         fprintf(stderr, "  tess fetch failed\n");
         return 1;

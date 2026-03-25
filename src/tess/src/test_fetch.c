@@ -63,7 +63,7 @@ static int make_test_tpkg(allocator *alloc, char const *name, char const *versio
     tl_tpkg_entry entries[2];
     u32           entry_count = 0;
 
-    char dummy_name[128];
+    char          dummy_name[128];
     snprintf(dummy_name, sizeof(dummy_name), "%s.tl", name);
     char dummy_content[128];
     snprintf(dummy_content, sizeof(dummy_content), "#module %s\nval() { 42 }\n", name);
@@ -113,7 +113,7 @@ static int test_fetch_single_dep(void) {
     int        error = 0;
     allocator *alloc = arena_create(default_allocator(), 4096);
 
-    char work[512], libs[512];
+    char       work[512], libs[512];
     make_temp_path(work, sizeof(work), "fetch_single");
     platform_mkdir(work);
     snprintf(libs, sizeof(libs), "%slibs" SEP, work);
@@ -123,12 +123,11 @@ static int test_fetch_single_dep(void) {
     snprintf(pkg_path, sizeof(pkg_path), "%spackage.tl", work);
     snprintf(lock_path, sizeof(lock_path), "%spackage.tl.lock", work);
     remove(lock_path);
-    error += write_file(pkg_path,
-                        "format(1)\n"
-                        "package(MyApp)\n"
-                        "version(\"0.1.0\")\n"
-                        "depend(FooLib, \"1.0.0\", \"http://example.com/\")\n"
-                        "depend_path(\"libs\")\n");
+    error += write_file(pkg_path, "format(1)\n"
+                                  "package(MyApp)\n"
+                                  "version(\"0.1.0\")\n"
+                                  "depend(FooLib, \"1.0.0\", \"http://example.com/\")\n"
+                                  "depend_path(\"libs\")\n");
 
     // Create mock .tpkg
     char *tpkg_data;
@@ -175,7 +174,7 @@ static int test_fetch_two_deps(void) {
     int        error = 0;
     allocator *alloc = arena_create(default_allocator(), 4096);
 
-    char work[512], libs[512];
+    char       work[512], libs[512];
     make_temp_path(work, sizeof(work), "fetch_two");
     platform_mkdir(work);
     snprintf(libs, sizeof(libs), "%slibs" SEP, work);
@@ -185,13 +184,12 @@ static int test_fetch_two_deps(void) {
     snprintf(pkg_path, sizeof(pkg_path), "%spackage.tl", work);
     snprintf(lock_path, sizeof(lock_path), "%spackage.tl.lock", work);
     remove(lock_path);
-    error += write_file(pkg_path,
-                        "format(1)\n"
-                        "package(MyApp)\n"
-                        "version(\"0.1.0\")\n"
-                        "depend(Alpha, \"1.0.0\", \"http://example.com/\")\n"
-                        "depend(Beta, \"2.0.0\", \"http://example.com/\")\n"
-                        "depend_path(\"libs\")\n");
+    error += write_file(pkg_path, "format(1)\n"
+                                  "package(MyApp)\n"
+                                  "version(\"0.1.0\")\n"
+                                  "depend(Alpha, \"1.0.0\", \"http://example.com/\")\n"
+                                  "depend(Beta, \"2.0.0\", \"http://example.com/\")\n"
+                                  "depend_path(\"libs\")\n");
 
     char *alpha_data, *beta_data;
     u32   alpha_size, beta_size;
@@ -203,11 +201,11 @@ static int test_fetch_two_deps(void) {
     mock_url(&mock, "http://example.com/Beta-2.0.0.tpkg", beta_data, beta_size);
     file_url_get_opts url_opts = {.mock_responses = mock};
 
-    tl_fetch_opts opts = {
-      .package_tl_path = pkg_path,
-      .lock_path       = lock_path,
-      .work_dir        = work,
-      .url_opts        = &url_opts,
+    tl_fetch_opts     opts     = {
+              .package_tl_path = pkg_path,
+              .lock_path       = lock_path,
+              .work_dir        = work,
+              .url_opts        = &url_opts,
     };
     error += (tl_fetch(alloc, &opts) != 0);
 
@@ -230,7 +228,7 @@ static int test_fetch_no_deps(void) {
     int        error = 0;
     allocator *alloc = arena_create(default_allocator(), 4096);
 
-    char work[512];
+    char       work[512];
     make_temp_path(work, sizeof(work), "fetch_nodeps");
     platform_mkdir(work);
 
@@ -238,10 +236,9 @@ static int test_fetch_no_deps(void) {
     snprintf(pkg_path, sizeof(pkg_path), "%spackage.tl", work);
     snprintf(lock_path, sizeof(lock_path), "%spackage.tl.lock", work);
     remove(lock_path);
-    error += write_file(pkg_path,
-                        "format(1)\n"
-                        "package(MyApp)\n"
-                        "version(\"0.1.0\")\n");
+    error += write_file(pkg_path, "format(1)\n"
+                                  "package(MyApp)\n"
+                                  "version(\"0.1.0\")\n");
 
     tl_fetch_opts opts = {
       .package_tl_path = pkg_path,
@@ -259,7 +256,7 @@ static int test_fetch_no_depend_path(void) {
     int        error = 0;
     allocator *alloc = arena_create(default_allocator(), 4096);
 
-    char work[512];
+    char       work[512];
     make_temp_path(work, sizeof(work), "fetch_nodp");
     platform_mkdir(work);
 
@@ -267,11 +264,10 @@ static int test_fetch_no_depend_path(void) {
     snprintf(pkg_path, sizeof(pkg_path), "%spackage.tl", work);
     snprintf(lock_path, sizeof(lock_path), "%spackage.tl.lock", work);
     remove(lock_path);
-    error += write_file(pkg_path,
-                        "format(1)\n"
-                        "package(MyApp)\n"
-                        "version(\"0.1.0\")\n"
-                        "depend(FooLib, \"1.0.0\", \"http://example.com/\")\n");
+    error += write_file(pkg_path, "format(1)\n"
+                                  "package(MyApp)\n"
+                                  "version(\"0.1.0\")\n"
+                                  "depend(FooLib, \"1.0.0\", \"http://example.com/\")\n");
 
     tl_fetch_opts opts = {
       .package_tl_path = pkg_path,
@@ -290,7 +286,7 @@ static int test_fetch_download_failure(void) {
     int        error = 0;
     allocator *alloc = arena_create(default_allocator(), 4096);
 
-    char work[512], libs[512];
+    char       work[512], libs[512];
     make_temp_path(work, sizeof(work), "fetch_fail");
     platform_mkdir(work);
     snprintf(libs, sizeof(libs), "%slibs" SEP, work);
@@ -300,22 +296,21 @@ static int test_fetch_download_failure(void) {
     snprintf(pkg_path, sizeof(pkg_path), "%spackage.tl", work);
     snprintf(lock_path, sizeof(lock_path), "%spackage.tl.lock", work);
     remove(lock_path);
-    error += write_file(pkg_path,
-                        "format(1)\n"
-                        "package(MyApp)\n"
-                        "version(\"0.1.0\")\n"
-                        "depend(Missing, \"1.0.0\", \"http://example.com/\")\n"
-                        "depend_path(\"libs\")\n");
+    error += write_file(pkg_path, "format(1)\n"
+                                  "package(MyApp)\n"
+                                  "version(\"0.1.0\")\n"
+                                  "depend(Missing, \"1.0.0\", \"http://example.com/\")\n"
+                                  "depend_path(\"libs\")\n");
 
     // Empty mock — no URLs registered
-    hashmap          *mock    = map_create(alloc, sizeof(byte_sized), 8);
+    hashmap          *mock     = map_create(alloc, sizeof(byte_sized), 8);
     file_url_get_opts url_opts = {.mock_responses = mock};
 
-    tl_fetch_opts opts = {
-      .package_tl_path = pkg_path,
-      .lock_path       = lock_path,
-      .work_dir        = work,
-      .url_opts        = &url_opts,
+    tl_fetch_opts     opts     = {
+              .package_tl_path = pkg_path,
+              .lock_path       = lock_path,
+              .work_dir        = work,
+              .url_opts        = &url_opts,
     };
     error += (tl_fetch(alloc, &opts) != 1);
 
@@ -328,7 +323,7 @@ static int test_fetch_local_only_dep(void) {
     int        error = 0;
     allocator *alloc = arena_create(default_allocator(), 4096);
 
-    char work[512], libs[512];
+    char       work[512], libs[512];
     make_temp_path(work, sizeof(work), "fetch_local");
     platform_mkdir(work);
     snprintf(libs, sizeof(libs), "%slibs" SEP, work);
@@ -338,12 +333,11 @@ static int test_fetch_local_only_dep(void) {
     snprintf(pkg_path, sizeof(pkg_path), "%spackage.tl", work);
     snprintf(lock_path, sizeof(lock_path), "%spackage.tl.lock", work);
     remove(lock_path);
-    error += write_file(pkg_path,
-                        "format(1)\n"
-                        "package(MyApp)\n"
-                        "version(\"0.1.0\")\n"
-                        "depend(LocalLib, \"1.0.0\")\n"
-                        "depend_path(\"libs\")\n");
+    error += write_file(pkg_path, "format(1)\n"
+                                  "package(MyApp)\n"
+                                  "version(\"0.1.0\")\n"
+                                  "depend(LocalLib, \"1.0.0\")\n"
+                                  "depend_path(\"libs\")\n");
 
     // Create .tpkg and place in libs/
     char *tpkg_data;
@@ -379,7 +373,7 @@ static int test_fetch_lock_reuse(void) {
     int        error = 0;
     allocator *alloc = arena_create(default_allocator(), 4096);
 
-    char work[512], libs[512];
+    char       work[512], libs[512];
     make_temp_path(work, sizeof(work), "fetch_reuse");
     platform_mkdir(work);
     snprintf(libs, sizeof(libs), "%slibs" SEP, work);
@@ -389,12 +383,11 @@ static int test_fetch_lock_reuse(void) {
     snprintf(pkg_path, sizeof(pkg_path), "%spackage.tl", work);
     snprintf(lock_path, sizeof(lock_path), "%spackage.tl.lock", work);
     remove(lock_path);
-    error += write_file(pkg_path,
-                        "format(1)\n"
-                        "package(MyApp)\n"
-                        "version(\"0.1.0\")\n"
-                        "depend(FooLib, \"1.0.0\", \"http://example.com/\")\n"
-                        "depend_path(\"libs\")\n");
+    error += write_file(pkg_path, "format(1)\n"
+                                  "package(MyApp)\n"
+                                  "version(\"0.1.0\")\n"
+                                  "depend(FooLib, \"1.0.0\", \"http://example.com/\")\n"
+                                  "depend_path(\"libs\")\n");
 
     // Create .tpkg
     char *tpkg_data;
@@ -406,11 +399,11 @@ static int test_fetch_lock_reuse(void) {
     mock_url(&mock, "http://example.com/FooLib-1.0.0.tpkg", tpkg_data, tpkg_size);
     file_url_get_opts url_opts = {.mock_responses = mock};
 
-    tl_fetch_opts opts = {
-      .package_tl_path = pkg_path,
-      .lock_path       = lock_path,
-      .work_dir        = work,
-      .url_opts        = &url_opts,
+    tl_fetch_opts     opts     = {
+              .package_tl_path = pkg_path,
+              .lock_path       = lock_path,
+              .work_dir        = work,
+              .url_opts        = &url_opts,
     };
     error += (tl_fetch(alloc, &opts) != 0);
 
@@ -432,7 +425,7 @@ static int test_fetch_lock_outdated(void) {
     int        error = 0;
     allocator *alloc = arena_create(default_allocator(), 4096);
 
-    char work[512], libs[512];
+    char       work[512], libs[512];
     make_temp_path(work, sizeof(work), "fetch_outdated");
     platform_mkdir(work);
     snprintf(libs, sizeof(libs), "%slibs" SEP, work);
@@ -444,12 +437,11 @@ static int test_fetch_lock_outdated(void) {
     remove(lock_path);
 
     // First: one dependency
-    error += write_file(pkg_path,
-                        "format(1)\n"
-                        "package(MyApp)\n"
-                        "version(\"0.1.0\")\n"
-                        "depend(Alpha, \"1.0.0\", \"http://example.com/\")\n"
-                        "depend_path(\"libs\")\n");
+    error += write_file(pkg_path, "format(1)\n"
+                                  "package(MyApp)\n"
+                                  "version(\"0.1.0\")\n"
+                                  "depend(Alpha, \"1.0.0\", \"http://example.com/\")\n"
+                                  "depend_path(\"libs\")\n");
 
     char *alpha_data, *beta_data;
     u32   alpha_size, beta_size;
@@ -461,11 +453,11 @@ static int test_fetch_lock_outdated(void) {
     mock_url(&mock, "http://example.com/Beta-2.0.0.tpkg", beta_data, beta_size);
     file_url_get_opts url_opts = {.mock_responses = mock};
 
-    tl_fetch_opts opts = {
-      .package_tl_path = pkg_path,
-      .lock_path       = lock_path,
-      .work_dir        = work,
-      .url_opts        = &url_opts,
+    tl_fetch_opts     opts     = {
+              .package_tl_path = pkg_path,
+              .lock_path       = lock_path,
+              .work_dir        = work,
+              .url_opts        = &url_opts,
     };
     error += (tl_fetch(alloc, &opts) != 0);
 
@@ -475,13 +467,12 @@ static int test_fetch_lock_outdated(void) {
     error += (lockfile.dep_count != 1);
 
     // Add second dependency to package.tl
-    error += write_file(pkg_path,
-                        "format(1)\n"
-                        "package(MyApp)\n"
-                        "version(\"0.1.0\")\n"
-                        "depend(Alpha, \"1.0.0\", \"http://example.com/\")\n"
-                        "depend(Beta, \"2.0.0\", \"http://example.com/\")\n"
-                        "depend_path(\"libs\")\n");
+    error += write_file(pkg_path, "format(1)\n"
+                                  "package(MyApp)\n"
+                                  "version(\"0.1.0\")\n"
+                                  "depend(Alpha, \"1.0.0\", \"http://example.com/\")\n"
+                                  "depend(Beta, \"2.0.0\", \"http://example.com/\")\n"
+                                  "depend_path(\"libs\")\n");
 
     // Second fetch should detect outdated lock and re-resolve
     error += (tl_fetch(alloc, &opts) != 0);
@@ -499,7 +490,7 @@ static int test_fetch_archive_name_mismatch(void) {
     int        error = 0;
     allocator *alloc = arena_create(default_allocator(), 4096);
 
-    char work[512], libs[512];
+    char       work[512], libs[512];
     make_temp_path(work, sizeof(work), "fetch_mismatch");
     platform_mkdir(work);
     snprintf(libs, sizeof(libs), "%slibs" SEP, work);
@@ -509,12 +500,11 @@ static int test_fetch_archive_name_mismatch(void) {
     snprintf(pkg_path, sizeof(pkg_path), "%spackage.tl", work);
     snprintf(lock_path, sizeof(lock_path), "%spackage.tl.lock", work);
     remove(lock_path);
-    error += write_file(pkg_path,
-                        "format(1)\n"
-                        "package(MyApp)\n"
-                        "version(\"0.1.0\")\n"
-                        "depend(FooLib, \"1.0.0\", \"http://example.com/\")\n"
-                        "depend_path(\"libs\")\n");
+    error += write_file(pkg_path, "format(1)\n"
+                                  "package(MyApp)\n"
+                                  "version(\"0.1.0\")\n"
+                                  "depend(FooLib, \"1.0.0\", \"http://example.com/\")\n"
+                                  "depend_path(\"libs\")\n");
 
     // Create .tpkg with WRONG name (BarLib instead of FooLib)
     char *tpkg_data;
@@ -525,11 +515,11 @@ static int test_fetch_archive_name_mismatch(void) {
     mock_url(&mock, "http://example.com/FooLib-1.0.0.tpkg", tpkg_data, tpkg_size);
     file_url_get_opts url_opts = {.mock_responses = mock};
 
-    tl_fetch_opts opts = {
-      .package_tl_path = pkg_path,
-      .lock_path       = lock_path,
-      .work_dir        = work,
-      .url_opts        = &url_opts,
+    tl_fetch_opts     opts     = {
+              .package_tl_path = pkg_path,
+              .lock_path       = lock_path,
+              .work_dir        = work,
+              .url_opts        = &url_opts,
     };
     // Should fail: archive name is BarLib but expected FooLib
     error += (tl_fetch(alloc, &opts) != 1);
@@ -543,7 +533,7 @@ static int test_fetch_transitive_dep(void) {
     int        error = 0;
     allocator *alloc = arena_create(default_allocator(), 4096);
 
-    char work[512], libs[512];
+    char       work[512], libs[512];
     make_temp_path(work, sizeof(work), "fetch_trans");
     platform_mkdir(work);
     snprintf(libs, sizeof(libs), "%slibs" SEP, work);
@@ -553,12 +543,11 @@ static int test_fetch_transitive_dep(void) {
     snprintf(pkg_path, sizeof(pkg_path), "%spackage.tl", work);
     snprintf(lock_path, sizeof(lock_path), "%spackage.tl.lock", work);
     remove(lock_path);
-    error += write_file(pkg_path,
-                        "format(1)\n"
-                        "package(MyApp)\n"
-                        "version(\"0.1.0\")\n"
-                        "depend(LibA, \"1.0.0\", \"http://example.com/\")\n"
-                        "depend_path(\"libs\")\n");
+    error += write_file(pkg_path, "format(1)\n"
+                                  "package(MyApp)\n"
+                                  "version(\"0.1.0\")\n"
+                                  "depend(LibA, \"1.0.0\", \"http://example.com/\")\n"
+                                  "depend_path(\"libs\")\n");
 
     // LibA depends on LibB (embedded package.tl)
     char const *liba_pkg = "format(1)\n"
@@ -566,8 +555,8 @@ static int test_fetch_transitive_dep(void) {
                            "version(\"1.0.0\")\n"
                            "depend(LibB, \"1.0.0\", \"http://example.com/\")\n"
                            "depend_path(\"libs\")\n";
-    char *liba_data, *libb_data;
-    u32   liba_size, libb_size;
+    char       *liba_data, *libb_data;
+    u32         liba_size, libb_size;
     error += make_test_tpkg(alloc, "LibA", "1.0.0", liba_pkg, &liba_data, &liba_size);
     error += make_test_tpkg(alloc, "LibB", "1.0.0", null, &libb_data, &libb_size);
 
@@ -576,11 +565,11 @@ static int test_fetch_transitive_dep(void) {
     mock_url(&mock, "http://example.com/LibB-1.0.0.tpkg", libb_data, libb_size);
     file_url_get_opts url_opts = {.mock_responses = mock};
 
-    tl_fetch_opts opts = {
-      .package_tl_path = pkg_path,
-      .lock_path       = lock_path,
-      .work_dir        = work,
-      .url_opts        = &url_opts,
+    tl_fetch_opts     opts     = {
+              .package_tl_path = pkg_path,
+              .lock_path       = lock_path,
+              .work_dir        = work,
+              .url_opts        = &url_opts,
     };
     error += (tl_fetch(alloc, &opts) != 0);
 

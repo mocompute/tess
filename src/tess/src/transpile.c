@@ -40,8 +40,8 @@ struct transpile {
     hashmap          *thunks_generated;  // str set — C FFI thunks already emitted
     str_build         thunks_build;      // deferred buffer for C FFI thunk definitions
 
-    hashmap          *interned_strings;  // str → u64 (literal content → offset in interned block)
-    u64               interned_offset;   // next write position in the interned block
+    hashmap          *interned_strings; // str → u64 (literal content → offset in interned block)
+    u64               interned_offset;  // next write position in the interned block
 
     str_array         toplevels_sorted;
 
@@ -1504,8 +1504,7 @@ static u64 intern_string(transpile *self, str content, u64 decoded_len) {
 
 // Replace String.from_literal("...") with a compile-time String struct literal.
 // Returns empty str to signal fallback to runtime from_literal (e.g., key too long for hashmap).
-static str generate_interned_string(transpile *self, ast_node const *call_node,
-                                    ast_node const *str_node) {
+static str generate_interned_string(transpile *self, ast_node const *call_node, ast_node const *str_node) {
     str content     = str_node->symbol.name;
     u64 decoded_len = cstr_decoded_length(content);
 
@@ -1513,31 +1512,28 @@ static str generate_interned_string(transpile *self, ast_node const *call_node,
     if (str_len(content) >= UINT8_MAX) return str_empty();
 
     // Get the return type (String) from the function's arrow type
-    tl_monotype *arrow       = env_lookup(self, ast_node_str(call_node->named_application.name));
+    tl_monotype *arrow = env_lookup(self, ast_node_str(call_node->named_application.name));
     assert(arrow && tl_monotype_is_list(arrow));
     tl_monotype *string_type = tl_monotype_sized_last(arrow->list.xs);
     str          type_name   = type_to_c_mono(self, string_type);
 
-    str res = next_res(self);
+    str          res         = next_res(self);
     generate_decl(self, res, string_type);
 
     if (decoded_len <= TL_SSO_MAX_SMALL) {
         unsigned char tl = sso_tag_len(decoded_len);
         generate_assign_lhs(self, res);
-        cat(self, str_fmt(self->transient,
-            "(%.*s){ .ss = { .buf = \"%.*s\", .tag_len = 0x%02X } }",
-            str_ilen(type_name), str_buf(&type_name),
-            str_ilen(content), str_buf(&content),
-            (unsigned)tl));
+        cat(self, str_fmt(self->transient, "(%.*s){ .ss = { .buf = \"%.*s\", .tag_len = 0x%02X } }",
+                          str_ilen(type_name), str_buf(&type_name), str_ilen(content), str_buf(&content),
+                          (unsigned)tl));
         cat_semicolonln(self);
     } else {
         u64 offset = intern_string(self, content, decoded_len);
         generate_assign_lhs(self, res);
         cat(self, str_fmt(self->transient,
-            "(%.*s){ .big = { .len = %llu, .buf = (char*)(tl_interned_strings_ + %llu) } }",
-            str_ilen(type_name), str_buf(&type_name),
-            (unsigned long long)decoded_len,
-            (unsigned long long)offset));
+                          "(%.*s){ .big = { .len = %llu, .buf = (char*)(tl_interned_strings_ + %llu) } }",
+                          str_ilen(type_name), str_buf(&type_name), (unsigned long long)decoded_len,
+                          (unsigned long long)offset));
         cat_semicolonln(self);
     }
 
@@ -1549,13 +1545,16 @@ static void emit_interned_block(transpile *self) {
     if (self->interned_offset == 0) return;
 
     size_t n = map_size(self->interned_strings);
-    typedef struct { u64 offset; str content; } intern_entry;
-    intern_entry *entries = alloc_malloc(self->transient, n * sizeof(intern_entry));
+    typedef struct {
+        u64 offset;
+        str content;
+    } intern_entry;
+    intern_entry    *entries = alloc_malloc(self->transient, n * sizeof(intern_entry));
 
-    hashmap_iterator iter = {0};
+    hashmap_iterator iter    = {0};
     str              key;
     void            *data;
-    size_t           idx  = 0;
+    size_t           idx = 0;
     while (str_map_iter(self->interned_strings, &iter, &key, &data)) {
         entries[idx++] = (intern_entry){.offset = *(u64 *)data, .content = key};
     }
@@ -1573,8 +1572,8 @@ static void emit_interned_block(transpile *self) {
 
     cat(self, S("static const char tl_interned_strings_[] =\n"));
     for (size_t i = 0; i < n; i++) {
-        cat(self, str_fmt(self->transient, "    \"%.*s\\0\"\n",
-                          str_ilen(entries[i].content), str_buf(&entries[i].content)));
+        cat(self, str_fmt(self->transient, "    \"%.*s\\0\"\n", str_ilen(entries[i].content),
+                          str_buf(&entries[i].content)));
     }
     cat(self, S(";\n"));
 }

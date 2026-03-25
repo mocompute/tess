@@ -65,9 +65,9 @@ static int test_abc(void) {
 /* -------------------------------------------------------------------------- */
 
 static int test_two_blocks(void) {
-    int        error = 0;
-    sha256_ctx ctx;
-    byte       digest[SHA256_DIGEST_SIZE];
+    int         error = 0;
+    sha256_ctx  ctx;
+    byte        digest[SHA256_DIGEST_SIZE];
     char const *msg = "abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq";
 
     sha256_init(&ctx);
@@ -147,11 +147,11 @@ static int test_hex_format(void) {
 /* Main                                                                       */
 /* -------------------------------------------------------------------------- */
 
-#define T(name)                                                                \
-    this_error = name();                                                       \
-    if (this_error) {                                                          \
-        fprintf(stderr, "FAILED: %s\n", #name);                               \
-        error += this_error;                                                   \
+#define T(name)                                                                                            \
+    this_error = name();                                                                                   \
+    if (this_error) {                                                                                      \
+        fprintf(stderr, "FAILED: %s\n", #name);                                                            \
+        error += this_error;                                                                               \
     }
 
 int main(void) {
