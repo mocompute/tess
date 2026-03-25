@@ -40,6 +40,9 @@ struct transpile {
     hashmap          *thunks_generated;  // str set — C FFI thunks already emitted
     str_build         thunks_build;      // deferred buffer for C FFI thunk definitions
 
+    hashmap          *interned_strings;  // str → u64 (literal content → offset in interned block)
+    u64               interned_offset;   // next write position in the interned block
+
     str_array         toplevels_sorted;
 
     str_build         build;
@@ -1448,6 +1451,139 @@ static str generate_funcall_variadic(transpile *self, ast_node const *node, eval
     return res;
 }
 
+// Must match _STR_MAX_SMALL in String.tl and _STR_SMALL_TAG.
+#define TL_SSO_MAX_SMALL 14
+#define TL_SSO_SMALL_TAG 0x01
+
+// Compute the byte length of a C string literal after escape processing.
+// Input is the raw content between quotes (as stored in ast_string.symbol.name),
+// where escape sequences are still literal (e.g., \n = two chars: '\' + 'n').
+// Stops at first bare \0 escape to match existing strlen-based from_literal behavior.
+static u64 cstr_decoded_length(str s) {
+    u64         len = 0;
+    char const *p   = str_buf(&s);
+    char const *end = p + str_len(s);
+    while (p < end) {
+        if (*p == '\\' && p + 1 < end) {
+            p++;
+            if (*p == 'x') {
+                p += 2; // \xNN — skip two hex digits
+            } else if (*p >= '0' && *p <= '7') {
+                // Bare \0 (not followed by another octal digit) → stop, matches strlen
+                if (*p == '0' && (p + 1 >= end || p[1] < '0' || p[1] > '7')) return len;
+                p++;
+                if (p < end && *p >= '0' && *p <= '7') p++;
+                if (p < end && *p >= '0' && *p <= '7') p++;
+            } else {
+                p++; // \n, \t, \\, \", etc. — one decoded byte
+            }
+        } else {
+            p++;
+        }
+        len++;
+    }
+    return len;
+}
+
+static unsigned char sso_tag_len(u64 n) {
+    return (unsigned char)(((n & 0x0F) << 4) | TL_SSO_SMALL_TAG);
+}
+
+// Intern a big string literal. Returns the offset in the interned block.
+// Deduplicates: identical literals share one entry.
+static u64 intern_string(transpile *self, str content, u64 decoded_len) {
+    void *existing = str_map_get(self->interned_strings, content);
+    if (existing) return *(u64 *)existing;
+
+    u64 offset = self->interned_offset;
+    str_map_set(&self->interned_strings, content, &offset);
+    self->interned_offset += decoded_len + 1; // +1 for null terminator
+    return offset;
+}
+
+// Replace String.from_literal("...") with a compile-time String struct literal.
+// Returns empty str to signal fallback to runtime from_literal (e.g., key too long for hashmap).
+static str generate_interned_string(transpile *self, ast_node const *call_node,
+                                    ast_node const *str_node) {
+    str content     = str_node->symbol.name;
+    u64 decoded_len = cstr_decoded_length(content);
+
+    // str_map keys are limited to 254 bytes; fall back to runtime for very long literals
+    if (str_len(content) >= UINT8_MAX) return str_empty();
+
+    // Get the return type (String) from the function's arrow type
+    tl_monotype *arrow       = env_lookup(self, ast_node_str(call_node->named_application.name));
+    assert(arrow && tl_monotype_is_list(arrow));
+    tl_monotype *string_type = tl_monotype_sized_last(arrow->list.xs);
+    str          type_name   = type_to_c_mono(self, string_type);
+
+    str res = next_res(self);
+    generate_decl(self, res, string_type);
+
+    if (decoded_len <= TL_SSO_MAX_SMALL) {
+        unsigned char tl = sso_tag_len(decoded_len);
+        generate_assign_lhs(self, res);
+        cat(self, str_fmt(self->transient,
+            "(%.*s){ .ss = { .buf = \"%.*s\", .tag_len = 0x%02X } }",
+            str_ilen(type_name), str_buf(&type_name),
+            str_ilen(content), str_buf(&content),
+            (unsigned)tl));
+        cat_semicolonln(self);
+    } else {
+        u64 offset = intern_string(self, content, decoded_len);
+        generate_assign_lhs(self, res);
+        cat(self, str_fmt(self->transient,
+            "(%.*s){ .big = { .len = %llu, .buf = (char*)(tl_interned_strings_ + %llu) } }",
+            str_ilen(type_name), str_buf(&type_name),
+            (unsigned long long)decoded_len,
+            (unsigned long long)offset));
+        cat_semicolonln(self);
+    }
+
+    return res;
+}
+
+// Emit the static interned string block. Called after all toplevel code has been generated.
+static void emit_interned_block(transpile *self) {
+    if (self->interned_offset == 0) return;
+
+    // Collect (offset, raw key) pairs from the hashmap and sort by offset
+    size_t n = map_size(self->interned_strings);
+    typedef struct { u64 offset; char const *buf; u8 len; } intern_entry;
+    intern_entry *entries = alloc_malloc(self->transient, n * sizeof(intern_entry));
+
+    hashmap_iterator iter = {0};
+    size_t           idx  = 0;
+    while (map_iter(self->interned_strings, &iter)) {
+        // str_map_set stores raw string bytes as the key (via str_span)
+        u64 offset = *(u64 *)iter.data;
+        entries[idx++] = (intern_entry){
+            .offset = offset,
+            .buf    = (char const *)iter.key_ptr,
+            .len    = iter.key_size,
+        };
+    }
+
+    // Sort by offset (insertion sort — n is small)
+    for (size_t i = 1; i < n; i++) {
+        intern_entry tmp = entries[i];
+        size_t       j   = i;
+        while (j > 0 && entries[j - 1].offset > tmp.offset) {
+            entries[j] = entries[j - 1];
+            j--;
+        }
+        entries[j] = tmp;
+    }
+
+    // Emit as concatenated C string literals
+    cat(self, S("static const char tl_interned_strings_[] =\n"));
+    for (size_t i = 0; i < n; i++) {
+        cat(self, str_fmt(self->transient, "    \"%.*s\\0\"\n",
+                          (int)entries[i].len, entries[i].buf));
+    }
+    cat(self, S(";\n"));
+}
+
 static str generate_funcall(transpile *self, ast_node const *node, eval_ctx *ctx) {
     // Note: the main logic of this function is also duplicated in generate_binary_op.
 
@@ -1456,6 +1592,16 @@ static str generate_funcall(transpile *self, ast_node const *node, eval_ctx *ctx
 
     assert(ast_node_is_nfa(node));
     str name = ast_node_str(node->named_application.name);
+
+    // Compile-time string literal interning: replace String.from_literal("...") with struct literal
+    if (str_starts_with(name, S("String__from_literal__1"))) {
+        ast_node_sized args = ast_node_sized_from_ast_array((ast_node *)node);
+        if (args.size == 1 && args.v[0]->tag == ast_string) {
+            str r = generate_interned_string(self, node, args.v[0]);
+            if (!str_is_empty(r)) return r; // empty = fallback to runtime
+        }
+    }
+
     if (is_intrinsic(name)) return generate_funcall_intrinsic(self, node, ctx);
 
     // c_ prefix: may be a c_ funcall or a c_ type constructor. If there is no type
@@ -3100,6 +3246,9 @@ int transpile_compile(transpile *self, str_build *out_build) {
         cat_nl(self);
     }
 
+    emit_interned_block(self);
+    if (self->interned_offset > 0) cat_nl(self);
+
     str_build_cat_n(&self->build, toplevels_build.v, toplevels_build.size);
 
     validate_c_exports(self);
@@ -3151,6 +3300,9 @@ transpile *transpile_create(allocator *alloc, transpile_opts const *opts) {
     self->context_generated = hset_create(self->arena, 64);
     self->thunks_generated  = hset_create(self->arena, 64);
     self->thunks_build      = str_build_init(self->arena, 256);
+
+    self->interned_strings  = map_new(self->arena, str, u64, 64);
+    self->interned_offset   = 0;
 
     self->next_res          = 0;
     self->next_block        = 0;
