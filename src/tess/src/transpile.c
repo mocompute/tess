@@ -1547,21 +1547,16 @@ static str generate_interned_string(transpile *self, ast_node const *call_node,
 static void emit_interned_block(transpile *self) {
     if (self->interned_offset == 0) return;
 
-    // Collect (offset, raw key) pairs from the hashmap and sort by offset
     size_t n = map_size(self->interned_strings);
-    typedef struct { u64 offset; char const *buf; u8 len; } intern_entry;
+    typedef struct { u64 offset; str content; } intern_entry;
     intern_entry *entries = alloc_malloc(self->transient, n * sizeof(intern_entry));
 
     hashmap_iterator iter = {0};
+    str              key;
+    void            *data;
     size_t           idx  = 0;
-    while (map_iter(self->interned_strings, &iter)) {
-        // str_map_set stores raw string bytes as the key (via str_span)
-        u64 offset = *(u64 *)iter.data;
-        entries[idx++] = (intern_entry){
-            .offset = offset,
-            .buf    = (char const *)iter.key_ptr,
-            .len    = iter.key_size,
-        };
+    while (str_map_iter(self->interned_strings, &iter, &key, &data)) {
+        entries[idx++] = (intern_entry){.offset = *(u64 *)data, .content = key};
     }
 
     // Sort by offset (insertion sort — n is small)
@@ -1575,11 +1570,10 @@ static void emit_interned_block(transpile *self) {
         entries[j] = tmp;
     }
 
-    // Emit as concatenated C string literals
     cat(self, S("static const char tl_interned_strings_[] =\n"));
     for (size_t i = 0; i < n; i++) {
         cat(self, str_fmt(self->transient, "    \"%.*s\\0\"\n",
-                          (int)entries[i].len, entries[i].buf));
+                          str_ilen(entries[i].content), str_buf(&entries[i].content)));
     }
     cat(self, S(";\n"));
 }

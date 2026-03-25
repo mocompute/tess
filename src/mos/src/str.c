@@ -55,6 +55,10 @@ str str_init_static(char const *in) {
     return (str){.big = {.buf = (char *)in, .len = strlen(in)}};
 }
 
+str str_ref(char const *buf, size_t len) {
+    return (str){.big = {.buf = (char *)buf, .len = len}};
+}
+
 str str_init_allocated(char *in) {
     return str_init_allocated_n(in, strlen(in));
 }

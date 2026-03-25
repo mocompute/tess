@@ -90,6 +90,7 @@ size_t hset_size(hashmap const *);
 
 // -- utilities --
 int       map_iter(hashmap const *, hashmap_iterator *);
+int       str_map_iter(hashmap const *, hashmap_iterator *, str *out_key, void **out_data);
 int       hset_iter(hashmap const *, hashmap_iterator *);
 str_array str_map_keys(allocator *, hashmap *);
 str_array str_map_sorted_keys(allocator *, hashmap *);

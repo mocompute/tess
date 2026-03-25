@@ -51,6 +51,7 @@ str  str_move(str *);
 
 str  str_init_small(char const *);         // fatal exit if string is too large
 str  str_init_static(char const *);        // from static c strings: do not deinit!
+str  str_ref(char const *, size_t);        // non-owning view: do not deinit!
 str  str_init_allocated(char *);           // from caller's allocator
 str  str_init_allocated_n(char *, size_t); // from caller's allocator
 str  str_init(allocator *, char const *);

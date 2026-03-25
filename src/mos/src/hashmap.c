@@ -561,6 +561,13 @@ hashmap *hset_of_str(allocator *alloc, str_sized in) {
     return out;
 }
 
+int str_map_iter(hashmap const *self, hashmap_iterator *iter, str *out_key, void **out_data) {
+    if (!map_iter(self, iter)) return 0;
+    *out_key  = str_ref(iter->key_ptr, iter->key_size);
+    *out_data = iter->data;
+    return 1;
+}
+
 int hset_iter(hashmap const *self, hashmap_iterator *iter) {
     int res    = map_iter(self, iter);
     iter->data = null;
