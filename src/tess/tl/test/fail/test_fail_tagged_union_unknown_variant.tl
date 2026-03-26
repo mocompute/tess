@@ -1,7 +1,7 @@
 #module Foo
 
-Shape = | Circle { radius: Float }
-        | Square { length: Float }
+Shape: | Circle { radius: Float }
+       | Square { length: Float }
 
 // A different type that is NOT a variant of Shape
 Point: { x: Float, y: Float }
