@@ -42,7 +42,7 @@ Single test:
 
 **After `git stash` or `git stash pop`, ALWAYS rebuild** (`make -j all`) before running tests — the binary on disk is stale.
 
-Compiler: `./tess <command> <file.tl>` — commands: `c` (transpile to C), `exe` (compile), `run` (compile+execute), `lib` (shared/static library). Common flags: `-v`, `--no-line-directive`, `-I <path>`, `--time`, `--stats`.
+Compiler: `./tess <command> <file.tl>` — commands: `c` (transpile to C), `check` (type-check only), `exe` (compile), `run` (compile+execute), `lib` (shared/static library). Common flags: `-v`, `--no-line-directive`, `-I <path>`, `--time`, `--stats`.
 
 ## Tess Language Quick Reference
 

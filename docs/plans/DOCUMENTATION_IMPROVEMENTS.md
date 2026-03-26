@@ -37,6 +37,7 @@ Commands to document:
 
 ```
 tess c <file.tl>              # Transpile to C (stdout)
+tess check <file.tl>          # Type-check without compiling
 tess exe <file.tl> -o <out>   # Compile to executable
 tess run <file.tl>            # Compile and execute
 tess lib <file.tl> -o <out>   # Compile to shared library

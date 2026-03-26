@@ -69,6 +69,7 @@ typedef struct {
     int               is_library;
     int               is_static_library;
     int               is_executable;
+    int               is_check;
     int               needs_pthread;
 
     int               dashdash_at; // index in words where '--' args begin; -1 if not set
@@ -107,6 +108,7 @@ noreturn void usage(int status, char const *argv0) {
     printf("Usage: %s [-hvVi] <command> [-o outpath] [path1 path2 ... pathn | -] \n", progname);
     printf("\nCommands:\n");
     printf("    c                      transpile input files to C (use - for stdin)\n");
+    printf("    check                  type-check input files without compiling\n");
     printf("    exe                    compile and create executable (use - for stdin)\n");
     printf("    run                    compile and run (use - for stdin; -- to pass args)\n");
     printf("    fmt                    format source file (reads stdin if no file given)\n");
@@ -1339,6 +1341,8 @@ int compile(state *self) {
         self->stats.infer_counters  = *tl_infer_get_counters(infer);
     }
 
+    if (self->is_check) goto cleanup_ti;
+
     // === TRANSPILATION PHASE ===
     hires_timer_start(&phase_timer);
 
@@ -2340,8 +2344,8 @@ static int init_package(state *self) {
 }
 
 static char const *validate_command_flags(state const *self, char const *cmd) {
-    int is_compile = (0 == strcmp(cmd, "c") || 0 == strcmp(cmd, "exe") || 0 == strcmp(cmd, "run") ||
-                      0 == strcmp(cmd, "lib") || 0 == strcmp(cmd, "lib-emit-c"));
+    int is_compile = (0 == strcmp(cmd, "c") || 0 == strcmp(cmd, "check") || 0 == strcmp(cmd, "exe") ||
+                      0 == strcmp(cmd, "run") || 0 == strcmp(cmd, "lib") || 0 == strcmp(cmd, "lib-emit-c"));
     int has_stats  = is_compile && 0 != strcmp(cmd, "run");
 
     if (self->no_line_directive && !is_compile) return "--no-line-directive";
@@ -2443,6 +2447,12 @@ int main(int argc, char *argv[]) {
     if (0 == strcmp("c", self.words.v[0])) {
         hires_timer_start(&timer);
         result = compile(&self);
+    }
+
+    else if (0 == strcmp("check", self.words.v[0])) {
+        hires_timer_start(&timer);
+        self.is_check = 1;
+        result        = compile(&self);
     }
 
     else if (0 == strcmp("exe", self.words.v[0])) {
