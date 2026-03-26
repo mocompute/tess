@@ -84,6 +84,6 @@ The existence of a variadic function precludes arity overloading for that name i
 
 ## Future Work
 
-- **String interpolation** (`f"value: {x}"`) — a separate feature that could use a `Format` trait; does not require variadics
+- ~~**String interpolation** (`f"value: {x}"`)~~ — implemented (uses `ToString`, not variadics)
 - **Spread operator** (`inner(args...)`) — unpack a `Slice` into variadic arguments at a call site
 - **Variadic UFCS** — `42.print()` where `print` is variadic with the receiver as a variadic argument

@@ -9,7 +9,7 @@ When generating or editing `.tl` code, follow these rules:
 - **No `mut` keyword.** Bindings are reassignable by default. Do not write `mut` anywhere.
 - **`:=` declares, `=` assigns.** `x := 42` creates a new binding; `x = 42` mutates an existing one.
 - **Use `Const` for immutable bindings.** `x: Const := 5` or `x: Const[Int] := 5`. Prevents reassignment, transpiles to C `const`.
-- **String literals are `String` (SSO).** `"foo"` is a `String`. Use `c"foo"` for a C string (`Ptr[CChar]`). The `s"foo"` prefix is still accepted but redundant.
+- **String literals are `String` (SSO).** `"foo"` is a `String`. Use `c"foo"` for a C string (`Ptr[CChar]`). Use `f"hello {name}"` for format strings with embedded expressions. The `s"foo"` prefix is still accepted but redundant.
 - **`main()` returns `CInt`.** The compiler enforces this. No type annotation needed.
 - **Omit type annotations in implementations.** Synopsis has full types; implementations use parameter names only. Inference handles the rest.
 - **Omit integer suffixes.** Write `0`, not `0zu`. Use suffixes only when inference is ambiguous.
@@ -306,7 +306,7 @@ log(msg) {
 ## Literals
 
 **Strings**: `"foo"` is a `String` (SSO). Use `c"foo"` for a C string (`Ptr[CChar]`).
-The `s"foo"` prefix is still accepted but redundant.
+The `s"foo"` prefix is still accepted but redundant. Use `f"hello {name}"` for format strings (f-strings) with embedded expressions.
 
 
 **Integers**: Do not use suffixes (`zu`, `z`, `u`) when the type is clear from context. Let inference resolve the type. Use suffixes only when inference genuinely cannot determine the type.

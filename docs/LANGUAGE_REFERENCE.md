@@ -1278,6 +1278,7 @@ the conformance rules.
 1.5e-10             // Scientific notation
 "hello"             // String (SSO)
 c"hello"            // Ptr[CChar] (C string)
+f"hello {name}"     // Format string (f-string)
 'a'                 // Character literal (CChar)
 '\n'                // Character with escape sequence
 true, false         // Boolean
@@ -1286,6 +1287,35 @@ void                // Void value
 ```
 
 Character literals use C syntax: single-quoted characters with the same escape sequences as C (`'\0'`, `'\n'`, `'\t'`, `'\\'`, `'\''`, etc.). They have type `CChar`.
+
+#### Format Strings (f-strings)
+
+The `f"..."` prefix creates a `String` with embedded expressions. Any expression inside `{...}` is evaluated and converted to a string via `ToString`:
+
+```tl
+name := "world"
+age  := 42
+greeting := f"hello {name}, age {age}"   // "hello world, age 42"
+```
+
+Expressions can be arbitrary — arithmetic, function calls, or block expressions:
+
+```tl
+f"sum = {x + y}"
+f"result = {add(x, y)}"
+f"val = {({a := 3; a + 7})}"             // block expression in braces
+```
+
+Literal braces are produced by doubling them:
+
+```tl
+f"{{braces}}"       // "{braces}"
+f"{{{x}}}"          // "{42}" when x is 42
+```
+
+Standard backslash escape sequences (`\n`, `\t`, `\\`, etc.) work in the literal segments of f-strings, just as in regular strings.
+
+An f-string with no interpolation holes degenerates to a plain `String` literal. Any type that implements `ToString` can appear in a hole — `Int`, `Float`, `Bool`, `String`, and user-defined types with a `to_string` implementation all work.
 
 #### Integer Literals
 

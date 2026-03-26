@@ -26,7 +26,7 @@ main() {
     a := Point(x = 1, y = 2)
     b := Point(x = 3, y = 4)
     c := a + b
-    println("(", c.x, ", ", c.y, ")")
+    println(f"({c.x}, {c.y})")
 
     if a != b { println("different") }
     0
