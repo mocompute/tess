@@ -708,6 +708,13 @@ int a_statement(parser *self) {
     if (0 == a_try(self, a_continue_statement)) return 0;
     if (0 == a_try(self, a_return_statement)) return 0;
 
+    // add { ... } block statements (creates new lexical scope for a sequence of statements)
+    ast_node *block_statement = parse_body(self);
+    if (block_statement) {
+        result_ast_node(self, block_statement);
+        return 0;
+    }
+
     return 1;
 }
 
