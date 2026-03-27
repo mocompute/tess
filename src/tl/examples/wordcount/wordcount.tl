@@ -19,8 +19,12 @@
 #import <HashMap.tl>
 #import <Array.tl>
 #import <String.tl>
+#import <Print.tl>
 #import <cstdio.tl>
 #import <cstdlib.tl>
+
+println  = Print.println
+fprintln = Print.fprintln
 
 
 // -- Types --
@@ -42,7 +46,7 @@ _is_space(c) {
 
 // Count lines, words, chars (and optionally unique words) in a string.
 _count(content, path, track_unique, ignore_case) {
-    n                 := String.len(content)
+    n                 := content.len()
     lines             := 0
     words             := 0
     unique            := 0
@@ -62,11 +66,11 @@ _count(content, path, track_unique, ignore_case) {
             if in_word {
                 words += 1
                 if track_unique {
-                    word := String.slice(content, word_start, i)
-                    if ignore_case { word = String.to_lower(word) }
+                    word := content.slice(word_start, i)
+                    if ignore_case { word = word.to_lower() }
                     p := word_map.get(word)
                     if p != null {
-                        p.* = p.* + 1
+                        p.* += 1
                     } else {
                         word_map.set(word, 1)
                         unique += 1
@@ -86,11 +90,11 @@ _count(content, path, track_unique, ignore_case) {
     if in_word {
         words += 1
         if track_unique {
-            word := String.slice(content, word_start, n)
-            if ignore_case { word = String.to_lower(word) }
+            word := content.slice(word_start, n)
+            if ignore_case { word = word.to_lower() }
             p := word_map.get(word)
             if p != null {
-                p.* = p.* + 1
+                p.* += 1
             } else {
                 word_map.set(word, 1)
                 unique += 1
@@ -113,15 +117,15 @@ _read_stdin() {
         ch := c_fgetc(c_stdin)
         if ch == c_EOF { break }
         c: CChar := ch
-        buf.&.push(c)
+        buf.push(c)
     }
 
     if buf.size == 0 {
-        buf.&.free()
+        buf.free()
         return String.empty()
     }
     result := String.from_bytes(buf.v, buf.size)
-    buf.&.free()
+    buf.free()
     result
 }
 
@@ -131,7 +135,7 @@ _print_line(c, show_lines, show_words, show_chars, show_unique) {
     if show_words { c_printf(c"%8d", c.words) }
     if show_chars { c_printf(c"%8d", c.chars) }
     if show_unique { c_printf(c"%8d", c.unique_words) }
-    c_printf(c"  %s\n", String.cstr(c.path.&))
+    println(f"  {c.path}")
 }
 
 
@@ -177,7 +181,7 @@ main(argc: CInt, argv: Ptr[CString]) {
         // Read from stdin.
         content := _read_stdin()
         c       := _count(content, "<stdin>", show_unique, ignore_case)
-        results.&.push(c)
+        results.push(c)
     } else {
         fi: CSize := 0
         while fi < files.size, fi += 1 {
@@ -185,24 +189,18 @@ main(argc: CInt, argv: Ptr[CString]) {
             when File.read_file(path) {
                 ok: Ok {
                     c := _count(ok.v, path, show_unique, ignore_case)
-                    results.&.push(c)
+                    results.push(c)
                 }
                 err: Err {
                     when err.v {
                         nf: NotFound {
-                            c_fprintf(c_stderr, c"wc: %s: no such file or directory\n",
-                                      String.cstr(nf.path.&))
-                            void
+                            fprintln(c_stderr, f"wc: {nf.path}: no such file or directory")
                         }
                         pd: PermissionDenied {
-                            c_fprintf(c_stderr, c"wc: %s: permission denied\n",
-                                      String.cstr(pd.path.&))
-                            void
+                            fprintln(c_stderr, f"wc: {pd.path}: permission denied")
                         }
                         else {
-                            c_fprintf(c_stderr, c"wc: %s: read error\n",
-                                      String.cstr(path.&))
-                            void
+                            fprintln(c_stderr, f"wc: {path}: read error")
                         }
                     }
                 }
@@ -212,21 +210,18 @@ main(argc: CInt, argv: Ptr[CString]) {
 
     // Sort by word count descending.
     if do_sort {
-        results.&.sort((a, b) { b.words - a.words })
+        results.sort((a, b) { b.words - a.words })
     }
 
     // Apply --top N limit.
-    when args.get_option("top") {
-        s: Some {
-            top_n := c_atoi(String.cstr(s.v.&))
-            if top_n > 0 {
-                limit: CSize := top_n
-                if limit < results.size {
-                    results = results.slice(0, limit)
-                }
+    if s: Some := args.get_option("top") {
+        top_n := c_atoi(s.v.cstr())
+        if top_n > 0 {
+            limit: CSize := top_n
+            if limit < results.size {
+                results = results.slice(0, limit)
             }
         }
-        n: None { }
     }
 
     // Print results.
