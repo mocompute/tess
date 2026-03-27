@@ -211,9 +211,7 @@ function(tl_create_test NAME SUBDIR)
     COMMAND
     tess_exe
     exe
-    --no-standard-includes
     -I ${CMAKE_CURRENT_SOURCE_DIR}
-    -S ${PROJECT_SOURCE_DIR}/src/tl/std
     -o ${TEST_EXE}
     ${TEST_SRC}
     DEPENDS
@@ -238,9 +236,7 @@ function(tl_create_test_optimized NAME SUBDIR)
     COMMAND
     tess_exe
     exe
-    --no-standard-includes
     -I ${CMAKE_CURRENT_SOURCE_DIR}
-    -S ${PROJECT_SOURCE_DIR}/src/tl/std
     -o ${TEST_EXE}
     ${TEST_SRC}
     DEPENDS
@@ -261,7 +257,7 @@ function(tl_create_build_fail_test NAME SUBDIR)
   set(TEST_SRC ${CMAKE_CURRENT_SOURCE_DIR}/tl/${SUBDIR}/test_${NAME}.tl)
   set(TEST_EXE ${CMAKE_CURRENT_BINARY_DIR}/tl/test_${NAME}${CMAKE_EXECUTABLE_SUFFIX})
   add_test(NAME ${TEST_NAME}
-    COMMAND $<TARGET_FILE:tess_exe> exe --no-standard-includes -I ${CMAKE_CURRENT_SOURCE_DIR} -S ${PROJECT_SOURCE_DIR}/src/tl/std -o ${TEST_EXE} ${TEST_SRC}
+    COMMAND $<TARGET_FILE:tess_exe> exe -I ${CMAKE_CURRENT_SOURCE_DIR} -o ${TEST_EXE} ${TEST_SRC}
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
   )
   set_tests_properties(${TEST_NAME} PROPERTIES
@@ -304,7 +300,7 @@ function(tl_create_runtime_fail_test NAME SUBDIR)
   set(TEST_EXE ${CMAKE_CURRENT_BINARY_DIR}/tl/test_${NAME}${CMAKE_EXECUTABLE_SUFFIX})
   add_custom_command(
     OUTPUT ${TEST_EXE}
-    COMMAND $<TARGET_FILE:tess_exe> exe --no-standard-includes --bounds-check -I ${CMAKE_CURRENT_SOURCE_DIR} -S ${PROJECT_SOURCE_DIR}/src/tl/std -o ${TEST_EXE}
+    COMMAND $<TARGET_FILE:tess_exe> exe --bounds-check -I ${CMAKE_CURRENT_SOURCE_DIR} -o ${TEST_EXE}
       ${TEST_SRC}
     DEPENDS tess_exe
       ${TEST_SRC}
@@ -347,8 +343,6 @@ add_custom_command(
   COMMAND
   tess_exe
   exe
-  --no-standard-includes
-  -S ${PROJECT_SOURCE_DIR}/src/tl/std
   -o ${TEST_EXE}
   test_import_relative_dotdot.tl
   DEPENDS

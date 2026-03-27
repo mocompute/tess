@@ -453,7 +453,7 @@ $(TL_BUILD_DIR)/test_import_relative_dotdot: $(TL_TEST_DIR)/fixtures/test_import
 	$(MSG_GEN) $@
 	@cd $(TL_TEST_DIR)/fixtures && \
 	export ASAN_OPTIONS=$(ASAN_OPTIONS) && $(COV_EXPORT) \
-	if ! $(CURDIR)/$(TESS_EXE) exe --no-standard-includes -S $(CURDIR)/$(TL_STD_DIR) -o $(CURDIR)/$@ test_import_relative_dotdot.tl ; then \
+	if ! $(CURDIR)/$(TESS_EXE) exe -o $(CURDIR)/$@ test_import_relative_dotdot.tl ; then \
 		rm -f $(CURDIR)/$@; \
 		$(MSG_FAIL) $@; \
 	fi
@@ -463,7 +463,7 @@ $(TL_BUILD_DIR)/test_%: $(TL_DIR_PASS)/test_%.tl $(TESS_EXE) $(TL_STD_SOURCES)
 	@mkdir -p $(dir $@) $(COV_PROF_DIR)
 	$(MSG_GEN) $@
 	@$(COV_EXPORT) export ASAN_OPTIONS=$(ASAN_OPTIONS); \
-	if ! ./$(TESS_EXE) exe --no-standard-includes -S $(TL_STD_DIR) -o $@ $< ; then \
+	if ! ./$(TESS_EXE) exe -o $@ $< ; then \
 		rm -f $@; \
 		$(MSG_FAIL) $@; \
 	fi
@@ -473,7 +473,7 @@ $(TL_BUILD_DIR)/test_opt_%: $(TL_DIR_PASS_OPT)/test_%.tl $(TESS_EXE) $(TL_STD_SO
 	@mkdir -p $(dir $@) $(COV_PROF_DIR)
 	$(MSG_GEN) $@
 	@$(COV_EXPORT) export ASAN_OPTIONS=$(ASAN_OPTIONS); \
-	if ! ./$(TESS_EXE) exe --no-standard-includes -S $(TL_STD_DIR) -o $@ $< ; then \
+	if ! ./$(TESS_EXE) exe -o $@ $< ; then \
 		rm -f $@; \
 		$(MSG_FAIL) $@; \
 	fi
@@ -508,7 +508,7 @@ test-tl: build-tl-tests
 	printf "  \033[1;36m[COUNT]\033[0m $$count_pass expected passing tests\n\n"; \
 	for name in $(TL_FAIL_TESTS); do \
 		$(MSG_TEST) $$name; \
-		if ./$(TESS_EXE) exe --no-standard-includes -S $(TL_STD_DIR) -o /dev/null $(TL_DIR_FAIL)/test_$$name.tl 2>/dev/null; then \
+		if ./$(TESS_EXE) exe -o /dev/null $(TL_DIR_FAIL)/test_$$name.tl 2>/dev/null; then \
 			$(MSG_FAIL2) $$name; \
 			failed=$$((failed + 1)); \
 		fi; \
@@ -518,7 +518,7 @@ test-tl: build-tl-tests
 	count_fail_rt=0; \
 	for name in $(TL_FAIL_RUNTIME_TESTS); do \
 		$(MSG_TEST) $$name; \
-		if ./$(TESS_EXE) exe --no-standard-includes --bounds-check -S $(TL_STD_DIR) -o /tmp/tl_test_$$name $(TL_DIR_FAIL_RT)/test_$$name.tl 2>/dev/null; then \
+		if ./$(TESS_EXE) exe --bounds-check -o /tmp/tl_test_$$name $(TL_DIR_FAIL_RT)/test_$$name.tl 2>/dev/null; then \
 			if /tmp/tl_test_$$name 2>/dev/null; then \
 				$(MSG_FAIL2) $$name; \
 				failed=$$((failed + 1)); \
@@ -533,7 +533,7 @@ test-tl: build-tl-tests
 	count_known_fail=0; \
 	known_fail=0; \
 	for name in $(TL_KNOWN_FAIL_FAILURES); do \
-		if ! ./$(TESS_EXE) exe --no-standard-includes -S $(TL_STD_DIR) -o /dev/null $(TL_DIR_KNOWN_FF)/test_$$name.tl 2>/dev/null; then \
+		if ! ./$(TESS_EXE) exe -o /dev/null $(TL_DIR_KNOWN_FF)/test_$$name.tl 2>/dev/null; then \
 			printf "  \033[1;32m[FIXED]\033[0m  test_$$name (remove from TL_KNOWN_FAIL_FAILURES)\n"; \
 		else \
 			printf "  \033[1;33m[KNOWN]\033[0m  test_$$name\n"; \
@@ -544,7 +544,7 @@ test-tl: build-tl-tests
 	printf "  \033[1;36m[COUNT]\033[0m $$count_known_fail known fail-failure tests\n\n"; \
 	known=0; \
 	for name in $(TL_KNOWN_FAILURES); do \
-		if ./$(TESS_EXE) exe --no-standard-includes -S $(TL_STD_DIR) -o /tmp/tl_test_$$name $(TL_DIR_KNOWN)/test_$$name.tl 2>/dev/null && /tmp/tl_test_$$name 2>/dev/null; then \
+		if ./$(TESS_EXE) exe -o /tmp/tl_test_$$name $(TL_DIR_KNOWN)/test_$$name.tl 2>/dev/null && /tmp/tl_test_$$name 2>/dev/null; then \
 			printf "  \033[1;32m[FIXED]\033[0m  test_$$name (remove from TL_KNOWN_FAILURES)\n"; \
 		else \
 			printf "  \033[1;33m[KNOWN]\033[0m  test_$$name\n"; \
