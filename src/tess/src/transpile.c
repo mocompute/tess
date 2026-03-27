@@ -1349,15 +1349,15 @@ static str emit_format_spec_literal(transpile *self, tl_format_spec const *spec,
     cat(self, S(" = {"));
 
     char fill = spec->fill ? spec->fill : ' ';
-    cat(self, str_fmt(self->transient, ".fill = '%c', ", fill));
-    cat(self, str_fmt(self->transient, ".align = %d, ", (int)spec->align));
-    cat(self, str_fmt(self->transient, ".sign = %d, ", (int)spec->sign));
-    cat(self, str_fmt(self->transient, ".alt = %d, ", spec->alt));
-    cat(self, str_fmt(self->transient, ".zero_pad = %d, ", spec->zero_pad));
-    cat(self, str_fmt(self->transient, ".width = %d, ", spec->width));
-    cat(self, str_fmt(self->transient, ".precision = %d, ", spec->precision));
-    cat(self, str_fmt(self->transient, ".type_char = %d, ", (int)spec->type_char));
-    cat(self, str_fmt(self->transient, ".has_type_specific = %d", spec->has_type_specific));
+    char buf[256];
+    int n = snprintf(buf, sizeof(buf),
+        ".fill = '%c', .align = %d, .sign = %d, .alt = %d, "
+        ".zero_pad = %d, .width = %d, .precision = %d, "
+        ".type_char = %d, .has_type_specific = %d",
+        fill, (int)spec->align, (int)spec->sign, spec->alt,
+        spec->zero_pad, spec->width, spec->precision,
+        (int)spec->type_char, spec->has_type_specific);
+    str_build_cat_n(&self->build, buf, (u32)n);
 
     cat(self, S("};\n"));
     return spec_tmp;
