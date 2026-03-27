@@ -29,16 +29,18 @@ static inline str str_qualify(allocator *alloc, str parent, str child) {
 
 // Format specifier parsed from f-string syntax: {expr:[[fill]align][sign][#][0][width][.precision][type]}
 typedef struct {
-    char fill;            // 0 for default (' ')
-    char align;           // '<', '>', '^', or 0 for default
-    char sign;            // '+', '-', ' ', or 0
     int  alt;             // '#' flag
     int  zero_pad;        // '0' flag
     int  width;           // 0 = unspecified
     int  precision;       // -1 = unspecified
-    char type_char;       // 'x','X','o','b','e','E','f', or 0
     int  has_type_specific; // 1 if any of sign/alt/zero_pad/precision/type_char set
+    char fill;            // 0 for default (' ')
+    char align;           // '<', '>', '^', or 0 for default
+    char sign;            // '+', '-', ' ', or 0
+    char type_char;       // 'x','X','o','b','e','E','f', or 0
 } tl_format_spec;
+
+defarray(tl_format_spec_array, tl_format_spec);
 
 // Check if a format spec has any non-default values (anything worth emitting).
 static inline int tl_format_spec_has_any(tl_format_spec const *spec) {

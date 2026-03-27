@@ -687,16 +687,14 @@ int a_string(parser *self) {
         ast_node_array parts = {.alloc = self->ast_arena};
 
         // Track per-part format specs. Index-parallel with parts.
-        // Dynamically sized array of tl_format_spec.
-        u32             specs_cap  = 0;
-        u32             specs_size = 0;
-        tl_format_spec *specs      = null;
+        tl_format_spec_array specs = {.alloc = self->ast_arena};
+        tl_format_spec const zero_spec = {0};
 
         // Add first literal segment (if non-empty)
         if (self->token.s[0] != '\0') {
             ast_node *lit = make_from_literal(self, self->token.s);
             array_push(parts, lit);
-            specs_size++; // zero-init slot for literal (no spec)
+            array_push(specs, zero_spec); // zero-init slot for literal (no spec)
         }
 
         int has_any_spec = 0;
@@ -710,8 +708,6 @@ int a_string(parser *self) {
             }
             array_push(parts, expr);
 
-            u32 expr_idx = specs_size++;
-
             // Next token: format spec, mid, or end
             if (next_token(self)) return ERROR_STOP;
 
@@ -722,27 +718,19 @@ int a_string(parser *self) {
                     self->error.tag = tl_err_invalid_format_spec;
                     return ERROR_STOP;
                 }
-                // Grow specs array on demand
-                if (!specs || specs_cap < specs_size) {
-                    u32 new_cap = specs_size < 8 ? 8 : specs_size * 2;
-                    tl_format_spec *new_specs =
-                        alloc_malloc(self->ast_arena, new_cap * sizeof(tl_format_spec));
-                    memset(new_specs, 0, new_cap * sizeof(tl_format_spec));
-                    if (specs) memcpy(new_specs, specs, expr_idx * sizeof(tl_format_spec));
-                    specs     = new_specs;
-                    specs_cap = new_cap;
-                }
-                specs[expr_idx]  = spec;
-                has_any_spec     = 1;
+                array_push(specs, spec);
+                has_any_spec = 1;
 
                 if (next_token(self)) return ERROR_STOP;
+            } else {
+                array_push(specs, zero_spec);
             }
 
             if (tok_f_string_mid == self->token.tag) {
                 if (self->token.s[0] != '\0') {
                     ast_node *mid = make_from_literal(self, self->token.s);
                     array_push(parts, mid);
-                    specs_size++; // zero-init slot for literal
+                    array_push(specs, zero_spec); // zero-init slot for literal
                 }
                 continue;
             }
@@ -750,7 +738,7 @@ int a_string(parser *self) {
                 if (self->token.s[0] != '\0') {
                     ast_node *end = make_from_literal(self, self->token.s);
                     array_push(parts, end);
-                    specs_size++; // zero-init slot for literal
+                    array_push(specs, zero_spec); // zero-init slot for literal
                 }
                 break;
             }
@@ -769,16 +757,10 @@ int a_string(parser *self) {
         r->named_application.n_fixed_args     = 0;
 
         // Attach format specs if any were present
-        if (has_any_spec && specs) {
-            // Copy to exact-sized arena allocation
-            tl_format_spec *final_specs =
-                alloc_malloc(self->ast_arena, parts.size * sizeof(tl_format_spec));
-            memset(final_specs, 0, parts.size * sizeof(tl_format_spec));
-            u32 copy_size = specs_size < parts.size ? specs_size : parts.size;
-            memcpy(final_specs, specs, copy_size * sizeof(tl_format_spec));
-
+        if (has_any_spec && specs.size) {
+            array_shrink(specs);
             tl_fstring_format *ffmt = alloc_malloc(self->ast_arena, sizeof(tl_fstring_format));
-            ffmt->specs       = final_specs;
+            ffmt->specs       = specs.v;
             ffmt->uses_format = null;
             ffmt->layout_fn   = str_empty();
             r->named_application.fstring_fmt = ffmt;
