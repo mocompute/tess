@@ -2,6 +2,9 @@
 // A type satisfying ToStringFormat must provide to_string_format(a: T, spec: FormatSpec) -> String.
 // Types may implement ToStringFormat without implementing it for all specifier combinations;
 // unsupported specifiers produce implementation-defined output.
+//
+// Note: the C helpers below share the size-dispatch preamble pattern with ToString.tl but
+// extend it with format spec handling (sign, alt, zero-pad, width, precision, type_char).
 
 #import <String.tl>
 #import <FormatSpec.tl>

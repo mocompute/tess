@@ -719,7 +719,7 @@ int a_string(parser *self) {
             if (tok_f_string_format_spec == self->token.tag) {
                 tl_format_spec spec;
                 if (parse_format_spec(self->token.s, &spec)) {
-                    self->error.tag = tl_err_expected_expression; // TODO: dedicated error
+                    self->error.tag = tl_err_invalid_format_spec;
                     return ERROR_STOP;
                 }
                 // Grow specs array on demand
