@@ -29,6 +29,6 @@ int transpile_generate_header(transpile *, str_build *out_header, str guard_name
 
 // -- stats --
 
-void transpile_get_arena_stats(transpile *, arena_stats *out);
+void transpile_get_arena_stats(transpile *, arena_stats *main_out, arena_stats *transient_out);
 
 #endif

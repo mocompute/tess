@@ -108,6 +108,16 @@ typedef struct {
         size_t               root_after_transpile_capacity;
         size_t               root_after_transpile_allocated;
 
+        // Root arena breakdown (child arena stats)
+        size_t               ast_arena_capacity;
+        size_t               ast_arena_used;
+        size_t               nodes_arena_capacity;
+        size_t               nodes_arena_used;
+        size_t               infer_transient_capacity;
+        size_t               infer_transient_used;
+        size_t               transpile_transient_capacity;
+        size_t               transpile_transient_used;
+
         tl_infer_phase_stats infer_phases;
         tl_infer_counters    infer_counters;
     } stats;
@@ -1144,6 +1154,13 @@ static void print_root_arena_phase(char const *label, size_t capacity, size_t al
     fprintf(stderr, "%-23s %12s capacity / %s used\n", label, cap_buf, alloc_buf);
 }
 
+static void print_breakdown_row(char const *label, size_t capacity, size_t used) {
+    char cap_buf[32], used_buf[32];
+    format_memory(cap_buf, sizeof cap_buf, capacity);
+    format_memory(used_buf, sizeof used_buf, used);
+    fprintf(stderr, "%-26s %10s %10s\n", label, cap_buf, used_buf);
+}
+
 static int read_stdin(state *self) {
     u32   capacity = 64 * 1024;
     char *data     = alloc_malloc(self->arena, capacity);
@@ -1343,6 +1360,14 @@ int compile(state *self) {
         self->stats.parse_capacity  = ast_stats.capacity + token_stats.capacity;
         self->stats.parse_final_mem = ast_stats.allocated + token_stats.allocated;
 
+        self->stats.ast_arena_capacity = ast_stats.capacity;
+        self->stats.ast_arena_used     = ast_stats.allocated;
+
+        arena_stats nodes_stats;
+        arena_get_stats(nodes_alloc, &nodes_stats);
+        self->stats.nodes_arena_capacity = nodes_stats.capacity;
+        self->stats.nodes_arena_used     = nodes_stats.allocated;
+
         arena_stats root;
         arena_get_stats(self->arena, &root);
         self->stats.root_after_parse_capacity  = root.capacity;
@@ -1367,11 +1392,13 @@ int compile(state *self) {
     hires_timer_stop(&phase_timer);
     if (self->report_stats) {
         self->stats.infer_time_ms = hires_timer_elapsed_sec(&phase_timer) * 1000.0;
-        arena_stats infer_arena_stats;
-        tl_infer_get_arena_stats(infer, &infer_arena_stats);
-        self->stats.infer_peak_mem  = infer_arena_stats.peak_allocated;
-        self->stats.infer_capacity  = infer_arena_stats.capacity;
-        self->stats.infer_final_mem = infer_arena_stats.allocated;
+        arena_stats infer_arena_stats, infer_transient_stats;
+        tl_infer_get_arena_stats(infer, &infer_arena_stats, &infer_transient_stats);
+        self->stats.infer_peak_mem           = infer_arena_stats.peak_allocated;
+        self->stats.infer_capacity           = infer_arena_stats.capacity;
+        self->stats.infer_final_mem          = infer_arena_stats.allocated;
+        self->stats.infer_transient_capacity = infer_transient_stats.capacity;
+        self->stats.infer_transient_used     = infer_transient_stats.allocated;
 
         arena_stats root;
         arena_get_stats(self->arena, &root);
@@ -1415,11 +1442,13 @@ int compile(state *self) {
     hires_timer_stop(&phase_timer);
     if (self->report_stats) {
         self->stats.transpile_time_ms = hires_timer_elapsed_sec(&phase_timer) * 1000.0;
-        arena_stats tp_arena_stats;
-        transpile_get_arena_stats(transpile, &tp_arena_stats);
-        self->stats.transpile_peak_mem  = tp_arena_stats.peak_allocated;
-        self->stats.transpile_capacity  = tp_arena_stats.capacity;
-        self->stats.transpile_final_mem = tp_arena_stats.allocated;
+        arena_stats tp_arena_stats, tp_transient_stats;
+        transpile_get_arena_stats(transpile, &tp_arena_stats, &tp_transient_stats);
+        self->stats.transpile_peak_mem           = tp_arena_stats.peak_allocated;
+        self->stats.transpile_capacity           = tp_arena_stats.capacity;
+        self->stats.transpile_final_mem          = tp_arena_stats.allocated;
+        self->stats.transpile_transient_capacity = tp_transient_stats.capacity;
+        self->stats.transpile_transient_used     = tp_transient_stats.allocated;
 
         arena_stats root;
         arena_get_stats(self->arena, &root);
@@ -2715,6 +2744,36 @@ done:
                                self.stats.root_after_infer_allocated);
         print_root_arena_phase("After transpilation:", self.stats.root_after_transpile_capacity,
                                self.stats.root_after_transpile_allocated);
+        fprintf(stderr, "\n");
+
+        // Root arena breakdown by component
+        fprintf(stderr, "=== Root Arena Breakdown ===\n\n");
+        fprintf(stderr, "%-26s %10s %10s\n", "Component", "Capacity", "Used");
+        fprintf(stderr, "%-26s %10s %10s\n", "--------------------------", "----------", "----------");
+        print_breakdown_row("Parser AST", self.stats.ast_arena_capacity, self.stats.ast_arena_used);
+        print_breakdown_row("AST node array", self.stats.nodes_arena_capacity,
+                            self.stats.nodes_arena_used);
+        print_breakdown_row("Infer", self.stats.infer_capacity, self.stats.infer_final_mem);
+        print_breakdown_row("Infer transient", self.stats.infer_transient_capacity,
+                            self.stats.infer_transient_used);
+        if (self.stats.transpile_capacity) {
+            print_breakdown_row("Transpile", self.stats.transpile_capacity,
+                                self.stats.transpile_final_mem);
+            print_breakdown_row("Transpile transient", self.stats.transpile_transient_capacity,
+                                self.stats.transpile_transient_used);
+        }
+
+        // Child capacity = root footprint (bytes consumed from root arena).
+        // Subtract tracked capacity (not used) so "Other" reflects only
+        // direct root allocations (scanner, hashmaps, structs, etc.).
+        size_t tracked_cap = self.stats.ast_arena_capacity + self.stats.nodes_arena_capacity +
+                             self.stats.infer_capacity + self.stats.infer_transient_capacity +
+                             self.stats.transpile_capacity + self.stats.transpile_transient_capacity;
+        size_t other_cap  = root_cap > tracked_cap ? root_cap - tracked_cap : 0;
+        size_t other_used = root_alloc > tracked_cap ? root_alloc - tracked_cap : 0;
+        print_breakdown_row("Other", other_cap, other_used);
+        fprintf(stderr, "%-26s %10s %10s\n", "--------------------------", "----------", "----------");
+        print_breakdown_row("Root total", root_cap, root_alloc);
         fprintf(stderr, "\n");
 
         // Inference sub-phase breakdown

@@ -185,8 +185,9 @@ tl_type_registry *tl_infer_get_registry(tl_infer *self) {
     return self->registry;
 }
 
-void tl_infer_get_arena_stats(tl_infer *self, arena_stats *out) {
-    arena_get_stats(self->arena, out);
+void tl_infer_get_arena_stats(tl_infer *self, arena_stats *main_out, arena_stats *transient_out) {
+    arena_get_stats(self->arena, main_out);
+    if (transient_out) arena_get_stats(self->transient, transient_out);
 }
 
 void tl_infer_set_report_stats(tl_infer *self, int enable) {

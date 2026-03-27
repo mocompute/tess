@@ -46,7 +46,7 @@ int                 is_main_function(str);
 
 // -- stats --
 
-void tl_infer_get_arena_stats(tl_infer *, arena_stats *out);
+void tl_infer_get_arena_stats(tl_infer *, arena_stats *main_out, arena_stats *transient_out);
 
 typedef struct {
     double alpha_ms;

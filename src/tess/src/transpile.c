@@ -3393,8 +3393,9 @@ void transpile_set_verbose(transpile *self, int val) {
     self->verbose = val;
 }
 
-void transpile_get_arena_stats(transpile *self, arena_stats *out) {
-    arena_get_stats(self->arena, out);
+void transpile_get_arena_stats(transpile *self, arena_stats *main_out, arena_stats *transient_out) {
+    arena_get_stats(self->arena, main_out);
+    if (transient_out) arena_get_stats(self->transient, transient_out);
 }
 
 //
