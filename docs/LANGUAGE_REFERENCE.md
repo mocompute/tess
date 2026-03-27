@@ -1317,6 +1317,68 @@ Standard backslash escape sequences (`\n`, `\t`, `\\`, etc.) work in the literal
 
 An f-string with no interpolation holes degenerates to a plain `String` literal. Any type that implements `ToString` can appear in a hole — `Int`, `Float`, `Bool`, `String`, and user-defined types with a `to_string` implementation all work.
 
+##### Format Specifiers
+
+An expression in an f-string hole can be followed by a colon and a format specifier that controls how the value is formatted. The syntax follows Python's [format specification mini-language](https://docs.python.org/3/library/string.html#format-specification-mini-language):
+
+```
+{expr:[[fill]align][sign][#][0][width][.precision][type]}
+```
+
+All parts are optional. When no specifier is given, the default `ToString` conversion is used.
+
+| Part        | Values                        | Meaning                                      |
+|-------------|-------------------------------|----------------------------------------------|
+| `fill`      | any character                 | Padding character (default: space)            |
+| `align`     | `<` `>` `^`                   | Left, right, or center alignment              |
+| `sign`      | `+` `-` (space)               | Sign display for numbers                      |
+| `#`         |                               | Alternate form (e.g. `0x`, `0o`, `0b` prefix) |
+| `0`         |                               | Zero-pad numbers (implies right-align)        |
+| `width`     | integer                       | Minimum field width                           |
+| `.precision`| integer                       | Decimal places for floats                     |
+| `type`      | `x` `X` `o` `b` `d` `e` `E` `f` | Type-specific conversion (see below)      |
+
+**Integer types** (`x` hex, `X` upper hex, `o` octal, `b` binary, `d` decimal):
+
+```tl
+f"{255:#x}"          // "0xff"
+f"{255:#X}"          // "0XFF"
+f"{42:#o}"           // "0o52"
+f"{42:#b}"           // "0b101010"
+f"{42:08b}"          // "00101010"
+f"{-3:+d}"           // "-3"
+f"{3:+d}"            // "+3"
+```
+
+**Float types** (`f` fixed, `e`/`E` scientific):
+
+```tl
+pi := 3.14159265
+f"{pi:.2f}"          // "3.14"
+f"{pi:.4e}"          // "3.1416e+00"
+f"{pi:+.2f}"         // "+3.14"
+```
+
+**Alignment and padding** work with any type:
+
+```tl
+f"{'hello':>10}"     // "     hello"
+f"{'hello':<10}"     // "hello     "
+f"{'hello':^10}"     // "  hello   "
+f"{'hello':*>10}"    // "*****hello"
+```
+
+**Combined specifiers**:
+
+```tl
+f"{3.14:>+10.2f}"   // "     +3.14"
+f"{255:#010x}"       // "0x000000ff"
+```
+
+**Trait dispatch.** Specifiers that require type-specific formatting (sign, `#`, zero-pad, precision, type char) use the `ToStringFormat` trait, which provides `to_string_format(a: T, spec: FormatSpec) -> String`. The standard library implements this for `Int`, `UInt`, and `Float` families. Layout-only specifiers (fill, align, width) work with any type that implements `ToString` — the value is converted to a string first, then padded.
+
+If a type-specific specifier is used on a type that does not implement `ToStringFormat`, the compiler reports an error.
+
 #### Integer Literals
 
 Integer literals have a **polymorphic (weak) type** that adapts to context. The suffix determines which family of integer types the literal can become:
