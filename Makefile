@@ -571,6 +571,7 @@ test-tl: build-tl-tests
 
 build-tests: build-mos-tests build-tess-tests build-vendor-tests build-tl-tests
 
+check: test
 test: build-tests
 	@mos_ok=0; tess_ok=0; vendor_ok=0; tl_ok=0; \
 	$(MAKE) --no-print-directory test-mos && mos_ok=1; \

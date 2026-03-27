@@ -24,6 +24,7 @@
         pkgs.stdenv.mkDerivation {
           pname = "tess";
           version = builtins.replaceStrings ["\n"] [""] (builtins.readFile ./VERSION);
+          enableParallelBuilding = true;
 
           src = ./.;
           nativeBuildInputs = with pkgs; [ gnumake ];
@@ -34,18 +35,6 @@
 
           # not autotools
           dontConfigure = true;
-
-          buildPhase = ''
-            runHook preBuild
-            make -j all
-            runHook postBuild
-          '';
-
-          checkPhase = ''
-            runHook preCheck
-            make -j test
-            runHook postCheck
-          '';
 
           doCheck = true;
 
