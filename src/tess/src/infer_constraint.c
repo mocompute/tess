@@ -2445,6 +2445,8 @@ int traverse_ast_case(tl_infer *self, traverse_ctx *ctx, ast_node *node, travers
 
         // For union cases, conditions are handled by infer_case() directly.
         // We only need to add condition symbols to lexical scope before traversing arms.
+        // Note: only lexical_names is scoped here — type_arguments must persist across arms
+        // (callbacks may insert via traverse_ctx_assign_type_arguments). Cannot use arena watermarks.
         forall(i, node->case_.conditions) {
             hashmap  *save = map_copy(ctx->lexical_names);
             ast_node *cond = node->case_.conditions.v[i];
@@ -2497,8 +2499,10 @@ int traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, traverse_cb 
     case ast_let: {
         // Save outer context: when specializing nested functions (via post_specialize → specialize_arrow),
         // the inner function's let case would otherwise clobber the outer type_arguments and lexical_names.
-        hashmap *save_type_arguments = map_copy(ctx->type_arguments);
-        hashmap *save_lexical_names  = map_copy(ctx->lexical_names);
+        // map_copy before arena_save: copies land in pre-watermark transient, surviving restore.
+        hashmap        *save_type_arguments = map_copy(ctx->type_arguments);
+        hashmap        *save_lexical_names  = map_copy(ctx->lexical_names);
+        arena_watermark wm                  = arena_save(self->transient);
 
         // Note: this node is being processed as a toplevel function definition. It must clear all lexical
         // contexts.
@@ -2521,15 +2525,14 @@ int traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, traverse_cb 
         // Note: let nodes are intentionally not processed with the callback.
 
         // Restore outer context
-        map_destroy(&ctx->type_arguments);
-        map_destroy(&ctx->lexical_names);
+        arena_restore(self->transient, wm);
         ctx->type_arguments = save_type_arguments;
         ctx->lexical_names  = save_lexical_names;
 
     } break;
 
     case ast_let_in: {
-
+        // Note: only lexical_names is scoped — type_arguments must persist (cannot watermark).
         hashmap *save = map_copy(ctx->lexical_names);
         assert(ast_node_is_symbol(node->let_in.name));
 
@@ -2591,6 +2594,7 @@ int traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, traverse_cb 
             }
         }
 
+        // Note: only lexical_names is scoped — type_arguments must persist (cannot watermark).
         hashmap *save = map_copy(ctx->lexical_names);
 
         if (traverse_ast_node_params(self, ctx, node, cb)) return 1;

@@ -195,14 +195,16 @@ static void *arena_malloc(allocator *alloc, size_t sz, char const *file, int lin
         return bump_alloc_assume_capacity(tail, sz);
     }
 
-    // Slow path: walk all buckets from head looking for one with capacity
-    arena_header *bucket = arena->head;
+    // Slow path: walk forward from tail looking for a bucket with capacity.
+    // Only search forward (never backwards) so that arena_save/arena_restore
+    // watermarks remain safe — a later restore cannot rewind past earlier allocations.
+    arena_header *bucket = tail->next;
     while (bucket) {
         if (bucket_has_capacity(bucket, sz)) {
             arena->tail = bucket;
             return bump_alloc_assume_capacity(bucket, sz);
         }
-        tail   = bucket; // track last bucket for potential new allocation
+        tail   = bucket;
         bucket = bucket->next;
     }
 
@@ -348,6 +350,21 @@ void arena_reset(allocator *arena_) {
 
     // Reset tail to head so allocations start from beginning
     arena->tail = arena->head;
+}
+
+arena_watermark arena_save(allocator *arena_) {
+    arena_allocator *arena = (arena_allocator *)arena_;
+    return (arena_watermark){.bucket = arena->tail, .size = arena->tail->size};
+}
+
+void arena_restore(allocator *arena_, arena_watermark wm) {
+    arena_allocator *arena = (arena_allocator *)arena_;
+    arena_header    *saved = (arena_header *)wm.bucket;
+
+    saved->size = wm.size;
+    for (arena_header *h = saved->next; h; h = h->next)
+        h->size = sizeof(arena_header);
+    arena->tail = saved;
 }
 
 void arena_get_stats(allocator *arena_, arena_stats *out) {

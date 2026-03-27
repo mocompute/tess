@@ -1532,9 +1532,11 @@ str specialize_arrow(tl_infer *self, traverse_ctx *traverse_ctx, str name, tl_mo
         hires_timer_init(&st);
         hires_timer_start(&st);
     }
-    ast_node *generic_node =
+    arena_watermark clone_wm = arena_save(self->transient);
+    ast_node       *generic_node =
       clone_generic_for_arrow(self, toplevel, arrow, inst_name,
                               traverse_ctx ? traverse_ctx->type_arguments : null, resolved_type_args);
+    arena_restore(self->transient, clone_wm);
     if (self->report_stats) {
         hires_timer_stop(&st);
         self->counters.specialize_clone_ms += hires_timer_elapsed_sec(&st) * 1000.0;

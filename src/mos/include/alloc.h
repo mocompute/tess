@@ -41,6 +41,16 @@ void                 arena_destroy(allocator **);
 // reset arena to empty but retain all capacity
 void arena_reset(allocator *);
 
+// -- arena watermark (save/restore) --
+
+typedef struct {
+    void  *bucket; // opaque: arena_header*
+    size_t size;   // bucket->size at save time
+} arena_watermark;
+
+nodiscard arena_watermark arena_save(allocator *arena);
+void            arena_restore(allocator *arena, arena_watermark wm);
+
 // -- arena statistics --
 
 typedef struct {
