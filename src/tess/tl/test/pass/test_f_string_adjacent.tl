@@ -2,8 +2,8 @@
 #import <Print.tl>
 
 main() {
-    x := "hello"
-    y := "world"
+    x     := "hello"
+    y     := "world"
     error := 0
 
     s1 := f"{x}{y}"

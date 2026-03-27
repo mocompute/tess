@@ -4,8 +4,8 @@
 add(a: Int, b: Int) -> Int { a + b }
 
 main() {
-    x := 10
-    y := 20
+    x     := 10
+    y     := 20
     error := 0
 
     s1 := f"sum = {x + y}"

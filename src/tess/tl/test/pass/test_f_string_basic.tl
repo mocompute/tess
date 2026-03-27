@@ -2,8 +2,8 @@
 #import <Print.tl>
 
 main() {
-    name := "world"
-    age  := 42
+    name  := "world"
+    age   := 42
     error := 0
 
     s1 := f"hello {name}"

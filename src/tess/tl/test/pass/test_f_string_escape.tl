@@ -2,7 +2,7 @@
 #import <Print.tl>
 
 main() {
-    x := 42
+    x     := 42
     error := 0
 
     // Escaped braces produce literal { and }

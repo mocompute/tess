@@ -7,8 +7,8 @@
 #import <String.tl>
 
 _count(content) {
-    i: CSize := 0
-    ch: Some := content.char_at(i) else { return 1 }
+    i:  CSize := 0
+    ch: Some  := content.char_at(i) else { return 1 }
     0
 }
 
