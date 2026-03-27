@@ -1097,6 +1097,8 @@ static void query_c_compiler_defines(state *self) {
 #endif
 
     if (rc != 0 || !output) {
+        fprintf(stderr, "warning: could not query C compiler predefined macros "
+                        "(platform-specific #if guards may not work correctly)\n");
         free(output);
         return;
     }
@@ -1671,6 +1673,15 @@ static c_string_array build_msvc_argv(state *self, char const **msvc_extra_flags
 }
 
 #endif
+
+static int require_c_compiler(state *self) {
+    if (str_is_empty(self->cc)) {
+        fprintf(stderr, "error: this command requires a C compiler. "
+                        "Set CC environment variable and try again.\n");
+        return 1;
+    }
+    return 0;
+}
 
 int compile_c(state *self) {
     if (str_is_empty(self->program)) return 1;
@@ -2479,18 +2490,15 @@ int main(int argc, char *argv[]) {
     }
 
     get_c_compiler(&self);
-    if (str_is_empty(self.cc)) {
-        fprintf(stderr, "Could not locate a working C compiler. Set CC environment "
-                        "variable and try again.");
-        exit(1);
-    }
 
     // Query C compiler for predefined macros (e.g. __linux__, _WIN32, __APPLE__)
-    hires_timer_start(&timer);
-    query_c_compiler_defines(&self);
-    hires_timer_stop(&timer);
-    if (self.report_stats) {
-        self.stats.cc_defines_time_ms = hires_timer_elapsed_sec(&timer) * 1000.0;
+    if (!str_is_empty(self.cc)) {
+        hires_timer_start(&timer);
+        query_c_compiler_defines(&self);
+        hires_timer_stop(&timer);
+        if (self.report_stats) {
+            self.stats.cc_defines_time_ms = hires_timer_elapsed_sec(&timer) * 1000.0;
+        }
     }
 
     // Populate scanner defines from -D flags + auto-defines + CC predefined macros
@@ -2544,6 +2552,7 @@ int main(int argc, char *argv[]) {
         self.is_executable = 1;
         result             = compile(&self);
         if (result) goto done;
+        if (require_c_compiler(&self)) { result = 1; goto done; }
         result = compile_c(&self);
     }
 
@@ -2575,7 +2584,9 @@ int main(int argc, char *argv[]) {
         if (self.dashdash_at >= 0) self.words.size = (size_t)self.dashdash_at;
 
         result = compile(&self);
-        if (result == 0) result = compile_c(&self);
+        if (result == 0) {
+            if (require_c_compiler(&self)) { result = 1; } else { result = compile_c(&self); }
+        }
 
         self.words.size = saved_words_size;
 
@@ -2637,6 +2648,7 @@ int main(int argc, char *argv[]) {
         self.is_library = 1;
         result          = compile(&self);
         if (result) goto done;
+        if (require_c_compiler(&self)) { result = 1; goto done; }
         result = self.is_static_library ? compile_c_static_lib(&self) : compile_c_obj(&self);
 
         // Write c_export header file if any exports were found
