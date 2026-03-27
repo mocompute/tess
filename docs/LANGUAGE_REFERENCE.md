@@ -1380,6 +1380,32 @@ value := ({
 })
 ```
 
+### Block Statements
+
+A bare `{ ... }` block used as a statement (not wrapped in parentheses) creates a new lexical scope without producing a value. Bindings declared inside the block are destroyed when the block exits and do not escape to the enclosing scope:
+
+```tl
+x := 1
+{
+  y := 2        // y is scoped to this block only
+  x = x + y    // x from the outer scope is visible here
+}
+// y is not accessible here
+```
+
+This is useful when you need a temporary variable for a calculation but don't want it to pollute the surrounding scope:
+
+```tl
+buf := load_data()
+{
+  tmp := compute_checksum(buf)
+  verify(tmp)
+}
+// tmp is gone; buf is still in scope
+```
+
+Unlike block expressions `({ ... })`, block statements have no value and cannot appear on the right-hand side of a binding.
+
 ### Expression Separators
 
 Because whitespace is not significant in Tess, the parser can sometimes interpret adjacent expressions differently than intended. A comma (`,`) or semicolon (`;`) can be placed between expressions to explicitly mark where one expression ends and the next begins.
@@ -1391,8 +1417,12 @@ This is most commonly needed when a binding's right-hand side is followed by a p
 tl: CSize := s.small.tag_len
 (tl & 0xF0zu) >> 4zu
 
-// Solution: comma (or semicolon) marks the end of the binding expression
+// Solution with comma: marks the end of the binding expression
 tl: CSize := s.small.tag_len,
+(tl & 0xF0zu) >> 4zu
+
+// Solution with semicolon: equivalent effect
+tl: CSize := s.small.tag_len;
 (tl & 0xF0zu) >> 4zu
 ```
 
