@@ -98,6 +98,7 @@ int a_assignment_by_operator(parser *self, int min_prec) {
     case tok_f_string_start:
     case tok_f_string_mid:
     case tok_f_string_end:
+    case tok_f_string_format_spec:
     case tok_char:
     case tok_comment:
     case tok_hash_command:        return 1;
@@ -160,6 +161,7 @@ int a_binary_operator(parser *self, int min_prec) {
     case tok_f_string_start:
     case tok_f_string_mid:
     case tok_f_string_end:
+    case tok_f_string_format_spec:
     case tok_char:
     case tok_comment:
     case tok_hash_command:        return 1;
@@ -221,6 +223,7 @@ int a_unary_operator(parser *self, int min_prec) {
     case tok_f_string_start:
     case tok_f_string_mid:
     case tok_f_string_end:
+    case tok_f_string_format_spec:
     case tok_char:
     case tok_comment:
     case tok_hash_command:        return 1;

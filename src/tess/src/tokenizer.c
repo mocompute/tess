@@ -34,9 +34,12 @@ struct tokenizer {
     u32            square_depth; // nesting depth of [ ] (to avoid greedy ]] inside type args)
 
     // f-string state (persists across tokenizer_next calls)
-    u32 f_string_depth;       // >0 when inside f-string expression hole
-    u32 f_string_brace_depth; // tracks nested {} within expression hole
-    int f_string_is_first;    // next literal segment is the first (start vs mid)
+    u32 f_string_depth;          // >0 when inside f-string expression hole
+    u32 f_string_brace_depth;    // tracks nested {} within expression hole
+    u32 f_string_paren_depth;    // tracks nested () within expression hole
+    u32 f_string_bracket_depth;  // tracks nested [] within expression hole
+    int f_string_is_first;       // next literal segment is the first (start vs mid)
+    int f_string_in_literal;     // 1 = next tokenizer_next() call starts in in_f_string state
 };
 
 // -- statics --
@@ -247,6 +250,7 @@ start:; // loop point for skip_depth > 0
 
         in_f_string,
         in_f_string_backslash,
+        in_f_string_format_spec,
         stop_f_string_segment,
 
         start_comment,
@@ -281,6 +285,13 @@ start:; // loop point for skip_depth > 0
 
     // return value, to be copied to *out
     token res = {0};
+
+    // After emitting a format spec token, resume scanning the f-string literal.
+    if (self->f_string_in_literal) {
+        self->f_string_in_literal = 0;
+        self->buf.size            = 0;
+        state                     = in_f_string;
+    }
 
     while (1) {
 
@@ -323,7 +334,15 @@ start:; // loop point for skip_depth > 0
             case 'f':  state = in_f; continue;
             case 's':  state = in_s; continue;
             case '.':  state = in_dot; continue;
-            case ':':  state = in_colon; continue;
+            case ':':
+                if (self->f_string_depth > 0 && self->f_string_brace_depth == 0
+                    && self->f_string_paren_depth == 0 && self->f_string_bracket_depth == 0) {
+                    self->buf.size = 0;
+                    state          = in_f_string_format_spec;
+                    continue;
+                }
+                state = in_colon;
+                continue;
             case '!':  state = in_bang; continue;
             case '#':  state = start_hash_command; continue;
 
@@ -343,6 +362,7 @@ start:; // loop point for skip_depth > 0
                 break;
 
             case '(':
+                if (self->f_string_depth > 0) self->f_string_paren_depth++;
                 replace_token(self->strings, &res, tok_open_round);
                 state = stop;
                 break;
@@ -357,6 +377,8 @@ start:; // loop point for skip_depth > 0
             case ']': state = in_close_square; continue;
 
             case ')':
+                if (self->f_string_depth > 0 && self->f_string_paren_depth > 0)
+                    self->f_string_paren_depth--;
                 replace_token(self->strings, &res, tok_close_round);
                 state = stop;
                 break;
@@ -364,8 +386,10 @@ start:; // loop point for skip_depth > 0
             case '}':
                 if (self->f_string_depth > 0 && self->f_string_brace_depth == 0) {
                     // End of f-string expression hole — resume scanning literal
-                    self->buf.size = 0;
-                    state          = in_f_string;
+                    self->f_string_paren_depth   = 0;
+                    self->f_string_bracket_depth = 0;
+                    self->buf.size               = 0;
+                    state                        = in_f_string;
                     continue;
                 }
                 if (self->f_string_depth > 0) self->f_string_brace_depth--;
@@ -446,6 +470,7 @@ start:; // loop point for skip_depth > 0
         case in_open_square:
             if (self->pos == end) {
                 self->square_depth++;
+                if (self->f_string_depth > 0) self->f_string_bracket_depth++;
                 replace_token(self->strings, &res, tok_open_square);
                 state = stop;
                 goto finish;
@@ -457,6 +482,7 @@ start:; // loop point for skip_depth > 0
             } else {
                 reverse_pos(self);
                 self->square_depth++;
+                if (self->f_string_depth > 0) self->f_string_bracket_depth++;
                 replace_token(self->strings, &res, tok_open_square);
                 state = stop;
             }
@@ -464,6 +490,8 @@ start:; // loop point for skip_depth > 0
 
         case in_close_square: {
             if (self->square_depth > 0) self->square_depth--;
+            if (self->f_string_depth > 0 && self->f_string_bracket_depth > 0)
+                self->f_string_bracket_depth--;
             if (self->pos == end) {
                 replace_token(self->strings, &res, tok_close_square);
                 state = stop;
@@ -877,9 +905,11 @@ start:; // loop point for skip_depth > 0
             if (self->f_string_depth == 0 && self->pos < end && '"' == peek_char(self, self->pos)) {
                 advance_pos(self); // skip the opening "
                 self->f_string_depth++;
-                self->f_string_brace_depth = 0;
-                self->f_string_is_first    = 1;
-                self->buf.size             = 0;
+                self->f_string_brace_depth   = 0;
+                self->f_string_paren_depth   = 0;
+                self->f_string_bracket_depth = 0;
+                self->f_string_is_first      = 1;
+                self->buf.size               = 0;
                 state                      = in_f_string;
                 continue;
             }
@@ -1275,6 +1305,25 @@ start:; // loop point for skip_depth > 0
             array_push(self->buf, c);
 
             state = in_f_string;
+        } break;
+
+        case in_f_string_format_spec: {
+            // Accumulate format spec characters between ':' and '}'.
+            if (self->pos == end) {
+                tok_error(self, out_err, tl_err_eof);
+                state = error;
+                continue;
+            }
+            char const c = next_char(self);
+            if (c == '}') {
+                // End of format spec — emit token and mark next call to resume literal scanning
+                replace_token_sn(self->strings, &res, tok_f_string_format_spec, self->buf.v,
+                                 self->buf.size);
+                self->f_string_in_literal = 1;
+                state                     = stop;
+            } else {
+                array_push(self->buf, c);
+            }
         } break;
 
         case stop_f_string_segment: {

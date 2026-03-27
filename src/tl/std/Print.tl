@@ -1,9 +1,11 @@
 // -- Print functions --
 #module Print
-#import <ToString.tl>
+#import <cstdio.tl>
+#import <FormatSpec.tl>
 #import <String.tl>
 #import <Slice.tl>
-#import <cstdio.tl>
+#import <ToString.tl>
+#import <ToStringFormat.tl>
 
 // -- Synopsis --
 

@@ -85,6 +85,7 @@ void token_deinit(allocator *alloc, token *tok) {
     case tok_f_string_start:
     case tok_f_string_mid:
     case tok_f_string_end:
+    case tok_f_string_format_spec:
     case tok_char:
     case tok_comment:
     case tok_hash_command:        alloc_free(alloc, tok->s); break;
@@ -145,6 +146,7 @@ char *token_to_string(allocator *alloc, token const *tok) {
     case tok_f_string_start:
     case tok_f_string_mid:
     case tok_f_string_end:
+    case tok_f_string_format_spec:
     case tok_char:
     case tok_comment:
     case tok_c_block:
