@@ -14,6 +14,8 @@
 #include <stdnoreturn.h>
 #include <string.h>
 
+#define ARENA_MAX_BUCKET_SIZE (8 * 1024 * 1024) // 8 MB cap on bucket growth
+
 // MSVC may not define max_align_t in stddef.h
 #if defined(_MSC_VER)
 typedef double max_align_t;
@@ -204,11 +206,14 @@ static void *arena_malloc(allocator *alloc, size_t sz, char const *file, int lin
         bucket = bucket->next;
     }
 
-    // Need to allocate a new bucket
-    size_t needed       = sz + sizeof(arena_header);
+    // Need to allocate a new bucket.
+    // Cap growth at ARENA_MAX_BUCKET_SIZE to limit capacity waste from doubling.
+    // Without the cap, a 342 MB arena ends up with 510 MB of bucket capacity.
+    size_t needed       = sz + sizeof(arena_header) + sizeof(arena_block);
     size_t new_capacity = tail->capacity * 2;
-    if (new_capacity < needed) new_capacity = alloc_next_power_of_two(needed);
-    if (new_capacity == 0) return null; // overflow
+    if (new_capacity == 0 || new_capacity < tail->capacity) return null; // overflow
+    if (new_capacity > ARENA_MAX_BUCKET_SIZE) new_capacity = ARENA_MAX_BUCKET_SIZE;
+    if (new_capacity < needed) new_capacity = needed;
 
     tail->next = arena_header_create(arena->parent, new_capacity);
     if (null == tail->next) return null;

@@ -25,11 +25,11 @@ parser *parser_create(allocator *alloc, parser_opts const *opts) {
     alloc_zero(self);
     self->opts                         = *opts;
     self->parent_alloc                 = alloc;
-    self->file_arena                   = arena_create(alloc, 64 * 1024);
-    self->tokens_arena                 = arena_create(alloc, PARSER_ARENA_SIZE);
+    self->file_arena                   = arena_create(default_allocator(), 64 * 1024);
+    self->tokens_arena                 = arena_create(default_allocator(), PARSER_ARENA_SIZE);
     self->ast_arena                    = arena_create(alloc, PARSER_ARENA_SIZE);
-    self->transient                    = arena_create(alloc, PARSER_ARENA_SIZE);
-    self->speculative                  = arena_create(alloc, PARSER_ARENA_SIZE);
+    self->transient                    = arena_create(default_allocator(), PARSER_ARENA_SIZE);
+    self->speculative                  = arena_create(default_allocator(), PARSER_ARENA_SIZE);
     self->tokenizer                    = null;
     self->files                        = opts->files;
     self->files_index                  = 0;
@@ -73,14 +73,18 @@ parser *parser_create(allocator *alloc, parser_opts const *opts) {
     return self;
 }
 
+void parser_release_temp_arenas(parser *self) {
+    if (self->tokenizer) tokenizer_destroy(&self->tokenizer);
+    if (self->transient) arena_destroy(&self->transient);
+    if (self->speculative) arena_destroy(&self->speculative);
+    if (self->tokens_arena) arena_destroy(&self->tokens_arena);
+    if (self->file_arena) arena_destroy(&self->file_arena);
+    self->tokens = (token_array){0};
+}
+
 void parser_destroy(parser **self) {
-    // error token: arena
-    // tokens: arena
+    parser_release_temp_arenas(*self);
 
-    // tokenizer
-    if ((*self)->tokenizer) tokenizer_destroy(&(*self)->tokenizer);
-
-    // arena
     allocator *alloc = (*self)->parent_alloc;
     if ((*self)->module_symbols) hset_destroy(&(*self)->module_symbols);
     hset_destroy(&(*self)->builtin_module_symbols);
@@ -92,11 +96,7 @@ void parser_destroy(parser **self) {
     if ((*self)->function_aliases) map_destroy(&(*self)->function_aliases);
     hset_destroy(&(*self)->modules_version_seen);
     hset_destroy(&(*self)->modules_seen);
-    arena_destroy(&(*self)->transient);
-    arena_destroy(&(*self)->speculative);
     arena_destroy(&(*self)->ast_arena);
-    arena_destroy(&(*self)->tokens_arena);
-    arena_destroy(&(*self)->file_arena);
     alloc_free(alloc, *self);
     *self = null;
 }

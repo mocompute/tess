@@ -38,6 +38,7 @@ typedef struct {
 
 nodiscard parser *parser_create(allocator *, parser_opts const *) mallocfun;
 void              parser_destroy(parser **);
+void              parser_release_temp_arenas(parser *);
 
 // -- module symbols pass --
 

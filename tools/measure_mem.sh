@@ -9,12 +9,13 @@
 #   -n N          Show only top N results (default: all)
 #   -s SUITE      Test suite: pass, fail, fail_runtime, pass_optimized,
 #                 known_failures, known_fail_failures, or "all" (default: all)
-#   -m MODE       Measurement mode: compile, run, or both (default: compile)
+#   -m MODE       Measurement mode: compile, check, run, or both (default: compile)
 #   -q            Quiet — suppress progress, only show results
 #
 # Examples:
 #   ./tools/measure_mem.sh                              # compile, all suites
 #   ./tools/measure_mem.sh -m run -s pass               # run pass tests
+#   ./tools/measure_mem.sh -m check -n 20                # type-check only (no C compiler), top 20
 #   ./tools/measure_mem.sh -m both -n 20                # compile+run, top 20
 #   ./tools/measure_mem.sh -m run 'test_f_string_*'     # run f-string tests
 
@@ -61,8 +62,8 @@ shift $((OPTIND - 1))
 PATTERN="${1:-}"
 
 case "$MODE" in
-    compile|run|both) ;;
-    *) echo "Unknown mode: $MODE (valid: compile, run, both)" >&2; exit 1 ;;
+    compile|check|run|both) ;;
+    *) echo "Unknown mode: $MODE (valid: compile, check, run, both)" >&2; exit 1 ;;
 esac
 
 if [ ! -x "$TESS" ]; then
@@ -172,8 +173,12 @@ measure_one() {
     local run_kb=0
     local run_rc=0
 
-    # --- Compile phase ---
-    if [ "$MODE" = "compile" ] || [ "$MODE" = "both" ]; then
+    # --- Compile / check phase ---
+    if [ "$MODE" = "check" ]; then
+        maxrss_kb "$TESS" check "$tl_file"
+        compile_kb=$MAXRSS_KB
+        compile_rc=$MAXRSS_RC
+    elif [ "$MODE" = "compile" ] || [ "$MODE" = "both" ]; then
         maxrss_kb "$TESS" exe -o "$out_file" "$tl_file"
         compile_kb=$MAXRSS_KB
         compile_rc=$MAXRSS_RC
@@ -237,7 +242,7 @@ done > "$RAW"
 
 echo ""
 
-if [ "$MODE" = "compile" ]; then
+if [ "$MODE" = "compile" ] || [ "$MODE" = "check" ]; then
     # Sort by compile_kb descending
     sort -rn -k1,1 "$RAW" | {
         echo "Results (sorted by peak memory, descending):"

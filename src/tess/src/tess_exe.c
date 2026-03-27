@@ -85,17 +85,28 @@ typedef struct {
     struct {
         double               parse_time_ms;
         size_t               parse_peak_mem;
+        size_t               parse_capacity;
         size_t               parse_final_mem;
         double               infer_time_ms;
         size_t               infer_peak_mem;
+        size_t               infer_capacity;
         size_t               infer_final_mem;
         double               stdlib_extract_time_ms;
         double               cc_defines_time_ms;
         double               transpile_time_ms;
         size_t               transpile_peak_mem;
+        size_t               transpile_capacity;
         size_t               transpile_final_mem;
         double               cc_time_ms;
         size_t               cc_input_size; // Size of C source passed to compiler
+
+        // Root arena snapshots (capacity = true OS memory footprint)
+        size_t               root_after_parse_capacity;
+        size_t               root_after_parse_allocated;
+        size_t               root_after_infer_capacity;
+        size_t               root_after_infer_allocated;
+        size_t               root_after_transpile_capacity;
+        size_t               root_after_transpile_allocated;
 
         tl_infer_phase_stats infer_phases;
         tl_infer_counters    infer_counters;
@@ -1104,22 +1115,33 @@ static void format_memory(char *buf, size_t sz, size_t bytes) {
 
 static void print_stats_header(void) {
     fprintf(stderr, "\n=== Compilation Statistics ===\n\n");
-    fprintf(stderr, "%-20s %12s %12s %12s\n", "Phase", "Time (ms)", "Peak Mem", "Final Mem");
-    fprintf(stderr, "%-20s %12s %12s %12s\n", "--------------------", "------------", "------------",
-            "------------");
+    fprintf(stderr, "%-20s %12s %12s %12s %12s\n", "Phase", "Time (ms)", "Peak Mem", "Capacity",
+            "Final Mem");
+    fprintf(stderr, "%-20s %12s %12s %12s %12s\n", "--------------------", "------------", "------------",
+            "------------", "------------");
 }
 
-static void print_stats_row(char const *phase, double time_ms, size_t peak_mem, size_t final_mem) {
-    char peak_buf[32], final_buf[32];
+static void print_stats_row(char const *phase, double time_ms, size_t peak_mem, size_t capacity,
+                            size_t final_mem) {
+    char peak_buf[32], cap_buf[32], final_buf[32];
     format_memory(peak_buf, sizeof peak_buf, peak_mem);
+    format_memory(cap_buf, sizeof cap_buf, capacity);
     format_memory(final_buf, sizeof final_buf, final_mem);
-    fprintf(stderr, "%-20s %12.3f %12s %12s\n", phase, time_ms, peak_buf, final_buf);
+    fprintf(stderr, "%-20s %12.3f %12s %12s %12s\n", phase, time_ms, peak_buf, cap_buf, final_buf);
 }
 
 static void print_stats_row_no_mem(char const *phase, double time_ms, size_t input_size) {
     char size_buf[32];
     format_memory(size_buf, sizeof size_buf, input_size);
-    fprintf(stderr, "%-20s %12.3f %12s %12s\n", phase, time_ms, "-", size_buf);
+    fprintf(stderr, "%-20s %12.3f %12s %12s %12s\n", phase, time_ms, "-", "-", size_buf);
+}
+
+static void print_root_arena_phase(char const *label, size_t capacity, size_t allocated) {
+    if (!capacity) return;
+    char cap_buf[32], alloc_buf[32];
+    format_memory(cap_buf, sizeof cap_buf, capacity);
+    format_memory(alloc_buf, sizeof alloc_buf, allocated);
+    fprintf(stderr, "%-23s %12s capacity / %s used\n", label, cap_buf, alloc_buf);
 }
 
 static int read_stdin(state *self) {
@@ -1153,12 +1175,17 @@ static int read_stdin(state *self) {
     return 0;
 }
 
-static void print_stats_footer(double total_ms, size_t total_peak) {
-    char peak_buf[32];
+static void print_stats_footer(double total_ms, size_t total_peak, size_t root_capacity,
+                               size_t root_allocated) {
+    char peak_buf[32], root_cap_buf[32], root_alloc_buf[32];
     format_memory(peak_buf, sizeof peak_buf, total_peak);
-    fprintf(stderr, "%-20s %12s %12s %12s\n", "--------------------", "------------", "------------",
-            "------------");
+    format_memory(root_cap_buf, sizeof root_cap_buf, root_capacity);
+    format_memory(root_alloc_buf, sizeof root_alloc_buf, root_allocated);
+    fprintf(stderr, "%-20s %12s %12s %12s %12s\n", "--------------------", "------------", "------------",
+            "------------", "------------");
     fprintf(stderr, "%-20s %12.3f %12s\n", "TOTAL", total_ms, peak_buf);
+    fprintf(stderr, "\n");
+    fprintf(stderr, "Arena Total:         %s capacity / %s used\n", root_cap_buf, root_alloc_buf);
     fprintf(stderr, "\n");
 }
 
@@ -1313,8 +1340,16 @@ int compile(state *self) {
         arena_stats ast_stats, token_stats;
         parser_get_arena_stats(parser, &ast_stats, &token_stats);
         self->stats.parse_peak_mem  = ast_stats.peak_allocated + token_stats.peak_allocated;
+        self->stats.parse_capacity  = ast_stats.capacity + token_stats.capacity;
         self->stats.parse_final_mem = ast_stats.allocated + token_stats.allocated;
+
+        arena_stats root;
+        arena_get_stats(self->arena, &root);
+        self->stats.root_after_parse_capacity  = root.capacity;
+        self->stats.root_after_parse_allocated = root.allocated;
     }
+
+    parser_release_temp_arenas(parser);
 
     // === TYPE INFERENCE PHASE ===
     hires_timer_start(&phase_timer);
@@ -1335,7 +1370,13 @@ int compile(state *self) {
         arena_stats infer_arena_stats;
         tl_infer_get_arena_stats(infer, &infer_arena_stats);
         self->stats.infer_peak_mem  = infer_arena_stats.peak_allocated;
+        self->stats.infer_capacity  = infer_arena_stats.capacity;
         self->stats.infer_final_mem = infer_arena_stats.allocated;
+
+        arena_stats root;
+        arena_get_stats(self->arena, &root);
+        self->stats.root_after_infer_capacity  = root.capacity;
+        self->stats.root_after_infer_allocated = root.allocated;
 
         self->stats.infer_phases    = *tl_infer_get_phase_stats(infer);
         self->stats.infer_counters  = *tl_infer_get_counters(infer);
@@ -1377,7 +1418,13 @@ int compile(state *self) {
         arena_stats tp_arena_stats;
         transpile_get_arena_stats(transpile, &tp_arena_stats);
         self->stats.transpile_peak_mem  = tp_arena_stats.peak_allocated;
+        self->stats.transpile_capacity  = tp_arena_stats.capacity;
         self->stats.transpile_final_mem = tp_arena_stats.allocated;
+
+        arena_stats root;
+        arena_get_stats(self->arena, &root);
+        self->stats.root_after_transpile_capacity  = root.capacity;
+        self->stats.root_after_transpile_allocated = root.allocated;
     }
 
     str program = str_build_finish(&program_build);
@@ -2628,15 +2675,16 @@ done:
 
     if (self.report_stats && !result) {
         print_stats_header();
-        fprintf(stderr, "%-20s %12.3f %12s %12s\n", "Stdlib Extract", self.stats.stdlib_extract_time_ms,
-                "-", "-");
-        fprintf(stderr, "%-20s %12.3f %12s %12s\n", "CC Defines", self.stats.cc_defines_time_ms, "-", "-");
+        fprintf(stderr, "%-20s %12.3f %12s %12s %12s\n", "Stdlib Extract",
+                self.stats.stdlib_extract_time_ms, "-", "-", "-");
+        fprintf(stderr, "%-20s %12.3f %12s %12s %12s\n", "CC Defines",
+                self.stats.cc_defines_time_ms, "-", "-", "-");
         print_stats_row("Parsing", self.stats.parse_time_ms, self.stats.parse_peak_mem,
-                        self.stats.parse_final_mem);
+                        self.stats.parse_capacity, self.stats.parse_final_mem);
         print_stats_row("Type Inference", self.stats.infer_time_ms, self.stats.infer_peak_mem,
-                        self.stats.infer_final_mem);
+                        self.stats.infer_capacity, self.stats.infer_final_mem);
         print_stats_row("Transpilation", self.stats.transpile_time_ms, self.stats.transpile_peak_mem,
-                        self.stats.transpile_final_mem);
+                        self.stats.transpile_capacity, self.stats.transpile_final_mem);
 
         double total_ms = self.stats.stdlib_extract_time_ms + self.stats.cc_defines_time_ms +
                           self.stats.parse_time_ms + self.stats.infer_time_ms +
@@ -2650,7 +2698,24 @@ done:
             total_ms += self.stats.cc_time_ms;
         }
 
-        print_stats_footer(total_ms, total_peak);
+        // Use the latest root arena snapshot for the footer
+        size_t root_cap   = self.stats.root_after_transpile_capacity;
+        size_t root_alloc = self.stats.root_after_transpile_allocated;
+        if (0 == root_cap) {
+            // check mode: no transpile phase, use infer snapshot
+            root_cap   = self.stats.root_after_infer_capacity;
+            root_alloc = self.stats.root_after_infer_allocated;
+        }
+        print_stats_footer(total_ms, total_peak, root_cap, root_alloc);
+
+        fprintf(stderr, "=== Root Arena Growth ===\n\n");
+        print_root_arena_phase("After parsing:", self.stats.root_after_parse_capacity,
+                               self.stats.root_after_parse_allocated);
+        print_root_arena_phase("After inference:", self.stats.root_after_infer_capacity,
+                               self.stats.root_after_infer_allocated);
+        print_root_arena_phase("After transpilation:", self.stats.root_after_transpile_capacity,
+                               self.stats.root_after_transpile_allocated);
+        fprintf(stderr, "\n");
 
         // Inference sub-phase breakdown
         tl_infer_phase_stats const *ip = &self.stats.infer_phases;
