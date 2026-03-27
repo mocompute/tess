@@ -13,6 +13,11 @@
 
 #include "infer_internal.h"
 
+static inline void transient_reset(tl_infer *self) {
+    arena_reset(self->transient);
+    tl_type_transient_reset();
+}
+
 // ============================================================================
 // Public API
 // ============================================================================
@@ -159,6 +164,7 @@ void tl_infer_destroy(allocator *alloc, tl_infer **p) {
     if ((*p)->instance_names) hset_destroy(&(*p)->instance_names);
     if ((*p)->attributes) map_destroy(&(*p)->attributes);
 
+    tl_type_transient_destroy();
     arena_destroy(&(*p)->transient);
     arena_destroy(&(*p)->arena);
     alloc_free(alloc, *p);
@@ -232,12 +238,12 @@ static int run_alpha_conversion(tl_infer *self, ast_node_sized nodes) {
     // rename the rest
     ctx = (rename_variables_ctx){.lex = ctx.lex};
     forall(i, nodes) rename_variables(self, nodes.v[i], &ctx, 0);
-    arena_reset(self->transient);
+    transient_reset(self);
 
 #if DEBUG_INVARIANTS
     if (check_all_types_null(self, nodes, "Phase 1: Alpha Conversion")) return 1;
     if (check_type_arg_types_null(self, nodes, "Phase 1: Alpha Conversion")) return 1;
-    arena_reset(self->transient);
+    transient_reset(self);
 #endif
     return 0;
 }
@@ -293,9 +299,9 @@ static void check_trait_circular_inheritance(tl_infer *self) {
 static int run_load_toplevels(tl_infer *self, ast_node_sized nodes) {
     self->toplevels = ast_node_str_map_create(self->arena, 1024);
     load_toplevel(self, nodes);
-    arena_reset(self->transient);
+    transient_reset(self);
     check_trait_circular_inheritance(self);
-    arena_reset(self->transient);
+    transient_reset(self);
     if (self->errors.size) return 1;
 
     log_toplevels(self);
@@ -312,7 +318,7 @@ static int run_generic_inference(tl_infer *self, ast_node_sized nodes) {
         count++;
     }
     if (self->report_stats) self->counters.toplevels_inferred = count;
-    arena_reset(self->transient);
+    transient_reset(self);
 
     if (self->errors.size) return 1;
 
@@ -334,7 +340,7 @@ static int run_generic_inference(tl_infer *self, ast_node_sized nodes) {
             }
         }
         if (failures) return 1;
-        arena_reset(self->transient);
+        transient_reset(self);
     }
 #endif
     return 0;
@@ -344,18 +350,18 @@ static int run_generic_inference(tl_infer *self, ast_node_sized nodes) {
 static int run_check_free_variables(tl_infer *self) {
     if (check_missing_free_variables(self)) return 1;
     if (self->errors.size) return 1;
-    arena_reset(self->transient);
+    transient_reset(self);
 
     tl_type_subs_apply(self->subs, self->env);
     apply_subs_to_ast(self);
-    arena_reset(self->transient);
+    transient_reset(self);
 
     dbg_at(1, self, "-- inference complete --");
     dbg_at(1, self, "");
     log_toplevels(self);
     log_subs(self);
     log_env(self);
-    arena_reset(self->transient);
+    transient_reset(self);
     return 0;
 }
 
@@ -440,7 +446,7 @@ static int run_specialize(tl_infer *self, ast_node_sized nodes, ast_node *main) 
         }
     }
 
-    arena_reset(self->transient);
+    transient_reset(self);
 
     // Default unconstrained weak integer literals: weak_int_signed -> Int, weak_int_unsigned -> UInt.
     // Must happen after specialization (which re-infers literals, creating new weak types)
@@ -452,21 +458,21 @@ static int run_specialize(tl_infer *self, ast_node_sized nodes, ast_node *main) 
     // apply subs to global environment
     tl_type_subs_apply(self->subs, self->env);
     apply_subs_to_ast(self);
-    arena_reset(self->transient);
+    transient_reset(self);
 
     // ensure main function has the correct type
     if (main) {
         if (check_main_function(self, main)) return 1;
-        arena_reset(self->transient);
+        transient_reset(self);
     }
 
     remove_generic_toplevels(self);
     if (self->report_stats) self->counters.toplevels_after_specialize = (u32)map_size(self->toplevels);
-    arena_reset(self->transient);
+    transient_reset(self);
 
 #if DEBUG_INVARIANTS
     if (check_no_generic_toplevels(self, "Phase 5: Specialization")) return 1;
-    arena_reset(self->transient);
+    transient_reset(self);
 #endif
     return 0;
 }
@@ -477,7 +483,7 @@ static int run_tree_shake(tl_infer *self, ast_node *main) {
 
     tree_shake_toplevels(self, main);
     if (self->report_stats) self->counters.toplevels_after_tree_shake = (u32)map_size(self->toplevels);
-    arena_reset(self->transient);
+    transient_reset(self);
 
     // after tree shake, extraneous symbols will have been removed from environment
     if (check_missing_free_variables(self)) return 1;
@@ -488,20 +494,20 @@ static int run_tree_shake(tl_infer *self, ast_node *main) {
 // Phase 7: Type specialization updates.
 static int run_update_types(tl_infer *self) {
     update_specialized_types(self);
-    arena_reset(self->transient);
+    transient_reset(self);
 
     check_unresolved_types(self);
-    arena_reset(self->transient);
+    transient_reset(self);
 
     check_closure_checks(self);
-    arena_reset(self->transient);
+    transient_reset(self);
 
     log_subs(self);
     dbg_at(1, self, "-- final env --");
     log_env(self);
-    arena_reset(self->transient);
+    transient_reset(self);
     log_toplevels(self);
-    arena_reset(self->transient);
+    transient_reset(self);
 
     return self->errors.size ? 1 : 0;
 }
@@ -551,7 +557,7 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *out_resu
                                    tl_type_registry_float(self->registry));
     tl_type_subs_apply(self->subs, self->env);
     apply_subs_to_ast(self);
-    arena_reset(self->transient);
+    transient_reset(self);
 
     ast_node *main = null;
     if (!self->opts.is_library) {
@@ -598,7 +604,7 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *out_resu
     fprintf(stderr, "  Unique instance names: %zu\n", hset_size(self->instance_names));
 #endif
 
-    arena_reset(self->transient);
+    transient_reset(self);
     return 0;
 }
 

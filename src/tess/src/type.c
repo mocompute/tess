@@ -155,7 +155,8 @@ tl_type_registry *tl_type_registry_create(allocator *alloc, allocator *transient
     self->alloc            = alloc;
     self->transient        = transient;
 
-    transient_allocator    = transient;
+    // FIXME: leaked in non-infer paths (manifest, lockfile) — needs tl_type_registry_destroy
+    transient_allocator    = arena_create(default_allocator(), 4096);
 
     self->subs             = subs;
     self->definitions      = map_new(self->alloc, str, tl_polytype *, 1024);       // key: str
@@ -259,6 +260,14 @@ tl_type_registry *tl_type_registry_create(allocator *alloc, allocator *transient
     make_carray(self);
 
     return self;
+}
+
+void tl_type_transient_reset(void) {
+    if (transient_allocator) arena_reset(transient_allocator);
+}
+
+void tl_type_transient_destroy(void) {
+    if (transient_allocator) arena_destroy(&transient_allocator);
 }
 
 static tl_polytype *tl_type_constructor_create_ext(tl_type_registry *self, str name, str generic_name,
@@ -1478,6 +1487,7 @@ void tl_type_env_remove_unknown_symbols(tl_type_env *self, hashmap *known) {
         str_map_erase(self->map, remove.v[i]);
         // dbg(self, "tl_type_env_remove_unknown_symbols: removing '%s'", str_cstr(&remove.v[i]));
     }
+    tl_type_transient_reset();
 }
 
 // ============================================================================
@@ -1879,6 +1889,7 @@ void tl_polytype_generalize(tl_polytype *self, tl_type_env *env, tl_type_subs *s
     generalize(self->type, &quant, &seen);
     self->quantifiers.size = quant.size;
     self->quantifiers.v    = quant.v;
+    tl_type_transient_reset();
 }
 
 tl_monotype *tl_polytype_concrete(tl_polytype *self) {
@@ -1890,6 +1901,7 @@ tl_polytype *tl_monotype_generalize(allocator *alloc, tl_monotype *mono) {
     tl_type_variable_array quantifiers = {.alloc = alloc};
     hashmap               *seen        = hset_create(transient_allocator, 64);
     generalize(mono, &quantifiers, &seen);
+    tl_type_transient_reset();
     return tl_polytype_create(alloc, (tl_type_variable_sized)array_sized(quantifiers), mono);
 }
 
@@ -2133,6 +2145,7 @@ int tl_monotype_is_concrete_(tl_monotype *self, hashmap **seen) {
 int tl_monotype_is_concrete(tl_monotype *self) {
     hashmap *seen = hset_create(transient_allocator, 64);
     int      res  = tl_monotype_is_concrete_(self, &seen);
+    tl_type_transient_reset();
     return res;
 }
 
@@ -2179,6 +2192,7 @@ int tl_monotype_is_weak_(tl_monotype *self, hashmap **seen) {
 int tl_monotype_is_weak_deep(tl_monotype *self) {
     hashmap *seen = hset_create(transient_allocator, 64);
     int      res  = tl_monotype_is_weak_(self, &seen);
+    tl_type_transient_reset();
     return res;
 }
 
@@ -3346,6 +3360,7 @@ static int tl_type_subs_monotype_occurs_(tl_type_subs *self, tl_type_variable tv
 int tl_type_subs_monotype_occurs(tl_type_subs *self, tl_type_variable tv, tl_monotype *mono) {
     hashmap *seen = hset_create(transient_allocator, 64);
     int      res  = tl_type_subs_monotype_occurs_(self, tv, mono, &seen);
+    tl_type_transient_reset();
     return res;
 }
 
@@ -3785,6 +3800,7 @@ void tl_type_subs_apply(tl_type_subs *subs, tl_type_env *env) {
         tl_polytype *poly = *(tl_polytype **)iter.data;
         tl_polytype_substitute_ext(subs->data.alloc, poly, subs, &exclude);
     }
+    tl_type_transient_reset();
 }
 
 void tl_type_subs_default_weak_ints(tl_type_subs *subs, tl_monotype *int_type, tl_monotype *uint_type,
@@ -3885,6 +3901,7 @@ void tl_type_env_log(tl_type_env *self) {
         str_deinit(transient_allocator, &type_str);
     }
     array_free(sorted);
+    tl_type_transient_reset();
 }
 
 //
@@ -3919,6 +3936,7 @@ void tl_type_subs_log(tl_type_subs *self) {
 
         fprintf(stderr, "\n");
     }
+    tl_type_transient_reset();
 }
 
 //

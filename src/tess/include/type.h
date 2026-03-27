@@ -352,6 +352,11 @@ void tl_type_subs_default_weak_ints(tl_type_subs *, tl_monotype *int_type, tl_mo
                                     tl_monotype *float_type);
 void tl_type_subs_log(tl_type_subs *);
 
+// -- type transient arena --
+
+void tl_type_transient_reset(void);
+void tl_type_transient_destroy(void);
+
 // -- utilities --
 
 u64               tl_monotype_sized_hash64(u64, tl_monotype_sized);

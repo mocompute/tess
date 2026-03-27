@@ -494,6 +494,7 @@ void update_specialized_types(tl_infer *self) {
         self->counters.update_types_ast_ms = hires_timer_elapsed_sec(&ut) * 1000.0;
     }
     arena_reset(self->transient);
+    tl_type_transient_reset();
 }
 
 static int check_unresolved_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_node *node) {
@@ -525,6 +526,7 @@ void check_unresolved_types(tl_infer *self) {
         traverse_ast(self, traverse, node, check_unresolved_cb);
     }
     arena_reset(self->transient);
+    tl_type_transient_reset();
 }
 
 // ============================================================================
