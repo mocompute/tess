@@ -102,7 +102,7 @@ conditional compilation, and a package manager.
 
 ```bash
 make -j              # Build the compiler (~5 seconds)
-make -j test         # Run tests (~30 seconds)
+make -j8 test        # Run tests (~40 seconds)
 make install         # Install to /usr/local (see docs/BUILD.md)
 ```
 
