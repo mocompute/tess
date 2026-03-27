@@ -2034,6 +2034,38 @@ when val {
 }
 ```
 
+### Conditional Variant Binding
+
+When you need to check for a single variant and execute a block only if it matches, use a conditional variant binding with `if`:
+
+```tl
+if c: Circle := shape {
+    // c is bound to the Circle value
+    use(c.radius)
+}
+// execution continues here if shape was not a Circle
+```
+
+An optional `else` clause handles the non-matching case:
+
+```tl
+if c: Circle := shape {
+    use(c.radius)
+}
+else {
+    handle_other()
+}
+```
+
+This is not intended to replace `when` — use `when` when matching multiple variants. Conditional variant binding is useful when a single variant results in a special case, especially as an early-return guard:
+
+```tl
+if err: Err := result {
+    return err.message
+}
+// continue with the success path
+```
+
 ## Traits
 
 Traits are compile-time type constraints that describe a set of functions a type must provide.

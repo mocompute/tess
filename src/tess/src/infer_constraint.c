@@ -1885,8 +1885,9 @@ static int infer_tagged_union_case(tl_infer *self, traverse_ctx *ctx, ast_node *
         cond->symbol.annotation_type = variant_poly;
     }
 
-    // Exhaustiveness check: if no else arm, verify all variants are covered
-    if (!has_else_arm) {
+    // Exhaustiveness check: if no else arm, verify all variants are covered.
+    // Conditional variant bindings (AST_TAGGED_UNION_CONDITIONAL) are intentionally non-exhaustive.
+    if (!has_else_arm && node->case_.is_union != AST_TAGGED_UNION_CONDITIONAL) {
         forall(j, valid_variants) {
             if (!variant_covered[j]) {
                 array_push(self->errors,

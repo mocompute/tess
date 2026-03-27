@@ -16,6 +16,7 @@ defslice(ast_node_slice, struct ast_node *);
 
 #define AST_TAGGED_UNION_VALUE       1
 #define AST_TAGGED_UNION_MUTABLE     2
+#define AST_TAGGED_UNION_CONDITIONAL 3
 
 #define AST_TAGGED_UNION_TAG_FIELD   "tag"
 #define AST_TAGGED_UNION_UNION_FIELD "u"
@@ -145,7 +146,7 @@ typedef struct ast_node {
             ast_node_sized   arms;             // must be same size
             struct ast_node *binary_predicate; // may be null
             struct ast_node *union_annotation; // type annotation for tagged union (e.g., T in case x: T)
-            int              is_union; // by parser if case is a union destructure (1: plain, 2: mutable)
+            int              is_union; // see AST_TAGGED_UNION_* (0: none, 1: plain, 2: mutable, 3: conditional)
         } case_;
 
         struct ast_if_then_else {

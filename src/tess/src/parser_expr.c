@@ -1008,7 +1008,51 @@ done:
     return result_ast_node(self, node);
 }
 
+// Conditional variant binding: if c: Circle := shape { ... } [else { ... }]
+// With else:    desugars to when shape { c: Circle { ... } else { ... } }
+// Without else: desugars to single-arm case (statement, no value)
+static int a_conditional_variant_binding(parser *self) {
+    int res = a_try(self, a_param);
+    if (res) return res;
+    ast_node *lval = self->result;
+    if (!ast_node_is_symbol(lval) || !lval->symbol.annotation) return 1;
+    if (a_try(self, a_colon_equal)) return 1;
+
+    ast_node *val = parse_expression(self, INT_MIN);
+    if (!val) return 1;
+
+    ast_node *yes = parse_body(self);
+    if (!yes) return ERROR_STOP;
+
+    ast_node_array conditions = {.alloc = self->ast_arena};
+    ast_node_array arms       = {.alloc = self->ast_arena};
+    array_push(conditions, lval);
+    array_push(arms, yes);
+
+    int is_union = AST_TAGGED_UNION_CONDITIONAL;
+
+    if (0 == a_try_s(self, the_symbol, "else")) {
+        ast_node *else_body = parse_body(self);
+        if (!else_body) return ERROR_STOP;
+
+        ast_node *sentinel = ast_node_create_nil(self->ast_arena);
+        set_node_file(self, sentinel);
+        array_push(conditions, sentinel);
+        array_push(arms, else_body);
+
+        is_union = AST_TAGGED_UNION_VALUE;
+    }
+
+    ast_node *node =
+      ast_node_create_case(self->ast_arena, val, (ast_node_sized)array_sized(conditions),
+                           (ast_node_sized)array_sized(arms), null, null, is_union);
+    set_node_file(self, node);
+    return result_ast_node(self, node);
+}
+
 ast_node *parse_if_continue(parser *self) {
+    if (0 == a_try(self, a_conditional_variant_binding)) return self->result;
+
     // the "if" token has been seen
     ast_node *cond = parse_expression(self, INT_MIN);
     if (!cond) return null;
