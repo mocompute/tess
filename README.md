@@ -46,7 +46,8 @@ factorial(n) {
 }
 ```
 
-**Tagged unions.** Define variants with associated data. The compiler checks that every case is handled.
+**Tagged unions.** Define variants with associated data, then bind on each variant of the union. The
+compiler checks that every case is handled.
 
 ```tl
 Shape: | Circle { radius: Float }
@@ -58,6 +59,23 @@ area(s) {
         s: Square { s.length * s.length }
     }
 }
+```
+
+Or, just bind the happy path, and ignore the rest:
+
+```tl
+    s: Some := get_the_thing() else { return "oops" }
+    use_it(s.value)
+    // ...
+```
+
+Or, condition on a single variant:
+
+```tl
+    if sq: Square := the_shape() {
+        log("we saw a square")
+    }
+    // ...
 ```
 
 **Generics.** One definition, multiple types, no macros. Type parameters can be constrained by traits: checked at compile time, specialized to concrete types.
@@ -83,6 +101,12 @@ result := c_sqrt(2.0)
 
 ```bash
 tess lib mylib.tl    # produces libmylib.so + libmylib.h
+```
+
+Conversely, generate Tess bindings from a C header automatically:
+
+```bash
+tess cbind sqlite3.h
 ```
 
 **Error handling.** `Result` and `Option` replace error codes and null checks. `try` unwraps the success case or returns the error: no goto chains.
