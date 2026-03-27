@@ -23,10 +23,10 @@ eq(p1, p2) {
 println = Print.println
 
 main() {
-    a := Point(x = 1, y = 2)
-    b := Point(x = 3, y = 4)
+    a := Point(x = 1.0, y = 2.5)
+    b := Point(x = 3.0, y = 4.5)
     c := a + b
-    println(f"({c.x}, {c.y})")
+    println(f"({c.x:.1f}, {c.y:.1f})")
 
     if a != b { println("different") }
     0
