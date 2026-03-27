@@ -133,7 +133,7 @@ int tl_package_parse_file(allocator *alloc, char const *path, tl_package *out) {
     if (parse_rc) {
         parser_report_errors(p);
         parser_destroy(&p);
-        tl_type_transient_destroy();
+        tl_type_registry_destroy(registry);
         arena_destroy(&parse_arena);
         return 1;
     }
@@ -364,7 +364,7 @@ int tl_package_parse_file(allocator *alloc, char const *path, tl_package *out) {
     }
     // Cleanup parser
     parser_destroy(&p);
-    tl_type_transient_destroy();
+    tl_type_registry_destroy(registry);
     arena_destroy(&parse_arena);
 
     return error ? 1 : 0;

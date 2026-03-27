@@ -164,7 +164,7 @@ void tl_infer_destroy(allocator *alloc, tl_infer **p) {
     if ((*p)->instance_names) hset_destroy(&(*p)->instance_names);
     if ((*p)->attributes) map_destroy(&(*p)->attributes);
 
-    tl_type_transient_destroy();
+    tl_type_registry_destroy((*p)->registry);
     arena_destroy(&(*p)->transient);
     arena_destroy(&(*p)->arena);
     alloc_free(alloc, *p);

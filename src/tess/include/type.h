@@ -355,7 +355,6 @@ void tl_type_subs_log(tl_type_subs *);
 // -- type transient arena --
 
 void tl_type_transient_reset(void);
-void tl_type_transient_destroy(void);
 
 // -- utilities --
 

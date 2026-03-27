@@ -20,6 +20,12 @@ static tl_type_registry *test_registry(void) {
     return tl_type_registry_create(arena, arena, subs);
 }
 
+static void test_registry_destroy(tl_type_registry *reg) {
+    allocator *arena = reg->alloc;
+    tl_type_registry_destroy(reg);
+    arena_destroy(&arena);
+}
+
 // Helper: look up a nullary type by name and return its monotype.
 static tl_monotype *lookup(tl_type_registry *reg, char *name) {
     str          s = (str){.big = {.buf = name, .len = (u32)strlen(name)}};
@@ -76,9 +82,7 @@ static int test_subchain_ids(void) {
     error += tl_monotype_integer_subchain(lookup(reg, "Void")) != TL_INTEGER_SUBCHAIN_NONE;
     error += tl_monotype_integer_subchain(lookup(reg, "Bool")) != TL_INTEGER_SUBCHAIN_NONE;
 
-    allocator *arena = reg->alloc;
-    tl_type_transient_destroy();
-    arena_destroy(&arena);
+    test_registry_destroy(reg);
     return error;
 }
 
@@ -129,9 +133,7 @@ static int test_width_ranks(void) {
     error += tl_monotype_integer_width_rank(lookup(reg, "Void")) != -1;
     error += tl_monotype_integer_width_rank(lookup(reg, "Bool")) != -1;
 
-    allocator *arena = reg->alloc;
-    tl_type_transient_destroy();
-    arena_destroy(&arena);
+    test_registry_destroy(reg);
     return error;
 }
 
@@ -163,9 +165,7 @@ static int test_compare_width_same_chain(void) {
     error += tl_monotype_compare_integer_width(lookup(reg, "CUInt8"), lookup(reg, "CUInt64")) != -1;
     error += tl_monotype_compare_integer_width(lookup(reg, "CUInt64"), lookup(reg, "CUInt8")) != 1;
 
-    allocator *arena = reg->alloc;
-    tl_type_transient_destroy();
-    arena_destroy(&arena);
+    test_registry_destroy(reg);
     return error;
 }
 
@@ -195,9 +195,7 @@ static int test_compare_width_cross_chain(void) {
     error += tl_monotype_compare_integer_width(lookup(reg, "CPtrDiff"), lookup(reg, "CInt")) != 2;
     error += tl_monotype_compare_integer_width(lookup(reg, "CChar"), lookup(reg, "CUnsignedChar")) != 2;
 
-    allocator *arena = reg->alloc;
-    tl_type_transient_destroy();
-    arena_destroy(&arena);
+    test_registry_destroy(reg);
     return error;
 }
 
@@ -230,9 +228,7 @@ static int test_same_subchain(void) {
     error += tl_monotype_same_integer_subchain(lookup(reg, "CInt"), lookup(reg, "Void")) != 0;
     error += tl_monotype_same_integer_subchain(lookup(reg, "Void"), lookup(reg, "Bool")) != 0;
 
-    allocator *arena = reg->alloc;
-    tl_type_transient_destroy();
-    arena_destroy(&arena);
+    test_registry_destroy(reg);
     return error;
 }
 
@@ -266,9 +262,7 @@ static int test_weak_int_construction(void) {
     error += wu2->tag != tl_weak_int_unsigned;
     error += wu2->var != 99;
 
-    allocator *arena = reg->alloc;
-    tl_type_transient_destroy();
-    arena_destroy(&arena);
+    test_registry_destroy(reg);
     return error;
 }
 
@@ -324,9 +318,7 @@ static int test_weak_int_predicates(void) {
     error += tl_monotype_is_concrete_no_weak(ws);
     error += tl_monotype_is_concrete_no_weak(wu);
 
-    allocator *arena = reg->alloc;
-    tl_type_transient_destroy();
-    arena_destroy(&arena);
+    test_registry_destroy(reg);
     return error;
 }
 
@@ -353,9 +345,7 @@ static int test_registry_csize_cptrdiff(void) {
     error += tl_monotype_integer_subchain(csize) != TL_INTEGER_SUBCHAIN_CSIZE;
     error += tl_monotype_integer_subchain(cptrdiff) != TL_INTEGER_SUBCHAIN_CPTRDIFF;
 
-    allocator *arena = reg->alloc;
-    tl_type_transient_destroy();
-    arena_destroy(&arena);
+    test_registry_destroy(reg);
     return error;
 }
 
@@ -381,9 +371,7 @@ static int test_cchar_signedness(void) {
     // Subchain is correct
     error += tl_monotype_integer_subchain(cchar) != TL_INTEGER_SUBCHAIN_CCHAR;
 
-    allocator *arena = reg->alloc;
-    tl_type_transient_destroy();
-    arena_destroy(&arena);
+    test_registry_destroy(reg);
     return error;
 }
 

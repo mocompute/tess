@@ -265,8 +265,13 @@ void tl_type_transient_reset(void) {
     if (transient_allocator) arena_reset(transient_allocator);
 }
 
-void tl_type_transient_destroy(void) {
+static void tl_type_transient_destroy(void) {
     if (transient_allocator) arena_destroy(&transient_allocator);
+}
+
+void tl_type_registry_destroy(tl_type_registry *self) {
+    (void)self;
+    tl_type_transient_destroy();
 }
 
 static tl_polytype *tl_type_constructor_create_ext(tl_type_registry *self, str name, str generic_name,
