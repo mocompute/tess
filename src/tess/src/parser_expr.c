@@ -1043,9 +1043,8 @@ static int a_conditional_variant_binding(parser *self) {
         is_union = AST_TAGGED_UNION_VALUE;
     }
 
-    ast_node *node =
-      ast_node_create_case(self->ast_arena, val, (ast_node_sized)array_sized(conditions),
-                           (ast_node_sized)array_sized(arms), null, null, is_union);
+    ast_node *node = ast_node_create_case(self->ast_arena, val, (ast_node_sized)array_sized(conditions),
+                                          (ast_node_sized)array_sized(arms), null, null, is_union);
     set_node_file(self, node);
     return result_ast_node(self, node);
 }

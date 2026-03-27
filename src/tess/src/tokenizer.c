@@ -34,9 +34,9 @@ struct tokenizer {
     u32            square_depth; // nesting depth of [ ] (to avoid greedy ]] inside type args)
 
     // f-string state (persists across tokenizer_next calls)
-    u32            f_string_depth;       // >0 when inside f-string expression hole
-    u32            f_string_brace_depth; // tracks nested {} within expression hole
-    int            f_string_is_first;    // next literal segment is the first (start vs mid)
+    u32 f_string_depth;       // >0 when inside f-string expression hole
+    u32 f_string_brace_depth; // tracks nested {} within expression hole
+    int f_string_is_first;    // next literal segment is the first (start vs mid)
 };
 
 // -- statics --
@@ -1212,7 +1212,7 @@ start:; // loop point for skip_depth > 0
             state         = stop;
         } break;
 
-        // -- f-string literal scanning --
+            // -- f-string literal scanning --
 
         case in_f_string: {
             if (self->pos == end) {
@@ -1257,9 +1257,7 @@ start:; // loop point for skip_depth > 0
                 self->f_string_depth--;
                 state = stop;
                 break;
-            default:
-                array_push(self->buf, c);
-                break;
+            default: array_push(self->buf, c); break;
             }
         } break;
 

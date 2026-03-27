@@ -146,7 +146,7 @@ typedef struct ast_node {
             ast_node_sized   arms;             // must be same size
             struct ast_node *binary_predicate; // may be null
             struct ast_node *union_annotation; // type annotation for tagged union (e.g., T in case x: T)
-            int              is_union; // see AST_TAGGED_UNION_* (0: none, 1: plain, 2: mutable, 3: conditional)
+            int is_union; // see AST_TAGGED_UNION_* (0: none, 1: plain, 2: mutable, 3: conditional)
         } case_;
 
         struct ast_if_then_else {
