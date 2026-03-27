@@ -1339,6 +1339,30 @@ static str generate_funcall_with_args(transpile *self, ast_node const *node, eva
     return res;
 }
 
+// Emit a FormatSpec C struct literal into the transpile buffer.
+// Returns the name of the temporary holding the spec.
+static str emit_format_spec_literal(transpile *self, tl_format_spec const *spec, str fs_type_c) {
+    str spec_tmp = next_res(self);
+    cat(self, fs_type_c);
+    cat(self, S(" "));
+    cat(self, spec_tmp);
+    cat(self, S(" = {"));
+
+    char fill = spec->fill ? spec->fill : ' ';
+    cat(self, str_fmt(self->transient, ".fill = '%c', ", fill));
+    cat(self, str_fmt(self->transient, ".align = %d, ", (int)spec->align));
+    cat(self, str_fmt(self->transient, ".sign = %d, ", (int)spec->sign));
+    cat(self, str_fmt(self->transient, ".alt = %d, ", spec->alt));
+    cat(self, str_fmt(self->transient, ".zero_pad = %d, ", spec->zero_pad));
+    cat(self, str_fmt(self->transient, ".width = %d, ", spec->width));
+    cat(self, str_fmt(self->transient, ".precision = %d, ", spec->precision));
+    cat(self, str_fmt(self->transient, ".type_char = %d, ", (int)spec->type_char));
+    cat(self, str_fmt(self->transient, ".has_type_specific = %d", spec->has_type_specific));
+
+    cat(self, S("};\n"));
+    return spec_tmp;
+}
+
 static str generate_funcall_variadic(transpile *self, ast_node const *node, eval_ctx *ctx) {
     // Variadic call: emit trait function calls for each variadic arg, pack into stack array,
     // construct Slice, and call the function with fixed args + slice.
@@ -1379,6 +1403,18 @@ static str generate_funcall_variadic(transpile *self, ast_node const *node, eval
         str_array va_temps = {.alloc = self->transient};
         array_reserve(va_temps, n_variadic);
 
+        tl_format_spec const *fspecs = node->named_application.format_specs;
+        u8 const *uses_format        = node->named_application.variadic_uses_format;
+
+        // Look up FormatSpec C type name (lazily, only if format specs are present).
+        str fs_type_c  = str_empty();
+        str layout_fn  = node->named_application.format_layout_fn;
+        if (fspecs) {
+            tl_polytype *fs_poly = tl_type_env_lookup(self->env, S("FormatSpec__FormatSpec"));
+            if (fs_poly && fs_poly->type)
+                fs_type_c = type_to_c_mono(self, fs_poly->type);
+        }
+
         for (u32 i = 0; i < n_variadic; i++) {
             ast_node const *arg_node = node->named_application.arguments[n_fixed + i];
             tl_monotype    *arg_type = arg_node->type ? arg_node->type->type : null;
@@ -1388,15 +1424,49 @@ static str generate_funcall_variadic(transpile *self, ast_node const *node, eval
                                          ? node->named_application.variadic_impl_fns[i]
                                          : str_empty();
 
-            // Emit: ElemType tmpN = impl_fn(NULL, argN);
+            int use_fmt    = uses_format && uses_format[i];
+            int has_layout = fspecs && tl_format_spec_has_any(&fspecs[n_fixed + i]);
+
+            // Emit FormatSpec struct literal if needed for this arg.
+            str spec_tmp = str_empty();
+            if ((use_fmt || has_layout) && !str_is_empty(fs_type_c)) {
+                spec_tmp = emit_format_spec_literal(self, &fspecs[n_fixed + i], fs_type_c);
+            }
+
+            // Emit: ElemType tmpN = impl_fn(NULL, argN [, specN]);
             str tmp = next_res(self);
             generate_decl(self, tmp, elem_type);
             cat(self, tmp);
             cat_assign(self);
             cat(self, mangle_fun(self, impl_fn));
-            cat(self, S("(NULL, "));
-            cat(self, arg_val);
-            cat(self, S(");\n"));
+            if (use_fmt && !str_is_empty(spec_tmp)) {
+                // Arity 2: to_string_format(NULL, arg, spec)
+                cat(self, S("(NULL, "));
+                cat(self, arg_val);
+                cat(self, S(", "));
+                cat(self, spec_tmp);
+                cat(self, S(");\n"));
+            } else {
+                // Arity 1: to_string(NULL, arg)
+                cat(self, S("(NULL, "));
+                cat(self, arg_val);
+                cat(self, S(");\n"));
+            }
+
+            // Apply layout (width/alignment/fill) if format spec is present.
+            if (has_layout && !str_is_empty(layout_fn) && !str_is_empty(spec_tmp)) {
+                str laid = next_res(self);
+                generate_decl(self, laid, elem_type);
+                cat(self, laid);
+                cat_assign(self);
+                cat(self, mangle_fun(self, layout_fn));
+                cat(self, S("(NULL, "));
+                cat(self, tmp);
+                cat(self, S(", "));
+                cat(self, spec_tmp);
+                cat(self, S(");\n"));
+                tmp = laid;
+            }
 
             array_push(va_temps, tmp);
         }

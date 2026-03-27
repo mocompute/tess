@@ -27,6 +27,25 @@ static inline str str_qualify(allocator *alloc, str parent, str child) {
     return str_cat_3(alloc, parent, S("__"), child);
 }
 
+// Format specifier parsed from f-string syntax: {expr:[[fill]align][sign][#][0][width][.precision][type]}
+typedef struct {
+    char fill;            // 0 for default (' ')
+    char align;           // '<', '>', '^', or 0 for default
+    char sign;            // '+', '-', ' ', or 0
+    int  alt;             // '#' flag
+    int  zero_pad;        // '0' flag
+    int  width;           // 0 = unspecified
+    int  precision;       // -1 = unspecified
+    char type_char;       // 'x','X','o','b','e','E','f', or 0
+    int  has_type_specific; // 1 if any of sign/alt/zero_pad/precision/type_char set
+} tl_format_spec;
+
+// Check if a format spec has any non-default values (anything worth emitting).
+static inline int tl_format_spec_has_any(tl_format_spec const *spec) {
+    return spec->fill || spec->align || spec->sign || spec->alt || spec->zero_pad ||
+           spec->width || spec->precision >= 0 || spec->type_char;
+}
+
 typedef struct ast_node {
     union {
         struct ast_symbol {
@@ -126,6 +145,9 @@ typedef struct ast_node {
             u8                n_fixed_args;     // number of fixed (non-variadic) arguments
             str *variadic_impl_fns; // per-variadic-arg: specialized trait fn name (set by specializer)
             str  variadic_trait_fn; // trait function base name, e.g. "hash" (set by specializer)
+            tl_format_spec *format_specs;        // per-arg format specs; null if none (set by parser)
+            u8             *variadic_uses_format; // 1=to_string_format, 0=to_string (set by specializer)
+            str             format_layout_fn;     // specialized apply_layout function name (set by specializer)
         } named_application;
 
         struct ast_tuple {
