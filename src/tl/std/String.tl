@@ -83,9 +83,10 @@ cat_4 (a: String, b: String, c: String, d: String)                        -> Str
 push  (self: Ptr[String], alloc: Ptr[Allocator], other: String)           -> Void
 push  (self: Ptr[String], other: String)                                  -> Void
 
-// Slicing.
-slice (alloc: Ptr[Allocator], s: String, start: CSize, end: CSize) -> String
-slice (s: String, start: CSize, end: CSize)                        -> String
+// Slicing and copying.
+copy  (alloc: Ptr[Allocator], s: String, start: CSize, end: CSize) -> String
+copy  (s: String, start: CSize, end: CSize)                        -> String
+slice (s: Ptr[String], start: CSize, end: CSize)                   -> Slice[CChar]
 
 // Search.
 index_of_char     (s: String, b: CChar)               -> Option[CSize]
@@ -476,11 +477,11 @@ push(self, other) {
 }
 
 
-// -- Slicing --
+// -- Slicing and copying --
 
-slice(alloc, s, start, end) {
+copy(alloc, s, start, end) {
     n := len(s)
-    if start > end || end > n { _tl_fatal_(c"String.slice: index out of bounds") }
+    if start > end || end > n { _tl_fatal_(c"String.copy: index out of bounds") }
     slen := end - start
     if slen == 0 { return empty() }
     sp              := _buf(s.&)
@@ -488,8 +489,18 @@ slice(alloc, s, start, end) {
     from_bytes(alloc, src, slen)
 }
 
+copy(s, start, end) {
+    copy(Alloc.context.default, s, start, end)
+}
+
 slice(s, start, end) {
-    slice(Alloc.context.default, s, start, end)
+    n := len(s.*)
+    if start > end || end > n { _tl_fatal_(c"String.slice: index out of bounds") }
+    slen := end - start
+    if slen == 0 { return Slice[CChar](v: Ptr[CChar] = null, size = 0) }
+    p               := _buf(s)
+    src: Ptr[CChar] := Unsafe.pointer_add(p, start)
+    Slice(v = src, size = slen)
 }
 
 

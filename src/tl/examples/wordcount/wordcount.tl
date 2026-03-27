@@ -66,7 +66,8 @@ _count(content, path, track_unique, ignore_case) {
             if in_word {
                 words += 1
                 if track_unique {
-                    word := content.slice(word_start, i)
+
+                    word := content.copy(word_start, i)
                     if ignore_case { word = word.to_lower() }
                     p := word_map.get(word)
                     if p != null {
@@ -90,7 +91,8 @@ _count(content, path, track_unique, ignore_case) {
     if in_word {
         words += 1
         if track_unique {
-            word := content.slice(word_start, n)
+
+            word := content.copy(word_start, n)
             if ignore_case { word = word.to_lower() }
             p := word_map.get(word)
             if p != null {
@@ -219,7 +221,7 @@ main(argc: CInt, argv: Ptr[CString]) {
         if top_n > 0 {
             limit: CSize := top_n
             if limit < results.size {
-                results = results.slice(0, limit)
+                results = results.copy(0, limit)
             }
         }
     }

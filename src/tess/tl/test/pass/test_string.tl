@@ -397,26 +397,26 @@ test_char_at() {
     error
 }
 
-test_slice() {
+test_copy_range() {
     error := 0
     s     := String.from_cstr(c"hello world")
-    sub   := s.slice(6zu, 11zu)
+    sub   := s.copy(6zu, 11zu)
     if sub.len() != 5zu { error += 1 }
     cs := sub.cstr()
     if c_strcmp(cs, c"world") != 0 { error += 1 }
 
-    // Empty slice
-    e := s.slice(3zu, 3zu)
+    // Empty copy
+    e := s.copy(3zu, 3zu)
     if e.len() != 0zu { error += 1 }
 
-    // Full string slice
-    full := s.slice(0zu, 11zu)
+    // Full string copy
+    full := s.copy(0zu, 11zu)
     csf  := full.cstr()
     if c_strcmp(csf, c"hello world") != 0 { error += 1 }
     full.free()
 
-    // Slice from start
-    head := s.slice(0zu, 5zu)
+    // Copy from start
+    head := s.copy(0zu, 5zu)
     csh  := head.cstr()
     if c_strcmp(csh, c"hello") != 0 { error += 1 }
     head.free()
@@ -424,6 +424,26 @@ test_slice() {
     s.free()
     sub.free()
     e.free()
+    error
+}
+
+test_slice() {
+    error := 0
+    s     := String.from_cstr(c"hello world")
+    // slice returns Slice[CChar], a non-owning view
+    sub := s.slice(6zu, 11zu)
+    if sub.size != 5zu { error += 1 }
+    if sub.v.[0] != 'w' { error += 1 }
+    if sub.v.[4] != 'd' { error += 1 }
+    // Empty slice
+    e := s.slice(3zu, 3zu)
+    if e.size != 0zu { error += 1 }
+    // Full string slice
+    full := s.slice(0zu, 11zu)
+    if full.size != 11zu { error += 1 }
+    if full.v.[0] != 'h' { error += 1 }
+    s.free()
+    // No free needed for Slice (non-owning)
     error
 }
 
@@ -1510,6 +1530,7 @@ main() {
     error += _check(c"cat_4", test_cat_4())
     error += _check(c"byte_at", test_byte_at())
     error += _check(c"char_at", test_char_at())
+    error += _check(c"copy_range", test_copy_range())
     error += _check(c"slice", test_slice())
     error += _check(c"index_of_char", test_index_of_char())
     error += _check(c"from_int", test_from_int())

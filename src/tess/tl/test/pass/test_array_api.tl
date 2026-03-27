@@ -201,22 +201,44 @@ test_clone() {
     error
 }
 
+test_copy_range() {
+    error := 0
+    arr   := Array.empty[Int]()
+    i     := 0
+    while i < 5, i += 1 { Array.push(arr.&, i * 10) }
+    // copy [1, 4) -> [10, 20, 30]
+    s := Array.copy(arr, 1zu, 4zu)
+    if s.size != 3zu { error += 1 }
+    if s.v.[0] != 10 { error += 1 }
+    if s.v.[1] != 20 { error += 1 }
+    if s.v.[2] != 30 { error += 1 }
+    // Empty copy
+    e := Array.copy(arr, 2zu, 2zu)
+    if e.size != 0zu { error += 1 }
+    Array.free(arr.&)
+    Array.free(s.&)
+    error
+}
+
 test_slice() {
     error := 0
     arr   := Array.empty[Int]()
     i     := 0
     while i < 5, i += 1 { Array.push(arr.&, i * 10) }
-    // slice [1, 4) -> [10, 20, 30]
+    // slice [1, 4) -> non-owning view of [10, 20, 30]
     s := Array.slice(arr, 1zu, 4zu)
     if s.size != 3zu { error += 1 }
     if s.v.[0] != 10 { error += 1 }
     if s.v.[1] != 20 { error += 1 }
     if s.v.[2] != 30 { error += 1 }
+    // Mutation through original is visible through slice
+    arr.v.[1] = 999
+    if s.v.[0] != 999 { error += 1 }
     // Empty slice
     e := Array.slice(arr, 2zu, 2zu)
     if e.size != 0zu { error += 1 }
     Array.free(arr.&)
-    Array.free(s.&)
+    // No free needed for Slice (non-owning)
     error
 }
 
@@ -459,6 +481,7 @@ main() {
     error += test_truncate()
     error += test_append()
     error += test_clone()
+    error += test_copy_range()
     error += test_slice()
     error += test_from_ptr()
     error += test_is_empty()

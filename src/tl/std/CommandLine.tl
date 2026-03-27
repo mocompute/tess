@@ -232,8 +232,8 @@ _store_str(values, name, val) {
 _parse_long(self, values, errors, name, arg, argc, argv, ip) {
     when name.index_of_char('=') {
         eq_pos: Some {
-            key      := name.slice(0, eq_pos.v)
-            val      := name.slice(eq_pos.v + 1, name.len())
+            key      := name.copy(0, eq_pos.v)
+            val      := name.copy(eq_pos.v + 1, name.len())
             si: Some := _find_spec_long(self, key) else {
                 Array.push(errors, UnknownFlag(flag = arg))
                 return
@@ -287,7 +287,7 @@ _parse_short(self, values, errors, arg, argc, argv, ip) {
             fc: FlagCount { _store_count(values, spec.long_name) }
             fv: FlagValue {
                 if j + 1 < arg_len {
-                    val := arg.slice(j + 1, arg_len)
+                    val := arg.copy(j + 1, arg_len)
                     _store_str(values, spec.long_name, val)
                     j = arg_len
                 } else if ip.* + 1 < argc {
@@ -335,7 +335,7 @@ parse(self, argc, argv) {
 
         // Check for --long options
         if arg.starts_with(dd) {
-            name := arg.slice(2, arg.len())
+            name := arg.copy(2, arg.len())
             _parse_long(self, values, errors.&, name, arg, argc, argv, i.&)
             i += 1
             continue

@@ -39,7 +39,7 @@ main() -> CInt {
 
     when String.index_of_char(S(c"output=bar"), '=') {
         eq: Some {
-            key := String.slice(S(c"output=bar"), 0zu, eq.v)
+            key := String.copy(S(c"output=bar"), 0zu, eq.v)
             when find(specs, key) {
                 si: Some {
                     spec := specs.v.[si.v]

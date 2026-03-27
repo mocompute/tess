@@ -72,8 +72,9 @@ append[T](self: Ptr[Array[T]], alloc: Ptr[Allocator], other: Array[T])    -> Voi
 append[T](self: Ptr[Array[T]], other: Array[T])                           -> Void
 clone[T] (alloc: Ptr[Allocator], arr: Array[T])                           -> Array[T]
 clone[T] (arr: Array[T])                                                  -> Array[T]
-slice[T] (alloc: Ptr[Allocator], arr: Array[T], start: CSize, end: CSize) -> Array[T]
-slice[T] (arr: Array[T], start: CSize, end: CSize)                        -> Array[T]
+copy[T]  (alloc: Ptr[Allocator], arr: Array[T], start: CSize, end: CSize) -> Array[T]
+copy[T]  (arr: Array[T], start: CSize, end: CSize)                        -> Array[T]
+slice[T] (arr: Array[T], start: CSize, end: CSize)                        -> Slice[T]
 
 // -- Search / query --
 
@@ -355,8 +356,8 @@ clone[T](arr) {
     clone(Alloc.context.default, arr)
 }
 
-slice[T](alloc, arr, start, end) {
-    if end > arr.size || start > end { _tl_fatal_(c"Array.slice: index out of bounds") }
+copy[T](alloc, arr, start, end) {
+    if end > arr.size || start > end { _tl_fatal_(c"Array.copy: index out of bounds") }
     len := end - start
     if len == 0 { return empty[T]() }
     result := with_capacity[T](alloc, len)
@@ -367,8 +368,15 @@ slice[T](alloc, arr, start, end) {
     result
 }
 
+copy[T](arr, start, end) {
+    copy(Alloc.context.default, arr, start, end)
+}
+
 slice[T](arr, start, end) {
-    slice(Alloc.context.default, arr, start, end)
+    if end > arr.size || start > end { _tl_fatal_(c"Array.slice: index out of bounds") }
+    if start == end { return Slice[T](v: Ptr[T] = null, size = 0) }
+    p: Ptr[T] := arr.v.[start].&
+    Slice(v = p, size = end - start)
 }
 
 

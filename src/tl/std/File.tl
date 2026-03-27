@@ -348,7 +348,7 @@ dirname(alloc, path) {
         ch: Some := path.char_at(i) else { continue }
         if _is_sep(ch.v) {
             if i == 0 { return String.from_bytes(alloc, c"/", 1) }
-            return String.slice(alloc, path, 0, i)
+            return String.copy(alloc, path, 0, i)
         }
     }
     "."
@@ -378,10 +378,10 @@ basename(path) {
         i -= 1
         ch: Some := path.char_at(i) else { continue }
         if _is_sep(ch.v) {
-            return path.slice(i + 1, end)
+            return path.copy(i + 1, end)
         }
     }
-    path.slice(0, end)
+    path.copy(0, end)
 }
 
 extension(path) {
@@ -391,7 +391,7 @@ extension(path) {
 
     dot: Some := base.last_index_of_char('.') else { return None }
     if dot.v == 0 { return None }       // c".hidden" — dot at start is not an extension
-    Some(base.slice(dot.v, n))
+    Some(base.copy(dot.v, n))
 }
 
 stem(path) {
@@ -401,7 +401,7 @@ stem(path) {
 
     dot: Some := base.last_index_of_char('.') else { return base }
     if dot.v == 0 { return base }       // c".hidden" — the whole thing is the stem
-    base.slice(0, dot.v)
+    base.copy(0, dot.v)
 }
 
 join(alloc, dir, file) {
@@ -895,7 +895,7 @@ read_lines(alloc, path) {
         if n > 0 {
             last: Some := line.char_at(n - 1) else { continue }
             if last.v == '\r' {
-                lines.v.[i] = String.slice(alloc, line, 0, n - 1)
+                lines.v.[i] = String.copy(alloc, line, 0, n - 1)
             }
         }
     }
