@@ -2101,9 +2101,15 @@ int specialize_applications_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_n
                             // Allocate format dispatch flags if format specs are present.
                             tl_fstring_format *ffmt = node->named_application.fstring_fmt;
                             tl_format_spec *fspecs  = ffmt ? ffmt->specs : null;
+
+                            // Look up FormatSpec type once (used by both per-arg and layout paths).
+                            tl_monotype *fs_type = null;
                             if (ffmt) {
                                 ffmt->uses_format = alloc_malloc(self->arena, n_va * sizeof(u8));
                                 memset(ffmt->uses_format, 0, n_va * sizeof(u8));
+                                tl_polytype *fs_poly =
+                                  tl_type_env_lookup(self->env, S("FormatSpec__FormatSpec"));
+                                fs_type = fs_poly ? fs_poly->type : null;
                             }
 
                             for (u32 vi = 0; vi < n_va; vi++) {
@@ -2140,40 +2146,20 @@ int specialize_applications_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_n
                                     impl = find_overload_func(self, arg_type, str_cstr(&sig->name),
                                                               sig->arity);
 
+                                // Build callsite arrow and specialize.
                                 if (!str_is_empty(impl)) {
-                                    if (use_format) {
-                                        // Build callsite arrow: (arg_type, FormatSpec) -> elem_type
-                                        tl_polytype *fs_poly =
-                                          tl_type_env_lookup(self->env, S("FormatSpec__FormatSpec"));
-                                        tl_monotype *fs_type = fs_poly ? fs_poly->type : null;
-                                        if (fs_type) {
-                                            tl_monotype **param_vs =
-                                              alloc_malloc(self->arena, 2 * sizeof(tl_monotype *));
-                                            param_vs[0]       = arg_type;
-                                            param_vs[1]       = fs_type;
-                                            tl_monotype *ptup = tl_monotype_create_tuple(
-                                              self->arena,
-                                              (tl_monotype_sized){.v = param_vs, .size = 2});
-                                            tl_monotype *va_arrow =
-                                              tl_type_registry_create_arrow(self->registry, ptup, elem_type);
-                                            str spec = specialize_arrow(self, traverse_ctx, impl, va_arrow,
-                                                                        (tl_monotype_sized){0});
-                                            impl = str_is_empty(spec) ? impl : spec;
-                                        }
-                                    } else {
-                                        // Build callsite arrow: (arg_type) -> elem_type
-                                        tl_monotype **param_vs =
-                                          alloc_malloc(self->arena, sizeof(tl_monotype *));
-                                        param_vs[0]       = arg_type;
-                                        tl_monotype *ptup = tl_monotype_create_tuple(
-                                          self->arena, (tl_monotype_sized){.v = param_vs, .size = 1});
-                                        tl_monotype *va_arrow =
-                                          tl_type_registry_create_arrow(self->registry, ptup, elem_type);
-
-                                        str spec = specialize_arrow(self, traverse_ctx, impl, va_arrow,
-                                                                    (tl_monotype_sized){0});
-                                        impl     = str_is_empty(spec) ? impl : spec;
-                                    }
+                                    u32 arity = use_format && fs_type ? 2 : 1;
+                                    tl_monotype **param_vs =
+                                      alloc_malloc(self->arena, arity * sizeof(tl_monotype *));
+                                    param_vs[0] = arg_type;
+                                    if (arity == 2) param_vs[1] = fs_type;
+                                    tl_monotype *ptup = tl_monotype_create_tuple(
+                                      self->arena, (tl_monotype_sized){.v = param_vs, .size = arity});
+                                    tl_monotype *va_arrow =
+                                      tl_type_registry_create_arrow(self->registry, ptup, elem_type);
+                                    str spec = specialize_arrow(self, traverse_ctx, impl, va_arrow,
+                                                                (tl_monotype_sized){0});
+                                    impl = str_is_empty(spec) ? impl : spec;
                                 }
                                 node->named_application.variadic_impl_fns[vi] = impl;
                                 if (ffmt && use_format)
@@ -2187,15 +2173,10 @@ int specialize_applications_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_n
                                     if (tl_format_spec_has_any(&fspecs[n_fixed + vi]))
                                         needs_layout = 1;
                                 }
-                                if (needs_layout) {
-                                    tl_polytype *fs_poly =
-                                      tl_type_env_lookup(self->env, S("FormatSpec__FormatSpec"));
-                                    tl_monotype *fs_type = fs_poly ? fs_poly->type : null;
-                                    // Ensure FormatSpec struct is specialized (fields generated).
-                                    if (fs_type)
-                                        specialize_type_constructor(self, S("FormatSpec"),
-                                            (tl_monotype_sized){0}, null);
-                                    if (fs_type && elem_type) {
+                                if (needs_layout && fs_type) {
+                                    specialize_type_constructor(self, S("FormatSpec"),
+                                        (tl_monotype_sized){0}, null);
+                                    if (elem_type) {
                                         // Arrow: (String, FormatSpec) -> String
                                         tl_monotype **lp =
                                           alloc_malloc(self->arena, 2 * sizeof(tl_monotype *));
