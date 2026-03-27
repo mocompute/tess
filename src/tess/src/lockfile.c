@@ -117,6 +117,7 @@ int tl_lockfile_parse_file(allocator *alloc, char const *path, tl_lockfile *out)
     if (parse_rc) {
         parser_report_errors(p);
         parser_destroy(&p);
+        tl_type_transient_destroy();
         arena_destroy(&parse_arena);
         return 1;
     }
@@ -252,6 +253,7 @@ int tl_lockfile_parse_file(allocator *alloc, char const *path, tl_lockfile *out)
 
     // Cleanup parser
     parser_destroy(&p);
+    tl_type_transient_destroy();
     arena_destroy(&parse_arena);
 
     return error ? 1 : 0;

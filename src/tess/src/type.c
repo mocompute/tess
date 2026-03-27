@@ -155,7 +155,6 @@ tl_type_registry *tl_type_registry_create(allocator *alloc, allocator *transient
     self->alloc            = alloc;
     self->transient        = transient;
 
-    // FIXME: leaked in non-infer paths (manifest, lockfile) — needs tl_type_registry_destroy
     transient_allocator    = arena_create(default_allocator(), 4096);
 
     self->subs             = subs;

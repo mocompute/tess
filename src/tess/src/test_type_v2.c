@@ -77,6 +77,7 @@ static int test_subchain_ids(void) {
     error += tl_monotype_integer_subchain(lookup(reg, "Bool")) != TL_INTEGER_SUBCHAIN_NONE;
 
     allocator *arena = reg->alloc;
+    tl_type_transient_destroy();
     arena_destroy(&arena);
     return error;
 }
@@ -129,6 +130,7 @@ static int test_width_ranks(void) {
     error += tl_monotype_integer_width_rank(lookup(reg, "Bool")) != -1;
 
     allocator *arena = reg->alloc;
+    tl_type_transient_destroy();
     arena_destroy(&arena);
     return error;
 }
@@ -162,6 +164,7 @@ static int test_compare_width_same_chain(void) {
     error += tl_monotype_compare_integer_width(lookup(reg, "CUInt64"), lookup(reg, "CUInt8")) != 1;
 
     allocator *arena = reg->alloc;
+    tl_type_transient_destroy();
     arena_destroy(&arena);
     return error;
 }
@@ -193,6 +196,7 @@ static int test_compare_width_cross_chain(void) {
     error += tl_monotype_compare_integer_width(lookup(reg, "CChar"), lookup(reg, "CUnsignedChar")) != 2;
 
     allocator *arena = reg->alloc;
+    tl_type_transient_destroy();
     arena_destroy(&arena);
     return error;
 }
@@ -227,6 +231,7 @@ static int test_same_subchain(void) {
     error += tl_monotype_same_integer_subchain(lookup(reg, "Void"), lookup(reg, "Bool")) != 0;
 
     allocator *arena = reg->alloc;
+    tl_type_transient_destroy();
     arena_destroy(&arena);
     return error;
 }
@@ -262,6 +267,7 @@ static int test_weak_int_construction(void) {
     error += wu2->var != 99;
 
     allocator *arena = reg->alloc;
+    tl_type_transient_destroy();
     arena_destroy(&arena);
     return error;
 }
@@ -319,6 +325,7 @@ static int test_weak_int_predicates(void) {
     error += tl_monotype_is_concrete_no_weak(wu);
 
     allocator *arena = reg->alloc;
+    tl_type_transient_destroy();
     arena_destroy(&arena);
     return error;
 }
@@ -347,6 +354,7 @@ static int test_registry_csize_cptrdiff(void) {
     error += tl_monotype_integer_subchain(cptrdiff) != TL_INTEGER_SUBCHAIN_CPTRDIFF;
 
     allocator *arena = reg->alloc;
+    tl_type_transient_destroy();
     arena_destroy(&arena);
     return error;
 }
@@ -374,6 +382,7 @@ static int test_cchar_signedness(void) {
     error += tl_monotype_integer_subchain(cchar) != TL_INTEGER_SUBCHAIN_CCHAR;
 
     allocator *arena = reg->alloc;
+    tl_type_transient_destroy();
     arena_destroy(&arena);
     return error;
 }
