@@ -1403,13 +1403,14 @@ static str generate_funcall_variadic(transpile *self, ast_node const *node, eval
         str_array va_temps = {.alloc = self->transient};
         array_reserve(va_temps, n_variadic);
 
-        tl_format_spec const *fspecs = node->named_application.format_specs;
-        u8 const *uses_format        = node->named_application.variadic_uses_format;
+        tl_fstring_format const *ffmt = node->named_application.fstring_fmt;
+        tl_format_spec const *fspecs = ffmt ? ffmt->specs : null;
+        u8 const *uses_format        = ffmt ? ffmt->uses_format : null;
 
         // Look up FormatSpec C type name (lazily, only if format specs are present).
         str fs_type_c  = str_empty();
-        str layout_fn  = node->named_application.format_layout_fn;
-        if (fspecs) {
+        str layout_fn  = ffmt ? ffmt->layout_fn : str_empty();
+        if (ffmt) {
             tl_polytype *fs_poly = tl_type_env_lookup(self->env, S("FormatSpec__FormatSpec"));
             if (fs_poly && fs_poly->type)
                 fs_type_c = type_to_c_mono(self, fs_poly->type);

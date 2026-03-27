@@ -2099,11 +2099,11 @@ int specialize_applications_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_n
                             node->named_application.variadic_trait_fn = sig->name;
 
                             // Allocate format dispatch flags if format specs are present.
-                            tl_format_spec *fspecs = node->named_application.format_specs;
-                            if (fspecs) {
-                                node->named_application.variadic_uses_format =
-                                  alloc_malloc(self->arena, n_va * sizeof(u8));
-                                memset(node->named_application.variadic_uses_format, 0, n_va * sizeof(u8));
+                            tl_fstring_format *ffmt = node->named_application.fstring_fmt;
+                            tl_format_spec *fspecs  = ffmt ? ffmt->specs : null;
+                            if (ffmt) {
+                                ffmt->uses_format = alloc_malloc(self->arena, n_va * sizeof(u8));
+                                memset(ffmt->uses_format, 0, n_va * sizeof(u8));
                             }
 
                             for (u32 vi = 0; vi < n_va; vi++) {
@@ -2176,8 +2176,8 @@ int specialize_applications_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_n
                                     }
                                 }
                                 node->named_application.variadic_impl_fns[vi] = impl;
-                                if (fspecs && use_format)
-                                    node->named_application.variadic_uses_format[vi] = 1;
+                                if (ffmt && use_format)
+                                    ffmt->uses_format[vi] = 1;
                             }
 
                             // Pre-specialize FormatSpec.apply_layout if any arg has layout specs.
@@ -2208,8 +2208,7 @@ int specialize_applications_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_n
                                         str base = S("FormatSpec__apply_layout__2");
                                         str spec = specialize_arrow(self, traverse_ctx, base,
                                                                     layout_arrow, (tl_monotype_sized){0});
-                                        node->named_application.format_layout_fn =
-                                          str_is_empty(spec) ? base : spec;
+                                        ffmt->layout_fn = str_is_empty(spec) ? base : spec;
                                     }
                                 }
                             }

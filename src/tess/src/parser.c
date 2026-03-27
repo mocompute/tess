@@ -610,6 +610,67 @@ static ast_node *make_from_literal(parser *self, char const *s) {
     return ast_node_create_nfa(self->ast_arena, name, (ast_node_sized){0}, args);
 }
 
+// Parse a format spec string: [[fill]align][sign][#][0][width][.precision][type]
+// Returns 0 on success, 1 on parse error.
+static int parse_format_spec(char const *s, tl_format_spec *out) {
+    *out = (tl_format_spec){.precision = -1};
+
+    char const *p = s;
+    if (!*p) return 0; // empty spec is valid (no-op)
+
+    // [[fill]align] — if char after first is an align char, first is fill
+    if (p[0] && p[1] && (p[1] == '<' || p[1] == '>' || p[1] == '^')) {
+        out->fill  = p[0];
+        out->align = p[1];
+        p += 2;
+    } else if (*p == '<' || *p == '>' || *p == '^') {
+        out->align = *p++;
+    }
+
+    // [sign]
+    if (*p == '+' || *p == '-' || *p == ' ') {
+        out->sign          = *p++;
+        out->has_type_specific = 1;
+    }
+
+    // [#]
+    if (*p == '#') {
+        out->alt           = 1;
+        out->has_type_specific = 1;
+        p++;
+    }
+
+    // [0][width] — a leading '0' means zero-pad, followed by optional width digits
+    if (*p == '0') {
+        out->zero_pad          = 1;
+        out->has_type_specific = 1;
+        p++;
+    }
+    if (*p >= '1' && *p <= '9') {
+        out->width = 0;
+        while (*p >= '0' && *p <= '9')
+            out->width = out->width * 10 + (*p++ - '0');
+    }
+
+    // [.precision]
+    if (*p == '.') {
+        p++;
+        out->precision     = 0;
+        out->has_type_specific = 1;
+        while (*p >= '0' && *p <= '9')
+            out->precision = out->precision * 10 + (*p++ - '0');
+    }
+
+    // [type]
+    if (*p == 'x' || *p == 'X' || *p == 'o' || *p == 'b' || *p == 'e' || *p == 'E' || *p == 'f') {
+        out->type_char     = *p++;
+        out->has_type_specific = 1;
+    }
+
+    // Must have consumed everything
+    return *p != '\0';
+}
+
 int a_string(parser *self) {
     if (next_token(self)) return 1;
 
@@ -625,11 +686,20 @@ int a_string(parser *self) {
         // Collect interleaved literal parts and expressions.
         ast_node_array parts = {.alloc = self->ast_arena};
 
+        // Track per-part format specs. Index-parallel with parts.
+        // Dynamically sized array of tl_format_spec.
+        u32             specs_cap  = 0;
+        u32             specs_size = 0;
+        tl_format_spec *specs      = null;
+
         // Add first literal segment (if non-empty)
         if (self->token.s[0] != '\0') {
             ast_node *lit = make_from_literal(self, self->token.s);
             array_push(parts, lit);
+            specs_size++; // zero-init slot for literal (no spec)
         }
+
+        int has_any_spec = 0;
 
         while (1) {
             // Parse the expression inside { }
@@ -640,13 +710,39 @@ int a_string(parser *self) {
             }
             array_push(parts, expr);
 
-            // Next token must be tok_f_string_mid or tok_f_string_end
+            u32 expr_idx = specs_size++;
+
+            // Next token: format spec, mid, or end
             if (next_token(self)) return ERROR_STOP;
+
+            // Optional format specifier
+            if (tok_f_string_format_spec == self->token.tag) {
+                tl_format_spec spec;
+                if (parse_format_spec(self->token.s, &spec)) {
+                    self->error.tag = tl_err_expected_expression; // TODO: dedicated error
+                    return ERROR_STOP;
+                }
+                // Grow specs array on demand
+                if (!specs || specs_cap < specs_size) {
+                    u32 new_cap = specs_size < 8 ? 8 : specs_size * 2;
+                    tl_format_spec *new_specs =
+                        alloc_malloc(self->ast_arena, new_cap * sizeof(tl_format_spec));
+                    memset(new_specs, 0, new_cap * sizeof(tl_format_spec));
+                    if (specs) memcpy(new_specs, specs, expr_idx * sizeof(tl_format_spec));
+                    specs     = new_specs;
+                    specs_cap = new_cap;
+                }
+                specs[expr_idx]  = spec;
+                has_any_spec     = 1;
+
+                if (next_token(self)) return ERROR_STOP;
+            }
 
             if (tok_f_string_mid == self->token.tag) {
                 if (self->token.s[0] != '\0') {
                     ast_node *mid = make_from_literal(self, self->token.s);
                     array_push(parts, mid);
+                    specs_size++; // zero-init slot for literal
                 }
                 continue;
             }
@@ -654,6 +750,7 @@ int a_string(parser *self) {
                 if (self->token.s[0] != '\0') {
                     ast_node *end = make_from_literal(self, self->token.s);
                     array_push(parts, end);
+                    specs_size++; // zero-init slot for literal
                 }
                 break;
             }
@@ -670,6 +767,23 @@ int a_string(parser *self) {
         ast_node      *r    = ast_node_create_nfa(self->ast_arena, name, (ast_node_sized){0}, args);
         r->named_application.is_variadic_call = 1;
         r->named_application.n_fixed_args     = 0;
+
+        // Attach format specs if any were present
+        if (has_any_spec && specs) {
+            // Copy to exact-sized arena allocation
+            tl_format_spec *final_specs =
+                alloc_malloc(self->ast_arena, parts.size * sizeof(tl_format_spec));
+            memset(final_specs, 0, parts.size * sizeof(tl_format_spec));
+            u32 copy_size = specs_size < parts.size ? specs_size : parts.size;
+            memcpy(final_specs, specs, copy_size * sizeof(tl_format_spec));
+
+            tl_fstring_format *ffmt = alloc_malloc(self->ast_arena, sizeof(tl_fstring_format));
+            ffmt->specs       = final_specs;
+            ffmt->uses_format = null;
+            ffmt->layout_fn   = str_empty();
+            r->named_application.fstring_fmt = ffmt;
+        }
+
         return result_ast_node(self, r);
     }
 

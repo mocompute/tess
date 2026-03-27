@@ -46,6 +46,14 @@ static inline int tl_format_spec_has_any(tl_format_spec const *spec) {
            spec->width || spec->precision >= 0 || spec->type_char;
 }
 
+// Grouped format data for f-string calls with format specifiers.
+// Null on most NFAs; allocated only when the parser sees format specs.
+typedef struct {
+    tl_format_spec *specs;       // per-arg, index-parallel with arguments
+    u8             *uses_format; // per-variadic-arg (set by specializer)
+    str             layout_fn;   // per-call (set by specializer)
+} tl_fstring_format;
+
 typedef struct ast_node {
     union {
         struct ast_symbol {
@@ -145,9 +153,7 @@ typedef struct ast_node {
             u8                n_fixed_args;     // number of fixed (non-variadic) arguments
             str *variadic_impl_fns; // per-variadic-arg: specialized trait fn name (set by specializer)
             str  variadic_trait_fn; // trait function base name, e.g. "hash" (set by specializer)
-            tl_format_spec *format_specs;        // per-arg format specs; null if none (set by parser)
-            u8             *variadic_uses_format; // 1=to_string_format, 0=to_string (set by specializer)
-            str             format_layout_fn;     // specialized apply_layout function name (set by specializer)
+            tl_fstring_format *fstring_fmt; // null unless f-string with format specs
         } named_application;
 
         struct ast_tuple {

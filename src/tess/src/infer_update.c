@@ -87,6 +87,16 @@ static void do_tree_shake(void *ctx_, ast_node *node) {
                     if (next) ast_node_dfs(ctx, next, do_tree_shake);
                 }
             }
+            // Format layout function (apply_layout) is called by the transpiler,
+            // not referenced by any AST node. Mark it as used.
+            str layout = node->named_application.fstring_fmt
+                           ? node->named_application.fstring_fmt->layout_fn : str_empty();
+            if (!str_is_empty(layout) && !str_hset_contains(ctx->recurs, layout)) {
+                str_hset_insert(&ctx->recurs, layout);
+                str_hset_insert(&ctx->names, layout);
+                ast_node *next = toplevel_get(self, layout);
+                if (next) ast_node_dfs(ctx, next, do_tree_shake);
+            }
         }
 
         if (!str_hset_contains(ctx->recurs, name)) {

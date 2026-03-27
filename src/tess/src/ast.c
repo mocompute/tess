@@ -8,6 +8,7 @@
 #include "type.h"
 
 #include <assert.h>
+#include <string.h>
 #include <stdio.h>
 
 #define DEBUG_TYPE_SET 0
@@ -73,6 +74,7 @@ ast_node *ast_node_create_nfa(allocator *alloc, ast_node *name, ast_node_sized t
     self->named_application.n_fixed_args          = 0;
     self->named_application.variadic_impl_fns     = null;
     self->named_application.variadic_trait_fn     = str_empty();
+    self->named_application.fstring_fmt           = null;
     return self;
 }
 ast_node *ast_node_create_nfa_tc(allocator *alloc, ast_node *name, ast_node_sized type_args,
@@ -429,6 +431,18 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
             for (u32 vi = 0; vi < n_va; vi++) vclone->variadic_impl_fns[vi] = vorig->variadic_impl_fns[vi];
         } else {
             vclone->variadic_impl_fns = null;
+        }
+        // Clone fstring_fmt (set by parser for f-strings with format specifiers).
+        if (vorig->fstring_fmt) {
+            tl_fstring_format *ffmt = alloc_malloc(alloc, sizeof(tl_fstring_format));
+            ffmt->specs = alloc_malloc(alloc, vorig->n_arguments * sizeof(tl_format_spec));
+            memcpy(ffmt->specs, vorig->fstring_fmt->specs,
+                   vorig->n_arguments * sizeof(tl_format_spec));
+            ffmt->uses_format = null; // set by specializer, not cloned
+            ffmt->layout_fn   = str_empty();
+            vclone->fstring_fmt = ffmt;
+        } else {
+            vclone->fstring_fmt = null;
         }
     } break;
 
