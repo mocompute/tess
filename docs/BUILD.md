@@ -12,7 +12,7 @@ On Windows, see [Building on Windows with CMake](#windows) instead.
 
 ```bash
 make -j all          # Build the compiler
-make -j8 test        # Run all tests (limit -j, may be memory hungry)
+make -j test         # Run all tests
 ```
 
 The resulting `tess` binary is copied to the project root.

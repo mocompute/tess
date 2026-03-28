@@ -22,19 +22,17 @@ Key docs:
 make -j all                # Parallel build (release mode)
 make CONFIG=debug          # Debug build with symbols
 make CONFIG=asan           # Memory debug (ASAN) build
-make -j8 test              # Run all tests (preferred)
-make -j8 test-mos          # MOS library tests only
-make -j8 test-tess         # Compiler unit tests only
-make -j8 test-tl           # Tess language integration tests only
+make -j test               # Run all tests (preferred)
+make -j test-mos           # MOS library tests only
+make -j test-tess          # Compiler unit tests only
+make -j test-tl            # Tess language integration tests only
 ```
-
-**Use `-j8`, not unrestricted `-j`.** Each tess compilation can use 250-600 MB; unrestricted parallelism during `build-tests` causes OOM kills.
 
 Build output: `build-release/` (release), `build-debug/` (debug).
 
 Full debug test run:
 ```bash
-(export CONFIG=debug && make clean && make -j all && make -j8 test)
+(export CONFIG=debug && make clean && make -j all && make -j test)
 ```
 
 Single test:
@@ -150,7 +148,7 @@ Standard library `.tl` files (must be explicitly imported with `#import <Name.tl
 
 **Always take a test-first approach.** Write tests BEFORE implementation:
 - Write a test for the desired behavior, verify it fails (or add to known failures), then implement
-- Run `make -j8 test` to verify all tests pass before committing
+- Run `make -j test` to verify all tests pass before committing
 - **Bug workflow**: Write a minimal failing test case in `test/known_failures/` before any fix work
 - **Adding tests**: Just drop a `test_<name>.tl` file in the appropriate `src/tess/tl/test/` subdirectory — both Makefile and CMake auto-discover tests
 
