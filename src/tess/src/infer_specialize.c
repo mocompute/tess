@@ -916,6 +916,35 @@ static void rewrite_op_to_nfa(tl_infer *self, ast_node *node, str func_name, ast
     ast_node_rewrite_to_nfa(node, ast_node_create_sym(self->arena, func_name), args, n_args);
 }
 
+// Get parameter types for a function from the type environment.
+static tl_monotype_sized get_func_param_types(tl_infer *self, str func_name) {
+    tl_polytype *poly = tl_type_env_lookup(self->env, func_name);
+    if (!poly) return (tl_monotype_sized){0};
+    tl_monotype *arrow = poly->type;
+    if (!tl_monotype_is_arrow(arrow)) return (tl_monotype_sized){0};
+    return tl_monotype_arrow_get_args(arrow);
+}
+
+// Wrap argument with & if param_type is Ptr[...] and argument is not already a pointer.
+// Analogous to ufcs_rewrite_call() implicit address-of (infer_constraint.c), but runs
+// post-phase-4 where types are concrete — assigns types directly instead of via constraints.
+static ast_node *maybe_wrap_address_of(tl_infer *self, ast_node *arg, tl_monotype *param_type) {
+    if (!param_type || !tl_monotype_is_ptr(param_type)) return arg;
+    if (!arg->type) return arg;
+    tl_monotype *arg_type = arg->type->type;
+    if (tl_monotype_is_ptr(arg_type)) return arg;
+
+    ast_node *amp  = ast_node_create_sym_c(self->arena, "&");
+    ast_node *addr = ast_node_create_unary_op(self->arena, amp, arg);
+    addr->file     = arg->file;
+    addr->line     = arg->line;
+    addr->col      = arg->col;
+    tl_monotype *ptr_type = tl_type_registry_ptr(self->registry, arg_type);
+    amp->type  = tl_polytype_absorb_mono(self->arena, ptr_type);
+    addr->type = tl_polytype_absorb_mono(self->arena, ptr_type);
+    return addr;
+}
+
 // For standalone builtin types (CChar, CSize, CPtrDiff), return the trait family canonical
 // module to try when a direct lookup in the type's own module fails. Returns empty for
 // user-defined types or builtins that already map directly to their family (e.g. CInt → "Int").
@@ -1024,6 +1053,13 @@ static void rewrite_operator_overloads(void *ctx, ast_node *node) {
         args[0]          = left;
         args[1]          = right;
 
+        // Auto-address-of: wrap value args with & when function expects pointers.
+        tl_monotype_sized param_types = get_func_param_types(self, full_name);
+        if (param_types.size >= 2) {
+            args[0] = maybe_wrap_address_of(self, args[0], param_types.v[0]);
+            args[1] = maybe_wrap_address_of(self, args[1], param_types.v[1]);
+        }
+
         if (is_neq && 0 != strcmp(func_name, "cmp")) {
             // a != b  →  !(eq(a, b))
             ast_node *eq_call =
@@ -1081,6 +1117,12 @@ static void rewrite_operator_overloads(void *ctx, ast_node *node) {
         args[0]          = lhs;
         args[1]          = value;
 
+        tl_monotype_sized param_types = get_func_param_types(self, full_name);
+        if (param_types.size >= 2) {
+            args[0] = maybe_wrap_address_of(self, args[0], param_types.v[0]);
+            args[1] = maybe_wrap_address_of(self, args[1], param_types.v[1]);
+        }
+
         // Build NFA: func(lhs, value) — result type matches LHS
         ast_node *call = ast_node_create_nfa(self->arena, ast_node_create_sym(self->arena, full_name),
                                              (ast_node_sized){0}, (ast_node_sized){.v = args, .size = 2});
@@ -1111,6 +1153,11 @@ static void rewrite_operator_overloads(void *ctx, ast_node *node) {
 
         ast_node **args = alloc_malloc(self->arena, sizeof(ast_node *));
         args[0]         = operand;
+
+        tl_monotype_sized param_types = get_func_param_types(self, full_name);
+        if (param_types.size >= 1)
+            args[0] = maybe_wrap_address_of(self, args[0], param_types.v[0]);
+
         rewrite_op_to_nfa(self, node, full_name, args, 1);
     }
 }
@@ -1290,10 +1337,35 @@ static int check_trait_arrow(tl_infer *self, ast_node *toplevel, tl_monotype *co
 
     // Compare full arrows by hash.
     if (tl_monotype_hash64(expected_arrow) != tl_monotype_hash64(actual_resolved)) {
-        str actual_str   = tl_monotype_to_string(self->transient, actual_resolved);
-        str expected_str = tl_monotype_to_string(self->transient, expected_arrow);
-        return emit_trait_sig_error(self, toplevel, concrete_type, trait_name, sig->name, actual_str,
-                                    expected_str);
+        // Auto-address-of fallback: accept Ptr[T] or Ptr[Const[T]] params
+        // where expected has T, with matching return type.
+        int compatible = 0;
+        tl_monotype_sized ap = tl_monotype_arrow_get_args(actual_resolved);
+        tl_monotype_sized ep = tl_monotype_arrow_get_args(expected_arrow);
+        if (ap.size == ep.size) {
+            compatible = 1;
+            for (u32 j = 0; j < ap.size; j++) {
+                u64 eh = tl_monotype_hash64(ep.v[j]);
+                if (tl_monotype_hash64(ap.v[j]) == eh) continue;
+                if (tl_monotype_is_ptr(ap.v[j])) {
+                    tl_monotype *target = tl_monotype_strip_const(tl_monotype_ptr_target(ap.v[j]));
+                    if (tl_monotype_hash64(target) == eh) continue;
+                }
+                compatible = 0;
+                break;
+            }
+            if (compatible) {
+                u64 arh = tl_monotype_hash64(tl_monotype_arrow_result(actual_resolved));
+                u64 erh = tl_monotype_hash64(tl_monotype_arrow_result(expected_arrow));
+                if (arh != erh) compatible = 0;
+            }
+        }
+        if (!compatible) {
+            str actual_str   = tl_monotype_to_string(self->transient, actual_resolved);
+            str expected_str = tl_monotype_to_string(self->transient, expected_arrow);
+            return emit_trait_sig_error(self, toplevel, concrete_type, trait_name, sig->name, actual_str,
+                                        expected_str);
+        }
     }
     return 0;
 }
