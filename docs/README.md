@@ -18,6 +18,12 @@ This directory contains technical documentation for the Tess programming languag
 | [GLOSSARY.md](GLOSSARY.md) | Definitions of Tess-specific terms, with notes on conventional equivalents |
 | [FAQ.md](FAQ.md) | Historical background, motivations and miscellaneous |
 
+## Tutorials
+
+| Tutorial | Description |
+|----------|-------------|
+| [Operator Overloading](tutorials/OPERATOR_OVERLOADING.md) | Defining custom operators, comparison, compound assignment, pointer parameters, traits, and conditional conformance |
+
 ## Suggested Reading Order
 
 **For language users:**
