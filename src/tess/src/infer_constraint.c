@@ -1830,8 +1830,9 @@ static int infer_tagged_union_case(tl_infer *self, traverse_ctx *ctx, ast_node *
     wrapper_type = tl_monotype_strip_const(wrapper_type);
 
     if (!tl_monotype_is_inst(wrapper_type)) {
-        expected_tagged_union(self, node->case_.expression);
-        return 1;
+        // Receiver type is a type variable (e.g., unannotated parameter):
+        // defer to specialization, where the type will be concrete.
+        return 0;
     }
 
     // Find the union field in the wrapper type
