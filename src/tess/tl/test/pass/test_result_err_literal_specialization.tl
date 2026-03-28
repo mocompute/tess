@@ -18,7 +18,7 @@ main() {
     when test() {
         ok:  Ok { 1 }
         err: Err {
-            if err.v != 42 { return 1 }
+            if err.error != 42 { return 1 }
             0
         }
     }

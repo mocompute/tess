@@ -8,7 +8,7 @@ sum_while(args: ...ToInt) -> Int {
     total: Int   := 0
     i:     CSize := 0
     while i < args.size, i += 1 {
-        total += args.v.[i]
+        total += args.data.[i]
     }
     total
 }

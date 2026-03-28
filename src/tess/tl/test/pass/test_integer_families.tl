@@ -54,7 +54,7 @@ test_option_signed_family() {
     // Some(42) creates Option[Int]
     opt := Some(42)
     error += when opt {
-        s: Some { if s.v == 42 {0} else {1} }
+        s: Some { if s.value == 42 {0} else {1} }
         n: None { 1 }
     }
 
@@ -67,7 +67,7 @@ test_option_unsigned_family() {
     // Some(0u) creates Option[UInt]
     opt := Some(0u)
     error += when opt {
-        s: Some { if s.v == 0u {0} else {1} }
+        s: Some { if s.value == 0u {0} else {1} }
         n: None { 1 }
     }
 

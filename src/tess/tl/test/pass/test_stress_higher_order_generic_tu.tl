@@ -1,13 +1,13 @@
 #module main
 
 // Generic tagged union: Option-like
-Opt[T]: | Val { v: T }
+Opt[T]: | Val { value: T }
         | Nope
 
 // --- map: apply function to value inside tagged union ---
 opt_map[T, U](o: Opt[T], f) -> Opt[U] {
     when o {
-        s: Val { Val(f(s.v)) }
+        s: Val { Val(f(s.value)) }
         n: Nope { Nope() }
     }
 }
@@ -15,7 +15,7 @@ opt_map[T, U](o: Opt[T], f) -> Opt[U] {
 // --- flatmap / monadic bind ---
 opt_flatmap[T, U](o: Opt[T], f) -> Opt[U] {
     when o {
-        s: Val { f(s.v) }
+        s: Val { f(s.value) }
         n: Nope { Nope() }
     }
 }
@@ -23,7 +23,7 @@ opt_flatmap[T, U](o: Opt[T], f) -> Opt[U] {
 // --- unwrap with default ---
 opt_unwrap[T](o: Opt[T], def: T) -> T {
     when o {
-        s: Val { s.v }
+        s: Val { s.value }
         n: Nope { def }
     }
 }
@@ -44,7 +44,7 @@ int_to_positive(x: Int) -> Opt[Int] {
 call_and_unwrap(f, arg: Int, def: Int) -> Int {
     result: Opt[Int] := f(arg)
     when result {
-        s: Val { s.v }
+        s: Val { s.value }
         n: Nope { def }
     }
 }

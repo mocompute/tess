@@ -7,10 +7,10 @@
 
 identity[T](x: T) -> T { x }
 
-Wrapper[T]:                         { v: T           }
-make_wrapper[T](x: T) -> Wrapper[T] { Wrapper(v = x) }
+Wrapper[T]:                         { value: T           }
+make_wrapper[T](x: T) -> Wrapper[T] { Wrapper(value = x) }
 
-MyOpt[T]: | MySome { v: T }
+MyOpt[T]: | MySome { value: T }
           | MyNone
 
 // --- 1. Same generic specialized with BOTH signed and unsigned weak ints ---
@@ -45,13 +45,13 @@ test_struct_in_tagged_union() {
     // Weak literal 42 flows into Wrapper[T] inside MyOpt[Wrapper[T]]
     opt := wrap_in_opt(42)
     error += when opt {
-        s: MySome { if s.v.v == 42 {0} else {1} }
+        s: MySome { if s.value.value == 42 {0} else {1} }
         n: MyNone { 1 }
     }
     // Unsigned version
     opt2 := wrap_in_opt(99u)
     error += when opt2 {
-        s: MySome { if s.v.v == 99u {0} else {1} }
+        s: MySome { if s.value.value == 99u {0} else {1} }
         n: MyNone { 1 }
     }
     error
@@ -101,9 +101,9 @@ test_deep_indirection() {
     error += if r2 == 55u {0} else {1}
     // 3 levels ending in a generic struct
     w := level3_box(42)
-    error += if w.v == 42 {0} else {1}
+    error += if w.value == 42 {0} else {1}
     w2 := level3_box(99u)
-    error += if w2.v == 99u {0} else {1}
+    error += if w2.value == 99u {0} else {1}
     error
 }
 
@@ -128,9 +128,9 @@ test_mixed_weak_and_concrete() {
     error += if r2 == 42u {0} else {1}
     // Wrap with mixed params
     w := add_and_wrap(77, 5)
-    error += if w.v == 77 {0} else {1}
+    error += if w.value == 77 {0} else {1}
     w2 := add_and_wrap(77u, 5)
-    error += if w2.v == 77u {0} else {1}
+    error += if w2.value == 77u {0} else {1}
     error
 }
 
@@ -140,13 +140,13 @@ test_weak_int_nested_option() {
     error := 0
     // Some(42) where 42 is weak => Option[Int]
     o := Some(42)
-    error += if (s: Some := o else { 0 }, s.v) == 42 {0} else {1}
+    error += if (s: Some := o else { 0 }, s.value) == 42 {0} else {1}
     // Some(Some(42)) => Option[Option[Int]] with weak int at innermost
     nested := Some(Some(42))
     error += when nested {
         outer: Some {
-            when outer.v {
-                inner: Some { if inner.v == 42 {0} else {1} }
+            when outer.value {
+                inner: Some { if inner.value == 42 {0} else {1} }
                 n:     None { 1 }
             }
         }
@@ -154,7 +154,7 @@ test_weak_int_nested_option() {
     }
     // Unsigned single-level through builtin Option
     opt_u := Some(99u)
-    error += if (s: Some := opt_u else { 0u }, s.v) == 99u {0} else {1}
+    error += if (s: Some := opt_u else { 0u }, s.value) == 99u {0} else {1}
     error
 }
 
@@ -169,7 +169,7 @@ test_generic_returning_tagged_union() {
     // Weak literal 42, generic function returning MyOpt[T]
     r := maybe_wrap(42, 1)
     error += when r {
-        s: MySome { if s.v == 42 {0} else {1} }
+        s: MySome { if s.value == 42 {0} else {1} }
         n: MyNone { 1 }
     }
     // None path
@@ -181,7 +181,7 @@ test_generic_returning_tagged_union() {
     // Unsigned
     r3 := maybe_wrap(99u, 1)
     error += when r3 {
-        s: MySome { if s.v == 99u {0} else {1} }
+        s: MySome { if s.value == 99u {0} else {1} }
         n: MyNone { 1 }
     }
     error
@@ -197,12 +197,12 @@ test_mixed_container_chain() {
     // Weak 42 -> identity -> Wrapper -> MyOpt
     r := chain_box_to_opt(42)
     error += when r {
-        s: MySome { if s.v.v == 42 {0} else {1} }
+        s: MySome { if s.value.value == 42 {0} else {1} }
         n: MyNone { 1 }
     }
     r2 := chain_box_to_opt(88u)
     error += when r2 {
-        s: MySome { if s.v.v == 88u {0} else {1} }
+        s: MySome { if s.value.value == 88u {0} else {1} }
         n: MyNone { 1 }
     }
     error

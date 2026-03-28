@@ -56,9 +56,9 @@ CommandLine: {
 // -- Types --
 
 // Parsed value for a single argument.
-ArgValue: | BoolVal  { v: Bool }
-          | CountVal { v: Int }
-          | StrVal   { v: String }
+ArgValue: | BoolVal  { value: Bool }
+          | CountVal { value: Int }
+          | StrVal   { value: String }
           | Absent
 
 // Parsed arguments container.
@@ -192,7 +192,7 @@ command(self, name: String) {
 _find_spec_long(self, name) {
     i: CSize := 0
     while i < self->_specs.size, i += 1 {
-        if self->_specs.v.[i].long_name.eq(name) {
+        if self->_specs.data.[i].long_name.eq(name) {
             return Some(i)
         }
     }
@@ -203,7 +203,7 @@ _find_spec_short(self, ch) {
     if ch == '\0' { return None }
     i: CSize := 0
     while i < self->_specs.size, i += 1 {
-        if self->_specs.v.[i].short_name == ch {
+        if self->_specs.data.[i].short_name == ch {
             return Some(i)
         }
     }
@@ -211,34 +211,34 @@ _find_spec_short(self, ch) {
 }
 
 _store_bool(values, name) {
-    values.set(name, Args.BoolVal(v = true))
+    values.set(name, Args.BoolVal(value = true))
 }
 
 _store_count(values, name) {
     s: Some := values.get_copy(name) else {
-        values.set(name, Args.CountVal(v = 1))
+        values.set(name, Args.CountVal(value = 1))
         return
     }
-    when s.v {
-        c: CountVal { values.set(name, Args.CountVal(v = c.v + 1)) }
-        else { values.set(name, Args.CountVal(v = 1)) }
+    when s.value {
+        c: CountVal { values.set(name, Args.CountVal(value = c.value + 1)) }
+        else { values.set(name, Args.CountVal(value = 1)) }
     }
 }
 
 _store_str(values, name, val) {
-    values.set(name, Args.StrVal(v = val))
+    values.set(name, Args.StrVal(value = val))
 }
 
 _parse_long(self, values, errors, name, arg, argc, argv, ip) {
     when name.index_of_char('=') {
         eq_pos: Some {
-            key      := name.copy(0, eq_pos.v)
-            val      := name.copy(eq_pos.v + 1, name.len())
+            key      := name.copy(0, eq_pos.value)
+            val      := name.copy(eq_pos.value + 1, name.len())
             si: Some := _find_spec_long(self, key) else {
                 Array.push(errors, UnknownFlag(flag = arg))
                 return
             }
-            spec := self->_specs.v.[si.v]
+            spec := self->_specs.data.[si.value]
             when spec.kind {
                 fv: FlagValue { _store_str(values, key, val) }
                 else { Array.push(errors, UnknownFlag(flag = arg)) }
@@ -249,7 +249,7 @@ _parse_long(self, values, errors, name, arg, argc, argv, ip) {
                 Array.push(errors, UnknownFlag(flag = arg))
                 return
             }
-            spec := self->_specs.v.[si.v]
+            spec := self->_specs.data.[si.value]
             when spec.kind {
                 fb: FlagBool { _store_bool(values, name) }
                 fc: FlagCount { _store_count(values, name) }
@@ -274,14 +274,14 @@ _parse_short(self, values, errors, arg, argc, argv, ip) {
             j += 1
             continue
         }
-        ch: CChar := bv.v
+        ch: CChar := bv.value
         si: Some  := _find_spec_short(self, ch) else {
             flag_str := "-".cat(String.from_bytes(ch.&, 1))
             Array.push(errors, UnknownFlag(flag = flag_str))
             j += 1
             continue
         }
-        spec := self->_specs.v.[si.v]
+        spec := self->_specs.data.[si.value]
         when spec.kind {
             fb: FlagBool { _store_bool(values, spec.long_name) }
             fc: FlagCount { _store_count(values, spec.long_name) }
@@ -353,7 +353,7 @@ parse(self, argc, argv) {
             found_cmd := 0
             k: CSize  := 0
             while k < self->_commands.size, k += 1 {
-                if self->_commands.v.[k].eq(arg) {
+                if self->_commands.data.[k].eq(arg) {
                     cmd       = Some(arg)
                     found_cmd = 1
                     break
@@ -372,7 +372,7 @@ parse(self, argc, argv) {
     // Check required args
     r: CSize := 0
     while r < self->_specs.size, r += 1 {
-        spec := self->_specs.v.[r]
+        spec := self->_specs.data.[r]
         if spec.required {
             if !values.contains(spec.long_name) {
                 errors.&.push(MissingRequired(name = spec.long_name))
@@ -392,11 +392,11 @@ parse(self, argc, argv) {
 parse_or_exit(self, argc, argv) {
     result := parse(self, argc, argv)
     when result {
-        ok:  Ok { ok.v }
+        ok:  Ok { ok.value }
         err: Err {
             i := 0
-            while i < err.v.errors.size, i += 1 {
-                when err.v.errors.v.[i] {
+            while i < err.error.errors.size, i += 1 {
+                when err.error.errors.data.[i] {
                     uf: UnknownFlag { c_printf(c"error: unknown flag '%s'\n", uf.flag.&.cstr()) }
                     mv: MissingValue { c_printf(c"error: missing value for '%s'\n", mv.flag.&.cstr()) }
                     mr: MissingRequired { c_printf(c"error: missing required option '%s'\n", mr.name.&.cstr()) }
@@ -435,7 +435,7 @@ help_text(self) {
 
         i: CSize := 0
         while i < self->_specs.size, i += 1 {
-            spec := self->_specs.v.[i]
+            spec := self->_specs.data.[i]
             result = result.cat("  ")
 
             if spec.short_name != '\0' {
@@ -470,7 +470,7 @@ help_text(self) {
         j: CSize := 0
         while j < self->_commands.size, j += 1 {
             result = result.cat("  ")
-            result = result.cat(self->_commands.v.[j])
+            result = result.cat(self->_commands.data.[j])
             result = result.cat("\n")
         }
     }
@@ -505,24 +505,24 @@ from_argv(argc, argv) {
 
 get_flag(args, name) {
     s: Some := args->_values.get_copy(name) else { return false }
-    when s.v {
-        b: BoolVal { b.v }
+    when s.value {
+        b: BoolVal { b.value }
         else { false }
     }
 }
 
 get_count(args, name) {
     s: Some := args->_values.get_copy(name) else { return 0 }
-    when s.v {
-        c: CountVal { c.v }
+    when s.value {
+        c: CountVal { c.value }
         else { 0 }
     }
 }
 
 get_option(args, name) {
     s: Some := args->_values.get_copy(name) else { return None }
-    when s.v {
-        sv: StrVal { Some(sv.v) }
+    when s.value {
+        sv: StrVal { Some(sv.value) }
         else { None }
     }
 }

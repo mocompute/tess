@@ -6,14 +6,14 @@
 #import <Alloc.tl>
 
 FormatSpec: {
-    fill:      CChar,
-    align:     CChar,
-    sign:      CChar,
-    alt:       Bool,
-    zero_pad:  Bool,
-    width:     CInt,
-    precision: CInt,
-    type_char: CChar,
+    fill:              CChar,
+    align:             CChar,
+    sign:              CChar,
+    alt:               Bool,
+    zero_pad:          Bool,
+    width:             CInt,
+    precision:         CInt,
+    type_char:         CChar,
     has_type_specific: Bool,
 }
 
@@ -58,9 +58,9 @@ static size_t tl_format_apply_layout(
 #endc
 
 c_tl_format_apply_layout(
-    out: Ptr[CChar], out_cap: CSize,
-    src: Ptr[Const[CChar]], src_len: CSize,
-    fill: CChar, align: CChar, width: CInt) -> CSize
+                         out:  Ptr[CChar], out_cap: CSize,
+                         src:  Ptr[Const[CChar]], src_len: CSize,
+                         fill: CChar, align: CChar, width: CInt) -> CSize
 
 // Implementation
 apply_layout(s, spec) {
@@ -78,14 +78,14 @@ apply_layout(s, spec) {
     if w <= 256 {
         buf: CArray[CChar, 256] := void
         ptr: Ptr[CChar]         := buf
-        written := c_tl_format_apply_layout(ptr, 256, sptr, s.len(), spec.fill, spec.align, w)
+        written                 := c_tl_format_apply_layout(ptr, 256, sptr, s.len(), spec.fill, spec.align, w)
         return String.from_bytes(ptr, written)
     }
 
-    cap: CSize := w
+    cap: CSize      := w
     ptr: Ptr[CChar] := Alloc.transient_alloc(cap)
-    written := c_tl_format_apply_layout(ptr, cap, sptr, s.len(), spec.fill, spec.align, w)
-    result := String.from_bytes(ptr, written)
+    written         := c_tl_format_apply_layout(ptr, cap, sptr, s.len(), spec.fill, spec.align, w)
+    result          := String.from_bytes(ptr, written)
     Alloc.transient_free(ptr)
     result
 }

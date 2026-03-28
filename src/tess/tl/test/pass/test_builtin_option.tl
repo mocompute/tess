@@ -28,21 +28,21 @@ test_some_construction() {
     // Some(42) infers Option[Int]
     opt_int := Some(42)
     error += when opt_int {
-        s: Some { if s.v == 42 {0} else {1} }
+        s: Some { if s.value == 42 {0} else {1} }
         n: None { 1 }
     }
 
     // Some(3.14) infers Option[Float]
     opt_float := Some(3.14)
     error += when opt_float {
-        s: Some { if s.v == 3.14 {0} else {1} }
+        s: Some { if s.value == 3.14 {0} else {1} }
         n: None { 1 }
     }
 
     // Some(true) infers Option[Bool]
     opt_bool := Some(1 == 1)
     error += when opt_bool {
-        s: Some { if s.v {0} else {1} }
+        s: Some { if s.value {0} else {1} }
         n: None { 1 }
     }
 
@@ -87,7 +87,7 @@ test_when_matching() {
     // Match Some, extract .v
     opt := Some(100)
     val := when opt {
-        s: Some { s.v }
+        s: Some { s.value }
         n: None { 0 }
     }
     error += if val == 100 {0} else {1}
@@ -95,7 +95,7 @@ test_when_matching() {
     // Match None, produce default
     empty: Option[Int] := None()
     val                := when empty {
-        s: Some { s.v }
+        s: Some { s.value }
         n: None { -1 }
     }
     error += if val == -1 {0} else {1}
@@ -103,14 +103,14 @@ test_when_matching() {
     // When result fed into conditional
     opt     := Some(50)
     doubled := when opt {
-        s: Some { s.v * 2 }
+        s: Some { s.value * 2 }
         n: None { 0 }
     }
     error += if doubled == 100 {0} else {1}
 
     // When on function result directly
     val := when narrowing(42) {
-        s: Some { s.v }
+        s: Some { s.value }
         n: None { 0 }
     }
     error += if val == 42 {0} else {1}
@@ -126,7 +126,7 @@ test_when_else() {
     // else instead of explicit None arm — Some path
     opt := Some(77)
     val := when opt {
-        s: Some { s.v }
+        s: Some { s.value }
         else { 0 }
     }
     error += if val == 77 {0} else {1}
@@ -134,7 +134,7 @@ test_when_else() {
     // else instead of explicit None arm — None path
     empty: Option[Int] := None()
     val                := when empty {
-        s: Some { s.v }
+        s: Some { s.value }
         else { -1 }
     }
     error += if val == -1 {0} else {1}
@@ -157,7 +157,7 @@ test_try() {
     // Both subtractions succeed (a >= b and c >= d)
     r := add_subs(10, 3, 9, 4)
     error += when r {
-        s: Some { if s.v == 12 {0} else {1} }
+        s: Some { if s.value == 12 {0} else {1} }
         n: None { 1 }
     }
 
@@ -186,7 +186,7 @@ test_let_else() {
     // Basic bail: extract Some or return error
     opt     := Some(42)
     s: Some := opt else { return 1 }
-    error += if s.v == 42 {0} else {1}
+    error += if s.value == 42 {0} else {1}
 
     // Bail takes the else path
     empty: Option[Int] := None()
@@ -203,14 +203,14 @@ test_let_else() {
     b       := Some(20)
     x: Some := a else { return 1 }
     y: Some := b else { return 1 }
-    error += if x.v + y.v == 30 {0} else {1}
+    error += if x.value + y.value == 30 {0} else {1}
 
     // Bail inside a loop with break
     opt   := narrowing(99)
     found := 0
     while 1 {
         s: Some := opt else { break }
-        found = s.v
+        found = s.value
         break
     }
     error += if found == 99 {0} else {1}
@@ -226,7 +226,7 @@ test_option_returning_functions() {
     // narrowing: in-range returns Some
     r := narrowing(127)
     error += when r {
-        s: Some { if s.v == 127 {0} else {1} }
+        s: Some { if s.value == 127 {0} else {1} }
         n: None { 1 }
     }
 
@@ -239,15 +239,15 @@ test_option_returning_functions() {
 
     // find_first_positive: first is positive
     r := find_first_positive(5, -1, -2)
-    error += if (s: Some := r else { 0 }, s.v) == 5 {0} else {1}
+    error += if (s: Some := r else { 0 }, s.value) == 5 {0} else {1}
 
     // find_first_positive: second is positive
     r := find_first_positive(-1, 7, -2)
-    error += if (s: Some := r else { 0 }, s.v) == 7 {0} else {1}
+    error += if (s: Some := r else { 0 }, s.value) == 7 {0} else {1}
 
     // find_first_positive: third is positive
     r := find_first_positive(-1, -2, 3)
-    error += if (s: Some := r else { 0 }, s.v) == 3 {0} else {1}
+    error += if (s: Some := r else { 0 }, s.value) == 3 {0} else {1}
 
     // find_first_positive: none positive
     r := find_first_positive(-1, -2, -3)
@@ -263,7 +263,7 @@ test_option_returning_functions() {
 
 get_or[T](opt: Option[T], default: T) -> T {
     when opt {
-        s: Some { s.v }
+        s: Some { s.value }
         n: None { default }
     }
 }
@@ -293,8 +293,8 @@ test_nested_option() {
     nested := Some(Some(42))
     error += when nested {
         outer: Some {
-            when outer.v {
-                inner: Some { if inner.v == 42 {0} else {1} }
+            when outer.value {
+                inner: Some { if inner.value == 42 {0} else {1} }
                 n:     None { 1 }
             }
         }
@@ -306,7 +306,7 @@ test_nested_option() {
     nested                  := Some(inner_none)
     error += when nested {
         outer: Some {
-            when outer.v {
+            when outer.value {
                 inner: Some { 1 }
                 n:     None { 0 }
             }
@@ -332,7 +332,7 @@ test_conditional_option() {
     // if/else producing Option — type inference across branches
     x   := 10
     opt := if x > 5 { Some(x) } else { None() }
-    error += if (s: Some := opt else { 0 }, s.v) == 10 {0} else {1}
+    error += if (s: Some := opt else { 0 }, s.value) == 10 {0} else {1}
 
     // None branch taken
     x   := 3
@@ -344,8 +344,8 @@ test_conditional_option() {
 
     // Conditional inside a function returning Option
     r   := checked_sub(10, 3)
-    val := when r { s: Some { if s.v > 0 { Some(s.v * 2) } else { None() } } else { None() } }
-    error += if (s: Some := val else { 0 }, s.v) == 14 {0} else {1}
+    val := when r { s: Some { if s.value > 0 { Some(s.value * 2) } else { None() } } else { None() } }
+    error += if (s: Some := val else { 0 }, s.value) == 14 {0} else {1}
 
     error
 }
@@ -362,7 +362,7 @@ test_option_in_struct() {
     // Struct with Some field
     c := Config(value = 10, limit = Some(100))
     error += when c.limit {
-        s: Some { if s.v == 100 {0} else {1} }
+        s: Some { if s.value == 100 {0} else {1} }
         n: None { 1 }
     }
 
@@ -375,7 +375,7 @@ test_option_in_struct() {
 
     // Access value field alongside Option field
     c     := Config(value = 42, limit = Some(99))
-    total := c.value + (s: Some := c.limit else { 0 }, s.v)
+    total := c.value + (s: Some := c.limit else { 0 }, s.value)
     error += if total == 141 {0} else {1}
 
     error
@@ -385,7 +385,7 @@ test_option_in_struct() {
 
 map_option[T, U](opt: Option[T], f) -> Option[U] {
     when opt {
-        s: Some { Some(f(s.v)) }
+        s: Some { Some(f(s.value)) }
         n: None { None() }
     }
 }
@@ -396,7 +396,7 @@ test_map_option() {
     // Map Some: transform inner value
     opt    := Some(3)
     mapped := map_option(opt, (x) { x * 2 })
-    error += if (s: Some := mapped else { 0 }, s.v) == 6 {0} else {1}
+    error += if (s: Some := mapped else { 0 }, s.value) == 6 {0} else {1}
 
     // Map None: stays None
     empty: Option[Int] := None()
@@ -410,7 +410,7 @@ test_map_option() {
     fopt     := Some(2.5)
     mapped_f := map_option(fopt, (x) { x * 2.0 })
     error += when mapped_f {
-        s: Some { if s.v == 5.0 {0} else {1} }
+        s: Some { if s.value == 5.0 {0} else {1} }
         n: None { 1 }
     }
 
@@ -432,12 +432,12 @@ test_first_some() {
     // First is Some — returns first
     a := Some(3)
     b := Some(5)
-    error += if (s: Some := first_some(a, b) else { 0 }, s.v) == 3 {0} else {1}
+    error += if (s: Some := first_some(a, b) else { 0 }, s.value) == 3 {0} else {1}
 
     // First is None — returns second
     none_val: Option[Int] := None()
     b                     := Some(7)
-    error += if (s: Some := first_some(none_val, b) else { 0 }, s.v) == 7 {0} else {1}
+    error += if (s: Some := first_some(none_val, b) else { 0 }, s.value) == 7 {0} else {1}
 
     // Both None
     none1: Option[Int] := None()
@@ -448,7 +448,7 @@ test_first_some() {
     }
 
     // Chain: first_some(None, first_some(None, Some(9)))
-    error += if (s: Some := first_some(none1, first_some(none2, Some(9))) else { 0 }, s.v) == 9 {0} else {1}
+    error += if (s: Some := first_some(none1, first_some(none2, Some(9))) else { 0 }, s.value) == 9 {0} else {1}
 
     error
 }
@@ -461,14 +461,14 @@ test_option_with_struct() {
     // Some wrapping a struct
     opt := Some(Point(x = 10, y = 20))
     error += when opt {
-        s: Some { if s.v.x == 10 && s.v.y == 20 {0} else {1} }
+        s: Some { if s.value.x == 10 && s.value.y == 20 {0} else {1} }
         n: None { 1 }
     }
 
     // Extract struct via let-else, then use fields
     opt     := Some(Point(x = 3, y = 4))
     s: Some := opt else { return 1 }
-    error += if s.v.x + s.v.y == 7 {0} else {1}
+    error += if s.value.x + s.value.y == 7 {0} else {1}
 
     // None of struct type
     empty: Option[Point] := None()
@@ -485,7 +485,7 @@ test_option_with_struct() {
 // Caller doesn't need to annotate — type inferred from the Option argument
 add_if_present(base: Int, extra: Option[Int]) -> Int {
     when extra {
-        s: Some { base + s.v }
+        s: Some { base + s.value }
         n: None { base }
     }
 }
@@ -543,7 +543,7 @@ test_bare_none() {
     // Verify Some branch still works alongside bare None
     r3 := bare_none_conditional(42)
     error += when r3 {
-        s: Some { if s.v == 42 {0} else {1} }
+        s: Some { if s.value == 42 {0} else {1} }
         n: None { 1 }
     }
 
@@ -560,7 +560,7 @@ test_bare_none() {
 
     // unwrap with bare None
     n2: Option[Int] := None
-    error += if (s: Some := n2 else { 99 }, s.v) == 99 {0} else {1}
+    error += if (s: Some := n2 else { 99 }, s.value) == 99 {0} else {1}
 
     error
 }

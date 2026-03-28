@@ -217,7 +217,7 @@ main(argc: CInt, argv: Ptr[CString]) {
 
     // Apply --top N limit.
     if s: Some := args.get_option("top") {
-        top_n := c_atoi(s.v.cstr())
+        top_n := c_atoi(s.value.cstr())
         if top_n > 0 {
             limit: CSize := top_n
             if limit < results.size {

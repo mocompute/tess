@@ -8,7 +8,7 @@ apply_to_each[T](arr: Array[T], f: (T) -> T) -> Array[T] {
     result   := Array.empty[T]()
     i: CSize := 0zu
     while i < arr.size, i += 1zu {
-        Array.push(result.&, f(arr.v.[i]))
+        Array.push(result.&, f(arr.data.[i]))
     }
     result
 }
@@ -17,7 +17,7 @@ count_matching[T](arr: Array[T], pred: (T) -> Bool) -> Int {
     n: Int   := 0
     i: CSize := 0zu
     while i < arr.size, i += 1zu {
-        if pred(arr.v.[i]) { n += 1 }
+        if pred(arr.data.[i]) { n += 1 }
     }
     n
 }
@@ -27,7 +27,7 @@ fold_right[T, U](arr: Array[T], init: U, f: (T, U) -> U) -> U {
     i   := arr.size
     while i > 0zu {
         i   = i - 1zu
-        acc = f(arr.v.[i], acc)
+        acc = f(arr.data.[i], acc)
     }
     acc
 }
@@ -40,9 +40,9 @@ test_generic_hof_stack_closure() {
     Array.push(arr.&, 2)
     Array.push(arr.&, 3)
     result := apply_to_each(arr, (x) { x + offset })
-    if result.v.[0] != 11 { error += 1 }
-    if result.v.[1] != 12 { error += 1 }
-    if result.v.[2] != 13 { error += 1 }
+    if result.data.[0] != 11 { error += 1 }
+    if result.data.[1] != 12 { error += 1 }
+    if result.data.[2] != 13 { error += 1 }
     Array.free(arr.&)
     Array.free(result.&)
     error
@@ -57,9 +57,9 @@ test_generic_hof_alloc_closure() {
     Array.push(arr.&, 2)
     Array.push(arr.&, 3)
     result := apply_to_each(arr, f)
-    if result.v.[0] != 11 { error += 1 }
-    if result.v.[1] != 12 { error += 1 }
-    if result.v.[2] != 13 { error += 1 }
+    if result.data.[0] != 11 { error += 1 }
+    if result.data.[1] != 12 { error += 1 }
+    if result.data.[2] != 13 { error += 1 }
     Array.free(arr.&)
     Array.free(result.&)
     error

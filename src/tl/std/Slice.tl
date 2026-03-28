@@ -5,7 +5,7 @@
 #module Slice
 
 get[T](s: Slice[T], i: CSize) -> T {
-    s.v.[i]
+    s.data.[i]
 }
 
 is_empty[T](s: Slice[T]) -> Bool {
@@ -15,7 +15,7 @@ is_empty[T](s: Slice[T]) -> Bool {
 // -- Iterator interface --
 
 Iter[T]: {
-    v:     Ptr[T],
+    data:  Ptr[T],
     size:  CSize,
     index: CSize,
 }
@@ -27,9 +27,9 @@ iter_cond[T]  (iter: Ptr[Iter[T]]) -> Bool
 iter_update[T](iter: Ptr[Iter[T]]) -> Void
 iter_deinit[T](iter: Ptr[Iter[T]]) -> Void
 
-iter_init  (s)    { Iter(v = s->v, size = s->size, index = 0) }
-iter_ptr   (iter) { iter->v.[iter->index].&                   }
-iter_value (iter) { iter->v.[iter->index]                     }
-iter_cond  (iter) { iter->index < iter->size                  }
-iter_update(iter) { iter->index = iter->index + 1             }
-iter_deinit(iter) {                                           }
+iter_init  (s)    { Iter(data = s->data, size = s->size, index = 0) }
+iter_ptr   (iter) { iter->data.[iter->index].&                      }
+iter_value (iter) { iter->data.[iter->index]                        }
+iter_cond  (iter) { iter->index < iter->size                        }
+iter_update(iter) { iter->index = iter->index + 1                   }
+iter_deinit(iter) {                                                 }

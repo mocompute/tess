@@ -17,7 +17,7 @@ test_write_and_read() {
         return 1
     }
 
-    if !String.eq(rd.v, content) {
+    if !String.eq(rd.value, content) {
         c_printf(c"FAIL content mismatch\n")
         fails += 1
     }
@@ -36,20 +36,20 @@ test_read_lines() {
         return 1
     }
 
-    if lr.v.size != 3 {
-        c_printf(c"FAIL expected 3 lines, got %d\n", lr.v.size)
+    if lr.value.size != 3 {
+        c_printf(c"FAIL expected 3 lines, got %d\n", lr.value.size)
         return 1
     }
 
-    if !String.eq(lr.v.v.[0], "alpha") {
+    if !String.eq(lr.value.data.[0], "alpha") {
         c_printf(c"FAIL line 0\n")
         fails += 1
     }
-    if !String.eq(lr.v.v.[1], "beta") {
+    if !String.eq(lr.value.data.[1], "beta") {
         c_printf(c"FAIL line 1\n")
         fails += 1
     }
-    if !String.eq(lr.v.v.[2], "gamma") {
+    if !String.eq(lr.value.data.[2], "gamma") {
         c_printf(c"FAIL line 2\n")
         fails += 1
     }
@@ -67,56 +67,56 @@ test_streaming_read_line() {
         c_printf(c"FAIL open for readline\n")
         return 1
     }
-    defer File.close(f.v)
+    defer File.close(f.value)
 
     // Line 1
-    r1: Ok := File.read_line(f.v) else {
+    r1: Ok := File.read_line(f.value) else {
         c_printf(c"FAIL readline err 1\n")
         return 1
     }
-    l1: Some := r1.v else {
+    l1: Some := r1.value else {
         c_printf(c"FAIL readline eof 1\n")
         return 1
     }
-    if !String.eq(l1.v, "one") {
-        c_printf(c"FAIL line 1: %s\n", String.cstr(l1.v.&))
+    if !String.eq(l1.value, "one") {
+        c_printf(c"FAIL line 1: %s\n", String.cstr(l1.value.&))
         fails += 1
     }
 
     // Line 2
-    r2: Ok := File.read_line(f.v) else {
+    r2: Ok := File.read_line(f.value) else {
         c_printf(c"FAIL readline err 2\n")
         return 1
     }
-    l2: Some := r2.v else {
+    l2: Some := r2.value else {
         c_printf(c"FAIL readline eof 2\n")
         return 1
     }
-    if !String.eq(l2.v, "two") {
-        c_printf(c"FAIL line 2: %s\n", String.cstr(l2.v.&))
+    if !String.eq(l2.value, "two") {
+        c_printf(c"FAIL line 2: %s\n", String.cstr(l2.value.&))
         fails += 1
     }
 
     // Line 3 (no trailing newline)
-    r3: Ok := File.read_line(f.v) else {
+    r3: Ok := File.read_line(f.value) else {
         c_printf(c"FAIL readline err 3\n")
         return 1
     }
-    l3: Some := r3.v else {
+    l3: Some := r3.value else {
         c_printf(c"FAIL readline eof 3\n")
         return 1
     }
-    if !String.eq(l3.v, "three") {
-        c_printf(c"FAIL line 3: %s\n", String.cstr(l3.v.&))
+    if !String.eq(l3.value, "three") {
+        c_printf(c"FAIL line 3: %s\n", String.cstr(l3.value.&))
         fails += 1
     }
 
     // Should be EOF now
-    r4: Ok := File.read_line(f.v) else {
+    r4: Ok := File.read_line(f.value) else {
         c_printf(c"FAIL readline err 4\n")
         return 1
     }
-    when r4.v {
+    when r4.value {
         s: Some {
             c_printf(c"FAIL expected EOF\n")
             fails += 1
@@ -135,22 +135,22 @@ test_streaming_write_read() {
         c_printf(c"FAIL open for write\n")
         return 1
     }
-    _we := File.write_str(wf.v, "stream test")
-    File.close(wf.v)
+    _we := File.write_str(wf.value, "stream test")
+    File.close(wf.value)
 
     rf: Ok := File.open(path, File.Read) else {
         c_printf(c"FAIL open for read\n")
         return 1
     }
-    defer File.close(rf.v)
+    defer File.close(rf.value)
 
-    content: Ok := File.read_all(rf.v) else {
+    content: Ok := File.read_all(rf.value) else {
         c_printf(c"FAIL read_all\n")
         return 1
     }
 
-    if !String.eq(content.v, "stream test") {
-        c_printf(c"FAIL stream content: %s\n", String.cstr(content.v.&))
+    if !String.eq(content.value, "stream test") {
+        c_printf(c"FAIL stream content: %s\n", String.cstr(content.value.&))
         fails += 1
     }
 
@@ -173,14 +173,14 @@ test_read_write_bytes() {
         return 1
     }
 
-    if rb.v.size != 3 {
-        c_printf(c"FAIL bytes size: %d\n", rb.v.size)
+    if rb.value.size != 3 {
+        c_printf(c"FAIL bytes size: %d\n", rb.value.size)
         return 1
     }
 
-    b0: Byte := rb.v.v.[0]
-    b1: Byte := rb.v.v.[1]
-    b2: Byte := rb.v.v.[2]
+    b0: Byte := rb.value.data.[0]
+    b1: Byte := rb.value.data.[1]
+    b2: Byte := rb.value.data.[2]
     if b0 != 0x48 {
         c_printf(c"FAIL byte 0\n")
         fails += 1
@@ -209,8 +209,8 @@ test_append() {
         return 1
     }
 
-    if !String.eq(rd.v, "first second") {
-        c_printf(c"FAIL append content: %s\n", String.cstr(rd.v.&))
+    if !String.eq(rd.value, "first second") {
+        c_printf(c"FAIL append content: %s\n", String.cstr(rd.value.&))
         fails += 1
     }
 
@@ -246,8 +246,8 @@ test_exists_and_metadata() {
         c_printf(c"FAIL size\n")
         return 1
     }
-    if sz.v != 13 {
-        c_printf(c"FAIL size value: %d\n", sz.v)
+    if sz.value != 13 {
+        c_printf(c"FAIL size value: %d\n", sz.value)
         fails += 1
     }
 
@@ -261,11 +261,11 @@ test_open_nonexistent() {
     when result {
         ok: Ok {
             c_printf(c"FAIL expected error opening nonexistent\n")
-            File.close(ok.v)
+            File.close(ok.value)
             fails += 1
         }
         err: Err {
-            when err.v {
+            when err.error {
                 nf: NotFound { fails += 0 }
                 else {
                     c_printf(c"FAIL expected NotFound error\n")
@@ -288,25 +288,25 @@ test_seek_tell() {
         c_printf(c"FAIL open for seek\n")
         return 1
     }
-    defer File.close(f.v)
+    defer File.close(f.value)
 
-    _se := File.seek(f.v, 5, File.Start)
+    _se := File.seek(f.value, 5, File.Start)
 
-    pos: Ok := File.tell(f.v) else {
+    pos: Ok := File.tell(f.value) else {
         c_printf(c"FAIL tell\n")
         return 1
     }
-    if pos.v != 5 {
-        c_printf(c"FAIL tell value: %d\n", pos.v)
+    if pos.value != 5 {
+        c_printf(c"FAIL tell value: %d\n", pos.value)
         fails += 1
     }
 
-    rest: Ok := File.read_all(f.v) else {
+    rest: Ok := File.read_all(f.value) else {
         c_printf(c"FAIL read after seek\n")
         return 1
     }
-    if !String.eq(rest.v, "fghij") {
-        c_printf(c"FAIL read after seek: %s\n", String.cstr(rest.v.&))
+    if !String.eq(rest.value, "fghij") {
+        c_printf(c"FAIL read after seek: %s\n", String.cstr(rest.value.&))
         fails += 1
     }
 

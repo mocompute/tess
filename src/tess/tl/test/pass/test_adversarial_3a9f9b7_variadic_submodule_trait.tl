@@ -24,7 +24,7 @@ concat_descriptions(args: ...Util.Describe) -> String {
     i: CSize := 0
     while i < args.size, i += 1 {
         if i > 0 { result.push(",") }
-        result.push(args.v.[i])
+        result.push(args.data.[i])
     }
     result
 }

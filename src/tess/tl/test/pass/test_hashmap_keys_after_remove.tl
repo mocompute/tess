@@ -28,7 +28,7 @@ main() {
     // Verify no removed keys leak through
     j: CSize := 0zu
     while j < ks.size, j += 1zu {
-        if ks.v.[j] < 5 { error += 1 }
+        if ks.data.[j] < 5 { error += 1 }
     }
 
     // Insert after removal
@@ -40,7 +40,7 @@ main() {
     found_100 := false
     j = 0zu
     while j < ks2.size, j += 1zu {
-        if ks2.v.[j] == 100 { found_100 = true }
+        if ks2.data.[j] == 100 { found_100 = true }
     }
     if !found_100 { error += 1 }
 

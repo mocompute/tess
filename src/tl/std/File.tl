@@ -337,7 +337,7 @@ dirname(alloc, path) {
     end := n
     while end > 1 {
         ch: Some := path.char_at(end - 1) else { break }
-        if !_is_sep(ch.v) { break }
+        if !_is_sep(ch.value) { break }
         end -= 1
     }
 
@@ -346,7 +346,7 @@ dirname(alloc, path) {
     while i > 0 {
         i -= 1
         ch: Some := path.char_at(i) else { continue }
-        if _is_sep(ch.v) {
+        if _is_sep(ch.value) {
             if i == 0 { return String.from_bytes(alloc, c"/", 1) }
             return String.copy(alloc, path, 0, i)
         }
@@ -366,7 +366,7 @@ basename(path) {
     end := n
     while end > 0 {
         ch: Some := path.char_at(end - 1) else { break }
-        if !_is_sep(ch.v) { break }
+        if !_is_sep(ch.value) { break }
         end -= 1
     }
 
@@ -377,7 +377,7 @@ basename(path) {
     while i > 0 {
         i -= 1
         ch: Some := path.char_at(i) else { continue }
-        if _is_sep(ch.v) {
+        if _is_sep(ch.value) {
             return path.copy(i + 1, end)
         }
     }
@@ -390,8 +390,8 @@ extension(path) {
     if n == 0 { return None }
 
     dot: Some := base.last_index_of_char('.') else { return None }
-    if dot.v == 0 { return None }       // c".hidden" — dot at start is not an extension
-    Some(base.copy(dot.v, n))
+    if dot.value == 0 { return None }   // c".hidden" — dot at start is not an extension
+    Some(base.copy(dot.value, n))
 }
 
 stem(path) {
@@ -400,8 +400,8 @@ stem(path) {
     if n == 0 { return String.empty() }
 
     dot: Some := base.last_index_of_char('.') else { return base }
-    if dot.v == 0 { return base }       // c".hidden" — the whole thing is the stem
-    base.copy(0, dot.v)
+    if dot.value == 0 { return base }   // c".hidden" — the whole thing is the stem
+    base.copy(0, dot.value)
 }
 
 join(alloc, dir, file) {
@@ -416,7 +416,7 @@ join(alloc, dir, file) {
 
     // Check if dir ends with separator
     last_ch: Some := dir.char_at(dn - 1) else { return String.copy(alloc, file) }
-    if _is_sep(last_ch.v) {
+    if _is_sep(last_ch.value) {
         return String.cat(alloc, dir, file)
     }
 
@@ -433,7 +433,7 @@ normalize(alloc, path) {
     if n == 0 { return String.empty() }
 
     first_ch: Some := path.char_at(0) else { return String.empty() }
-    abs            := _is_sep(first_ch.v)
+    abs            := _is_sep(first_ch.value)
 
     // Split path into components
     parts := String.split(alloc, path, "/")
@@ -442,10 +442,10 @@ normalize(alloc, path) {
     result   := Array.empty[String]()
     i: CSize := 0
     while i < parts.size, i += 1 {
-        sub      := String.split(alloc, parts.v.[i], "\\")
+        sub      := String.split(alloc, parts.data.[i], "\\")
         j: CSize := 0
         while j < sub.size, j += 1 {
-            Array.push(result.&, alloc, sub.v.[j])
+            Array.push(result.&, alloc, sub.data.[j])
         }
     }
 
@@ -453,7 +453,7 @@ normalize(alloc, path) {
     stack    := Array.empty[String]()
     k: CSize := 0
     while k < result.size, k += 1 {
-        part := result.v.[k]
+        part := result.data.[k]
         pn   := part.len()
 
         if pn == 0 || part.eq(".") {
@@ -461,7 +461,7 @@ normalize(alloc, path) {
         }
 
         if part.eq("..") {
-            if stack.size > 0 && !stack.v.[stack.size - 1].eq("..") {
+            if stack.size > 0 && !stack.data.[stack.size - 1].eq("..") {
                 stack.&.pop()
                 void
             } else if !abs {
@@ -534,7 +534,7 @@ relative(alloc, from_dir, to_path) {
     common: CSize := 0
     max_common    := if from_parts.size < to_parts.size { from_parts.size } else { to_parts.size }
     while common < max_common {
-        if !from_parts.v.[common].eq(to_parts.v.[common]) { break }
+        if !from_parts.data.[common].eq(to_parts.data.[common]) { break }
         common += 1
     }
 
@@ -548,7 +548,7 @@ relative(alloc, from_dir, to_path) {
 
     d: CSize := common
     while d < to_parts.size, d += 1 {
-        Array.push(result.&, alloc, to_parts.v.[d])
+        Array.push(result.&, alloc, to_parts.data.[d])
     }
 
     if result.size == 0 { return Ok(".") }
@@ -563,12 +563,12 @@ is_absolute(path) {
     n := path.len()
     if n == 0 { return false }
     first: Some := path.char_at(0) else { return false }
-    if _is_sep(first.v) { return true }
+    if _is_sep(first.value) { return true }
     // Windows drive letter: C:\ or C:/
     if n < 3 { return false }
     second: Some := path.char_at(1) else { return false }
     third:  Some := path.char_at(2) else { return false }
-    second.v == ':' && _is_sep(third.v)
+    second.value == ':' && _is_sep(third.value)
 }
 
 is_relative(path) {
@@ -758,7 +758,7 @@ read_bytes(self, alloc) {
     if remaining == 0 { return Ok(Array.empty[Byte]()) }
 
     result     := Array.with_capacity_undefined[Byte](alloc, remaining)
-    bytes_read := c_fread(result.v, 1, remaining, self->_handle)
+    bytes_read := c_fread(result.data, 1, remaining, self->_handle)
     if bytes_read < remaining && c_ferror(self->_handle) != 0 {
         Array.free(result.&, alloc)
         return Err(_errno_to_error(self->_path))
@@ -795,7 +795,7 @@ write_str(self, data) {
 
 write_bytes(self, data) {
     if data.size == 0 { return Ok(void) }
-    written := c_fwrite(data.v, 1, data.size, self->_handle)
+    written := c_fwrite(data.data, 1, data.size, self->_handle)
     if written < data.size {
         return Err(_errno_to_error(self->_path))
     }
@@ -890,18 +890,18 @@ read_lines(alloc, path) {
     // Strip \r from each line (Windows line endings)
     i: CSize := 0
     while i < lines.size, i += 1 {
-        line := lines.v.[i]
+        line := lines.data.[i]
         n    := line.len()
         if n > 0 {
             last: Some := line.char_at(n - 1) else { continue }
-            if last.v == '\r' {
-                lines.v.[i] = String.copy(alloc, line, 0, n - 1)
+            if last.value == '\r' {
+                lines.data.[i] = String.copy(alloc, line, 0, n - 1)
             }
         }
     }
 
     // Remove trailing empty line (split on c"\n" produces one after final newline)
-    if lines.size > 0 && lines.v.[lines.size - 1].is_empty() {
+    if lines.size > 0 && lines.data.[lines.size - 1].is_empty() {
         lines.size -= 1
     }
 
@@ -971,7 +971,7 @@ scan_dir(alloc, path, ext) {
 
     ext_cstr: CString := null
     when ext {
-        s: Some { ext_cstr = s.v.&.cstr() }
+        s: Some { ext_cstr = s.value.cstr() }
         n: None { }
     }
 

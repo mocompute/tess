@@ -8,5 +8,5 @@ Foo = Option
 
 main() {
     x: App.Foo[CInt] := Some(42)
-    when x { s: Some { s.v - 42 } else { 0 } }
+    when x { s: Some { s.value - 42 } else { 0 } }
 }

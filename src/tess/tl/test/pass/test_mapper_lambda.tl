@@ -4,7 +4,7 @@
 
 // A generic type definition
 Arr[T]: {
-    v:        Ptr[T],
+    data:     Ptr[T],
     size:     CSize,
     capacity: CSize,
 }
@@ -18,14 +18,14 @@ map[U](f, arr) {
     out_p: Ptr[U] := c_malloc(sizeof[U]() * arr.size)
 
     // Construct an Arr object on the stack
-    out := Arr(v = out_p, size = arr.size, capacity = arr.size)
+    out := Arr(data = out_p, size = arr.size, capacity = arr.size)
 
     // Iteration is with `while`, with an optional `, expr` update expression (note the comma) which activates
     // at the end of the loop. `continue` is supported with the same semantics as C. Collections can also
     // provide custom iteration functions which can be access with a `for` statement.
     i := 0zu
     while i < arr.size, i = i + 1zu {
-        out.v.[i] = f(arr.v.[i])
+        out.data.[i] = f(arr.data.[i])
     }
 
     // the value of the final expression is the return value. In this case, the struct will be copied to the
@@ -37,15 +37,15 @@ main() {
 
     // When constructing an object, all fields must be provided. But they may be assigned `void`, which leaves
     // them uninitialised, shown here for the purpose of an example.
-    vals := Arr(v: Ptr[Int] = c_malloc(sizeof[Int]() * 4zu), size = void, capacity = 4zu)
+    vals := Arr(data: Ptr[Int] = c_malloc(sizeof[Int]() * 4zu), size = void, capacity = 4zu)
 
     // Note that `:=` always defines a new variable. A plain `=` is used to assign to an existing variable (or
     // a field or indexed location).
-    vals.size  = 4zu
-    vals.v.[0] = 0
-    vals.v.[1] = 1
-    vals.v.[2] = 2
-    vals.v.[3] = 3
+    vals.size     = 4zu
+    vals.data.[0] = 0
+    vals.data.[1] = 1
+    vals.data.[2] = 2
+    vals.data.[3] = 3
 
     // A lambda function is parsed as `(...) { ... }`, that is, a set of 0 or more parameters and a body.
     res := map( (x) { x + 1 }, vals )
@@ -54,14 +54,14 @@ main() {
     // any whitespace will do, or optional commas may be used.
     sum := 0, i := 0zu
     while i < vals.size, i = i + 1zu {
-        sum = sum + vals.v.[i]
+        sum = sum + vals.data.[i]
     }
     c_assert(sum == 6)
 
     // verify that map returns an array with mapped values
     sum := 0, i := 0zu
     while i < vals.size, i = i + 1zu {
-        sum = sum + res.v.[i]
+        sum = sum + res.data.[i]
     }
     c_assert(sum == 10)
 

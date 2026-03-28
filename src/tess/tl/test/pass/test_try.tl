@@ -1,10 +1,10 @@
 #module MyRes
 
-MyResult[T, E]: | MyOk { v: T } | MyErr { e: E }
+MyResult[T, E]: | MyOk { value: T } | MyErr { error: E }
 
 #module MyOpt
 
-MyOption[T]: | MySome { v: T } | MyNone
+MyOption[T]: | MySome { value: T } | MyNone
 
 #module main
 
@@ -74,7 +74,7 @@ main() {
     // Test 1: try unwraps MyOk
     r1 := test_try_ok()
     when r1 {
-        s: MyOk { error += if s.v == 42 { 0 } else { 1 } }
+        s: MyOk { error += if s.value == 42 { 0 } else { 1 } }
         e: MyErr { error += 1 }
     }
 
@@ -82,20 +82,20 @@ main() {
     r2 := test_try_err()
     when r2 {
         s: MyOk { error += 1 }
-        e: MyErr { error += if e.e == 99 { 0 } else { 1 } }
+        e: MyErr { error += if e.error == 99 { 0 } else { 1 } }
     }
 
     // Test 3: try composes inline
     r3 := test_try_compose()
     when r3 {
-        s: MyOk { error += if s.v == 10 { 0 } else { 1 } }
+        s: MyOk { error += if s.value == 10 { 0 } else { 1 } }
         e: MyErr { error += 1 }
     }
 
     // Test 4: try with MyOption - unwraps MySome
     r4 := test_try_option_some()
     when r4 {
-        s: MySome { error += if s.v == 8 { 0 } else { 1 } }
+        s: MySome { error += if s.value == 8 { 0 } else { 1 } }
         n: MyNone { error += 1 }
     }
 
@@ -109,7 +109,7 @@ main() {
     // Test 6: nested try
     r6 := test_try_nested()
     when r6 {
-        s: MyOk { error += if s.v == 5 { 0 } else { 1 } }
+        s: MyOk { error += if s.value == 5 { 0 } else { 1 } }
         e: MyErr { error += 1 }
     }
 
@@ -117,7 +117,7 @@ main() {
     r7 := test_try_defer_inner()
     when r7 {
         s: MyOk { error += 1 }
-        e: MyErr { error += if e.e == 42 { 0 } else { 1 } }
+        e: MyErr { error += if e.error == 42 { 0 } else { 1 } }
     }
 
     error

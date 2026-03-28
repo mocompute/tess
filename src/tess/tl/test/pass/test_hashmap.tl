@@ -16,15 +16,15 @@ eq(a: Point, b: Point) -> Bool {
 
 #module CollidingKey
 
-CollidingKey: { v: Int }
+CollidingKey: { value: Int }
 
 hash(k: CollidingKey) -> CSize {
-    v: CSize := k.v
+    v: CSize := k.value
     v & 3zu
 }
 
 eq(a: CollidingKey, b: CollidingKey) -> Bool {
-    a.v == b.v
+    a.value == b.value
 }
 
 #module main
@@ -79,7 +79,7 @@ test_get_copy() {
 
     opt := m.get_copy(42)
     when opt {
-        s: Some { if s.v != 84 { error += 1 } }
+        s: Some { if s.value != 84 { error += 1 } }
         n: None { error += 1 }
     }
 
@@ -227,9 +227,9 @@ test_keys_values() {
     found_3  := false
     i: CSize := 0zu
     while i < ks.size, i += 1zu {
-        if ks.v.[i] == 1 { found_1 = true }
-        if ks.v.[i] == 2 { found_2 = true }
-        if ks.v.[i] == 3 { found_3 = true }
+        if ks.data.[i] == 1 { found_1 = true }
+        if ks.data.[i] == 2 { found_2 = true }
+        if ks.data.[i] == 3 { found_3 = true }
     }
     if !found_1 { error += 1 }
     if !found_2 { error += 1 }
@@ -240,9 +240,9 @@ test_keys_values() {
     found_30 := false
     i = 0zu
     while i < vs.size, i += 1zu {
-        if vs.v.[i] == 10 { found_10 = true }
-        if vs.v.[i] == 20 { found_20 = true }
-        if vs.v.[i] == 30 { found_30 = true }
+        if vs.data.[i] == 10 { found_10 = true }
+        if vs.data.[i] == 20 { found_20 = true }
+        if vs.data.[i] == 30 { found_30 = true }
     }
     if !found_10 { error += 1 }
     if !found_20 { error += 1 }
@@ -340,36 +340,36 @@ test_collision_stress() {
     n := 32
     i := 0
     while i < n, i += 1 {
-        m.set(CollidingKey(v = i), i * 7)
+        m.set(CollidingKey(value = i), i * 7)
     }
     if m.size() != 32zu { error += 1 }
 
     // Verify all entries are accessible
     i = 0
     while i < n, i += 1 {
-        p := m.get(CollidingKey(v = i))
+        p := m.get(CollidingKey(value = i))
         if p == null { error += 1 }
         if p != null && p.* != i * 7 { error += 1 }
     }
 
     // Overwrite in collision-heavy map
-    m.set(CollidingKey(v = 4), 999)
+    m.set(CollidingKey(value = 4), 999)
     if m.size() != 32zu { error += 1 }
-    p := m.get(CollidingKey(v = 4))
+    p := m.get(CollidingKey(value = 4))
     if p == null { error += 1 }
     if p != null && p.* != 999 { error += 1 }
 
     // Remove entries from the middle of collision chains
     i = 0
     while i < 16, i += 1 {
-        if !m.remove(CollidingKey(v = i)) { error += 1 }
+        if !m.remove(CollidingKey(value = i)) { error += 1 }
     }
     if m.size() != 16zu { error += 1 }
 
     // Remaining entries (16..31) must still be accessible after backward-shift
     i = 16
     while i < n, i += 1 {
-        p2 := m.get(CollidingKey(v = i))
+        p2 := m.get(CollidingKey(value = i))
         if p2 == null { error += 1 }
         if p2 != null && p2.* != i * 7 { error += 1 }
     }
@@ -377,7 +377,7 @@ test_collision_stress() {
     // Removed entries must be gone
     i = 0
     while i < 16, i += 1 {
-        if m.contains(CollidingKey(v = i)) { error += 1 }
+        if m.contains(CollidingKey(value = i)) { error += 1 }
     }
 
     m.destroy()
@@ -514,8 +514,8 @@ test_keys_values_with_alloc() {
     found_2  := false
     i: CSize := 0zu
     while i < ks.size, i += 1zu {
-        if ks.v.[i] == 1 { found_1 = true }
-        if ks.v.[i] == 2 { found_2 = true }
+        if ks.data.[i] == 1 { found_1 = true }
+        if ks.data.[i] == 2 { found_2 = true }
     }
     if !found_1 { error += 1 }
     if !found_2 { error += 1 }
@@ -524,8 +524,8 @@ test_keys_values_with_alloc() {
     found_20 := false
     i = 0zu
     while i < vs.size, i += 1zu {
-        if vs.v.[i] == 10 { found_10 = true }
-        if vs.v.[i] == 20 { found_20 = true }
+        if vs.data.[i] == 10 { found_10 = true }
+        if vs.data.[i] == 20 { found_20 = true }
     }
     if !found_10 { error += 1 }
     if !found_20 { error += 1 }

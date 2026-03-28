@@ -38,7 +38,7 @@ concat_all(args: ...ToString) -> String {
     result   := String.empty()
     i: CSize := 0
     while i < args.size, i += 1 {
-        result.push(args.v.[i])
+        result.push(args.data.[i])
     }
     result
 }
@@ -50,7 +50,7 @@ describe_and_join(args: ...Helpers.Describable) -> String {
     i: CSize := 0
     while i < args.size, i += 1 {
         if i > 0 { result.push(",") }
-        result.push(args.v.[i])
+        result.push(args.data.[i])
     }
     // Also call inner variadic to verify nesting works
     suffix := concat_all(args.size)

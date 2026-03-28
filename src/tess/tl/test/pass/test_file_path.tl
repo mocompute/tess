@@ -39,7 +39,7 @@ test_extension() {
 
     e1       := File.Path.extension("foo.txt")
     s1: Some := e1 else { c_printf(c"FAIL ext 1: None\n") fails += 1 return fails }
-    if !String.eq(s1.v, ".txt") { c_printf(c"FAIL ext 1: %s\n", String.cstr(s1.v.&)) fails += 1 }
+    if !String.eq(s1.value, ".txt") { c_printf(c"FAIL ext 1: %s\n", String.cstr(s1.value.&)) fails += 1 }
 
     e2 := File.Path.extension("foo")
     when e2 { s: Some { c_printf(c"FAIL ext 2: expected None\n") fails += 1 } n: None { } }
@@ -49,7 +49,7 @@ test_extension() {
 
     e4       := File.Path.extension("archive.tar.gz")
     s4: Some := e4 else { c_printf(c"FAIL ext 4: None\n") fails += 1 return fails }
-    if !String.eq(s4.v, ".gz") { c_printf(c"FAIL ext 4: %s\n", String.cstr(s4.v.&)) fails += 1 }
+    if !String.eq(s4.value, ".gz") { c_printf(c"FAIL ext 4: %s\n", String.cstr(s4.value.&)) fails += 1 }
 
     fails
 }

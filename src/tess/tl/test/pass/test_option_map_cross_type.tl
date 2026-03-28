@@ -6,7 +6,7 @@
 
 map_option[T, U](opt: Option[T], f) -> Option[U] {
     when opt {
-        s: Some { Some(f(s.v)) }
+        s: Some { Some(f(s.value)) }
         n: None { None() }
     }
 }
@@ -17,13 +17,13 @@ main() {
     // Same-type map works: Int -> Int
     opt    := Some(3)
     mapped := map_option(opt, (x) { x * 2 })
-    error += if (s: Some := mapped else { 0 }, s.v) == 6 {0} else {1}
+    error += if (s: Some := mapped else { 0 }, s.value) == 6 {0} else {1}
 
     // Cross-type map: Int -> Float (explicit conversion)
     int_opt  := Some(5)
     mapped_f := map_option(int_opt, (x) { Unsafe.int_to_float(x) * 1.5 })
     error += when mapped_f {
-        s: Some { if s.v == 7.5 {0} else {1} }
+        s: Some { if s.value == 7.5 {0} else {1} }
         n: None { 1 }
     }
 

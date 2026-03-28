@@ -497,10 +497,10 @@ slice(s, start, end) {
     n := len(s.*)
     if start > end || end > n { _tl_fatal_(c"String.slice: index out of bounds") }
     slen := end - start
-    if slen == 0 { return Slice[CChar](v: Ptr[CChar] = null, size = 0) }
+    if slen == 0 { return Slice[CChar](data: Ptr[CChar] = null, size = 0) }
     p               := _buf(s)
     src: Ptr[CChar] := Unsafe.pointer_add(p, start)
-    Slice(v = src, size = slen)
+    Slice(data = src, size = slen)
 }
 
 

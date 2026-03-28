@@ -1,7 +1,7 @@
 #module main
 
 // renamed due to new conflict with builtin Some/None
-MyOption[a]: | MySome { v: a }
+MyOption[a]: | MySome { value: a }
              | MyNone
 
 main() {
@@ -10,9 +10,9 @@ main() {
     // Nested when: match outer, then match inner
     result := when outer {
         s: MySome {
-            inner := s.v
+            inner := s.value
             when inner {
-                s2: MySome { s2.v }
+                s2: MySome { s2.value }
                 n:  MyNone { 0 }
             }
         }

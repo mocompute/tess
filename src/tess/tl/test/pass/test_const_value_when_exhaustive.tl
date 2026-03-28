@@ -6,8 +6,8 @@
 main() {
     x: Const[Result[Int, Int]] := Ok(42)
     result                     := when x {
-        o: Ok { o.v }
-        e: Err { e.v }
+        o: Ok { o.value }
+        e: Err { e.error }
     }
     c_printf(c"result = %lld\n", result)
     0

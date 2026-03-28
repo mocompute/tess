@@ -10,7 +10,7 @@ format_all(args: ...Hash) -> CSize {
     result: CSize := 100
     i             := 0
     while i < args.size, i = i + 1 {
-        result = result + args.v.[i]
+        result = result + args.data.[i]
     }
     result
 }
@@ -21,7 +21,7 @@ format_all(args: ...Hash) -> CSize {
     result: CSize := 200
     i             := 0
     while i < args.size, i = i + 1 {
-        result = result + args.v.[i]
+        result = result + args.data.[i]
     }
     result
 }

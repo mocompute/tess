@@ -12,10 +12,10 @@ double[T]  (x: T) -> T { x + x }
 Pair[T]:                            { first: T, second: T         }
 make_pair[T](a: T, b: T) -> Pair[T] { Pair(first = a, second = b) }
 
-Box[T]:                     { v: T       }
-make_box[T](x: T) -> Box[T] { Box(v = x) }
+Box[T]:                     { value: T       }
+make_box[T](x: T) -> Box[T] { Box(value = x) }
 
-MyOpt[T]: | MySome { v: T }
+MyOpt[T]: | MySome { value: T }
           | MyNone
 
 // --- 1. Generic function called with weak int literals ---
@@ -49,9 +49,9 @@ test_nested_generic_calls() {
 test_weak_int_in_generic_struct() {
     error := 0
     b     := make_box(42)
-    error += if b.v == 42 {0} else {1}
+    error += if b.value == 42 {0} else {1}
     b2 := make_box(77u)
-    error += if b2.v == 77u {0} else {1}
+    error += if b2.value == 77u {0} else {1}
     error
 }
 
@@ -84,18 +84,18 @@ test_tagged_union_weak_int() {
     // MySome(42) where MySome is generic => T must default to Int
     opt := MySome(42)
     error += when opt {
-        s: MySome { if s.v == 42 {0} else {1} }
+        s: MySome { if s.value == 42 {0} else {1} }
         n: MyNone { 1 }
     }
     // Unsigned variant
     opt2 := MySome(99u)
     error += when opt2 {
-        s: MySome { if s.v == 99u {0} else {1} }
+        s: MySome { if s.value == 99u {0} else {1} }
         n: MyNone { 1 }
     }
     // Builtin Option with weak int
     opt3 := Some(123)
-    error += if (s: Some := opt3 else { 0 }, s.v) == 123 {0} else {1}
+    error += if (s: Some := opt3 else { 0 }, s.value) == 123 {0} else {1}
     error
 }
 

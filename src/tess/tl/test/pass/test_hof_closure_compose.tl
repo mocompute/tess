@@ -17,9 +17,9 @@ test_filter_then_map() {
     filtered := Array.filter(arr, (x) { x > threshold })
     result   := Array.map(filtered, (x) { x + offset })
     if result.size != 3zu { error += 1 }
-    if result.v.[0] != 103 { error += 1 }
-    if result.v.[1] != 104 { error += 1 }
-    if result.v.[2] != 105 { error += 1 }
+    if result.data.[0] != 103 { error += 1 }
+    if result.data.[1] != 104 { error += 1 }
+    if result.data.[2] != 105 { error += 1 }
     Array.free(arr.&)
     Array.free(filtered.&)
     Array.free(result.&)
@@ -98,8 +98,8 @@ test_sort_then_filter() {
     Array.sort(arr.&, (a, b) { a - b })
     result := Array.filter(arr, (x) { x > threshold })
     if result.size != 2zu { error += 1 }
-    if result.v.[0] != 4 { error += 1 }
-    if result.v.[1] != 5 { error += 1 }
+    if result.data.[0] != 4 { error += 1 }
+    if result.data.[1] != 5 { error += 1 }
     Array.free(arr.&)
     Array.free(result.&)
     error

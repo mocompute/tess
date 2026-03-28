@@ -2,15 +2,15 @@
 // Functions are arity-mangled, so they occupy a separate namespace from types.
 #module M
 
-f: { v: CInt }
+f: { value: CInt }
 
 #module M
 
-f(x: CInt) -> CInt { s := f(v = x); s.v }
+f(x: CInt) -> CInt { s := f(value = x); s.value }
 
 #module main
 
 main() {
-    x := M.f(v = 10)
-    M.f(10) - x.v
+    x := M.f(value = 10)
+    M.f(10) - x.value
 }

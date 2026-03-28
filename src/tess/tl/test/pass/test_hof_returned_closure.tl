@@ -27,9 +27,9 @@ test_adder_map() {
     Array.push(arr.&, 2)
     Array.push(arr.&, 3)
     result := Array.map(arr, add10)
-    if result.v.[0] != 11 { error += 1 }
-    if result.v.[1] != 12 { error += 1 }
-    if result.v.[2] != 13 { error += 1 }
+    if result.data.[0] != 11 { error += 1 }
+    if result.data.[1] != 12 { error += 1 }
+    if result.data.[2] != 13 { error += 1 }
     Array.free(arr.&)
     Array.free(result.&)
     error
@@ -46,8 +46,8 @@ test_predicate_filter() {
     Array.push(arr.&, 5)
     result := Array.filter(arr, gt3)
     if result.size != 2zu { error += 1 }
-    if result.v.[0] != 4 { error += 1 }
-    if result.v.[1] != 5 { error += 1 }
+    if result.data.[0] != 4 { error += 1 }
+    if result.data.[1] != 5 { error += 1 }
     Array.free(arr.&)
     Array.free(result.&)
     error
@@ -61,15 +61,15 @@ test_comparator_sort() {
     Array.push(arr.&, 1)
     Array.push(arr.&, 2)
     Array.sort(arr.&, cmp_asc)
-    if arr.v.[0] != 1 { error += 1 }
-    if arr.v.[1] != 2 { error += 1 }
-    if arr.v.[2] != 3 { error += 1 }
+    if arr.data.[0] != 1 { error += 1 }
+    if arr.data.[1] != 2 { error += 1 }
+    if arr.data.[2] != 3 { error += 1 }
 
     cmp_desc := make_comparator(0 - 1)
     Array.sort(arr.&, cmp_desc)
-    if arr.v.[0] != 3 { error += 1 }
-    if arr.v.[1] != 2 { error += 1 }
-    if arr.v.[2] != 1 { error += 1 }
+    if arr.data.[0] != 3 { error += 1 }
+    if arr.data.[1] != 2 { error += 1 }
+    if arr.data.[2] != 1 { error += 1 }
     Array.free(arr.&)
     error
 }
@@ -87,8 +87,8 @@ test_multiple_factories() {
     mapped   := Array.map(arr, add5)
     filtered := Array.filter(mapped, gt10)
     if filtered.size != 2zu { error += 1 }
-    if filtered.v.[0] != 11 { error += 1 }
-    if filtered.v.[1] != 14 { error += 1 }
+    if filtered.data.[0] != 11 { error += 1 }
+    if filtered.data.[1] != 14 { error += 1 }
     Array.free(arr.&)
     Array.free(mapped.&)
     Array.free(filtered.&)

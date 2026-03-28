@@ -20,9 +20,9 @@ test_struct_map() {
     Array.push(arr.&, 2)
     Array.push(arr.&, 3)
     result := Array.map(arr, tx.transform)
-    if result.v.[0] != 101 { error += 1 }
-    if result.v.[1] != 102 { error += 1 }
-    if result.v.[2] != 103 { error += 1 }
+    if result.data.[0] != 101 { error += 1 }
+    if result.data.[1] != 102 { error += 1 }
+    if result.data.[2] != 103 { error += 1 }
     Array.free(arr.&)
     Array.free(result.&)
     error
@@ -39,8 +39,8 @@ test_struct_filter() {
     Array.push(arr.&, 5)
     result := Array.filter(arr, tx.predicate)
     if result.size != 2zu { error += 1 }
-    if result.v.[0] != 4 { error += 1 }
-    if result.v.[1] != 5 { error += 1 }
+    if result.data.[0] != 4 { error += 1 }
+    if result.data.[1] != 5 { error += 1 }
     Array.free(arr.&)
     Array.free(result.&)
     error
@@ -57,8 +57,8 @@ test_struct_pipeline() {
     mapped   := Array.map(arr, tx.transform)
     filtered := Array.filter(mapped, tx.predicate)
     if filtered.size != 2zu { error += 1 }
-    if filtered.v.[0] != 16 { error += 1 }
-    if filtered.v.[1] != 19 { error += 1 }
+    if filtered.data.[0] != 16 { error += 1 }
+    if filtered.data.[1] != 19 { error += 1 }
     Array.free(arr.&)
     Array.free(mapped.&)
     Array.free(filtered.&)
@@ -74,10 +74,10 @@ test_multiple_structs() {
     Array.push(arr.&, 2)
     r1 := Array.map(arr, tx1.transform)
     r2 := Array.map(arr, tx2.transform)
-    if r1.v.[0] != 11 { error += 1 }
-    if r1.v.[1] != 12 { error += 1 }
-    if r2.v.[0] != 21 { error += 1 }
-    if r2.v.[1] != 22 { error += 1 }
+    if r1.data.[0] != 11 { error += 1 }
+    if r1.data.[1] != 12 { error += 1 }
+    if r2.data.[0] != 21 { error += 1 }
+    if r2.data.[1] != 22 { error += 1 }
     Array.free(arr.&)
     Array.free(r1.&)
     Array.free(r2.&)

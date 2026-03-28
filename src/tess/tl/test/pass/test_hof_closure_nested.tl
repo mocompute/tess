@@ -18,9 +18,9 @@ test_closure_capturing_closure() {
     Array.push(arr.&, 2)
     Array.push(arr.&, 3)
     result := Array.map(arr, (x) { add5(x) })
-    if result.v.[0] != 6 { error += 1 }
-    if result.v.[1] != 7 { error += 1 }
-    if result.v.[2] != 8 { error += 1 }
+    if result.data.[0] != 6 { error += 1 }
+    if result.data.[1] != 7 { error += 1 }
+    if result.data.[2] != 8 { error += 1 }
     Array.free(arr.&)
     Array.free(result.&)
     error
@@ -36,9 +36,9 @@ test_alloc_closure_capturing_closure() {
     Array.push(arr.&, 2)
     Array.push(arr.&, 3)
     result := Array.map(arr, doubled)
-    if result.v.[0] != 21 { error += 1 }
-    if result.v.[1] != 22 { error += 1 }
-    if result.v.[2] != 23 { error += 1 }
+    if result.data.[0] != 21 { error += 1 }
+    if result.data.[1] != 22 { error += 1 }
+    if result.data.[2] != 23 { error += 1 }
     Array.free(arr.&)
     Array.free(result.&)
     error
@@ -57,8 +57,8 @@ test_nested_with_filter() {
     // Keep elements where add3(x) > 6, i.e. x > 3
     result := Array.filter(arr, (x) { add3(x) > 6 })
     if result.size != 2zu { error += 1 }
-    if result.v.[0] != 4 { error += 1 }
-    if result.v.[1] != 5 { error += 1 }
+    if result.data.[0] != 4 { error += 1 }
+    if result.data.[1] != 5 { error += 1 }
     Array.free(arr.&)
     Array.free(result.&)
     error

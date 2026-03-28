@@ -18,7 +18,7 @@ test_spawn_fn_ptr() {
         return 1
     }
 
-    _r := Thread.join(t.v)
+    _r := Thread.join(t.value)
 
     if arg.value != 42 {
         c_printf(c"FAIL fn ptr value not set: %d\n", arg.value)
@@ -39,7 +39,7 @@ test_spawn_join() {
         return 1
     }
 
-    _r := Thread.join(t.v)
+    _r := Thread.join(t.value)
 
     if value != 42 {
         c_printf(c"FAIL value not set by thread: %d\n", value)
@@ -59,7 +59,7 @@ test_spawn_closure() {
         return 1
     }
 
-    _r := Thread.join(t.v)
+    _r := Thread.join(t.value)
 
     if done != 1 {
         c_printf(c"FAIL closure did not run\n")
@@ -91,7 +91,7 @@ test_detach() {
         return 1
     }
 
-    _d := Thread.detach(t.v)
+    _d := Thread.detach(t.value)
 
     // Give the detached thread time to run
     Thread.sleep(0, 100000000)          // 100ms

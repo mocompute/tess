@@ -61,7 +61,7 @@ main() {
     when test_cross_ok() {
         ok:  Ok { fails += 0 }
         err: Err {
-            c_printf(c"FAIL test_cross_ok: got Err(%d)\n", err.v)
+            c_printf(c"FAIL test_cross_ok: got Err(%d)\n", err.error)
             fails += 1
         }
     }
@@ -73,8 +73,8 @@ main() {
             fails += 1
         }
         err: Err {
-            if err.v != 99 {
-                c_printf(c"FAIL test_cross_err: expected 99, got %d\n", err.v)
+            if err.error != 99 {
+                c_printf(c"FAIL test_cross_err: expected 99, got %d\n", err.error)
                 fails += 1
             }
         }
@@ -83,8 +83,8 @@ main() {
     // Test 3: cross-type with different success types
     when test_cross_ok_different_success() {
         ok: Ok {
-            if ok.v != 7 {
-                c_printf(c"FAIL test_cross_ok_different_success: expected 7, got %d\n", ok.v)
+            if ok.value != 7 {
+                c_printf(c"FAIL test_cross_ok_different_success: expected 7, got %d\n", ok.value)
                 fails += 1
             }
         }
@@ -98,7 +98,7 @@ main() {
     when test_multi_try() {
         ok:  Ok { fails += 0 }
         err: Err {
-            c_printf(c"FAIL test_multi_try: got Err(%d)\n", err.v)
+            c_printf(c"FAIL test_multi_try: got Err(%d)\n", err.error)
             fails += 1
         }
     }
@@ -110,8 +110,8 @@ main() {
             fails += 1
         }
         err: Err {
-            if err.v != -5 {
-                c_printf(c"FAIL outer(-5): expected -5, got %d\n", err.v)
+            if err.error != -5 {
+                c_printf(c"FAIL outer(-5): expected -5, got %d\n", err.error)
                 fails += 1
             }
         }
@@ -120,7 +120,7 @@ main() {
     when outer(10) {
         ok:  Ok { fails += 0 }
         err: Err {
-            c_printf(c"FAIL outer(10): got Err(%d)\n", err.v)
+            c_printf(c"FAIL outer(10): got Err(%d)\n", err.error)
             fails += 1
         }
     }

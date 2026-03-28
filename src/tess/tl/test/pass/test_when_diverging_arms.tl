@@ -14,7 +14,7 @@ test_when_return_void() {
 test_when_return_value() {
     x: Option[CInt] := Some(42)
     result          := when x {
-        s: Some { s.v }
+        s: Some { s.value }
         n: None { return 1 }
     }
     if result != 42 { return 1 }
@@ -43,7 +43,7 @@ test_if_else_diverge_reverse() {
 test_when_multi_diverge() {
     x: Result[CInt, CInt] := Ok(10)
     result                := when x {
-        ok:  Ok { ok.v }
+        ok:  Ok { ok.value }
         err: Err { return 1 }
     }
     if result != 10 { return 1 }
@@ -56,7 +56,7 @@ test_when_break() {
     i               := 0
     while i < 10 {
         val := when x {
-            s: Some { s.v }
+            s: Some { s.value }
             n: None { break }
         }
         i += val

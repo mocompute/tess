@@ -14,7 +14,7 @@ main() {
     s2 := f"{s:*^20}"
     if s2 != "*******hello********" { error += 1 }
 
-    b := true
+    b  := true
     s3 := f"{b:>10}"
     if s3 != "      true" { error += 1 }
 

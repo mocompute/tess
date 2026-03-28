@@ -211,7 +211,7 @@ arguments can be omitted when they match the enclosing function's type parameter
 ```tl
 my_unwrap[a](opt: T[a], default: a) -> a {
     case opt: T {          // T[a] inferred from opt's type
-        s: MySome { s.v }
+        s: MySome { s.value }
         n: MyNone { default }
     }
 }

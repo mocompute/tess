@@ -252,15 +252,15 @@ static size_t tl_float_format(
 #endc
 
 c_tl_signed_int_format(buf: Ptr[CChar], bufsz: CSize, p: Ptr[any], sz: CSize,
-                        sign: CChar, alt: Bool, zero_pad: Bool, width: CInt,
-                        type_char: CChar) -> CSize
+                       sign:      CChar, alt: Bool, zero_pad: Bool, width: CInt,
+                       type_char: CChar) -> CSize
 
 c_tl_unsigned_int_format(buf: Ptr[CChar], bufsz: CSize, p: Ptr[any], sz: CSize,
-                          sign: CChar, alt: Bool, zero_pad: Bool, width: CInt,
-                          type_char: CChar) -> CSize
+                         sign:      CChar, alt: Bool, zero_pad: Bool, width: CInt,
+                         type_char: CChar) -> CSize
 
 c_tl_float_format(buf: Ptr[CChar], bufsz: CSize, p: Ptr[any], sz: CSize,
-                   sign: CChar, precision: CInt, type_char: CChar) -> CSize
+                  sign: CChar, precision: CInt, type_char: CChar) -> CSize
 
 // -- Implementations --
 
@@ -269,8 +269,8 @@ c_tl_float_format(buf: Ptr[CChar], bufsz: CSize, p: Ptr[any], sz: CSize,
 to_string_format[T](n: T, spec: FormatSpec) -> String {
     buf: CArray[CChar, 128] := void
     ptr: Ptr[CChar]         := buf
-    written := c_tl_signed_int_format(ptr, 128, n.&, sizeof(n),
-                   spec.sign, spec.alt, spec.zero_pad, spec.width, spec.type_char)
+    written                 := c_tl_signed_int_format(ptr, 128, n.&, sizeof(n),
+                                      spec.sign, spec.alt, spec.zero_pad, spec.width, spec.type_char)
     String.from_bytes(ptr, written)
 }
 
@@ -279,8 +279,8 @@ to_string_format[T](n: T, spec: FormatSpec) -> String {
 to_string_format[T](n: T, spec: FormatSpec) -> String {
     buf: CArray[CChar, 128] := void
     ptr: Ptr[CChar]         := buf
-    written := c_tl_unsigned_int_format(ptr, 128, n.&, sizeof(n),
-                   spec.sign, spec.alt, spec.zero_pad, spec.width, spec.type_char)
+    written                 := c_tl_unsigned_int_format(ptr, 128, n.&, sizeof(n),
+                                        spec.sign, spec.alt, spec.zero_pad, spec.width, spec.type_char)
     String.from_bytes(ptr, written)
 }
 
@@ -289,7 +289,7 @@ to_string_format[T](n: T, spec: FormatSpec) -> String {
 to_string_format[T](f: T, spec: FormatSpec) -> String {
     buf: CArray[CChar, 128] := void
     ptr: Ptr[CChar]         := buf
-    written := c_tl_float_format(ptr, 128, f.&, sizeof(f),
-                   spec.sign, spec.precision, spec.type_char)
+    written                 := c_tl_float_format(ptr, 128, f.&, sizeof(f),
+                                 spec.sign, spec.precision, spec.type_char)
     String.from_bytes(ptr, written)
 }

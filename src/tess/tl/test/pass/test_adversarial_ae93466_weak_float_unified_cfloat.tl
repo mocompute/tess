@@ -16,8 +16,8 @@ test_result_cfloat() -> CInt {
     when r {
         ok: Ok {
             // sizeof should match CFloat, not CDouble
-            if sizeof(ok.v) != sizeof[CFloat]() { return 1 }
-            if ok.v != 1.5 { return 1 }
+            if sizeof(ok.value) != sizeof[CFloat]() { return 1 }
+            if ok.value != 1.5 { return 1 }
             0
         }
         err: Err { 1 }

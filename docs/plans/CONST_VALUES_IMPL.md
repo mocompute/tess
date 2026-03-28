@@ -743,7 +743,7 @@ main() {
     x: Const[Option[Int]] := Some(42)
     result := when x {
         s: Some {
-            val := s.v
+            val := s.value
             val = val + 1
             val
         }

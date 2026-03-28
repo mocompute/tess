@@ -1,6 +1,6 @@
 #module MyOption
 
-T[a]: | MySome { v: a }
+T[a]: | MySome { value: a }
       | MyNone
 
 #module main
@@ -8,14 +8,14 @@ T[a]: | MySome { v: a }
 _test_match_path() {
     val       := MyOption.MySome(42)
     s: MySome := val else { return 1 }
-    if s.v != 42 { return 1 }
+    if s.value != 42 { return 1 }
     0
 }
 
 _no_match_helper() {
     val: MyOption.T[CInt] := MyOption.MyNone
     s:   MySome           := val else { 99 }
-    s.v + 1
+    s.value + 1
 }
 
 _test_no_match_fallback() {
@@ -26,7 +26,7 @@ _test_no_match_fallback() {
 _match_helper() {
     val       := MyOption.MySome(10)
     s: MySome := val else { 99 }
-    s.v + 1
+    s.value + 1
 }
 
 _test_match_continuation() {

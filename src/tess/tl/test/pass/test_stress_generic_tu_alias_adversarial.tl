@@ -5,7 +5,7 @@
 // --- Module A: define a generic tagged union ---
 #module A
 
-Res[T]: | ROk  { v: T }
+Res[T]: | ROk  { value: T }
         | RErr { code: Int }
 
 // --- Module B: multiple aliases to the same specialization ---
@@ -22,8 +22,8 @@ IR = B.IntRes1
 // --- Module D: two-param generic tagged union ---
 #module D
 
-Either[L, R]: | Left  { v: L }
-              | Right { v: R }
+Either[L, R]: | Left  { value: L }
+              | Right { value: R }
 
 IntStrEither = Either[Int, Int]
 
@@ -44,7 +44,7 @@ IntWrap = Wrapper[Int]
 // Generic function to extract from A.Res
 unwrap_res[T](r: A.Res[T], default: T) -> T {
     when r {
-        o: ROk { o.v }
+        o: ROk { o.value }
         e: RErr { default }
     }
 }
@@ -79,14 +79,14 @@ main() {
     e2: D.Either[Int, Int] := D.Right(v = 200)
 
     r1 := when e1 {
-        l: Left { l.v }
-        r: Right { r.v }
+        l: Left { l.value }
+        r: Right { r.value }
     }
     error += if r1 == 100 { 0 } else { 1 }
 
     r2 := when e2 {
-        l: Left { l.v }
-        r: Right { r.v }
+        l: Left { l.value }
+        r: Right { r.value }
     }
     error += if r2 == 200 { 0 } else { 1 }
 
@@ -99,9 +99,9 @@ main() {
     cross2: B.IntRes2 := A.RErr(code = 6)
     cross3: C.IR      := A.RErr(code = 7)
 
-    m1 := when cross1 { o: ROk { o.v } e: RErr { e.code } }
-    m2 := when cross2 { o: ROk { o.v } e: RErr { e.code } }
-    m3 := when cross3 { o: ROk { o.v } e: RErr { e.code } }
+    m1 := when cross1 { o: ROk { o.value } e: RErr { e.code } }
+    m2 := when cross2 { o: ROk { o.value } e: RErr { e.code } }
+    m3 := when cross3 { o: ROk { o.value } e: RErr { e.code } }
 
     error += if m1 == 5 { 0 } else { 1 }
     error += if m2 == 6 { 0 } else { 1 }

@@ -19,8 +19,8 @@ test_signal_wait() {
     value: CInt := 0
     ready_p     := ready.&
     value_p     := value.&
-    mtx_p       := mtx.v.&
-    cv_p        := cv.v.&
+    mtx_p       := mtx.value.&
+    cv_p        := cv.value.&
 
     // Producer thread
     t: Ok := Thread.spawn([[alloc, capture(ready_p, value_p, mtx_p, cv_p)]] () {
@@ -47,7 +47,7 @@ test_signal_wait() {
     }
     _u := Mutex.unlock(mtx_p)
 
-    _j := Thread.join(t.v)
+    _j := Thread.join(t.value)
     Cond.destroy(cv_p)
     Mutex.destroy(mtx_p)
 
@@ -70,8 +70,8 @@ test_broadcast() {
     count: CInt := 0
     go_p        := go.&
     count_p     := count.&
-    mtx_p       := mtx.v.&
-    cv_p        := cv.v.&
+    mtx_p       := mtx.value.&
+    cv_p        := cv.value.&
 
     // Two waiting threads
     t1: Ok := Thread.spawn([[alloc, capture(go_p, count_p, mtx_p, cv_p)]] () {
@@ -111,8 +111,8 @@ test_broadcast() {
     _b := Cond.broadcast(cv_p)
     _u := Mutex.unlock(mtx_p)
 
-    _j1 := Thread.join(t1.v)
-    _j2 := Thread.join(t2.v)
+    _j1 := Thread.join(t1.value)
+    _j2 := Thread.join(t2.value)
 
     if count != 2 {
         c_printf(c"FAIL broadcast count %d != 2\n", count)

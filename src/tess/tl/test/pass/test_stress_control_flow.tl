@@ -1,6 +1,6 @@
 #module MyOption
 
-T[a]: | MySome { v: a }
+T[a]: | MySome { value: a }
       | MyNone
 
 #module main
@@ -114,7 +114,7 @@ test_bail_in_loop_break() {
     while i < 5, i = i + 1 {
         val       := if i == 3 { MyOption.MySome(42) } else { MyOption.MyNone() }
         s: MySome := val else { continue }
-        result = s.v
+        result = s.value
         break
     }
     if result == 42 {0} else {1}
@@ -124,7 +124,7 @@ test_bail_in_loop_break() {
 test_bail_with_return() -> Int {
     val       := MyOption.MySome(77)
     s: MySome := val else { return 1 }
-    if s.v == 77 {0} else {1}
+    if s.value == 77 {0} else {1}
 }
 
 main() {

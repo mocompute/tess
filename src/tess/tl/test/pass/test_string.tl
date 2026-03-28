@@ -380,9 +380,9 @@ test_cat_4() {
 test_byte_at() {
     error := 0
     s     := String.from_cstr(c"abc")
-    if (b: Some := s.byte_at(0zu) else { _NUL }, b.v) != 97u { error += 1 } // 'a'
-    if (b: Some := s.byte_at(1zu) else { _NUL }, b.v) != 98u { error += 1 } // 'b'
-    if (b: Some := s.byte_at(2zu) else { _NUL }, b.v) != 99u { error += 1 } // 'c'
+    if (b: Some := s.byte_at(0zu) else { _NUL }, b.value) != 97u { error += 1 } // 'a'
+    if (b: Some := s.byte_at(1zu) else { _NUL }, b.value) != 98u { error += 1 } // 'b'
+    if (b: Some := s.byte_at(2zu) else { _NUL }, b.value) != 99u { error += 1 } // 'c'
     s.free()
     error
 }
@@ -390,9 +390,9 @@ test_byte_at() {
 test_char_at() {
     error := 0
     s     := String.from_cstr(c"abc")
-    if (c: Some := s.char_at(0zu) else { _NUL_CHAR }, c.v) != 'a' { error += 1 }
-    if (c: Some := s.char_at(1zu) else { _NUL_CHAR }, c.v) != 'b' { error += 1 }
-    if (c: Some := s.char_at(2zu) else { _NUL_CHAR }, c.v) != 'c' { error += 1 }
+    if (c: Some := s.char_at(0zu) else { _NUL_CHAR }, c.value) != 'a' { error += 1 }
+    if (c: Some := s.char_at(1zu) else { _NUL_CHAR }, c.value) != 'b' { error += 1 }
+    if (c: Some := s.char_at(2zu) else { _NUL_CHAR }, c.value) != 'c' { error += 1 }
     s.free()
     error
 }
@@ -433,15 +433,15 @@ test_slice() {
     // slice returns Slice[CChar], a non-owning view
     sub := s.slice(6zu, 11zu)
     if sub.size != 5zu { error += 1 }
-    if sub.v.[0] != 'w' { error += 1 }
-    if sub.v.[4] != 'd' { error += 1 }
+    if sub.data.[0] != 'w' { error += 1 }
+    if sub.data.[4] != 'd' { error += 1 }
     // Empty slice
     e := s.slice(3zu, 3zu)
     if e.size != 0zu { error += 1 }
     // Full string slice
     full := s.slice(0zu, 11zu)
     if full.size != 11zu { error += 1 }
-    if full.v.[0] != 'h' { error += 1 }
+    if full.data.[0] != 'h' { error += 1 }
     s.free()
     // No free needed for Slice (non-owning)
     error
@@ -452,15 +452,15 @@ test_slice() {
 test_index_of_char() {
     error := 0
     s     := String.from_cstr(c"hello")
-    if (r: Some := s.index_of_char('l') else { _NONE }, r.v) != 2zu { error += 1 }
-    if (r: Some := s.index_of_char('o') else { _NONE }, r.v) != 4zu { error += 1 }
+    if (r: Some := s.index_of_char('l') else { _NONE }, r.value) != 2zu { error += 1 }
+    if (r: Some := s.index_of_char('o') else { _NONE }, r.value) != 4zu { error += 1 }
     error += when s.index_of_char('z') { s: Some { 1 } else { 0 } }
 
     // First byte
-    if (r: Some := s.index_of_char('h') else { _NONE }, r.v) != 0zu { error += 1 }
+    if (r: Some := s.index_of_char('h') else { _NONE }, r.value) != 0zu { error += 1 }
 
     // Last byte
-    if (r: Some := s.index_of_char('o') else { _NONE }, r.v) != 4zu { error += 1 }
+    if (r: Some := s.index_of_char('o') else { _NONE }, r.value) != 4zu { error += 1 }
 
     s.free()
 
@@ -592,14 +592,14 @@ test_replace_byte() {
 
 test_from_byte() {
     error := 0
-    s     := String.from_byte(65u)                                          // 'A'
+    s     := String.from_byte(65u)                                              // 'A'
     if s.len() != 1zu { error += 1 }
-    if (b: Some := s.byte_at(0zu) else { _NUL }, b.v) != 65u { error += 1 } // 'A'
+    if (b: Some := s.byte_at(0zu) else { _NUL }, b.value) != 65u { error += 1 } // 'A'
     s.free()
 
-    s2 := String.from_byte(122u)                                              // 'z'
+    s2 := String.from_byte(122u)                                                  // 'z'
     if s2.len() != 1zu { error += 1 }
-    if (b: Some := s2.byte_at(0zu) else { _NUL }, b.v) != 122u { error += 1 } // 'z'
+    if (b: Some := s2.byte_at(0zu) else { _NUL }, b.value) != 122u { error += 1 } // 'z'
     s2.free()
     error
 }
@@ -627,11 +627,11 @@ test_index_of() {
     xyz   := String.from_cstr(c"xyz")
     e     := String.empty()
 
-    if (r: Some := s.index_of(h) else { _NONE }, r.v) != 0zu { error += 1 }  // beginning
-    if (r: Some := s.index_of(w) else { _NONE }, r.v) != 6zu { error += 1 }  // end
-    if (r: Some := s.index_of(lo) else { _NONE }, r.v) != 3zu { error += 1 } // middle
-    error += when s.index_of(xyz) { s: Some { 1 } else { 0 } }               // not found
-    if (r: Some := s.index_of(e) else { _NONE }, r.v) != 0zu { error += 1 }  // empty needle -> 0
+    if (r: Some := s.index_of(h) else { _NONE }, r.value) != 0zu { error += 1 }  // beginning
+    if (r: Some := s.index_of(w) else { _NONE }, r.value) != 6zu { error += 1 }  // end
+    if (r: Some := s.index_of(lo) else { _NONE }, r.value) != 3zu { error += 1 } // middle
+    error += when s.index_of(xyz) { s: Some { 1 } else { 0 } }                   // not found
+    if (r: Some := s.index_of(e) else { _NONE }, r.value) != 0zu { error += 1 }  // empty needle -> 0
 
     // Needle longer than haystack
     big := String.from_cstr(c"this is way too long")
@@ -651,10 +651,10 @@ test_index_of_char_from() {
     s     := String.from_cstr(c"hello")
 
     // Skip first 'l' at index 2, find second 'l' at index 3
-    if (r: Some := s.index_of_char_from('l', 3zu) else { _NONE }, r.v) != 3zu { error += 1 }
+    if (r: Some := s.index_of_char_from('l', 3zu) else { _NONE }, r.value) != 3zu { error += 1 }
 
     // Start at match position
-    if (r: Some := s.index_of_char_from('l', 2zu) else { _NONE }, r.v) != 2zu { error += 1 }
+    if (r: Some := s.index_of_char_from('l', 2zu) else { _NONE }, r.value) != 2zu { error += 1 }
 
     // Start past all occurrences
     error += when s.index_of_char_from('l', 4zu) { s: Some { 1 } else { 0 } }
@@ -672,13 +672,13 @@ test_last_index_of_char() {
     s     := String.from_cstr(c"hello")
 
     // Multiple 'l' - finds last at index 3
-    if (r: Some := s.last_index_of_char('l') else { _NONE }, r.v) != 3zu { error += 1 }
+    if (r: Some := s.last_index_of_char('l') else { _NONE }, r.value) != 3zu { error += 1 }
 
     // Single 'h' at index 0
-    if (r: Some := s.last_index_of_char('h') else { _NONE }, r.v) != 0zu { error += 1 }
+    if (r: Some := s.last_index_of_char('h') else { _NONE }, r.value) != 0zu { error += 1 }
 
     // Single 'o' at end
-    if (r: Some := s.last_index_of_char('o') else { _NONE }, r.v) != 4zu { error += 1 }
+    if (r: Some := s.last_index_of_char('o') else { _NONE }, r.value) != 4zu { error += 1 }
 
     // Not found
     error += when s.last_index_of_char('z') { s: Some { 1 } else { 0 } }
@@ -698,10 +698,10 @@ test_last_index_of() {
     e     := String.empty()
 
     // Repeated pattern - finds last
-    if (r: Some := s.last_index_of(abc) else { _NONE }, r.v) != 6zu { error += 1 }
+    if (r: Some := s.last_index_of(abc) else { _NONE }, r.value) != 6zu { error += 1 }
 
     // Empty needle -> len(s)
-    if (r: Some := s.last_index_of(e) else { _NONE }, r.v) != 9zu { error += 1 }
+    if (r: Some := s.last_index_of(e) else { _NONE }, r.value) != 9zu { error += 1 }
 
     // Not found
     xyz := String.from_cstr(c"xyz")
@@ -717,7 +717,7 @@ test_last_index_of() {
     // Single occurrence
     hw := String.from_cstr(c"hello world")
     w  := String.from_cstr(c"world")
-    if (r: Some := hw.last_index_of(w) else { _NONE }, r.v) != 6zu { error += 1 }
+    if (r: Some := hw.last_index_of(w) else { _NONE }, r.value) != 6zu { error += 1 }
     hw.free()
     w.free()
 

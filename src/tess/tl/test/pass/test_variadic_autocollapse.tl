@@ -9,7 +9,7 @@ concat_all(args: ...ToString) -> String {
     result   := String.empty()
     i: CSize := 0
     while i < args.size, i += 1 {
-        result.push(args.v.[i])
+        result.push(args.data.[i])
     }
     result
 }
@@ -18,7 +18,7 @@ sum_hashes(args: ...Hash) -> CSize {
     h: CSize := 0
     i: CSize := 0
     while i < args.size, i += 1 {
-        h = h + args.v.[i]
+        h = h + args.data.[i]
     }
     h
 }

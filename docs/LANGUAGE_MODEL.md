@@ -219,7 +219,7 @@ fails, the `else` block executes. The else block may either **diverge** (`return
 // Diverging: exit the function if no match
 s: Some := val else { return 0 }
 // s is available here — this is the body of the binding expression
-s.v + 1
+s.value + 1
 
 // Non-diverging: use a fallback value if no match
 s: Some := val else { 0 }
@@ -240,14 +240,14 @@ about one variant:
 ```tl
 // Without variant binding: the unwrapped value is trapped inside the arm
 when val {
-    s: Some { use(s.v) }
+    s: Some { use(s.value) }
     _: None { return 0 }
 }
 // can't use s here — it was scoped to the when arm
 
 // With variant binding: the unwrapped value is available in the surrounding scope
 s: Some := val else { return 0 }
-use(s.v)   // s is in scope for the rest of the block
+use(s.value)   // s is in scope for the rest of the block
 ```
 
 ## Closures and Capture
@@ -465,7 +465,7 @@ variant and want its value for the rest of the function, `when` traps it inside 
 
 ```tl
 when val {
-    s: Some { use(s.v) }
+    s: Some { use(s.value) }
     _: None { return 0 }
 }
 // s is gone — it was scoped to the arm
@@ -476,7 +476,7 @@ Variant binding solves this by creating the binding in the **enclosing** scope i
 ```tl
 s: Some := val else { return 0 }
 // s is bound here — the "in" part is the rest of the enclosing block
-use(s.v)
+use(s.value)
 ```
 
 The connection is direct: `s: Some := val else { return 0 }` is a binding expression

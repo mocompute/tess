@@ -33,14 +33,14 @@ main() {
     // get_copy returns Option[V]
     opt := m.get_copy(3)
     val := when opt {
-        s: Some { s.v }
+        s: Some { s.value }
         n: None { -1 }
     }
     error += if val == 300 {0} else {1}
 
     none_opt := m.get_copy(99)
     none_val := when none_opt {
-        s: Some { s.v }
+        s: Some { s.value }
         n: None { -1 }
     }
     error += if none_val == -1 {0} else {1}

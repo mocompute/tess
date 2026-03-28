@@ -8,7 +8,7 @@
 
 unwrap_or_die(opt: Option[Int]) -> Int {
     when opt {
-        s: Some { s.v }
+        s: Some { s.value }
         n: None {
             c_exit(1)
             _tl_fatal_(c"unreachable")

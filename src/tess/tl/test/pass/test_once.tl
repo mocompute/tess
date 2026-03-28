@@ -49,9 +49,9 @@ test_once_multi_thread() {
         return 1
     }
 
-    _j1 := Thread.join(t1.v)
-    _j2 := Thread.join(t2.v)
-    _j3 := Thread.join(t3.v)
+    _j1 := Thread.join(t1.value)
+    _j2 := Thread.join(t2.value)
+    _j3 := Thread.join(t3.value)
 
     if counter != 1 {
         c_printf(c"FAIL multi-thread counter %d != 1\n", counter)

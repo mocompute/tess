@@ -24,7 +24,7 @@ test_err_match() {
     when r {
         ok:  Ok { 1 }
         err: Err {
-            if err.v == 42 { 0 }
+            if err.error == 42 { 0 }
             else { 1 }
         }
     }
@@ -71,8 +71,8 @@ main() {
             fails += 1
         }
         err: Err {
-            if err.v != 99 {
-                c_printf(c"FAIL test_try_err: wrong error value %d\n", err.v)
+            if err.error != 99 {
+                c_printf(c"FAIL test_try_err: wrong error value %d\n", err.error)
                 fails += 1
             }
         }

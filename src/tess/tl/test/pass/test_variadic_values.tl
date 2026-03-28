@@ -5,7 +5,7 @@ sum_hashes(args: ...Hash) -> CSize {
     total: CSize := 0
     i:     CSize := 0
     while i < args.size, i = i + 1 {
-        total = total + args.v.[i]
+        total = total + args.data.[i]
     }
     total
 }

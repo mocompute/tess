@@ -5,7 +5,7 @@
 // Generic function using when on Result
 get_or_default[T, U](res: Result[T, U], default: T) -> T {
     when res {
-        o: Ok { o.v }
+        o: Ok { o.value }
         e: Err { default }
     }
 }
@@ -14,7 +14,7 @@ get_or_default[T, U](res: Result[T, U], default: T) -> T {
 get_err_or_default[T, U](res: Result[T, U], default: U) -> U {
     when res {
         o: Ok { default }
-        e: Err { e.v }
+        e: Err { e.error }
     }
 }
 
@@ -24,7 +24,7 @@ main() {
     // Test Ok variant (both type params must be constrained)
     good: Result[Int, Int] := Ok(42)
     result                 := when good {
-        o: Ok { o.v }
+        o: Ok { o.value }
         e: Err { 0 }
     }
     error += if result == 42 {0} else {1}
@@ -33,14 +33,14 @@ main() {
     bad: Result[Int, Int] := Err(99)
     result                := when bad {
         o: Ok { 0 }
-        e: Err { e.v }
+        e: Err { e.error }
     }
     error += if result == 99 {0} else {1}
 
     // Test with Float types
     fgood: Result[Float, Int] := Ok(3.14)
     result_f                  := when fgood {
-        o: Ok { o.v }
+        o: Ok { o.value }
         e: Err { 0.0 }
     }
     error += if result_f == 3.14 {0} else {1}
@@ -59,7 +59,7 @@ main() {
     // Test with else arm
     ok_val2: Result[Int, Int] := Ok(100)
     result                    := when ok_val2 {
-        o: Ok { o.v }
+        o: Ok { o.value }
         else { 0 }
     }
     error += if result == 100 {0} else {1}

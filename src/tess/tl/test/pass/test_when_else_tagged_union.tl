@@ -23,7 +23,7 @@ Spec: { name: String, kind: Kind }
 find(specs: Array[Spec], name: String) -> Option[CSize] {
     i: CSize := 0zu
     while i < specs.size, i += 1zu {
-        if String.eq(specs.v.[i].name, name) { return Some(i) }
+        if String.eq(specs.data.[i].name, name) { return Some(i) }
     }
     None
 }
@@ -39,10 +39,10 @@ main() -> CInt {
 
     when String.index_of_char(S(c"output=bar"), '=') {
         eq: Some {
-            key := String.copy(S(c"output=bar"), 0zu, eq.v)
+            key := String.copy(S(c"output=bar"), 0zu, eq.value)
             when find(specs, key) {
                 si: Some {
-                    spec := specs.v.[si.v]
+                    spec := specs.data.[si.value]
                     when spec.kind {
                         fv: FlagValue {
                             c_fprintf(c_stderr, c"matched FlagValue\n")

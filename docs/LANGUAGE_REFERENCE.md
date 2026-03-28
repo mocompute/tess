@@ -2038,7 +2038,7 @@ When the tagged union type cannot be inferred from the scrutinee, use `case` wit
 
 ```tl
 result := case opt: Option[Int] {
-  s: Some { s.v }
+  s: Some { s.value }
   n: None { 0 }
 }
 ```
@@ -2049,7 +2049,7 @@ This is needed when the scrutinee's type is ambiguous, such as inside a type pre
 unwrap[T, U](opt_or_res, default: T) -> T {
     if opt_or_res :: Option[T] {
         case opt_or_res: Option[T] {
-            s: Some { s.v }
+            s: Some { s.value }
             n: None { default }
         }
     } else if opt_or_res :: Result[T, U] {
@@ -2086,7 +2086,7 @@ When you need a single variant's value for the rest of a scope, use a variant bi
 ```tl
 s: MySome := val else { return 0 }
 // s is available for the rest of the scope
-s.v + 1
+s.value + 1
 ```
 
 The `else` block may either diverge (`return`, `break`, `continue`) or produce a value. When it produces a value, the overall expression evaluates to that value if the match fails — the continuation after the variant binding is not reached:
@@ -2094,7 +2094,7 @@ The `else` block may either diverge (`return`, `break`, `continue`) or produce a
 ```tl
 // Diverging: exit the function if no match
 s: MySome := val else { return -1 }
-s.v + 1
+s.value + 1
 
 // Non-diverging: use a fallback value if no match
 s: MySome := val else { 0 }
@@ -2107,21 +2107,21 @@ This avoids trapping the unwrapped value inside a `when` arm when subsequent cod
 ```tl
 // Without variant binding — value is trapped inside the arm
 when val {
-    s: MySome { use(s.v) }
+    s: MySome { use(s.value) }
     n: MyNone { return 0 }
 }
 // can't use s here
 
 // With variant binding — value available in the rest of the scope
 s: MySome := val else { return 0 }
-use(s.v)
+use(s.value)
 ```
 
 For the conditional case (doing different things per variant), use `when` with `else`:
 
 ```tl
 when val {
-    s: MySome { s.v + 1 }
+    s: MySome { s.value + 1 }
     else { fallback }
 }
 ```

@@ -6,11 +6,11 @@ MyList[T]: | Cons { head: T, tail: Ptr[MyList[T]] }
            | LNil
 
 // --- Result type (single type param, error is always Int) ---
-MyRes[T]: | MyOk  { v: T }
+MyRes[T]: | MyOk  { value: T }
           | MyErr { code: Int }
 
 // --- Option-like ---
-Opt[T]: | Val { v: T }
+Opt[T]: | Val { value: T }
         | Nope
 
 // ============================================================
@@ -53,7 +53,7 @@ list_sum_to_res(lst: Ptr[MyList[Int]]) -> MyRes[Int] {
 // ============================================================
 apply_or_default[T](o: Opt[T], f, def: T) -> T {
     when o {
-        s: Val { f(s.v) }
+        s: Val { f(s.value) }
         n: Nope { def }
     }
 }
@@ -67,14 +67,14 @@ not_bool  (b: Bool)        -> Bool { !b    }
 // ============================================================
 opt_unwrap[T](o: Opt[T], def: T) -> T {
     when o {
-        s: Val { s.v }
+        s: Val { s.value }
         n: Nope { def }
     }
 }
 
 res_unwrap[T](r: MyRes[T], def: T) -> T {
     when r {
-        o: MyOk { o.v }
+        o: MyOk { o.value }
         e: MyErr { def }
     }
 }
@@ -84,7 +84,7 @@ res_unwrap[T](r: MyRes[T], def: T) -> T {
 // ============================================================
 opt_to_res[T](o: Opt[T], err_code: Int) -> MyRes[T] {
     when o {
-        s: Val { MyOk(s.v) }
+        s: Val { MyOk(s.value) }
         n: Nope { MyErr(err_code) }
     }
 }
@@ -95,8 +95,8 @@ opt_to_res[T](o: Opt[T], err_code: Int) -> MyRes[T] {
 flatten_opt_res[T](o: Opt[MyRes[T]], def: T) -> T {
     when o {
         s: Val {
-            when s.v {
-                ok: MyOk { ok.v }
+            when s.value {
+                ok: MyOk { ok.value }
                 er: MyErr { def }
             }
         }

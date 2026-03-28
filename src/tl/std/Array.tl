@@ -9,7 +9,7 @@ Allocator = Alloc.Allocator
 
 // Primary type.
 Array[T]: {
-    v:        Ptr[T],
+    data:     Ptr[T],
     size:     CSize,
     capacity: CSize,
 }
@@ -122,7 +122,7 @@ _merge[T]             (v: Ptr[T], tmp: Ptr[T], lo: CSize, mid: CSize, hi: CSize,
 // -- Implementation --
 
 empty[T]() {
-    Array (v: Ptr[T] = null, capacity = 0, size = 0)
+    Array (data: Ptr[T] = null, capacity = 0, size = 0)
 }
 
 
@@ -138,8 +138,8 @@ init[T](val: T, count) {
 }
 
 free(self, alloc) {
-    alloc->free(alloc, self->v)
-    self->v = null
+    alloc->free(alloc, self->data)
+    self->data = null
 }
 
 free(self) {
@@ -150,7 +150,7 @@ free(self) {
 with_capacity[T](alloc, count) {
     width     := _type_width_aligned[T]()
     p: Ptr[T] := alloc->malloc(alloc, count * width)
-    Array ( v = p, capacity = count, size = 0)
+    Array ( data = p, capacity = count, size = 0)
 }
 
 with_capacity[T](count) {
@@ -169,9 +169,9 @@ with_capacity_undefined[T](count) {
 
 reserve[T](self, alloc, count) {
     if self->capacity < count {
-        p := alloc->realloc(alloc, self->v, count * _type_width_aligned[T]())
+        p := alloc->realloc(alloc, self->data, count * _type_width_aligned[T]())
         if p == null { _tl_fatal_(c"oom") }
-        self->v        = p
+        self->data     = p
         self->capacity = count
     }
 }
@@ -182,8 +182,8 @@ reserve[T](self, count) {
 
 push(self, alloc, x) {
     if _is_full(self) { _grow(self, alloc, self->capacity + 1) }
-    self->v.[self->size] = x
-    self->size           = self->size + 1
+    self->data.[self->size] = x
+    self->size              = self->size + 1
 }
 
 push(self, x) {
@@ -195,17 +195,17 @@ push(self, x) {
 
 get[T](arr, index: CSize) -> T {
     if index >= arr.size { _tl_fatal_(c"Array.get: index out of bounds") }
-    arr.v.[index]
+    arr.data.[index]
 }
 
 front[T](arr) -> T {
     if arr.size == 0 { _tl_fatal_(c"Array.front: empty array") }
-    arr.v.[0]
+    arr.data.[0]
 }
 
 back[T](arr) -> T {
     if arr.size == 0 { _tl_fatal_(c"Array.back: empty array") }
-    arr.v.[arr.size - 1]
+    arr.data.[arr.size - 1]
 }
 
 
@@ -214,7 +214,7 @@ back[T](arr) -> T {
 pop[T](self) -> T {
     if self->size == 0 { _tl_fatal_(c"Array.pop: empty array") }
     self->size = self->size - 1
-    self->v.[self->size]
+    self->data.[self->size]
 }
 
 clear[T](self) {
@@ -226,12 +226,12 @@ insert[T](self, alloc, index, val: T) {
     if _is_full(self) { _grow(self, alloc, self->capacity + 1) }
     if index < self->size {
         width       := _type_width_aligned[T]()
-        dst: Ptr[T] := self->v.[index + 1].&
-        src: Ptr[T] := self->v.[index].&
+        dst: Ptr[T] := self->data.[index + 1].&
+        src: Ptr[T] := self->data.[index].&
         c_memmove(dst, src, (self->size - index) * width)
     }
-    self->v.[index] = val
-    self->size      = self->size + 1
+    self->data.[index] = val
+    self->size         = self->size + 1
 }
 
 insert[T](self, index, val: T) {
@@ -240,12 +240,12 @@ insert[T](self, index, val: T) {
 
 remove[T](self, index) -> T {
     if index >= self->size { _tl_fatal_(c"Array.remove: index out of bounds") }
-    val := self->v.[index]
+    val := self->data.[index]
     self->size = self->size - 1
     if index < self->size {
         width       := _type_width_aligned[T]()
-        dst: Ptr[T] := self->v.[index].&
-        src: Ptr[T] := self->v.[index + 1].&
+        dst: Ptr[T] := self->data.[index].&
+        src: Ptr[T] := self->data.[index + 1].&
         c_memmove(dst, src, (self->size - index) * width)
     }
     val
@@ -253,10 +253,10 @@ remove[T](self, index) -> T {
 
 swap_remove[T](self, index) -> T {
     if index >= self->size { _tl_fatal_(c"Array.swap_remove: index out of bounds") }
-    val := self->v.[index]
+    val := self->data.[index]
     self->size = self->size - 1
     if index < self->size {
-        self->v.[index] = self->v.[self->size]
+        self->data.[index] = self->data.[self->size]
     }
     val
 }
@@ -269,7 +269,7 @@ resize[T](self, alloc, count, val: T) {
         _grow(self, alloc, count)
         i := self->size
         while i < count, i += 1 {
-            self->v.[i] = val
+            self->data.[i] = val
         }
     }
     self->size = count
@@ -282,14 +282,14 @@ resize[T](self, count, val: T) {
 shrink_to_fit[T](self, alloc) {
     if self->size < self->capacity {
         if self->size == 0 {
-            alloc->free(alloc, self->v)
-            self->v        = null
+            alloc->free(alloc, self->data)
+            self->data     = null
             self->capacity = 0
         } else {
             width := _type_width_aligned[T]()
-            p     := alloc->realloc(alloc, self->v, self->size * width)
+            p     := alloc->realloc(alloc, self->data, self->size * width)
             if p != null {
-                self->v        = p
+                self->data     = p
                 self->capacity = self->size
             }
         }
@@ -312,9 +312,9 @@ truncate[T](self, count) {
 swap[T](self, i, j) {
     if i >= self->size { _tl_fatal_(c"Array.swap: index out of bounds") }
     if j >= self->size { _tl_fatal_(c"Array.swap: index out of bounds") }
-    tmp := self->v.[i]
-    self->v.[i] = self->v.[j]
-    self->v.[j] = tmp
+    tmp := self->data.[i]
+    self->data.[i] = self->data.[j]
+    self->data.[j] = tmp
 }
 
 reverse[T](self) {
@@ -334,8 +334,8 @@ append[T](self, alloc, other) {
     if other.size == 0 { return void }
     _grow(self, alloc, self->size + other.size)
     width       := _type_width_aligned[T]()
-    dst: Ptr[T] := self->v.[self->size].&
-    c_memcpy(dst, other.v, other.size * width)
+    dst: Ptr[T] := self->data.[self->size].&
+    c_memcpy(dst, other.data, other.size * width)
     self->size = self->size + other.size
 }
 
@@ -348,7 +348,7 @@ clone[T](alloc, arr) {
     result := with_capacity[T](alloc, arr.size)
     result.size = arr.size
     width := _type_width_aligned[T]()
-    c_memcpy(result.v, arr.v, arr.size * width)
+    c_memcpy(result.data, arr.data, arr.size * width)
     result
 }
 
@@ -363,8 +363,8 @@ copy[T](alloc, arr, start, end) {
     result := with_capacity[T](alloc, len)
     result.size = len
     width       := _type_width_aligned[T]()
-    src: Ptr[T] := arr.v.[start].&
-    c_memcpy(result.v, src, len * width)
+    src: Ptr[T] := arr.data.[start].&
+    c_memcpy(result.data, src, len * width)
     result
 }
 
@@ -374,9 +374,9 @@ copy[T](arr, start, end) {
 
 slice[T](arr, start, end) {
     if end > arr.size || start > end { _tl_fatal_(c"Array.slice: index out of bounds") }
-    if start == end { return Slice[T](v: Ptr[T] = null, size = 0) }
-    p: Ptr[T] := arr.v.[start].&
-    Slice(v = p, size = end - start)
+    if start == end { return Slice[T](data: Ptr[T] = null, size = 0) }
+    p: Ptr[T] := arr.data.[start].&
+    Slice(data = p, size = end - start)
 }
 
 
@@ -389,7 +389,7 @@ is_empty[T](arr) {
 contains[T](arr, val: T) {
     i: CSize := 0
     while i < arr.size, i += 1 {
-        if arr.v.[i] == val { return true }
+        if arr.data.[i] == val { return true }
     }
     false
 }
@@ -397,7 +397,7 @@ contains[T](arr, val: T) {
 index_of[T](arr, val: T) {
     i: CSize := 0
     while i < arr.size, i += 1 {
-        if arr.v.[i] == val { return Some(i) }
+        if arr.data.[i] == val { return Some(i) }
     }
     None
 }
@@ -409,7 +409,7 @@ from_ptr[T](alloc, ptr, len) {
     result := with_capacity[T](alloc, len)
     result.size = len
     width := _type_width_aligned[T]()
-    c_memcpy(result.v, ptr, len * width)
+    c_memcpy(result.data, ptr, len * width)
     result
 }
 
@@ -425,7 +425,7 @@ map[T, U](alloc, arr, f: (T) -> U) {
     result.size = arr.size
     i: CSize := 0
     while i < arr.size, i += 1 {
-        result.v.[i] = f(arr.v.[i])
+        result.data.[i] = f(arr.data.[i])
     }
     result
 }
@@ -438,7 +438,7 @@ filter[T](alloc, arr, f: (T) -> Bool) {
     result   := empty[T]()
     i: CSize := 0
     while i < arr.size, i += 1 {
-        if f(arr.v.[i]) { push(result.&, alloc, arr.v.[i]) }
+        if f(arr.data.[i]) { push(result.&, alloc, arr.data.[i]) }
     }
     result
 }
@@ -451,7 +451,7 @@ reduce[T, U](arr, init: U, f: (U, T) -> U) {
     acc      := init
     i: CSize := 0
     while i < arr.size, i += 1 {
-        acc = f(acc, arr.v.[i])
+        acc = f(acc, arr.data.[i])
     }
     acc
 }
@@ -459,14 +459,14 @@ reduce[T, U](arr, init: U, f: (U, T) -> U) {
 foreach[T](arr, f: (T) -> Void) {
     i: CSize := 0
     while i < arr.size, i += 1 {
-        f(arr.v.[i])
+        f(arr.data.[i])
     }
 }
 
 any_of[T](arr, f: (T) -> Bool) {
     i: CSize := 0
     while i < arr.size, i += 1 {
-        if f(arr.v.[i]) { return true }
+        if f(arr.data.[i]) { return true }
     }
     false
 }
@@ -474,7 +474,7 @@ any_of[T](arr, f: (T) -> Bool) {
 all[T](arr, f: (T) -> Bool) {
     i: CSize := 0
     while i < arr.size, i += 1 {
-        if !f(arr.v.[i]) { return false }
+        if !f(arr.data.[i]) { return false }
     }
     true
 }
@@ -482,7 +482,7 @@ all[T](arr, f: (T) -> Bool) {
 find[T](arr, f: (T) -> Bool) {
     i: CSize := 0
     while i < arr.size, i += 1 {
-        if f(arr.v.[i]) { return Some(i) }
+        if f(arr.data.[i]) { return Some(i) }
     }
     None
 }
@@ -530,7 +530,7 @@ sort[T](self, tmp_alloc, cmp: (T, T) -> Int) {
             hi := i + w * 2
             if hi > n { hi = n }
             if mid < hi {
-                _merge(self->v, tmp, i, mid, hi, cmp, width)
+                _merge(self->data, tmp, i, mid, hi, cmp, width)
             }
             i = i + w * 2
         }
@@ -557,7 +557,7 @@ sorted[T](arr, cmp: (T, T) -> Int) {
 // -- Iterator interface --
 
 Iter[T]: {
-    v:     Ptr[T],
+    data:  Ptr[T],
     size:  CSize,
     index: CSize,
 }
@@ -569,12 +569,12 @@ iter_cond[T]  (iter: Ptr[Iter[T]]) -> Bool
 iter_update[T](iter: Ptr[Iter[T]]) -> Void
 iter_deinit[T](iter: Ptr[Iter[T]]) -> Void
 
-iter_init  (arr)  { Iter ( v = arr->v, size = arr->size, index = 0) }
-iter_ptr   (iter) { iter->v.[iter->index].&                         }
-iter_value (iter) { iter->v.[iter->index]                           }
-iter_cond  (iter) { iter->index < iter->size                        }
-iter_update(iter) { iter->index = iter->index + 1                   }
-iter_deinit(iter) {                                                 }
+iter_init  (arr)  { Iter ( data = arr->data, size = arr->size, index = 0) }
+iter_ptr   (iter) { iter->data.[iter->index].&                            }
+iter_value (iter) { iter->data.[iter->index]                              }
+iter_cond  (iter) { iter->index < iter->size                              }
+iter_update(iter) { iter->index = iter->index + 1                         }
+iter_deinit(iter) {                                                       }
 
 
 // --
@@ -613,7 +613,7 @@ IterValue[T]: {
 }
 
 Iter[T]: {
-    v:     Ptr[T],
+    data:  Ptr[T],
     size:  CSize,
     index: CSize,
     iv:    IterValue[T],
@@ -628,14 +628,14 @@ iter_cond[T]  (iter: Ptr[Iter[T]])       -> Bool
 iter_update[T](iter: Ptr[Iter[T]])       -> Void
 iter_deinit[T](iter: Ptr[Iter[T]])       -> Void
 
-iter_init(arr) { Iter (v = arr->v,
+iter_init(arr) { Iter (data = arr->data,
                        size  = arr->size,
                        index = 0,
                        iv    = IterValue (value = void, index = 0),
                        ivp   = IterValuePtr(ptr = null, index = 0)) }
 
-iter_ptr   (iter) { iter->ivp.ptr = iter->v.[iter->index].& iter->ivp.index = iter->index iter->ivp }
-iter_value (iter) { iter->iv.value = iter->v.[iter->index] iter->iv.index = iter->index iter->iv    }
-iter_cond  (iter) { iter->index < iter->size                                                        }
-iter_update(iter) { iter->index = iter->index + 1                                                   }
-iter_deinit(iter) {                                                                                 }
+iter_ptr   (iter) { iter->ivp.ptr = iter->data.[iter->index].& iter->ivp.index = iter->index iter->ivp }
+iter_value (iter) { iter->iv.value = iter->data.[iter->index] iter->iv.index = iter->index iter->iv    }
+iter_cond  (iter) { iter->index < iter->size                                                           }
+iter_update(iter) { iter->index = iter->index + 1                                                      }
+iter_deinit(iter) {                                                                                    }

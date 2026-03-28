@@ -2379,7 +2379,7 @@ int traverse_ast(tl_infer *, traverse_ctx *, ast_node *, traverse_cb);
 
 // Pre-set variant binding types on tagged union case conditions BEFORE traversing arm bodies.
 // This is essential for nested when: the inner when needs the outer binding's type to be resolved
-// so that field access (e.g., s.v) works and the inner scrutinee gets a concrete tagged union type.
+// so that field access (e.g., s.value) works and the inner scrutinee gets a concrete tagged union type.
 // Without this, the bottom-up callback order means the inner when's infer_tagged_union_case runs
 // before the outer when's, leaving binding types as unresolved type variables.
 static void prepare_tagged_union_bindings(tl_infer *self, traverse_ctx *ctx, ast_node *node) {

@@ -1,6 +1,6 @@
 #module MyOption
 
-T[a]: | MySome { v: a }
+T[a]: | MySome { value: a }
       | MyNone
 
 #module main
@@ -9,7 +9,7 @@ T[a]: | MySome { v: a }
 test_basic_bail() {
     val       := MyOption.MySome(42)
     s: MySome := val else { return 1 }
-    if s.v == 42 {0} else {1}
+    if s.value == 42 {0} else {1}
 }
 
 // Test 2: Bail takes the else path
@@ -24,7 +24,7 @@ test_bail_else_path() {
 test_bail_remaining_body() {
     val       := MyOption.MySome(10)
     s: MySome := val else { return 1 }
-    x         := s.v + 5
+    x         := s.value + 5
     y         := x * 2
     if y == 30 {0} else {1}
 }
@@ -35,14 +35,14 @@ test_multiple_bails() {
     b         := MyOption.MySome(20)
     x: MySome := a else { return 1 }
     y: MySome := b else { return 1 }
-    if x.v + y.v == 30 {0} else {1}
+    if x.value + y.value == 30 {0} else {1}
 }
 
 // Test 5: Bail with generic tagged union (Float)
 test_bail_generic() {
     val       := MyOption.MySome(3.14)
     s: MySome := val else { return 1 }
-    if s.v > 3.0 {0} else {1}
+    if s.value > 3.0 {0} else {1}
 }
 
 // Test 6: Bail inside a while loop with break
@@ -51,7 +51,7 @@ test_bail_break() {
     result := 1
     while 1 {
         s: MySome := val else { break }
-        result = if s.v == 99 {0} else {1}
+        result = if s.value == 99 {0} else {1}
         break
     }
     result
@@ -65,7 +65,7 @@ test_bail_continue() {
         v := if i == 1 { MyOption.MySome(42) } else { MyOption.MyNone() }
         i = i + 1
         s: MySome := v else { continue }
-        result = result + s.v
+        result = result + s.value
     }
     if result == 42 {0} else {1}
 }

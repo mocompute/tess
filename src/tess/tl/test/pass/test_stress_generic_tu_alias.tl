@@ -3,7 +3,7 @@
 
 #module Defs
 
-Res[T]: | ROk  { v: T }
+Res[T]: | ROk  { value: T }
         | RErr { code: Int }
 
 #module Aliases
@@ -19,7 +19,7 @@ IR = Aliases.IntRes
 // Generic function taking a generic tagged union
 extract[T](r: Defs.Res[T], default: T) -> T {
     when r {
-        o: ROk { o.v }
+        o: ROk { o.value }
         e: RErr { default }
     }
 }
@@ -27,7 +27,7 @@ extract[T](r: Defs.Res[T], default: T) -> T {
 // Function taking aliased type as parameter
 extract_aliased(r: Aliases.IntRes, default: Int) -> Int {
     when r {
-        o: ROk { o.v }
+        o: ROk { o.value }
         e: RErr { default }
     }
 }
@@ -62,7 +62,7 @@ main() {
     // --- Test 5: Pattern matching (when) on aliased tagged union ---
     aliased_val: Aliases.IntRes := Defs.ROk(55)
     matched                     := when aliased_val {
-        o: ROk { o.v }
+        o: ROk { o.value }
         e: RErr { e.code }
     }
     error += if matched == 55 { 0 } else { 1 }
@@ -70,7 +70,7 @@ main() {
     // Pattern match on nested alias
     nested_val: NestedAlias.IR := Defs.RErr(code = 7)
     matched2                   := when nested_val {
-        o: ROk { o.v }
+        o: ROk { o.value }
         e: RErr { e.code }
     }
     error += if matched2 == 7 { 0 } else { 1 }

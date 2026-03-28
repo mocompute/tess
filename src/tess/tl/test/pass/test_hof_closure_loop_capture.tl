@@ -17,11 +17,11 @@ main() {
 
     // Each closure should have captured a different value of i
     // closures[0] captures i=0, closures[1] captures i=1, etc.
-    f0 := closures.v.[0]
-    f1 := closures.v.[1]
-    f2 := closures.v.[2]
-    f3 := closures.v.[3]
-    f4 := closures.v.[4]
+    f0 := closures.data.[0]
+    f1 := closures.data.[1]
+    f2 := closures.data.[2]
+    f3 := closures.data.[3]
+    f4 := closures.data.[4]
     if f0(10) != 10 { error += 1 }
     if f1(10) != 11 { error += 1 }
     if f2(10) != 12 { error += 1 }

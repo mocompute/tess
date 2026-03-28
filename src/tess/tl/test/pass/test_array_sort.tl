@@ -17,7 +17,7 @@ test_single() {
     Array.push(arr.&, 42)
     Array.sort(arr.&, (a, b) { a - b })
     if arr.size != 1zu { error += 1 }
-    if arr.v.[0] != 42 { error += 1 }
+    if arr.data.[0] != 42 { error += 1 }
     Array.free(arr.&)
     error
 }
@@ -31,11 +31,11 @@ test_ascending() {
     Array.push(arr.&, 4)
     Array.push(arr.&, 2)
     Array.sort(arr.&, (a, b) { a - b })
-    if arr.v.[0] != 1 { error += 1 }
-    if arr.v.[1] != 2 { error += 1 }
-    if arr.v.[2] != 3 { error += 1 }
-    if arr.v.[3] != 4 { error += 1 }
-    if arr.v.[4] != 5 { error += 1 }
+    if arr.data.[0] != 1 { error += 1 }
+    if arr.data.[1] != 2 { error += 1 }
+    if arr.data.[2] != 3 { error += 1 }
+    if arr.data.[3] != 4 { error += 1 }
+    if arr.data.[4] != 5 { error += 1 }
     Array.free(arr.&)
     error
 }
@@ -49,11 +49,11 @@ test_descending() {
     Array.push(arr.&, 4)
     Array.push(arr.&, 5)
     Array.sort(arr.&, (a, b) { b - a })
-    if arr.v.[0] != 5 { error += 1 }
-    if arr.v.[1] != 4 { error += 1 }
-    if arr.v.[2] != 3 { error += 1 }
-    if arr.v.[3] != 2 { error += 1 }
-    if arr.v.[4] != 1 { error += 1 }
+    if arr.data.[0] != 5 { error += 1 }
+    if arr.data.[1] != 4 { error += 1 }
+    if arr.data.[2] != 3 { error += 1 }
+    if arr.data.[3] != 2 { error += 1 }
+    if arr.data.[4] != 1 { error += 1 }
     Array.free(arr.&)
     error
 }
@@ -65,9 +65,9 @@ test_named_comparator() {
     Array.push(arr.&, 1)
     Array.push(arr.&, 2)
     Array.sort(arr.&, cmp_asc/2)
-    if arr.v.[0] != 1 { error += 1 }
-    if arr.v.[1] != 2 { error += 1 }
-    if arr.v.[2] != 3 { error += 1 }
+    if arr.data.[0] != 1 { error += 1 }
+    if arr.data.[1] != 2 { error += 1 }
+    if arr.data.[2] != 3 { error += 1 }
     Array.free(arr.&)
     error
 }
@@ -80,13 +80,13 @@ test_sorted() {
     Array.push(arr.&, 2)
     result := Array.sorted(arr, (a, b) { a - b })
     // Result is sorted
-    if result.v.[0] != 1 { error += 1 }
-    if result.v.[1] != 2 { error += 1 }
-    if result.v.[2] != 3 { error += 1 }
+    if result.data.[0] != 1 { error += 1 }
+    if result.data.[1] != 2 { error += 1 }
+    if result.data.[2] != 3 { error += 1 }
     // Original unchanged
-    if arr.v.[0] != 3 { error += 1 }
-    if arr.v.[1] != 1 { error += 1 }
-    if arr.v.[2] != 2 { error += 1 }
+    if arr.data.[0] != 3 { error += 1 }
+    if arr.data.[1] != 1 { error += 1 }
+    if arr.data.[2] != 2 { error += 1 }
     Array.free(arr.&)
     Array.free(result.&)
     error
@@ -100,10 +100,10 @@ test_already_sorted() {
     Array.push(arr.&, 3)
     Array.push(arr.&, 4)
     Array.sort(arr.&, (a, b) { a - b })
-    if arr.v.[0] != 1 { error += 1 }
-    if arr.v.[1] != 2 { error += 1 }
-    if arr.v.[2] != 3 { error += 1 }
-    if arr.v.[3] != 4 { error += 1 }
+    if arr.data.[0] != 1 { error += 1 }
+    if arr.data.[1] != 2 { error += 1 }
+    if arr.data.[2] != 3 { error += 1 }
+    if arr.data.[3] != 4 { error += 1 }
     Array.free(arr.&)
     error
 }
@@ -115,9 +115,9 @@ test_sort_with_allocator() {
     Array.push(arr.&, 3)
     Array.push(arr.&, 1)
     Array.sort(arr.&, Alloc.context.transient, (a, b) { a - b })
-    if arr.v.[0] != 1 { error += 1 }
-    if arr.v.[1] != 3 { error += 1 }
-    if arr.v.[2] != 5 { error += 1 }
+    if arr.data.[0] != 1 { error += 1 }
+    if arr.data.[1] != 3 { error += 1 }
+    if arr.data.[2] != 5 { error += 1 }
     Array.free(arr.&)
     error
 }

@@ -36,7 +36,7 @@ join_all(args: ...Helpers.Describable) -> String {
     result   := String.empty()
     i: CSize := 0
     while i < args.size, i += 1 {
-        result.push(args.v.[i])
+        result.push(args.data.[i])
     }
     result
 }
