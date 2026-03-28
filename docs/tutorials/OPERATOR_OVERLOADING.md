@@ -220,9 +220,57 @@ after += : (6, 8)
 after -= : (5, 7)
 ```
 
+## 5. Pointer Parameters for Efficiency
+
+All the examples so far take their operands **by value**. For small types like `Vec2` this
+is fine, but for larger structs, copying on every `+` or `==` is wasteful. You can define
+your operator functions to take `Ptr[Const[T]]` instead — the compiler will automatically
+insert `&` at the call site, just like it does for dot-call syntax (UFCS):
+
+```tl
+#module BigStruct
+
+BigStruct : { a: Int, b: Int, c: Int, d: Int, e: Int }
+
+eq(a: Ptr[Const[BigStruct]], b: Ptr[Const[BigStruct]]) {
+    a->a == b->a && a->b == b->b && a->c == b->c && a->d == b->d && a->e == b->e
+}
+
+cmp(a: Ptr[Const[BigStruct]], b: Ptr[Const[BigStruct]]) -> CInt {
+    if a->a < b->a { -1 }
+    else if a->a > b->a { 1 }
+    else { 0 }
+}
+
+#module main
+
+main() {
+    x := BigStruct.BigStruct(a = 1, b = 2, c = 3, d = 4, e = 5)
+    y := BigStruct.BigStruct(a = 1, b = 2, c = 3, d = 4, e = 5)
+
+    c_printf(c"x == y: %d\n", x == y)
+    c_printf(c"x < y:  %d\n", x < y)
+    0
+}
+```
+
+```
+$ tess run ptr_ops.tl
+x == y: 1
+x < y:  0
+```
+
+When the compiler sees `x == y` and the `eq` function expects pointers, it rewrites the
+call to `eq(&x, &y)` automatically. This works for all operator overloads (binary, unary,
+and compound assignment) and is fully transparent to callers. Trait bounds like `[T: Eq]`
+also recognize pointer-taking implementations as satisfying the trait.
+
+> **Tip:** Use `Ptr[Const[T]]` (not `Ptr[T]`) for read-only operators like `eq` and `cmp`.
+> Reserve `Ptr[T]` for operators that need to mutate the operand.
+
 ---
 
-## 5. Introduction to Traits
+## 6. Introduction to Traits
 
 So far we've been defining operators for a specific type. But what if you want to write
 a function that works with *any* type that supports `+`, or *any* type that supports `==`?
@@ -304,7 +352,7 @@ These generic functions work with built-in types too. `Int` satisfies `Add` (it 
 types conform to the traits matching their intrinsic operators. So `double(7)` and
 `smallest(3, 8)` work just as you'd expect.
 
-## 6. Defining Your Own Traits
+## 7. Defining Your Own Traits
 
 The built-in traits like `Add` and `Eq` are provided by the compiler, but they're not
 magic. A trait declaration looks like a struct, but with function signatures instead of
@@ -390,7 +438,7 @@ signatures in its module.
 > combined trait instead. See
 > [Language Reference: Trait Inheritance](../LANGUAGE_REFERENCE.md#trait-inheritance).
 
-## 7. Conditional Conformance
+## 8. Conditional Conformance
 
 What if you have a generic type like `Pair[T]`, and you want `==` to work on it — but
 only when the inner type `T` itself supports `==`? This is **conditional conformance**:
