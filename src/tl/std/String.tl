@@ -46,7 +46,6 @@ from_cstr  (s: Ptr[Const[CChar]])                                  -> String
 from_bytes (alloc: Ptr[Allocator], s: Ptr[Const[CChar]], n: CSize) -> String
 from_bytes (s: Ptr[Const[CChar]], n: CSize)                        -> String
 copy       (alloc: Ptr[Allocator], s: Ptr[Const[String]])          -> String
-copy       (s: Ptr[Const[String]])                                 -> String
 from_int   (alloc: Ptr[Allocator], n: Int)                         -> String
 from_int   (n: Int)                                                -> String
 from_float (alloc: Ptr[Allocator], f: Float)                       -> String
@@ -54,70 +53,90 @@ from_float (f: Float)                                              -> String
 from_byte  (b: Byte)                                               -> String
 from_bool  (b: Bool)                                               -> String
 
-// Queries.
-len      (s: Ptr[Const[String]])               -> CSize
-is_empty (s: Ptr[Const[String]])               -> Bool
-byte_at  (s: Ptr[Const[String]], index: CSize) -> Option[Byte]
-char_at  (s: Ptr[Const[String]], index: CSize) -> Option[CChar]
-cstr     (s: Ptr[String])                      -> CString
 
-// Hashing.
-hash (s: Ptr[Const[String]]) -> CSize
+self: Ptr[Const[String]]: {
+    // Construction
+    copy ()                         -> String
+    copy (start: CSize, end: CSize) -> String
 
-// Comparison.
-eq           (a: Ptr[Const[String]], b: Ptr[Const[String]])             -> Bool
-cmp          (a: Ptr[Const[String]], b: Ptr[Const[String]])             -> CInt
-starts_with  (s: Ptr[Const[String]], prefix: Ptr[Const[String]])        -> Bool
-ends_with    (s: Ptr[Const[String]], suffix: Ptr[Const[String]])        -> Bool
-contains     (haystack: Ptr[Const[String]], needle: Ptr[Const[String]]) -> Bool
-contains_char(s: Ptr[Const[String]], b: CChar)                          -> Bool
-eq_cstr      (s: Ptr[Const[String]], cs: CString)                       -> Bool
+    // Queries.
+    len      ()             -> CSize
+    is_empty ()             -> Bool
+    byte_at  (index: CSize) -> Option[Byte]
+    char_at  (index: CSize) -> Option[CChar]
+
+    // Hashing
+    hash (s: Ptr[Const[String]]) -> CSize
+
+    // Search.
+    index_of_char     (b: CChar)                   -> Option[CSize]
+    index_of_char_from(b: CChar, start: CSize)     -> Option[CSize]
+    last_index_of_char(b: CChar)                   -> Option[CSize]
+    index_of          (needle: Ptr[Const[String]]) -> Option[CSize]
+    last_index_of     (needle: Ptr[Const[String]]) -> Option[CSize]
+    count_byte        (b: CChar)                   -> CSize
+    count             (needle: Ptr[Const[String]]) -> CSize
+
+    // Comparison
+    contains_char(b: CChar)                   -> Bool
+    eq_cstr      (cs: CString)                -> Bool
+    starts_with  (prefix: Ptr[Const[String]]) -> Bool
+    ends_with    (suffix: Ptr[Const[String]]) -> Bool
+    contains     (needle: Ptr[Const[String]]) -> Bool
+
+    // Concatenation (immutable)
+    cat   (b: Ptr[Const[String]])                                               -> String
+    cat_3 (b: Ptr[Const[String]], c: Ptr[Const[String]])                        -> String
+    cat_4 (b: Ptr[Const[String]], c: Ptr[Const[String]], d: Ptr[Const[String]]) -> String
+
+    // Transformation
+    replace_byte(find: CChar, replace: CChar)                        -> String
+    to_upper    ()                                                   -> String
+    to_lower    ()                                                   -> String
+    trim_left   ()                                                   -> String
+    trim_right  ()                                                   -> String
+    trim        ()                                                   -> String
+    repeat      (count: CSize)                                       -> String
+    replace     (old: Ptr[Const[String]], new_s: Ptr[Const[String]]) -> String
+    strip_prefix(prefix: Ptr[Const[String]])                         -> String
+    strip_suffix(suffix: Ptr[Const[String]])                         -> String
+
+}
+
+
+self: Ptr[Const[String]], other: Ptr[Const[String]]: {
+    eq  () -> Bool
+    cmp () -> CInt
+}
+
+
+cstr (s: Ptr[String]) -> CString
+
 
 // Concatenation.
 cat   (alloc: Ptr[Allocator], a: Ptr[Const[String]], b: Ptr[Const[String]])                                               -> String
-cat   (a: Ptr[Const[String]], b: Ptr[Const[String]])                                                                      -> String
 cat_3 (alloc: Ptr[Allocator], a: Ptr[Const[String]], b: Ptr[Const[String]], c: Ptr[Const[String]])                        -> String
-cat_3 (a: Ptr[Const[String]], b: Ptr[Const[String]], c: Ptr[Const[String]])                                               -> String
 cat_4 (alloc: Ptr[Allocator], a: Ptr[Const[String]], b: Ptr[Const[String]], c: Ptr[Const[String]], d: Ptr[Const[String]]) -> String
-cat_4 (a: Ptr[Const[String]], b: Ptr[Const[String]], c: Ptr[Const[String]], d: Ptr[Const[String]])                        -> String
 push  (self: Ptr[String], alloc: Ptr[Allocator], other: Ptr[Const[String]])                                               -> Void
 push  (self: Ptr[String], other: Ptr[Const[String]])                                                                      -> Void
 
 // Slicing and copying.
 copy  (alloc: Ptr[Allocator], s: Ptr[Const[String]], start: CSize, end: CSize) -> String
-copy  (s: Ptr[Const[String]], start: CSize, end: CSize)                        -> String
 slice (s: Ptr[String], start: CSize, end: CSize)                               -> Slice[CChar]
 
-// Search.
-index_of_char     (s: Ptr[Const[String]], b: CChar)                   -> Option[CSize]
-index_of_char_from(s: Ptr[Const[String]], b: CChar, start: CSize)     -> Option[CSize]
-last_index_of_char(s: Ptr[Const[String]], b: CChar)                   -> Option[CSize]
-index_of          (s: Ptr[Const[String]], needle: Ptr[Const[String]]) -> Option[CSize]
-last_index_of     (s: Ptr[Const[String]], needle: Ptr[Const[String]]) -> Option[CSize]
-count_byte        (s: Ptr[Const[String]], b: CChar)                   -> CSize
-count             (s: Ptr[Const[String]], needle: Ptr[Const[String]]) -> CSize
 
 // Transformation.
+// FIXME: these need to swap argument order, to put the receiver first
 replace_byte(alloc: Ptr[Allocator], s: Ptr[Const[String]], find: CChar, replace: CChar)                        -> String
-replace_byte(s: Ptr[Const[String]], find: CChar, replace: CChar)                                               -> String
 to_upper    (alloc: Ptr[Allocator], s: Ptr[Const[String]])                                                     -> String
-to_upper    (s: Ptr[Const[String]])                                                                            -> String
 to_lower    (alloc: Ptr[Allocator], s: Ptr[Const[String]])                                                     -> String
-to_lower    (s: Ptr[Const[String]])                                                                            -> String
 trim_left   (alloc: Ptr[Allocator], s: Ptr[Const[String]])                                                     -> String
-trim_left   (s: Ptr[Const[String]])                                                                            -> String
 trim_right  (alloc: Ptr[Allocator], s: Ptr[Const[String]])                                                     -> String
-trim_right  (s: Ptr[Const[String]])                                                                            -> String
 trim        (alloc: Ptr[Allocator], s: Ptr[Const[String]])                                                     -> String
-trim        (s: Ptr[Const[String]])                                                                            -> String
 repeat      (alloc: Ptr[Allocator], s: Ptr[Const[String]], count: CSize)                                       -> String
-repeat      (s: Ptr[Const[String]], count: CSize)                                                              -> String
 replace     (alloc: Ptr[Allocator], s: Ptr[Const[String]], old: Ptr[Const[String]], new_s: Ptr[Const[String]]) -> String
-replace     (s: Ptr[Const[String]], old: Ptr[Const[String]], new_s: Ptr[Const[String]])                        -> String
 strip_prefix(alloc: Ptr[Allocator], s: Ptr[Const[String]], prefix: Ptr[Const[String]])                         -> String
-strip_prefix(s: Ptr[Const[String]], prefix: Ptr[Const[String]])                                                -> String
 strip_suffix(alloc: Ptr[Allocator], s: Ptr[Const[String]], suffix: Ptr[Const[String]])                         -> String
-strip_suffix(s: Ptr[Const[String]], suffix: Ptr[Const[String]])                                                -> String
 
 // In-place transformation.
 replace_byte_in_place(s: Ptr[String], find: CChar, replace: CChar) -> Void
@@ -322,21 +341,25 @@ hash(s) {
 
 // -- Comparison --
 
-eq(a, b) {
-    0 == cmp(a, b)
-}
+self: Ptr[Const[String]], other: Ptr[Const[String]]: {
 
-cmp(a, b) {
-    la      := len(a)
-    lb      := len(b)
-    pa      := _buf(a)
-    pb      := _buf(b)
-    min_len := if la < lb { la } else { lb }
-    if min_len > 0 {
-        r := c_memcmp(pa, pb, min_len)
-        if r != 0 { return r }
+    eq() {
+        0 == cmp(self, other)
     }
-    if la < lb { - 1 } else if la > lb { 1 } else { 0 }
+
+    cmp() {
+        la      := len(self)
+        lb      := len(other)
+        pa      := _buf(self)
+        pb      := _buf(other)
+        min_len := if la < lb { la } else { lb }
+        if min_len > 0 {
+            r := c_memcmp(pa, pb, min_len)
+            if r != 0 { return r }
+        }
+        if la < lb { - 1 } else if la > lb { 1 } else { 0 }
+    }
+
 }
 
 starts_with(s, prefix) {

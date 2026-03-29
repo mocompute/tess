@@ -47,7 +47,7 @@ A **receiver block** factors shared parameters out of a group of function declar
 and/or definitions:
 
 ```
-name : Type : {
+name: Type : {
     func(remaining_params...) -> ReturnType
     func(remaining_params...) -> ReturnType { body }
     ...
@@ -57,7 +57,7 @@ name : Type : {
 Multiple parameters can be factored out by separating them with commas:
 
 ```
-name1 : Type1, name2 : Type2 : {
+name1: Type1, name2: Type2 : {
     func(remaining_params...) -> ReturnType
     ...
 }
