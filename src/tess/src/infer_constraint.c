@@ -1589,6 +1589,49 @@ static int check_const_strip_in_call(tl_infer *self, tl_monotype *func_type, tl_
     return 0;
 }
 
+// Wrap operand with & during the constraint phase. Returns the address-of node,
+// or null on constraint error (caller should propagate return 1).
+static ast_node *constraint_wrap_address_of(tl_infer *self, ast_node *operand) {
+    ast_node *amp  = ast_node_create_sym_c(self->arena, "&");
+    ast_node *addr = ast_node_create_unary_op(self->arena, amp, operand);
+    addr->file     = operand->file;
+    addr->line     = operand->line;
+    addr->col      = operand->col;
+    ensure_tv(self, &amp->type);
+    ensure_tv(self, &addr->type);
+    tl_monotype *ptr = tl_type_registry_ptr(self->registry, operand->type->type);
+    if (constrain_pm(self, addr->type, ptr, addr, TL_UNIFY_SYMMETRIC)) return null;
+    return addr;
+}
+
+// Auto-address-of for Ptr[Const[T]] parameters in regular function calls.
+// Ptr[T] (mutable) is NOT auto-addressed — only Ptr[Const[T]] (read-only).
+static int auto_address_of_ptr_const_args(tl_infer *self, tl_monotype *func_type,
+                                          tl_polytype *callsite, ast_node_sized args) {
+    if (!tl_monotype_is_arrow(func_type)) return 0;
+    tl_monotype *call_mono = callsite->type;
+    if (!tl_monotype_is_arrow(call_mono)) return 0;
+
+    tl_monotype_sized func_params = tl_monotype_arrow_get_args(func_type);
+    tl_monotype_sized call_args   = tl_monotype_arrow_get_args(call_mono);
+
+    u32 n = func_params.size < call_args.size ? func_params.size : call_args.size;
+
+    for (u32 i = 0; i < n; ++i) {
+        if (!tl_monotype_is_ptr_to_const(func_params.v[i])) continue;
+        if (tl_monotype_is_ptr(call_args.v[i])) continue;
+        if (tl_monotype_is_tv(call_args.v[i])) continue;
+
+        ast_node *addr = constraint_wrap_address_of(self, args.v[i]);
+        if (!addr) return 1;
+
+        call_args.v[i] = tl_type_registry_ptr(self->registry, args.v[i]->type->type);
+        args.v[i]      = addr;
+    }
+
+    return 0;
+}
+
 // Check if the LHS of a reassignment involves a const violation:
 // - Dereferencing a Ptr(Const(T))
 // - Mutating a field of a Const(T) value binding
@@ -2330,6 +2373,9 @@ static int infer_named_function_application(tl_infer *self, traverse_ctx *ctx, a
         }
         if (!app) return 1;
 
+        // Auto-address-of: wrap non-pointer args where param is Ptr[Const[T]]
+        if (auto_address_of_ptr_const_args(self, inst, app, iter.nodes)) return 1;
+
 #if DEBUG_EXPLICIT_TYPE_ARGS
         {
             str type_str = tl_polytype_to_string(self->transient, type);
@@ -2972,20 +3018,8 @@ static int ufcs_rewrite_call(tl_infer *self, traverse_ctx *ctx, ast_node *node, 
         tl_monotype *recv_mono = left->type->type;
         tl_monotype_substitute(self->arena, recv_mono, self->subs, null);
         if (!tl_monotype_is_ptr(recv_mono)) {
-            ast_node *amp  = ast_node_create_sym_c(self->arena, "&");
-            ast_node *addr = ast_node_create_unary_op(self->arena, amp, left);
-            addr->file     = left->file;
-            addr->line     = left->line;
-            addr->col      = left->col;
-            ensure_tv(self, &amp->type);
-            ensure_tv(self, &addr->type);
-            // Constrain addr type to Ptr[operand_type], mirroring infer_unary_op for '&'.
-            // Without this, the addr type var is disconnected from the receiver's type,
-            // causing nullary UFCS calls to produce non-concrete specializations.
-            {
-                tl_monotype *ptr = tl_type_registry_ptr(self->registry, left->type->type);
-                if (constrain_pm(self, addr->type, ptr, addr, TL_UNIFY_SYMMETRIC)) return 1;
-            }
+            ast_node *addr = constraint_wrap_address_of(self, left);
+            if (!addr) return 1;
             left = addr;
         }
     }
