@@ -54,7 +54,7 @@ from_byte  (b: Byte)                                               -> String
 from_bool  (b: Bool)                                               -> String
 
 
-self: Ptr[Const[String]]: {
+(self: Ptr[Const[String]]): {
     // Construction
     copy ()                         -> String
     copy (start: CSize, end: CSize) -> String
@@ -104,7 +104,7 @@ self: Ptr[Const[String]]: {
 }
 
 
-self: Ptr[Const[String]], other: Ptr[Const[String]]: {
+(self: Ptr[Const[String]], other: Ptr[Const[String]]): {
     eq  () -> Bool
     cmp () -> CInt
 }
@@ -341,7 +341,7 @@ hash(s) {
 
 // -- Comparison --
 
-self: Ptr[Const[String]], other: Ptr[Const[String]]: {
+(self: Ptr[Const[String]], other: Ptr[Const[String]]): {
 
     eq() {
         0 == cmp(self, other)

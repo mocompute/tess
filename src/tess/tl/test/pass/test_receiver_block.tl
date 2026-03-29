@@ -3,9 +3,9 @@
 
 #module Counter
 
-Counter : { value: Int }
+Counter: { value: Int }
 
-self: Ptr[Counter] : {
+(self: Ptr[Counter]): {
     get() -> Int {
         self->value
     }
@@ -23,7 +23,7 @@ self: Ptr[Counter] : {
 
 main() {
     error := 0
-    c := Counter(value = 0)
+    c     := Counter(value = 0)
 
     error += if c.get() == 0 {0} else {1}
 

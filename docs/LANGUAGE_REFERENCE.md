@@ -1191,7 +1191,7 @@ This is purely syntactic sugar — the parser desugars each entry into a normal 
 block's parameters prepended.
 
 ```tl
-s: Ptr[Const[String]] : {
+(s: Ptr[Const[String]]): {
     len()                 -> CSize
     is_empty()            -> Bool
     byte_at(index: CSize) -> Option[Byte]
@@ -1206,11 +1206,11 @@ is_empty(s: Ptr[Const[String]])           -> Bool
 byte_at(s: Ptr[Const[String]], index: CSize) -> Option[Byte]
 ```
 
-The identifier before the first colon is the parameter name — there is no implicit `self` or `this`. The
-name is available in function bodies:
+The identifier before the colon inside the parentheses is the parameter name — there is no implicit `self`
+or `this`. The name is available in function bodies:
 
 ```tl
-s: Ptr[Const[String]] : {
+(s: Ptr[Const[String]]): {
     is_empty() -> Bool {
         len(s) == 0
     }
@@ -1225,13 +1225,13 @@ A module may have multiple blocks for different receiver types:
 
 ```tl
 // Immutable access.
-s: Ptr[Const[String]] : {
+(s: Ptr[Const[String]]): {
     len()      -> CSize
     is_empty() -> Bool
 }
 
 // Mutation.
-self: Ptr[String] : {
+(self: Ptr[String]): {
     push(other: Ptr[Const[String]]) -> Void
     free()                          -> Void
 }
@@ -1242,7 +1242,7 @@ self: Ptr[String] : {
 Multiple parameters can be factored out by separating them with commas:
 
 ```tl
-a: Ptr[Const[String]], b: Ptr[Const[String]] : {
+(a: Ptr[Const[String]], b: Ptr[Const[String]]): {
     eq()  -> Bool
     cmp() -> CInt
 }
@@ -1264,7 +1264,7 @@ which are not. In `Ptr[Array[T]]`: `Ptr` and `Array` are known, `T` is unknown �
 type parameter threaded to every function in the block:
 
 ```tl
-self: Ptr[Array[T]] : {
+(self: Ptr[Array[T]]): {
     push(x: T) -> Void
     pop()       -> T
 }
@@ -1280,7 +1280,7 @@ pop[T](self: Ptr[Array[T]])        -> T
 **Trait constraints** on inferred type parameters are specified inline:
 
 ```tl
-self: Ptr[HashMap[K: HashEq, V]] : {
+(self: Ptr[HashMap[K: HashEq, V]]): {
     set(key: K, value: V) -> Void
     get(key: K)           -> Ptr[V]
 }
@@ -1294,7 +1294,7 @@ Functions that don't need the constraint go in a separate block without it.
 **Additional function-level type parameters** are merged after the block-level ones:
 
 ```tl
-self: Ptr[Array[T]] : {
+(self: Ptr[Array[T]]): {
     map[U](f: fn/1(T) -> U) -> Array[U]
 }
 // desugars to: map[T, U](self: Ptr[Array[T]], f: fn/1(T) -> U) -> Array[U]

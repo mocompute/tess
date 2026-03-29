@@ -5,10 +5,10 @@
 
 #import <Hash.tl>
 
-KeyVal[K, V] : { key: K, val: V }
+KeyVal[K, V]: { key: K, val: V }
 
 // Constrained receiver: K must implement Hash.
-kv: KeyVal[K: Hash, V] : {
+(kv: KeyVal[K: Hash, V]): {
     key_hash() -> CSize {
         kv.key.hash()
     }

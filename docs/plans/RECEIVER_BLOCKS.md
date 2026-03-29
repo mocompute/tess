@@ -47,7 +47,7 @@ A **receiver block** factors shared parameters out of a group of function declar
 and/or definitions:
 
 ```
-name: Type : {
+(name: Type): {
     func(remaining_params...) -> ReturnType
     func(remaining_params...) -> ReturnType { body }
     ...
@@ -57,7 +57,7 @@ name: Type : {
 Multiple parameters can be factored out by separating them with commas:
 
 ```
-name1: Type1, name2: Type2 : {
+(name1: Type1, name2: Type2): {
     func(remaining_params...) -> ReturnType
     ...
 }
@@ -80,7 +80,7 @@ byte_at  (s: Ptr[Const[String]], index: CSize) -> Option[Byte]
 After:
 
 ```tl
-s: Ptr[Const[String]] : {
+(s: Ptr[Const[String]]): {
     len()                 -> CSize
     is_empty()            -> Bool
     byte_at(index: CSize) -> Option[Byte]
@@ -91,10 +91,11 @@ Desugaring produces exactly the "before" form. The two are interchangeable.
 
 ### Syntax Rationale
 
-The form `name: Type : { ... }` uses no keywords. It extends Tess's existing binding
-syntax -- `name: Type` is already how parameter types are written. The trailing `: { ... }`
-says "here are the functions that share this parameter." This preserves Tess's distinctive
-property that `#hash` directives are the only top-level keywords.
+The form `(name: Type): { ... }` uses no keywords. It extends Tess's existing binding
+syntax -- `name: Type` is already how parameter types are written. Wrapping the parameters
+in parentheses and following with `: { ... }` says "here are the functions that share this
+parameter." This preserves Tess's distinctive property that `#hash` directives are the only
+top-level keywords.
 
 ### Parameter Names
 
@@ -102,7 +103,7 @@ The identifiers before each colon are **parameter names**, used in function bodi
 as parameter names in desugared signatures:
 
 ```tl
-s: Ptr[Const[String]] : {
+(s: Ptr[Const[String]]): {
     len() -> CSize {
         return if _is_small(s) { _small_len(s) } else { s->big.len }
     }
@@ -118,7 +119,7 @@ When multiple functions share the same parameter list prefix, all shared paramet
 be factored out:
 
 ```tl
-a: Ptr[Const[String]], b: Ptr[Const[String]] : {
+(a: Ptr[Const[String]], b: Ptr[Const[String]]): {
     eq()  -> Bool
     cmp() -> CInt
 }
@@ -134,7 +135,7 @@ cmp(a: Ptr[Const[String]], b: Ptr[Const[String]]) -> CInt
 All named parameters are available in function bodies:
 
 ```tl
-a: Ptr[Const[String]], b: Ptr[Const[String]] : {
+(a: Ptr[Const[String]], b: Ptr[Const[String]]): {
     eq() -> Bool {
         0 == cmp(a, b)
     }
@@ -144,7 +145,7 @@ a: Ptr[Const[String]], b: Ptr[Const[String]] : {
 The parameters need not be the same type:
 
 ```tl
-dst: Ptr[String], src: Ptr[Const[String]] : {
+(dst: Ptr[String], src: Ptr[Const[String]]): {
     copy_into()                 -> Void
     copy_into_at(offset: CSize) -> Void
 }
@@ -158,14 +159,14 @@ A module may have multiple receiver blocks for different receiver types:
 
 ```tl
 // Immutable access.
-s: Ptr[Const[String]] : {
+(s: Ptr[Const[String]]): {
     len()      -> CSize
     is_empty() -> Bool
     hash()     -> CSize
 }
 
 // Mutation.
-self: Ptr[String] : {
+(self: Ptr[String]): {
     cstr()                                     -> CString
     push(other: Ptr[Const[String]])            -> Void
     replace_byte_in_place(find: CChar, replace: CChar) -> Void
@@ -186,7 +187,7 @@ The three common receiver types and their meanings:
 A block can contain forward declarations, full definitions, or both:
 
 ```tl
-s: Ptr[Const[String]] : {
+(s: Ptr[Const[String]]): {
     // Forward declaration.
     len() -> CSize
 
@@ -216,7 +217,7 @@ are known types and which are not. In `Ptr[Array[T]]`:
 The inferred type parameters are prepended to each function's type parameter list:
 
 ```tl
-self: Ptr[Array[T]] : {
+(self: Ptr[Array[T]]): {
     push(x: T)        -> Void
     pop()              -> T
     get(index: CSize)  -> T
@@ -236,7 +237,7 @@ get[T](self: Ptr[Array[T]], index: CSize)  -> T
 Multiple unknown identifiers each become type parameters, in the order they first appear:
 
 ```tl
-self: Ptr[HashMap[K, V]] : {
+(self: Ptr[HashMap[K, V]]): {
     size()     -> CSize
     is_empty() -> Bool
 }
@@ -255,7 +256,7 @@ Type parameters in the receiver type may carry trait constraints using the exist
 `Name: Trait` constraint syntax:
 
 ```tl
-self: Ptr[HashMap[K: HashEq, V]] : {
+(self: Ptr[HashMap[K: HashEq, V]]): {
     set(key: K, value: V) -> Void
     get(key: K)           -> Ptr[V]
     contains(key: K)      -> Bool
@@ -275,7 +276,7 @@ Functions that don't need the constraint go in a separate block:
 
 ```tl
 // Unconstrained.
-self: Ptr[HashMap[K, V]] : {
+(self: Ptr[HashMap[K, V]]): {
     size()     -> CSize
     is_empty() -> Bool
     clear()    -> Void
@@ -283,7 +284,7 @@ self: Ptr[HashMap[K, V]] : {
 }
 
 // Requires HashEq on K.
-self: Ptr[HashMap[K: HashEq, V]] : {
+(self: Ptr[HashMap[K: HashEq, V]]): {
     set(key: K, value: V) -> Void
     get(key: K)           -> Ptr[V]
     contains(key: K)      -> Bool
@@ -298,7 +299,7 @@ unified -- if the same name appears in multiple parameter types, it becomes a si
 type parameter:
 
 ```tl
-a: Array[T], b: Array[T] : {
+(a: Array[T], b: Array[T]): {
     eq()    -> Bool
     concat() -> Array[T]
 }
@@ -314,7 +315,7 @@ concat[T](a: Array[T], b: Array[T]) -> Array[T]
 Parameters may also have different types:
 
 ```tl
-self: Ptr[Array[T]], s: Slice[T] : {
+(self: Ptr[Array[T]], s: Slice[T]): {
     append_slice() -> Void
 }
 // desugars to: append_slice[T](self: Ptr[Array[T]], s: Slice[T]) -> Void
@@ -326,7 +327,7 @@ A function inside a receiver block can introduce additional type parameters beyo
 inferred from the receiver:
 
 ```tl
-self: Ptr[Array[T]] : {
+(self: Ptr[Array[T]]): {
     map[U](f: fn/1(T) -> U) -> Array[U]
 }
 ```
@@ -345,12 +346,12 @@ Block-level type parameters come first, then function-level ones.
 Given a receiver block:
 
 ```
-name1 : Type1, name2 : Type2, ... : {
+(name1: Type1, name2: Type2, ...): {
     func_name(params...) -> ReturnType
 }
 ```
 
-(The single-parameter form `name : Type : { ... }` is just the one-element case.)
+(The single-parameter form `(name: Type): { ... }` is just the one-element case.)
 
 The parser performs these steps:
 
@@ -379,38 +380,18 @@ only ordinary free functions.
 
 ### Disambiguation
 
-The single-parameter receiver block introduces the token sequence:
+A receiver block starts with `(` at the top level, which is the disambiguator. The
+opening parenthesis is not valid at the start of any other top-level form, so the parser
+can immediately recognize a receiver block.
+
+The full token sequence is:
 
 ```
-identifier : TypeExpr : {
+( name : TypeExpr , ... ) : {
 ```
-
-The multi-parameter form introduces:
-
-```
-identifier : TypeExpr , identifier : TypeExpr , ... : {
-```
-
-Existing top-level forms after `identifier :` are:
-
-| After `identifier :`     | Meaning                  |
-|--------------------------|--------------------------|
-| `{ ... }` or `\| ...`   | Struct or tagged union    |
-| `Identifier { ... }`     | Trait with parent         |
-| `TypeExpr :=`            | Variable binding          |
-| `TypeExpr =`             | Typed assignment          |
-| **`TypeExpr : { ... }`** | **Receiver block (new)**  |
-| **`TypeExpr , ...`**     | **Multi-param block (new)** |
-
-For the single-parameter form, the second `:` before `{` is the disambiguator. No
-existing form produces this token sequence.
-
-For the multi-parameter form, the `,` after a complete type expression is the early
-disambiguator -- no existing top-level form has `identifier : TypeExpr ,`. The parser
-can collect comma-separated `name : Type` pairs until it sees `: {`.
 
 Colons inside bracketed type expressions (e.g., `HashMap[K: HashEq, V]`) are consumed
-by bracket parsing and do not interfere with the top-level `:` or `,` detection.
+by bracket parsing and do not interfere with parameter parsing inside the parentheses.
 
 ### Scope
 
@@ -425,7 +406,7 @@ bodies, struct definitions, or other nested contexts.
 The common allocator-pair pattern works naturally inside a receiver block:
 
 ```tl
-s: Ptr[Const[String]] : {
+(s: Ptr[Const[String]]): {
     to_upper(alloc: Ptr[Allocator]) -> String
     to_upper()                      -> String
     trim(alloc: Ptr[Allocator])     -> String
@@ -469,13 +450,13 @@ generic types to distinguish read-only from mutating methods, just like non-gene
 
 ```tl
 // Read-only access to a generic array.
-s: Ptr[Const[Array[T]]] : {
+(s: Ptr[Const[Array[T]]]): {
     is_empty() -> Bool
     get(index: CSize) -> T
 }
 
 // Mutating access.
-self: Ptr[Array[T]] : {
+(self: Ptr[Array[T]]): {
     push(x: T) -> Void
     pop()       -> T
 }
@@ -487,7 +468,7 @@ Private helpers (prefixed with `_`) can use receiver blocks if they share a comm
 receiver:
 
 ```tl
-s: Ptr[Const[String]] : {
+(s: Ptr[Const[String]]): {
     _is_small() -> Bool
     _small_len() -> CSize
     _buf()       -> Ptr[CChar]
@@ -545,13 +526,13 @@ from_byte  (b: Byte)                                               -> String
 from_bool  (b: Bool)                                               -> String
 
 // Comparison (symmetric).
-a: Ptr[Const[String]], b: Ptr[Const[String]] : {
+(a: Ptr[Const[String]], b: Ptr[Const[String]]): {
     eq()  -> Bool
     cmp() -> CInt
 }
 
 // Immutable operations.
-s: Ptr[Const[String]] : {
+(s: Ptr[Const[String]]): {
     len()                                    -> CSize
     is_empty()                               -> Bool
     byte_at(index: CSize)                    -> Option[Byte]
@@ -608,7 +589,7 @@ s: Ptr[Const[String]] : {
 }
 
 // Mutating operations.
-self: Ptr[String] : {
+(self: Ptr[String]): {
     cstr()                                                  -> CString
     push(alloc: Ptr[Allocator], other: Ptr[Const[String]])  -> Void
     push(other: Ptr[Const[String]])                         -> Void
@@ -649,7 +630,7 @@ from_ptr[T](alloc: Ptr[Allocator], ptr: Ptr[T], len: CSize) -> Array[T]
 from_ptr[T](ptr: Ptr[T], len: CSize)                        -> Array[T]
 
 // Mutable operations.
-self: Ptr[Array[T]] : {
+(self: Ptr[Array[T]]): {
     push(alloc: Ptr[Allocator], x: T) -> Void
     push(x: T)                        -> Void
     reserve(alloc: Ptr[Allocator], count: CSize) -> Void
@@ -676,7 +657,7 @@ self: Ptr[Array[T]] : {
 }
 
 // By-value operations.
-arr: Array[T] : {
+(arr: Array[T]): {
     get(index: CSize)              -> T
     front()                        -> T
     back()                         -> T
@@ -738,7 +719,7 @@ create[K, V](alloc: Ptr[Allocator])                    -> Ptr[HashMap[K, V]]
 create[K, V](alloc: Ptr[Allocator], opts: HashMapOpts) -> Ptr[HashMap[K, V]]
 
 // Unconstrained methods.
-self: Ptr[HashMap[K, V]] : {
+(self: Ptr[HashMap[K, V]]): {
     size()                        -> CSize
     is_empty()                    -> Bool
     clear()                       -> Void
@@ -750,7 +731,7 @@ self: Ptr[HashMap[K, V]] : {
 }
 
 // Methods requiring HashEq on K.
-self: Ptr[HashMap[K: HashEq, V]] : {
+(self: Ptr[HashMap[K: HashEq, V]]): {
     set(key: K, value: V) -> Void
     get(key: K)           -> Ptr[V]
     get_copy(key: K)      -> Option[V]

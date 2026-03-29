@@ -7,11 +7,11 @@
 
 #module Foo
 
-_A: { x: CInt }
-_B: { y: CInt }
+_A:  { x: CInt         }
+_B:  { y: CInt         }
 Foo: { | a: _A | b: _B }
 
-a: Ptr[Const[Foo]], b: Ptr[Const[Foo]]: {
+(a: Ptr[Const[Foo]], b: Ptr[Const[Foo]]): {
     eq () -> Bool
 }
 

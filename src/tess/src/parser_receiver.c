@@ -8,7 +8,6 @@
 // with the block's parameters prepended. This is purely a parser transformation.
 
 #include "parser_internal.h"
-#include "infer.h"          // is_intrinsic, is_c_symbol, is_main_function
 #include "type_registry.h"
 
 // ============================================================================
@@ -28,7 +27,7 @@ static int receiver_type_arg(parser *self) {
     if (ast_node_is_symbol(node) && 0 == a_try(self, a_colon)) {
         if (a_try(self, a_receiver_type_expr)) return ERROR_STOP;
         node->symbol.annotation = self->result;
-        self->result = node;
+        self->result            = node;
     }
     return 0;
 }
@@ -59,7 +58,7 @@ done:
 // are always simple identifiers with optional type arguments.
 static int a_receiver_type_expr(parser *self) {
     if (0 == a_try(self, a_attributed_identifier)) {
-        ast_node *ident = self->result;
+        ast_node      *ident = self->result;
 
         ast_node_array type_args;
         if (ERROR_STOP == maybe_receiver_type_arguments(self, &type_args)) return ERROR_STOP;
@@ -140,14 +139,14 @@ static ast_node *clone_type_strip_constraints(allocator *alloc, ast_node const *
     if (!node) return null;
 
     if (ast_node_is_symbol(node)) {
-        ast_node *clone      = ast_node_clone(alloc, node);
+        ast_node *clone          = ast_node_clone(alloc, node);
         clone->symbol.annotation = null;
         return clone;
     }
 
     if (ast_node_is_nfa(node)) {
-        u8          n    = node->named_application.n_type_arguments;
-        ast_node  **args = alloc_malloc(alloc, n * sizeof(ast_node *));
+        u8         n    = node->named_application.n_type_arguments;
+        ast_node **args = alloc_malloc(alloc, n * sizeof(ast_node *));
         for (u8 i = 0; i < n; i++)
             args[i] = clone_type_strip_constraints(alloc, node->named_application.type_arguments[i]);
         ast_node *name_clone = ast_node_clone(alloc, node->named_application.name);
@@ -167,13 +166,13 @@ static ast_node *clone_type_strip_constraints(allocator *alloc, ast_node const *
 // (no symbol registration, no name mangling).
 static int parse_receiver_entry(parser *self, receiver_entry *out) {
     if (a_try(self, a_attributed_identifier)) return 1;
-    out->name = self->result;
+    out->name        = self->result;
 
     out->type_params = (ast_node_array){.alloc = self->ast_arena};
     if (maybe_type_parameters(self, &out->type_params)) return 1;
 
     out->params = (ast_node_array){.alloc = self->ast_arena};
-    int res = parse_param_list(self, &out->params, 1);
+    int res     = parse_param_list(self, &out->params, 1);
     if (res) return res;
 
     out->return_type = null;
@@ -205,6 +204,8 @@ static int parse_receiver_entry(parser *self, receiver_entry *out) {
 // Parse a complete receiver block into out. Does not produce AST nodes.
 // Returns 0 on success, 1 for backtrack, ERROR_STOP for fatal error.
 static int parse_receiver_block(parser *self, receiver_block_info *out) {
+    if (a_try(self, a_open_round)) return 1;
+
     out->params  = (receiver_param_array){.alloc = self->ast_arena};
     out->entries = (receiver_entry_array){.alloc = self->ast_arena};
 
@@ -228,6 +229,9 @@ static int parse_receiver_block(parser *self, receiver_block_info *out) {
         array_push(out->params, p);
     }
 
+    // close round
+    if (a_try(self, a_close_round)) return 1;
+
     // Second colon — the disambiguator
     if (a_try(self, a_colon)) return 1;
 
@@ -237,7 +241,7 @@ static int parse_receiver_block(parser *self, receiver_block_info *out) {
     // Parse entries until closing brace
     while (0 != a_try(self, a_close_curly)) {
         receiver_entry entry = {0};
-        int res = parse_receiver_entry(self, &entry);
+        int            res   = parse_receiver_entry(self, &entry);
         if (res) return ERROR_STOP;
         array_push(out->entries, entry);
     }
@@ -291,8 +295,8 @@ static ast_node *desugar_entry(parser *self, receiver_block_info *info, receiver
         ast_node *tup = ast_node_create_tuple(alloc, (ast_node_sized)array_sized(full_params));
         set_node_file(self, tup);
 
-        ast_node *arrow =
-          ast_node_create_arrow(alloc, tup, entry->return_type, (ast_node_sized)sized_all(full_type_params));
+        ast_node *arrow = ast_node_create_arrow(alloc, tup, entry->return_type,
+                                                (ast_node_sized)sized_all(full_type_params));
         set_node_file(self, arrow);
 
         name->symbol.annotation = arrow;
@@ -358,7 +362,7 @@ static int desugar_receiver_block(parser *self, receiver_block_info *info) {
 // Called from toplevel() dispatch chain via a_try().
 int toplevel_receiver_block(parser *self) {
     receiver_block_info info;
-    int res = parse_receiver_block(self, &info);
+    int                 res = parse_receiver_block(self, &info);
     if (res) return res;
     return desugar_receiver_block(self, &info);
 }

@@ -2,9 +2,9 @@
 
 #module Box
 
-Box[T] : { value: T }
+Box[T]: { value: T }
 
-self: Ptr[Box[T]] : {
+(self: Ptr[Box[T]]): {
     get() -> T {
         self->value
     }

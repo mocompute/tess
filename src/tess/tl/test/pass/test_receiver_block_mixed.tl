@@ -2,15 +2,15 @@
 
 #module Point
 
-Point : { x: Int, y: Int }
+Point: { x: Int, y: Int }
 
 // Forward declarations in a receiver block.
-p: Ptr[Point] : {
+(p: Ptr[Point]): {
     sum() -> Int
 }
 
 // Separate block with definitions.
-p: Ptr[Point] : {
+(p: Ptr[Point]):  {
     diff() -> Int {
         p->x - p->y
     }
@@ -25,7 +25,7 @@ sum(p) {
 
 main() {
     error := 0
-    p := Point(x = 3, y = 7)
+    p     := Point(x = 3, y = 7)
 
     error += if p.sum() == 10 {0} else {1}
     error += if p.diff() == -4 {0} else {1}

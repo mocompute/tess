@@ -3,9 +3,9 @@
 
 #module Box
 
-Box[T] : { value: T }
+Box[T]: { value: T }
 
-b: Box[T] : {
+(b: Box[T]):   {
     get() -> T {
         b.value
     }
