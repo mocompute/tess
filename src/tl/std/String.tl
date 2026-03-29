@@ -228,6 +228,8 @@ copy(s) {
 }
 
 #ifc
+#include <limits.h>
+_Static_assert(CHAR_BIT == 8, "String requires 8-bit char");
 #include <stdio.h>
 static size_t tl_string_snprintf_int(char *buf, size_t sz, long long n) {
     int r = snprintf(buf, sz, "%lld", n);
