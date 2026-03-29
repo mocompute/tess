@@ -1277,7 +1277,7 @@ int maybe_type_parameters(parser *self, ast_node_array *out) {
 }
 
 // Check if an annotation AST node is a variadic type: NFA(name="...", type_args=[TraitName])
-static int is_variadic_annotation(ast_node *ann) {
+int is_variadic_annotation(ast_node *ann) {
     if (!ann) return 0;
     if (!ast_node_is_nfa(ann)) return 0;
     if (!ast_node_is_symbol(ann->named_application.name)) return 0;
@@ -1285,7 +1285,7 @@ static int is_variadic_annotation(ast_node *ann) {
 }
 
 // Extract the trait name from a variadic type annotation
-static str variadic_trait_name(ast_node *ann) {
+str variadic_trait_name(ast_node *ann) {
     // ann is NFA(name="...", type_args=[TraitName])
     assert(ann->named_application.n_type_arguments == 1);
     ast_node *trait = ann->named_application.type_arguments[0];
@@ -1300,7 +1300,7 @@ static str variadic_trait_name(ast_node *ann) {
 // n_fixed: number of fixed (non-variadic) params
 // trait: trait name from the variadic bound
 // module: current module name
-static void register_variadic_symbol(parser *self, str base_name, str mangled, u8 n_fixed, str trait,
+void register_variadic_symbol(parser *self, str base_name, str mangled, u8 n_fixed, str trait,
                                      str module) {
     variadic_symbol_info *info = alloc_malloc(self->parent_alloc, sizeof(variadic_symbol_info));
     info->n_fixed_params       = n_fixed;
@@ -1313,7 +1313,7 @@ static void register_variadic_symbol(parser *self, str base_name, str mangled, u
 // Detect whether the last parameter has a variadic annotation (...TraitName),
 // compute arity, mangle the name, and register the variadic symbol if found.
 // Returns 1 if variadic, 0 otherwise. *out_arity receives the mangled arity.
-static int detect_and_register_variadic(parser *self, ast_node *name, ast_node_sized params,
+int detect_and_register_variadic(parser *self, ast_node *name, ast_node_sized params,
                                         u8 *out_arity) {
     int is_variadic = 0;
     u8  n_fixed     = (u8)params.size;
@@ -1818,6 +1818,9 @@ int toplevel(parser *self) {
         else if (ERROR_STOP == res) goto error;
 
         if (0 == (res = a_try(self, toplevel_union))) goto success;
+        else if (ERROR_STOP == res) goto error;
+
+        if (0 == (res = a_try(self, toplevel_receiver_block))) goto success;
         else if (ERROR_STOP == res) goto error;
 
         if (0 == (res = a_try(self, toplevel_defun))) goto success;

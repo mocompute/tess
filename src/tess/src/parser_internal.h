@@ -246,6 +246,12 @@ void     add_module_symbol(parser *, ast_node *);
 hashmap *resolve_module_symbols(parser *, str module_name);
 void     maybe_mangle_implicit_submodule(parser *, ast_node *name);
 
+// Variadic detection and symbol registration
+int  is_variadic_annotation(ast_node *ann);
+str  variadic_trait_name(ast_node *ann);
+void register_variadic_symbol(parser *, str base_name, str mangled, u8 n_fixed, str trait, str module);
+int  detect_and_register_variadic(parser *, ast_node *name, ast_node_sized params, u8 *out_arity);
+
 // parser infrastructure
 
 int           is_eof(parser *);
@@ -265,6 +271,38 @@ str           next_var_name(parser *);
 
 void          tokens_push_back(struct parser *, struct token *);
 void          tokens_shrink(struct parser *, u32);
+
+// ============================================================================
+// Receiver blocks
+// ============================================================================
+
+// A single parameter in the receiver block header: "name : TypeExpr"
+typedef struct {
+    ast_node *name;      // symbol node (from a_identifier)
+    ast_node *type_expr; // type expression (from a_type_identifier)
+} receiver_param;
+
+defarray(receiver_param_array, receiver_param);
+
+// A single function entry inside the receiver block.
+// Forward declaration (body == null) or full definition (body != null).
+typedef struct {
+    ast_node      *name;       // attributed identifier
+    ast_node_array type_params; // function-level [U] if present
+    ast_node_array params;      // explicit params only (no receiver)
+    ast_node      *return_type; // type after ->, or null
+    ast_node      *body;        // parsed body, or null for forward decls
+} receiver_entry;
+
+defarray(receiver_entry_array, receiver_entry);
+
+// Complete parsed receiver block (before desugaring).
+typedef struct {
+    receiver_param_array params;  // 1 or more receiver parameters
+    receiver_entry_array entries; // function entries inside { ... }
+} receiver_block_info;
+
+int toplevel_receiver_block(parser *);
 
 #ifndef MOS_WINDOWS
 void parser_dbg(struct parser *, char const *restrict fmt, ...) __attribute__((format(printf, 2, 3)));
