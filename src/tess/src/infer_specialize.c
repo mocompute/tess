@@ -1447,7 +1447,7 @@ static int check_trait_bound_(tl_infer *self, ast_node *toplevel, tl_monotype *c
             // Ptr[T] auto-deref: if direct lookup failed and type is Ptr[T], try T's module.
             // Mirrors ufcs_rewrite_call() which auto-derefs pointer receivers.
             if (str_is_empty(func_name) && tl_monotype_is_ptr(concrete_type)) {
-                tl_monotype *target = tl_monotype_ptr_target(concrete_type);
+                tl_monotype *target = tl_monotype_strip_const(tl_monotype_ptr_target(concrete_type));
                 if (tl_monotype_is_inst(target))
                     func_name = find_overload_func(self, target, str_cstr(&sig->name), sig->arity);
             }

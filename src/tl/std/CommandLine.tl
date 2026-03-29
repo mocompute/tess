@@ -267,7 +267,7 @@ _parse_long(self, values, errors, name, arg, argc, argv, ip) {
 }
 
 _parse_short(self, values, errors, arg: Ptr[Const[String]], argc, argv, ip) {
-    arg_len  := String.len(arg)         // FIXME why UFCS not working
+    arg_len  := arg.len()
     j: CSize := 1
     while j < arg_len {
         bv: Some := String.byte_at(arg, j) else {
@@ -287,7 +287,7 @@ _parse_short(self, values, errors, arg: Ptr[Const[String]], argc, argv, ip) {
             fc: FlagCount { _store_count(values, spec.long_name) }
             fv: FlagValue {
                 if j + 1 < arg_len {
-                    val := String.copy(arg, j + 1, arg_len) // FIXME why UFCS not working
+                    val := arg.copy(j + 1, arg_len)
                     _store_str(values, spec.long_name, val)
                     j = arg_len
                 } else if ip.* + 1 < argc {

@@ -2969,6 +2969,9 @@ static int ufcs_rewrite_call(tl_infer *self, traverse_ctx *ctx, ast_node *node, 
     if (tl_monotype_is_ptr(recv_type)) {
         recv_type = tl_monotype_ptr_target(recv_type);
     }
+    if (tl_monotype_is_const(recv_type)) {
+        recv_type = tl_monotype_const_target(recv_type);
+    }
 
     // Lookup: try unqualified, then module-qualified from receiver's type
     tl_polytype *fn_poly = lookup_poly(self, ufcs_name);
