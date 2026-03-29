@@ -246,10 +246,7 @@ void     add_module_symbol(parser *, ast_node *);
 hashmap *resolve_module_symbols(parser *, str module_name);
 void     maybe_mangle_implicit_submodule(parser *, ast_node *name);
 
-// Variadic detection and symbol registration
-int  is_variadic_annotation(ast_node *ann);
-str  variadic_trait_name(ast_node *ann);
-void register_variadic_symbol(parser *, str base_name, str mangled, u8 n_fixed, str trait, str module);
+// Variadic detection and symbol registration (called from parser_receiver.c)
 int  detect_and_register_variadic(parser *, ast_node *name, ast_node_sized params, u8 *out_arity);
 
 // parser infrastructure

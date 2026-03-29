@@ -134,21 +134,23 @@ static void collect_type_params(parser *self, ast_node *type_expr, ast_node_arra
 static ast_node *clone_type_strip_constraints(allocator *alloc, ast_node const *node) {
     if (!node) return null;
 
-    ast_node *clone = ast_node_clone(alloc, node);
-
-    if (ast_node_is_symbol(clone)) {
+    if (ast_node_is_symbol(node)) {
+        ast_node *clone      = ast_node_clone(alloc, node);
         clone->symbol.annotation = null;
         return clone;
     }
 
-    if (ast_node_is_nfa(clone)) {
-        for (u8 i = 0; i < clone->named_application.n_type_arguments; i++) {
-            clone->named_application.type_arguments[i] =
-              clone_type_strip_constraints(alloc, clone->named_application.type_arguments[i]);
-        }
+    if (ast_node_is_nfa(node)) {
+        u8          n    = node->named_application.n_type_arguments;
+        ast_node  **args = alloc_malloc(alloc, n * sizeof(ast_node *));
+        for (u8 i = 0; i < n; i++)
+            args[i] = clone_type_strip_constraints(alloc, node->named_application.type_arguments[i]);
+        ast_node *name_clone = ast_node_clone(alloc, node->named_application.name);
+        return ast_node_create_nfa(alloc, name_clone, (ast_node_sized){.v = args, .size = n},
+                                   (ast_node_sized){0});
     }
 
-    return clone;
+    return ast_node_clone(alloc, node);
 }
 
 // ============================================================================
@@ -272,7 +274,7 @@ static ast_node *desugar_entry(parser *self, receiver_block_info *info, receiver
     forall(i, entry->type_params) {
         // Only add if not already present from block-level
         str name = ast_node_str(entry->type_params.v[i]);
-        if (!has_type_param(block_type_params, name)) {
+        if (!has_type_param(&full_type_params, name)) {
             array_push(full_type_params, entry->type_params.v[i]);
         }
     }
