@@ -97,11 +97,9 @@ last_index_of     (s: Ptr[Const[String]], needle: Ptr[Const[String]]) -> Option[
 count_byte        (s: Ptr[Const[String]], b: CChar)                   -> CSize
 count             (s: Ptr[Const[String]], needle: Ptr[Const[String]]) -> CSize
 
-// Mutation.
-replace_byte(alloc: Ptr[Allocator], s: Ptr[Const[String]], find: CChar, replace: CChar) -> String
-replace_byte(s: Ptr[Const[String]], find: CChar, replace: CChar)                        -> String
-
 // Transformation.
+replace_byte(alloc: Ptr[Allocator], s: Ptr[Const[String]], find: CChar, replace: CChar)                        -> String
+replace_byte(s: Ptr[Const[String]], find: CChar, replace: CChar)                                               -> String
 to_upper    (alloc: Ptr[Allocator], s: Ptr[Const[String]])                                                     -> String
 to_upper    (s: Ptr[Const[String]])                                                                            -> String
 to_lower    (alloc: Ptr[Allocator], s: Ptr[Const[String]])                                                     -> String
@@ -120,6 +118,11 @@ strip_prefix(alloc: Ptr[Allocator], s: Ptr[Const[String]], prefix: Ptr[Const[Str
 strip_prefix(s: Ptr[Const[String]], prefix: Ptr[Const[String]])                                                -> String
 strip_suffix(alloc: Ptr[Allocator], s: Ptr[Const[String]], suffix: Ptr[Const[String]])                         -> String
 strip_suffix(s: Ptr[Const[String]], suffix: Ptr[Const[String]])                                                -> String
+
+// In-place transformation.
+replace_byte_in_place(s: Ptr[String], find: CChar, replace: CChar) -> Void
+to_upper_in_place    (s: Ptr[String])                              -> Void
+to_lower_in_place    (s: Ptr[String])                              -> Void
 
 // Split and join.
 split(alloc: Ptr[Allocator], s: Ptr[Const[String]], delimiter: Ptr[Const[String]]) -> Array.Array[String]
@@ -607,19 +610,11 @@ count(s, needle) {
 }
 
 
-// -- Mutation --
+// -- Transformation --
 
 replace_byte(alloc, s, find, replace) {
-    result   := copy(alloc, s)
-    n        := len(result.&)
-    rp       := _buf(result.&)
-    i: CSize := 0
-    while i < n, i += 1 {
-        ch: CChar := rp.[i]
-        if ch == find {
-            rp.[i] = replace
-        }
-    }
+    result := copy(alloc, s)
+    replace_byte_in_place(result.&, find, replace)
     result
 }
 
@@ -627,17 +622,9 @@ replace_byte(s, find, replace) {
     replace_byte(Alloc.context.default, s, find, replace)
 }
 
-
-// -- Transformation --
-
 to_upper(alloc, s) {
-    result   := copy(alloc, s)
-    n        := len(result.&)
-    rp       := _buf(result.&)
-    i: CSize := 0
-    while i < n, i += 1 {
-        if rp.[i] >= 'a' && rp.[i] <= 'z' { rp.[i] = rp.[i] - ' ' }
-    }
+    result := copy(alloc, s)
+    to_upper_in_place(result.&)
     result
 }
 
@@ -646,13 +633,8 @@ to_upper(s) {
 }
 
 to_lower(alloc, s) {
-    result   := copy(alloc, s)
-    n        := len(result.&)
-    rp       := _buf(result.&)
-    i: CSize := 0
-    while i < n, i += 1 {
-        if rp.[i] >= 'A' && rp.[i] <= 'Z' { rp.[i] = rp.[i] + ' ' }
-    }
+    result := copy(alloc, s)
+    to_lower_in_place(result.&)
     result
 }
 
@@ -836,6 +818,41 @@ strip_suffix(alloc, s, suffix) {
 
 strip_suffix(s, suffix) {
     strip_suffix(Alloc.context.default, s, suffix)
+}
+
+
+// -- In-place transformation --
+
+replace_byte_in_place(s, find, replace) {
+    n        := len(s)
+    rp       := _buf(s)
+    i: CSize := 0
+    while i < n, i += 1 {
+        ch: CChar := rp.[i]
+        if ch == find {
+            rp.[i] = replace
+        }
+    }
+}
+
+to_upper_in_place(s) {
+    n        := len(s)
+    rp       := _buf(s)
+    i: CSize := 0
+    while i < n, i += 1 {
+        ch: CChar := rp.[i]
+        if ch >= 'a' && ch <= 'z' { rp.[i] = ch - ' ' }
+    }
+}
+
+to_lower_in_place(s) {
+    n        := len(s)
+    rp       := _buf(s)
+    i: CSize := 0
+    while i < n, i += 1 {
+        ch: CChar := rp.[i]
+        if ch >= 'A' && ch <= 'Z' { rp.[i] = ch + ' ' }
+    }
 }
 
 
