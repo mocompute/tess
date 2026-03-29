@@ -86,6 +86,19 @@ Summable[T]: Add[T], Eq[T] { }
 sum[T: Summable](a, b) { a + b }
 ```
 
+**Receiver blocks.** Group methods by their receiver instead of repeating it on every function. No `impl` keyword — just parentheses and braces. Call sites use dot syntax.
+
+```tl
+#module Stack
+
+Stack[T]: { data: Array[T] }
+
+(self: Ptr[Stack[T]]): {
+    push(x: T) -> Void { self->data.push(x) }
+    pop()      -> T    { self->data.pop() }
+}
+```
+
 **C interop.** Include a C header and call its functions directly. Export Tess functions back to C: the compiler generates the `.h` for you.
 
 ```tl
