@@ -1184,6 +1184,127 @@ n.mymath.square()            // n is Int — module qualifier needed for non-str
 
 **Generics:** dot-call syntax works with generic structs and generic functions. Inside generic function bodies, dot-call syntax resolution is deferred to specialization, when the receiver's type is known.
 
+### Receiver Blocks
+
+A receiver block factors shared parameters out of a group of function declarations and/or definitions.
+This is purely syntactic sugar — the parser desugars each entry into a normal top-level function with the
+block's parameters prepended.
+
+```tl
+s: Ptr[Const[String]] : {
+    len()                 -> CSize
+    is_empty()            -> Bool
+    byte_at(index: CSize) -> Option[Byte]
+}
+```
+
+Desugars to:
+
+```tl
+len(s: Ptr[Const[String]])               -> CSize
+is_empty(s: Ptr[Const[String]])           -> Bool
+byte_at(s: Ptr[Const[String]], index: CSize) -> Option[Byte]
+```
+
+The identifier before the first colon is the parameter name — there is no implicit `self` or `this`. The
+name is available in function bodies:
+
+```tl
+s: Ptr[Const[String]] : {
+    is_empty() -> Bool {
+        len(s) == 0
+    }
+}
+```
+
+A block can contain forward declarations, full definitions, or both.
+
+#### Multiple Receiver Types
+
+A module may have multiple blocks for different receiver types:
+
+```tl
+// Immutable access.
+s: Ptr[Const[String]] : {
+    len()      -> CSize
+    is_empty() -> Bool
+}
+
+// Mutation.
+self: Ptr[String] : {
+    push(other: Ptr[Const[String]]) -> Void
+    free()                          -> Void
+}
+```
+
+#### Multiple Parameters
+
+Multiple parameters can be factored out by separating them with commas:
+
+```tl
+a: Ptr[Const[String]], b: Ptr[Const[String]] : {
+    eq()  -> Bool
+    cmp() -> CInt
+}
+```
+
+Desugars to:
+
+```tl
+eq(a: Ptr[Const[String]], b: Ptr[Const[String]])  -> Bool
+cmp(a: Ptr[Const[String]], b: Ptr[Const[String]]) -> CInt
+```
+
+The parameters need not share a type. All named parameters are available in function bodies.
+
+#### Generics
+
+The parser infers type parameters from the receiver type by checking which identifiers are known types and
+which are not. In `Ptr[Array[T]]`: `Ptr` and `Array` are known, `T` is unknown — therefore `T` becomes a
+type parameter threaded to every function in the block:
+
+```tl
+self: Ptr[Array[T]] : {
+    push(x: T) -> Void
+    pop()       -> T
+}
+```
+
+Desugars to:
+
+```tl
+push[T](self: Ptr[Array[T]], x: T) -> Void
+pop[T](self: Ptr[Array[T]])        -> T
+```
+
+**Trait constraints** on inferred type parameters are specified inline:
+
+```tl
+self: Ptr[HashMap[K: HashEq, V]] : {
+    set(key: K, value: V) -> Void
+    get(key: K)           -> Ptr[V]
+}
+// desugars to:
+// set[K: HashEq, V](self: Ptr[HashMap[K, V]], key: K, value: V) -> Void
+// get[K: HashEq, V](self: Ptr[HashMap[K, V]], key: K)           -> Ptr[V]
+```
+
+Functions that don't need the constraint go in a separate block without it.
+
+**Additional function-level type parameters** are merged after the block-level ones:
+
+```tl
+self: Ptr[Array[T]] : {
+    map[U](f: fn/1(T) -> U) -> Array[U]
+}
+// desugars to: map[T, U](self: Ptr[Array[T]], f: fn/1(T) -> U) -> Array[U]
+```
+
+#### Scope
+
+Receiver blocks are only valid at the module top level. They cannot appear inside function bodies, struct
+definitions, or other nested contexts.
+
 ### The `main` Function
 
 The entry point is `main()` in the `main` module. It must return `CInt`. The compiler accepts two forms:
