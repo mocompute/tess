@@ -2010,9 +2010,10 @@ int parser_parse_all(parser *self, ast_node_array *out) {
         ast_node *node;
 
         parser_result(self, &node);
-        str str = v2_ast_node_to_string(self->transient, node);
-        parser_dbg(self, "parse_all: parsed node %s", str_cstr(&str));
-
+        if (self->verbose) {
+            str str = v2_ast_node_to_string(self->transient, node);
+            parser_dbg(self, "parse_all: parsed node %s", str_cstr(&str));
+        }
         array_push(*out, node);
     }
 
