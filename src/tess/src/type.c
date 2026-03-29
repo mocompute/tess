@@ -1000,12 +1000,7 @@ static tl_monotype *parse_type_nfa(tl_type_registry *self, tl_type_registry_pars
             node->named_application.n_type_arguments);
 #endif
 
-    if (tl_type_registry_is_unary_type(self, name)) {
-
-        // Note: returning null is valid, because this function may be called to try to parse things
-        // which look like type literals for a while, but are actually type constructors.
-
-        if (1 != node->named_application.n_type_arguments) return null;
+    if (tl_type_registry_is_unary_type(self, name) && 1 == node->named_application.n_type_arguments) {
         ast_node const *target      = node->named_application.type_arguments[0];
 
         ast_node const *target_name = null;

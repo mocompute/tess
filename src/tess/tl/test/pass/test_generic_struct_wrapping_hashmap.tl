@@ -5,7 +5,7 @@
 
 #import <HashMap.tl>
 
-Lookup[K, V] : { map: Ptr[HashMap[K, V]] }
+Lookup[K, V]: { map: Ptr[HashMap[K, V]] }
 
 count[K, V](self: Ptr[Lookup[K, V]]) -> CSize {
     self->map.size()
@@ -22,7 +22,7 @@ destroy[K, V](self: Ptr[Lookup[K, V]]) -> Void {
 #module main
 
 main() {
-    lk := Lookup.create[Int, Int]()
+    lk    := Lookup.create[Int, Int]()
     error := if lk.count() == 0 {0} else {1}
     lk.destroy()
     error
