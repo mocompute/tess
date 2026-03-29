@@ -74,14 +74,12 @@ contains_char(s: String, b: CChar)              -> Bool
 eq_cstr      (s: String, cs: CString)           -> Bool
 
 // Concatenation.
-cat   (alloc: Ptr[Allocator], a: String, b: String)                       -> String
-cat   (a: String, b: String)                                              -> String
-cat_3 (alloc: Ptr[Allocator], a: String, b: String, c: String)            -> String
-cat_3 (a: String, b: String, c: String)                                   -> String
-cat_4 (alloc: Ptr[Allocator], a: String, b: String, c: String, d: String) -> String
-cat_4 (a: String, b: String, c: String, d: String)                        -> String
-push  (self: Ptr[String], alloc: Ptr[Allocator], other: String)           -> Void
-push  (self: Ptr[String], other: String)                                  -> Void
+cat   (alloc: Ptr[Allocator], a: String, b: String)             -> String
+cat   (a: String, b: String)                                    -> String
+cat_3 (alloc: Ptr[Allocator], a: String, b: String, c: String)  -> String
+cat_3 (a: String, b: String, c: String)                         -> String
+push  (self: Ptr[String], alloc: Ptr[Allocator], other: String) -> Void
+push  (self: Ptr[String], other: String)                        -> Void
 
 // Slicing and copying.
 copy  (alloc: Ptr[Allocator], s: String, start: CSize, end: CSize) -> String
@@ -447,23 +445,6 @@ cat_3(alloc, a, b, c) {
 cat_3(a, b, c) {
     cat_3(Alloc.context.default, a, b, c)
 }
-
-cat_4(alloc, a, b, c, d) {
-    bufs: CArray[Ptr[CChar], 4] := void
-    lens: CArray[CSize, 4]      := void
-    bufs.[0] = _buf(a.&) lens.[0] = len(a)
-    bufs.[1] = _buf(b.&) lens.[1] = len(b)
-    bufs.[2] = _buf(c.&) lens.[2] = len(c)
-    bufs.[3] = _buf(d.&) lens.[3] = len(d)
-    bp: Ptr[Ptr[CChar]] := bufs
-    lp: Ptr[CSize]      := lens
-    _cat_impl(alloc, bp, lp, 4)
-}
-
-cat_4(a, b, c, d) {
-    cat_4(Alloc.context.default, a, b, c, d)
-}
-
 
 push(self, alloc, other) {
     result := cat(alloc, self.*, other)

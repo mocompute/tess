@@ -357,24 +357,6 @@ test_cat_3() {
     error
 }
 
-test_cat_4() {
-    error := 0
-    a     := String.from_cstr(c"one")
-    b     := String.from_cstr(c" two")
-    c     := String.from_cstr(c" three")
-    d     := String.from_cstr(c" four")
-    r     := a.cat_4(b, c, d)
-    cs    := r.cstr()
-    if c_strcmp(cs, c"one two three four") != 0 { error += 1 }
-    if r.len() != 18zu { error += 1 }
-    a.free()
-    b.free()
-    c.free()
-    d.free()
-    r.free()
-    error
-}
-
 // -- Access and slicing --
 
 test_byte_at() {
@@ -1527,7 +1509,6 @@ main() {
     error += _check(c"cat_to_big", test_cat_to_big())
     error += _check(c"push", test_push())
     error += _check(c"cat_3", test_cat_3())
-    error += _check(c"cat_4", test_cat_4())
     error += _check(c"byte_at", test_byte_at())
     error += _check(c"char_at", test_char_at())
     error += _check(c"copy_range", test_copy_range())
