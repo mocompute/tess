@@ -106,6 +106,11 @@ static void collect_type_params(parser *self, ast_node *type_expr, ast_node_arra
     if (!type_expr) return;
 
     if (ast_node_is_symbol(type_expr)) {
+        // Module-mangled symbols are known identifiers (types or functions from the
+        // current module), not type parameters.  mangle_name() only sets this flag
+        // for symbols found in current_module_symbols, so it reliably distinguishes
+        // concrete names like Foo__Foo from genuine type variables like T or K.
+        if (type_expr->symbol.is_module_mangled) return;
         str name = ast_node_str(type_expr);
         if (!is_known_type_or_module(self, name) && !has_type_param(type_params, name)) {
             // Clone the symbol so we have an independent node for the type param list

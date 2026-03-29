@@ -158,6 +158,12 @@ The following are **never module-mangled**:
 4. **`builtin` module symbols** - Built-in functions like `sizeof`, `alignof`
 5. **Type names** - Types use the type registry instead
 
+### Gotcha: Mangled Names vs. Type Registry Timing
+
+`mangle_name()` checks the type registry first: if a bare name like `Foo` is found there, the function returns early without mangling. But the type registry only contains **built-in types during parsing** — user-defined types are registered later during inference. This means user-defined type names appearing inside type expressions (e.g., `Ptr[Const[Foo]]`) *will* be module-mangled to `Foo__Foo` during parsing, even though they are types, not functions.
+
+This is normally harmless because the inference phase resolves mangled type names correctly. However, any parser-level code that inspects type expressions must account for this: a module-mangled symbol (`is_module_mangled == 1`) inside a type expression is a **known concrete type**, not a free type variable. The `collect_type_params()` function in receiver block desugaring was bitten by this — it used `is_known_type_or_module()` (which checks the type registry) to decide whether a symbol was a type parameter, but the registry didn't have user-defined types yet, so mangled names like `Foo__Foo` were misclassified as type variables.
+
 ### Cross-Module References
 
 When referencing a symbol from another module:
