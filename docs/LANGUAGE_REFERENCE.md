@@ -529,7 +529,13 @@ unsafe_strip(p: Ptr[Const[Int]]) -> Ptr[Int] {
 }
 ```
 
-**Limitation:** `Const[T]` cannot be used with generic type parameters. A function like `f(dst: Ptr[T], src: Ptr[Const[T]])` will fail because `T` cannot unify with both `X` and `Const[X]`. Use `Ptr[T]` for both parameters when `T` is generic, and reserve `Const` for concrete types like `Ptr[Const[CChar]]`.
+`Const` works with generic type parameters. Both `Ptr[Const[T]]` (const pointer to a generic type) and `Ptr[Const[Container[T]]]` (const pointer to a generic container) are valid:
+
+```tl
+read_only[T](p: Ptr[Const[T]]) -> T { p.* }
+first[T](arr: Ptr[Const[Array[T]]]) -> T { arr->data.[0] }
+copy_val[T](dst: Ptr[T], src: Ptr[Const[T]]) { dst.* = src.* }
+```
 
 ### Fixed-Size Arrays (CArray)
 
