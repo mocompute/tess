@@ -43,5 +43,5 @@ This directory contains technical documentation for the Tess programming languag
 ## See Also
 
 - [CLAUDE.md](../CLAUDE.md) - Build commands and project architecture overview
-- [src/tl/std/](../src/tl/std/) - Standard library source (especially `Array.tl` for documented examples)
+- [src/tl/std/](../src/tl/std/) - Standard library source
 - [src/tess/tl/](../src/tess/tl/) - Test files demonstrating language features

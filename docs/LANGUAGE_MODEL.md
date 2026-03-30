@@ -54,7 +54,9 @@ This means: "let `x` be `5` in the expression `x + 1`." The entire thing — the
 
 ### The implicit "in"
 
-In ML-family languages, these are called *let-in expressions*, and use an explicit keyword to separate the binding from the body. For example, in OCaml you write `let x = 5 in x + 1`. In Tess, the "in" is implicit: everything after the `:=` line, up to the end of the enclosing block, is the body.
+In ML-family languages, these are called *let-in expressions*, and use an explicit keyword to separate the
+binding from the body. For example, in OCaml you write `let x = 5 in x + 1`. In Tess, the "in" is implicit:
+everything after the `:=` line, up to the end of the enclosing block, is the body.
 
 ```tl
 // Tess
@@ -126,10 +128,19 @@ if true {
 // x is not visible here
 ```
 
-### Parenthesized bindings
+Blocks can also be used purely for scoping, without producing a value.
 
-You can make the scoping explicit by using parentheses. This is especially useful when
-you want to use a binding expression in the middle of a larger expression:
+```tl
+{
+    // zero or more statements or expressions.
+    // any bindings created in this scope will not be visible after the block
+}
+```
+
+### Parenthesized expressions
+
+When you need a more complex expression to produce a value, you can use parentheses to delimit the scope.
+This is especially useful when you want to use a binding expression in the middle of a larger expression:
 
 ```tl
 result := (
@@ -138,6 +149,18 @@ result := (
   a + b       // this is the value of the parenthesized expression
 )
 // result is 30; a and b are not visible here
+```
+
+```tl
+foo(first, (tmp := 10; tmp * 2), third)
+// produces value `20` as second argument to foo()
+```
+
+Note that brace-delimited blocks cannot be used in positions where a value is required, such as the above
+examples. You must use parenthesized expressions in those positions.
+
+```tl
+foo(first, { tmp := 10; tmp * 2 }, third) // ERROR: must use parenthesized expression
 ```
 
 ## Shadowing
@@ -177,11 +200,11 @@ x = 10       // mutate it — same binding, new value
 
 The key differences from `:=`:
 
-| | `:=` (binding) | `=` (mutation) |
-|---|---|---|
-| Creates a new name? | Yes | No (name must already exist) |
-| Is an expression? | Yes (has a value) | No (statement, no value) |
-| Crosses scopes? | No (scoped to enclosing block) | Yes (mutates the original binding) |
+|                     | `:=` (binding)                 | `=` (mutation)                     |
+|---------------------|--------------------------------|------------------------------------|
+| Creates a new name? | Yes                            | No (name must already exist)       |
+| Is an expression?   | Yes (has a value)              | No (statement, no value)           |
+| Crosses scopes?     | No (scoped to enclosing block) | Yes (mutates the original binding) |
 
 Mutation reaches into the scope where the name was originally bound:
 
@@ -228,27 +251,33 @@ ptr: Ptr[Byte] := some_other_ptr     // pointer cast
 Every conversion point in Tess is a `:=` binding with a type annotation, making casts
 visually prominent and easy to find.
 
-## Variant Binding
+## Variant Binding (for Tagged Unions)
 
-Also known as let-else in ML-family languages.
+Given the tagged unions:
 
-With binding expressions understood, **variant binding** is a natural extension.
+```tl
+Option[T]: | Some { value: T }
+           | None
 
-A variant binding tries to match a value against a tagged union variant. If the match
-succeeds, the unwrapped value is bound for the rest of the scope. If it
-fails, the `else` block executes. The else block may either **diverge** (`return`,
-`break`, `continue`) or **produce a fallback value**:
+Result[T, U]: | Ok  { value: T }
+              | Err { error: U }
+
+```
+
+a variant binding tries to match a value against one of its variants. If the match succeeds, the unwrapped
+value is bound for the rest of the scope. If it fails, the `else` block executes. The else block may either
+**diverge** (`return`, `break`, `continue`) or **produce a fallback value**:
 
 ```tl
 // Diverging: exit the function if no match
-s: Some := val else { return 0 }
+s: Some := map.get("key") else { return 0 }
 // s is available here — this is the body of the binding expression
 s.value + 1
 
 // Non-diverging: use a fallback value if no match
-s: Some := val else { 0 }
-// if val was None, the whole expression evaluated to 0
-// if val was Some, s is bound and execution continues here
+s: Some := map.get("key") else { 0 }
+// if map.get result was None, the whole expression evaluated to 0
+// if map.get result was Some, s is bound and execution continues here
 ```
 
 When the else block diverges, `s` is guaranteed to be bound for the rest of the scope —
@@ -272,6 +301,24 @@ when val {
 // With variant binding: the unwrapped value is available in the surrounding scope
 s: Some := val else { return 0 }
 use(s.value)   // s is in scope for the rest of the block
+```
+
+Compare also with `try`, usable with any two-variant tagged union, when the first variant is the most useful
+result, and the second can be returned as an error signal.
+
+```tl
+good := try result
+// good is bound to Ok value for the rest of scope
+
+// equivalent to:
+when result {
+    ok: Ok {
+        // use ok.value here...
+    }
+    err: Err {
+        return err
+    }
+}
 ```
 
 ## Closures and Capture
@@ -408,7 +455,7 @@ make_counter(start: Int, arena: Ptr[Allocator]) -> Counter {
   state.* = start
 
   inc := [[alloc(arena), capture(state)]] () {
-    state.* = state.* + 1
+    state.* += 1
     state.*
   }
   get := [[alloc(arena), capture(state)]] () { state.* }
@@ -424,14 +471,14 @@ c.get()   // 2
 
 ### Stack vs. allocated closures: summary
 
-| | Stack closure | Allocated closure |
-|---|---|---|
-| Syntax | `(x) { body }` | `[[alloc, capture(...)]] (x) { body }` |
-| Captures | Implicit, by reference | Explicit, by value |
-| Mutations shared? | Yes | No (capture a pointer for shared state) |
-| Can escape scope? | No | Yes |
-| Memory | Stack (automatic) | Heap (freed via allocator or arena) |
-| Type | `Closure[F]` | `Closure[F]` (same) |
+|                   | Stack closure          | Allocated closure                       |
+|-------------------|------------------------|-----------------------------------------|
+| Syntax            | `(x) { body }`         | `[[alloc, capture(...)]] (x) { body }`  |
+| Captures          | Implicit, by reference | Explicit, by value                      |
+| Mutations shared? | Yes                    | No (capture a pointer for shared state) |
+| Can escape scope? | No                     | Yes                                     |
+| Memory            | Stack (automatic)      | Heap (freed via allocator or arena)     |
+| Type              | `Closure[F]`           | `Closure[F]` (same)                     |
 
 The two kinds are interchangeable at call sites. A function that takes a `Closure[(Int)
 -> Int]` accepts either kind — the calling convention is the same.
