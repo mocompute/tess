@@ -295,8 +295,9 @@ defarray(receiver_entry_array, receiver_entry);
 
 // Complete parsed receiver block (before desugaring).
 typedef struct {
-    receiver_param_array params;  // 1 or more receiver parameters
-    receiver_entry_array entries; // function entries inside { ... }
+    ast_node_array       type_params; // explicit [T] from [T]() syntax
+    receiver_param_array params;      // 0 or more receiver parameters
+    receiver_entry_array entries;     // function entries inside { ... }
 } receiver_block_info;
 
 int toplevel_receiver_block(parser *);

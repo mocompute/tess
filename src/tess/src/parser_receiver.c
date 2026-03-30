@@ -204,13 +204,20 @@ static int parse_receiver_entry(parser *self, receiver_entry *out) {
 // Parse a complete receiver block into out. Does not produce AST nodes.
 // Returns 0 on success, 1 for backtrack, ERROR_STOP for fatal error.
 static int parse_receiver_block(parser *self, receiver_block_info *out) {
-    if (a_try(self, a_open_round)) return 1;
-
     out->params  = (receiver_param_array){.alloc = self->ast_arena};
     out->entries = (receiver_entry_array){.alloc = self->ast_arena};
 
-    // Empty params: () is allowed
-    if (0 != a_try(self, a_close_round)) {
+    // Optionally parse explicit type parameters: [T] or [K: HashEq, V]
+    // Only valid for zero-parameter blocks: [T](): { ... }
+    if (maybe_type_parameters(self, &out->type_params)) return 1;
+
+    if (a_try(self, a_open_round)) return 1;
+
+    if (out->type_params.size > 0) {
+        // [T]() form — require empty param list
+        if (a_try(self, a_close_round)) return ERROR_STOP;
+    } else if (0 != a_try(self, a_close_round)) {
+        // Standard form — parse receiver parameters
         // First parameter: name : TypeExpr
         receiver_param first = {0};
         if (a_try(self, a_identifier)) return 1;
@@ -337,8 +344,13 @@ static ast_node *desugar_entry(parser *self, receiver_block_info *info, receiver
 
 // Desugar a receiver_block_info into AST nodes wrapped in an ast_body.
 static int desugar_receiver_block(parser *self, receiver_block_info *info) {
-    // --- Collect type parameters from all receiver param type expressions ---
+    // --- Collect block-level type parameters ---
     ast_node_array block_type_params = {.alloc = self->ast_arena};
+    // Explicit type params from [T]() syntax
+    forall(i, info->type_params) {
+        array_push(block_type_params, info->type_params.v[i]);
+    }
+    // Inferred type params from receiver param type expressions
     forall(i, info->params) {
         collect_type_params(self, info->params.v[i].type_expr, &block_type_params);
     }
