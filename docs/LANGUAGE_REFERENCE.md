@@ -1300,6 +1300,45 @@ Functions that don't need the constraint go in a separate block without it.
 // desugars to: map[T, U](self: Ptr[Array[T]], f: fn/1(T) -> U) -> Array[U]
 ```
 
+#### Explicit Type Parameters
+
+Zero-parameter blocks can specify type parameters explicitly with `[T](): { ... }`. This is useful for
+constructor-like functions that have no receiver to infer type parameters from:
+
+```tl
+[T](): {
+    empty()                           -> Array[T]
+    init(val: T, count: CSize)        -> Array[T]
+    from_ptr(ptr: Ptr[T], len: CSize) -> Array[T]
+}
+```
+
+Desugars to:
+
+```tl
+empty[T]()                             -> Array[T]
+init[T](val: T, count: CSize)          -> Array[T]
+from_ptr[T](ptr: Ptr[T], len: CSize)   -> Array[T]
+```
+
+Multiple type parameters and trait constraints work the same as with inferred type parameters:
+
+```tl
+[K: HashEq, V](): {
+    create() -> Ptr[HashMap[K, V]]
+}
+// desugars to: create[K: HashEq, V]() -> Ptr[HashMap[K, V]]
+```
+
+Functions inside the block can introduce additional type parameters, merged after the block-level ones:
+
+```tl
+[T](): {
+    convert[U](val: T, f: (T) -> U) -> U
+}
+// desugars to: convert[T, U](val: T, f: (T) -> U) -> U
+```
+
 #### Scope
 
 Receiver blocks are only valid at the module top level. They cannot appear inside function bodies, struct
