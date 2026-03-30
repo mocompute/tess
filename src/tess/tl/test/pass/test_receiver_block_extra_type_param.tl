@@ -5,7 +5,7 @@
 
 Box[T]: { value: T }
 
-(b: Box[T]):   {
+(b: Box[T]): {
     get() -> T {
         b.value
     }

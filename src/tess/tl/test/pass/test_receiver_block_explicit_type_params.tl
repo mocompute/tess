@@ -43,7 +43,7 @@ Pair[A, B]: { first: A, second: B }
 
 // Coexistence with standard receiver blocks in the same module.
 (p: Pair[A, B]): {
-    get_first() -> A { p.first }
+    get_first () -> A { p.first  }
     get_second() -> B { p.second }
 }
 
@@ -68,7 +68,7 @@ main() {
 
     // Entry-level additional type param
     p5: Pair[Int, Bool] := Pair(first = 3, second = true)
-    p6 := Pair.map_first(p5, (x) { x * 10 })
+    p6                  := Pair.map_first(p5, (x) { x * 10 })
     error += if p6.first == 30 && p6.second == true {0} else {1}
 
     // Trait-constrained explicit type param

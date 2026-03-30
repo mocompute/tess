@@ -10,7 +10,7 @@ Point: { x: Int, y: Int }
 }
 
 // Separate block with definitions.
-(p: Ptr[Point]):  {
+(p: Ptr[Point]): {
     diff() -> Int {
         p->x - p->y
     }

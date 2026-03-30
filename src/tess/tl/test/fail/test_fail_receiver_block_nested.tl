@@ -3,7 +3,7 @@
 #module main
 
 main() {
-    s: Int : {
+    s: Int: {
         foo() -> Int { s }
     }
     0

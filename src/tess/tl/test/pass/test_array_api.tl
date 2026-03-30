@@ -435,7 +435,7 @@ test_find() {
 
 test_filter_map() {
     error := 0
-    arr := Array.empty[Int]()
+    arr   := Array.empty[Int]()
     arr.push(1)
     arr.push(2)
     arr.push(3)

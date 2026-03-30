@@ -87,10 +87,10 @@ _ch_add_layer(base: (Int) -> Int, extra: Int) -> (Int) -> Int {
 test_chain() -> CInt {
     error := 0
 
-    base := _ch_make_base(10)               // base(x) = x + 10
-    l1   := _ch_add_layer(base, 5)          // offset=15, l1(x) = x + 15
-    l2   := _ch_add_layer(l1, 3)            // offset=18, l2(x) = x + 18
-    l3   := _ch_add_layer(l2, 2)            // offset=20, l3(x) = x + 20
+    base := _ch_make_base(10)           // base(x) = x + 10
+    l1   := _ch_add_layer(base, 5)      // offset=15, l1(x) = x + 15
+    l2   := _ch_add_layer(l1, 3)        // offset=18, l2(x) = x + 18
+    l3   := _ch_add_layer(l2, 2)        // offset=20, l3(x) = x + 20
 
     error += if base(0) == 10 { 0 } else { 1 }
     error += if l1(0) == 15 { 0 } else { 1 }

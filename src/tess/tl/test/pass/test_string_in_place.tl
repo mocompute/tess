@@ -81,13 +81,13 @@ _check(name: CString, r: Int) -> Int {
 
 main() {
     error := 0
-    error += _check(c"replace_byte_in_place_small",       test_replace_byte_in_place_small())
-    error += _check(c"replace_byte_in_place_big",         test_replace_byte_in_place_big())
-    error += _check(c"replace_byte_in_place_no_match",    test_replace_byte_in_place_no_match())
-    error += _check(c"to_upper_in_place_small",           test_to_upper_in_place_small())
-    error += _check(c"to_upper_in_place_big",             test_to_upper_in_place_big())
-    error += _check(c"to_lower_in_place_small",           test_to_lower_in_place_small())
-    error += _check(c"to_lower_in_place_big",             test_to_lower_in_place_big())
+    error += _check(c"replace_byte_in_place_small", test_replace_byte_in_place_small())
+    error += _check(c"replace_byte_in_place_big", test_replace_byte_in_place_big())
+    error += _check(c"replace_byte_in_place_no_match", test_replace_byte_in_place_no_match())
+    error += _check(c"to_upper_in_place_small", test_to_upper_in_place_small())
+    error += _check(c"to_upper_in_place_big", test_to_upper_in_place_big())
+    error += _check(c"to_lower_in_place_small", test_to_lower_in_place_small())
+    error += _check(c"to_lower_in_place_big", test_to_lower_in_place_big())
     result: CInt := error
     result
 }

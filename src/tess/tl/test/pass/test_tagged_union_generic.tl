@@ -7,7 +7,7 @@
 
 // Option-like type (renamed to avoid builtin Some/None conflict)
 MyOpt[a]: | MySome { value: a }
-           | MyNone
+          | MyNone
 
 // Box-like type for nested/return tests
 Box[a]: | Has { v: a }
