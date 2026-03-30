@@ -206,7 +206,7 @@ static void generate_prototypes(transpile *self, int decl_static) {
 
         str          name = toplevel_name(node);
         tl_polytype *type = tl_type_env_lookup(self->env, name);
-        if (!type) fatal("missing type");
+        if (!type) fatal("missing type: '%s'", str_cstr(&name));
 
         // skip let nodes that are not specialized
         if (ast_node_is_let(node) && !ast_node_is_specialized(node)) continue;
@@ -1350,13 +1350,12 @@ static str emit_format_spec_literal(transpile *self, tl_format_spec const *spec,
 
     char fill = spec->fill ? spec->fill : ' ';
     char buf[256];
-    int n = snprintf(buf, sizeof(buf),
-        ".fill = '%c', .align = %d, .sign = %d, .alt = %d, "
-        ".zero_pad = %d, .width = %d, .precision = %d, "
-        ".type_char = %d, .has_type_specific = %d",
-        fill, (int)spec->align, (int)spec->sign, spec->alt,
-        spec->zero_pad, spec->width, spec->precision,
-        (int)spec->type_char, spec->has_type_specific);
+    int  n = snprintf(buf, sizeof(buf),
+                      ".fill = '%c', .align = %d, .sign = %d, .alt = %d, "
+                       ".zero_pad = %d, .width = %d, .precision = %d, "
+                       ".type_char = %d, .has_type_specific = %d",
+                      fill, (int)spec->align, (int)spec->sign, spec->alt, spec->zero_pad, spec->width,
+                      spec->precision, (int)spec->type_char, spec->has_type_specific);
     str_build_cat_n(&self->build, buf, (u32)n);
 
     cat(self, S("};\n"));
@@ -1403,30 +1402,29 @@ static str generate_funcall_variadic(transpile *self, ast_node const *node, eval
         str_array va_temps = {.alloc = self->transient};
         array_reserve(va_temps, n_variadic);
 
-        tl_fstring_format const *ffmt = node->named_application.fstring_fmt;
-        tl_format_spec const *fspecs = ffmt ? ffmt->specs : null;
-        u8 const *uses_format        = ffmt ? ffmt->uses_format : null;
+        tl_fstring_format const *ffmt        = node->named_application.fstring_fmt;
+        tl_format_spec const    *fspecs      = ffmt ? ffmt->specs : null;
+        u8 const                *uses_format = ffmt ? ffmt->uses_format : null;
 
         // Look up FormatSpec C type name (lazily, only if format specs are present).
-        str fs_type_c  = str_empty();
-        str layout_fn  = ffmt ? ffmt->layout_fn : str_empty();
+        str fs_type_c = str_empty();
+        str layout_fn = ffmt ? ffmt->layout_fn : str_empty();
         if (ffmt) {
             tl_polytype *fs_poly = tl_type_env_lookup(self->env, S("FormatSpec__FormatSpec"));
-            if (fs_poly && fs_poly->type)
-                fs_type_c = type_to_c_mono(self, fs_poly->type);
+            if (fs_poly && fs_poly->type) fs_type_c = type_to_c_mono(self, fs_poly->type);
         }
 
         for (u32 i = 0; i < n_variadic; i++) {
-            ast_node const *arg_node = node->named_application.arguments[n_fixed + i];
-            tl_monotype    *arg_type = arg_node->type ? arg_node->type->type : null;
-            str             arg_val  = generate_expr(self, arg_type, arg_node, ctx);
+            ast_node const *arg_node   = node->named_application.arguments[n_fixed + i];
+            tl_monotype    *arg_type   = arg_node->type ? arg_node->type->type : null;
+            str             arg_val    = generate_expr(self, arg_type, arg_node, ctx);
 
-            str             impl_fn  = (node->named_application.variadic_impl_fns)
-                                         ? node->named_application.variadic_impl_fns[i]
-                                         : str_empty();
+            str             impl_fn    = (node->named_application.variadic_impl_fns)
+                                           ? node->named_application.variadic_impl_fns[i]
+                                           : str_empty();
 
-            int use_fmt    = uses_format && uses_format[i];
-            int has_layout = fspecs && tl_format_spec_has_any(&fspecs[n_fixed + i]);
+            int             use_fmt    = uses_format && uses_format[i];
+            int             has_layout = fspecs && tl_format_spec_has_any(&fspecs[n_fixed + i]);
 
             // Emit FormatSpec struct literal if needed for this arg.
             str spec_tmp = str_empty();
