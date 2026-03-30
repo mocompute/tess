@@ -209,28 +209,31 @@ static int parse_receiver_block(parser *self, receiver_block_info *out) {
     out->params  = (receiver_param_array){.alloc = self->ast_arena};
     out->entries = (receiver_entry_array){.alloc = self->ast_arena};
 
-    // First parameter: name : TypeExpr
-    receiver_param first = {0};
-    if (a_try(self, a_identifier)) return 1;
-    first.name = self->result;
-    if (a_try(self, a_colon)) return 1;
-    if (a_try(self, a_receiver_type_expr)) return 1;
-    first.type_expr = self->result;
-    array_push(out->params, first);
-
-    // Additional comma-separated parameters
-    while (0 == a_try(self, a_comma)) {
-        receiver_param p = {0};
+    // Empty params: () is allowed
+    if (0 != a_try(self, a_close_round)) {
+        // First parameter: name : TypeExpr
+        receiver_param first = {0};
         if (a_try(self, a_identifier)) return 1;
-        p.name = self->result;
+        first.name = self->result;
         if (a_try(self, a_colon)) return 1;
         if (a_try(self, a_receiver_type_expr)) return 1;
-        p.type_expr = self->result;
-        array_push(out->params, p);
-    }
+        first.type_expr = self->result;
+        array_push(out->params, first);
 
-    // close round
-    if (a_try(self, a_close_round)) return 1;
+        // Additional comma-separated parameters
+        while (0 == a_try(self, a_comma)) {
+            receiver_param p = {0};
+            if (a_try(self, a_identifier)) return 1;
+            p.name = self->result;
+            if (a_try(self, a_colon)) return 1;
+            if (a_try(self, a_receiver_type_expr)) return 1;
+            p.type_expr = self->result;
+            array_push(out->params, p);
+        }
+
+        // close round
+        if (a_try(self, a_close_round)) return 1;
+    }
 
     // Second colon — the disambiguator
     if (a_try(self, a_colon)) return 1;
