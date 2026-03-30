@@ -3,6 +3,8 @@
 
 #module Pair
 
+#import <Hash.tl>
+
 Pair[A, B]: { first: A, second: B }
 
 // Single explicit type param — constructors and by-value functions.
@@ -31,6 +33,14 @@ Pair[A, B]: { first: A, second: B }
     }
 }
 
+// Trait-constrained explicit type param.
+// [K: Hash]() desugars to hash_of[K: Hash](...).
+[K: Hash](): {
+    hash_of(k: K) -> CSize {
+        k.hash()
+    }
+}
+
 // Coexistence with standard receiver blocks in the same module.
 (p: Pair[A, B]): {
     get_first() -> A { p.first }
@@ -38,6 +48,7 @@ Pair[A, B]: { first: A, second: B }
 }
 
 #module main
+#import <Hash.tl>
 
 main() {
     error := 0
@@ -59,6 +70,10 @@ main() {
     p5: Pair[Int, Bool] := Pair(first = 3, second = true)
     p6 := Pair.map_first(p5, (x) { x * 10 })
     error += if p6.first == 30 && p6.second == true {0} else {1}
+
+    // Trait-constrained explicit type param
+    h := Pair.hash_of(42)
+    error += if h != 0 {0} else {1}
 
     // Standard receiver block coexistence
     error += if p.get_first() == 1 {0} else {1}
