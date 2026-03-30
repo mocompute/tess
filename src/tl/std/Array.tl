@@ -120,21 +120,23 @@ Array[T]: {
 
     // -- Functional operations --
 
-    map[U]   (f: (T) -> U)             -> Array[U]
-    filter   (f: (T) -> Bool)          -> Array[T]
-    reduce[U](init: U, f: (U, T) -> U) -> U
-    foreach  (f: (T) -> Void)          -> Void
-    any_of   (f: (T) -> Bool)          -> Bool
-    all      (f: (T) -> Bool)          -> Bool
-    find     (f: (T) -> Bool)          -> Option[CSize]
+    map[U]       (f: (T) -> U)                    -> Array[U]
+    filter       (f: (T) -> Bool)                 -> Array[T]
+    filter_map[U](pred: (T) -> Bool, f: (T) -> U) -> Array[U]
+    reduce[U]    (init: U, f: (U, T) -> U)        -> U
+    foreach      (f: (T) -> Void)                 -> Void
+    any_of       (f: (T) -> Bool)                 -> Bool
+    all          (f: (T) -> Bool)                 -> Bool
+    find         (f: (T) -> Bool)                 -> Option[CSize]
 
     // -- With allocators --
 
-    clone (alloc: Ptr[Allocator])                                                -> Array[T]
-    copy  (alloc: Ptr[Allocator], start: CSize, end: CSize)                      -> Array[T]
-    filter(alloc: Ptr[Allocator], f: (T) -> Bool)                                -> Array[T]
-    map[U](alloc: Ptr[Allocator], f: (T) -> U)                                   -> Array[U]
-    sorted(alloc: Ptr[Allocator], tmp_alloc: Ptr[Allocator], cmp: (T, T) -> Int) -> Array[T]
+    clone        (alloc: Ptr[Allocator])                                                -> Array[T]
+    copy         (alloc: Ptr[Allocator], start: CSize, end: CSize)                      -> Array[T]
+    filter       (alloc: Ptr[Allocator], f: (T) -> Bool)                                -> Array[T]
+    map[U]       (alloc: Ptr[Allocator], f: (T) -> U)                                   -> Array[U]
+    filter_map[U](alloc: Ptr[Allocator], pred: (T) -> Bool, f: (T) -> U)                -> Array[U]
+    sorted       (alloc: Ptr[Allocator], tmp_alloc: Ptr[Allocator], cmp: (T, T) -> Int) -> Array[T]
 }
 
 
@@ -496,6 +498,10 @@ _merge[T](v, tmp, lo, mid, hi, cmp: (T, T) -> Int, width) {
         arr.filter(Alloc.context.default, f)
     }
 
+    filter_map[U](pred: (T) -> Bool, f: (T) -> U) {
+        arr.filter_map(Alloc.context.default, pred, f)
+    }
+
     reduce[T, U](init: U, f: (U, T) -> U) {
         acc      := init
         i: CSize := 0
@@ -563,7 +569,18 @@ _merge[T](v, tmp, lo, mid, hi, cmp: (T, T) -> Int, width) {
         result   := empty[T]()
         i: CSize := 0
         while i < arr->size, i += 1 {
-            if f(arr->data.[i]) { push(result.&, alloc, arr->data.[i]) }
+            if f(arr->data.[i]) { result.push(alloc, arr->data.[i]) }
+        }
+        result
+    }
+
+    filter_map[U](alloc, pred, f) {
+        result   := empty[T]()
+        i: CSize := 0
+        while i < arr->size, i += 1 {
+            if pred(arr->data.[i]) {
+                result.push(alloc, f(arr->data.[i]))
+            }
         }
         result
     }
@@ -580,7 +597,7 @@ _merge[T](v, tmp, lo, mid, hi, cmp: (T, T) -> Int, width) {
 
     sorted(alloc, tmp_alloc, cmp: (T, T) -> Int) {
         result := arr.clone(alloc)
-        sort(result.&, tmp_alloc, cmp)
+        result.sort(tmp_alloc, cmp)
         result
     }
 

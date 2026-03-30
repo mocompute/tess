@@ -433,6 +433,38 @@ test_find() {
 }
 
 
+test_filter_map() {
+    error := 0
+    arr := Array.empty[Int]()
+    arr.push(1)
+    arr.push(2)
+    arr.push(3)
+    arr.push(4)
+    arr.push(5)
+    // Keep evens, multiply by 10
+    result := arr.filter_map((x) { x % 2 == 0 }, (x) { x * 10 })
+    if result.size != 2zu { error += 1 }
+    if result.data.[0] != 20 { error += 1 }
+    if result.data.[1] != 40 { error += 1 }
+    // Nothing matches
+    r2 := arr.filter_map((x) { x > 100 }, (x) { x * 10 })
+    if r2.size != 0zu { error += 1 }
+    // Everything matches
+    r3 := arr.filter_map((x) { x > 0 }, (x) { x + 1 })
+    if r3.size != 5zu { error += 1 }
+    if r3.data.[0] != 2 { error += 1 }
+    if r3.data.[4] != 6 { error += 1 }
+    // Empty array
+    e  := Array.empty[Int]()
+    r4 := e.filter_map((x) { x > 0 }, (x) { x * 10 })
+    if r4.size != 0zu { error += 1 }
+    arr.free()
+    result.free()
+    r2.free()
+    r3.free()
+    error
+}
+
 test_foreach() {
     error := 0
     arr   := Array.empty[Int]()
@@ -494,6 +526,7 @@ main() {
     error += test_any_of()
     error += test_all()
     error += test_find()
+    error += test_filter_map()
     error += test_foreach()
     error += test_reduce()
     error
