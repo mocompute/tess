@@ -5,6 +5,62 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased] - 2026-03-24 to 2026-03-30 (49b0fde6..eb8c9ec7)
+
+### Highlights
+
+- **F-strings with format specifiers**: Interpolated strings via `f"hello {name}"` with Python-inspired format specifiers `{expr:width.precision}`
+- **Receiver blocks**: New `name : Type : { ... }` syntax for defining methods on a type
+- **Compile-time string literal interning**: SSO strings inlined, larger strings deduplicated — eliminates runtime `from_literal` overhead
+- **Slice semantics overhaul**: `Array.slice` and `String.slice` now return non-owning views instead of copies
+- **Major memory optimizations**: Arena bucket capping, transient arenas, and watermarks reduce peak memory by up to 50%
+
+### Added
+
+- **F-strings**: Interpolated strings via `f"hello {name}"` syntax, desugared into `Print.format(...)` variadic calls. Includes Python-inspired format specifiers: `{expr:[[fill]align][sign][#][0][width][.precision][type]}`, backed by new `FormatSpec.tl` and `ToStringFormat.tl` stdlib modules.
+- **Receiver Blocks**: New `name : Type : { func() -> T { body } }` syntax for defining methods on a type, desugared into ordinary top-level functions with the receiver parameter prepended. Supports generic type parameters, trait constraints, and mixed forward declarations and definitions.
+- **Function Aliases**: Top-level `name = Module.func` syntax for aliasing functions across modules. Call sites are rewritten at parse time. Supports variadic functions and `alias/N` arity-qualified function pointer references.
+- **Conditional Variant Binding**: `if c: Circle := shape { ... }` syntax for single-variant checks that bind on match, with optional `else`.
+- **Standalone Block Statements**: Blocks `{ ... }` can now appear as standalone statements in expression position.
+- **`tess check` Command**: Type-checks without compiling — runs parse and inference only, skipping transpilation and C compilation.
+- **Compile-time String Literal Interning**: The transpiler emits pre-computed `String` struct literals in generated C. SSO strings (<=14 bytes) are inlined; larger strings point into a deduplicated static const interned block.
+- **Auto-address-of for `Ptr[Const[T]]`**: The compiler automatically inserts `&` when a function parameter is `Ptr[Const[T]]` and the call site provides a value `T`. Applies to regular calls, operator overloads, and trait conformance.
+- **`fprint`/`fprintln` in Print**: fprintf-equivalent functions for writing to arbitrary file streams with variadic `...ToString` arguments.
+- **In-place String Mutations**: `replace_byte_in_place`, `to_upper_in_place`, `to_lower_in_place` added to String module.
+- **Array.filter_map**: New higher-order function combining filter and map.
+- **MOS Library**: `str_ref()` for non-owning string views, `str_map_iter()` for type-safe hashmap iteration, `arena_save()`/`arena_restore()` for lightweight sub-arena resets.
+- **Memory Measurement Tooling**: `tools/measure_mem.sh` for profiling compilation memory usage. `--stats` flag now shows per-arena memory breakdown and per-phase growth tracking.
+- **`docs/BUILD.md`**: New documentation covering build configurations, installation, Nix integration, and standalone binary packaging.
+
+### Changed
+
+- **Slice Semantics Overhaul**: `Array.slice` and `String.slice` now return non-owning `Slice[T]` views instead of allocating copies. The copy-making versions are renamed to `copy`.
+- **String API Takes `Ptr[Const[String]]`**: Immutable String APIs redefined to accept `Ptr[Const[String]]` receivers instead of value `String`, enabling pass-by-reference without copies.
+- **Stdlib Field Naming**: Renamed terse `v` fields to full descriptive names across all stdlib types (Array, CommandLine, File, FormatSpec, Slice, String, etc.).
+- **Stdlib Refactoring**: Array.tl and String.tl substantially refactored to use receiver block syntax. String.tl reorganized around `Ptr[Const[String]]` receiver patterns.
+- **Hashmap Load Factor**: Lowered from 0.85 to 0.75 to reduce probe distances.
+- **Memory Optimizations**: Arena bucket doubling capped at 8MB with exact-fit for oversized allocations (510MB down to 254MB for large compilations). Type.c given its own transient arena. Arena watermarks added for specialization (120MB down to 32MB). Parser temporary arenas freed before inference starts.
+- **C Compiler Deferred**: Commands like `c`, `fmt`, `lib-emit-c`, `pack`, `cbind`, `init`, and `fetch` no longer require a C compiler to be present.
+- **Test Consolidation**: 23 alloc_closure tests, 7 auto_collapse tests, and 9 tagged_union_generic tests each combined into single executables.
+
+### Removed
+
+- **`#module_prelude` Directive** *(breaking)*: Removed since modules can now be reopened, making the prelude mechanism unnecessary.
+- **`String.cat_4`**: Removed; use `String.push` instead.
+- **`from_literal/1` and `string_literals` from Alloc**: No longer needed since string literals are inlined by the transpiler.
+
+### Fixed
+
+- **UFCS dispatch on `Ptr[Const[T]]` receivers**: Fixed incorrect dispatch when the receiver was a const pointer.
+- **UFCS dot-call on unannotated function parameters**: `content.char_at(i)` on an unannotated parameter no longer errors with `tagged_union_expected`.
+- **Formatter aligning receiver block opening brace**: Fixed `tess fmt` incorrectly aligning the `{` of a receiver block with inner lines.
+- **Type annotation parsing for multi-param structs**: Fixed parsing when a struct had multiple type parameters but only one field.
+- **Signed overflow formatting `LLONG_MIN` in binary**: Avoided undefined behavior in format specifier output.
+- **`apply_layout` buffer truncation**: Fixed buffer truncation for large format widths.
+- **Value for-loop variables incorrectly marked `Const`**: Now only pointer iteration (`for &x in ...`) gets `Const`; value iteration yields a mutable copy.
+- **Generic UTDs deleted too early during specialization**: Generic user-type definitions now preserved as specialization templates.
+- **Variadic propagation in split declarations**: `is_variadic` flag was lost when synopsis and implementation were separate; now propagated from the forward declaration.
+
 ## [Unreleased] - 2026-03-15 to 2026-03-24 (c259bf19..49b0fde6)
 
 ### Highlights
