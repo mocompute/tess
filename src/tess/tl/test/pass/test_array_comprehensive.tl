@@ -35,9 +35,9 @@ test_init_struct() {
     error
 }
 
-test_with_capacity_undefined_basic() {
+test_init_undefined_basic() {
     error := 0
-    arr   := Array.with_capacity_undefined[Int](10zu)
+    arr   := Array.init_undefined[Int](10zu)
     if arr.size != 10zu { error += 1 }
     if arr.capacity != 10zu { error += 1 }
     // Write values and read them back
@@ -200,7 +200,7 @@ test_zero_capacity() {
 
 test_indexed_iterator() {
     error := 0
-    arr   := Array.with_capacity_undefined[CSize](4zu)
+    arr   := Array.init_undefined[CSize](4zu)
     // Use Array.Indexed to set values: ptr.* = index
     for it.& in Array.Indexed arr {
         it.ptr.* = it.index
@@ -220,7 +220,7 @@ main() {
     error += test_init_basic()
     error += test_init_zero_count()
     error += test_init_struct()
-    error += test_with_capacity_undefined_basic()
+    error += test_init_undefined_basic()
     error += test_reserve_empty()
     error += test_reserve_growth()
     error += test_reserve_noop()

@@ -2,7 +2,7 @@
 #import <Array.tl>
 
 main() {
-    xs := Array.with_capacity_undefined[CSize](4zu)
+    xs := Array.init_undefined[CSize](4zu)
 
     // Note: the for statement refers to the Array.Indexed module defined in <Array.tl>.
     // Iterator modules may define arbitrary fields on the iterator, such as `index` in this example.

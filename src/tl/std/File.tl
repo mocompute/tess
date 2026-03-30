@@ -757,7 +757,7 @@ read_bytes(self, alloc) {
     remaining := try _remaining_bytes(self)
     if remaining == 0 { return Ok(Array.empty[Byte]()) }
 
-    result     := Array.with_capacity_undefined[Byte](alloc, remaining)
+    result     := Array.init_undefined[Byte](alloc, remaining)
     bytes_read := c_fread(result.data, 1, remaining, self->_handle)
     if bytes_read < remaining && c_ferror(self->_handle) != 0 {
         Array.free(result.&, alloc)
