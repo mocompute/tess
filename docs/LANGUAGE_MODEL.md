@@ -89,6 +89,30 @@ let a = 1 in
 Each binding can see all the names introduced before it, and the final expression can
 see all of them. The entire construct produces the value `3`.
 
+### Trailing binding shorthand
+
+When a binding appears at the very end of a block with no subsequent expression (no body),
+it evaluates to the bound value. This:
+
+```tl
+foo() {
+  result: Byte := value
+}
+```
+
+is syntax sugar for:
+
+```tl
+foo() {
+  result: Byte := value
+  result
+}
+```
+
+The binding is created, and because it is the last thing in the block, the block's value is
+the bound variable itself. This is a natural consequence of the binding expression model:
+a binding with an empty body evaluates to the bound value.
+
 ### Blocks delimit scope
 
 Curly braces `{ }` define where a binding's body ends. A name introduced with `:=` inside a

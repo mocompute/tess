@@ -1537,6 +1537,16 @@ res := (x := 42
         x - 10)     // x is scoped to the expression; res = 32
 ```
 
+When a binding is the last expression in a block (no body follows), the block evaluates to the bound value:
+
+```tl
+foo() {
+  result := compute()     // No body — equivalent to: result := compute(); result
+}
+```
+
+> See [Language Model: Trailing binding shorthand](LANGUAGE_MODEL.md#trailing-binding-shorthand) for the conceptual explanation.
+
 ### Block Expressions
 
 A block can be used as an expression by wrapping it in parentheses: `({ ... })`. The block's value is its final expression:
