@@ -192,7 +192,7 @@ _merge[T](v, tmp, lo, mid, hi, cmp: (T, T) -> Int, width) {
 
 // -- Constructors --
 
-[T]():      {
+[T](): {
     empty() {
         Array (data: Ptr[T] = null, capacity = 0, size = 0)
     }
@@ -615,7 +615,7 @@ iter_init[T](arr: Ptr[Array[T]]) -> Iter[T]
 
 iter_init(arr) { Iter(data = arr->data, size = arr->size, index = 0) }
 
-(iter: Ptr[Iter[T]]):       {
+(iter: Ptr[Iter[T]]): {
     iter_ptr   () -> Ptr[T] { iter->data.[iter->index].& }
     iter_value () -> T      { iter->data.[iter->index]   }
     iter_cond  () -> Bool   { iter->index < iter->size   }
@@ -652,7 +652,7 @@ iter_init[T](arr: Ptr[Array[T]]) { Iter (data = arr->data,
                                          iv    = IterValue (value = void, index = 0),
                                          ivp   = IterValuePtr(ptr = null, index = 0)) }
 
-(iter: Ptr[Iter[T]]):                {
+(iter: Ptr[Iter[T]]): {
     iter_ptr   () -> IterValuePtr[T] { iter->ivp.ptr = iter->data.[iter->index].& iter->ivp.index = iter->index iter->ivp }
     iter_value () -> IterValue[T]    { iter->iv.value = iter->data.[iter->index] iter->iv.index = iter->index iter->iv    }
     iter_cond  () -> Bool            { iter->index < iter->size                                                           }

@@ -923,8 +923,10 @@ static void align_pass(allocator *alloc, char **lines, int nlines) {
     // e.g. "ArgValue: | BoolVal { ... }" should have its { aligned with the
     // continuation group "          | CountVal { ... }" that follows.
     for (i = 0; i + 1 < nlines; i++) {
-        // Must be a tagged union opener (contains `: |`)
         if (!is_struct_opener(lines[i])) continue;
+        // Skip scope-opening lines (receiver blocks, struct definitions) —
+        // only align inline braces (tagged union variants with net braces == 0).
+        if (count_net_braces(lines[i]) > 0) continue;
         int col0 = find_align_token(lines[i], ALIGN_OPEN_BRACE);
         if (col0 < 0) continue;
         // Next line must be a continuation with same token at a greater column
