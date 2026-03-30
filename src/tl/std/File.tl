@@ -348,7 +348,7 @@ dirname(alloc, path) {
         ch: Some := path.char_at(i) else { continue }
         if _is_sep(ch.value) {
             if i == 0 { return String.from_bytes(alloc, c"/", 1) }
-            return String.copy(alloc, path, 0, i)
+            return path.copy(alloc, 0, i)
         }
     }
     "."
@@ -406,22 +406,22 @@ stem(path) {
 
 join(alloc, dir, file) {
     // If file is absolute, return file
-    if is_absolute(file) { return String.copy(alloc, file) }
+    if is_absolute(file) { return file.copy(alloc) }
 
     dn := dir.len()
-    if dn == 0 { return String.copy(alloc, file) }
+    if dn == 0 { return file.copy(alloc) }
 
     fn := file.len()
-    if fn == 0 { return String.copy(alloc, dir) }
+    if fn == 0 { return file.copy(alloc) }
 
     // Check if dir ends with separator
-    last_ch: Some := dir.char_at(dn - 1) else { return String.copy(alloc, file) }
+    last_ch: Some := dir.char_at(dn - 1) else { return file.copy(alloc) }
     if _is_sep(last_ch.value) {
-        return String.cat(alloc, dir, file)
+        return dir.cat(alloc, file)
     }
 
     sep := String.from_bytes(c"/", 1)
-    String.cat_3(alloc, dir, sep, file)
+    dir.cat_3(alloc, sep, file)
 }
 
 join(dir, file) {
@@ -436,13 +436,13 @@ normalize(alloc, path) {
     abs            := _is_sep(first_ch.value)
 
     // Split path into components
-    parts := String.split(alloc, path, "/")
+    parts := path.split(alloc, "/")
 
     // Also handle backslash-separated paths
     result   := Array.empty[String]()
     i: CSize := 0
     while i < parts.size, i += 1 {
-        sub      := String.split(alloc, parts.data.[i], "\\")
+        sub      := parts.data.[i].split(alloc, "\\")
         j: CSize := 0
         while j < sub.size, j += 1 {
             Array.push(result.&, alloc, sub.data.[j])
@@ -480,7 +480,7 @@ normalize(alloc, path) {
 
     out := String.join(alloc, "/", stack)
     if abs {
-        return String.cat(alloc, "/", out)
+        return "/".cat(alloc, out)
     }
     out
 }
@@ -527,8 +527,8 @@ relative(alloc, from_dir, to_path) {
     }
 
     // Split into components
-    from_parts := String.split(alloc, norm_from, "/")
-    to_parts   := String.split(alloc, norm_to, "/")
+    from_parts := norm_from.split(alloc_from, "/")
+    to_parts   := norm_to.split(alloc_to, "/")
 
     // Find common prefix length
     common: CSize := 0
@@ -885,7 +885,7 @@ append_file(path, content) {
 
 read_lines(alloc, path) {
     content := try read_file(alloc, path)
-    lines   := String.split(alloc, content, "\n")
+    lines   := content.split(alloc, "\n")
 
     // Strip \r from each line (Windows line endings)
     i: CSize := 0
@@ -895,7 +895,7 @@ read_lines(alloc, path) {
         if n > 0 {
             last: Some := line.char_at(n - 1) else { continue }
             if last.value == '\r' {
-                lines.data.[i] = String.copy(alloc, line, 0, n - 1)
+                lines.data.[i] = line.copy(alloc, 0, n - 1)
             }
         }
     }
