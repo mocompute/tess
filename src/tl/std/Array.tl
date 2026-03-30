@@ -259,7 +259,7 @@ _merge[T](v, tmp, lo, mid, hi, cmp: (T, T) -> Int, width) {
 
     pop() -> T {
         if self->size == 0 { _tl_fatal_(c"Array.pop: empty array") }
-        self->size = self->size - 1
+        self->size -= 1
         self->data.[self->size]
     }
 
@@ -321,7 +321,7 @@ _merge[T](v, tmp, lo, mid, hi, cmp: (T, T) -> Int, width) {
     push(alloc, x) {
         if _is_full(self) { _grow(self, alloc, self->capacity + 1) }
         self->data.[self->size] = x
-        self->size              = self->size + 1
+        self->size += 1
     }
 
     reserve(alloc, count) {
@@ -405,9 +405,9 @@ _merge[T](v, tmp, lo, mid, hi, cmp: (T, T) -> Int, width) {
                 if mid < hi {
                     _merge(self->data, tmp, i, mid, hi, cmp, width)
                 }
-                i = i + w * 2
+                i += w * 2
             }
-            w = w * 2
+            w *= 2
         }
         tmp_alloc->free(tmp_alloc, tmp)
     }
@@ -415,174 +415,176 @@ _merge[T](v, tmp, lo, mid, hi, cmp: (T, T) -> Int, width) {
 
 // -- Immutable operations --
 
-get[T](arr, index: CSize) -> T {
-    if index >= arr->size { _tl_fatal_(c"Array.get: index out of bounds") }
-    arr->data.[index]
-}
-
-front[T](arr) -> T {
-    if arr->size == 0 { _tl_fatal_(c"Array.front: empty array") }
-    arr->data.[0]
-}
-
-back[T](arr) -> T {
-    if arr->size == 0 { _tl_fatal_(c"Array.back: empty array") }
-    arr->data.[arr->size - 1]
-}
-
-clone[T](arr) {
-    arr.clone(Alloc.context.default)
-}
-
-copy[T](arr, start, end) {
-    arr.copy(Alloc.context.default, start, end)
-}
-
-slice[T](arr, start, end) {
-    if end > arr->size || start > end { _tl_fatal_(c"Array.slice: index out of bounds") }
-    if start == end { return Slice[T](data: Ptr[T] = null, size = 0) }
-    p: Ptr[T] := arr->data.[start].&
-    Slice(data = p, size = end - start)
-}
-
-is_empty[T](arr) {
-    arr->size == 0
-}
-
-contains[T](arr, val: T) {
-    i: CSize := 0
-    while i < arr->size, i += 1 {
-        if arr->data.[i] == val { return true }
+(arr: Ptr[Const[Array[T]]]): {
+    get(index: CSize) -> T {
+        if index >= arr->size { _tl_fatal_(c"Array.get: index out of bounds") }
+        arr->data.[index]
     }
-    false
-}
 
-index_of[T](arr, val: T) {
-    i: CSize := 0
-    while i < arr->size, i += 1 {
-        if arr->data.[i] == val { return Some(i) }
+    front() -> T {
+        if arr->size == 0 { _tl_fatal_(c"Array.front: empty array") }
+        arr->data.[0]
     }
-    None
-}
 
-sorted[T](arr, cmp: (T, T) -> Int) {
-    arr.sorted(Alloc.context.default, Alloc.context.transient, cmp)
-}
-
-reverse[T](self) {
-    if self->size == 0 { return void }
-    i: CSize := 0
-    j        := self->size - 1
-    while i < j, i += 1 {
-        swap(self, i, j)
-        j = j - 1
+    back() -> T {
+        if arr->size == 0 { _tl_fatal_(c"Array.back: empty array") }
+        arr->data.[arr->size - 1]
     }
-}
 
-swap[T](self, i, j) {
-    if i >= self->size { _tl_fatal_(c"Array.swap: index out of bounds") }
-    if j >= self->size { _tl_fatal_(c"Array.swap: index out of bounds") }
-    tmp := self->data.[i]
-    self->data.[i] = self->data.[j]
-    self->data.[j] = tmp
-}
-
-map[T, U](arr, f: (T) -> U) {
-    arr.map(Alloc.context.default, f)
-}
-
-filter[T](arr, f: (T) -> Bool) {
-    arr.filter(Alloc.context.default, f)
-}
-
-reduce[T, U](arr, init: U, f: (U, T) -> U) {
-    acc      := init
-    i: CSize := 0
-    while i < arr->size, i += 1 {
-        acc = f(acc, arr->data.[i])
+    clone() {
+        arr.clone(Alloc.context.default)
     }
-    acc
-}
 
-foreach[T](arr, f: (T) -> Void) {
-    i: CSize := 0
-    while i < arr->size, i += 1 {
-        f(arr->data.[i])
+    copy(start, end) {
+        arr.copy(Alloc.context.default, start, end)
     }
-}
 
-any_of[T](arr, f: (T) -> Bool) {
-    i: CSize := 0
-    while i < arr->size, i += 1 {
-        if f(arr->data.[i]) { return true }
+    slice(start, end) {
+        if end > arr->size || start > end { _tl_fatal_(c"Array.slice: index out of bounds") }
+        if start == end { return Slice[T](data: Ptr[T] = null, size = 0) }
+        p: Ptr[T] := arr->data.[start].&
+        Slice(data = p, size = end - start)
     }
-    false
-}
 
-all[T](arr, f: (T) -> Bool) {
-    i: CSize := 0
-    while i < arr->size, i += 1 {
-        if !f(arr->data.[i]) { return false }
+    is_empty() {
+        arr->size == 0
     }
-    true
-}
 
-find[T](arr, f: (T) -> Bool) {
-    i: CSize := 0
-    while i < arr->size, i += 1 {
-        if f(arr->data.[i]) { return Some(i) }
+    contains(val: T) {
+        i: CSize := 0
+        while i < arr->size, i += 1 {
+            if arr->data.[i] == val { return true }
+        }
+        false
     }
-    None
-}
 
-// -- With allocators --
-
-clone[T](arr, alloc) {
-    if arr->size == 0 { return empty[T]() }
-    result := with_capacity[T](alloc, arr->size)
-    result.size = arr->size
-    width := _type_width_aligned[T]()
-    c_memcpy(result.data, arr->data, arr->size * width)
-    result
-}
-
-copy[T](arr, alloc, start, end) {
-    if end > arr->size || start > end { _tl_fatal_(c"Array.copy: index out of bounds") }
-    len := end - start
-    if len == 0 { return empty[T]() }
-    result := with_capacity[T](alloc, len)
-    result.size = len
-    width       := _type_width_aligned[T]()
-    src: Ptr[T] := arr->data.[start].&
-    c_memcpy(result.data, src, len * width)
-    result
-}
-
-filter[T](arr, alloc, f: (T) -> Bool) {
-    result   := empty[T]()
-    i: CSize := 0
-    while i < arr->size, i += 1 {
-        if f(arr->data.[i]) { push(result.&, alloc, arr->data.[i]) }
+    index_of(val: T) {
+        i: CSize := 0
+        while i < arr->size, i += 1 {
+            if arr->data.[i] == val { return Some(i) }
+        }
+        None
     }
-    result
-}
 
-map[T, U](arr, alloc, f: (T) -> U) {
-    result := with_capacity[U](alloc, arr->size)
-    result.size = arr->size
-    i: CSize := 0
-    while i < arr->size, i += 1 {
-        result.data.[i] = f(arr->data.[i])
+    sorted(cmp: (T, T) -> Int) {
+        arr.sorted(Alloc.context.default, Alloc.context.transient, cmp)
     }
-    result
-}
 
-sorted[T](arr, alloc, tmp_alloc, cmp: (T, T) -> Int) {
-    result := arr.clone(alloc)
-    sort(result.&, tmp_alloc, cmp)
-    result
-}
+    reverse() {
+        if arr->size == 0 { return void }
+        i: CSize := 0
+        j        := arr->size - 1
+        while i < j, i += 1 {
+            arr.swap(i, j)
+            j -= 1
+        }
+    }
 
+    swap(i, j) {
+        if i >= arr->size { _tl_fatal_(c"Array.swap: index out of bounds") }
+        if j >= arr->size { _tl_fatal_(c"Array.swap: index out of bounds") }
+        tmp := arr->data.[i]
+        arr->data.[i] = arr->data.[j]
+        arr->data.[j] = tmp
+    }
+
+    map[T, U](f: (T) -> U) {
+        arr.map(Alloc.context.default, f)
+    }
+
+    filter(f: (T) -> Bool) {
+        arr.filter(Alloc.context.default, f)
+    }
+
+    reduce[T, U](init: U, f: (U, T) -> U) {
+        acc      := init
+        i: CSize := 0
+        while i < arr->size, i += 1 {
+            acc = f(acc, arr->data.[i])
+        }
+        acc
+    }
+
+    foreach(f: (T) -> Void) {
+        i: CSize := 0
+        while i < arr->size, i += 1 {
+            f(arr->data.[i])
+        }
+    }
+
+    any_of(f: (T) -> Bool) {
+        i: CSize := 0
+        while i < arr->size, i += 1 {
+            if f(arr->data.[i]) { return true }
+        }
+        false
+    }
+
+    all(f: (T) -> Bool) {
+        i: CSize := 0
+        while i < arr->size, i += 1 {
+            if !f(arr->data.[i]) { return false }
+        }
+        true
+    }
+
+    find(f: (T) -> Bool) {
+        i: CSize := 0
+        while i < arr->size, i += 1 {
+            if f(arr->data.[i]) { return Some(i) }
+        }
+        None
+    }
+
+    // -- With allocators --
+
+    clone(alloc) {
+        if arr->size == 0 { return empty[T]() }
+        result := with_capacity[T](alloc, arr->size)
+        result.size = arr->size
+        width := _type_width_aligned[T]()
+        c_memcpy(result.data, arr->data, arr->size * width)
+        result
+    }
+
+    copy(alloc, start, end) {
+        if end > arr->size || start > end { _tl_fatal_(c"Array.copy: index out of bounds") }
+        len := end - start
+        if len == 0 { return empty[T]() }
+        result := with_capacity[T](alloc, len)
+        result.size = len
+        width       := _type_width_aligned[T]()
+        src: Ptr[T] := arr->data.[start].&
+        c_memcpy(result.data, src, len * width)
+        result
+    }
+
+    filter(alloc, f: (T) -> Bool) {
+        result   := empty[T]()
+        i: CSize := 0
+        while i < arr->size, i += 1 {
+            if f(arr->data.[i]) { push(result.&, alloc, arr->data.[i]) }
+        }
+        result
+    }
+
+    map[T, U](alloc, f: (T) -> U) {
+        result := with_capacity[U](alloc, arr->size)
+        result.size = arr->size
+        i: CSize := 0
+        while i < arr->size, i += 1 {
+            result.data.[i] = f(arr->data.[i])
+        }
+        result
+    }
+
+    sorted(alloc, tmp_alloc, cmp: (T, T) -> Int) {
+        result := arr.clone(alloc)
+        sort(result.&, tmp_alloc, cmp)
+        result
+    }
+
+}
 
 // -- Iterator interface --
 
@@ -597,11 +599,11 @@ iter_init[T](arr: Ptr[Array[T]]) -> Iter[T]
 iter_init(arr) { Iter(data = arr->data, size = arr->size, index = 0) }
 
 (iter: Ptr[Iter[T]]):       {
-    iter_ptr   () -> Ptr[T] { iter->data.[iter->index].&    }
-    iter_value () -> T      { iter->data.[iter->index]      }
-    iter_cond  () -> Bool   { iter->index < iter->size      }
-    iter_update() -> Void   { iter->index = iter->index + 1 }
-    iter_deinit() -> Void   {                               }
+    iter_ptr   () -> Ptr[T] { iter->data.[iter->index].& }
+    iter_value () -> T      { iter->data.[iter->index]   }
+    iter_cond  () -> Bool   { iter->index < iter->size   }
+    iter_update() -> Void   { iter->index += 1           }
+    iter_deinit() -> Void   {                            }
 }
 
 
@@ -637,6 +639,6 @@ iter_init[T](arr: Ptr[Array[T]]) { Iter (data = arr->data,
     iter_ptr   () -> IterValuePtr[T] { iter->ivp.ptr = iter->data.[iter->index].& iter->ivp.index = iter->index iter->ivp }
     iter_value () -> IterValue[T]    { iter->iv.value = iter->data.[iter->index] iter->iv.index = iter->index iter->iv    }
     iter_cond  () -> Bool            { iter->index < iter->size                                                           }
-    iter_update() -> Void            { iter->index = iter->index + 1                                                      }
+    iter_update() -> Void            { iter->index += 1                                                                   }
     iter_deinit() -> Void            {                                                                                    }
 }
