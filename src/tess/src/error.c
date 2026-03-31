@@ -59,9 +59,11 @@ char const *tl_error_tag_to_string(tl_error_tag tag) {
     X(tl_err_unalias_not_found,                 "unalias target not found")                                \
     X(tl_err_double_underscore_in_identifier,   "double underscore in identifier")
 
-#define USER_ERROR_ENTRY(tag, user_str) if (t == tag) return user_str;
+#define USER_ERROR_ENTRY(tag, user_str) [tag] = user_str,
 
 char const *tl_error_tag_to_user_string(tl_error_tag t) {
-    TESS_USER_ERROR_LIST(USER_ERROR_ENTRY)
+    static char const *const strings[] = {TESS_USER_ERROR_LIST(USER_ERROR_ENTRY)};
+    if ((unsigned)t < sizeof strings / sizeof *strings && strings[t])
+        return strings[t];
     return tl_error_tag_to_string(t);
 }

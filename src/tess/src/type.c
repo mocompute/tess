@@ -2856,7 +2856,7 @@ str tl_polytype_to_string(allocator *alloc, tl_polytype *self) {
 //
 // Differences from tl_monotype_to_string_:
 // - Type variables (t152, ws154, etc.) render as "_" instead of internal IDs
-// - Constructor names use generic_name to strip module doubling (Vec__Vec -> Vec)
+// - Constructor names strip the module prefix (Vec__Vec -> Vec) via last "__" split
 // - Free variable lists on closures are omitted
 
 static str tl_monotype_to_user_string_(allocator *alloc, tl_monotype *self, hashmap **map) {
@@ -2891,21 +2891,21 @@ static str tl_monotype_to_user_string_(allocator *alloc, tl_monotype *self, hash
     case tl_weak_float:       str_build_cat(&b, S("Float")); break;
 
     case tl_cons_inst: {
-        // Strip module prefix from type names for user-facing output.
-        // Module-qualified names are "Module__Type" — we show just "Type".
-        str name = str_empty();
+        // Use the unmangled portion of the type name for user-facing output.
+        // Module-qualified names are "Module__Type" — show just "Type".
+        str name;
         if (!str_is_empty(self->cons_inst->special_name))
             name = self->cons_inst->special_name;
         else
             name = self->cons_inst->def->name;
-        // Find last "__" and take everything after it
+        // Find last "__" separator and take everything after it
         char const *s    = str_buf(&name);
         int         slen = str_ilen(name);
         char const *last = null;
         for (int i = 0; i + 1 < slen; i++) {
             if (s[i] == '_' && s[i + 1] == '_') last = s + i + 2;
         }
-        if (last) str_build_cat_n(&b, last, (u32)(s + slen - last));
+        if (last && last < s + slen) str_build_cat_n(&b, last, (u32)(s + slen - last));
         else str_build_cat(&b, name);
         if (self->cons_inst->args.size) {
             str_build_cat(&b, S("["));
