@@ -1,4 +1,5 @@
 #module main
+#import <cstring.tl>
 
 // Regression: sizeof must return the full array size for CArray, not the
 // decayed pointer size.
@@ -21,6 +22,14 @@ main() {
 
     if actual2 != expected {
         c_printf(c"FAIL 2: sizeof[CArray[CInt, 16]]() = %zu, expected %zu\n", actual2, expected)
+        error += 1
+    }
+
+    // Test 3: sizeof still correct when CArray is also passed to c_memset (with import)
+    c_memset(arr, 0, sizeof(arr))
+    arr.[0] = 42
+    if arr.[0] != 42 {
+        c_printf(c"FAIL 3: c_memset + assign failed\n")
         error += 1
     }
 

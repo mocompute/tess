@@ -933,6 +933,7 @@ static ast_node *maybe_wrap_address_of(tl_infer *self, ast_node *arg, tl_monotyp
     if (!arg->type) return arg;
     tl_monotype *arg_type = arg->type->type;
     if (tl_monotype_is_ptr(arg_type)) return arg;
+    if (tl_monotype_is_carray(arg_type)) return arg; // CArray decays to pointer on its own
 
     ast_node *amp  = ast_node_create_sym_c(self->arena, "&");
     ast_node *addr = ast_node_create_unary_op(self->arena, amp, arg);

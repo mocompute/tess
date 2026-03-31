@@ -1621,12 +1621,33 @@ static int auto_address_of_ptr_const_args(tl_infer *self, tl_monotype *func_type
         if (!tl_monotype_is_ptr_to_const(func_params.v[i])) continue;
         if (tl_monotype_is_ptr(call_args.v[i])) continue;
         if (tl_monotype_is_tv(call_args.v[i])) continue;
+        if (tl_monotype_is_carray(call_args.v[i])) continue; // CArray decays on its own
 
         ast_node *addr = constraint_wrap_address_of(self, args.v[i]);
         if (!addr) return 1;
 
         call_args.v[i] = tl_type_registry_ptr(self->registry, args.v[i]->type->type);
         args.v[i]      = addr;
+    }
+
+    return 0;
+}
+
+// Implicit CArray-to-Ptr decay: rewrite callsite arrow when CArray is passed to Ptr param.
+static int auto_decay_carray_to_ptr_args(tl_infer *self, tl_monotype *func_type,
+                                         tl_polytype *callsite) {
+    if (!tl_monotype_is_arrow(func_type)) return 0;
+    tl_monotype *call_mono = callsite->type;
+    if (!tl_monotype_is_arrow(call_mono)) return 0;
+
+    tl_monotype_sized func_params = tl_monotype_arrow_get_args(func_type);
+    tl_monotype_sized call_args   = tl_monotype_arrow_get_args(call_mono);
+    u32               n           = func_params.size < call_args.size ? func_params.size : call_args.size;
+
+    for (u32 i = 0; i < n; ++i) {
+        if (!tl_monotype_is_carray(call_args.v[i])) continue;
+        if (!tl_monotype_is_ptr(func_params.v[i])) continue;
+        call_args.v[i] = tl_type_registry_ptr(self->registry, tl_monotype_carray_element(call_args.v[i]));
     }
 
     return 0;
@@ -2375,6 +2396,8 @@ static int infer_named_function_application(tl_infer *self, traverse_ctx *ctx, a
 
         // Auto-address-of: wrap non-pointer args where param is Ptr[Const[T]]
         if (auto_address_of_ptr_const_args(self, inst, app, iter.nodes)) return 1;
+        // CArray-to-Ptr decay: rewrite CArray args to Ptr[element] where param is Ptr
+        if (auto_decay_carray_to_ptr_args(self, inst, app)) return 1;
 
 #if DEBUG_EXPLICIT_TYPE_ARGS
         {
@@ -3020,7 +3043,7 @@ static int ufcs_rewrite_call(tl_infer *self, traverse_ctx *ctx, ast_node *node, 
         // val.f() where f expects Ptr[T]: implicit address-of
         tl_monotype *recv_mono = left->type->type;
         tl_monotype_substitute(self->arena, recv_mono, self->subs, null);
-        if (!tl_monotype_is_ptr(recv_mono)) {
+        if (!tl_monotype_is_ptr(recv_mono) && !tl_monotype_is_carray(recv_mono)) {
             ast_node *addr = constraint_wrap_address_of(self, left);
             if (!addr) return 1;
             left = addr;
