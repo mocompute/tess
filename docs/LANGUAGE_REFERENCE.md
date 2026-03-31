@@ -1863,7 +1863,9 @@ while i < 10, i = i + 1 {
 
 ### For-in Loop
 
-The `for` statement iterates over collections using a module-based iterator interface:
+The `for` statement iterates over collections using a module-based iterator interface.
+The iterator module is inferred from the collection's type via UFCS dispatch — any type
+whose module implements the iterator interface can be used directly:
 
 ```tl
 for x in collection {
@@ -1875,20 +1877,22 @@ for x.& in collection {
 }
 ```
 
-#### Custom Iterator Modules
-
-By default, `for` uses the `Array` module's iterator. You can specify a different iterator module:
+This works with `Array`, `Slice`, `String`, and any user-defined type that implements
+the iterator interface in its module:
 
 ```tl
-for x in Module collection { ... }
-for x.& in Module collection { ... }
+#import <Slice.tl>
+s := arr.slice(0, 4)
+for x in s { use(x) }         // Slice module inferred from type
 ```
 
-For example, `Array.Indexed` provides both the value and its index:
+#### Explicit Iterator Modules
+
+When you need both the element and its index, use `Array.Indexed`:
 
 ```tl
 for it in Array.Indexed xs {
-  c_printf(c"index=%d value=%d\n", it.index, it.value)
+  Print.println(f"index={it.index} value={it.value}")
 }
 
 for it.& in Array.Indexed xs {
@@ -1913,7 +1917,20 @@ The `Iter` type can contain arbitrary fields accessible in the loop body (like `
 
 #### Desugaring
 
-The statement `for x in Module xs { body }` desugars to:
+When no explicit module is specified, the compiler emits UFCS dot-calls and the module is
+inferred from the collection's type during type inference:
+
+```tl
+iter := xs.iter_init()
+while iter.iter_cond(), iter.iter_update() {
+  x: Const := iter.iter_value()
+  body
+}
+iter.iter_deinit()
+```
+
+When an explicit module is specified (`for x in Module xs { body }`), the compiler emits
+module-qualified calls directly:
 
 ```tl
 iter := Module.iter_init(xs.&)

@@ -3033,6 +3033,18 @@ static int ufcs_rewrite_call(tl_infer *self, traverse_ctx *ctx, ast_node *node, 
             fn_poly         = lookup_poly(self, ufcs_name);
         }
     }
+    // Type-name-as-module fallback: for types defined outside their eponymous module
+    // (e.g. Slice[T] is defined in builtin but its methods live in #module Slice),
+    // try the type constructor's generic name as the module.
+    if (!fn_poly && tl_monotype_is_inst(recv_type)) {
+        str gn = recv_type->cons_inst->def->generic_name;
+        str module = recv_type->cons_inst->def->module;
+        if (!str_is_empty(gn) && !str_eq(gn, module)) {
+            str qualified = str_qualify(self->arena, gn, field_name);
+            ufcs_name     = mangle_str_for_arity(self->arena, qualified, ufcs_arity);
+            fn_poly       = lookup_poly(self, ufcs_name);
+        }
+    }
     // Family fallback for standalone builtin types (CChar→Int, CSize→UInt, CPtrDiff→Int)
     if (!fn_poly && tl_monotype_is_inst(recv_type)) {
         str family = builtin_trait_family_module(recv_type);
