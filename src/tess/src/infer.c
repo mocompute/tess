@@ -613,6 +613,11 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *out_resu
 // ============================================================================
 
 static void report_error_hints(tl_infer *self, tl_infer_error *err) {
+    if (err->tag == tl_err_undeclared_reassignment) {
+        fprintf(stderr, "  hint: to declare a new variable, use ':=' instead of '=': %s := ...\n",
+                str_cstr(&err->message));
+        return;
+    }
     if (err->tag == tl_err_free_variable_not_found) {
         // If the free variable name matches a trait method, suggest parenthesizing
         // number literals (e.g., 42.hash() should be (42).hash())
