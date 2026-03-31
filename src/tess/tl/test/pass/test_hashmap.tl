@@ -112,10 +112,10 @@ test_overwrite() {
     m     := HashMap.create[Int, Int]()
 
     m.set(1, 100)
-    if m.size() != 1zu { error += 1 }
+    if m.size() != 1 { error += 1 }
 
     m.set(1, 200)
-    if m.size() != 1zu { error += 1 }
+    if m.size() != 1 { error += 1 }
 
     p := m.get(1)
     if p == null { error += 1 }
@@ -198,7 +198,7 @@ test_clear() {
 
     // Can still insert after clear
     m.set(4, 40)
-    if m.size() != 1zu { error += 1 }
+    if m.size() != 1 { error += 1 }
     p := m.get(4)
     if p == null { error += 1 }
     if p != null && p.* != 40 { error += 1 }
@@ -226,7 +226,7 @@ test_keys_values() {
     found_2  := false
     found_3  := false
     i: CSize := 0zu
-    while i < ks.size, i += 1zu {
+    while i < ks.size, i += 1 {
         if ks.data.[i] == 1 { found_1 = true }
         if ks.data.[i] == 2 { found_2 = true }
         if ks.data.[i] == 3 { found_3 = true }
@@ -239,7 +239,7 @@ test_keys_values() {
     found_20 := false
     found_30 := false
     i = 0zu
-    while i < vs.size, i += 1zu {
+    while i < vs.size, i += 1 {
         if vs.data.[i] == 10 { found_10 = true }
         if vs.data.[i] == 20 { found_20 = true }
         if vs.data.[i] == 30 { found_30 = true }
@@ -513,7 +513,7 @@ test_keys_values_with_alloc() {
     found_1  := false
     found_2  := false
     i: CSize := 0zu
-    while i < ks.size, i += 1zu {
+    while i < ks.size, i += 1 {
         if ks.data.[i] == 1 { found_1 = true }
         if ks.data.[i] == 2 { found_2 = true }
     }
@@ -523,7 +523,7 @@ test_keys_values_with_alloc() {
     found_10 := false
     found_20 := false
     i = 0zu
-    while i < vs.size, i += 1zu {
+    while i < vs.size, i += 1 {
         if vs.data.[i] == 10 { found_10 = true }
         if vs.data.[i] == 20 { found_20 = true }
     }
@@ -603,7 +603,7 @@ test_default_eq() {
 
     // Overwrite: eq must return true for identical key so size stays 1
     m.set(42, 200)
-    if m.size() != 1zu { error += 1 }
+    if m.size() != 1 { error += 1 }
     p = m.get(42)
     if p == null { error += 1 }
     if p != null && p.* != 200 { error += 1 }
