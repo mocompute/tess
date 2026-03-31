@@ -1,8 +1,8 @@
 # The Tess Language
 
-A statically-typed language that transpiles to C.
+A practical statically-typed language that builds on C.
 
-Tess adds type inference, generics, and tagged unions to a C-like foundation. It transpiles to plain C: you keep your toolchain, your debugger, and your performance.
+Tess adds type inference, generics, and tagged unions to a C foundation. It transpiles to plain C: you keep your toolchain, your debugger, and your performance.
 
 ```tl
 #module Point
@@ -46,8 +46,8 @@ factorial(n) {
 }
 ```
 
-**Tagged unions.** Define variants with associated data, then bind on each variant of the union. The
-compiler checks that every case is handled.
+**Tagged unions.** Define variants with associated data. Match exhaustively, bind a single variant, or
+propagate errors: the compiler won't let anything slip.
 
 ```tl
 Shape: | Circle { radius: Float }
@@ -76,6 +76,12 @@ Or, condition on a single variant:
         log("we saw a square")
     }
     // ...
+```
+
+Or, propagate errors with `try`:
+
+```tl
+    file := try open_file()    // unwraps Ok, or returns Err
 ```
 
 **Generics.** One definition, multiple types, no macros. Type parameters can be constrained by traits: checked at compile time, specialized to concrete types.
