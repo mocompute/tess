@@ -6,12 +6,15 @@
 #import <Alloc.tl>
 #import <Array.tl>
 #import <HashMap.tl>
+#import <Print.tl>
 #import <String.tl>
 #import <cstdlib.tl>
 #import <cstdio.tl>
 #import <cstring.tl>
 
 Allocator = Alloc.Allocator
+print     = Print.print
+println   = Print.println
 
 // Shorthand for string literal to String conversion.
 
@@ -190,10 +193,9 @@ command(self, name: String) {
 // -- Private helpers --
 
 _find_spec_long(self, name) {
-    i: CSize := 0
-    while i < self->_specs.size, i += 1 {
-        if self->_specs.data.[i].long_name.eq(name) {
-            return Some(i)
+    for spec in Array.Indexed self->_specs {
+        if spec.value.long_name.eq(name) {
+            return Some(spec.index)
         }
     }
     None
@@ -201,10 +203,9 @@ _find_spec_long(self, name) {
 
 _find_spec_short(self, ch) {
     if ch == '\0' { return None }
-    i: CSize := 0
-    while i < self->_specs.size, i += 1 {
-        if self->_specs.data.[i].short_name == ch {
-            return Some(i)
+    for spec in Array.Indexed self->_specs {
+        if spec.value.short_name == ch {
+            return Some(spec.index)
         }
     }
     None
@@ -351,9 +352,8 @@ parse(self, argc, argv) {
         // Not a flag — check for command or positional
         if self->_commands.size > 0 && positional.size == 0 {
             found_cmd := 0
-            k: CSize  := 0
-            while k < self->_commands.size, k += 1 {
-                if self->_commands.data.[k].eq(arg) {
+            for command in self->_commands {
+                if command.eq(arg) {
                     cmd       = Some(arg)
                     found_cmd = 1
                     break
@@ -370,9 +370,7 @@ parse(self, argc, argv) {
     }
 
     // Check required args
-    r: CSize := 0
-    while r < self->_specs.size, r += 1 {
-        spec := self->_specs.data.[r]
+    for spec in self->_specs {
         if spec.required {
             if !values.contains(spec.long_name) {
                 errors.&.push(MissingRequired(name = spec.long_name))
@@ -394,16 +392,15 @@ parse_or_exit(self, argc, argv) {
     when result {
         ok:  Ok { ok.value }
         err: Err {
-            i := 0
-            while i < err.error.errors.size, i += 1 {
-                when err.error.errors.data.[i] {
-                    uf: UnknownFlag { c_printf(c"error: unknown flag '%s'\n", uf.flag.&.cstr()) }
-                    mv: MissingValue { c_printf(c"error: missing value for '%s'\n", mv.flag.&.cstr()) }
-                    mr: MissingRequired { c_printf(c"error: missing required option '%s'\n", mr.name.&.cstr()) }
-                    ic: InvalidCommand { c_printf(c"error: unknown command '%s'\n", ic.name.&.cstr()) }
+            for it in err.error.errors {
+                when it {
+                    uf: UnknownFlag { println(f"error: unknown flag '{uf.flag}'") }
+                    mv: MissingValue { println(f"error: missing value for '{mv.flag}'") }
+                    mr: MissingRequired { println(f"error: missing required option '{mr.name}'") }
+                    ic: InvalidCommand { println(f"error: unknown command '{ic.name}'") }
                 }
             }
-            c_printf(c"\n")
+            println("")
             print_help(self)
             c_exit(1)
             _tl_fatal_(c"unreachable")
@@ -433,9 +430,7 @@ help_text(self) {
     if self->_specs.size > 0 {
         result = result.cat("\nOptions:\n")
 
-        i: CSize := 0
-        while i < self->_specs.size, i += 1 {
-            spec := self->_specs.data.[i]
+        for spec in self->_specs {
             result = result.cat("  ")
 
             if spec.short_name != '\0' {
@@ -467,10 +462,9 @@ help_text(self) {
 
     if self->_commands.size > 0 {
         result = result.cat("\nCommands:\n")
-        j: CSize := 0
-        while j < self->_commands.size, j += 1 {
+        for command in self->_commands {
             result = result.cat("  ")
-            result = result.cat(self->_commands.data.[j])
+            result = result.cat(command)
             result = result.cat("\n")
         }
     }
@@ -479,9 +473,7 @@ help_text(self) {
 }
 
 print_help(self) {
-    txt := help_text(self)
-    c_printf(c"%s", txt.&.cstr())
-    void
+    print(f"{help_text(self)}")
 }
 
 
@@ -491,7 +483,7 @@ from_argv(argc, argv) {
     result := Array.empty[String]()
     i      := 0
     while i < argc, i += 1 {
-        result.&.push(String.from_cstr(argv.[i]))
+        result.push(String.from_cstr(argv.[i]))
     }
     result
 }
