@@ -577,19 +577,31 @@ b := Buffer(data = void, len = 0)
 which leaves the underlying memory uninitialized. Use direct indexing (or C library functions like `c_memset`)
 to initialize the array.
 
-**Decay to pointer:** Local CArrays require explicit decay. Struct field CArrays decay automatically on access:
+**Decay to pointer:** CArrays decay to pointers automatically at function call sites (matching C semantics)
+and in struct field access. Explicit decay via binding annotation is also supported:
 
 ```tl
-// Local: explicit decay
+// Function call: automatic decay
 buffer: CArray[CChar, 256] := void
-ptr: Ptr[CChar] := buffer             // Must be explicit
-c_strcpy(ptr, "hello")
+c_strcpy(buffer, "hello")             // CArray[CChar, 256] decays to Ptr[CChar]
 
 // Struct field: automatic decay
 data_ptr: Ptr[CChar] := b.data        // Decays automatically
+
+// Explicit decay via binding
+ptr: Ptr[CChar] := buffer             // Also works
 ```
 
-j### Pointers and Arrays for C Programmers
+**sizeof:** `sizeof(arr)` and `sizeof[CArray[T, N]]()` return the full array size (`N * sizeof(T)`),
+not the pointer size. This matches C semantics for arrays that have not decayed:
+
+```tl
+arr: CArray[CInt, 16] := void
+sizeof(arr)                // 64 (= 16 * 4)
+sizeof[CArray[CInt, 16]]() // 64
+```
+
+### Pointers and Arrays for C Programmers
 
 Quick reference for common C patterns and their Tess equivalents:
 
@@ -754,7 +766,7 @@ foo() -> Ptr[any] { return null }     // Required - null has no type
 | Tagged union `when` expression                   | No (type inferred from scrutinee)      |
 | Tagged union `case` expression                   | **Yes** (when type not inferrable)     |
 | CArray binding                                   | **Yes** (type annotation required)     |
-| CArray decay to pointer                          | **Yes** (explicit `Ptr[T]` annotation) |
+| CArray decay to pointer                          | No (automatic at call sites)           |
 | Pointer cast to different type                   | **Yes**                                |
 | C type via literal suffix (`42u`, `42zu`)        | No (suffix determines type)            |
 | C type via narrowing/cross-chain cast            | **Yes** (binding annotation)           |
