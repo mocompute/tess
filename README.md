@@ -172,7 +172,7 @@ tess exe -o myapp    # standalone binary
 
 - [Language Reference](docs/LANGUAGE_REFERENCE.md): complete syntax guide
 - [Language Model](docs/LANGUAGE_MODEL.md): scoping, closures, and semantics
-- [Type System](docs/TYPE_SYSTEM.md): inference, generics, and integer types
+- [Type System](docs/TYPE_SYSTEM.md): how type inference and specialization work
 - [Standard Library](docs/STANDARD_LIBRARY.md): Array, String, HashMap, and more
 - [Packages](docs/PACKAGES.md): creating and consuming `.tpkg` libraries
 - [Building](docs/BUILD.md): build configurations, installation, and standalone binary

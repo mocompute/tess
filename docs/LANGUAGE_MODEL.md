@@ -584,4 +584,4 @@ The core ideas:
 ## Further Reading
 
 - [Language Reference](LANGUAGE_REFERENCE.md) — Complete syntax reference with examples
-- [Type System](TYPE_SYSTEM.md) — Type inference, generics, and the constraint system
+- [Type System](TYPE_SYSTEM.md) — How inference, unification, and specialization work

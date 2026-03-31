@@ -1,8 +1,8 @@
-# Tess Type System
+# Tess Type System — How Inference Works
 
 The compiler infers types from usage, so most code needs no annotations. Generic functions and types are specialized to concrete types at compile time: no runtime dispatch, no overhead.
 
-This document covers how inference works, when you need annotations, and how generics and traits interact.
+This document explains how the compiler reasons about types — the internal machinery of inference, unification, and specialization. For syntax and usage, see the [Language Reference](LANGUAGE_REFERENCE.md). For the conceptual model of bindings and scoping, see the [Language Model](LANGUAGE_MODEL.md).
 
 ## Type Inference
 
@@ -19,79 +19,75 @@ The compiler infers:
 - The return type equals the result type of `+`
 - Final type: `(Int, Int) -> Int` or `(Float, Float) -> Float` depending on usage
 
-### When Annotations Are Required
+## The Type Hierarchy
 
-Type annotations are needed when:
+The type system has three levels:
 
-1. **C function declarations** - The compiler cannot infer types across the FFI boundary:
+- **Type Variables** — Placeholders during inference (`t0`, `t1`, etc.)
+- **Monotypes** — Concrete types without quantifiers (`Int`, `Point[Float]`)
+- **Polytypes** — Type schemes with quantified variables (`forall T. T -> T`)
+
+### Arrow Types (Function Types)
+
+Function types use arrow notation:
+
+```tl
+(Int) -> Int                    // Function taking Int, returning Int
+(Int, Int) -> Int               // Function taking two Ints
+((T) -> U, T) -> U              // Higher-order function
+```
+
+Tuples in arrow types represent function parameter lists — they are a feature of the type system, not the language itself.
+
+## Constraint Satisfaction
+
+The type checker generates and solves constraints:
+
+### Constraint Types
+
+1. **Equality constraints** — Two types must be the same
    ```tl
-   c_malloc(size: CSize) -> Ptr[any]
-   c_printf(fmt: CString, ...) -> CInt
+   x := y    // typeof(x) = typeof(y)
    ```
 
-2. **Ambiguous pointer types** - When `c_malloc` or similar returns `Ptr[any]`:
+2. **Application constraints** — Function application
    ```tl
-   p: Ptr[Int] := c_malloc(sizeof[Int]() * 10)
+   f(x)      // typeof(f) = typeof(x) -> result
    ```
 
-3. **Functions only used through pointers** - Without a direct call site, the compiler cannot specialize:
+3. **Field constraints** — Struct field access
    ```tl
-   // Annotation required: malloc is only stored, never called directly
-   malloc(count: CSize) -> Ptr[Int] {
-     c_malloc(count)
-   }
-   alloc := Allocator(malloc_fn = malloc/1)
+   p.x       // typeof(p) must have field x
    ```
 
-## Generics
+### Unification
 
-### Generic Types
-
-Types can have type parameters, written in square brackets:
+Constraints are solved by **unification** — finding substitutions that make types equal:
 
 ```tl
-Point[T] : { x: T, y: T }           // One type parameter
-Map[K, V] : { keys: Ptr[K], values: Ptr[V], size: Int }  // Multiple parameters
+id(x) { x }
+y := id(42)
 ```
 
-### Generic Functions
+Generates:
+1. `id : t0 -> t1` (fresh type variables)
+2. `x : t0`
+3. Return type = `t1`
+4. Body `x` means `t1 = t0`
+5. Call `id(42)` means `t0 = Int`
+6. Therefore: `id: Int -> Int` for this call site
 
-Functions are automatically generic when they work with any type:
+### Occurs Check
+
+The type checker prevents infinite types. When a function is used, the occurs check detects self-referential types:
 
 ```tl
-id(x) { x }                         // Inferred: (T) -> T
-swap(x, y) { (y, x) }               // Inferred: (T, U) -> (U, T)
-apply(f, x) { f(x) }                // Inferred: ((T) -> U, T) -> U
+f(x) { f }
+
+main() {
+  g := f(1)   // Error: would require t = t -> t (infinite type)
+}
 ```
-
-### Explicit Type Parameters
-
-Generic functions declare type parameters using square brackets. Square brackets always denote type arguments; parentheses always denote value arguments:
-
-```tl
-empty[T]() -> Array[T] { ... }
-with_capacity[T](n: Int) -> Array[T] { ... }
-map[T, U](f: (T) -> U, arr: Array[T]) -> Array[U] { ... }
-
-// Usage
-arr := empty[Int]()
-floats := with_capacity[Float](16)
-```
-
-### Trait Bounds
-
-Type parameters can be constrained with trait bounds, restricting them to types that satisfy
-a given trait:
-
-```tl
-sort[T: Ord](arr: Array[T]) { ... }
-double[T: Add](x: T) -> T { x + x }
-```
-
-Bounds are checked at call sites during specialization. A type satisfies a trait through
-structural conformance — if its module contains functions matching all of the trait's
-signatures, it conforms. See the [Language Reference](LANGUAGE_REFERENCE.md#traits) for full
-details on the trait system.
 
 ## Monomorphization (Specialization)
 
@@ -159,370 +155,6 @@ main() {
 
 Type annotations on functions are only required when there is no usage context to infer the concrete type.
 
-## Type Aliases
-
-Type aliases create shorthand names for types:
-
-```tl
-Pt = Point[Int]                                  // Simple alias
-StringIntMap = Collections.Map[CString, Int]  // Fully specialized alias
-```
-
-Aliases are expanded at compile time. `Pt` and `Point[Int]` are the same type.
-
-### Partial Specialization (Not Supported)
-
-Tess does not support partially specialized type aliases:
-
-```tl
-// NOT SUPPORTED:
-StringMap[V] = Map[CString, V]   // Error: partial specialization
-```
-
-Instead, use the full generic type or create a fully specialized alias.
-
-### Auto-Collapsed Type Aliases
-
-When a module's primary type has the same name as the module (e.g., `Array.Array`, `HashMap.HashMap`), the compiler automatically registers the bare module name as a type alias during type constructor creation. This is equivalent to an implicit:
-
-```tl
-Array = Array.Array      // auto-generated, not user-written
-HashMap = HashMap.HashMap
-```
-
-The alias is only created when the bare name is not already occupied by another type. Both the bare and qualified forms unify to the same type — they are fully interchangeable in all type positions.
-
-**Implementation:** In `create_type_constructor_from_user_type` (`infer_constraint.c`), after registering the mangled type (`Module__Module`), the compiler checks whether the symbol's `original` name equals its `module` name. If so, and the bare name is free, `tl_type_registry_type_alias_insert` registers the alias.
-
-## Type Constructors
-
-User-defined types (structs, unions, enums) introduce **type constructors**.
-
-### Built-in Type Constructors
-
-`Ptr[T]` and `Const[T]` are built-in unary type constructors. `Const[T]` serves two roles: inside `Ptr` it expresses read-only pointer access (`Ptr[Const[T]]`), and on value bindings it prevents reassignment (`x: Const[Int] := 5`). `Const` without a type argument is sugar for `Const[T]` with a fresh type variable (`x: Const := 5`). The compiler enforces const correctness by rejecting mutation through const pointers, preventing implicit removal of const qualifiers, and rejecting reassignment of const value bindings.
-
-### Struct Type Constructors
-
-```tl
-Point[T] : { x: T, y: T }
-```
-
-`Point` is a type constructor that takes one type argument. `Point[Int]` and `Point[Float]` are distinct concrete types.
-
-### The Type Hierarchy
-
-- **Type Variables** - Placeholders during inference (`t0`, `t1`, etc.)
-- **Monotypes** - Concrete types without quantifiers (`Int`, `Point[Float]`)
-- **Polytypes** - Type schemes with quantified variables (`forall T. T -> T`)
-
-### Arrow Types (Function Types)
-
-Function types use arrow notation:
-
-```tl
-(Int) -> Int                    // Function taking Int, returning Int
-(Int, Int) -> Int               // Function taking two Ints
-((T) -> U, T) -> U              // Higher-order function
-```
-
-### Tuple Types
-
-Tuples group multiple types:
-
-```tl
-(Int, Float)                    // Pair
-(Int, Float, String)            // Triple
-```
-
-Tuples are a feature of the type system, not the Tess language. They
-are used to represent function parameter lists in arrow types.
-
-### Variadic Types
-
-The `tl_variadic` monotype represents a trait-bounded variadic parameter in the type system. It stores a trait name and the element type (the return type of the trait's single function).
-
-**During parsing:** `...TraitName` in a parameter type position creates a `tl_variadic` monotype with the trait name and a null element type.
-
-**During inference:** The `resolve_variadic_to_slice()` function:
-1. Looks up the trait in the trait registry
-2. Validates: exactly one signature, arity 1, concrete (non-generic) return type
-3. Extracts the return type as the element type
-4. Resolves to `Slice[ReturnType]` — the variadic parameter's actual type
-
-**At call sites:** When `is_variadic_call` is set on an NFA node, the inference engine:
-1. Resolves all argument types
-2. Checks each variadic argument's type against the trait bound via `check_trait_bound()`
-3. Builds a callsite arrow with `n_fixed + 1` elements (the last being `Slice[ReturnType]`)
-
-**Unification:** `tl_variadic` is treated like `tl_ellipsis` during tuple unification — it accepts zero or more remaining arguments. The `unify_tuple()` function handles both.
-
-**Slice type:** `Slice[T]` is defined in `builtin.tl` as `{ v: Ptr[T], size: CSize }`. It is a regular Tess type, not a compiler-internal construct. The transpiler generates stack-allocated arrays and `Slice` literals at variadic call sites.
-
-## Constraint Satisfaction
-
-The type checker generates and solves constraints:
-
-### Constraint Types
-
-1. **Equality constraints** - Two types must be the same
-   ```tl
-   x := y    // typeof(x) = typeof(y)
-   ```
-
-2. **Application constraints** - Function application
-   ```tl
-   f(x)      // typeof(f) = typeof(x) -> result
-   ```
-
-3. **Field constraints** - Struct field access
-   ```tl
-   p.x       // typeof(p) must have field x
-   ```
-
-### Unification
-
-Constraints are solved by **unification** - finding substitutions that make types equal:
-
-```tl
-id(x) { x }
-y := id(42)
-```
-
-Generates:
-1. `id : t0 -> t1` (fresh type variables)
-2. `x : t0`
-3. Return type = `t1`
-4. Body `x` means `t1 = t0`
-5. Call `id(42)` means `t0 = Int`
-6. Therefore: `id: Int -> Int` for this call site
-
-### Occurs Check
-
-The type checker prevents infinite types. When a function is used, the occurs check detects self-referential types:
-
-```tl
-f(x) { f }
-
-main() {
-  g := f(1)   // Error: would require t = t -> t (infinite type)
-}
-```
-
-## Type Conversions
-
-Tess supports both implicit and explicit type conversions:
-
-### Integer Types
-
-Integer types are organized into **seven sub-chains**, each with a width
-ordering. Implicit widening is only permitted within a single sub-chain,
-from narrower to wider.
-
-**C-Named Signed:** `CSignedChar < CShort < CInt < CLong < CLongLong (= Int)`
-
-**C-Named Unsigned:** `CUnsignedChar < CUnsignedShort < CUnsignedInt < CUnsignedLong < CUnsignedLongLong (= UInt)`
-
-**Fixed-Width Signed:** `CInt8 < CInt16 < CInt32 < CInt64`
-
-**Fixed-Width Unsigned:** `CUInt8 < CUInt16 < CUInt32 < CUInt64`
-
-**Standalone Types** (no implicit conversion): `CSize`, `CPtrDiff`, `CChar`
-
-#### Implicit Widening
-
-Within a sub-chain, narrower types implicitly widen to wider types. This
-applies in all directed contexts — variable bindings, reassignment,
-function arguments, and return values:
-
-```tl
-// Let-in binding
-x: CInt := 42
-y: Int := x              // OK: CInt → Int
-
-// Reassignment
-z: Int := 0
-z = x                    // OK: CInt → Int
-
-// Function arguments
-take_int(n: Int) { n }
-take_int(x)               // OK: CInt argument widens to Int parameter
-
-// Return values
-to_int(n: CInt) -> Int { n }  // OK: CInt return widens to Int
-```
-
-#### Explicit Narrowing and Cross-Chain Conversion
-
-Narrowing (wide → narrow), cross-chain (e.g., signed ↔ unsigned, C-named ↔
-fixed-width), and standalone type conversions require an explicit **declaration
-type annotation**:
-
-```tl
-narrow: CInt := some_int_value        // Narrowing: Int → CInt
-unsigned: UInt := some_int_value      // Cross-family: signed → unsigned
-fixed: CInt32 := some_cint_value      // Cross-chain: C-named → fixed-width
-size: CSize := some_uint_value        // Standalone: UInt → CSize
-```
-
-The binding annotation is the only syntax for explicit conversion — there is
-no `as` keyword or cast function. This makes every conversion point visually
-prominent when scanning code.
-
-#### Weak Integer Literals
-
-Integer literals receive a **polymorphic (weak) type** that adapts to context:
-
-- `42` — weak signed, resolves to any signed integer type; defaults to `Int`
-- `42u` — weak unsigned, resolves to any unsigned integer type; defaults to `UInt`
-- `42z` — concrete `CPtrDiff` (not polymorphic)
-- `42zu` — concrete `CSize` (not polymorphic)
-
-```tl
-f(x: CInt) { x }
-f(42)                    // OK: literal 42 adapts to CInt
-c_malloc(10zu)           // OK: 10zu is CSize
-```
-
-When a weak literal resolves to a concrete type, the compiler verifies the
-literal value fits in that type's range. For example, `256` resolving to
-`CInt8` is a compile-time error.
-
-#### Exact Match in Generics and Operators
-
-Type variables require exact type match — no implicit widening through generics:
-
-```tl
-f(x: T, y: T) -> T { x + y }
-
-a: CInt := 1
-b: CShort := 2
-f(a, b)              // Error: T bound to CInt, CShort != CInt
-```
-
-Arithmetic and comparison operators are typed as `(T, T) -> T`, requiring
-both operands to be the same concrete type. Conditional (`if`) and `case`
-expressions also require all branches to have the same type.
-
-#### Debug Bounds Checking
-
-In debug builds, narrowing conversions emit a runtime bounds check before the
-cast. If the value does not fit in the target type, the program aborts with
-a diagnostic message.
-
-### Pointer Types
-
-Pointers can be explicitly cast using a declaration type annotation:
-```tl
-p: Ptr[Int] := c_malloc(...)
-q: Ptr[Byte] := p   // Explicit pointer cast
-```
-
-### Const Pointer Coercion
-
-`Ptr[T]` implicitly coerces to `Ptr[Const[T]]` (adding const is safe):
-
-```tl
-read(p: Ptr[Const[Int]]) { p.* }
-
-main() {
-  p: Ptr[Int] := c_malloc(8)
-  p.* = 42
-  val := read(p)     // OK: Ptr[Int] -> Ptr[Const[Int]]
-}
-```
-
-The reverse is rejected — `Ptr[Const[T]]` does not coerce to `Ptr[T]`:
-
-```tl
-write(p: Ptr[Int]) { p.* = 10  0 }
-
-pass(p: Ptr[Const[Int]]) {
-  write(p)            // Error: cannot strip const
-}
-```
-
-Const stripping is also rejected through nested pointer levels:
-`Ptr[Ptr[Const[T]]]` cannot coerce to `Ptr[Ptr[T]]`.
-
-Const stripping is also rejected in struct constructor fields and return statements.
-
-**Explicit cast:** Const can be stripped using an annotated declaration:
-
-```tl
-mp: Ptr[Int] := const_ptr    // explicit cast, allowed
-```
-
-In the generated C code, `Ptr[Const[T]]` transpiles to `const T*`.
-
-### Const Value Bindings
-
-`Const[T]` on a value binding prevents reassignment. During unification, `Const[T]` strips freely for value types — a `Const[Int]` value can be passed to a function expecting `Int` because the value is copied. This matches C semantics where `const int x` can be passed by value to functions expecting `int`.
-
-Taking the address of a `Const[T]` binding produces `Ptr[Const[T]]`, preserving const safety through pointers. This means UFCS methods that take `Ptr[T]` (mutating) are rejected on const bindings, while methods taking `Ptr[Const[T]]` (read-only) are accepted.
-
-`Const` on a binding and `Const` inside `Ptr` are orthogonal: `Const[Ptr[Int]]` transpiles to `int* const` (can't reassign pointer, can mutate pointee), while `Ptr[Const[Int]]` transpiles to `const int*` (can reassign pointer, can't mutate pointee).
-
-For-loop variables are implicitly `Const`.
-
-### Const and Generic Type Parameters
-
-`Const[T]` cannot currently be used with generic type parameters. When a generic function uses the same type variable `T` in both a `Ptr[T]` and a `Ptr[Const[T]]` position, unification fails because `T` would need to be both `X` and `Const[X]` simultaneously:
-
-```tl
-// Does NOT work — T unifies to conflicting types:
-c_memcpy(dst: Ptr[T], src: Ptr[Const[T]], n: CSize) -> Ptr[T]
-
-// Works — use Ptr[T] for both when T is generic:
-c_memcpy(dst: Ptr[T], src: Ptr[T], n: CSize) -> Ptr[T]
-
-// Works — Const is fine with concrete types:
-c_strcmp(s1: Ptr[Const[CChar]], s2: Ptr[Const[CChar]]) -> CInt
-```
-
-This is why the standard library `mem*` bindings (`c_memcpy`, `c_memmove`, `c_memcmp`, `c_memchr`) use `Ptr[T]` without `Const`, while string functions that use concrete `CChar` types include `Const` where the C headers specify `const`.
-
-### Float/Integer Conversion
-
-`Int` and `Float` are not implicitly convertible. Conversion requires an
-explicit declaration type annotation (the same cast syntax used for integer
-narrowing and pointer casts):
-
-```tl
-x: Float := 3.7
-y: Int := x          // OK: float-to-integer cast (truncates)
-
-n: Int := 42
-f: Float := n        // OK: integer-to-float cast
-```
-
-Integer literals are always integer-typed, not `Float`:
-```tl
-x: Float := 0       // Error: 0 is an integer literal, not Float
-x: Float := 0.0     // OK: 0.0 is Float
-```
-
-## Recursive Types
-
-Types can reference themselves through pointers:
-
-```tl
-Node[T] : { value: T, next: Ptr[Node[T]] }
-
-// Usage
-n1 := Node(value = 1, next = null)
-n2 := Node(value = 2, next = n1.&)
-```
-
-### Mutually Recursive Types
-
-Types can reference each other:
-
-```tl
-Tree[T] : { value: T, children: Ptr[Forest[T]] }
-Forest[T] : { trees: Ptr[Tree[T]], count: Int }
-```
-
 ## Polymorphic Recursion
 
 Functions can call themselves with different type arguments:
@@ -535,78 +167,8 @@ is_odd(n)  { if n == 0 { false } else { is_even(n - 1) } }
 
 Both functions are specialized to `(Int) -> Bool`.
 
-## The `any` Type
+## Further Reading
 
-The `any` type represents an unknown pointer type, used primarily for C interop:
-
-```tl
-c_malloc(size: CSize) -> Ptr[any]
-```
-
-`Ptr[any]` can be assigned to any pointer type:
-```tl
-p: Ptr[Int] := c_malloc(...)      // Ptr[any] -> Ptr[Int]
-q: Ptr[Point[Float]] := c_malloc(...)
-```
-
-## Type Predicates
-
-Use `::` to test a type. The `::` operator is a binary predicate.
-
-```tl
-x := 42
-x :: Int    // true if x has type Int
-
-y := get_value()
-y :: Point[Int]
-y
-```
-
-Type predicates are checked at compile time and produce an expression
-with a boolean value.
-
-### Attribute Predicates
-
-The `::` operator also serves as an **attribute predicate** when the right-hand side is an attribute set (`[[...]]`) instead of a type. Attribute predicates test whether a symbol was declared with a given attribute.
-
-```tl
-[[my_attr]] x := 42
-x :: [[my_attr]]        // true
-x :: [[other]]          // false
-```
-
-For attributes with arguments (e.g., `[[NFA(42)]]`), two matching modes apply:
-
-- **Exact match**: `sym :: [[NFA(42)]]` — matches only if the attribute has the same arguments.
-- **General match**: `sym :: [[NFA]]` — matches any `NFA(...)` attribute regardless of arguments.
-
-Like type predicates, attribute predicates are resolved at compile time and produce a boolean value.
-
-## Void and Unit
-
-- `Void` - The type of expressions with no value (statements)
-- `void` - The void value (used to explicitly return nothing)
-
-```tl
-print(x) {
-  c_printf(c"%d\n", x)
-  void    // Explicit void return
-}
-```
-
-Functions without a meaningful return value have type `(...) -> Void`.
-
-## Summary
-
-The Tess type system provides:
-
-| Feature | Description |
-|---------|-------------|
-| Inference | Types deduced from usage |
-| Generics | Parametric polymorphism with type variables |
-| Monomorphization | Generic code specialized at compile time |
-| Structural typing | Types compared by structure |
-| Constraint solving | Unification-based type checking |
-| C interop | Seamless integration with C types |
-
-The combination of type inference and monomorphization means you get the safety of static types with the convenience of dynamic-feeling code, while generating efficient specialized code.
+- [Language Reference](LANGUAGE_REFERENCE.md) — Complete syntax reference including type annotations, generics, traits, and conversions
+- [Language Model](LANGUAGE_MODEL.md) — Bindings, scoping, closures, and pattern matching
+- [Specialization](SPECIALIZATION.md) — Detailed monomorphization pipeline documentation

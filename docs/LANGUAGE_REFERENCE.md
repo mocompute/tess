@@ -263,7 +263,19 @@ type alias), auto-collapse does not override it.
 
 ### Integer Type Conversions
 
-Integer types are organized into sub-chains with width ordering. Conversions follow strict rules:
+Integer types are organized into sub-chains with width ordering:
+
+**C-Named Signed:** `CSignedChar < CShort < CInt < CLong < CLongLong (= Int)`
+
+**C-Named Unsigned:** `CUnsignedChar < CUnsignedShort < CUnsignedInt < CUnsignedLong < CUnsignedLongLong (= UInt)`
+
+**Fixed-Width Signed:** `CInt8 < CInt16 < CInt32 < CInt64`
+
+**Fixed-Width Unsigned:** `CUInt8 < CUInt16 < CUInt32 < CUInt64`
+
+**Standalone Types** (no implicit conversion): `CSize`, `CPtrDiff`, `CChar`
+
+Conversions follow strict rules:
 
 **Implicit widening** (narrow → wide, same sub-chain) is automatic in all directed contexts:
 ```tl
@@ -304,7 +316,27 @@ c := a + wide            // OK: CInt + CInt
 c := a + 2               // OK: literal 2 adapts to CInt
 ```
 
-See [TYPE_SYSTEM.md](TYPE_SYSTEM.md) for the full sub-chain hierarchy and conversion rules.
+In debug builds, narrowing conversions emit a runtime bounds check that aborts if the value does not fit in the target type.
+
+See [TYPE_SYSTEM.md](TYPE_SYSTEM.md) for how the constraint solver handles these conversions.
+
+### Float/Integer Conversion
+
+`Int` and `Float` are not implicitly convertible. Conversion requires an explicit binding type annotation (the same cast syntax used for integer narrowing and pointer casts):
+
+```tl
+x: Float := 3.7
+y: Int := x          // OK: float-to-integer cast (truncates)
+
+n: Int := 42
+f: Float := n        // OK: integer-to-float cast
+```
+
+Integer literals are always integer-typed, not `Float`:
+```tl
+x: Float := 0       // Error: 0 is an integer literal, not Float
+x: Float := 0.0     // OK: 0.0 is Float
+```
 
 ### Pointer Types
 

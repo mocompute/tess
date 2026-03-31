@@ -12,7 +12,7 @@ Key docs:
 - `docs/LANGUAGE_REFERENCE.md` — Complete syntax reference
 - `docs/LANGUAGE_MODEL.md` — Core semantics (binding expressions, closures, scoping)
 - `docs/TL_CODING_CONVENTIONS.md` — Full coding conventions (quick reference is inlined below)
-- `docs/TYPE_SYSTEM.md` — Type inference, generics, constraints
+- `docs/TYPE_SYSTEM.md` — How type inference, unification, and specialization work
 - `docs/SPECIALIZATION.md` — Monomorphisation pipeline
 - `docs/plans/` — Design documents for planned/in-progress features
 
