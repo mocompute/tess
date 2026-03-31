@@ -1,6 +1,6 @@
 // upgrade_strings — Upgrade Tess string literal prefixes.
 //
-// Transforms string prefixes to match new Tess conventions:
+// Transforms string prefixes to match new Tess convtions:
 //   c"hello"  → c"hello"    (bare strings become explicit C strings)
 //   "hello" → c"hello"     (s-prefix strings become bare strings)
 //
@@ -12,10 +12,11 @@
 
 
 #module main
+#import <Array.tl>
 #import <CommandLine.tl>
 #import <File.tl>
+#import <Print.tl>
 #import <String.tl>
-#import <Array.tl>
 #import <cstdio.tl>
 #import <cstdlib.tl>
 
@@ -40,33 +41,33 @@ _is_alnum_or_under(c) {
 // Process a single line, transforming string prefixes.
 // Returns the transformed line.
 _process_line(line) {
-    n   := String.len(line)
+    n   := line.len()
     out := Array.empty[CChar]()
 
     i: CSize := 0
     while i < n, i += 1 {
-        ch: Some := String.char_at(line, i) else { continue }
-        c        := ch.v
+        ch: Some := line.char_at(i) else { continue }
+        c        := ch.value
 
         // Character literal — skip through so '"' inside doesn't confuse us.
         if c == '\'' {
             out.push(c)
             i += 1
             // Handle escape inside char literal.
-            inner: Some := String.char_at(line, i) else { continue }
-            if inner.v == '\\' {
-                out.push(inner.v)
+            inner: Some := line.char_at(i) else { continue }
+            if inner.value == '\\' {
+                out.push(inner.value)
                 i += 1
-                esc: Some := String.char_at(line, i) else { continue }
-                out.push(esc.v)
+                esc: Some := line.char_at(i) else { continue }
+                out.push(esc.value)
                 i += 1
             } else {
-                out.push(inner.v)
+                out.push(inner.value)
                 i += 1
             }
             // Closing quote.
-            close: Some := String.char_at(line, i) else { continue }
-            out.push(close.v)
+            close: Some := line.char_at(i) else { continue }
+            out.push(close.value)
             continue
         }
 
@@ -77,10 +78,10 @@ _process_line(line) {
             prefix: CChar := 0
 
             if out.size > 0 {
-                prev := out.v.[out.size - 1]
+                prev := out.data.[out.size - 1]
                 if _is_alpha(prev) {
                     // Check that the letter is standalone (not part of an identifier).
-                    if out.size == 1 || !_is_alnum_or_under(out.v.[out.size - 2]) {
+                    if out.size == 1 || !_is_alnum_or_under(out.data.[out.size - 2]) {
                         has_prefix = true
                         prefix     = prev
                     }
@@ -104,15 +105,15 @@ _process_line(line) {
 
             // Copy string body until closing quote, handling escapes.
             while i < n {
-                sc: Some := String.char_at(line, i) else { break }
-                sv       := sc.v
+                sc: Some := line.char_at(i) else { break }
+                sv       := sc.value
 
                 if sv == '\\' {
                     // Escape sequence — copy backslash and next char.
                     out.push(sv)
                     i += 1
-                    nc: Some := String.char_at(line, i) else { break }
-                    out.push(nc.v)
+                    nc: Some := line.char_at(i) else { break }
+                    out.push(nc.value)
                     i += 1
                     continue
                 }
@@ -139,7 +140,7 @@ _process_line(line) {
         out.free()
         return String.empty()
     }
-    result := String.from_bytes(out.v, out.size)
+    result := String.from_bytes(out.data, out.size)
     out.free()
     result
 }
@@ -150,49 +151,40 @@ _process_line(line) {
 _process_file(path, in_place) {
     when File.read_file(path) {
         ok: Ok {
-            content := ok.v
-            lines   := String.split(content, "\n")
+            content := ok.value
+            lines   := content.split("\n")
 
-            output    := Array.empty[String]()
-            li: CSize := 0
-            while li < lines.size, li += 1 {
-                transformed := _process_line(lines.v.[li])
+            output := Array.empty[String]()
+            for line in lines {
+                transformed := _process_line(line)
                 output.push(transformed)
             }
 
-            result := String.join("\n", output)
+            result := "\n".join(output)
 
             if in_place {
                 when File.write_file(path, result) {
                     ok:  Ok { }
                     err: Err {
-                        c_fprintf(c_stderr, c"error: could not write %s\n",
-                                  String.cstr(path.&))
+                        Print.fprintln(c_stderr, f"error: could not write {path.cstr()}")
                         return 1
                     }
                 }
             } else {
-                c_printf(c"%s", String.cstr(result.&))
-                void
+                Print.print(f"{result}")
             }
             return 0
         }
         err: Err {
-            when err.v {
+            when err.error {
                 nf: NotFound {
-                    c_fprintf(c_stderr, c"error: %s: no such file\n",
-                              String.cstr(nf.path.&))
-                    void
+                    Print.fprintln(c_stderr, f"error: {nf.path}: no such file")
                 }
                 pd: PermissionDenied {
-                    c_fprintf(c_stderr, c"error: %s: permission denied\n",
-                              String.cstr(pd.path.&))
-                    void
+                    Print.fprintln(c_stderr, f"error: {pd.path}: permission denied")
                 }
                 else {
-                    c_fprintf(c_stderr, c"error: %s: read error\n",
-                              String.cstr(path.&))
-                    void
+                    Print.fprintln(c_stderr, c"error: {path}: read error")
                 }
             }
             return 1
@@ -221,16 +213,15 @@ main(argc: CInt, argv: Ptr[CString]) {
     files    := args.positionals()
 
     if files.size == 0 {
-        c_fprintf(c_stderr, c"error: no input files\n")
+        Print.fprintln(c_stderr, "error: no input files")
         cl.print_help()
         cl.destroy()
         return 1
     }
 
-    errors    := 0
-    fi: CSize := 0
-    while fi < files.size, fi += 1 {
-        errors += _process_file(files.v.[fi], in_place)
+    errors := 0
+    for file in files {
+        errors += _process_file(file, in_place)
     }
 
     cl.destroy()
