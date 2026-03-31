@@ -5,6 +5,35 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [v0.1.0] - 2026-03-30 to 2026-03-31 (eb8c9ec7..cc50f567)
+
+### Highlights
+
+- Human-readable error messages with cleaned-up type names and prose descriptions
+- Implicit `CArray`-to-`Ptr` decay at function call sites, matching C semantics
+- Column numbers now included in type-checker error locations
+- `--no-optimize` renamed to `--debug` (with corrected `DEBUG`/`NDEBUG` logic)
+
+### Added
+
+- **Implicit CArray-to-Ptr Decay**: `CArray[T, N]` values now automatically coerce to `Ptr[T]` when passed to functions expecting a pointer, matching C's array decay semantics. Eliminates the need for explicit pointer conversions when calling C functions.
+- **Human-Readable Error Messages**: Type-checker errors now show clean, single-line messages with user-facing type names (e.g., `Vec` instead of `Vec__Vec`) and prose descriptions (e.g., "cannot mutate const value" instead of raw error tags). Internal AST dumps are suppressed unless `-v` is passed.
+- **Column Numbers in Type-Checker Errors**: Error locations now use `file:line:col:` format (matching parser errors) when column information is available.
+- **`:=` vs `=` Hint**: When writing `n = 10` instead of `n := 10`, the "undeclared variable" error now suggests using the `:=` binding operator.
+
+### Changed
+
+- **`--no-optimize` Renamed to `--debug`**: The CLI flag is now `--debug` to better reflect its purpose as a debug mode toggle controlling optimization level, bounds checking, and debug defines.
+- **Error Deduplication**: The type-checker now suppresses cascading errors, emitting only the leaf-level type mismatch instead of repeating at every nesting level.
+- **Documentation Updates**: Extensive revisions to `LANGUAGE_MODEL.md` and `LANGUAGE_REFERENCE.md` — CArray decay documented, sizeof behavior clarified, terminology standardized from "declaration" to "binding", new sections on parenthesized expressions and variant binding.
+
+### Fixed
+
+- **sizeof/alignof for CArray types**: `sizeof(arr)` was returning the pointer size instead of the full array size. Now correctly emits `T[N]` for sizeof/alignof computations.
+- **DEBUG/NDEBUG defines were inverted**: The old `--no-optimize` flag was defining `NDEBUG` when optimization was disabled — exactly backwards. Corrected with the rename to `--debug`.
+- **Spurious `&`-wrapping of CArray arguments**: Auto-address-of and UFCS rewrite passes no longer incorrectly wrap CArray values, which decay to pointers on their own.
+- **Duplicate error entries in constraint solving**: Fixed double error push when `constrain()` already reported an error.
+
 ## [Unreleased] - 2026-03-24 to 2026-03-30 (49b0fde6..eb8c9ec7)
 
 ### Highlights
