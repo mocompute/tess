@@ -365,7 +365,7 @@ fixed: CInt32 := some_cint_value      // Cross-chain: C-named → fixed-width
 size: CSize := some_uint_value        // Standalone: UInt → CSize
 ```
 
-The declaration annotation is the only syntax for explicit conversion — there is
+The binding annotation is the only syntax for explicit conversion — there is
 no `as` keyword or cast function. This makes every conversion point visually
 prominent when scanning code.
 

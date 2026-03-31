@@ -4,7 +4,7 @@ This is the complete syntax guide for Tess. For the design rationale behind the 
 
 If you're coming from C, most of Tess will look familiar: braces for blocks, parentheses for calls, the same operators. The main differences:
 
-- `:=` declares a variable, `=` assigns to an existing one
+- `:=` introduces a binding, `=` assigns to an existing one
 - Type annotations are usually optional: the compiler infers them
 - Functions return their last expression: no `return` needed
 - `if`, `case`, and `when` produce values
@@ -31,6 +31,9 @@ A source file may contain one or more modules.
 ```
 
 Access module members with dot notation: `ModuleName.function()` or `ModuleName.Type`
+
+During compilation, all input source files are scanned to collect their imports. Imported files are then
+processed in dependency order before processing any of the source files.
 
 ### Submodules
 
@@ -82,6 +85,8 @@ add(a: T, b: T) -> T { T(x = a.x + b.x, y = a.y + b.y, z = a.z + b.z) }
 This convention also makes [auto-collapse](#auto-collapse-for-same-name-types) work naturally: naming the
 type `T` (or the same as the module, e.g. Vec2, Vec3) lets users write `Vec2.T(...)` or just `Vec2(...)`.
 
+This is only a convention. Modules may declare many types.
+
 ### Packages
 
 Modules can be distributed as `.tpkg` packages. When a package is declared as a dependency via `depend()` in
@@ -92,7 +97,7 @@ See [PACKAGES.md](PACKAGES.md) for the full package system reference.
 
 ### Module Initialization
 
-Modules can define a `__init()` function that runs automatically at
+Modules can define an `__init()` function that runs automatically at
 the start of the program:
 
 ```tl
@@ -166,6 +171,17 @@ When a module is re-opened, all symbols from the original definition are restore
 normally. If a symbol is defined more than once (e.g., when the same file is parsed twice through different
 import paths), the first definition wins and duplicates are silently skipped.
 
+A module may be reopened from a different source file. However, the compiler only dependency-orders imported
+files (via #import); the source files themselves are processed in the order they appear on the command line
+or in the source() list in package.tl. When source() points to a directory, the order is
+filesystem-dependent and not guaranteed. If a reopening in one source file depends on declarations from
+another source file's opening of the same module, the result depends on which file is processed first. To
+avoid this:
+
+1. Only reopen modules within the same file that defines them, or
+2. Only reopen standard library modules (e.g., to add trait implementations for your types).
+
+
 ### Auto-Collapse for Same-Name Types
 
 When a module defines a type with the same name as the module itself, or a type named `T`, the compiler
@@ -185,7 +201,7 @@ a: Array[Int]
 Both forms are interchangeable — they refer to the same type and can be mixed freely in function signatures:
 
 ```tl
-convert(a: Array[Int]) -> Array.Array[Int] { a }   // OK
+convert(a: Array[Int]) -> Array.Array[Int] { a }   // OK, but discouraged
 ```
 
 This applies to any module whose primary type shares its name, including standard library modules like `Array` and `HashMap`:
@@ -202,7 +218,7 @@ Both conventions work:
 
 ```tl
 #module Vec2
-Vec2[T]: { x: T, y: T }     // Same name as module
+Vec2[T]: { x: T, y: T }      // Same name as module
 
 #module Point
 T[a]: { x: a, y: a }         // Named T
@@ -268,7 +284,7 @@ take_int(x)               // OK: CShort widens to Int
 to_int(n: CShort) -> Int { n }  // OK: CShort return widens to Int
 ```
 
-**Narrowing** (wide → narrow), **cross-family** (signed ↔ unsigned), **cross-chain** (C-named ↔ fixed-width), and **standalone** (`CSize`, `CPtrDiff`, `CChar`) conversions require an explicit declaration type annotation:
+**Narrowing** (wide → narrow), **cross-family** (signed ↔ unsigned), **cross-chain** (C-named ↔ fixed-width), and **standalone** (`CSize`, `CPtrDiff`, `CChar`) conversions require an explicit binding type annotation:
 ```tl
 narrow:   CInt   := some_int_value      // Narrowing: Int → CInt
 unsigned: UInt   := some_int_value      // Cross-family: signed → unsigned
@@ -276,7 +292,7 @@ fixed:    CInt32 := some_cint_value     // Cross-chain: C-named → fixed-width
 size:     CSize  := some_uint_value     // Standalone: UInt → CSize
 ```
 
-The declaration annotation is the only cast syntax — there is no `as` keyword.
+The binding annotation is the only cast syntax — there is no `as` keyword.
 
 **Operators and generics require exact type match:**
 ```tl
@@ -293,9 +309,11 @@ See [TYPE_SYSTEM.md](TYPE_SYSTEM.md) for the full sub-chain hierarchy and conver
 ### Pointer Types
 
 ```tl
-Ptr[T]              // Mutable pointer to type T
-Ptr[Const[T]]       // Const pointer to type T (read-only)
-CArray[T, N]        // C-style fixed-size array
+Ptr[T]               // Mutable pointer to type T
+Ptr[Const[T]]        // Const pointer to type T (read-only)
+Const[Ptr[T]]        // Immutable pointer to mutable data
+Const[Ptr[Const[T]]] // Immutable pointer to read-only data
+CArray[T, N]         // C-style fixed-size array
 ```
 
 See [Pointers](#pointers) for operations, const semantics, array decay, and a C-to-Tess reference table.
@@ -317,8 +335,8 @@ Pt = Point[Int]    // Creates a type alias
 An alias can refer to a fully specialized generic or to the unspecialized generic itself. Partial specialization is not supported:
 
 ```tl
-Pt = Point[Int]           // OK: fully specialized
-Pt = Point                // OK: alias for the unspecialized generic
+Pt = Point[Int]                    // OK: fully specialized
+Pt = Point                         // OK: alias for the unspecialized generic
 StringMap[V] = HashMap[String, V]  // Error: partial specialization
 ```
 
@@ -345,13 +363,16 @@ Function references via the `/N` syntax also work through aliases:
 apply(my_add/2, 10, 20)   // passes Math.add/2 as a function pointer
 ```
 
-Function aliases are a parse-time name rewrite — they are not first-class values and cannot be used in UFCS position (`value.alias(args)` does not resolve aliases).
+Function aliases are a parse-time name rewrite — they are not first-class values and cannot be used in UFCS
+position (`value.alias(args)` does not resolve aliases).
 
-The compiler distinguishes function aliases from type aliases automatically: if the target has arity-mangled entries in the module's symbol table, it is a function; otherwise it is a type.
+The compiler distinguishes function aliases from type aliases automatically: if the target has arity-mangled
+entries in the module's symbol table, it is a function; otherwise it is a type.
 
 ### Explicit Type Parameters
 
-Generic functions declare type parameters using square brackets. Square brackets always denote type arguments; parentheses always denote value arguments or constructors:
+Generic functions declare type parameters using square brackets. Square brackets always denote type
+arguments; parentheses always denote value arguments or constructors:
 
 ```tl
 // Function with explicit type parameter
@@ -364,7 +385,8 @@ arr := empty[Int]()           // Creates Array[Int]
 floats := empty[Float]()      // Creates Array[Float]
 ```
 
-This pattern is commonly used in the standard library for functions that need to create values of a generic type.
+This pattern is commonly used in the standard library for functions that need to create values of a generic
+type.
 
 ## Pointers
 
@@ -388,18 +410,18 @@ ptr.[i]               // Index into pointer (pointer arithmetic)
 ptr.[i] = value       // Write through pointer index
 ```
 
-### Type Casts via Declaration Annotation
+### Type Casts via Binding Annotation
 
-The declaration type annotation is the universal cast syntax in Tess. It covers both pointer casts and integer conversions:
+The binding type annotation is the universal cast syntax in Tess. It covers both pointer casts and integer conversions:
 
 ```tl
 // Pointer casts
-p: Ptr[Int] := c_malloc(sizeof[Int]() * 10zu)
+p: Ptr[Int]  := c_malloc(sizeof[Int]() * 10zu)
 b: Ptr[Byte] := p     // Cast to different pointer type
 
 // Integer conversions (narrowing, cross-family, cross-chain, standalone)
 narrow: CInt := some_int_value
-size: CSize := some_uint_value
+size: CSize  := some_uint_value
 ```
 
 See [Integer Type Conversions](#integer-type-conversions) for the full conversion rules.
@@ -410,7 +432,7 @@ See [Integer Type Conversions](#integer-type-conversions) for the full conversio
 
 ```tl
 x: Const[Int] := 42         // Cannot reassign x
-x: Const := 42              // Same, with type inference
+x: Const      := 42         // Same, with type inference
 ```
 
 **Reassignment and compound assignment are rejected:**
@@ -520,7 +542,7 @@ This also applies to struct constructor fields and return statements — any imp
 
 This applies at any pointer nesting level: `Ptr[Ptr[Const[T]]]` cannot be passed where `Ptr[Ptr[T]]` is expected.
 
-**Casting away const:** When necessary, const can be explicitly stripped using an annotated declaration (the language's general cast mechanism):
+**Casting away const:** When necessary, const can be explicitly stripped using an annotated binding (the language's general cast mechanism):
 
 ```tl
 unsafe_strip(p: Ptr[Const[Int]]) -> Ptr[Int] {
@@ -550,6 +572,10 @@ arr.[0] = 42                          // Direct indexing
 Buffer: { data: CArray[CChar, 256], len: CInt }
 b := Buffer(data = void, len = 0)
 ```
+
+**Static array initialization:** Not supported. The binding expression must initialize the array to `void`,
+which leaves the underlying memory uninitialized. Use direct indexing (or C library functions like `c_memset`)
+to initialize the array.
 
 **Decay to pointer:** Local CArrays require explicit decay. Struct field CArrays decay automatically on access:
 
@@ -623,7 +649,7 @@ The Tess compiler uses Hindley-Milner style type inference. Annotations are opti
 | Float literals                                       | `x := 3.14`                    | Literal type is `Float`                     |
 | Struct constructors                                  | `p := Point(x = 1, y = 2)`     | Type inferred from constructor              |
 | Tagged union constructors (with constraining fields) | `opt := Some(42)`              | Type parameter inferred from argument value |
-| CArray declaration                                   | `arr: CArray[Int, 10] := void` | CArray is a type annotation                 |
+| CArray binding                                       | `arr: CArray[Int, 10] := void` | CArray is a type annotation                 |
 | Function calls                                       | `result := add(1, 2)`          | Return type inferred from function          |
 
 #### Function Parameters and Return Types
@@ -648,7 +674,7 @@ c_printf(fmt: CString, ...) -> CInt
 
 #### Pointer Casts
 
-See [Type Casts via Declaration Annotation](#type-casts-via-declaration-annotation) in the Pointers section.
+See [Type Casts via Binding Annotation](#type-casts-via-binding-annotation) in the Pointers section.
 
 #### C Type Disambiguation
 
@@ -727,11 +753,11 @@ foo() -> Ptr[any] { return null }     // Required - null has no type
 | Tagged union without constraining field          | **Yes** (at binding site)              |
 | Tagged union `when` expression                   | No (type inferred from scrutinee)      |
 | Tagged union `case` expression                   | **Yes** (when type not inferrable)     |
-| CArray declaration                               | **Yes** (type annotation required)     |
+| CArray binding                                   | **Yes** (type annotation required)     |
 | CArray decay to pointer                          | **Yes** (explicit `Ptr[T]` annotation) |
 | Pointer cast to different type                   | **Yes**                                |
 | C type via literal suffix (`42u`, `42zu`)        | No (suffix determines type)            |
-| C type via narrowing/cross-chain cast            | **Yes** (declaration annotation)       |
+| C type via narrowing/cross-chain cast            | **Yes** (binding annotation)           |
 | C float type (CFloat, etc.)                      | **Yes**                                |
 | c_malloc result                                  | **Yes**                                |
 | C FFI function declaration                       | **Yes**                                |
@@ -1569,7 +1595,7 @@ Weak literals do not resolve to standalone types (`CSize`, `CPtrDiff`, `CChar`).
 
 ### Let-in Expressions
 
-Variables can be declared inline within parentheses:
+Bindings can be introduced inline within parentheses:
 
 ```tl
 res := (x := 42
@@ -2677,7 +2703,7 @@ The init function name is derived from the output path: `tess lib mylib.tl -o li
 
 ## Global Variables
 
-Variables declared at module scope are global variables:
+Bindings at module scope are global variables:
 
 ```tl
 #module Foo
