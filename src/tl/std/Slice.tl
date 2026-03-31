@@ -4,12 +4,15 @@
 
 #module Slice
 
-get[T](s: Slice[T], i: CSize) -> T {
-    s.data.[i]
-}
+(s: Ptr[Const[Slice[T]]]): {
+    get(i: CSize) -> T {
+        if i >= a->size { _tl_fatal_(c"Slice.get: index out of bounds") }
+        s->data.[i]
+    }
 
-is_empty[T](s: Slice[T]) -> Bool {
-    s.size == 0
+    is_empty() -> Bool {
+        s->size == 0
+    }
 }
 
 // -- Iterator interface --
@@ -20,16 +23,12 @@ Iter[T]: {
     index: CSize,
 }
 
-iter_init[T]  (s: Ptr[Slice[T]])   -> Iter[T]
-iter_ptr[T]   (iter: Ptr[Iter[T]]) -> Ptr[T]
-iter_value[T] (iter: Ptr[Iter[T]]) -> T
-iter_cond[T]  (iter: Ptr[Iter[T]]) -> Bool
-iter_update[T](iter: Ptr[Iter[T]]) -> Void
-iter_deinit[T](iter: Ptr[Iter[T]]) -> Void
+iter_init[T](s: Ptr[Slice[T]]) { Iter(data = s->data, size = s->size, index = 0) }
 
-iter_init  (s)    { Iter(data = s->data, size = s->size, index = 0) }
-iter_ptr   (iter) { iter->data.[iter->index].&                      }
-iter_value (iter) { iter->data.[iter->index]                        }
-iter_cond  (iter) { iter->index < iter->size                        }
-iter_update(iter) { iter->index = iter->index + 1                   }
-iter_deinit(iter) {                                                 }
+(iter: Ptr[Iter[T]]): {
+    iter_ptr   () -> Ptr[T] { iter->data.[iter->index].& }
+    iter_value () -> T      { iter->data.[iter->index]   }
+    iter_cond  () -> Bool   { iter->index < iter->size   }
+    iter_update() -> Void   { iter->index += 1           }
+    iter_deinit() -> Void   {                            }
+}
