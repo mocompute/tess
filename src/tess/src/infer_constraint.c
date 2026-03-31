@@ -37,7 +37,9 @@ int env_insert_constrain(tl_infer *self, str name, tl_polytype *type, ast_node c
 }
 
 void expected_type(tl_infer *self, ast_node const *node) {
-    array_push(self->errors, ((tl_infer_error){.tag = tl_err_expected_type, .node = node}));
+    str msg = str_empty();
+    if (node && ast_node_is_symbol(node)) msg = ast_node_name_original(node);
+    array_push(self->errors, ((tl_infer_error){.tag = tl_err_expected_type, .node = node, .message = msg}));
 }
 
 void expected_tagged_union(tl_infer *self, ast_node const *node) {
@@ -781,11 +783,20 @@ int traverse_ctx_is_param(traverse_ctx *self, str name) {
 // Constraint solving
 // ============================================================================
 
+static int has_error(tl_infer *self, tl_error_tag tag, ast_node const *node) {
+    forall(i, self->errors) {
+        if (self->errors.v[i].tag == tag && self->errors.v[i].node == node) return 1;
+    }
+    return 0;
+}
+
 int type_error(tl_infer *self, ast_node const *node) {
+    if (has_error(self, tl_err_type_error, node)) return 1;
     array_push(self->errors, ((tl_infer_error){.tag = tl_err_type_error, .node = node}));
     return 1;
 }
 int unresolved_type_error(tl_infer *self, ast_node const *node) {
+    if (has_error(self, tl_err_unresolved_type, node)) return 1;
     array_push(self->errors, ((tl_infer_error){.tag = tl_err_unresolved_type, .node = node}));
     return 1;
 }
@@ -803,14 +814,24 @@ static int is_std_function(ast_node *);
 typedef struct {
     tl_infer       *self;
     ast_node const *node;
+    int             error_reported;
 } type_error_cb_ctx;
 
 static void type_error_cb(void *ctx_, tl_monotype *left, tl_monotype *right) {
     type_error_cb_ctx *ctx = ctx_;
-    if (!ctx->self->is_constrain_ignore_error) {
-        log_type_error_mm(ctx->self, left, right, ctx->node);
-        type_error(ctx->self, ctx->node);
-    }
+    if (ctx->self->is_constrain_ignore_error) return;
+    if (ctx->error_reported) return; // only report leaf-level mismatch
+
+    ctx->error_reported = 1;
+
+    // Format "conflicting types" message using user-facing type names
+    str left_str  = tl_monotype_to_user_string(ctx->self->transient, left);
+    str right_str = tl_monotype_to_user_string(ctx->self->transient, right);
+    str msg       = str_fmt(ctx->self->arena, "conflicting types: %s versus %s",
+                            str_cstr(&left_str), str_cstr(&right_str));
+
+    array_push(ctx->self->errors,
+               ((tl_infer_error){.tag = tl_err_type_error, .node = ctx->node, .message = msg}));
 }
 
 int constrain_mono(tl_infer *self, tl_monotype *left, tl_monotype *right, ast_node const *node,
@@ -1218,8 +1239,12 @@ static int cast_constrain_let_in(tl_infer *self, ast_node *node) {
             i64 lit = (val->tag == ast_i64) ? ast_node_i64(val)->val : (i64)ast_node_u64(val)->val;
             if (negate) lit = -lit;
             if (!tl_monotype_integer_value_fits(annotation_type->type, lit)) {
-                log_type_error(self, annotation_type, value_type, node);
-                type_error(self, node);
+                str left_str  = tl_polytype_to_user_string(self->transient, annotation_type);
+                str right_str = tl_polytype_to_user_string(self->transient, value_type);
+                str msg       = str_fmt(self->arena, "conflicting types: %s versus %s",
+                                        str_cstr(&left_str), str_cstr(&right_str));
+                array_push(self->errors,
+                           ((tl_infer_error){.tag = tl_err_type_error, .node = node, .message = msg}));
                 self->is_constrain_ignore_error = saved;
                 return 1;
             }
@@ -2878,7 +2903,7 @@ int constrain_or_set(tl_infer *self, ast_node *node, tl_polytype *type) {
         fprintf(stderr, "constrain_or_set: '%s' : %s :: %s\n", str_cstr(&name), str_cstr(&node_type_str),
                 str_cstr(&poly_str));
 #endif
-        if (constrain(self, node->type, type, node, TL_UNIFY_SYMMETRIC)) return type_error(self, node);
+        if (constrain(self, node->type, type, node, TL_UNIFY_SYMMETRIC)) return 1;
     }
 
     else {

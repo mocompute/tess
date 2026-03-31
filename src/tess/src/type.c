@@ -2850,6 +2850,107 @@ str tl_polytype_to_string(allocator *alloc, tl_polytype *self) {
     return str_build_finish(&b);
 }
 
+// ============================================================================
+// User-facing type-to-string (for error messages)
+// ============================================================================
+//
+// Differences from tl_monotype_to_string_:
+// - Type variables (t152, ws154, etc.) render as "_" instead of internal IDs
+// - Constructor names use generic_name to strip module doubling (Vec__Vec -> Vec)
+// - Free variable lists on closures are omitted
+
+static str tl_monotype_to_user_string_(allocator *alloc, tl_monotype *self, hashmap **map) {
+    if (!self) return S("[null]");
+    str *found = map_get(*map, &self, sizeof(void *));
+    if (found) return *found;
+    str provisional = str_init(alloc, "[recur]");
+    map_set(map, &self, sizeof(void *), &provisional);
+
+    str_build b = str_build_init(alloc, 64);
+
+    switch (self->tag) {
+    case tl_placeholder: str_build_cat(&b, S("PLACEHOLDER")); break;
+    case tl_any:         str_build_cat(&b, S("any")); break;
+    case tl_ellipsis:    str_build_cat(&b, S("...")); break;
+    case tl_variadic:
+        str_build_cat(&b, S("..."));
+        str_build_cat(&b, self->variadic.trait_name);
+        break;
+    case tl_integer: {
+        char buf[64];
+        int  n = snprintf(buf, sizeof buf, "i%i", self->integer);
+        str_build_cat_n(&b, buf, (u32)n);
+    } break;
+    case tl_c_macro: str_build_cat(&b, self->c_macro_name); break;
+
+    // Type variables: render as "_" instead of internal IDs
+    case tl_var:              str_build_cat(&b, S("_")); break;
+    case tl_weak:             str_build_cat(&b, S("_")); break;
+    case tl_weak_int_signed:  str_build_cat(&b, S("Int")); break;
+    case tl_weak_int_unsigned:str_build_cat(&b, S("UInt")); break;
+    case tl_weak_float:       str_build_cat(&b, S("Float")); break;
+
+    case tl_cons_inst: {
+        // Strip module prefix from type names for user-facing output.
+        // Module-qualified names are "Module__Type" — we show just "Type".
+        str name = str_empty();
+        if (!str_is_empty(self->cons_inst->special_name))
+            name = self->cons_inst->special_name;
+        else
+            name = self->cons_inst->def->name;
+        // Find last "__" and take everything after it
+        char const *s    = str_buf(&name);
+        int         slen = str_ilen(name);
+        char const *last = null;
+        for (int i = 0; i + 1 < slen; i++) {
+            if (s[i] == '_' && s[i + 1] == '_') last = s + i + 2;
+        }
+        if (last) str_build_cat_n(&b, last, (u32)(s + slen - last));
+        else str_build_cat(&b, name);
+        if (self->cons_inst->args.size) {
+            str_build_cat(&b, S("["));
+            forall(i, self->cons_inst->args) {
+                str_build_cat(&b, tl_monotype_to_user_string_(alloc, self->cons_inst->args.v[i], map));
+                if (i + 1 < self->cons_inst->args.size) str_build_cat(&b, S(", "));
+            }
+            str_build_cat(&b, S("]"));
+        }
+    } break;
+
+    case tl_arrow: {
+        // Omit free variable lists for user-facing output
+        str_build_cat(&b, S("("));
+        forall(i, self->list.xs) {
+            str_build_cat(&b, tl_monotype_to_user_string_(alloc, self->list.xs.v[i], map));
+            if (i + 1 < self->list.xs.size) str_build_cat(&b, S(" -> "));
+        }
+        str_build_cat(&b, S(")"));
+    } break;
+
+    case tl_tuple: {
+        str_build_cat(&b, S("("));
+        forall(i, self->list.xs) {
+            str_build_cat(&b, tl_monotype_to_user_string_(alloc, self->list.xs.v[i], map));
+            if (i + 1 < self->list.xs.size) str_build_cat(&b, S(", "));
+        }
+        str_build_cat(&b, S(")"));
+    } break;
+    }
+
+    str out = str_build_finish(&b);
+    map_set(map, &self, sizeof(void *), &out);
+    return out;
+}
+
+str tl_monotype_to_user_string(allocator *alloc, tl_monotype *self) {
+    hashmap *map = map_create(transient_allocator, sizeof(str), 32);
+    return tl_monotype_to_user_string_(alloc, self, &map);
+}
+
+str tl_polytype_to_user_string(allocator *alloc, tl_polytype *self) {
+    return tl_monotype_to_user_string(alloc, self->type);
+}
+
 tl_monotype *tl_monotype_arrow_result(tl_monotype *self) {
     if (!tl_monotype_is_arrow(self)) fatal("logic error");
     if (2 != self->list.xs.size) fatal("runtime error");

@@ -1008,7 +1008,7 @@ static int check_no_conform_operator(tl_infer *self, ast_node *node, tl_monotype
                                      char const *func_name, char const *op) {
     char const *trait = func_name_to_trait_name(func_name);
     if (!trait || !has_no_conform(self, type, trait)) return 0;
-    str type_str = tl_monotype_to_string(self->transient, type);
+    str type_str = tl_monotype_to_user_string(self->transient, type);
     str msg =
       str_fmt(self->arena,
               "operator '%s' cannot be used on type %s: conformance to '%s' denied via [[no_conform(%s)]]",
@@ -1284,7 +1284,7 @@ static int push_trait_error(tl_infer *self, ast_node *toplevel, str msg) {
 
 static int emit_trait_sig_error(tl_infer *self, ast_node *toplevel, tl_monotype *concrete_type,
                                 str trait_name, str fn_name, str actual_sig, str expected_sig) {
-    str type_str = tl_monotype_to_string(self->transient, concrete_type);
+    str type_str = tl_monotype_to_user_string(self->transient, concrete_type);
     return push_trait_error(
       self, toplevel,
       str_fmt(self->arena, "type %s does not satisfy trait %s: function '%s' has signature %s, expected %s",
@@ -1362,8 +1362,8 @@ static int check_trait_arrow(tl_infer *self, ast_node *toplevel, tl_monotype *co
             }
         }
         if (!compatible) {
-            str actual_str   = tl_monotype_to_string(self->transient, actual_resolved);
-            str expected_str = tl_monotype_to_string(self->transient, expected_arrow);
+            str actual_str   = tl_monotype_to_user_string(self->transient, actual_resolved);
+            str expected_str = tl_monotype_to_user_string(self->transient, expected_arrow);
             return emit_trait_sig_error(self, toplevel, concrete_type, trait_name, sig->name, actual_str,
                                         expected_str);
         }
@@ -1373,7 +1373,7 @@ static int check_trait_arrow(tl_infer *self, ast_node *toplevel, tl_monotype *co
 
 static int emit_trait_bound_error(tl_infer *self, ast_node *toplevel, tl_monotype *concrete_type,
                                   str trait_name, str fn_name, u32 arity) {
-    str type_str = tl_monotype_to_string(self->transient, concrete_type);
+    str type_str = tl_monotype_to_user_string(self->transient, concrete_type);
     return push_trait_error(
       self, toplevel,
       str_fmt(self->arena, "type %s does not satisfy trait %s: missing function '%s' with arity %u",
@@ -1382,7 +1382,7 @@ static int emit_trait_bound_error(tl_infer *self, ast_node *toplevel, tl_monotyp
 
 static int emit_no_conform_bound_error(tl_infer *self, ast_node *toplevel, tl_monotype *concrete_type,
                                        str trait_name, char const *trait_generic_name) {
-    str type_str = tl_monotype_to_string(self->transient, concrete_type);
+    str type_str = tl_monotype_to_user_string(self->transient, concrete_type);
     return push_trait_error(
       self, toplevel,
       str_fmt(self->arena,
@@ -2206,7 +2206,7 @@ int specialize_applications_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_n
                                         use_format = 1;
                                     } else {
                                         // Type-specific spec but no ToStringFormat impl — error.
-                                        str type_str = tl_monotype_to_string(self->transient, arg_type);
+                                        str type_str = tl_monotype_to_user_string(self->transient, arg_type);
                                         str msg = str_fmt(self->arena,
                                             "format specifier requires ToStringFormat trait, "
                                             "not implemented for type %s", str_cstr(&type_str));

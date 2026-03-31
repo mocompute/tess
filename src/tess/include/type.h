@@ -202,6 +202,8 @@ u64          tl_monotype_hash64(tl_monotype *);
 tl_monotype *tl_monotype_arrow_result(tl_monotype *);
 
 str          tl_monotype_to_string(allocator *, tl_monotype *);
+str          tl_monotype_to_user_string(allocator *, tl_monotype *);
+str          tl_polytype_to_user_string(allocator *, tl_polytype *);
 int          tl_monotype_is_any(tl_monotype *);
 int          tl_monotype_is_integer(tl_monotype *);
 int          tl_monotype_is_c_macro(tl_monotype *);

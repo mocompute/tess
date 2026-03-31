@@ -143,5 +143,6 @@ typedef enum tl_error_tag { TESS_ERROR_TAG_LIST(MOS_TAG_NAME) } tl_error_tag;
 // -- utilities --
 
 char const *tl_error_tag_to_string(tl_error_tag);
+char const *tl_error_tag_to_user_string(tl_error_tag);
 
 #endif
