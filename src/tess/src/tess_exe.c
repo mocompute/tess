@@ -56,10 +56,10 @@ typedef struct {
     int               report_time;  // --time option
     int               report_stats; // --stats option
     int               help;
-    int               no_optimize;
+    int               debug;
     int               bounds_check;           // --bounds-check (override: ON)
     int               no_bounds_check;        // --no-bounds-check (override: OFF)
-    int               effective_bounds_check; // computed from the above + no_optimize
+    int               effective_bounds_check; // computed from the above + debug
 
     int               in_place;
     int               pack_list;     // --list option for pack command
@@ -155,7 +155,7 @@ noreturn void usage(int status, char const *argv0) {
     printf("    --no-line-directive    suppress output of #line directives in C file\n");
     printf("    --bounds-check         enable integer narrowing bounds checks (default in debug)\n");
     printf("    --no-bounds-check      disable integer narrowing bounds checks\n");
-    printf("    --no-optimize          compile C build with -O0 (default is -O2. See also CFLAGS.)\n");
+    printf("    --debug                debug build: -O0, bounds checks on, DEBUG defined (default is -O2)\n");
     printf("    --no-standard-includes do not add default standard library paths\n");
     printf("    --static               create static library instead of shared (lib command only)\n");
     printf("    --stats                report memory and time statistics per phase\n");
@@ -196,7 +196,7 @@ void state_init(state *self) {
     self->no_line_directive      = 0;
     self->no_standard_includes   = 0;
     self->help                   = 0;
-    self->no_optimize            = 0;
+    self->debug                  = 0;
     self->bounds_check           = 0;
     self->no_bounds_check        = 0;
     self->effective_bounds_check = 0;
@@ -245,7 +245,7 @@ void state_gather_long_option(state *self, char *str) {
     else if (0 == strcmp("--verbose-ast", str)) self->verbose_ast = 1;
     else if (0 == strcmp("--verbose-parse", str)) self->verbose_parse = 1;
     else if (0 == strcmp("--no-line-directive", str)) self->no_line_directive = 1;
-    else if (0 == strcmp("--no-optimize", str)) self->no_optimize = 1;
+    else if (0 == strcmp("--debug", str)) self->debug = 1;
     else if (0 == strcmp("--no-standard-includes", str)) self->no_standard_includes = 1;
     else if (0 == strcmp("--in-place", str)) self->in_place = 1;
     else if (0 == strcmp("--list", str)) self->pack_list = 1;
@@ -1523,7 +1523,7 @@ static int is_msvc_compiler(state *self) {
 static void add_c_flags(state *self, c_string_array *argv) {
     // If CFLAGS is present, do not add optimize flags
     if (!self->cflags.size) {
-        if (self->no_optimize) {
+        if (self->debug) {
             char const *_t = "-O0";
             array_push(*argv, _t);
         } else {
@@ -1553,7 +1553,7 @@ static void add_c_flags_msvc(state *self, c_string_array *argv) {
 
     // If CFLAGS is present, do not add optimize flags
     if (!self->cflags.size) {
-        if (self->no_optimize) {
+        if (self->debug) {
             // msvc: /Od disables optimization
             char const *_t = "/Od";
             array_push(*argv, _t);
@@ -2436,7 +2436,7 @@ static char const *validate_command_flags(state const *self, char const *cmd) {
     int has_stats  = is_compile && 0 != strcmp(cmd, "run");
 
     if (self->no_line_directive && !is_compile) return "--no-line-directive";
-    if (self->no_optimize && !is_compile) return "--no-optimize";
+    if (self->debug && !is_compile) return "--debug";
     if (self->in_place && 0 != strcmp(cmd, "fmt")) return "--in-place";
     if (self->pack_unpack && 0 != strcmp(cmd, "pack")) return "--unpack";
     if (self->pack_list && 0 != strcmp(cmd, "pack")) return "--list";
@@ -2469,14 +2469,14 @@ int main(int argc, char *argv[]) {
     state_init(&self);
     state_gather_options(&self, argc, argv);
 
-    // Bounds checking: ON in debug (no_optimize), OFF in release.
+    // Bounds checking: ON in debug, OFF in release.
     // --bounds-check overrides to ON; --no-bounds-check overrides to OFF.
-    self.effective_bounds_check = self.no_optimize;
+    self.effective_bounds_check = self.debug;
     if (self.bounds_check) self.effective_bounds_check = 1;
     if (self.no_bounds_check) self.effective_bounds_check = 0;
 
     // Auto-define DEBUG or NDEBUG based on optimization mode
-    str auto_def = str_init(self.arena, self.no_optimize ? "NDEBUG" : "DEBUG");
+    str auto_def = str_init(self.arena, self.debug ? "DEBUG" : "NDEBUG");
     array_push(self.defines, auto_def);
 
     if (!self.no_standard_includes) {
