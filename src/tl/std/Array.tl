@@ -234,7 +234,7 @@ _merge[T](v, tmp, lo, mid, hi, cmp: (T, T) -> Int, width) {
 
     with_capacity(alloc, count) {
         width     := _type_width_aligned[T]()
-        p: Ptr[T] := alloc->malloc(alloc, count * width)
+        p: Ptr[T] := alloc.alloc(count * width)
         Array ( data = p, capacity = count, size = 0)
     }
 
@@ -328,7 +328,7 @@ _merge[T](v, tmp, lo, mid, hi, cmp: (T, T) -> Int, width) {
 
     reserve(alloc, count) {
         if self->capacity < count {
-            p := alloc->realloc(alloc, self->data, count * _type_width_aligned[T]())
+            p := alloc.realloc(self->data, count * _type_width_aligned[T]())
             if p == null { _tl_fatal_(c"oom") }
             self->data     = p
             self->capacity = count
@@ -336,7 +336,7 @@ _merge[T](v, tmp, lo, mid, hi, cmp: (T, T) -> Int, width) {
     }
 
     free(alloc) {
-        alloc->free(alloc, self->data)
+        alloc.dealloc(self->data)
         self->data = null
     }
 
@@ -367,12 +367,12 @@ _merge[T](v, tmp, lo, mid, hi, cmp: (T, T) -> Int, width) {
     shrink_to_fit(alloc) {
         if self->size < self->capacity {
             if self->size == 0 {
-                alloc->free(alloc, self->data)
+                alloc.dealloc(self->data)
                 self->data     = null
                 self->capacity = 0
             } else {
                 width := _type_width_aligned[T]()
-                p     := alloc->realloc(alloc, self->data, self->size * width)
+                p     := alloc.realloc(self->data, self->size * width)
                 if p != null {
                     self->data     = p
                     self->capacity = self->size
@@ -394,7 +394,7 @@ _merge[T](v, tmp, lo, mid, hi, cmp: (T, T) -> Int, width) {
         n := self->size
         if n <= 1 { return void }
         width       := _type_width_aligned[T]()
-        tmp: Ptr[T] := tmp_alloc->malloc(tmp_alloc, n * width)
+        tmp: Ptr[T] := tmp_alloc.alloc(n * width)
         if tmp == null { _tl_fatal_(c"Array.sort: oom") }
         w: CSize := 1
         while w < n {
@@ -411,7 +411,7 @@ _merge[T](v, tmp, lo, mid, hi, cmp: (T, T) -> Int, width) {
             }
             w *= 2
         }
-        tmp_alloc->free(tmp_alloc, tmp)
+        tmp_alloc.dealloc(tmp)
     }
 }
 

@@ -122,7 +122,7 @@ _store_str      (values: Ptr[HashMap[String, ArgValue]], name: String, val: Stri
 // -- Create / Destroy --
 
 create(alloc, name, description) {
-    p: Ptr[CommandLine] := alloc->malloc(alloc, sizeof[CommandLine]())
+    p: Ptr[CommandLine] := alloc.alloc(sizeof[CommandLine]())
     if p == null { _tl_fatal_(c"CommandLine: oom") }
     p->_alloc       = alloc
     p->_name        = name
@@ -140,7 +140,7 @@ destroy(self) {
     alloc := self->_alloc
     self->_specs.&.free()
     self->_commands.&.free()
-    alloc->free(alloc, self)
+    alloc.dealloc(self)
 }
 
 

@@ -639,7 +639,7 @@ open(alloc, path, mode) {
     handle := c_fopen(path_cstr, mode_cstr)
     if handle == null { return Err(_errno_to_error(path)) }
 
-    f: Ptr[File] := alloc->malloc(alloc, sizeof[File]())
+    f: Ptr[File] := alloc.alloc(sizeof[File]())
     if f == null { _tl_fatal_(c"File.open: out of memory") }
     f->_handle = handle
     f->_alloc  = alloc
@@ -657,7 +657,7 @@ close(self) {
         self->_handle = null
     }
     alloc := self->_alloc
-    alloc->free(alloc, self)
+    alloc.dealloc(self)
 }
 
 
@@ -694,13 +694,13 @@ read_line(self, alloc) {
 
         if len == cap {
             new_cap             := cap * 2
-            new_buf: Ptr[CChar] := alloc->malloc(alloc, new_cap)
+            new_buf: Ptr[CChar] := alloc.alloc(new_cap)
             if new_buf == null {
-                if heap_buf != null { alloc->free(alloc, heap_buf) }
+                if heap_buf != null { alloc.dealloc(heap_buf) }
                 _tl_fatal_(c"File.read_line: out of memory")
             }
             c_memcpy(new_buf, buf_ptr, len)
-            if heap_buf != null { alloc->free(alloc, heap_buf) }
+            if heap_buf != null { alloc.dealloc(heap_buf) }
             heap_buf = new_buf
             buf_ptr  = new_buf
             cap      = new_cap
@@ -713,7 +713,7 @@ read_line(self, alloc) {
 
     // Check for read error (not just EOF)
     if ch == c_EOF && c_ferror(self->_handle) != 0 {
-        if heap_buf != null { alloc->free(alloc, heap_buf) }
+        if heap_buf != null { alloc.dealloc(heap_buf) }
         return Err(_errno_to_error(self->_path))
     }
 
@@ -723,7 +723,7 @@ read_line(self, alloc) {
     }
 
     result := String.from_bytes(alloc, buf_ptr, len)
-    if heap_buf != null { alloc->free(alloc, heap_buf) }
+    if heap_buf != null { alloc.dealloc(heap_buf) }
     Ok(Some(result))
 }
 
@@ -735,17 +735,17 @@ read_all(self, alloc) {
     remaining := try _remaining_bytes(self)
     if remaining == 0 { return Ok(String.empty()) }
 
-    tmp: Ptr[CChar] := alloc->malloc(alloc, remaining + 1)
+    tmp: Ptr[CChar] := alloc.alloc(remaining + 1)
     if tmp == null { _tl_fatal_(c"File.read_all: out of memory") }
 
     bytes_read := c_fread(tmp, 1, remaining, self->_handle)
     if bytes_read < remaining && c_ferror(self->_handle) != 0 {
-        alloc->free(alloc, tmp)
+        alloc.dealloc(tmp)
         return Err(_errno_to_error(self->_path))
     }
 
     result := String.from_bytes(alloc, tmp, bytes_read)
-    alloc->free(alloc, tmp)
+    alloc.dealloc(tmp)
     Ok(result)
 }
 

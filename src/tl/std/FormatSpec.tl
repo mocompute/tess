@@ -83,9 +83,9 @@ apply_layout(s, spec) {
     }
 
     cap: CSize      := w
-    ptr: Ptr[CChar] := Alloc.transient_alloc(cap)
+    ptr: Ptr[CChar] := Alloc.context.transient.alloc(cap)
     written         := c_tl_format_apply_layout(ptr, cap, sptr, s.len(), spec.fill, spec.align, w)
     result          := String.from_bytes(ptr, written)
-    Alloc.transient_free(ptr)
+    Alloc.context.transient.dealloc(ptr)
     result
 }

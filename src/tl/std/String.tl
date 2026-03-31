@@ -187,7 +187,7 @@ _init_small(src, n) {
 }
 
 _init_big(alloc, src, n) {
-    buf: Ptr[CChar] := alloc->malloc(alloc, n + 1)
+    buf: Ptr[CChar] := alloc.alloc(n + 1)
     if buf == null { _tl_fatal_(c"String: out of memory") }
     if n > 0 { c_memcpy(buf, src, n) }
     String(big = _Big(len = n, buf = buf))
@@ -652,7 +652,7 @@ from_bool(b: Bool) {
             return result
         }
 
-        buf: Ptr[CChar] := alloc->malloc(alloc, total + 1)
+        buf: Ptr[CChar] := alloc.alloc(total + 1)
         if buf == null { _tl_fatal_(c"String.repeat: out of memory") }
         off: CSize := 0
         i:   CSize := 0
@@ -682,7 +682,7 @@ from_bool(b: Bool) {
         np := _buf(new_s)
 
         // Build result into heap buffer, then decide SSO
-        buf: Ptr[CChar] := alloc->malloc(alloc, total + 1)
+        buf: Ptr[CChar] := alloc.alloc(total + 1)
         if buf == null { _tl_fatal_(c"String.replace: out of memory") }
         off: CSize := 0
         j:   CSize := 0
@@ -710,7 +710,7 @@ from_bool(b: Bool) {
 
         if total <= _STR_MAX_SMALL {
             result := _init_small(buf, total)
-            alloc->free(alloc, buf)
+            alloc.dealloc(buf)
             return result
         }
         String(big = _Big(len = total, buf = buf))
@@ -835,7 +835,7 @@ from_bool(b: Bool) {
 
     free(alloc) {
         if !_is_small(self) {
-            alloc->free(alloc, self->big.buf)
+            alloc.dealloc(self->big.buf)
         }
         self.* = empty()
     }
@@ -888,7 +888,7 @@ _cat_impl(alloc, bufs: Ptr[Ptr[CChar]], lens: Ptr[CSize], count: CSize) {
         return s
     }
 
-    buf: Ptr[CChar] := alloc->malloc(alloc, total + 1)
+    buf: Ptr[CChar] := alloc.alloc(total + 1)
     if buf == null { _tl_fatal_(c"String: out of memory") }
     off: CSize := 0
     j:   CSize := 0
@@ -945,7 +945,7 @@ join(alloc, sep, arr) {
         return result
     }
 
-    buf: Ptr[CChar] := alloc->malloc(alloc, total + 1)
+    buf: Ptr[CChar] := alloc.alloc(total + 1)
     if buf == null { _tl_fatal_(c"String.join: out of memory") }
     off: CSize := 0
     j:   CSize := 0

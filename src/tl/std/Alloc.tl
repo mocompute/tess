@@ -109,7 +109,7 @@ get_stats (a: Ptr[Allocator])                  -> Stats
 
 create(alloc, capacity) {
     c_assert(capacity > sizeof[_Header]())
-    out: Ptr[_Header] := alloc->malloc(alloc, capacity)
+    out: Ptr[_Header] := alloc.alloc(capacity)
     out->next     = null
     out->capacity = capacity
     out->size     = sizeof[_Header]()
@@ -127,7 +127,7 @@ _resize        (a: Ptr[Allocator], p: Ptr[any], sz: CSize)      -> Ptr[any]
 
 
 create(alloc: Ptr[Allocator], size: CSize) -> Ptr[Allocator] {
-    out: Ptr[BumpAllocator] := alloc->malloc(alloc, sizeof[BumpAllocator]())
+    out: Ptr[BumpAllocator] := alloc.alloc(sizeof[BumpAllocator]())
     out->parent         = alloc
     out->peak_allocated = 0
     size := Alloc.next_power_of_two(size)
@@ -146,7 +146,7 @@ create(alloc: Ptr[Allocator], size: CSize) -> Ptr[Allocator] {
 
 destroy(alloc: Ptr[Allocator]) {
     bump: Ptr[BumpAllocator] := alloc
-    bump->parent->free(alloc, bump)
+    bump->parent.dealloc(bump)
 }
 
 _alloc_assume_capacity(bucket: Ptr[_Header], sz: CSize) -> Ptr[any] {
@@ -457,7 +457,7 @@ restore(a: Ptr[Allocator], state: State) -> Void {
     next := state.bucket->next
     while next != null {
         following := next->next
-        arena->parent->free(arena->parent, next)
+        arena->parent.dealloc(next)
         next = following
     }
     state.bucket->next = null
@@ -476,24 +476,15 @@ align_max     (n: CSize)                      -> CSize
 align_padding (p: Ptr[any], alignment: CSize) -> CSize
 is_aligned    (p: Ptr[any], alignment: CSize) -> Bool
 
-transient_alloc         (sz: CSize)                   -> Ptr[any]
-transient_clear         (num: CSize, sz: CSize)       -> Ptr[any]
-transient_realloc       (p: Ptr[any], sz: CSize)      -> Ptr[any]
-transient_free          (p: Ptr[any])                 -> Void
-transient_aligned_alloc (sz: CSize, alignment: CSize) -> Ptr[any]
-transient_aligned_free  (p: Ptr[any])                 -> Void
-transient_resize        (p: Ptr[any], sz: CSize)      -> Ptr[any]
-transient_reset         ()                            -> Void
-transient_save          ()                            -> BumpAllocator.State
-transient_restore       (state: BumpAllocator.State)  -> Void
-
-managed_alloc         (sz: CSize)                   -> Ptr[any]
-managed_clear         (num: CSize, sz: CSize)       -> Ptr[any]
-managed_realloc       (p: Ptr[any], sz: CSize)      -> Ptr[any]
-managed_free          (p: Ptr[any])                 -> Void
-managed_aligned_alloc (sz: CSize, alignment: CSize) -> Ptr[any]
-managed_aligned_free  (p: Ptr[any])                 -> Void
-managed_resize        (p: Ptr[any], sz: CSize)      -> Ptr[any]
+(self: Ptr[Allocator]): {
+    alloc          (sz: CSize)                   -> Ptr[any]
+    clear          (num: CSize, sz: CSize)       -> Ptr[any]
+    realloc        (p: Ptr[any], sz: CSize)      -> Ptr[any]
+    dealloc        (p: Ptr[any])                 -> Void
+    aligned_alloc  (sz: CSize, alignment: CSize) -> Ptr[any]
+    aligned_dealloc(p: Ptr[any])                 -> Void
+    resize         (p: Ptr[any], sz: CSize)      -> Ptr[any]
+}
 
 // Returns: input if already a power of two, or else the next higher
 // power of two.
@@ -520,7 +511,6 @@ is_aligned(p: Ptr[any], alignment: CSize) -> Bool {
 }
 
 // -- wrappers around stdlib allocator --
-// Access them via managed_alloc, etc.
 
 _malloc  (a: Ptr[Allocator], sz: CSize)              -> Ptr[any] { c_malloc(sz)      }
 _calloc  (a: Ptr[Allocator], num: CSize, sz: CSize)  -> Ptr[any] { c_calloc(num, sz) }
@@ -539,6 +529,16 @@ _resize (a: Ptr[Allocator], p: Ptr[any], sz: CSize) -> Ptr[any] {
     null                                // stdlib has no in-place resize
 }
 
+(self: Ptr[Allocator]): {
+    alloc          (sz)            { self->malloc(self, sz)                   }
+    clear          (num, sz)       { self->calloc(self, num, sz)              }
+    realloc        (p, sz)         { self->realloc(self, p, sz)               }
+    dealloc        (p)             { self->free(self, p)                      }
+    aligned_alloc  (sz, alignment) { self->aligned_alloc(self, sz, alignment) }
+    aligned_dealloc(p)             { self->aligned_free(self, p)              }
+    resize         (p, sz)         { self->resize(self, p, sz)                }
+}
+
 next_power_of_two(n: CSize) {
     if n > (c_SIZE_MAX / 2) + 1 {return 0} // overflow
 
@@ -554,29 +554,6 @@ next_power_of_two(n: CSize) {
     n = n | (n >> 32)
     n + 1
 }
-
-// -- transient --
-
-transient_alloc         (sz)            { context.transient->malloc(context.transient, sz)                   }
-transient_clear         (num, sz)       { context.transient->calloc(context.transient, num, sz)              }
-transient_realloc       (p, sz)         { context.transient->realloc(context.transient, p, sz)               }
-transient_free          (p)             { context.transient->free(context.transient, p)                      }
-transient_aligned_alloc (sz, alignment) { context.transient->aligned_alloc(context.transient, sz, alignment) }
-transient_aligned_free  (p)             { context.transient->aligned_free(context.transient, p)              }
-transient_resize        (p, sz)         { context.transient->resize(context.transient, p, sz)                }
-transient_reset         ()              { BumpAllocator.reset(context.transient)                             }
-transient_save          ()              { BumpAllocator.save(context.transient)                              }
-transient_restore       (state)         { BumpAllocator.restore(context.transient, state)                    }
-
-// -- managed --
-
-managed_alloc         (sz)            { context.managed->malloc(context.managed, sz)                   }
-managed_clear         (num, sz)       { context.managed->calloc(context.managed, num, sz)              }
-managed_realloc       (p, sz)         { context.managed->realloc(context.managed, p, sz)               }
-managed_free          (p)             { context.managed->free(context.managed, p)                      }
-managed_aligned_alloc (sz, alignment) { context.managed->aligned_alloc(context.managed, sz, alignment) }
-managed_aligned_free  (p)             { context.managed->aligned_free(context.managed, p)              }
-managed_resize        (p, sz)         { context.managed->resize(context.managed, p, sz)                }
 
 // -- initialisation --
 

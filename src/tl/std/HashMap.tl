@@ -77,7 +77,7 @@ _hash_tag   (hash) -> CSize      { (hash >> 56) & 0xFF          }
 _entry_width[K, V]() -> CSize { Alloc.align(sizeof[_Entry[K, V]](), alignof[_Entry[K, V]]()) }
 
 _alloc_entries[K, V](alloc, capacity) {
-    p: Ptr[_Entry[K, V]] := alloc->calloc(alloc, capacity, _entry_width[K, V]())
+    p: Ptr[_Entry[K, V]] := alloc.clear(capacity, _entry_width[K, V]())
     if p == null { _tl_fatal_(c"HashMap: oom") }
     p
 }
@@ -99,7 +99,7 @@ _alloc_entries[K, V](alloc, capacity) {
     create(alloc: Ptr[Allocator], opts: HashMapOpts) -> Ptr[HashMap[K, V]] {
         cap := if opts.capacity == 0 { 16 } else { Alloc.next_power_of_two(opts.capacity) }
 
-        m: Ptr[HashMap[K, V]] := alloc->malloc(alloc, sizeof[HashMap[K, V]]())
+        m: Ptr[HashMap[K, V]] := alloc.alloc(sizeof[HashMap[K, V]]())
         if m == null { _tl_fatal_(c"HashMap: oom") }
 
         m->_entries  = _alloc_entries[K, V](alloc, cap)
@@ -113,8 +113,8 @@ _alloc_entries[K, V](alloc, capacity) {
 (self: Ptr[HashMap[K: HashEq, V]]): {
     destroy() {
         alloc := self->_alloc
-        alloc->free(alloc, self->_entries)
-        alloc->free(alloc, self)
+        alloc.dealloc(self->_entries)
+        alloc.dealloc(self)
     }
 }
 
@@ -325,7 +325,7 @@ _insert_entry[K: Eq, V](entries, capacity, key: K, value: V, hash: CSize) -> CSi
             }
         }
 
-        alloc->free(alloc, old_entries)
+        alloc.dealloc(old_entries)
         self->_entries  = new_entries
         self->_capacity = new_capacity
     }
