@@ -647,13 +647,18 @@ void tl_infer_report_errors(tl_infer *self) {
                 str node_str = show_ast ? v2_ast_node_to_string(self->transient, node) : str_empty();
 
                 if (node->file && *node->file) {
-                    if (show_ast)
-                        fprintf(stderr, "%s:%u: %s: %s: %s\n", node->file, node->line, tag,
-                                str_cstr(&message), str_cstr(&node_str));
-                    else if (!str_is_empty(message))
-                        fprintf(stderr, "%s:%u: %s: %s\n", node->file, node->line, tag, str_cstr(&message));
+                    // Print file:line:col when col is known, file:line otherwise
+                    if (node->col)
+                        fprintf(stderr, "%s:%u:%u: ", node->file, node->line, node->col);
                     else
-                        fprintf(stderr, "%s:%u: %s\n", node->file, node->line, tag);
+                        fprintf(stderr, "%s:%u: ", node->file, node->line);
+
+                    if (show_ast)
+                        fprintf(stderr, "%s: %s: %s\n", tag, str_cstr(&message), str_cstr(&node_str));
+                    else if (!str_is_empty(message))
+                        fprintf(stderr, "%s: %s\n", tag, str_cstr(&message));
+                    else
+                        fprintf(stderr, "%s\n", tag);
                 } else {
                     if (show_ast)
                         fprintf(stderr, "%s: %s: %s\n", tag, str_cstr(&message), str_cstr(&node_str));
