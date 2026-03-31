@@ -3656,6 +3656,26 @@ static str type_to_c_mono(transpile *self, tl_monotype *type) {
     return type_to_c(self, &wrap);
 }
 
+// Emit CArray(T, N) as "T[N]" — the non-decayed C spelling.
+// Returns empty string if the type is not a CArray.
+static str carray_type_to_c(transpile *self, tl_monotype *type) {
+    if (!tl_monotype_is_carray(type)) return str_empty();
+    str typec = type_to_c_mono(self, tl_monotype_carray_element(type));
+    if (tl_monotype_carray_count_is_macro(type)) {
+        str macro  = tl_monotype_carray_count_macro_name(type);
+        str c_name = remove_c_prefix(self->transient, macro);
+        return str_fmt(self->transient, "%s[%.*s]", str_cstr(&typec), str_ilen(c_name), str_buf(&c_name));
+    }
+    i32 count = tl_monotype_carray_count(type);
+    return str_fmt(self->transient, "%s[%i]", str_cstr(&typec), count);
+}
+
+// Like type_to_c_mono but preserves CArray as T[N] instead of decaying to T*.
+static str type_to_c_for_sizeof(transpile *self, tl_monotype *type) {
+    str arr = carray_type_to_c(self, type);
+    return str_is_empty(arr) ? type_to_c_mono(self, type) : arr;
+}
+
 static str arrow_rhs_to_c(transpile *self, tl_polytype *type) {
     if (tl_polytype_is_scheme(type)) {
         return S("void");
@@ -3776,7 +3796,7 @@ static str tl_sizeof(transpile *self, ast_node const *node, eval_ctx *ctx, void 
         // here indicates a type parameter resolution bug.
         if (tl_monotype_is_void(type) || tl_monotype_is_tv(type) || tl_monotype_is_any(type))
             return S("(size_t)0");
-        str ctype = type_to_c_mono(self, type);
+        str ctype = type_to_c_for_sizeof(self, type);
         return str_cat_3(self->transient, S("sizeof("), ctype, S(")"));
     } else if (node->named_application.n_arguments == 0) {
         exit_error(node->file, node->line, "sizeof: could not resolve type argument");
@@ -3787,10 +3807,6 @@ static str tl_sizeof(transpile *self, ast_node const *node, eval_ctx *ctx, void 
         exit_error(node->file, node->line, "sizeof expects exactly one argument");
     ast_node const *arg = node->named_application.arguments[0];
 
-    // // Note: The environment contains the most current type for a symbol argument.
-    // tl_polytype *poly = arg->type;
-    // if (ast_node_is_symbol(arg)) poly = tl_type_env_lookup(self->env, ast_node_str(arg));
-
     if (ast_node_is_nfa(arg)) {
         // type constructor
         tl_monotype *type = tl_type_registry_parse_type(self->registry, arg);
@@ -3799,10 +3815,22 @@ static str tl_sizeof(transpile *self, ast_node const *node, eval_ctx *ctx, void 
 
         if (tl_monotype_is_void(type) || tl_monotype_is_tv(type) || tl_monotype_is_any(type))
             return S("(size_t)0");
-        str ctype = type_to_c_mono(self, type);
+        str ctype = type_to_c_for_sizeof(self, type);
         return str_cat_3(self->transient, S("sizeof("), ctype, S(")"));
     } else {
-        // expression
+        // expression — use type info directly to avoid CArray→pointer decay.
+        tl_polytype *poly = arg->type;
+        if (ast_node_is_symbol(arg)) {
+            tl_polytype *env_poly = tl_type_env_lookup(self->env, ast_node_str(arg));
+            if (env_poly) poly = env_poly;
+        }
+        if (poly && poly->type && tl_monotype_is_carray(poly->type)) {
+            tl_monotype *mono = poly->type;
+            update_type(self, &mono);
+            str carray_c = carray_type_to_c(self, mono);
+            if (!str_is_empty(carray_c))
+                return str_cat_3(self->transient, S("sizeof("), carray_c, S(")"));
+        }
         int save         = ctx->want_lvalue;
         ctx->want_lvalue = 1;
         str expr         = generate_expr(self, null, arg, ctx);
@@ -3823,7 +3851,7 @@ static str tl_alignof(transpile *self, ast_node const *node, eval_ctx *ctx, void
         // _Alignof(void) is a GCC extension; MSVC rejects it.
         if (tl_monotype_is_void(type) || tl_monotype_is_tv(type) || tl_monotype_is_any(type))
             return S("(size_t)1");
-        str ctype = type_to_c_mono(self, type);
+        str ctype = type_to_c_for_sizeof(self, type);
         return str_cat_3(self->transient, S("_Alignof("), ctype, S(")"));
     } else if (node->named_application.n_arguments == 0) {
         exit_error(node->file, node->line, "alignof: could not resolve type argument");
@@ -3846,7 +3874,7 @@ static str tl_alignof(transpile *self, ast_node const *node, eval_ctx *ctx, void
 
         if (tl_monotype_is_void(type) || tl_monotype_is_tv(type) || tl_monotype_is_any(type))
             return S("(size_t)1");
-        str ctype = type_to_c_mono(self, type);
+        str ctype = type_to_c_for_sizeof(self, type);
         return str_cat_3(self->transient, S("_Alignof("), ctype, S(")"));
     } else {
         // expression - not support because MSVC makes us sad
