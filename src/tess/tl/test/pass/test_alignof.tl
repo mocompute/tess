@@ -26,6 +26,9 @@ main() {
     error += if sizeof[Point]() >= alignof[Point]() {0} else {1}
     error += if sizeof[Ptr[Void]]() >= alignof[Ptr[Void]]() {0} else {1}
 
+    // Test alignof with CArray — alignment matches element type, not pointer
+    error += if alignof[CArray[CInt, 16]]() == alignof[CInt]() {0} else {1}
+
     // Test alignof with fixed-width types
     error += if alignof[CInt8]() >= 1zu {0} else {1}
     error += if alignof[CInt16]() >= 2zu {0} else {1}
