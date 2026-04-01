@@ -1803,6 +1803,25 @@ static int infer_binary_op(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
         // Relational/logical: operands stay SYMMETRIC for now (result is Bool, not integer).
         // Phase 4+ may tighten this once stdlib CSize/UInt mixing is resolved.
         if (constrain(self, left->type, right->type, node, TL_UNIFY_SYMMETRIC)) return 1;
+
+        // Without this guard, null's weak type unifies with non-pointer types like Option,
+        // generating invalid `struct == NULL` in C.
+        int left_is_nil  = ast_node_is_nil(left);
+        int right_is_nil = ast_node_is_nil(right);
+        if (left_is_nil != right_is_nil) {
+            ast_node *other = left_is_nil ? right : left;
+            tl_monotype_substitute(self->arena, other->type->type, self->subs, null);
+            tl_monotype *mono = other->type->type;
+            if (tl_polytype_is_concrete_no_weak(other->type) && !tl_monotype_is_ptr(mono)
+                && !tl_monotype_is_arrow(mono)) {
+                str type_str = tl_monotype_to_user_string(self->transient, mono);
+                str msg      = str_fmt(self->arena, "cannot compare %s with null (not a pointer type)",
+                                       str_cstr(&type_str));
+                array_push(self->errors,
+                           ((tl_infer_error){.tag = tl_err_type_error, .node = node, .message = msg}));
+                return 1;
+            }
+        }
     } else if (is_index_operator(op)) {
 
         // needed
