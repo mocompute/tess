@@ -26,9 +26,12 @@ main() {
     error += if m.contains(1) == true {0} else {1}
     error += if m.contains(99) == false {0} else {1}
 
-    // get returns Ptr[V]
-    p := m.get(2)
-    error += if p.* == 200 {0} else {1}
+    // get returns Option[Ptr[V]]
+    p := when m.get(2) {
+        s: Some { s.value }
+        n: None { null }
+    }
+    error += if p != null && p.* == 200 {0} else {1}
 
     // get_copy returns Option[V]
     opt := m.get_copy(3)

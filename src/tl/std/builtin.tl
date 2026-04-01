@@ -41,3 +41,20 @@ Option[T]: | Some { value: T }
 
 Result[T, U]: | Ok  { value: T }
               | Err { error: U }
+
+or_else[T, U](opt_or_res, default: T) -> T {
+    if opt_or_res :: Option[T] {
+        case opt_or_res: Option[T] {
+            s: Some { s.value }
+            n: None { default }
+        }
+    } else if opt_or_res :: Result[T, U] {
+        case opt_or_res: Result[T, U] {
+            o: Ok { o.value }
+            e: Err { default }
+        }
+    }
+    else {
+        _tl_fatal_(c"or_else: invalid type")
+    }
+}

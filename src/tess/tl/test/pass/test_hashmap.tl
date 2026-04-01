@@ -52,9 +52,9 @@ test_set_get() {
 
     if m.size() != 3zu { error += 1 }
 
-    p1 := m.get(1)
-    p2 := m.get(2)
-    p3 := m.get(3)
+    p1 := m.get(1).or_else(null)
+    p2 := m.get(2).or_else(null)
+    p3 := m.get(3).or_else(null)
 
     if p1 == null { error += 1 }
     if p2 == null { error += 1 }
@@ -65,7 +65,7 @@ test_set_get() {
     if p3 != null && p3.* != 300 { error += 1 }
 
     // Missing key returns null
-    p4 := m.get(999)
+    p4 := m.get(999).or_else(null)
     if p4 != null { error += 1 }
 
     m.destroy()
@@ -117,7 +117,7 @@ test_overwrite() {
     m.set(1, 200)
     if m.size() != 1 { error += 1 }
 
-    p := m.get(1)
+    p := m.get(1).or_else(null)
     if p == null { error += 1 }
     if p != null && p.* != 200 { error += 1 }
 
@@ -141,8 +141,8 @@ test_remove() {
     if !m.contains(1) { error += 1 }
     if !m.contains(3) { error += 1 }
 
-    p1 := m.get(1)
-    p3 := m.get(3)
+    p1 := m.get(1).or_else(null)
+    p3 := m.get(3).or_else(null)
     if p1 != null && p1.* != 10 { error += 1 }
     if p3 != null && p3.* != 30 { error += 1 }
 
@@ -174,7 +174,7 @@ test_grow() {
     // Verify all entries survived growth
     i = 0
     while i < n, i += 1 {
-        p := m.get(i)
+        p := m.get(i).or_else(null)
         if p == null { error += 1 }
         if p != null && p.* != i * 10 { error += 1 }
     }
@@ -199,7 +199,7 @@ test_clear() {
     // Can still insert after clear
     m.set(4, 40)
     if m.size() != 1 { error += 1 }
-    p := m.get(4)
+    p := m.get(4).or_else(null)
     if p == null { error += 1 }
     if p != null && p.* != 40 { error += 1 }
 
@@ -258,7 +258,7 @@ test_empty_map() {
     error := 0
     m     := HashMap.create[Int, Int]()
 
-    if m.get(1) != null { error += 1 }
+    if m.get(1).or_else(null) != null { error += 1 }
     if m.contains(1) { error += 1 }
     if m.remove(1) { error += 1 }
     if m.size() != 0zu { error += 1 }
@@ -295,16 +295,16 @@ test_struct_keys() {
 
     if m.size() != 3zu { error += 1 }
 
-    v := m.get(Point(x = 1, y = 2))
+    v := m.get(Point(x = 1, y = 2)).or_else(null)
     if v == null { error += 1 }
     if v != null && v.* != 10 { error += 1 }
 
-    v = m.get(Point(x = 3, y = 4))
+    v = m.get(Point(x = 3, y = 4)).or_else(null)
     if v == null { error += 1 }
     if v != null && v.* != 20 { error += 1 }
 
     // Non-existent struct key
-    v = m.get(Point(x = 7, y = 8))
+    v = m.get(Point(x = 7, y = 8)).or_else(null)
     if v != null { error += 1 }
 
     m.destroy()
@@ -323,7 +323,7 @@ test_remove_and_reinsert() {
     m.set(1, 99)
     if m.size() != 2zu { error += 1 }
 
-    p := m.get(1)
+    p := m.get(1).or_else(null)
     if p == null { error += 1 }
     if p != null && p.* != 99 { error += 1 }
 
@@ -347,7 +347,7 @@ test_collision_stress() {
     // Verify all entries are accessible
     i = 0
     while i < n, i += 1 {
-        p := m.get(CollidingKey(value = i))
+        p := m.get(CollidingKey(value = i)).or_else(null)
         if p == null { error += 1 }
         if p != null && p.* != i * 7 { error += 1 }
     }
@@ -355,7 +355,7 @@ test_collision_stress() {
     // Overwrite in collision-heavy map
     m.set(CollidingKey(value = 4), 999)
     if m.size() != 32zu { error += 1 }
-    p := m.get(CollidingKey(value = 4))
+    p := m.get(CollidingKey(value = 4)).or_else(null)
     if p == null { error += 1 }
     if p != null && p.* != 999 { error += 1 }
 
@@ -369,7 +369,7 @@ test_collision_stress() {
     // Remaining entries (16..31) must still be accessible after backward-shift
     i = 16
     while i < n, i += 1 {
-        p2 := m.get(CollidingKey(value = i))
+        p2 := m.get(CollidingKey(value = i)).or_else(null)
         if p2 == null { error += 1 }
         if p2 != null && p2.* != i * 7 { error += 1 }
     }
@@ -411,7 +411,7 @@ test_large_remove() {
     if m.size() != 50zu { error += 1 }
     i = 0
     while i < 50, i += 1 {
-        p := m.get(i)
+        p := m.get(i).or_else(null)
         if p == null { error += 1 }
         if p != null && p.* != i * 3 { error += 1 }
     }
@@ -430,15 +430,15 @@ test_zero_and_negative_keys() {
 
     if m.size() != 3zu { error += 1 }
 
-    p := m.get(0)
+    p := m.get(0).or_else(null)
     if p == null { error += 1 }
     if p != null && p.* != 100 { error += 1 }
 
-    p = m.get(-1)
+    p = m.get(-1).or_else(null)
     if p == null { error += 1 }
     if p != null && p.* != 200 { error += 1 }
 
-    p = m.get(-999)
+    p = m.get(-999).or_else(null)
     if p == null { error += 1 }
     if p != null && p.* != 300 { error += 1 }
 
@@ -461,18 +461,18 @@ test_struct_values() {
 
     if m.size() != 3zu { error += 1 }
 
-    p := m.get(1)
+    p := m.get(1).or_else(null)
     if p == null { error += 1 }
     if p != null && (p->x != 10 || p->y != 20) { error += 1 }
 
-    p = m.get(2)
+    p = m.get(2).or_else(null)
     if p == null { error += 1 }
     if p != null && (p->x != 30 || p->y != 40) { error += 1 }
 
     // Overwrite with different struct value
     m.set(1, Point(x = 99, y = 88))
     if m.size() != 3zu { error += 1 }
-    p = m.get(1)
+    p = m.get(1).or_else(null)
     if p == null { error += 1 }
     if p != null && (p->x != 99 || p->y != 88) { error += 1 }
 
@@ -488,7 +488,7 @@ test_create_with_alloc() {
     m.set(2, 20)
 
     if m.size() != 2zu { error += 1 }
-    p := m.get(1)
+    p := m.get(1).or_else(null)
     if p == null { error += 1 }
     if p != null && p.* != 10 { error += 1 }
 
@@ -562,7 +562,7 @@ test_remove_then_grow() {
     // Verify surviving original entries
     i = 50
     while i < 100, i += 1 {
-        p := m.get(i)
+        p := m.get(i).or_else(null)
         if p == null { error += 1 }
         if p != null && p.* != i { error += 1 }
     }
@@ -570,7 +570,7 @@ test_remove_then_grow() {
     // Verify new entries
     i = 1000
     while i < 1200, i += 1 {
-        p := m.get(i)
+        p := m.get(i).or_else(null)
         if p == null { error += 1 }
         if p != null && p.* != i * 2 { error += 1 }
     }
@@ -594,17 +594,17 @@ test_default_eq() {
     m.set(42, 100)
 
     // Same key bytes must match (eq returns true)
-    p := m.get(42)
+    p := m.get(42).or_else(null)
     if p == null { error += 1 }
     if p != null && p.* != 100 { error += 1 }
 
     // Different key bytes must not match (eq returns false)
-    if m.get(43) != null { error += 1 }
+    if m.get(43).or_else(null) != null { error += 1 }
 
     // Overwrite: eq must return true for identical key so size stays 1
     m.set(42, 200)
     if m.size() != 1 { error += 1 }
-    p = m.get(42)
+    p = m.get(42).or_else(null)
     if p == null { error += 1 }
     if p != null && p.* != 200 { error += 1 }
 
@@ -612,14 +612,14 @@ test_default_eq() {
     m2 := HashMap.create[Point, Int]()
     m2.set(Point(x = 10, y = 20), 999)
 
-    p2 := m2.get(Point(x = 10, y = 20))
+    p2 := m2.get(Point(x = 10, y = 20)).or_else(null)
     if p2 == null { error += 1 }
     if p2 != null && p2.* != 999 { error += 1 }
 
     // Structs with any different field must not match
-    if m2.get(Point(x = 10, y = 21)) != null { error += 1 }
-    if m2.get(Point(x = 11, y = 20)) != null { error += 1 }
-    if m2.get(Point(x = 0, y = 0)) != null { error += 1 }
+    if m2.get(Point(x = 10, y = 21)).or_else(null) != null { error += 1 }
+    if m2.get(Point(x = 11, y = 20)).or_else(null) != null { error += 1 }
+    if m2.get(Point(x = 0, y = 0)).or_else(null) != null { error += 1 }
 
     m.destroy()
     m2.destroy()
@@ -706,15 +706,15 @@ test_iter_mut() {
     }
 
     // Verify values were mutated
-    p := m.get(1)
+    p := m.get(1).or_else(null)
     if p == null { error += 1 }
     if p != null && p.* != 20 { error += 1 }
 
-    p = m.get(2)
+    p = m.get(2).or_else(null)
     if p == null { error += 1 }
     if p != null && p.* != 40 { error += 1 }
 
-    p = m.get(3)
+    p = m.get(3).or_else(null)
     if p == null { error += 1 }
     if p != null && p.* != 60 { error += 1 }
 

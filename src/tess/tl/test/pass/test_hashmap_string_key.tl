@@ -15,15 +15,24 @@ test_str_key_basic() {
 
     if m.size() != 3zu { error += 1 }
 
-    p := m.get(String.from_cstr(c"hello"))
+    p := when m.get(String.from_cstr(c"hello")) {
+        s: Some { s.value }
+        n: None { null }
+    }
     if p == null { error += 1 }
     if p != null && p.* != 10 { error += 1 }
 
-    p = m.get(String.from_cstr(c"world"))
+    p = when m.get(String.from_cstr(c"world")) {
+        s: Some { s.value }
+        n: None { null }
+    }
     if p == null { error += 1 }
     if p != null && p.* != 20 { error += 1 }
 
-    p = m.get(String.from_cstr(c"foo"))
+    p = when m.get(String.from_cstr(c"foo")) {
+        s: Some { s.value }
+        n: None { null }
+    }
     if p == null { error += 1 }
     if p != null && p.* != 30 { error += 1 }
 
