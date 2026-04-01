@@ -390,6 +390,9 @@ int a_for_statement(parser *self) {
     //
 
     if (a_try_s(self, the_symbol, "for")) return 1;
+    char const *for_file = self->token.file;
+    u32         for_line = self->token.line;
+    u32         for_col  = self->token.col;
     ast_node *variable = parse_expression(self, INT_MIN);
     if (!variable || (!ast_node_is_symbol(variable) && !ast_node_is_unary_op(variable))) return 1;
 
@@ -485,6 +488,16 @@ int a_for_statement(parser *self) {
         call_iter_cond   = create_ufcs_iter_call(self, iterator, "iter_cond");
         call_iter_update = create_ufcs_iter_call(self, iterator, "iter_update");
         call_iter_deinit = create_ufcs_iter_call(self, iterator, "iter_deinit");
+    }
+
+    // Propagate the `for` keyword's source location to all synthesized iter calls
+    // so that type errors in desugared code point back to the for-loop.
+    ast_node *iter_calls[] = {call_iter_init, call_iter_value, call_iter_ptr,
+                              call_iter_cond, call_iter_update, call_iter_deinit};
+    for (int i = 0; i < (int)(sizeof iter_calls / sizeof iter_calls[0]); i++) {
+        iter_calls[i]->file = for_file;
+        iter_calls[i]->line = for_line;
+        iter_calls[i]->col  = for_col;
     }
 
     ast_node *while_body = null;
