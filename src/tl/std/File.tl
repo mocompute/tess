@@ -10,6 +10,7 @@
 #module File
 #import <Alloc.tl>
 #import <Array.tl>
+#import <Slice.tl>
 #import <String.tl>
 #import <cstdlib.tl>
 #import <cstdio.tl>
@@ -56,12 +57,15 @@ static int tl_file_is_dir(const char *path) {
 }
 
 static long long tl_file_size(const char *path) {
-    FILE *f = fopen(path, "rb");
-    if (!f) return -1;
-    if (fseek(f, 0, SEEK_END) != 0) { fclose(f); return -1; }
-    long sz = ftell(f);
-    fclose(f);
-    return (long long)sz;
+#ifdef _WIN32
+    struct _stat st;
+    if (_stat(path, &st) != 0) return -1;
+    return (long long)st.st_size;
+#else
+    struct stat st;
+    if (stat(path, &st) != 0) return -1;
+    return (long long)st.st_size;
+#endif
 }
 
 static int tl_file_mkdir(const char *path) {
@@ -320,13 +324,27 @@ separator  ()             -> CChar
 
 // -- Private helpers --
 
-_is_sep (c: CChar) -> Bool
+_is_sep       (c: CChar) -> Bool
+_make_absolute(alloc: Ptr[Allocator], path: String, orig: String) -> Result[String, File.IOError]
 
 
 // -- Implementation --
 
 _is_sep(c) {
     c == '/' || c == '\\'
+}
+
+_make_absolute(alloc, path, orig) {
+    if is_absolute(path) { return Ok(path) }
+    cwd_buf: CArray[CChar, 4096] := void
+    cwd_ptr: Ptr[CChar]          := cwd_buf
+    if c_tl_file_getcwd(cwd_ptr, 4096) != 0 {
+        return Err(File.IOFailed(path = orig,
+                                 message    = "relative: getcwd failed",
+                                 errno_code = c_errno))
+    }
+    cwd := String.from_cstr(alloc, cwd_ptr)
+    Ok(normalize(alloc, join(alloc, cwd, path)))
 }
 
 dirname(alloc, path) {
@@ -412,7 +430,7 @@ join(alloc, dir, file) {
     if dn == 0 { return file.copy(alloc) }
 
     fn := file.len()
-    if fn == 0 { return file.copy(alloc) }
+    if fn == 0 { return dir.copy(alloc) }
 
     // Check if dir ends with separator
     last_ch: Some := dir.char_at(dn - 1) else { return file.copy(alloc) }
@@ -420,8 +438,7 @@ join(alloc, dir, file) {
         return dir.cat(alloc, file)
     }
 
-    sep := String.from_bytes(c"/", 1)
-    dir.cat_3(alloc, sep, file)
+    dir.cat_3(alloc, "/", file)
 }
 
 join(dir, file) {
@@ -435,42 +452,28 @@ normalize(alloc, path) {
     first_ch: Some := path.char_at(0) else { return String.empty() }
     abs            := _is_sep(first_ch.value)
 
-    // Split path into components
-    parts := path.split(alloc, "/")
-
-    // Also handle backslash-separated paths
-    result   := Array.empty[String]()
-    i: CSize := 0
-    while i < parts.size, i += 1 {
-        sub      := parts.data.[i].split(alloc, "\\")
-        j: CSize := 0
-        while j < sub.size, j += 1 {
-            Array.push(result.&, alloc, sub.data.[j])
-        }
-    }
+    // Normalize separators and split into components
+    unified := path.replace_byte(alloc, '\\', '/')
+    parts   := unified.split(alloc, "/")
 
     // Process components
-    stack    := Array.empty[String]()
-    k: CSize := 0
-    while k < result.size, k += 1 {
-        part := result.data.[k]
-        pn   := part.len()
-
-        if pn == 0 || part.eq(".") {
+    stack := Array.empty[String]()
+    for part in parts {
+        if part.len() == 0 || part.eq(".") {
             continue
         }
 
         if part.eq("..") {
             if stack.size > 0 && !stack.data.[stack.size - 1].eq("..") {
-                stack.&.pop()
+                stack.pop()
                 void
             } else if !abs {
-                Array.push(stack.&, alloc, part)
+                stack.push(alloc, part)
             }
             continue
         }
 
-        Array.push(stack.&, alloc, part)
+        stack.push(alloc, part)
     }
 
     if stack.size == 0 {
@@ -497,38 +500,12 @@ relative(alloc, from_dir, to_path) {
     }
 
     // Normalize both paths; make absolute if relative
-    norm_from := normalize(alloc, from_dir)
-    norm_to   := normalize(alloc, to_path)
-
-    if !is_absolute(norm_from) {
-        cwd_buf: CArray[CChar, 4096] := void
-        cwd_ptr: Ptr[CChar]          := cwd_buf
-        if c_tl_file_getcwd(cwd_ptr, 4096) != 0 {
-            return Err(File.IOFailed(path = from_dir,
-                                     message    = "relative: getcwd failed",
-                                     errno_code = c_errno))
-        }
-        cwd := String.from_cstr(alloc, cwd_ptr)
-        norm_from = join(alloc, cwd, norm_from)
-        norm_from = normalize(alloc, norm_from)
-    }
-
-    if !is_absolute(norm_to) {
-        cwd_buf: CArray[CChar, 4096] := void
-        cwd_ptr: Ptr[CChar]          := cwd_buf
-        if c_tl_file_getcwd(cwd_ptr, 4096) != 0 {
-            return Err(File.IOFailed(path = to_path,
-                                     message    = "relative: getcwd failed",
-                                     errno_code = c_errno))
-        }
-        cwd := String.from_cstr(alloc, cwd_ptr)
-        norm_to = join(alloc, cwd, norm_to)
-        norm_to = normalize(alloc, norm_to)
-    }
+    norm_from := try _make_absolute(alloc, normalize(alloc, from_dir), from_dir)
+    norm_to   := try _make_absolute(alloc, normalize(alloc, to_path), to_path)
 
     // Split into components
-    from_parts := norm_from.split(alloc_from, "/")
-    to_parts   := norm_to.split(alloc_to, "/")
+    from_parts := norm_from.split(alloc, "/")
+    to_parts   := norm_to.split(alloc, "/")
 
     // Find common prefix length
     common: CSize := 0
@@ -543,12 +520,11 @@ relative(alloc, from_dir, to_path) {
     ups: CSize := from_parts.size - common
     u:   CSize := 0
     while u < ups, u += 1 {
-        Array.push(result.&, alloc, "..")
+        result.push(alloc, "..")
     }
 
-    d: CSize := common
-    while d < to_parts.size, d += 1 {
-        Array.push(result.&, alloc, to_parts.data.[d])
+    for part in to_parts.slice(common, to_parts.size) {
+        result.push(alloc, part)
     }
 
     if result.size == 0 { return Ok(".") }
@@ -634,7 +610,7 @@ _remaining_bytes(self) {
 
 open(alloc, path, mode) {
     mode_cstr := _mode_str(mode)
-    path_cstr := path.&.cstr()
+    path_cstr := path.cstr()
 
     handle := c_fopen(path_cstr, mode_cstr)
     if handle == null { return Err(_errno_to_error(path)) }
@@ -760,7 +736,7 @@ read_bytes(self, alloc) {
     result     := Array.init_undefined[Byte](alloc, remaining)
     bytes_read := c_fread(result.data, 1, remaining, self->_handle)
     if bytes_read < remaining && c_ferror(self->_handle) != 0 {
-        Array.free(result.&, alloc)
+        result.free(alloc)
         return Err(_errno_to_error(self->_path))
     }
     result.size = bytes_read
@@ -785,7 +761,7 @@ write(self, buf, count) {
 write_str(self, data) {
     n := data.len()
     if n == 0 { return Ok(void) }
-    ptr     := data.&.cstr()
+    ptr     := data.cstr()
     written := c_fwrite(ptr, 1, n, self->_handle)
     if written < n {
         return Err(_errno_to_error(self->_path))
@@ -888,16 +864,8 @@ read_lines(alloc, path) {
     lines   := content.split(alloc, "\n")
 
     // Strip \r from each line (Windows line endings)
-    i: CSize := 0
-    while i < lines.size, i += 1 {
-        line := lines.data.[i]
-        n    := line.len()
-        if n > 0 {
-            last: Some := line.char_at(n - 1) else { continue }
-            if last.value == '\r' {
-                lines.data.[i] = line.copy(alloc, 0, n - 1)
-            }
-        }
+    for line.& in lines {
+        line.* = line.*.strip_suffix(alloc, "\r")
     }
 
     // Remove trailing empty line (split on c"\n" produces one after final newline)
@@ -916,15 +884,15 @@ read_lines(path) {
 // -- File metadata --
 
 exists(path) {
-    c_tl_file_exists(path.&.cstr()) != 0
+    c_tl_file_exists(path.cstr()) != 0
 }
 
 is_directory(path) {
-    c_tl_file_is_dir(path.&.cstr()) != 0
+    c_tl_file_is_dir(path.cstr()) != 0
 }
 
 size(path) {
-    sz := c_tl_file_size(path.&.cstr())
+    sz := c_tl_file_size(path.cstr())
     if sz < 0 { return Err(_errno_to_error(path)) }
     Ok(sz)
 }
@@ -940,7 +908,7 @@ temp_dir() {
 // -- Directory operations --
 
 create_dir(path) {
-    if c_tl_file_mkdir(path.&.cstr()) != 0 {
+    if c_tl_file_mkdir(path.cstr()) != 0 {
         return Err(_errno_to_error(path))
     }
     Ok(void)
@@ -967,7 +935,7 @@ c_tl_scan_dir_cleanup(l: Ptr[c_struct_tl_path_list])                            
 
 scan_dir(alloc, path, ext) {
     list: c_struct_tl_path_list := void
-    path_cstr                   := path.&.cstr()
+    path_cstr                   := path.cstr()
 
     ext_cstr: CString := null
     when ext {
@@ -984,7 +952,7 @@ scan_dir(alloc, path, ext) {
     i: CSize := 0
     while i < count, i += 1 {
         entry_cstr := c_tl_scan_dir_get(list.&, i)
-        Array.push(result.&, alloc, String.from_cstr(alloc, entry_cstr))
+        result.push(alloc, String.from_cstr(alloc, entry_cstr))
     }
 
     Ok(result)

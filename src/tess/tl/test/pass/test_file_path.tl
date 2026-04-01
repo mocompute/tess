@@ -85,6 +85,17 @@ test_join() {
     j4 := File.Path.join("/foo", "/bar.txt")
     if !String.eq(j4, "/bar.txt") { c_printf(c"FAIL join 4: %s\n", String.cstr(j4.&)) fails += 1 }
 
+    // Empty file should return dir
+    j5 := File.Path.join("/foo", "")
+    if !String.eq(j5, "/foo") { c_printf(c"FAIL join 5: %s\n", String.cstr(j5.&)) fails += 1 }
+
+    j6 := File.Path.join("bar", "")
+    if !String.eq(j6, "bar") { c_printf(c"FAIL join 6: %s\n", String.cstr(j6.&)) fails += 1 }
+
+    // Both empty
+    j7 := File.Path.join("", "")
+    if !String.eq(j7, "") { c_printf(c"FAIL join 7: %s\n", String.cstr(j7.&)) fails += 1 }
+
     fails
 }
 
@@ -121,6 +132,47 @@ test_is_absolute() {
     fails
 }
 
+test_relative() {
+    fails := 0
+
+    // Sibling directories
+    r1: Ok := File.Path.relative("/a/b", "/a/c") else {
+        c_printf(c"FAIL relative 1: error\n")
+        return 1
+    }
+    if !String.eq(r1.value, "../c") { c_printf(c"FAIL relative 1: %s\n", r1.value.cstr()) fails += 1 }
+
+    // Nested path
+    r2: Ok := File.Path.relative("/a/b", "/a/b/c/d") else {
+        c_printf(c"FAIL relative 2: error\n")
+        return 1
+    }
+    if !String.eq(r2.value, "c/d") { c_printf(c"FAIL relative 2: %s\n", r2.value.cstr()) fails += 1 }
+
+    // Same path
+    r3: Ok := File.Path.relative("/a/b", "/a/b") else {
+        c_printf(c"FAIL relative 3: error\n")
+        return 1
+    }
+    if !String.eq(r3.value, ".") { c_printf(c"FAIL relative 3: %s\n", r3.value.cstr()) fails += 1 }
+
+    // Deep divergence
+    r4: Ok := File.Path.relative("/a/b/c", "/x/y") else {
+        c_printf(c"FAIL relative 4: error\n")
+        return 1
+    }
+    if !String.eq(r4.value, "../../../x/y") { c_printf(c"FAIL relative 4: %s\n", r4.value.cstr()) fails += 1 }
+
+    // Empty input should return error
+    r5 := File.Path.relative("", "/a")
+    when r5 {
+        ok: Ok { c_printf(c"FAIL relative 5: expected error\n") fails += 1 }
+        err: Err { }
+    }
+
+    fails
+}
+
 main() {
     fails := 0
 
@@ -131,6 +183,7 @@ main() {
     fails += test_join()
     fails += test_normalize()
     fails += test_is_absolute()
+    fails += test_relative()
 
     if fails == 0 { c_printf(c"All path tests passed.\n") }
     else { c_printf(c"%d path test(s) failed.\n", fails) }
