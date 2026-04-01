@@ -176,6 +176,7 @@ typedef struct ast_node {
             ast_node_sized   arms;             // must be same size
             struct ast_node *binary_predicate; // may be null
             struct ast_node *union_annotation; // type annotation for tagged union (e.g., T in case x: T)
+            struct ast_node *else_binding;     // optional binding for else arm (two-variant unions only)
             int is_union; // see AST_TAGGED_UNION_* (0: none, 1: plain, 2: mutable, 3: conditional)
         } case_;
 
@@ -310,7 +311,7 @@ nodiscard ast_node *ast_node_create_reassignment_op(allocator *, ast_node *, ast
 nodiscard ast_node *ast_node_create_attribute_set(allocator *, ast_node_sized) mallocfun;
 nodiscard ast_node *ast_node_create_body(allocator *, ast_node_sized) mallocfun;
 nodiscard ast_node *ast_node_create_case(allocator *, ast_node *, ast_node_sized, ast_node_sized,
-                                         ast_node *, ast_node *, int) mallocfun;
+                                         ast_node *, ast_node *, ast_node *, int) mallocfun;
 nodiscard ast_node *ast_node_create_bool(allocator *, int) mallocfun;
 nodiscard ast_node *ast_node_create_continue(allocator *) mallocfun;
 nodiscard ast_node *ast_node_create_nil(allocator *) mallocfun;

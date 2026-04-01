@@ -107,7 +107,8 @@ ast_node *ast_node_create_body(allocator *alloc, ast_node_sized body) {
 }
 
 ast_node *ast_node_create_case(allocator *alloc, ast_node *expr, ast_node_sized conds, ast_node_sized arms,
-                               ast_node *bin_pred, ast_node *union_annotation, int is_union) {
+                               ast_node *bin_pred, ast_node *union_annotation, ast_node *else_binding,
+                               int is_union) {
     // Note: is_union may be 0, 1, 2, or 3. See AST_TAGGED_UNION_* in ast.h
     ast_node *self               = ast_node_create(alloc, ast_case);
     self->case_.expression       = expr;
@@ -115,6 +116,7 @@ ast_node *ast_node_create_case(allocator *alloc, ast_node *expr, ast_node_sized 
     self->case_.arms             = arms;
     self->case_.binary_predicate = bin_pred;         // may be null
     self->case_.union_annotation = union_annotation; // type annotation for tagged union
+    self->case_.else_binding     = else_binding;     // optional else arm binding
     self->case_.is_union         = is_union;
     return self;
 }
@@ -564,6 +566,7 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
         }
         clone->case_.is_union         = orig->case_.is_union;
         clone->case_.union_annotation = ast_node_clone(alloc, orig->case_.union_annotation);
+        clone->case_.else_binding     = ast_node_clone(alloc, orig->case_.else_binding);
     } break;
 
     case ast_unary_op: {
@@ -783,6 +786,7 @@ void ast_node_each_node(void *ctx, ast_node_each_node_fun fun, ast_node *node) {
         fun(ctx, node->case_.expression);
         if (node->case_.binary_predicate) fun(ctx, node->case_.binary_predicate);
         if (node->case_.union_annotation) fun(ctx, node->case_.union_annotation);
+        if (node->case_.else_binding) fun(ctx, node->case_.else_binding);
         forall(i, node->case_.conditions) fun(ctx, node->case_.conditions.v[i]);
         forall(i, node->case_.arms) fun(ctx, node->case_.arms.v[i]);
         break;
@@ -1015,6 +1019,12 @@ str v2_ast_node_to_string(allocator *alloc, ast_node const *node) {
             if (i + 1 < node->case_.conditions.size) str_build_cat(&b, S(" "));
         }
         str_build_cat(&b, S(")"));
+
+        if (node->case_.else_binding) {
+            str_build_cat(&b, S("(else_binding "));
+            str_build_cat(&b, v2_ast_node_to_string(alloc, node->case_.else_binding));
+            str_build_cat(&b, S(")"));
+        }
 
         str_build_cat(&b, S(")"));
         return str_build_finish(&b);
@@ -1631,6 +1641,7 @@ u64 ast_node_hash(ast_node const *self) {
         combine_node(self->case_.expression);
         combine_node(self->case_.binary_predicate);
         combine_node(self->case_.union_annotation);
+        combine_node(self->case_.else_binding);
         forall(i, self->case_.conditions) combine_node(self->case_.conditions.v[i]);
         forall(i, self->case_.arms) combine_node(self->case_.arms.v[i]);
         break;

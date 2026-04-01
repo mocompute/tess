@@ -126,6 +126,7 @@
     X(tl_err_const_violation, "const_violation")                                                           \
     X(tl_err_try_requires_two_variant_union, "try_requires_two_variant_union")                             \
     X(tl_err_try_requires_single_field_variant, "try_requires_single_field_variant")                       \
+    X(tl_err_else_binding_requires_two_variant_union, "else_binding_requires_two_variant_union")           \
     X(tl_err_trait_bound_not_satisfied, "trait_bound_not_satisfied")                                       \
     X(tl_err_closure_escape, "closure_escape")                                                             \
     X(tl_err_capture_without_alloc, "capture_without_alloc")                                               \

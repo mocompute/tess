@@ -1906,6 +1906,25 @@ tl_monotype *tagged_union_find_variant(tl_monotype *wrapper_type, str variant_na
     return null;
 }
 
+// Given a concrete wrapper type for a two-variant tagged union and the name of one variant,
+// return the monotype of the other variant. Optionally writes the other variant's field name
+// to *out_name. Returns null if not a two-variant union or if matched_name is not found.
+tl_monotype *tagged_union_other_variant(tl_monotype *wrapper_type, str matched_name, str *out_name) {
+    i32 u_index = tl_monotype_type_constructor_field_index(wrapper_type, S(AST_TAGGED_UNION_UNION_FIELD));
+    if (u_index < 0) return null;
+    tl_monotype *union_type = wrapper_type->cons_inst->args.v[u_index];
+    if (!tl_monotype_is_inst(union_type) || union_type->cons_inst->def->field_names.size != 2)
+        return null;
+    str_sized field_names = union_type->cons_inst->def->field_names;
+    forall(j, field_names) {
+        if (str_eq(field_names.v[j], matched_name)) {
+            if (out_name) *out_name = field_names.v[1 - j];
+            return union_type->cons_inst->args.v[1 - j];
+        }
+    }
+    return null;
+}
+
 // Wrap a variant type in Ptr if the binding is mutable (&), otherwise return as-is.
 static tl_polytype *tagged_union_variant_poly(tl_infer *self, tl_monotype *variant_type,
                                               int is_union_flag) {
@@ -2006,6 +2025,31 @@ static int infer_tagged_union_case(tl_infer *self, traverse_ctx *ctx, ast_node *
                 return 1;
             }
         }
+    }
+
+    // Else binding: bind the other variant in the else arm (two-variant unions only)
+    if (has_else_arm && node->case_.else_binding && ast_node_is_symbol(node->case_.else_binding)) {
+        if (valid_variants.size != 2) {
+            array_push(self->errors,
+                       ((tl_infer_error){.tag  = tl_err_else_binding_requires_two_variant_union,
+                                         .node = node->case_.else_binding}));
+            return 1;
+        }
+
+        // Find the uncovered variant (the one not matched by the primary condition)
+        int other_index = -1;
+        forall(j, valid_variants) {
+            if (!variant_covered[j]) {
+                other_index = (int)j;
+                break;
+            }
+        }
+        assert(other_index >= 0); // two-variant union with one covered → one must be uncovered
+        tl_monotype *other_type = union_type->cons_inst->args.v[other_index];
+        tl_polytype *other_poly = tagged_union_variant_poly(self, other_type, node->case_.is_union);
+
+        ast_node_type_set(node->case_.else_binding, other_poly);
+        node->case_.else_binding->symbol.annotation_type = other_poly;
     }
 
     return 0;
@@ -2545,6 +2589,29 @@ static void prepare_tagged_union_bindings(tl_infer *self, traverse_ctx *ctx, ast
         cond->symbol.annotation_type = variant_poly;
         env_insert_constrain(self, cond->symbol.name, variant_poly, cond);
     }
+
+    // Pre-set else binding type for two-variant unions
+    if (node->case_.else_binding && ast_node_is_symbol(node->case_.else_binding)) {
+        if (node->case_.else_binding->symbol.annotation_type &&
+            tl_monotype_is_inst_specialized(node->case_.else_binding->symbol.annotation_type->type))
+            return;
+
+        str primary_name = str_empty();
+        if (node->case_.conditions.size > 0) {
+            ast_node *cond = node->case_.conditions.v[0];
+            if (ast_node_is_symbol(cond) && cond->symbol.annotation)
+                primary_name = ast_node_name_original(cond->symbol.annotation);
+        }
+        tl_monotype *other_type = tagged_union_other_variant(wrapper_type, primary_name, null);
+        if (other_type) {
+            tl_polytype *other_poly = tagged_union_variant_poly(self, other_type, node->case_.is_union);
+
+            ast_node_type_set(node->case_.else_binding, other_poly);
+            node->case_.else_binding->symbol.annotation_type = other_poly;
+            env_insert_constrain(self, node->case_.else_binding->symbol.name, other_poly,
+                                 node->case_.else_binding);
+        }
+    }
 }
 
 int traverse_ast_case(tl_infer *self, traverse_ctx *ctx, ast_node *node, traverse_cb cb) {
@@ -2567,8 +2634,11 @@ int traverse_ast_case(tl_infer *self, traverse_ctx *ctx, ast_node *node, travers
             hashmap  *save = map_copy(ctx->lexical_names);
             ast_node *cond = node->case_.conditions.v[i];
 
-            // Skip nil condition (else arm)
+            // Skip nil condition (else arm), but add else_binding to scope if present
             if (ast_node_is_nil(cond)) {
+                if (node->case_.else_binding && ast_node_is_symbol(node->case_.else_binding)) {
+                    str_hset_insert(&ctx->lexical_names, node->case_.else_binding->symbol.name);
+                }
                 if (i < node->case_.arms.size) {
                     ctx->node_pos = npos_operand;
                     if (traverse_ast(self, ctx, node->case_.arms.v[i], cb)) return 1;

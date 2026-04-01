@@ -2246,6 +2246,35 @@ static str generate_tagged_union_case(transpile *self, ast_node const *node, eva
             if (i > 0) {
                 cat(self, S("else {\n"));
             }
+
+            // Generate else binding if present: OtherVariant name = expr.u.OtherVariant;
+            if (node->case_.else_binding && ast_node_is_symbol(node->case_.else_binding) &&
+                node->case_.else_binding->symbol.annotation_type) {
+                tl_monotype *eb_type = node->case_.else_binding->symbol.annotation_type->type;
+
+                str other_variant_name = str_empty();
+                if (i > 0 && node->case_.conditions.size > 0) {
+                    ast_node *primary_cond = node->case_.conditions.v[0];
+                    if (ast_node_is_symbol(primary_cond) && primary_cond->symbol.annotation) {
+                        str pname = ast_node_name_original(primary_cond->symbol.annotation);
+                        tagged_union_other_variant(wrapper_type, pname, &other_variant_name);
+                    }
+                }
+                if (!str_is_empty(other_variant_name)) {
+                    str eb_binding_name =
+                      escape_c_keyword(self->transient, ast_node_str(node->case_.else_binding));
+
+                    generate_decl(self, eb_binding_name, eb_type);
+                    cat(self, eb_binding_name);
+                    cat(self, S(" = "));
+                    if (is_pointer) cat(self, S("&"));
+                    cat(self, expr_str);
+                    cat(self, S(".u."));
+                    cat(self, escape_c_keyword(self->transient, other_variant_name));
+                    cat_semicolonln(self);
+                }
+            }
+
             str arm_body = generate_expr(self, null, node->case_.arms.v[i], ctx);
             if (result_type && should_assign_result(ctx, result_type)) {
                 generate_assign(self, res, arm_body);

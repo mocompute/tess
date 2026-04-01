@@ -1738,6 +1738,25 @@ static int specialize_reassignment(tl_infer *self, traverse_ctx *traverse_ctx, a
     return specialize_operand(self, traverse_ctx, node->assignment.value);
 }
 
+// Specialize a variant binding's type constructor and apply the result, handling Ptr wrapping.
+// Returns the specialized instance name (empty on failure).
+static str specialize_variant_binding(tl_infer *self, ast_node *binding, tl_monotype *variant_type,
+                                      str generic_name, tl_monotype_sized args) {
+    tl_polytype *special_type = null;
+    str          inst_name    = specialize_type_constructor(self, generic_name, args, &special_type);
+    if (str_is_empty(inst_name) || !special_type) return str_empty();
+
+    if (tl_monotype_is_ptr(variant_type)) {
+        tl_monotype *new_ptr =
+          tl_type_registry_ptr(self->registry, tl_polytype_concrete(special_type));
+        binding->symbol.annotation_type = tl_polytype_absorb_mono(self->arena, new_ptr);
+    } else {
+        binding->symbol.annotation_type = special_type;
+    }
+    ast_node_type_set(binding, binding->symbol.annotation_type);
+    return inst_name;
+}
+
 static int specialize_case(tl_infer *self, traverse_ctx *traverse_ctx, ast_node *node) {
     assert(ast_node_is_case(node));
 
@@ -1764,8 +1783,6 @@ static int specialize_case(tl_infer *self, traverse_ctx *traverse_ctx, ast_node 
             if (tl_monotype_is_inst(inner_type) && !tl_monotype_is_inst_specialized(inner_type)) {
                 str               generic_name = inner_type->cons_inst->def->generic_name;
                 tl_monotype_sized args         = inner_type->cons_inst->args;
-                tl_polytype      *special_type = null;
-                str               inst_name    = str_empty();
 
                 if (!tl_monotype_is_concrete(inner_type)) {
                     // Variant type has unresolved type variables (e.g., from a case annotation
@@ -1786,25 +1803,49 @@ static int specialize_case(tl_infer *self, traverse_ctx *traverse_ctx, ast_node 
                     }
                 }
 
-                inst_name = specialize_type_constructor(self, generic_name, args, &special_type);
-                if (!str_is_empty(inst_name) && special_type) {
-                    // Update the annotation_type with the specialized type
-                    if (tl_monotype_is_ptr(variant_type)) {
-                        tl_monotype *new_ptr =
-                          tl_type_registry_ptr(self->registry, tl_polytype_concrete(special_type));
-                        cond->symbol.annotation_type = tl_polytype_absorb_mono(self->arena, new_ptr);
-                    } else {
-                        cond->symbol.annotation_type = special_type;
-                    }
-                    ast_node_type_set(cond, cond->symbol.annotation_type);
-
-                    // Update the annotation node's name to the specialized name
-                    if (cond->symbol.annotation && ast_node_is_symbol(cond->symbol.annotation)) {
-                        ast_node_name_replace(cond->symbol.annotation, inst_name);
-                    }
-                }
+                str inst_name = specialize_variant_binding(self, cond, variant_type, generic_name, args);
+                if (!str_is_empty(inst_name) && cond->symbol.annotation &&
+                    ast_node_is_symbol(cond->symbol.annotation))
+                    ast_node_name_replace(cond->symbol.annotation, inst_name);
             }
         }
+
+        // Specialize else_binding variant type (else_binding has no annotation node to rename)
+        if (node->case_.else_binding && ast_node_is_symbol(node->case_.else_binding) &&
+            node->case_.else_binding->symbol.annotation_type) {
+            tl_monotype *variant_type = node->case_.else_binding->symbol.annotation_type->type;
+            tl_monotype *inner_type   = variant_type;
+            if (tl_monotype_is_ptr(variant_type)) inner_type = tl_monotype_ptr_target(variant_type);
+
+            if (tl_monotype_is_inst(inner_type) && !tl_monotype_is_inst_specialized(inner_type)) {
+                str               generic_name = inner_type->cons_inst->def->generic_name;
+                tl_monotype_sized args         = inner_type->cons_inst->args;
+
+                if (!tl_monotype_is_concrete(inner_type)) {
+                    tl_monotype *expr_type =
+                      node->case_.expression->type ? node->case_.expression->type->type : null;
+                    if (expr_type) tl_monotype_substitute(self->arena, expr_type, self->subs, null);
+
+                    if (expr_type && tl_monotype_is_concrete(expr_type) && tl_monotype_is_inst(expr_type)) {
+                        str primary_name = str_empty();
+                        if (node->case_.conditions.size > 0) {
+                            ast_node *cond = node->case_.conditions.v[0];
+                            if (ast_node_is_symbol(cond) && cond->symbol.annotation)
+                                primary_name = ast_node_name_original(cond->symbol.annotation);
+                        }
+                        tl_monotype *concrete_other = tagged_union_other_variant(expr_type, primary_name, null);
+                        if (concrete_other && tl_monotype_is_inst(concrete_other)) {
+                            generic_name = concrete_other->cons_inst->def->generic_name;
+                            args         = concrete_other->cons_inst->args;
+                        }
+                    }
+                }
+
+                specialize_variant_binding(self, node->case_.else_binding, variant_type,
+                                           generic_name, args);
+            }
+        }
+
         return 0;
     }
 

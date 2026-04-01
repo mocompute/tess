@@ -125,6 +125,15 @@ static void rename_case_variables(tl_infer *self, ast_node *node, rename_variabl
             str_map_set(&ctx->lex, name, &newvar);
         }
 
+        // Alpha-convert else binding (scoped to else arm body only)
+        if (is_union && ast_node_is_nil(node->case_.conditions.v[i]) && node->case_.else_binding) {
+            str name   = ast_node_str(node->case_.else_binding);
+            str newvar = next_variable_name(self, name);
+            if (!save) save = map_copy(ctx->lex);
+            str_map_set(&ctx->lex, name, &newvar);
+            rename_variables(self, node->case_.else_binding, ctx, level + 1);
+        }
+
         rename_variables(self, node->case_.conditions.v[i], ctx, level + 1);
         rename_variables(self, node->case_.arms.v[i], ctx, level + 1);
 

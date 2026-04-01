@@ -37,6 +37,7 @@ str                 toplevel_name(ast_node const *);
 ast_node           *toplevel_name_node(ast_node *);
 
 tl_monotype        *tl_infer_update_specialized_type(tl_infer *, tl_monotype *mono);
+tl_monotype        *tagged_union_other_variant(tl_monotype *, str, str *);
 
 int                 is_c_symbol(str);
 int                 is_c_struct_symbol(str);

@@ -643,9 +643,15 @@ int a_assignment(parser *self) {
     ast_node *val = parse_expression(self, INT_MIN);
     if (!val) return ERROR_STOP;
 
-    // Let-else form: s: MySome := val else { diverge-or-value }
+    // Let-else form: s: MySome := val else [name] { diverge-or-value }
     // Desugars to: when val { s: MySome { <remaining body> } else { <else-body> } }
     if (ast_node_is_symbol(lval) && lval->symbol.annotation && 0 == a_try_s(self, the_symbol, "else")) {
+        // Optional else binding: `else err { ... }` binds the other variant (two-variant unions only)
+        ast_node *else_binding = null;
+        if (0 == a_try(self, a_identifier)) {
+            else_binding = self->result;
+        }
+
         ast_node *else_body = parse_body(self);
         if (!else_body) return ERROR_STOP;
 
@@ -672,7 +678,8 @@ int a_assignment(parser *self) {
 
         ast_node *node =
           ast_node_create_case(self->ast_arena, val, (ast_node_sized)array_sized(conditions),
-                               (ast_node_sized)array_sized(arms), null, null, AST_TAGGED_UNION_VALUE);
+                               (ast_node_sized)array_sized(arms), null, null, else_binding,
+                               AST_TAGGED_UNION_VALUE);
         set_node_file(self, node);
         return result_ast_node(self, node);
     }
@@ -1030,9 +1037,15 @@ static int a_conditional_variant_binding(parser *self) {
     array_push(conditions, lval);
     array_push(arms, yes);
 
-    int is_union = AST_TAGGED_UNION_CONDITIONAL;
+    int       is_union     = AST_TAGGED_UNION_CONDITIONAL;
+    ast_node *else_binding = null;
 
     if (0 == a_try_s(self, the_symbol, "else")) {
+        // Optional else binding: `else err { ... }` binds the other variant (two-variant unions only)
+        if (0 == a_try(self, a_identifier)) {
+            else_binding = self->result;
+        }
+
         ast_node *else_body = parse_body(self);
         if (!else_body) return ERROR_STOP;
 
@@ -1045,7 +1058,8 @@ static int a_conditional_variant_binding(parser *self) {
     }
 
     ast_node *node = ast_node_create_case(self->ast_arena, val, (ast_node_sized)array_sized(conditions),
-                                          (ast_node_sized)array_sized(arms), null, null, is_union);
+                                          (ast_node_sized)array_sized(arms), null, null, else_binding,
+                                          is_union);
     set_node_file(self, node);
     return result_ast_node(self, node);
 }
@@ -1231,7 +1245,7 @@ begin_body:
 
     ast_node *node =
       ast_node_create_case(self->ast_arena, expr, (ast_node_sized)array_sized(conditions),
-                           (ast_node_sized)array_sized(arms), bin_pred, union_type, union_flag);
+                           (ast_node_sized)array_sized(arms), bin_pred, union_type, null, union_flag);
     set_node_file(self, node);
     return node;
 }
@@ -1308,7 +1322,7 @@ ast_node *parse_when_expr(parser *self) {
     else union_flag = AST_TAGGED_UNION_VALUE;
 
     ast_node *node = ast_node_create_case(self->ast_arena, expr, (ast_node_sized)array_sized(conditions),
-                                          (ast_node_sized)array_sized(arms), null, null, union_flag);
+                                          (ast_node_sized)array_sized(arms), null, null, null, union_flag);
     set_node_file(self, node);
     return node;
 }
