@@ -50,7 +50,7 @@ Entry[K, V]: { key: K, value: V }
     destroy() -> Void
 
     set     (key: K, value: V) -> Void
-    get     (key: K)           -> Ptr[V]
+    get     (key: K)           -> Option[Ptr[V]]
     get_copy(key: K)           -> Option[V]
     contains(key: K)           -> Bool
     remove  (key: K)           -> Bool
@@ -186,7 +186,7 @@ _insert_entry[K: Eq, V](entries, capacity, key: K, value: V, hash: CSize) -> CSi
     }
 
     get(key) {
-        if self->_size == 0 { return null }
+        if self->_size == 0 { return None }
 
         hash        := key.hash()
         mask        := self->_capacity - 1
@@ -198,27 +198,26 @@ _insert_entry[K: Eq, V](entries, capacity, key: K, value: V, hash: CSize) -> CSi
             e      := self->_entries.[bucket].&
             e_meta := e->meta
 
-            if !_is_occupied(e_meta) { return null }
-            if _get_dist(e_meta) < dist { return null }
+            if !_is_occupied(e_meta) { return None }
+            if _get_dist(e_meta) < dist { return None }
             if _get_tag(e_meta) == tag && e->key == key {
-                return e->value.&
+                return Some(e->value.&)
             }
 
             dist += 1
             bucket = (bucket + 1) & mask
         }
 
-        null
+        None
     }
 
     get_copy(key) {
-        p := get(self, key)
-        if p == null { return None }
+        p := try get(self, key)
         Some(p.*)
     }
 
     contains(key) {
-        get(self, key) != null
+        if _: Some := get(self, key) {true} else {false}
     }
 
     // -- Remove (backward-shift deletion) --
