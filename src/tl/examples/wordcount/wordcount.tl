@@ -158,7 +158,7 @@ main(argc: CInt, argv: Ptr[CString]) {
     do_sort     := args.get_flag("sort")
 
     // Default: show all standard counts if no specific flag given.
-    if !show_lines && !show_words && !show_chars {
+    if !show_lines && !show_words && !show_chars && !show_unique {
         show_lines = true
         show_words = true
         show_chars = true
