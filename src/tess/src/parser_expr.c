@@ -641,7 +641,7 @@ int a_assignment(parser *self) {
     if (a_try(self, a_colon_equal)) return 1;
 
     ast_node *val = parse_expression(self, INT_MIN);
-    if (!val) return 1;
+    if (!val) return ERROR_STOP;
 
     // Let-else form: s: MySome := val else { diverge-or-value }
     // Desugars to: when val { s: MySome { <remaining body> } else { <else-body> } }
@@ -817,12 +817,16 @@ done:;
 }
 
 int a_value(parser *self) {
+    int res;
     // Put funcall before type constructor, due to arity mangling
-    if (0 == a_try(self, a_funcall)) return 0;
-    if (0 == a_try(self, a_type_constructor)) return 0;
+    if (0 == (res = a_try(self, a_funcall))) return 0;
+    if (ERROR_STOP == res) return ERROR_STOP;
+    if (0 == (res = a_try(self, a_type_constructor))) return 0;
+    if (ERROR_STOP == res) return ERROR_STOP;
     if (0 == a_try(self, a_lambda_function)) return 0;
     if (0 == a_try(self, a_number)) return 0;
-    if (0 == a_try(self, a_string)) return 0;
+    if (0 == (res = a_try(self, a_string))) return 0;
+    if (ERROR_STOP == res) return ERROR_STOP;
     if (0 == a_try(self, a_char)) return 0;
     if (0 == a_try(self, a_bool)) return 0;
     if (0 == a_try(self, a_nil)) return 0;

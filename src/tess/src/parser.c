@@ -662,7 +662,7 @@ static int parse_format_spec(char const *s, tl_format_spec *out) {
     }
 
     // [type]
-    if (*p == 'x' || *p == 'X' || *p == 'o' || *p == 'b' || *p == 'e' || *p == 'E' || *p == 'f') {
+    if (*p == 'd' || *p == 'x' || *p == 'X' || *p == 'o' || *p == 'b' || *p == 'e' || *p == 'E' || *p == 'f') {
         out->type_char     = *p++;
         out->has_type_specific = 1;
     }
