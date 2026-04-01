@@ -329,5 +329,42 @@ _insert_entry[K: Eq, V](entries, capacity, key: K, value: V, hash: CSize) -> CSi
         self->_entries  = new_entries
         self->_capacity = new_capacity
     }
+}
 
+
+// -- Iterator interface --
+
+
+IterEntry[K, V]: {
+    key:   K,
+    value: V,
+}
+
+Iter[K, V]: {
+    data:     Ptr[_Entry[K, V]],
+    capacity: CSize,
+    index:    CSize,
+}
+
+iter_init (map) { Iter(data = map->_entries, capacity = map->_capacity, index = 0) }
+
+(iter: Ptr[Iter[K, V]]): {
+    // mutable iterator is over values only, not keys
+    iter_ptr () -> Ptr[V] { iter->data.[iter->index].value.& }
+
+    iter_value () -> IterEntry[K, V] {
+        entry_p := iter->data.[iter->index].&
+        IterEntry(key = entry_p->key, value = entry_p->value)
+    }
+
+    iter_cond () -> Bool {
+        // Skip unoccupied slots in the open-addressing table.
+        while iter->index < iter->capacity, iter->index += 1 {
+            if _is_occupied(iter->data.[iter->index].meta) { return true }
+        }
+        false
+    }
+
+    iter_update() -> Void { iter->index += 1 }
+    iter_deinit() -> Void {                  }
 }

@@ -626,6 +626,126 @@ test_default_eq() {
     error
 }
 
+test_iter() {
+    error := 0
+    m     := HashMap.create[Int, Int]()
+
+    m.set(1, 10)
+    m.set(2, 20)
+    m.set(3, 30)
+
+    // Iterate and collect all key-value pairs
+    count   := 0
+    key_sum := 0
+    val_sum := 0
+    for entry in m {
+        key_sum += entry.key
+        val_sum += entry.value
+        count += 1
+    }
+
+    if count != 3 { error += 1 }
+    if key_sum != 6 { error += 1 }      // 1+2+3
+    if val_sum != 60 { error += 1 }     // 10+20+30
+
+    m.destroy()
+    error
+}
+
+test_iter_empty() {
+    error := 0
+    m     := HashMap.create[Int, Int]()
+
+    count := 0
+    for entry in m {
+        count += 1
+    }
+    if count != 0 { error += 1 }
+
+    m.destroy()
+    error
+}
+
+test_iter_after_remove() {
+    error := 0
+    m     := HashMap.create[Int, Int]()
+
+    m.set(1, 10)
+    m.set(2, 20)
+    m.set(3, 30)
+    m.remove(2)
+
+    count   := 0
+    key_sum := 0
+    val_sum := 0
+    for entry in m {
+        key_sum += entry.key
+        val_sum += entry.value
+        count += 1
+    }
+
+    if count != 2 { error += 1 }
+    if key_sum != 4 { error += 1 }      // 1+3
+    if val_sum != 40 { error += 1 }     // 10+30
+
+    m.destroy()
+    error
+}
+
+test_iter_mut() {
+    error := 0
+    m     := HashMap.create[Int, Int]()
+
+    m.set(1, 10)
+    m.set(2, 20)
+    m.set(3, 30)
+
+    // Double every value via mutable iteration
+    for v.& in m {
+        v.* *= 2
+    }
+
+    // Verify values were mutated
+    p := m.get(1)
+    if p == null { error += 1 }
+    if p != null && p.* != 20 { error += 1 }
+
+    p = m.get(2)
+    if p == null { error += 1 }
+    if p != null && p.* != 40 { error += 1 }
+
+    p = m.get(3)
+    if p == null { error += 1 }
+    if p != null && p.* != 60 { error += 1 }
+
+    m.destroy()
+    error
+}
+
+test_iter_struct_values() {
+    error := 0
+    m     := HashMap.create[Int, Point]()
+
+    m.set(1, Point(x = 10, y = 20))
+    m.set(2, Point(x = 30, y = 40))
+
+    x_sum := 0
+    y_sum := 0
+    count := 0
+    for entry in m {
+        x_sum += entry.value.x
+        y_sum += entry.value.y
+        count += 1
+    }
+
+    if count != 2 { error += 1 }
+    if x_sum != 40 { error += 1 }       // 10+30
+    if y_sum != 60 { error += 1 }       // 20+40
+
+    m.destroy()
+    error
+}
+
 main() {
     error := 0
     error += test_create_destroy()
@@ -648,5 +768,10 @@ main() {
     error += test_keys_values_with_alloc()
     error += test_remove_then_grow()
     error += test_default_eq()
+    error += test_iter()
+    error += test_iter_empty()
+    error += test_iter_after_remove()
+    error += test_iter_mut()
+    error += test_iter_struct_values()
     error
 }

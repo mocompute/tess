@@ -791,11 +791,13 @@ static int has_error(tl_infer *self, tl_error_tag tag, ast_node const *node) {
 }
 
 int type_error(tl_infer *self, ast_node const *node) {
+    // Suppress duplicate errors
     if (has_error(self, tl_err_type_error, node)) return 1;
     array_push(self->errors, ((tl_infer_error){.tag = tl_err_type_error, .node = node}));
     return 1;
 }
 int unresolved_type_error(tl_infer *self, ast_node const *node) {
+    // Suppress duplicate errors
     if (has_error(self, tl_err_unresolved_type, node)) return 1;
     array_push(self->errors, ((tl_infer_error){.tag = tl_err_unresolved_type, .node = node}));
     return 1;
