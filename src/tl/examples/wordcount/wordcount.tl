@@ -121,6 +121,13 @@ print_line(c, show_lines, show_words, show_chars, show_unique) {
     println(f"  {c.path}")
 }
 
+report_error(path, error) {
+    when error {
+        nf: NotFound { fprintln(c_stderr, f"wc: {nf.path}: no such file or directory") }
+        pd: PermissionDenied { fprintln(c_stderr, f"wc: {pd.path}: permission denied") }
+        else { fprintln(c_stderr, f"wc: {path}: read error") }
+    }
+}
 
 // -- Entry point --
 
@@ -167,18 +174,8 @@ main(argc: CInt, argv: Ptr[CString]) {
         results.push(c)
     } else {
         for path in files {
-            when File.read_file(path) {
-                err: Err {
-                    when err.error {
-                        nf: NotFound { fprintln(c_stderr, f"wc: {nf.path}: no such file or directory") }
-                        pd: PermissionDenied { fprintln(c_stderr, f"wc: {pd.path}: permission denied") }
-                        else { fprintln(c_stderr, f"wc: {path}: read error") }
-                    }
-                }
-                ok: Ok {
-                    results.push(do_count(ok.value, path, show_unique, ignore_case))
-                }
-            }
+            ok: Ok := File.read_file(path) else err { report_error(path, err.error); continue }
+            results.push(do_count(ok.value, path, show_unique, ignore_case))
         }
     }
 
