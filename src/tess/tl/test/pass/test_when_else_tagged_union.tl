@@ -69,7 +69,7 @@ main() -> CInt {
 
     // errors should be 0 (FlagValue matched), value should be stored
     if errors != 0 { error += 1 }
-    if values.get(S(c"output")) == null { error += 1 }
+    if values.get(S(c"output")).or_else(null) == null { error += 1 }
 
     values.destroy()
     Array.free(specs.&)

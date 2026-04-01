@@ -29,7 +29,7 @@ main() -> CInt {
     if map_size(m) != 1zu { error += 1 }
     if map_size_qualified(m) != 1zu { error += 1 }
     if map_size(convert_map(m)) != 1zu { error += 1 }
-    p := m.get(1)
+    p := m.get(1).or_else(null)
     if p == null { error += 1 }
     else if p.* != 100 { error += 1 }
     m.destroy()

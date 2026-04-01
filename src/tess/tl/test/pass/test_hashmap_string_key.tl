@@ -37,7 +37,7 @@ test_str_key_basic() {
     if p != null && p.* != 30 { error += 1 }
 
     // Missing key
-    if m.get(String.from_cstr(c"bar")) != null { error += 1 }
+    if m.get(String.from_cstr(c"bar")).or_else(null) != null { error += 1 }
 
     m.destroy()
     error
@@ -52,7 +52,7 @@ test_str_key_overwrite() {
 
     if m.size() != 1zu { error += 1 }
 
-    p := m.get(String.from_cstr(c"key"))
+    p := m.get(String.from_cstr(c"key")).or_else(null)
     if p == null { error += 1 }
     if p != null && p.* != 200 { error += 1 }
 
@@ -85,7 +85,7 @@ test_str_key_empty_string() {
     m.set(String.from_cstr(c""), 42)
     if m.size() != 1zu { error += 1 }
 
-    p := m.get(String.from_cstr(c""))
+    p := m.get(String.from_cstr(c"")).or_else(null)
     if p == null { error += 1 }
     if p != null && p.* != 42 { error += 1 }
 
@@ -107,11 +107,11 @@ test_str_key_long_strings() {
 
     if m.size() != 2zu { error += 1 }
 
-    p := m.get(String.from_cstr(c"this is a long string key"))
+    p := m.get(String.from_cstr(c"this is a long string key")).or_else(null)
     if p == null { error += 1 }
     if p != null && p.* != 1 { error += 1 }
 
-    p = m.get(String.from_cstr(c"another lengthy key value"))
+    p = m.get(String.from_cstr(c"another lengthy key value")).or_else(null)
     if p == null { error += 1 }
     if p != null && p.* != 2 { error += 1 }
 
