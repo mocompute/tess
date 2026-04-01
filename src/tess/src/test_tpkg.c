@@ -2058,7 +2058,7 @@ static int test_e2e_c_export_header(void) {
 
     char so_path[512], hdr_path[512];
     snprintf(so_path, sizeof(so_path), "%slibtest" LIB_SUFFIX, dir);
-    snprintf(hdr_path, sizeof(hdr_path), "%slibtest.h", dir);
+    snprintf(hdr_path, sizeof(hdr_path), "%stest.h", dir);
 
     char cmd[2048];
     snprintf(cmd, sizeof(cmd),
@@ -2078,7 +2078,7 @@ static int test_e2e_c_export_header(void) {
     }
 
     // Verify include guard
-    if (!strstr(header, "#ifndef LIBTEST_H") || !strstr(header, "#define LIBTEST_H")) {
+    if (!strstr(header, "#ifndef TEST_H") || !strstr(header, "#define TEST_H")) {
         fprintf(stderr, "  header missing include guard\n");
         return 1;
     }
@@ -2128,7 +2128,7 @@ static int test_e2e_c_export_no_header_when_none(void) {
 
     char so_path[512], hdr_path[512];
     snprintf(so_path, sizeof(so_path), "%slibnoex" LIB_SUFFIX, dir);
-    snprintf(hdr_path, sizeof(hdr_path), "%slibnoex.h", dir);
+    snprintf(hdr_path, sizeof(hdr_path), "%snoex.h", dir);
 
     char cmd[2048];
     snprintf(cmd, sizeof(cmd),
@@ -2191,7 +2191,7 @@ static int test_e2e_c_export_static_lib(void) {
 
     char a_path[512], hdr_path[512];
     snprintf(a_path, sizeof(a_path), "%slibtest" STATICLIB_SUFFIX, dir);
-    snprintf(hdr_path, sizeof(hdr_path), "%slibtest.h", dir);
+    snprintf(hdr_path, sizeof(hdr_path), "%stest.h", dir);
 
     char cmd[2048];
     snprintf(cmd, sizeof(cmd),
@@ -2219,7 +2219,7 @@ static int test_e2e_c_export_static_lib(void) {
     }
 
     // Verify include guard
-    if (!strstr(header, "#ifndef LIBTEST_H") || !strstr(header, "#define LIBTEST_H")) {
+    if (!strstr(header, "#ifndef TEST_H") || !strstr(header, "#define TEST_H")) {
         fprintf(stderr, "  header missing include guard\n");
         return 1;
     }
@@ -2264,7 +2264,7 @@ static int test_e2e_c_export_static_lib(void) {
             snprintf(consumer_src, sizeof(consumer_src), "%smain.c", dir);
             snprintf(consumer_exe, sizeof(consumer_exe), "%smain" EXE_SUFFIX, dir);
 
-            if (write_file(consumer_src, "#include \"libtest.h\"\n"
+            if (write_file(consumer_src, "#include \"test.h\"\n"
                                          "#include <stdio.h>\n"
                                          "int main(void) {\n"
                                          "    tl_init_test();\n"

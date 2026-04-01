@@ -300,6 +300,35 @@ void state_gather_options(state *self, int argc, char *argv[]) {
     }
 }
 
+// Extract bare library name from an output path: "path/to/libfoo.so" -> "foo"
+static char const *lib_name_from_path(allocator *alloc, char const *path) {
+    char const *base = file_basename(path);
+    if (0 == strncmp(base, "lib", 3)) base += 3;
+    char const *dot = strrchr(base, '.');
+    u32         len = dot ? (u32)(dot - base) : (u32)strlen(base);
+    if (len == 0) return null;
+    char *result = alloc_malloc(alloc, len + 1);
+    memcpy(result, base, len);
+    result[len] = '\0';
+    return result;
+}
+
+// Build include guard from a bare library name: "foo" -> "FOO_H"
+static str lib_include_guard(allocator *alloc, char const *name) {
+    char guard[256];
+    u32  gi = 0;
+    for (u32 k = 0; name[k] && gi < sizeof guard - 3; k++) {
+        char c = name[k];
+        if (('a' <= c && c <= 'z') || ('A' <= c && c <= 'Z') || ('0' <= c && c <= '9'))
+            guard[gi++] = (char)((c >= 'a' && c <= 'z') ? c - 32 : c);
+        else guard[gi++] = '_';
+    }
+    guard[gi++] = '_';
+    guard[gi++] = 'H';
+    guard[gi]   = '\0';
+    return str_init(alloc, guard);
+}
+
 // Try to derive a default output path from package.tl.
 // Returns empty string if package.tl doesn't exist or can't be parsed.
 // mode: 0=exe, 1=lib (shared), 2=pack, 3=lib (static)
@@ -1416,16 +1445,7 @@ int compile(state *self) {
     // === TRANSPILATION PHASE ===
     hires_timer_start(&phase_timer);
 
-    // Derive library name from output path for namespaced tl_init
-    str lib_name = str_empty();
-    if (self->is_library && self->out_path) {
-        char const *base = file_basename(self->out_path);
-        // Strip "lib" prefix if present (libfoo.so -> foo)
-        if (0 == strncmp(base, "lib", 3)) base += 3;
-        char const *dot = strrchr(base, '.');
-        u32         len = dot ? (u32)(dot - base) : (u32)strlen(base);
-        if (len > 0) lib_name = str_init_n(self->arena, base, len);
-    }
+    str lib_name = self->lib_name ? str_init(self->arena, self->lib_name) : str_empty();
 
     transpile_opts transpile_opts = {
       .infer_result      = infer_result,
@@ -1463,24 +1483,7 @@ int compile(state *self) {
     if (self->is_library && self->out_path) {
         // Generate c_export header if there are any exported functions
         str_build header_build = {0};
-        // Derive guard name from package name (if available) or output path
-        char const *basename = self->lib_name ? self->lib_name : file_basename(self->out_path);
-        char        guard[256];
-        {
-            u32         gi  = 0;
-            char const *dot = strrchr(basename, '.');
-            u32         len = dot ? (u32)(dot - basename) : (u32)strlen(basename);
-            for (u32 k = 0; k < len && gi < sizeof guard - 3; k++) {
-                char c = basename[k];
-                if (('a' <= c && c <= 'z') || ('A' <= c && c <= 'Z') || ('0' <= c && c <= '9'))
-                    guard[gi++] = (char)((c >= 'a' && c <= 'z') ? c - 32 : c);
-                else guard[gi++] = '_';
-            }
-            guard[gi++] = '_';
-            guard[gi++] = 'H';
-            guard[gi]   = '\0';
-        }
-        str guard_str = str_init(self->arena, guard);
+        str guard_str = lib_include_guard(self->arena, str_cstr(&lib_name));
         if (transpile_generate_header(transpile, &header_build, guard_str)) {
             self->header = str_build_finish(&header_build);
         }
@@ -2642,6 +2645,9 @@ int main(int argc, char *argv[]) {
             self.out_path = str_cstr(&path);
             self.lib_name = str_cstr(&name);
         }
+        if (!self.lib_name) {
+            self.lib_name = lib_name_from_path(self.arena, self.out_path);
+        }
         if (self.verbose && self.is_static_library) {
             fprintf(stderr, "Static library mode\n");
         }
@@ -2653,28 +2659,8 @@ int main(int argc, char *argv[]) {
 
         // Write c_export header file if any exports were found
         if (!result && !str_is_empty(self.header)) {
-            // Derive header path: use package name if available, otherwise strip extension from out_path
             char header_path[4096];
-            if (self.lib_name) {
-                size_t name_len = strlen(self.lib_name);
-                if (name_len + 3 > sizeof header_path) {
-                    fprintf(stderr, "error: package name too long for header generation\n");
-                    result = 1;
-                    goto done;
-                }
-                snprintf(header_path, sizeof header_path, "%s.h", self.lib_name);
-            } else {
-                size_t out_len = strlen(self.out_path);
-                if (out_len + 3 > 4096) {
-                    fprintf(stderr, "error: output path too long for header generation\n");
-                    result = 1;
-                    goto done;
-                }
-                snprintf(header_path, sizeof header_path, "%s", self.out_path);
-                char *dot = strrchr(header_path, '.');
-                if (dot) *dot = '\0';
-                strncat(header_path, ".h", sizeof header_path - strlen(header_path) - 1);
-            }
+            snprintf(header_path, sizeof header_path, "%s.h", self.lib_name);
 
             FILE *hf = fopen(header_path, "w");
             if (!hf) {
