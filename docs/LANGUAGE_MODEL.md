@@ -287,6 +287,25 @@ When the else block produces a value, the overall variant binding expression eva
 that value if the match fails, and the continuation after the variant binding is not
 reached.
 
+For two-variant unions, the `else` arm can optionally **bind the other variant** by placing
+an identifier before the block. This gives access to the unmatched variant's fields without
+a nested `when`:
+
+```tl
+ok: Ok := do_something() else err { return err.error }
+// ok is bound to the Ok value, err was available in the else block
+
+if ok: Ok := result {
+    use(ok.value)
+} else err {
+    log(err.error)
+}
+```
+
+Else binding is restricted to two-variant unions because the compiler can unambiguously
+determine which variant the else arm receives. For unions with three or more variants,
+use `when` to match each variant explicitly.
+
 The variant binding replaces a common `when` (pattern match) idiom where you only care
 about one variant:
 

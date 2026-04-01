@@ -2365,6 +2365,15 @@ s: MySome := val else { 0 }
 // if val was MySome, s is bound and execution continues here
 ```
 
+**Else binding:** For two-variant unions, the `else` arm can optionally bind the other variant by placing an identifier before the block. This gives access to the unmatched variant's fields:
+
+```tl
+ok: Ok := result else err { return err.error }
+// ok is bound to the Ok variant for the rest of the scope
+```
+
+Else binding is restricted to two-variant unions (e.g., `Result`, `Option`). For unions with three or more variants, use `when` to match each variant explicitly.
+
 This avoids trapping the unwrapped value inside a `when` arm when subsequent code needs it:
 
 ```tl
@@ -2409,6 +2418,16 @@ if c: Circle := shape {
 }
 else {
     handle_other()
+}
+```
+
+For two-variant unions, the `else` clause can bind the other variant:
+
+```tl
+if ok: Ok := result {
+    use(ok.value)
+} else err {
+    log(err.error)
 }
 ```
 

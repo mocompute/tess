@@ -251,6 +251,12 @@ Use a **variant binding** when a single variant is expected and all others shoul
 s: Some := HashMap.get_copy(values, name) else { return 0 }
 ```
 
+For two-variant unions, the else arm can bind the other variant to access its fields:
+
+```tl
+ok: Ok := do_something() else err { return err.error }
+```
+
 ## Control Flow
 
 ### Keeping Code Flat
