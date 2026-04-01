@@ -2087,9 +2087,9 @@ The enclosing function's return type must be compatible — it must be the same 
 // These are equivalent:
 data := try parse(input)
 
-__tmp := parse(input)
-__ok: Ok := __tmp else { return __tmp }
-data := __ok.v
+tmp := parse(input)
+ok: Ok := tmp else { return tmp }
+data := ok.value
 ```
 
 ## Structs
