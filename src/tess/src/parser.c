@@ -212,7 +212,7 @@ int result_ast_str_(parser *p, ast_tag tag, str s) {
 
 int result_ast_node(parser *p, ast_node *node) {
     p->result = node;
-    if (!node->line) set_result_file(p);
+    if (!node->file || !*node->file) set_result_file(p);
     return 0;
 }
 
