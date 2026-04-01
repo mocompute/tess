@@ -336,6 +336,17 @@ static ast_node *create_ufcs_iter_call(parser *self, ast_node *receiver, const c
     return ast_node_create_binary_op(self->ast_arena, dot, receiver, nfa);
 }
 
+// Create a module-qualified iterator call: Module.method(arg).
+// The method name is arity-mangled and module-prefixed at parse time.
+static ast_node *create_module_iter_call(parser *self, str module_name,
+                                         const char *method_arity_mangled, ast_node *arg) {
+    ast_node_sized iter_args = {.size = 1, .v = alloc_malloc(self->ast_arena, sizeof(iter_args.v[0]))};
+    iter_args.v[0]           = arg;
+    ast_node *name           = ast_node_create_sym_c(self->ast_arena, method_arity_mangled);
+    mangle_name_for_module(self, name, module_name);
+    return ast_node_create_nfa(self->ast_arena, name, (ast_node_sized){0}, iter_args);
+}
+
 int a_for_statement(parser *self) {
     // The `for` statement is sugar over a while statement which uses a defined iterator interface. It has
     // four forms: with or without a Module specifier, and with or without a pointer specifier. The pointer
@@ -372,7 +383,7 @@ int a_for_statement(parser *self) {
     //
     //     iter := Module.iter_init(xs.&)
     //     while Module.iter_cond(iter.&), Module.iter_update(iter.&) {
-    //       x := Module.iter_value(iter.&)
+    //       x := Module.iter_value(iter.&)    // or Module.iter_ptr(iter.&) for the .& form
     //       ...
     //     }
     //     Module.iter_deinit(iter.&)
@@ -459,48 +470,12 @@ int a_for_statement(parser *self) {
         ast_node *iterator_address = ast_node_create_unary_op(self->ast_arena, address_of, iterator);
         ast_node *iterable_address = ast_node_create_unary_op(self->ast_arena, address_of, iterable);
 
-        {
-            ast_node_sized iter_args = {.size = 1, .v = alloc_malloc(self->ast_arena, sizeof(iter_args.v[0]))};
-            iter_args.v[0]           = iterable_address;
-            ast_node *name           = ast_node_create_sym_c(self->ast_arena, "iter_init__1");
-            mangle_name_for_module(self, name, module_name);
-            call_iter_init = ast_node_create_nfa(self->ast_arena, name, (ast_node_sized){0}, iter_args);
-        }
-        {
-            ast_node_sized iter_args = {.size = 1, .v = alloc_malloc(self->ast_arena, sizeof(iter_args.v[0]))};
-            iter_args.v[0]           = iterator_address;
-            ast_node *name           = ast_node_create_sym_c(self->ast_arena, "iter_value__1");
-            mangle_name_for_module(self, name, module_name);
-            call_iter_value = ast_node_create_nfa(self->ast_arena, name, (ast_node_sized){0}, iter_args);
-        }
-        {
-            ast_node_sized iter_args = {.size = 1, .v = alloc_malloc(self->ast_arena, sizeof(iter_args.v[0]))};
-            iter_args.v[0]           = iterator_address;
-            ast_node *name           = ast_node_create_sym_c(self->ast_arena, "iter_ptr__1");
-            mangle_name_for_module(self, name, module_name);
-            call_iter_ptr = ast_node_create_nfa(self->ast_arena, name, (ast_node_sized){0}, iter_args);
-        }
-        {
-            ast_node_sized iter_args = {.size = 1, .v = alloc_malloc(self->ast_arena, sizeof(iter_args.v[0]))};
-            iter_args.v[0]           = iterator_address;
-            ast_node *name           = ast_node_create_sym_c(self->ast_arena, "iter_cond__1");
-            mangle_name_for_module(self, name, module_name);
-            call_iter_cond = ast_node_create_nfa(self->ast_arena, name, (ast_node_sized){0}, iter_args);
-        }
-        {
-            ast_node_sized iter_args = {.size = 1, .v = alloc_malloc(self->ast_arena, sizeof(iter_args.v[0]))};
-            iter_args.v[0]           = iterator_address;
-            ast_node *name           = ast_node_create_sym_c(self->ast_arena, "iter_update__1");
-            mangle_name_for_module(self, name, module_name);
-            call_iter_update = ast_node_create_nfa(self->ast_arena, name, (ast_node_sized){0}, iter_args);
-        }
-        {
-            ast_node_sized iter_args = {.size = 1, .v = alloc_malloc(self->ast_arena, sizeof(iter_args.v[0]))};
-            iter_args.v[0]           = iterator_address;
-            ast_node *name           = ast_node_create_sym_c(self->ast_arena, "iter_deinit__1");
-            mangle_name_for_module(self, name, module_name);
-            call_iter_deinit = ast_node_create_nfa(self->ast_arena, name, (ast_node_sized){0}, iter_args);
-        }
+        call_iter_init   = create_module_iter_call(self, module_name, "iter_init__1",   iterable_address);
+        call_iter_value  = create_module_iter_call(self, module_name, "iter_value__1",  iterator_address);
+        call_iter_ptr    = create_module_iter_call(self, module_name, "iter_ptr__1",    iterator_address);
+        call_iter_cond   = create_module_iter_call(self, module_name, "iter_cond__1",   iterator_address);
+        call_iter_update = create_module_iter_call(self, module_name, "iter_update__1", iterator_address);
+        call_iter_deinit = create_module_iter_call(self, module_name, "iter_deinit__1", iterator_address);
     } else {
         // UFCS path: emit dot-call nodes. The module is inferred from the receiver's type during
         // type inference. UFCS handles arity mangling and auto-address-of (Ptr[T] coercion).
@@ -544,7 +519,6 @@ int a_for_statement(parser *self) {
     ast_node *rhs                        = call_iter_init;
     ast_node *let_iter_init = ast_node_create_let_in(self->ast_arena, lhs, rhs, while_statement_exprs_body);
 
-    // The resulting node is a let-in:
     return result_ast_node(self, let_iter_init);
 }
 
