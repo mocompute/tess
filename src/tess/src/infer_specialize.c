@@ -2417,8 +2417,8 @@ int add_generic(tl_infer *self, ast_node *node) {
     ast_function_view fv = ast_function_view_from(node);
     if (fv.node) {
         // Unified path for named functions (ast_let) and lambda bindings (ast_let_in_lambda)
+        ast_node_sized params = {.v = fv.parameters, .size = fv.n_parameters};
         if (!provisional) {
-            ast_node_sized params = {.v = fv.parameters, .size = fv.n_parameters};
             if (!fv.is_lambda && is_main_function(name)) {
                 provisional = make_arrow_result_type(self, null, params,
                                                      tl_type_registry_get(self->registry, S("CInt")), 1);
@@ -2428,8 +2428,7 @@ int add_generic(tl_infer *self, ast_node *node) {
         }
 
         if (fv.is_lambda) {
-            tl_polytype *node_arrow = make_arrow(self, null, ast_node_sized_from_ast_array(infer_target),
-                                                 node->let_in.value->lambda_function.body, 1);
+            tl_polytype *node_arrow = make_arrow(self, null, params, fv.body, 1);
             if (provisional && node_arrow)
                 constrain(self, provisional, node_arrow, node, TL_UNIFY_SYMMETRIC);
             provisional = node_arrow;
