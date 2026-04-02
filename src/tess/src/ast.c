@@ -830,7 +830,31 @@ ast_node *ast_arguments_next(ast_arguments_iter *iter) {
 ast_node *ast_node_body(ast_node *self) {
     if (ast_node_is_let(self)) return self->let.body;
     else if (ast_node_is_let_in_lambda(self)) return self->let_in.value->lambda_function.body;
+    else if (ast_node_is_lambda_function(self)) return self->lambda_function.body;
     else return null;
+}
+
+ast_function_view ast_function_view_from(ast_node *node) {
+    ast_function_view v = {0};
+    if (ast_node_is_let(node)) {
+        v.node         = node;
+        v.name_node    = node->let.name;
+        v.parameters   = node->let.parameters;
+        v.n_parameters = node->let.n_parameters;
+        v.body         = node->let.body;
+        v.attributes   = NULL;
+        v.is_lambda    = 0;
+    } else if (ast_node_is_let_in_lambda(node)) {
+        ast_node *lf   = node->let_in.value;
+        v.node         = node;
+        v.name_node    = node->let_in.name;
+        v.parameters   = lf->lambda_function.parameters;
+        v.n_parameters = lf->lambda_function.n_parameters;
+        v.body         = lf->lambda_function.body;
+        v.attributes   = lf->lambda_function.attributes;
+        v.is_lambda    = 1;
+    }
+    return v;
 }
 
 //

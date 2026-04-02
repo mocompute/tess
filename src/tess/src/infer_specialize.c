@@ -798,32 +798,22 @@ static int specialize_user_type(tl_infer *self, traverse_ctx *traverse_ctx, ast_
 }
 
 ast_node *get_infer_target(ast_node *node) {
-    if (ast_node_is_let(node) || ast_node_is_lambda_function(node)) {
-        return node;
-    }
-
-    else if (ast_node_is_let_in(node)) {
-        return node->let_in.value;
-    }
-
-    else if (ast_node_is_symbol(node)) {
-        return null;
-    }
-
-    return null;
+    ast_function_view fv = ast_function_view_from(node);
+    if (fv.node) return fv.is_lambda ? node->let_in.value : node;
+    if (ast_node_is_lambda_function(node)) return node;      // bare lambda (e.g. from clone)
+    if (ast_node_is_let_in(node)) return node->let_in.value; // non-lambda let-in
+    return null;                                             // symbol, etc.
 }
 
 int  specialize_applications_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_node *node);
 
 void toplevel_name_replace(ast_node *node, str name_replace) {
-    if (ast_node_is_let(node)) {
-        ast_node_name_replace(node->let.name, name_replace);
-        ast_node_set_is_specialized(node);
-    } else if (ast_node_is_let_in_lambda(node)) {
-        ast_node_name_replace(node->let_in.name, name_replace);
+    ast_function_view fv = ast_function_view_from(node);
+    if (fv.node) {
+        ast_node_name_replace(fv.name_node, name_replace);
+        if (!fv.is_lambda) ast_node_set_is_specialized(node);
     } else if (ast_node_is_symbol(node)) {
-        // no body
-        ;
+        // no body — nothing to rename
     } else {
         fatal("logic error");
     }
@@ -935,14 +925,14 @@ static ast_node *maybe_wrap_address_of(tl_infer *self, ast_node *arg, tl_monotyp
     if (tl_monotype_is_ptr(arg_type)) return arg;
     if (tl_monotype_is_carray(arg_type)) return arg; // CArray decays to pointer on its own
 
-    ast_node *amp  = ast_node_create_sym_c(self->arena, "&");
-    ast_node *addr = ast_node_create_unary_op(self->arena, amp, arg);
-    addr->file     = arg->file;
-    addr->line     = arg->line;
-    addr->col      = arg->col;
+    ast_node *amp         = ast_node_create_sym_c(self->arena, "&");
+    ast_node *addr        = ast_node_create_unary_op(self->arena, amp, arg);
+    addr->file            = arg->file;
+    addr->line            = arg->line;
+    addr->col             = arg->col;
     tl_monotype *ptr_type = tl_type_registry_ptr(self->registry, arg_type);
-    amp->type  = tl_polytype_absorb_mono(self->arena, ptr_type);
-    addr->type = tl_polytype_absorb_mono(self->arena, ptr_type);
+    amp->type             = tl_polytype_absorb_mono(self->arena, ptr_type);
+    addr->type            = tl_polytype_absorb_mono(self->arena, ptr_type);
     return addr;
 }
 
@@ -1113,10 +1103,10 @@ static void rewrite_operator_overloads(void *ctx, ast_node *node) {
         if (str_is_empty(full_name)) return;
 
         // Capture fields before overwriting the union.
-        ast_node  *value = node->assignment.value;
-        ast_node **args  = alloc_malloc(self->arena, 2 * sizeof(ast_node *));
-        args[0]          = lhs;
-        args[1]          = value;
+        ast_node  *value              = node->assignment.value;
+        ast_node **args               = alloc_malloc(self->arena, 2 * sizeof(ast_node *));
+        args[0]                       = lhs;
+        args[1]                       = value;
 
         tl_monotype_sized param_types = get_func_param_types(self, full_name);
         if (param_types.size >= 2) {
@@ -1152,12 +1142,11 @@ static void rewrite_operator_overloads(void *ctx, ast_node *node) {
         str full_name = find_overload_func(self, operand_type, func_name, 1);
         if (str_is_empty(full_name)) return;
 
-        ast_node **args = alloc_malloc(self->arena, sizeof(ast_node *));
-        args[0]         = operand;
+        ast_node **args               = alloc_malloc(self->arena, sizeof(ast_node *));
+        args[0]                       = operand;
 
         tl_monotype_sized param_types = get_func_param_types(self, full_name);
-        if (param_types.size >= 1)
-            args[0] = maybe_wrap_address_of(self, args[0], param_types.v[0]);
+        if (param_types.size >= 1) args[0] = maybe_wrap_address_of(self, args[0], param_types.v[0]);
 
         rewrite_op_to_nfa(self, node, full_name, args, 1);
     }
@@ -1340,9 +1329,9 @@ static int check_trait_arrow(tl_infer *self, ast_node *toplevel, tl_monotype *co
     if (tl_monotype_hash64(expected_arrow) != tl_monotype_hash64(actual_resolved)) {
         // Auto-address-of fallback: accept Ptr[T] or Ptr[Const[T]] params
         // where expected has T, with matching return type.
-        int compatible = 0;
-        tl_monotype_sized ap = tl_monotype_arrow_get_args(actual_resolved);
-        tl_monotype_sized ep = tl_monotype_arrow_get_args(expected_arrow);
+        int               compatible = 0;
+        tl_monotype_sized ap         = tl_monotype_arrow_get_args(actual_resolved);
+        tl_monotype_sized ep         = tl_monotype_arrow_get_args(expected_arrow);
         if (ap.size == ep.size) {
             compatible = 1;
             for (u32 j = 0; j < ap.size; j++) {
@@ -1659,7 +1648,9 @@ static int specialize_operand(tl_infer *self, traverse_ctx *traverse_ctx, ast_no
     // TODO: function pointers with callsite type arguments
     str inst_name =
       specialize_arrow(self, traverse_ctx, value_name, value_type->type, (tl_monotype_sized){0});
-    if (str_is_empty(inst_name)) return 0; // FIXME: ignores error
+    // Empty means either no toplevel found (benign: C binding) or trait bound failure
+    // (already reported in self->errors). Either way, keep the original name.
+    if (str_is_empty(inst_name)) return 0;
     ast_node_name_replace(node, inst_name);
     return 0;
 }
@@ -1679,10 +1670,8 @@ static int specialize_let_in_lambda_from_body(tl_infer *self, traverse_ctx *trav
 
     if (!str_is_empty(inst_name)) {
         ast_node_name_replace(node->let_in.name, inst_name);
-        // Also update the body symbol to reference the specialized name.
-        // The body may be a plain symbol or an ast_body wrapping expressions.
-        // FIXME: this is a ridiculous special case that only fixes the test
-        // test_alloc_closure_no_captures.tl
+        // The let-in body is a synthetic wrapper (from maybe_wrap_lambda_function_in_let_in)
+        // that just references the lambda name. Update it to match the specialized name.
         ast_node *body_sym = node->let_in.body;
         if (ast_node_is_body(body_sym) && body_sym->body.expressions.size > 0)
             body_sym = body_sym->body.expressions.v[body_sym->body.expressions.size - 1];
@@ -1744,8 +1733,8 @@ static int specialize_let_in(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
         if (ast_node_is_let_in_lambda(node)) {
             // Annotated lambdas: the annotation provides a concrete-enough arrow
             // (after the add_generic fix connects param TVs).  Route to lookup.
-            if (node->let_in.value->lambda_function.annotation &&
-                name_type && tl_monotype_is_arrow(name_type->type))
+            if (node->let_in.value->lambda_function.annotation && name_type &&
+                tl_monotype_is_arrow(name_type->type))
                 return specialize_let_in_lambda_lookup(self, node, name_type);
             return specialize_let_in_lambda_from_body(self, traverse_ctx, node);
         }
@@ -1774,8 +1763,7 @@ static str specialize_variant_binding(tl_infer *self, ast_node *binding, tl_mono
     if (str_is_empty(inst_name) || !special_type) return str_empty();
 
     if (tl_monotype_is_ptr(variant_type)) {
-        tl_monotype *new_ptr =
-          tl_type_registry_ptr(self->registry, tl_polytype_concrete(special_type));
+        tl_monotype *new_ptr = tl_type_registry_ptr(self->registry, tl_polytype_concrete(special_type));
         binding->symbol.annotation_type = tl_polytype_absorb_mono(self->arena, new_ptr);
     } else {
         binding->symbol.annotation_type = special_type;
@@ -1860,7 +1848,8 @@ static int specialize_case(tl_infer *self, traverse_ctx *traverse_ctx, ast_node 
                             if (ast_node_is_symbol(cond) && cond->symbol.annotation)
                                 primary_name = ast_node_name_original(cond->symbol.annotation);
                         }
-                        tl_monotype *concrete_other = tagged_union_other_variant(expr_type, primary_name, null);
+                        tl_monotype *concrete_other =
+                          tagged_union_other_variant(expr_type, primary_name, null);
                         if (concrete_other && tl_monotype_is_inst(concrete_other)) {
                             generic_name = concrete_other->cons_inst->def->generic_name;
                             args         = concrete_other->cons_inst->args;
@@ -1868,8 +1857,8 @@ static int specialize_case(tl_infer *self, traverse_ctx *traverse_ctx, ast_node 
                     }
                 }
 
-                specialize_variant_binding(self, node->case_.else_binding, variant_type,
-                                           generic_name, args);
+                specialize_variant_binding(self, node->case_.else_binding, variant_type, generic_name,
+                                           args);
             }
         }
 
@@ -1880,7 +1869,8 @@ static int specialize_case(tl_infer *self, traverse_ctx *traverse_ctx, ast_node 
     if (!node->case_.binary_predicate) return 0;
 
     ast_node *predicate = node->case_.binary_predicate;
-    if (!ast_node_is_symbol(predicate)) return 0; // FIXME: what about lambdas?
+    // Lambda predicates are inline expressions, already monomorphic — no specialization needed.
+    if (!ast_node_is_symbol(predicate)) return 0;
     if (!node->case_.conditions.size) return 0;
 
     tl_polytype *pred_arrow =
@@ -1890,7 +1880,8 @@ static int specialize_case(tl_infer *self, traverse_ctx *traverse_ctx, ast_node 
     str inst_name =
       specialize_arrow(self, traverse_ctx, predicate_name, pred_arrow->type, (tl_monotype_sized){0});
 
-    if (str_is_empty(inst_name)) return 0; // FIXME: ignores error
+    // Empty means no toplevel found or trait bound failure (already reported).
+    if (str_is_empty(inst_name)) return 0;
     ast_node_name_replace(predicate, inst_name);
 
     return 0;
@@ -2242,8 +2233,8 @@ int specialize_applications_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_n
                             node->named_application.variadic_trait_fn = sig->name;
 
                             // Allocate format dispatch flags if format specs are present.
-                            tl_fstring_format *ffmt = node->named_application.fstring_fmt;
-                            tl_format_spec *fspecs  = ffmt ? ffmt->specs : null;
+                            tl_fstring_format *ffmt   = node->named_application.fstring_fmt;
+                            tl_format_spec    *fspecs = ffmt ? ffmt->specs : null;
 
                             // Look up FormatSpec type once (used by both per-arg and layout paths).
                             tl_monotype *fs_type = null;
@@ -2264,8 +2255,8 @@ int specialize_applications_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_n
                                 // Check if this argument has a type-specific format spec.
                                 int has_fmt_spec = fspecs && fspecs[n_fixed + vi].has_type_specific;
 
-                                str impl = str_empty();
-                                int use_format = 0;
+                                str impl         = str_empty();
+                                int use_format   = 0;
 
                                 // Two-phase lookup: try to_string_format first if format spec present.
                                 if (has_fmt_spec && arg_type && tl_monotype_is_inst(arg_type)) {
@@ -2274,24 +2265,27 @@ int specialize_applications_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_n
                                         use_format = 1;
                                     } else {
                                         // Type-specific spec but no ToStringFormat impl — error.
-                                        str type_str = tl_monotype_to_user_string(self->transient, arg_type);
+                                        str type_str =
+                                          tl_monotype_to_user_string(self->transient, arg_type);
                                         str msg = str_fmt(self->arena,
-                                            "format specifier requires ToStringFormat trait, "
-                                            "not implemented for type %s", str_cstr(&type_str));
-                                        array_push(self->errors,
-                                            ((tl_infer_error){.tag  = tl_err_trait_bound_not_satisfied,
-                                                              .node = arg, .message = msg}));
+                                                          "format specifier requires ToStringFormat trait, "
+                                                          "not implemented for type %s",
+                                                          str_cstr(&type_str));
+                                        array_push(self->errors, ((tl_infer_error){
+                                                                   .tag  = tl_err_trait_bound_not_satisfied,
+                                                                   .node = arg,
+                                                                   .message = msg}));
                                     }
                                 }
 
                                 // Fall back to regular to_string.
                                 if (str_is_empty(impl) && arg_type && tl_monotype_is_inst(arg_type))
-                                    impl = find_overload_func(self, arg_type, str_cstr(&sig->name),
-                                                              sig->arity);
+                                    impl =
+                                      find_overload_func(self, arg_type, str_cstr(&sig->name), sig->arity);
 
                                 // Build callsite arrow and specialize.
                                 if (!str_is_empty(impl)) {
-                                    u32 arity = use_format && fs_type ? 2 : 1;
+                                    u32           arity = use_format && fs_type ? 2 : 1;
                                     tl_monotype **param_vs =
                                       alloc_malloc(self->arena, arity * sizeof(tl_monotype *));
                                     param_vs[0] = arg_type;
@@ -2302,36 +2296,34 @@ int specialize_applications_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_n
                                       tl_type_registry_create_arrow(self->registry, ptup, elem_type);
                                     str spec = specialize_arrow(self, traverse_ctx, impl, va_arrow,
                                                                 (tl_monotype_sized){0});
-                                    impl = str_is_empty(spec) ? impl : spec;
+                                    impl     = str_is_empty(spec) ? impl : spec;
                                 }
                                 node->named_application.variadic_impl_fns[vi] = impl;
-                                if (ffmt && use_format)
-                                    ffmt->uses_format[vi] = 1;
+                                if (ffmt && use_format) ffmt->uses_format[vi] = 1;
                             }
 
                             // Pre-specialize FormatSpec.apply_layout if any arg has layout specs.
                             if (fspecs) {
                                 int needs_layout = 0;
                                 for (u32 vi = 0; vi < n_va && !needs_layout; vi++) {
-                                    if (tl_format_spec_has_any(&fspecs[n_fixed + vi]))
-                                        needs_layout = 1;
+                                    if (tl_format_spec_has_any(&fspecs[n_fixed + vi])) needs_layout = 1;
                                 }
                                 if (needs_layout && fs_type) {
                                     specialize_type_constructor(self, S("FormatSpec"),
-                                        (tl_monotype_sized){0}, null);
+                                                                (tl_monotype_sized){0}, null);
                                     if (elem_type) {
                                         // Arrow: (String, FormatSpec) -> String
                                         tl_monotype **lp =
                                           alloc_malloc(self->arena, 2 * sizeof(tl_monotype *));
-                                        lp[0] = elem_type;
-                                        lp[1] = fs_type;
+                                        lp[0]             = elem_type;
+                                        lp[1]             = fs_type;
                                         tl_monotype *ptup = tl_monotype_create_tuple(
                                           self->arena, (tl_monotype_sized){.v = lp, .size = 2});
                                         tl_monotype *layout_arrow =
                                           tl_type_registry_create_arrow(self->registry, ptup, elem_type);
                                         str base = S("FormatSpec__apply_layout__2");
-                                        str spec = specialize_arrow(self, traverse_ctx, base,
-                                                                    layout_arrow, (tl_monotype_sized){0});
+                                        str spec = specialize_arrow(self, traverse_ctx, base, layout_arrow,
+                                                                    (tl_monotype_sized){0});
                                         ffmt->layout_fn = str_is_empty(spec) ? base : spec;
                                     }
                                 }
@@ -2393,9 +2385,7 @@ static int infer_one(tl_infer *self, ast_node *infer_target, tl_polytype *arrow)
     // constrain arrow result type and infer target's type
     if (arrow) {
         if (tl_polytype_is_scheme(arrow)) fatal("logic error");
-        ast_node *body = null;
-        if (ast_node_is_let(infer_target)) body = infer_target->let.body;
-        else if (ast_node_is_lambda_function(infer_target)) body = infer_target->lambda_function.body;
+        ast_node *body = ast_node_body(infer_target);
         if (!body) fatal("logic error");
 
         tl_polytype wrap_result = tl_polytype_wrap(tl_monotype_arrow_result(arrow->type));
@@ -2424,26 +2414,26 @@ int add_generic(tl_infer *self, ast_node *node) {
     tl_infer_set_attributes(self, name_node);
 
     // calculate provisional type, for recursive functions
-    if (ast_node_is_let(node)) {
+    ast_function_view fv = ast_function_view_from(node);
+    if (fv.node) {
+        // Unified path for named functions (ast_let) and lambda bindings (ast_let_in_lambda)
         if (!provisional) {
-            // Note: special case: force main() to have a CInt result type
-            if (is_main_function(name)) {
-                provisional = make_arrow_result_type(self, null, ast_node_sized_from_ast_array(node),
+            ast_node_sized params = {.v = fv.parameters, .size = fv.n_parameters};
+            if (!fv.is_lambda && is_main_function(name)) {
+                provisional = make_arrow_result_type(self, null, params,
                                                      tl_type_registry_get(self->registry, S("CInt")), 1);
-            }
-
-            else {
-                provisional =
-                  make_arrow(self, null, ast_node_sized_from_ast_array(node), node->let.body, 1);
+            } else {
+                provisional = make_arrow(self, null, params, fv.body, 1);
             }
         }
-    } else if (ast_node_is_let_in_lambda(node)) {
-        tl_polytype *node_arrow = make_arrow(self, null,
-            ast_node_sized_from_ast_array(infer_target),
-            node->let_in.value->lambda_function.body, 1);
-        if (provisional && node_arrow)
-            constrain(self, provisional, node_arrow, node, TL_UNIFY_SYMMETRIC);
-        provisional = node_arrow;
+
+        if (fv.is_lambda) {
+            tl_polytype *node_arrow = make_arrow(self, null, ast_node_sized_from_ast_array(infer_target),
+                                                 node->let_in.value->lambda_function.body, 1);
+            if (provisional && node_arrow)
+                constrain(self, provisional, node_arrow, node, TL_UNIFY_SYMMETRIC);
+            provisional = node_arrow;
+        }
     } else if (ast_node_is_symbol(node)) {
         // toplevel symbol node, e.g. for declaration of intrinsics, or forward type annotations. They will
         // take precedence to any later declarations, so let's be careful

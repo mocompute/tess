@@ -2121,6 +2121,15 @@ static int infer_case(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
     return 0;
 }
 
+// Clone a let-in lambda (without its body) into the toplevels map so the transpiler
+// can generate it as a toplevel C function.
+static void promote_lambda_to_toplevel(tl_infer *self, ast_node *node) {
+    str       name  = ast_node_str(node->let_in.name);
+    ast_node *clone = ast_node_clone(self->arena, node);
+    clone->let_in.body = null;
+    toplevel_add(self, name, clone);
+}
+
 static int infer_let_in(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
     if (resolve_node(self, node->let_in.name, ctx, npos_formal_parameter)) return 1;
     if (resolve_node(self, node->let_in.value, ctx, npos_value_rhs)) return 1;
@@ -2129,8 +2138,6 @@ static int infer_let_in(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
     if (node->let_in.body) ensure_tv(self, &node->let_in.body->type);
 
     if (ast_node_is_lambda_function(node->let_in.value)) {
-        str name = node->let_in.name->symbol.name;
-
         if (add_generic(self, node)) return 1;
 
         node->let_in.name->type = null;
@@ -2138,11 +2145,7 @@ static int infer_let_in(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
         if (node->let_in.body)
             if (constrain(self, node->type, node->let_in.body->type, node, TL_UNIFY_SYMMETRIC)) return 1;
 
-        {
-            ast_node *let_in_lambda    = ast_node_clone(self->arena, node);
-            let_in_lambda->let_in.body = null;
-            toplevel_add(self, name, let_in_lambda);
-        }
+        promote_lambda_to_toplevel(self, node);
 
     } else {
         if (is_std_function(node->let_in.value)) {

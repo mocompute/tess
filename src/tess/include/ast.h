@@ -368,6 +368,22 @@ ast_node          *ast_arguments_next(ast_arguments_iter *); // recognises nil a
 
 ast_node          *ast_node_body(ast_node *); // body of let or let in lambda.
 
+// -- function view: uniform access to ast_let and ast_let_in_lambda --
+
+typedef struct {
+    ast_node  *node;         // original node (ast_let or ast_let_in wrapping lambda)
+    ast_node  *name_node;    // symbol holding the function name
+    ast_node **parameters;   // formal parameter array
+    u8         n_parameters;
+    ast_node  *body;         // function body
+    ast_node  *attributes;   // lambda attrs (from ast_lambda_function) or NULL for named fns
+    int        is_lambda;    // 1 if lambda binding, 0 if named function
+} ast_function_view;
+
+// Returns a valid view for ast_let and ast_let_in_lambda nodes.
+// Returns a zeroed view (node == NULL) for anything else.
+ast_function_view  ast_function_view_from(ast_node *);
+
 // -- utilities --
 
 str            v2_ast_node_to_string(allocator *, ast_node const *);
