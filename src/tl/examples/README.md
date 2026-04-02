@@ -14,3 +14,5 @@ can be compiled with `tess exe` or run directly with `tess run`.
 | [c_export_basic](c_export_basic/)                 | Minimal C interop: a math library built with `tess lib` and called from C via a Makefile |
 | [c_export_package_basic](c_export_package_basic/) | Same math library using `package.tl` and a named `MathLib` module                        |
 | [c_project_with_tess](c_project_with_tess/)       | Adding a Tess library to an existing C project with a top-level Makefile                 |
+| [c_import_basic](c_import_basic/)                 | Importing a C library into Tess using `tess cbind` and `tess c`                          |
+| [tess_project_with_c](tess_project_with_c/)       | A Tess project that incorporates a C library from a subdirectory                         |
