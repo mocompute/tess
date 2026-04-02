@@ -40,6 +40,7 @@ typedef struct {
 
     str               cc;
     str_sized         cflags;
+    str_sized         ldflags;
     import_resolver  *resolver;
     str_array         defines;
 
@@ -70,7 +71,8 @@ typedef struct {
     int               is_static_library;
     int               is_executable;
     int               is_check;
-    int               needs_pthread;
+
+    str_sized         link_libs; // from #link directives (populated after compile)
 
     int               dashdash_at; // index in words where '--' args begin; -1 if not set
 
@@ -166,6 +168,9 @@ noreturn void usage(int status, char const *argv0) {
     printf("    CC                     command to invoke C compiler (default cc)\n");
     printf("    CFLAGS                 flags provided to the C compiler: If CFLAGS is set,\n");
     printf("                           it overrides optimization level (include -O2 if you want it).\n");
+    printf("    LDFLAGS                flags passed to the linker (e.g., -L/usr/local/lib)\n");
+    printf("\nSource directives:\n");
+    printf("    #link <libname>        link against a C library (e.g., #link m for libm)\n");
 
     exit(status);
 }
@@ -204,7 +209,6 @@ void state_init(state *self) {
     self->is_library             = 0;
     self->is_static_library      = 0;
     self->is_executable          = 0;
-    self->needs_pthread          = 0;
     self->dashdash_at            = -1;
     self->stdin_data             = null;
     self->stdin_size             = 0;
@@ -1085,6 +1089,15 @@ static void get_c_compiler(state *self) {
     } else {
         self->cflags = (str_sized){0};
     }
+
+    char const *LDFLAGS = getenv("LDFLAGS");
+
+    if (LDFLAGS) {
+        str       ldflags = str_init(self->arena, LDFLAGS);
+        str_array arr     = {.alloc = self->arena};
+        str_parse_words(ldflags, &arr);
+        self->ldflags = (str_sized)array_sized(arr);
+    }
 }
 
 // Query the C compiler for predefined macros and add them to the defines list.
@@ -1302,11 +1315,6 @@ int compile(state *self) {
 
     str_sized     ordered_files = files_in_order(self, paths, (str_sized)array_sized(pkg_files));
 
-    // Detect threading library usage for -lpthread linking
-#ifndef MOS_WINDOWS
-    self->needs_pthread = str_map_contains(self->scanner.modules_seen, S("ThreadError"));
-#endif
-
     // Add current package's modules to the prefix map
     if (!str_is_empty(cur_pkg_name) && !str_is_empty(cur_pkg_version)) {
         if (!module_prefixes) {
@@ -1490,6 +1498,16 @@ int compile(state *self) {
     if (self->is_executable || self->is_library) {
         // Save program and return to caller
         self->program = program;
+
+        // Copy link_libs to state arena (infer arena will be freed at cleanup_ti)
+        if (infer_result.link_libs.size > 0) {
+            str *copied = alloc_malloc(self->arena, infer_result.link_libs.size * sizeof(str));
+            for (u32 i = 0; i < infer_result.link_libs.size; i++) {
+                copied[i] = str_copy(self->arena, infer_result.link_libs.v[i]);
+            }
+            self->link_libs = (str_sized){.v = copied, .size = infer_result.link_libs.size};
+        }
+
         goto done;
     } else {
         // output C source code
@@ -1585,7 +1603,8 @@ static c_string_array build_gcc_argv(state *self, char const **extra_flags, int 
     char const    *cc   = str_cstr(&self->cc);
 
     c_string_array argv = {.alloc = self->arena};
-    array_reserve(argv, self->cflags.size + extra_flags_count + 16);
+    array_reserve(argv, self->cflags.size + self->link_libs.size + self->ldflags.size
+                       + extra_flags_count + 16);
     array_push(argv, cc);
 
     // clang-format off
@@ -1614,12 +1633,18 @@ static c_string_array build_gcc_argv(state *self, char const **extra_flags, int 
         // clang-format on
     }
 
-#ifndef MOS_WINDOWS
-    if (self->needs_pthread) {
-        char const *_t = "-lpthread";
-        array_push(argv, _t);
+    // Append #link libraries (must come after source/object files for the linker)
+    forall(i, self->link_libs) {
+        str         flag = str_cat(self->arena, S("-l"), self->link_libs.v[i]);
+        char const *cstr = str_cstr(&flag);
+        array_push(argv, cstr);
     }
-#endif
+
+    // Append LDFLAGS
+    forall(i, self->ldflags) {
+        char const *cstr = str_cstr(&self->ldflags.v[i]);
+        array_push(argv, cstr);
+    }
 
     {
         char const *_t = null;
@@ -1640,7 +1665,8 @@ static c_string_array build_msvc_argv(state *self, char const **msvc_extra_flags
                                       int msvc_extra_flags_count, char const *c_file,
                                       char const *obj_file) {
     c_string_array argv = {.alloc = self->arena};
-    array_reserve(argv, self->cflags.size + msvc_extra_flags_count + 16);
+    array_reserve(argv, self->cflags.size + self->link_libs.size + self->ldflags.size
+                       + msvc_extra_flags_count + 16);
 
     char const *cc = str_cstr(&self->cc);
     array_push(argv, cc);
@@ -1666,7 +1692,22 @@ static c_string_array build_msvc_argv(state *self, char const **msvc_extra_flags
 
     { char const *_t = "/TC"; array_push(argv, _t); }
     array_push(argv, c_file);
+    // clang-format on
 
+    // Append #link libraries (MSVC uses foo.lib syntax)
+    forall(i, self->link_libs) {
+        str         lib  = str_cat(self->arena, self->link_libs.v[i], S(".lib"));
+        char const *cstr = str_cstr(&lib);
+        array_push(argv, cstr);
+    }
+
+    // Append LDFLAGS
+    forall(i, self->ldflags) {
+        char const *cstr = str_cstr(&self->ldflags.v[i]);
+        array_push(argv, cstr);
+    }
+
+    // clang-format off
     { char const *_t = null; array_push(argv, _t); }
     // clang-format on
 

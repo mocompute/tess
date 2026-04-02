@@ -18,6 +18,7 @@ typedef struct {
     ast_node_sized    nodes;             // full ast (to get utds)
     ast_node_sized    synthesized_nodes; // nodes added by compiler
     str_sized         hash_includes;
+    str_sized         link_libs;
 } tl_infer_result;
 
 typedef struct {

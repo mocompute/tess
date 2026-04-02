@@ -91,6 +91,7 @@ struct tl_infer {
     hashmap             *instance_names; // str set
     hashmap             *attributes;     // str => ast_node* attribute_set (possibly null)
     str_array            hash_includes;
+    str_array            link_libs;
     tl_infer_error_array errors;
 
     // Context for single-pass parsing of user type definitions

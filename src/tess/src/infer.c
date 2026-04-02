@@ -55,6 +55,7 @@ tl_infer *tl_infer_create(allocator *alloc, tl_infer_opts const *opts) {
     self->instance_names            = hset_create(self->arena, 4096);
     self->attributes                = map_new(self->arena, str, void *, 4096);
     self->hash_includes             = (str_array){.alloc = self->arena};
+    self->link_libs                 = (str_array){.alloc = self->arena};
     self->errors                    = (tl_infer_error_array){.alloc = self->arena};
 
     self->next_var_name             = 0;
@@ -594,8 +595,10 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *out_resu
 
         array_shrink(self->synthesized_nodes);
         array_shrink(self->hash_includes);
+        array_shrink(self->link_libs);
         out_result->synthesized_nodes = (ast_node_sized)sized_all(self->synthesized_nodes);
         out_result->hash_includes     = (str_sized)sized_all(self->hash_includes);
+        out_result->link_libs         = (str_sized)sized_all(self->link_libs);
     }
 
 #if DEBUG_INSTANCE_CACHE

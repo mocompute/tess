@@ -8,6 +8,9 @@
 //   t: Ok := Thread.spawn([[alloc, capture(ptr)]] () { ptr.* = 42 }) else { return 1 }
 //   Thread.join(t.v)
 #module Thread
+#ifndef _WIN32
+#link pthread
+#endif
 #import <Alloc.tl>
 #import <ThreadError.tl>
 #import <cstdlib.tl>

@@ -28,6 +28,7 @@ A source file may contain one or more modules.
 #module ModuleName      // Declare a module
 #import <filename.tl>   // Import another Tess file
 #include <header.h>     // Include a C header
+#link libname           // Link against a C library (e.g., #link m for libm)
 ```
 
 Access module members with dot notation: `ModuleName.function()` or `ModuleName.Type`
