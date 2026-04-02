@@ -1034,6 +1034,17 @@ apply(f, x) { f(x) }
 apply(fp, 5)         // Pass function pointer as argument
 ```
 
+The `/arity` suffix is only needed for top-level function names, where it disambiguates between overloads of the same name with different arities. Lambda bindings cannot be arity-overloaded, so they are already unambiguous values — pass them directly by name, without an arity suffix:
+
+```tl
+add1(x) { x + 1 }
+fp := add1/1             // Top-level function: needs /arity
+
+inc := (x) { x + 1 }
+apply(f, x) { f(x) }
+apply(inc, 5)            // Lambda binding: just use the name
+```
+
 Function pointers can be stored in structs:
 
 ```tl

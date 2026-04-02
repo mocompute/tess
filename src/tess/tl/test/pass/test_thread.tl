@@ -69,6 +69,31 @@ test_spawn_closure() {
     fails
 }
 
+test_spawn_lambda() {
+    fails := 0
+
+    t: Ok := Thread.spawn(() { Thread.yield() }) else {
+        c_printf(c"FAIL spawn lambda\n")
+        return 1
+    }
+
+    _r := Thread.join(t.value)
+    fails
+}
+
+test_spawn_lambda_binding() {
+    fails := 0
+    fn    := () { Thread.yield() }
+
+    t: Ok := Thread.spawn(fn) else {
+        c_printf(c"FAIL spawn lambda binding\n")
+        return 1
+    }
+
+    _r := Thread.join(t.value)
+    fails
+}
+
 test_current_eq() {
     fails := 0
     me    := Thread.current()
@@ -121,6 +146,8 @@ main() {
     fails += test_spawn_fn_ptr()
     fails += test_spawn_join()
     fails += test_spawn_closure()
+    fails += test_spawn_lambda()
+    fails += test_spawn_lambda_binding()
     fails += test_detach()
     fails += test_current_eq()
     fails += test_yield()
