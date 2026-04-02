@@ -373,8 +373,7 @@ ast_node          *ast_node_body(ast_node *); // body of let or let in lambda.
 typedef struct {
     ast_node  *node;         // original node (ast_let or ast_let_in wrapping lambda)
     ast_node  *name_node;    // symbol holding the function name
-    ast_node **parameters;   // formal parameter array
-    u8         n_parameters;
+    ast_node_sized parameters; // formal parameter array
     ast_node  *body;         // function body
     ast_node  *attributes;   // lambda attrs (from ast_lambda_function) or NULL for named fns
     int        is_lambda;    // 1 if lambda binding, 0 if named function

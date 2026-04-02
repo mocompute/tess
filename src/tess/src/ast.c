@@ -839,8 +839,7 @@ ast_function_view ast_function_view_from(ast_node *node) {
     if (ast_node_is_let(node)) {
         v.node         = node;
         v.name_node    = node->let.name;
-        v.parameters   = node->let.parameters;
-        v.n_parameters = node->let.n_parameters;
+        v.parameters   = (ast_node_sized){.v = node->let.parameters, .size = node->let.n_parameters};
         v.body         = node->let.body;
         v.attributes   = NULL;
         v.is_lambda    = 0;
@@ -848,8 +847,7 @@ ast_function_view ast_function_view_from(ast_node *node) {
         ast_node *lf   = node->let_in.value;
         v.node         = node;
         v.name_node    = node->let_in.name;
-        v.parameters   = lf->lambda_function.parameters;
-        v.n_parameters = lf->lambda_function.n_parameters;
+        v.parameters   = (ast_node_sized){.v = lf->lambda_function.parameters, .size = lf->lambda_function.n_parameters};
         v.body         = lf->lambda_function.body;
         v.attributes   = lf->lambda_function.attributes;
         v.is_lambda    = 1;
