@@ -1582,7 +1582,9 @@ static str generate_interned_string(transpile *self, ast_node const *call_node, 
 
     // Get the return type (String) from the function's arrow type
     tl_monotype *arrow = env_lookup(self, ast_node_str(call_node->named_application.name));
-    assert(arrow && tl_monotype_is_list(arrow));
+    // FIXME: this condition should be detected during type inference, not in the transpiler
+    if (!arrow || !tl_monotype_is_list(arrow))
+        fatal("String__from_literal is not defined — is '#import <String.tl>' missing?");
     tl_monotype *string_type = tl_monotype_sized_last(arrow->list.xs);
     str          type_name   = type_to_c_mono(self, string_type);
 
@@ -2250,9 +2252,9 @@ static str generate_tagged_union_case(transpile *self, ast_node const *node, eva
             // Generate else binding if present: OtherVariant name = expr.u.OtherVariant;
             if (node->case_.else_binding && ast_node_is_symbol(node->case_.else_binding) &&
                 node->case_.else_binding->symbol.annotation_type) {
-                tl_monotype *eb_type = node->case_.else_binding->symbol.annotation_type->type;
+                tl_monotype *eb_type            = node->case_.else_binding->symbol.annotation_type->type;
 
-                str other_variant_name = str_empty();
+                str          other_variant_name = str_empty();
                 if (i > 0 && node->case_.conditions.size > 0) {
                     ast_node *primary_cond = node->case_.conditions.v[0];
                     if (ast_node_is_symbol(primary_cond) && primary_cond->symbol.annotation) {
@@ -3857,8 +3859,7 @@ static str tl_sizeof(transpile *self, ast_node const *node, eval_ctx *ctx, void 
             tl_monotype *mono = poly->type;
             update_type(self, &mono);
             str carray_c = carray_type_to_c(self, mono);
-            if (!str_is_empty(carray_c))
-                return str_cat_3(self->transient, S("sizeof("), carray_c, S(")"));
+            if (!str_is_empty(carray_c)) return str_cat_3(self->transient, S("sizeof("), carray_c, S(")"));
         }
         int save         = ctx->want_lvalue;
         ctx->want_lvalue = 1;

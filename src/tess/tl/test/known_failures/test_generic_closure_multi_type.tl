@@ -1,5 +1,6 @@
 #module main
 #import <Alloc.tl>
+#import <String.tl>
 
 // Partially-annotated generic lambda closure called at different argument
 // types.  The return type is fixed (Int) but the param type varies per
