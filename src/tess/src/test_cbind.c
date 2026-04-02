@@ -35,7 +35,7 @@ static int test_simple_function(void) {
                    "# 1 \"test.h\"\n"
                    "int foo(int x);\n",
                    "#module test\n"
-                   "#include <test.h>\n"
+                   "#include \"test.h\"\n"
                    "\n"
                    "c_foo(x: CInt) -> CInt\n");
 
@@ -54,7 +54,7 @@ static int test_void_function(void) {
                    "# 1 \"test.h\"\n"
                    "void bar(void);\n",
                    "#module test\n"
-                   "#include <test.h>\n"
+                   "#include \"test.h\"\n"
                    "\n"
                    "c_bar() -> Void\n");
 
@@ -73,7 +73,7 @@ static int test_const_char_ptr(void) {
                    "# 1 \"test.h\"\n"
                    "int puts(const char *s);\n",
                    "#module test\n"
-                   "#include <test.h>\n"
+                   "#include \"test.h\"\n"
                    "\n"
                    "c_puts(s: Ptr[Const[CChar]]) -> CInt\n");
 
@@ -92,7 +92,7 @@ static int test_void_star_return(void) {
                    "# 1 \"test.h\"\n"
                    "void *malloc(unsigned long size);\n",
                    "#module test\n"
-                   "#include <test.h>\n"
+                   "#include \"test.h\"\n"
                    "\n"
                    "c_malloc(size: CUnsignedLong) -> Ptr[any]\n");
 
@@ -111,7 +111,7 @@ static int test_variadic(void) {
                    "# 1 \"test.h\"\n"
                    "int printf(const char *fmt, ...);\n",
                    "#module test\n"
-                   "#include <test.h>\n"
+                   "#include \"test.h\"\n"
                    "\n"
                    "c_printf(fmt: Ptr[Const[CChar]], args: ...) -> CInt\n");
 
@@ -130,7 +130,7 @@ static int test_struct(void) {
                    "# 1 \"test.h\"\n"
                    "struct point { int x; int y; };\n",
                    "#module test\n"
-                   "#include <test.h>\n"
+                   "#include \"test.h\"\n"
                    "\n"
                    "c_struct_point: { x: CInt, y: CInt }\n"
                    "\n");
@@ -150,7 +150,7 @@ static int test_enum(void) {
                    "# 1 \"test.h\"\n"
                    "enum color { RED = 0, GREEN = 1, BLUE = 2 };\n",
                    "#module test\n"
-                   "#include <test.h>\n"
+                   "#include \"test.h\"\n"
                    "\n"
                    "c_RED: CInt\n"
                    "c_GREEN: CInt\n"
@@ -173,7 +173,7 @@ static int test_forward_struct(void) {
                    "struct opaque;\n"
                    "struct opaque *get_opaque(void);\n",
                    "#module test\n"
-                   "#include <test.h>\n"
+                   "#include \"test.h\"\n"
                    "\n"
                    "c_struct_opaque: { _opaque: Byte }\n"
                    "\n"
@@ -196,7 +196,7 @@ static int test_typedef_struct_alias(void) {
                    "typedef struct point point_t;\n"
                    "point_t make_point(void);\n",
                    "#module test\n"
-                   "#include <test.h>\n"
+                   "#include \"test.h\"\n"
                    "\n"
                    "c_struct_point: { x: CInt, y: CInt }\n"
                    "\n"
@@ -217,7 +217,7 @@ static int test_typedef_anon_struct(void) {
                    "# 1 \"test.h\"\n"
                    "typedef struct { int x; int y; } vec2;\n",
                    "#module test\n"
-                   "#include <test.h>\n"
+                   "#include \"test.h\"\n"
                    "\n"
                    "c_vec2: { x: CInt, y: CInt }\n"
                    "\n");
@@ -238,7 +238,7 @@ static int test_typedef_struct_different_names(void) {
                    "typedef struct point_s { int x; int y; } point_t;\n"
                    "point_t make(void);\n",
                    "#module test\n"
-                   "#include <test.h>\n"
+                   "#include \"test.h\"\n"
                    "\n"
                    "c_struct_point_s: { x: CInt, y: CInt }\n"
                    "\n"
@@ -260,7 +260,7 @@ static int test_typedef_simple(void) {
                    "typedef int myint;\n"
                    "myint add(myint a, myint b);\n",
                    "#module test\n"
-                   "#include <test.h>\n"
+                   "#include \"test.h\"\n"
                    "\n"
                    "c_add(a: CInt, b: CInt) -> CInt\n");
 
@@ -279,7 +279,7 @@ static int test_function_pointer_param(void) {
                    "# 1 \"test.h\"\n"
                    "void set_callback(void (*cb)(int));\n",
                    "#module test\n"
-                   "#include <test.h>\n"
+                   "#include \"test.h\"\n"
                    "\n"
                    "c_set_callback(cb: (arg0: CInt) -> Void) -> Void\n");
 
@@ -299,7 +299,7 @@ static int test_define_constant(void) {
                    "#define MAX_SIZE 1024\n"
                    "#define VERSION 3\n",
                    "#module test\n"
-                   "#include <test.h>\n"
+                   "#include \"test.h\"\n"
                    "\n"
                    "c_MAX_SIZE: CInt\n"
                    "c_VERSION: CInt\n"
@@ -324,7 +324,7 @@ static int test_filter_transitive(void) {
                    "# 2 \"other.h\"\n"
                    "int other_func2(void);\n",
                    "#module test\n"
-                   "#include <test.h>\n"
+                   "#include \"test.h\"\n"
                    "\n"
                    "c_my_func() -> CInt\n");
 
@@ -343,7 +343,7 @@ static int test_unnamed_params(void) {
                    "# 1 \"test.h\"\n"
                    "int add(int, int);\n",
                    "#module test\n"
-                   "#include <test.h>\n"
+                   "#include \"test.h\"\n"
                    "\n"
                    "c_add(arg0: CInt, arg1: CInt) -> CInt\n");
 
@@ -362,7 +362,7 @@ static int test_multi_word_types(void) {
                    "# 1 \"test.h\"\n"
                    "unsigned long long big(unsigned short x);\n",
                    "#module test\n"
-                   "#include <test.h>\n"
+                   "#include \"test.h\"\n"
                    "\n"
                    "c_big(x: CUnsignedShort) -> CUnsignedLongLong\n");
 
@@ -381,7 +381,7 @@ static int test_standard_types(void) {
                    "# 1 \"test.h\"\n"
                    "void *memcpy(void *dst, const void *src, size_t n);\n",
                    "#module test\n"
-                   "#include <test.h>\n"
+                   "#include \"test.h\"\n"
                    "\n"
                    "c_memcpy(dst: Ptr[any], src: Ptr[Const[any]], n: CSize) -> Ptr[any]\n");
 
@@ -432,7 +432,7 @@ static int test_builtin_va_list(void) {
                    "# 1 \"test.h\"\n"
                    "int vprintf(const char *fmt, __builtin_va_list ap);\n",
                    "#module test\n"
-                   "#include <test.h>\n"
+                   "#include \"test.h\"\n"
                    "\n"
                    "c_vprintf(fmt: Ptr[Const[CChar]], ap: c___builtin_va_list) -> CInt\n");
 
@@ -451,7 +451,7 @@ static int test_struct_mixed_pointers(void) {
                    "# 1 \"test.h\"\n"
                    "struct S { int *a, b, **c; };\n",
                    "#module test\n"
-                   "#include <test.h>\n"
+                   "#include \"test.h\"\n"
                    "\n"
                    "c_struct_S: { a: Ptr[CInt], b: CInt, c: Ptr[Ptr[CInt]] }\n"
                    "\n");
@@ -471,7 +471,7 @@ static int test_enum_negative(void) {
                    "# 1 \"test.h\"\n"
                    "enum status { OK = 0, ERR = -1, NOMEM = -2 };\n",
                    "#module test\n"
-                   "#include <test.h>\n"
+                   "#include \"test.h\"\n"
                    "\n"
                    "c_OK: CInt\n"
                    "c_ERR: CInt\n"
@@ -493,7 +493,7 @@ static int test_struct_fp_field(void) {
                    "# 1 \"test.h\"\n"
                    "struct ops { void (*init)(int); int (*get)(void); };\n",
                    "#module test\n"
-                   "#include <test.h>\n"
+                   "#include \"test.h\"\n"
                    "\n"
                    "c_struct_ops: { init: (arg0: CInt) -> Void, get: () -> CInt }\n"
                    "\n");
@@ -515,7 +515,7 @@ static int test_static_inline_skipped(void) {
                    "static inline int square(int x) { return x * x; }\n"
                    "int cube(int x);\n",
                    "#module test\n"
-                   "#include <test.h>\n"
+                   "#include \"test.h\"\n"
                    "\n"
                    "c_cube(x: CInt) -> CInt\n");
 
@@ -534,7 +534,7 @@ static int test_c11_attributes(void) {
                    "# 1 \"test.h\"\n"
                    "_Alignas(16) int aligned_func(void);\n",
                    "#module test\n"
-                   "#include <test.h>\n"
+                   "#include \"test.h\"\n"
                    "\n"
                    "c_aligned_func() -> CInt\n");
 
@@ -554,7 +554,7 @@ static int test_define_then_function(void) {
                    "#define VERSION 1\n"
                    "int init(void);\n",
                    "#module test\n"
-                   "#include <test.h>\n"
+                   "#include \"test.h\"\n"
                    "\n"
                    "c_VERSION: CInt\n"
                    "\n"
@@ -585,7 +585,7 @@ static int test_embedded_line_markers(void) {
                    "                 __attribute__ ((__nothrow__))\n"
                    ";\n",
                    "#module test\n"
-                   "#include <test.h>\n"
+                   "#include \"test.h\"\n"
                    "\n"
                    "c_malloc(size: CSize) -> Ptr[any]\n"
                    "c_free(ptr: Ptr[any]) -> Void\n");
@@ -613,7 +613,7 @@ static int test_define_inside_struct(void) {
                    "  } my_data;\n"
                    "int process(my_data *d);\n",
                    "#module test\n"
-                   "#include <test.h>\n"
+                   "#include \"test.h\"\n"
                    "\n"
                    "c_my_data: { count: CInt, flags: CLong }\n"
                    "\n"
@@ -634,7 +634,7 @@ static int test_struct_array_field(void) {
                    "# 1 \"test.h\"\n"
                    "typedef struct { int data[32]; char name[64]; } buffer;\n",
                    "#module test\n"
-                   "#include <test.h>\n"
+                   "#include \"test.h\"\n"
                    "\n"
                    "c_buffer: { data: CArray[CInt, 32], name: CArray[CChar, 64] }\n"
                    "\n");
@@ -655,7 +655,7 @@ static int test_skip_dunder_functions(void) {
                    "int foo(int x);\n"
                    "int __bar(int y);\n",
                    "#module test\n"
-                   "#include <test.h>\n"
+                   "#include \"test.h\"\n"
                    "\n"
                    "c_foo(x: CInt) -> CInt\n");
 
@@ -674,7 +674,7 @@ static int test_strip_dunder_params(void) {
                    "# 1 \"test.h\"\n"
                    "int foo(int __x, const char *__str);\n",
                    "#module test\n"
-                   "#include <test.h>\n"
+                   "#include \"test.h\"\n"
                    "\n"
                    "c_foo(x: CInt, str: Ptr[Const[CChar]]) -> CInt\n");
 
@@ -697,7 +697,7 @@ static int test_dedup_functions(void) {
                    "extern void bar(void);\n"
                    "extern void bar(void);\n",
                    "#module test\n"
-                   "#include <test.h>\n"
+                   "#include \"test.h\"\n"
                    "\n"
                    "c_foo(x: CInt) -> CInt\n"
                    "c_bar() -> Void\n");
@@ -719,7 +719,7 @@ static int test_typedef_preserves_name(void) {
                    "typedef struct _IO_FILE FILE;\n"
                    "FILE *fopen(const char *path, const char *mode);\n",
                    "#module test\n"
-                   "#include <test.h>\n"
+                   "#include \"test.h\"\n"
                    "\n"
                    "c_struct__IO_FILE: { fd: CInt }\n"
                    "\n"

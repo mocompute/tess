@@ -1798,14 +1798,8 @@ static str emit_bindings(allocator *a, cbind_state *st, char const *module_name)
     str mod_line = str_fmt(a, "#module %s\n", module_name);
     str_build_cat(&sb, mod_line);
 
-    // determine include style
-    str inc_line;
-    if (str_contains_char(st->target_file, '/') || str_contains_char(st->target_file, '\\')) {
-        inc_line =
-          str_fmt(a, "#include \"%.*s\"\n\n", str_ilen(st->target_file), str_buf(&st->target_file));
-    } else {
-        inc_line = str_fmt(a, "#include <%.*s>\n\n", str_ilen(st->target_file), str_buf(&st->target_file));
-    }
+    str inc_line =
+      str_fmt(a, "#include \"%.*s\"\n\n", str_ilen(st->target_file), str_buf(&st->target_file));
     str_build_cat(&sb, inc_line);
 
     // Emit forward-declared (opaque) structs
