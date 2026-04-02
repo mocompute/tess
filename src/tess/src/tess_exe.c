@@ -213,7 +213,7 @@ void state_init(state *self) {
 
 static void state_track_temp_dir(state *self, char const *path) {
     str         s    = str_init(self->arena, path);
-    char const *copy = str_cstr(&s);
+    char const *copy = str_cstr_copy(self->arena, s);
     array_push(self->temp_dirs, copy);
 }
 
@@ -307,10 +307,8 @@ static char const *lib_name_from_path(allocator *alloc, char const *path) {
     char const *dot = strrchr(base, '.');
     u32         len = dot ? (u32)(dot - base) : (u32)strlen(base);
     if (len == 0) return null;
-    char *result = alloc_malloc(alloc, len + 1);
-    memcpy(result, base, len);
-    result[len] = '\0';
-    return result;
+    str s = str_init_n(alloc, base, len);
+    return str_cstr_copy(alloc, s);
 }
 
 // Build include guard from a bare library name: "foo" -> "FOO_H"
@@ -2203,7 +2201,7 @@ static int pack_files(state *self) {
             fprintf(stderr, "error: -o option is required (no package.tl found)\n");
             return 1;
         }
-        self->out_path = str_cstr(&path);
+        self->out_path = str_cstr_copy(self->arena, path);
     }
 
     // Parse package.tl from CWD (needed early for source() resolution)
@@ -2550,7 +2548,7 @@ int main(int argc, char *argv[]) {
                 fprintf(stderr, "error: -o option is required (no package.tl found)\n");
                 exit(1);
             }
-            self.out_path = str_cstr(&path);
+            self.out_path = str_cstr_copy(self.arena, path);
         }
         self.is_executable = 1;
         result             = compile(&self);
@@ -2642,8 +2640,8 @@ int main(int argc, char *argv[]) {
                 fprintf(stderr, "error: -o option is required (no package.tl found)\n");
                 exit(1);
             }
-            self.out_path = str_cstr(&path);
-            self.lib_name = str_cstr(&name);
+            self.out_path = str_cstr_copy(self.arena, path);
+            self.lib_name = str_cstr_copy(self.arena, name);
         }
         if (!self.lib_name) {
             self.lib_name = lib_name_from_path(self.arena, self.out_path);
