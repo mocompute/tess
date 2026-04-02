@@ -150,6 +150,15 @@ void set_node_file(parser *self, ast_node *node) {
     node->col  = self->token.col;
 }
 
+ast_node *parser_make_arrow(parser *self, ast_node_array params, ast_node *return_type,
+                            ast_node_sized type_params) {
+    ast_node *tup = ast_node_create_tuple(self->ast_arena, (ast_node_sized)array_sized(params));
+    set_node_file(self, tup);
+    ast_node *arrow = ast_node_create_arrow(self->ast_arena, tup, return_type, type_params);
+    set_node_file(self, arrow);
+    return arrow;
+}
+
 static void set_result_file(parser *self) {
     set_node_file(self, self->result);
 }
@@ -1356,14 +1365,8 @@ int toplevel_defun(parser *self) {
         if (a_try(self, a_type_identifier)) return 1;
         ast_node *ann = self->result;
 
-        // make tuple
-        ast_node *tup = ast_node_create_tuple(self->ast_arena, (ast_node_sized)array_sized(params));
-        set_node_file(self, tup);
-
-        // make arrow
         ast_node *arrow =
-          ast_node_create_arrow(self->ast_arena, tup, ann, (ast_node_sized)sized_all(type_params));
-        set_node_file(self, arrow);
+          parser_make_arrow(self, params, ann, (ast_node_sized)sized_all(type_params));
 
         // attach to name
         name->symbol.annotation = arrow;

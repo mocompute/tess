@@ -791,11 +791,7 @@ decl_done:;
     if (0 == a_try(self, a_arrow)) {
         if (a_try(self, a_type_identifier)) return 1;
 
-        ast_node *tup = ast_node_create_tuple(self->ast_arena, (ast_node_sized)array_sized(params));
-        set_node_file(self, tup);
-
-        annotation = ast_node_create_arrow(self->ast_arena, tup, self->result, (ast_node_sized){0});
-        set_node_file(self, annotation);
+        annotation = parser_make_arrow(self, params, self->result, (ast_node_sized){0});
     }
 
     if (a_try(self, a_open_curly)) return 1;

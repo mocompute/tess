@@ -231,8 +231,10 @@ int result_ast_u64_zu(parser *, u64);
 int result_ast_node(parser *, ast_node *);
 
 // Node helpers
-void set_node_file(parser *, ast_node *);
-int  set_node_parameters(parser *, ast_node *, ast_node_array *);
+void      set_node_file(parser *, ast_node *);
+int       set_node_parameters(parser *, ast_node *, ast_node_array *);
+ast_node *parser_make_arrow(parser *, ast_node_array params, ast_node *return_type,
+                            ast_node_sized type_params);
 
 // Name mangling
 void mangle_name(parser *, ast_node *);

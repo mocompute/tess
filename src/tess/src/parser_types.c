@@ -532,14 +532,7 @@ int a_type_arrow(parser *self) {
     if (a_try(self, a_type_identifier)) return 1;
     ast_node *rhs = self->result;
 
-    // make tuple
-    ast_node *tup = ast_node_create_tuple(self->ast_arena, (ast_node_sized)array_sized(params));
-    set_node_file(self, tup);
-
-    // make arrow: type arguments will be parsed separately
-    ast_node *arrow = ast_node_create_arrow(self->ast_arena, tup, rhs, (ast_node_sized){0});
-    set_node_file(self, arrow);
-
+    ast_node *arrow = parser_make_arrow(self, params, rhs, (ast_node_sized){0});
     return result_ast_node(self, arrow);
 }
 // Parse a single trait function signature: name(param: Type, ...) -> RetType

@@ -302,12 +302,8 @@ static ast_node *desugar_entry(parser *self, receiver_block_info *info, receiver
     ast_node *name = entry->name;
 
     if (entry->return_type) {
-        ast_node *tup = ast_node_create_tuple(alloc, (ast_node_sized)array_sized(full_params));
-        set_node_file(self, tup);
-
-        ast_node *arrow = ast_node_create_arrow(alloc, tup, entry->return_type,
-                                                (ast_node_sized)sized_all(full_type_params));
-        set_node_file(self, arrow);
+        ast_node *arrow = parser_make_arrow(self, full_params, entry->return_type,
+                                            (ast_node_sized)sized_all(full_type_params));
 
         name->symbol.annotation = arrow;
     }
