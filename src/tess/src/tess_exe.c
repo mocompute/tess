@@ -2657,18 +2657,19 @@ int main(int argc, char *argv[]) {
 
         // Write c_export header file if any exports were found
         if (!result && !str_is_empty(self.header)) {
-            char header_path[4096];
-            snprintf(header_path, sizeof header_path, "%s.h", self.lib_name);
+            str out_dir  = file_dirname(self.arena, str_init_static(self.out_path));
+            str hdr_name = str_cat(self.arena, str_init_static(self.lib_name), S(".h"));
+            str hdr_path = file_path_join(self.arena, out_dir, hdr_name);
 
-            FILE *hf = fopen(header_path, "w");
+            FILE *hf = fopen(str_cstr(&hdr_path), "w");
             if (!hf) {
-                fprintf(stderr, "error: could not open header file for writing: %s\n", header_path);
+                fprintf(stderr, "error: could not open header file for writing: %s\n", str_cstr(&hdr_path));
                 result = 1;
             } else {
                 size_t len     = str_len(self.header);
                 size_t written = fwrite(str_buf(&self.header), 1, len, hf);
                 if (written != len || fclose(hf)) {
-                    fprintf(stderr, "error: failed to write header file: %s\n", header_path);
+                    fprintf(stderr, "error: failed to write header file: %s\n", str_cstr(&hdr_path));
                     result = 1;
                 }
             }
