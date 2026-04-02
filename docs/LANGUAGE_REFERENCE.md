@@ -913,9 +913,10 @@ function ends with an assignment (`=`), no `void` is needed.
 > See [Language Model: Closures and Capture](LANGUAGE_MODEL.md#closures-and-capture) for the conceptual model of capture semantics, stack vs. allocated closures, and the escape restriction.
 
 ```tl
-f := (x) { x + 1 }           // Lambda expression
-f := (x: Int) { x + 1 }      // With type annotation
-(x) { x + 1 } (5)            // Immediate application (returns 6)
+f := (x) { x + 1 }               // Lambda expression
+f := (x: Int) { x + 1 }          // With parameter type annotation
+f := (x: Int) -> Int { x + 1 }   // With return type annotation
+(x) { x + 1 } (5)                // Immediate application (returns 6)
 ```
 
 Lambdas capture variables from the enclosing scope (closures):

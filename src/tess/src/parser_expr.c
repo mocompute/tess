@@ -684,6 +684,11 @@ int a_assignment(parser *self) {
         return result_ast_node(self, node);
     }
 
+    // Transfer lambda return type annotation to the binding name, so inference
+    // processes it the same way as a named function's arrow annotation.
+    if (ast_node_is_lambda_function(val) && val->lambda_function.annotation)
+        lval->symbol.annotation = val->lambda_function.annotation;
+
     // Normal let-in path
     ast_node_array exprs  = {.alloc = self->ast_arena};
     ast_node_array defers = {.alloc = self->ast_arena};
@@ -729,6 +734,8 @@ ast_node *maybe_wrap_lambda_function_in_let_in(parser *self, ast_node *node) {
     if (!ast_node_is_lambda_function(node)) return node;
 
     ast_node *lval = ast_node_create_sym(self->ast_arena, next_var_name(self));
+    if (node->lambda_function.annotation)
+        lval->symbol.annotation = node->lambda_function.annotation;
     ast_node *val  = node;
 
     // body of let: just the symbol referring to the lambda's name
@@ -777,7 +784,19 @@ int a_lambda_function(parser *self) {
         array_push(params, self->result);
     }
 
-decl_done:
+decl_done:;
+
+    // optional return type annotation — same arrow construction as a_type_arrow / toplevel_defun
+    ast_node *annotation = null;
+    if (0 == a_try(self, a_arrow)) {
+        if (a_try(self, a_type_identifier)) return 1;
+
+        ast_node *tup = ast_node_create_tuple(self->ast_arena, (ast_node_sized)array_sized(params));
+        set_node_file(self, tup);
+
+        annotation = ast_node_create_arrow(self->ast_arena, tup, self->result, (ast_node_sized){0});
+        set_node_file(self, annotation);
+    }
 
     if (a_try(self, a_open_curly)) return 1;
 
@@ -797,6 +816,7 @@ decl_done:
     set_node_parameters(self, l, &params);
     l->lambda_function.body       = body;
     l->lambda_function.attributes = attributes;
+    l->lambda_function.annotation = annotation;
     return result_ast_node(self, l);
 }
 

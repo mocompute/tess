@@ -122,6 +122,7 @@ typedef struct ast_node {
             u8                n_parameters;
             struct ast_node  *body;
             struct ast_node  *attributes; // may be null
+            struct ast_node  *annotation; // full arrow annotation (params) -> Type, may be null
         } lambda_function;
 
         struct ast_let {

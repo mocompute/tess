@@ -400,6 +400,7 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
         struct ast_lambda_function *vclone = ast_node_lf(clone), *vorig = ast_node_lf((ast_node *)orig);
         vclone->body       = ast_node_clone(alloc, vorig->body);
         vclone->attributes = ast_node_clone(alloc, vorig->attributes);
+        vclone->annotation = ast_node_clone(alloc, vorig->annotation);
     } break;
 
     case ast_lambda_function_application: {
@@ -716,6 +717,7 @@ void ast_node_each_node(void *ctx, ast_node_each_node_fun fun, ast_node *node) {
         //
         fun(ctx, node->lambda_function.body);
         fun(ctx, node->lambda_function.attributes);
+        fun(ctx, node->lambda_function.annotation);
         break;
 
     case ast_lambda_function_application:
@@ -1616,6 +1618,7 @@ u64 ast_node_hash(ast_node const *self) {
         //
         combine_node(self->lambda_function.body);
         combine_node(self->lambda_function.attributes);
+        combine_node(self->lambda_function.annotation);
         break;
 
     case ast_lambda_function_application: combine_node(self->lambda_application.lambda); break;
