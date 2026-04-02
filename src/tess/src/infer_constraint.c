@@ -156,6 +156,10 @@ static int toplevel_hash_command(tl_infer *self, ast_node *node) {
     } else if (str_eq(words.v[0], S("unalias"))) {
         return 0;
     } else if (str_eq(words.v[0], S("link"))) {
+        if (words.size != 2) {
+            wrong_number_of_arguments(self, node);
+            return 1;
+        }
         str_array_set_insert(&self->link_libs, words.v[1]);
         return 0;
     } else {

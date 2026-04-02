@@ -209,6 +209,8 @@ void state_init(state *self) {
     self->is_library             = 0;
     self->is_static_library      = 0;
     self->is_executable          = 0;
+    self->link_libs              = (str_sized){0};
+    self->ldflags                = (str_sized){0};
     self->dashdash_at            = -1;
     self->stdin_data             = null;
     self->stdin_size             = 0;
@@ -1097,6 +1099,8 @@ static void get_c_compiler(state *self) {
         str_array arr     = {.alloc = self->arena};
         str_parse_words(ldflags, &arr);
         self->ldflags = (str_sized)array_sized(arr);
+    } else {
+        self->ldflags = (str_sized){0};
     }
 }
 
@@ -1501,11 +1505,12 @@ int compile(state *self) {
 
         // Copy link_libs to state arena (infer arena will be freed at cleanup_ti)
         if (infer_result.link_libs.size > 0) {
-            str *copied = alloc_malloc(self->arena, infer_result.link_libs.size * sizeof(str));
+            str_array arr = {.alloc = self->arena};
             for (u32 i = 0; i < infer_result.link_libs.size; i++) {
-                copied[i] = str_copy(self->arena, infer_result.link_libs.v[i]);
+                str s = str_copy(self->arena, infer_result.link_libs.v[i]);
+                array_push(arr, s);
             }
-            self->link_libs = (str_sized){.v = copied, .size = infer_result.link_libs.size};
+            self->link_libs = (str_sized)array_sized(arr);
         }
 
         goto done;
