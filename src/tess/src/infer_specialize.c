@@ -1709,9 +1709,14 @@ static int specialize_let_in_lambda_lookup(tl_infer *self, ast_node *node, tl_po
 
     str *found = instance_lookup_arrow(self, name, arrow, (tl_monotype_sized){0});
     if (!found) {
-        // When the name has an annotation (e.g. return type annotation on lambda), the
-        // arrow from name_type may lack free variables that are present in the env's
-        // generalized type. Retry with the env's arrow which includes closure FVs.
+        // FIXME: not fully understood.  For annotated lambda closures, node->let_in.name->type
+        // at specialization time is an arrow WITHOUT free variables, while the env holds the
+        // same arrow WITH FVs (from add_free_variables_to_arrow).  The hash mismatch causes
+        // the lookup above to miss.  We don't know why name->type diverges from the env type —
+        // it may be set from annotation_type (which never receives FVs) or re-derived during
+        // the specialization traversal.  This fallback papers over the mismatch by retrying
+        // with the env's arrow.  A proper fix would ensure name->type and the env agree, making
+        // this fallback unnecessary.
         tl_polytype *env_type = tl_type_env_lookup(self->env, name);
         if (env_type && tl_monotype_is_arrow(env_type->type) && env_type->type != arrow) {
             tl_monotype *env_arrow = env_type->type;
@@ -1722,20 +1727,6 @@ static int specialize_let_in_lambda_lookup(tl_infer *self, ast_node *node, tl_po
                                               tl_type_registry_uint(self->registry),
                                               tl_type_registry_float(self->registry));
             found = instance_lookup_arrow(self, name, env_arrow, (tl_monotype_sized){0});
-        }
-    }
-    if (!found && ast_node_is_let_in_lambda(node) &&
-        node->let_in.value->lambda_function.annotation) {
-        // Last resort for return-type-annotated lambdas: the annotation's arrow type
-        // may not match the call-site's specialization hash (different TVs, missing FVs).
-        // Probe for the first specialization <name>_N by naming convention.
-        for (u32 probe_i = 0; !found && probe_i < 8; probe_i++) {
-            str probe = str_fmt(self->arena, "%.*s_%u", str_ilen(name), str_buf(&name), probe_i);
-            if (instance_name_exists(self, probe)) {
-                str *p = alloc_malloc(self->arena, sizeof(str));
-                *p = probe;
-                found = p;
-            }
         }
     }
     if (found) ast_node_name_replace(node->let_in.name, *found);
@@ -1751,20 +1742,11 @@ static int specialize_let_in(tl_infer *self, traverse_ctx *traverse_ctx, ast_nod
     // Non-lambda non-concrete let-ins with a body are no-ops.
     if (!concrete && node->let_in.body) {
         if (ast_node_is_let_in_lambda(node)) {
-            // When the name has a return type annotation (e.g. lambda `-> Int`) but
-            // not all params are annotated, the name_type arrow may be non-concrete.
-            // Only use the lookup fallback path when an annotation is present;
-            // otherwise use the standard from_body path for generic lambdas.
-            if (node->let_in.value->lambda_function.annotation) {
-                tl_monotype *arrow = name_type->type;
-                tl_monotype_substitute(self->arena, arrow, self->subs, null);
-                if (!tl_monotype_is_concrete_no_weak(arrow))
-                    tl_monotype_default_weak_ints(arrow, tl_type_registry_int(self->registry),
-                                                  tl_type_registry_uint(self->registry),
-                                                  tl_type_registry_float(self->registry));
-                if (tl_monotype_is_arrow(arrow))
-                    return specialize_let_in_lambda_lookup(self, node, name_type);
-            }
+            // Annotated lambdas: the annotation provides a concrete-enough arrow
+            // (after the add_generic fix connects param TVs).  Route to lookup.
+            if (node->let_in.value->lambda_function.annotation &&
+                name_type && tl_monotype_is_arrow(name_type->type))
+                return specialize_let_in_lambda_lookup(self, node, name_type);
             return specialize_let_in_lambda_from_body(self, traverse_ctx, node);
         }
         return 0;
@@ -2456,9 +2438,12 @@ int add_generic(tl_infer *self, ast_node *node) {
             }
         }
     } else if (ast_node_is_let_in_lambda(node)) {
-        if (!provisional)
-            provisional = make_arrow(self, null, ast_node_sized_from_ast_array(infer_target),
-                                     node->let_in.value->lambda_function.body, 1);
+        tl_polytype *node_arrow = make_arrow(self, null,
+            ast_node_sized_from_ast_array(infer_target),
+            node->let_in.value->lambda_function.body, 1);
+        if (provisional && node_arrow)
+            constrain(self, provisional, node_arrow, node, TL_UNIFY_SYMMETRIC);
+        provisional = node_arrow;
     } else if (ast_node_is_symbol(node)) {
         // toplevel symbol node, e.g. for declaration of intrinsics, or forward type annotations. They will
         // take precedence to any later declarations, so let's be careful
