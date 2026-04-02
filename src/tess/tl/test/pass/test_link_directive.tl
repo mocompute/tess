@@ -1,5 +1,7 @@
 #include <math.h>
+#ifndef _WIN32
 #link m
+#endif
 
 #module main
 
