@@ -109,15 +109,6 @@ defslice(c_string_cslice, char const *);
           array_push_many_impl((array_t *)&(p), (p).v, sizeof(ty), alignof(ty), (void *)(xs), (u32)(n));   \
     } while (0)
 
-// TODO: this doesn't do what you think it does
-#define array_move(p, xs, n)                                                                               \
-    do {                                                                                                   \
-        static_assert(sizeof((xs)[0]) == sizeof((p).v[0]), "size mismatch");                               \
-        static_assert(sizeof(p) >= sizeof(array_t), "not an array");                                       \
-        (p).v = array_move_impl((array_t *)&(p), (p).v, sizeof(p).v[0], infer_align(sizeof(p).v[0]),       \
-                                (void *)(xs), (u32)(n));                                                   \
-    } while (0)
-
 #define array_insert(p, i, xs, n)                                                                          \
     do {                                                                                                   \
         static_assert(sizeof((xs)[0]) == sizeof((p).v[0]), "size mismatch");                               \
@@ -218,7 +209,6 @@ nodiscard void *array_alloc_impl(array_t *, u32, u32, u16) mallocfun;
 nodiscard void *array_reserve_impl(array_t *, void *, u32, u32, u16);
 nodiscard void *array_push_impl(array_t *h, void *restrict, u32, u16, void const *restrict);
 nodiscard void *array_push_many_impl(array_t *h, void *restrict, u32, u16, void const *restrict, u32);
-nodiscard void *array_move_impl(array_t *h, void *, u32, u16, void *, u32);
 nodiscard void *array_insert_impl(array_t *h, void *restrict ptr, u32 index, u32, u16, void const *restrict,
                                   u32);
 
