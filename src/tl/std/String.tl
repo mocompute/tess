@@ -23,18 +23,21 @@ Allocator = Alloc.Allocator
 _STR_SMALL_TAG: Byte  := 0x01
 _STR_MAX_SMALL: CSize := 14
 
-_Big: {
-    len: CSize,
-    buf: Ptr[CChar],
-}
+// Note: String type is defined in <builtin.tl> so it is always available without requiring an import of
+// String.tl
 
-_Small: {
-    buf:     CArray[CChar, 15],
-    tag_len: CUnsignedChar,
-}
+// _Big: {
+//     len: CSize,
+//     buf: Ptr[CChar],
+// }
 
-String: { | big: _Big
-          | ss: _Small }
+// _Small: {
+//     buf:     CArray[CChar, 15],
+//     tag_len: CUnsignedChar,
+// }
+
+// String: { | big: _Big
+//           | ss: _Small }
 
 
 // -- Synopsis --
@@ -221,10 +224,6 @@ from_cstr(alloc, cs) {
 from_cstr(cs) {
     from_cstr(Alloc.context.default, cs)
 }
-
-// Note: from_literal/1 is now a pseudo-function that is inlined at the transpiler phase. It still needs to
-// have a type though.
-from_literal(s: Ptr[Const[CChar]]) -> String
 
 
 #ifc

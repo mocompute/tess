@@ -13,5 +13,6 @@ bad_try() -> Result[Void, String] {
 }
 
 main() {
+    bad_try()
     0
 }

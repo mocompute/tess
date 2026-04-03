@@ -58,3 +58,28 @@ or_else[T, U](opt_or_res, default: T) -> T {
         _tl_fatal_(c"or_else: invalid type")
     }
 }
+
+// String — Small-string-optimized, immutable string type.
+//
+// Strings of 14 bytes or fewer are stored inline (no heap allocation).
+// Larger strings use a heap-allocated buffer via an explicit allocator.
+//
+// Defined in <builtin.tl> so string literals are always available.
+#module String
+
+_Big: {
+    len: CSize,
+    buf: Ptr[CChar],
+}
+
+_Small: {
+    buf:     CArray[CChar, 15],
+    tag_len: CUnsignedChar,
+}
+
+String: { | big: _Big
+          | ss: _Small }
+
+// Note: from_literal/1 is now a pseudo-function that is inlined at the transpiler phase. It still needs to
+// have a type though.
+from_literal(s: Ptr[Const[CChar]]) -> String
