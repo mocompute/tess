@@ -697,7 +697,7 @@ int a_assignment(parser *self) {
         else array_push(exprs, self->result);
     }
 
-    ast_node *body = create_body_fallback(self, exprs, defers, val);
+    ast_node *body = create_body_fallback(self, exprs, defers, lval);
 
     ast_node *a    = ast_node_create_let_in(self->ast_arena, lval, val, body);
     return result_ast_node(self, a);
