@@ -261,8 +261,6 @@ void rename_variables(tl_infer *self, ast_node *node, rename_variables_ctx *ctx,
                 // [[alloc]] without expression: synthesize Alloc__context.default as the alloc_expr.
                 // This lets the rest of the pipeline (alpha conversion, type checking, transpilation)
                 // handle it uniformly with the explicit [[alloc(expr)]] case.
-                //
-                // TODO: generate an error if Alloc is not in scope (the user forgot to #import <Alloc.tl>
                 ast_node *ctx_sym = ast_node_create_sym_c(self->arena, "Alloc__context");
                 ast_node *dot_op  = ast_node_create_sym_c(self->arena, ".");
                 ast_node *field   = ast_node_create_sym_c(self->arena, "default");

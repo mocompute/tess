@@ -135,6 +135,7 @@
     X(tl_err_capture_unused_var, "capture_unused_variable")                                                \
     X(tl_err_capture_not_in_scope, "capture_not_in_scope")                                                 \
     X(tl_err_alloc_expr_type_mismatch, "alloc_expr_type_mismatch")                                         \
+    X(tl_err_alloc_requires_import, "alloc_requires_import")                                               \
     X(tl_err_undeclared_reassignment, "undeclared_variable")                                               \
     X(tl_err_auto_collapse_ambiguous, "auto_collapse_ambiguous")                                           \
     X(tl_err_invalid_format_spec, "invalid_format_specifier")

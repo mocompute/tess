@@ -669,6 +669,13 @@ static int check_closure_attrs_cb(tl_infer *self, traverse_ctx *ctx, ast_node *n
       lambda_get_closure_attrs(self->transient, node->lambda_function.attributes);
     if (!attrs.has_alloc) return 0;
 
+    // Check if Alloc module is imported (Alloc__Context type must be in the type environment).
+    if (!tl_type_env_lookup(self->env, S("Alloc__Context"))) {
+        array_push(self->errors,
+                   ((tl_infer_error){.tag = tl_err_alloc_requires_import, .node = node}));
+        return 0;
+    }
+
     // Validate alloc_expr type is Ptr[Allocator].
     if (attrs.alloc_expr && attrs.alloc_expr->type) {
         tl_polytype_substitute(self->arena, attrs.alloc_expr->type, self->subs);

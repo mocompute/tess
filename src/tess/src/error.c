@@ -26,6 +26,7 @@ char const *tl_error_tag_to_string(tl_error_tag tag) {
     X(tl_err_capture_unused_var, "captured variable unused")                                               \
     X(tl_err_capture_not_in_scope, "captured variable not in scope")                                       \
     X(tl_err_alloc_expr_type_mismatch, "alloc expression type mismatch")                                   \
+    X(tl_err_alloc_requires_import, "[[alloc]] requires #import <Alloc.tl>")                               \
     X(tl_err_trait_bound_not_satisfied, "trait bound not satisfied")                                       \
     X(tl_err_trait_circular_inheritance, "circular trait inheritance")                                     \
     X(tl_err_type_exists, "type already defined")                                                          \
