@@ -1294,6 +1294,15 @@ int compile(state *self) {
         }
     }
 
+    // Validate that all input files exist before proceeding
+    for (u32 i = 0; i < paths.size; i++) {
+        str file = str_init_static(paths.v[i]);
+        if (!file_exists(file)) {
+            fprintf(stderr, "error: file not found: %s\n", paths.v[i]);
+            return 1;
+        }
+    }
+
     // Warn if CLI files override source() entries
     if (!used_source_entries && self->words.size >= 2) {
         str pkg_path = str_init_static("package.tl");
