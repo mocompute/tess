@@ -49,7 +49,7 @@ typedef struct {
 } arena_watermark;
 
 nodiscard arena_watermark arena_save(allocator *arena);
-void            arena_restore(allocator *arena, arena_watermark wm);
+void                      arena_restore(allocator *arena, arena_watermark wm);
 
 // -- arena statistics --
 

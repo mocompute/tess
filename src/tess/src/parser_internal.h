@@ -249,7 +249,7 @@ hashmap *resolve_module_symbols(parser *, str module_name);
 void     maybe_mangle_implicit_submodule(parser *, ast_node *name);
 
 // Variadic detection and symbol registration (called from parser_receiver.c)
-int  detect_and_register_variadic(parser *, ast_node *name, ast_node_sized params, u8 *out_arity);
+int detect_and_register_variadic(parser *, ast_node *name, ast_node_sized params, u8 *out_arity);
 
 // parser infrastructure
 
@@ -286,7 +286,7 @@ defarray(receiver_param_array, receiver_param);
 // A single function entry inside the receiver block.
 // Forward declaration (body == null) or full definition (body != null).
 typedef struct {
-    ast_node      *name;       // attributed identifier
+    ast_node      *name;        // attributed identifier
     ast_node_array type_params; // function-level [U] if present
     ast_node_array params;      // explicit params only (no receiver)
     ast_node      *return_type; // type after ->, or null

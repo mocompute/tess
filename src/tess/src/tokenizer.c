@@ -34,12 +34,12 @@ struct tokenizer {
     u32            square_depth; // nesting depth of [ ] (to avoid greedy ]] inside type args)
 
     // f-string state (persists across tokenizer_next calls)
-    u32 f_string_depth;          // >0 when inside f-string expression hole
-    u32 f_string_brace_depth;    // tracks nested {} within expression hole
-    u32 f_string_paren_depth;    // tracks nested () within expression hole
-    u32 f_string_bracket_depth;  // tracks nested [] within expression hole
-    int f_string_is_first;       // next literal segment is the first (start vs mid)
-    int f_string_in_literal;     // 1 = next tokenizer_next() call starts in in_f_string state
+    u32 f_string_depth;         // >0 when inside f-string expression hole
+    u32 f_string_brace_depth;   // tracks nested {} within expression hole
+    u32 f_string_paren_depth;   // tracks nested () within expression hole
+    u32 f_string_bracket_depth; // tracks nested [] within expression hole
+    int f_string_is_first;      // next literal segment is the first (start vs mid)
+    int f_string_in_literal;    // 1 = next tokenizer_next() call starts in in_f_string state
 };
 
 // -- statics --
@@ -335,16 +335,16 @@ start:; // loop point for skip_depth > 0
             case 's':  state = in_s; continue;
             case '.':  state = in_dot; continue;
             case ':':
-                if (self->f_string_depth > 0 && self->f_string_brace_depth == 0
-                    && self->f_string_paren_depth == 0 && self->f_string_bracket_depth == 0) {
+                if (self->f_string_depth > 0 && self->f_string_brace_depth == 0 &&
+                    self->f_string_paren_depth == 0 && self->f_string_bracket_depth == 0) {
                     self->buf.size = 0;
                     state          = in_f_string_format_spec;
                     continue;
                 }
                 state = in_colon;
                 continue;
-            case '!':  state = in_bang; continue;
-            case '#':  state = start_hash_command; continue;
+            case '!': state = in_bang; continue;
+            case '#': state = start_hash_command; continue;
 
             case '~':
                 replace_token_s(self->strings, &res, tok_symbol, "~");
@@ -910,7 +910,7 @@ start:; // loop point for skip_depth > 0
                 self->f_string_bracket_depth = 0;
                 self->f_string_is_first      = 1;
                 self->buf.size               = 0;
-                state                      = in_f_string;
+                state                        = in_f_string;
                 continue;
             }
             // Not f"...", treat 'f' as start of identifier

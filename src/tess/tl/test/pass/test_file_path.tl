@@ -166,7 +166,7 @@ test_relative() {
     // Empty input should return error
     r5 := File.Path.relative("", "/a")
     when r5 {
-        ok: Ok { c_printf(c"FAIL relative 5: expected error\n") fails += 1 }
+        ok:  Ok { c_printf(c"FAIL relative 5: expected error\n") fails += 1 }
         err: Err { }
     }
 

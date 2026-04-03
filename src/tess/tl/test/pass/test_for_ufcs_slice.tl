@@ -4,10 +4,10 @@
 
 main() {
     arr := Array.init(0, 4)
-    i := 1
+    i   := 1
     for x.& in arr {
         x.* = i
-        i = i + 1
+        i   = i + 1
     }
 
     s := arr.slice(0, 4)

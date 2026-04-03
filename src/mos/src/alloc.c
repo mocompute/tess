@@ -361,9 +361,8 @@ void arena_restore(allocator *arena_, arena_watermark wm) {
     arena_allocator *arena = (arena_allocator *)arena_;
     arena_header    *saved = (arena_header *)wm.bucket;
 
-    saved->size = wm.size;
-    for (arena_header *h = saved->next; h; h = h->next)
-        h->size = sizeof(arena_header);
+    saved->size            = wm.size;
+    for (arena_header *h = saved->next; h; h = h->next) h->size = sizeof(arena_header);
     arena->tail = saved;
 }
 

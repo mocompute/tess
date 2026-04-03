@@ -11,7 +11,7 @@ zero_buf(p: Ptr[any], n: CSize) { c_memset(p, 0, n) }
 // Ptr[CInt] parameter (typed pointer)
 sum(p: Ptr[CInt], n: CInt) -> CInt {
     total: CInt := 0
-    i: CInt := 0
+    i:     CInt := 0
     while i < n {
         total += p.[i]
         i += 1
@@ -22,7 +22,7 @@ sum(p: Ptr[CInt], n: CInt) -> CInt {
 // Ptr[Const[CInt]] parameter (read-only pointer — tests guard in auto_address_of_ptr_const_args)
 sum_const(p: Ptr[Const[CInt]], n: CInt) -> CInt {
     total: CInt := 0
-    i: CInt := 0
+    i:     CInt := 0
     while i < n {
         total += p.[i]
         i += 1
@@ -34,7 +34,7 @@ sum_const(p: Ptr[Const[CInt]], n: CInt) -> CInt {
 CArray_wrapper: { data: CArray[CInt, 4] }
 
 fill(self: Ptr[CArray_wrapper], val: CInt) {
-    i: CInt := 0
+    i:   CInt      := 0
     ptr: Ptr[CInt] := self->data
     while i < 4 {
         ptr.[i] = val

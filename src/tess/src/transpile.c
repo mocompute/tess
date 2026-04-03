@@ -1846,20 +1846,19 @@ static void emit_closure_binding(transpile *self, str spec_name, str ctx_var) {
     cat(self, S(" };\n"));
 }
 
-
 static str generate_let_in_lambda(transpile *self, tl_monotype *result_type, ast_node const *node,
                                   eval_ctx *ctx) {
 
     // For allocated closures: create local tl_closure variable(s) with heap-allocated context.
     // A polymorphic closure may have multiple specializations, each needing its own binding
     // (same context, different function pointer).
-    str                  name        = ast_node_str(node->let_in.name);
+    str                  name = ast_node_str(node->let_in.name);
     lambda_closure_attrs alloc_attrs =
       lambda_get_closure_attrs(self->transient, node->let_in.value->lambda_function.attributes);
     if (alloc_attrs.has_alloc) {
-        tl_polytype *poly = tl_type_env_lookup(self->env, name);
+        tl_polytype *poly    = tl_type_env_lookup(self->env, name);
 
-        str ctx_var = str_empty();
+        str          ctx_var = str_empty();
         if (poly && poly->type->list.fvs.size)
             ctx_var = generate_context(self, poly->type->list.fvs, ctx, 1, alloc_attrs.alloc_expr);
 

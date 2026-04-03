@@ -836,8 +836,8 @@ static void type_error_cb(void *ctx_, tl_monotype *left, tl_monotype *right) {
     // Format "conflicting types" message using user-facing type names
     str left_str  = tl_monotype_to_user_string(ctx->self->transient, left);
     str right_str = tl_monotype_to_user_string(ctx->self->transient, right);
-    str msg       = str_fmt(ctx->self->arena, "conflicting types: %s versus %s",
-                            str_cstr(&left_str), str_cstr(&right_str));
+    str msg       = str_fmt(ctx->self->arena, "conflicting types: %s versus %s", str_cstr(&left_str),
+                            str_cstr(&right_str));
 
     array_push(ctx->self->errors,
                ((tl_infer_error){.tag = tl_err_type_error, .node = ctx->node, .message = msg}));
@@ -1250,8 +1250,8 @@ static int cast_constrain_let_in(tl_infer *self, ast_node *node) {
             if (!tl_monotype_integer_value_fits(annotation_type->type, lit)) {
                 str left_str  = tl_polytype_to_user_string(self->transient, annotation_type);
                 str right_str = tl_polytype_to_user_string(self->transient, value_type);
-                str msg       = str_fmt(self->arena, "conflicting types: %s versus %s",
-                                        str_cstr(&left_str), str_cstr(&right_str));
+                str msg       = str_fmt(self->arena, "conflicting types: %s versus %s", str_cstr(&left_str),
+                                        str_cstr(&right_str));
                 array_push(self->errors,
                            ((tl_infer_error){.tag = tl_err_type_error, .node = node, .message = msg}));
                 self->is_constrain_ignore_error = saved;
@@ -1640,8 +1640,8 @@ static ast_node *constraint_wrap_address_of(tl_infer *self, ast_node *operand) {
 
 // Auto-address-of for Ptr[Const[T]] parameters in regular function calls.
 // Ptr[T] (mutable) is NOT auto-addressed — only Ptr[Const[T]] (read-only).
-static int auto_address_of_ptr_const_args(tl_infer *self, tl_monotype *func_type,
-                                          tl_polytype *callsite, ast_node_sized args) {
+static int auto_address_of_ptr_const_args(tl_infer *self, tl_monotype *func_type, tl_polytype *callsite,
+                                          ast_node_sized args) {
     if (!tl_monotype_is_arrow(func_type)) return 0;
     tl_monotype *call_mono = callsite->type;
     if (!tl_monotype_is_arrow(call_mono)) return 0;
@@ -1649,7 +1649,7 @@ static int auto_address_of_ptr_const_args(tl_infer *self, tl_monotype *func_type
     tl_monotype_sized func_params = tl_monotype_arrow_get_args(func_type);
     tl_monotype_sized call_args   = tl_monotype_arrow_get_args(call_mono);
 
-    u32 n = func_params.size < call_args.size ? func_params.size : call_args.size;
+    u32               n           = func_params.size < call_args.size ? func_params.size : call_args.size;
 
     for (u32 i = 0; i < n; ++i) {
         if (!tl_monotype_is_ptr_to_const(func_params.v[i])) continue;
@@ -1668,8 +1668,7 @@ static int auto_address_of_ptr_const_args(tl_infer *self, tl_monotype *func_type
 }
 
 // Implicit CArray-to-Ptr decay: rewrite callsite arrow when CArray is passed to Ptr param.
-static int auto_decay_carray_to_ptr_args(tl_infer *self, tl_monotype *func_type,
-                                         tl_polytype *callsite) {
+static int auto_decay_carray_to_ptr_args(tl_infer *self, tl_monotype *func_type, tl_polytype *callsite) {
     if (!tl_monotype_is_arrow(func_type)) return 0;
     tl_monotype *call_mono = callsite->type;
     if (!tl_monotype_is_arrow(call_mono)) return 0;
@@ -1819,8 +1818,8 @@ static int infer_binary_op(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
             ast_node *other = left_is_nil ? right : left;
             tl_monotype_substitute(self->arena, other->type->type, self->subs, null);
             tl_monotype *mono = other->type->type;
-            if (tl_polytype_is_concrete_no_weak(other->type) && !tl_monotype_is_ptr(mono)
-                && !tl_monotype_is_arrow(mono)) {
+            if (tl_polytype_is_concrete_no_weak(other->type) && !tl_monotype_is_ptr(mono) &&
+                !tl_monotype_is_arrow(mono)) {
                 str type_str = tl_monotype_to_user_string(self->transient, mono);
                 str msg      = str_fmt(self->arena, "cannot compare %s with null (not a pointer type)",
                                        str_cstr(&type_str));
@@ -1920,8 +1919,7 @@ tl_monotype *tagged_union_other_variant(tl_monotype *wrapper_type, str matched_n
     i32 u_index = tl_monotype_type_constructor_field_index(wrapper_type, S(AST_TAGGED_UNION_UNION_FIELD));
     if (u_index < 0) return null;
     tl_monotype *union_type = wrapper_type->cons_inst->args.v[u_index];
-    if (!tl_monotype_is_inst(union_type) || union_type->cons_inst->def->field_names.size != 2)
-        return null;
+    if (!tl_monotype_is_inst(union_type) || union_type->cons_inst->def->field_names.size != 2) return null;
     str_sized field_names = union_type->cons_inst->def->field_names;
     forall(j, field_names) {
         if (str_eq(field_names.v[j], matched_name)) {
@@ -2124,8 +2122,8 @@ static int infer_case(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
 // Clone a let-in lambda (without its body) into the toplevels map so the transpiler
 // can generate it as a toplevel C function.
 static void promote_lambda_to_toplevel(tl_infer *self, ast_node *node) {
-    str       name  = ast_node_str(node->let_in.name);
-    ast_node *clone = ast_node_clone(self->arena, node);
+    str       name     = ast_node_str(node->let_in.name);
+    ast_node *clone    = ast_node_clone(self->arena, node);
     clone->let_in.body = null;
     toplevel_add(self, name, clone);
 }
@@ -3138,7 +3136,7 @@ static int ufcs_rewrite_call(tl_infer *self, traverse_ctx *ctx, ast_node *node, 
     // (e.g. Slice[T] is defined in builtin but its methods live in #module Slice),
     // try the type constructor's generic name as the module.
     if (!fn_poly && tl_monotype_is_inst(recv_type)) {
-        str gn = recv_type->cons_inst->def->generic_name;
+        str gn     = recv_type->cons_inst->def->generic_name;
         str module = recv_type->cons_inst->def->module;
         if (!str_is_empty(gn) && !str_eq(gn, module)) {
             str qualified = str_qualify(self->arena, gn, field_name);

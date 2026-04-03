@@ -11,7 +11,7 @@
 main() {
     error := 0
 
-    special := 42
+    special  := 42
     constant := [[alloc, capture(special)]] (x) -> Int { special }
 
     if constant(1.0) != 42 { error += 1 }

@@ -18,7 +18,7 @@ main() {
     s4 := f"{x:+d}"
     if s4 != "+42" { error += 1 }
 
-    y := -7
+    y  := -7
     s5 := f"{y:+d}"
     if s5 != "-7" { error += 1 }
 
@@ -26,7 +26,7 @@ main() {
     if s6 != "    -7" { error += 1 }
 
     u: UInt := 255
-    s7 := f"{u:d}"
+    s7      := f"{u:d}"
     if s7 != "255" { error += 1 }
 
     error

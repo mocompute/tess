@@ -85,30 +85,30 @@ typedef struct {
 
     // Compilation statistics (populated when report_stats is set)
     struct {
-        double               parse_time_ms;
-        size_t               parse_peak_mem;
-        size_t               parse_capacity;
-        size_t               parse_final_mem;
-        double               infer_time_ms;
-        size_t               infer_peak_mem;
-        size_t               infer_capacity;
-        size_t               infer_final_mem;
-        double               stdlib_extract_time_ms;
-        double               cc_defines_time_ms;
-        double               transpile_time_ms;
-        size_t               transpile_peak_mem;
-        size_t               transpile_capacity;
-        size_t               transpile_final_mem;
-        double               cc_time_ms;
-        size_t               cc_input_size; // Size of C source passed to compiler
+        double parse_time_ms;
+        size_t parse_peak_mem;
+        size_t parse_capacity;
+        size_t parse_final_mem;
+        double infer_time_ms;
+        size_t infer_peak_mem;
+        size_t infer_capacity;
+        size_t infer_final_mem;
+        double stdlib_extract_time_ms;
+        double cc_defines_time_ms;
+        double transpile_time_ms;
+        size_t transpile_peak_mem;
+        size_t transpile_capacity;
+        size_t transpile_final_mem;
+        double cc_time_ms;
+        size_t cc_input_size; // Size of C source passed to compiler
 
         // Root arena snapshots (capacity = true OS memory footprint)
-        size_t               root_after_parse_capacity;
-        size_t               root_after_parse_allocated;
-        size_t               root_after_infer_capacity;
-        size_t               root_after_infer_allocated;
-        size_t               root_after_transpile_capacity;
-        size_t               root_after_transpile_allocated;
+        size_t root_after_parse_capacity;
+        size_t root_after_parse_allocated;
+        size_t root_after_infer_capacity;
+        size_t root_after_infer_allocated;
+        size_t root_after_transpile_capacity;
+        size_t root_after_transpile_allocated;
 
         // Root arena breakdown (child arena stats)
         size_t               ast_arena_capacity;
@@ -157,7 +157,8 @@ noreturn void usage(int status, char const *argv0) {
     printf("    --no-line-directive    suppress output of #line directives in C file\n");
     printf("    --bounds-check         enable integer narrowing bounds checks (default in debug)\n");
     printf("    --no-bounds-check      disable integer narrowing bounds checks\n");
-    printf("    --debug                debug build: -O0, bounds checks on, DEBUG defined (default is -O2)\n");
+    printf(
+      "    --debug                debug build: -O0, bounds checks on, DEBUG defined (default is -O2)\n");
     printf("    --no-standard-includes do not add default standard library paths\n");
     printf("    --static               create static library instead of shared (lib command only)\n");
     printf("    --stats                report memory and time statistics per phase\n");
@@ -1397,9 +1398,9 @@ int compile(state *self) {
         self->stats.parse_time_ms = hires_timer_elapsed_sec(&phase_timer) * 1000.0;
         arena_stats ast_stats, token_stats;
         parser_get_arena_stats(parser, &ast_stats, &token_stats);
-        self->stats.parse_peak_mem  = ast_stats.peak_allocated + token_stats.peak_allocated;
-        self->stats.parse_capacity  = ast_stats.capacity + token_stats.capacity;
-        self->stats.parse_final_mem = ast_stats.allocated + token_stats.allocated;
+        self->stats.parse_peak_mem     = ast_stats.peak_allocated + token_stats.peak_allocated;
+        self->stats.parse_capacity     = ast_stats.capacity + token_stats.capacity;
+        self->stats.parse_final_mem    = ast_stats.allocated + token_stats.allocated;
 
         self->stats.ast_arena_capacity = ast_stats.capacity;
         self->stats.ast_arena_used     = ast_stats.allocated;
@@ -1446,8 +1447,8 @@ int compile(state *self) {
         self->stats.root_after_infer_capacity  = root.capacity;
         self->stats.root_after_infer_allocated = root.allocated;
 
-        self->stats.infer_phases    = *tl_infer_get_phase_stats(infer);
-        self->stats.infer_counters  = *tl_infer_get_counters(infer);
+        self->stats.infer_phases               = *tl_infer_get_phase_stats(infer);
+        self->stats.infer_counters             = *tl_infer_get_counters(infer);
     }
 
     if (self->is_check) goto cleanup_ti;
@@ -1455,7 +1456,7 @@ int compile(state *self) {
     // === TRANSPILATION PHASE ===
     hires_timer_start(&phase_timer);
 
-    str lib_name = self->lib_name ? str_init(self->arena, self->lib_name) : str_empty();
+    str            lib_name       = self->lib_name ? str_init(self->arena, self->lib_name) : str_empty();
 
     transpile_opts transpile_opts = {
       .infer_result      = infer_result,
@@ -1493,7 +1494,7 @@ int compile(state *self) {
     if (self->is_library && self->out_path) {
         // Generate c_export header if there are any exported functions
         str_build header_build = {0};
-        str guard_str = lib_include_guard(self->arena, str_cstr(&lib_name));
+        str       guard_str    = lib_include_guard(self->arena, str_cstr(&lib_name));
         if (transpile_generate_header(transpile, &header_build, guard_str)) {
             self->header = str_build_finish(&header_build);
         }
@@ -1608,8 +1609,8 @@ static c_string_array build_gcc_argv(state *self, char const **extra_flags, int 
     char const    *cc   = str_cstr(&self->cc);
 
     c_string_array argv = {.alloc = self->arena};
-    array_reserve(argv, self->cflags.size + self->link_libs.size + self->ldflags.size
-                       + extra_flags_count + 16);
+    array_reserve(argv,
+                  self->cflags.size + self->link_libs.size + self->ldflags.size + extra_flags_count + 16);
     array_push(argv, cc);
 
     // clang-format off
@@ -1670,8 +1671,8 @@ static c_string_array build_msvc_argv(state *self, char const **msvc_extra_flags
                                       int msvc_extra_flags_count, char const *c_file,
                                       char const *obj_file) {
     c_string_array argv = {.alloc = self->arena};
-    array_reserve(argv, self->cflags.size + self->link_libs.size + self->ldflags.size
-                       + msvc_extra_flags_count + 16);
+    array_reserve(argv, self->cflags.size + self->link_libs.size + self->ldflags.size +
+                          msvc_extra_flags_count + 16);
 
     char const *cc = str_cstr(&self->cc);
     array_push(argv, cc);
@@ -2599,7 +2600,10 @@ int main(int argc, char *argv[]) {
         self.is_executable = 1;
         result             = compile(&self);
         if (result) goto done;
-        if (require_c_compiler(&self)) { result = 1; goto done; }
+        if (require_c_compiler(&self)) {
+            result = 1;
+            goto done;
+        }
         result = compile_c(&self);
     }
 
@@ -2632,7 +2636,11 @@ int main(int argc, char *argv[]) {
 
         result = compile(&self);
         if (result == 0) {
-            if (require_c_compiler(&self)) { result = 1; } else { result = compile_c(&self); }
+            if (require_c_compiler(&self)) {
+                result = 1;
+            } else {
+                result = compile_c(&self);
+            }
         }
 
         self.words.size = saved_words_size;
@@ -2698,16 +2706,19 @@ int main(int argc, char *argv[]) {
         self.is_library = 1;
         result          = compile(&self);
         if (result) goto done;
-        if (require_c_compiler(&self)) { result = 1; goto done; }
+        if (require_c_compiler(&self)) {
+            result = 1;
+            goto done;
+        }
         result = self.is_static_library ? compile_c_static_lib(&self) : compile_c_obj(&self);
 
         // Write c_export header file if any exports were found
         if (!result && !str_is_empty(self.header)) {
-            str out_dir  = file_dirname(self.arena, str_init_static(self.out_path));
-            str hdr_name = str_cat(self.arena, str_init_static(self.lib_name), S(".h"));
-            str hdr_path = file_path_join(self.arena, out_dir, hdr_name);
+            str   out_dir  = file_dirname(self.arena, str_init_static(self.out_path));
+            str   hdr_name = str_cat(self.arena, str_init_static(self.lib_name), S(".h"));
+            str   hdr_path = file_path_join(self.arena, out_dir, hdr_name);
 
-            FILE *hf = fopen(str_cstr(&hdr_path), "w");
+            FILE *hf       = fopen(str_cstr(&hdr_path), "w");
             if (!hf) {
                 fprintf(stderr, "error: could not open header file for writing: %s\n", str_cstr(&hdr_path));
                 result = 1;
@@ -2749,8 +2760,8 @@ done:
         print_stats_header();
         fprintf(stderr, "%-20s %12.3f %12s %12s %12s\n", "Stdlib Extract",
                 self.stats.stdlib_extract_time_ms, "-", "-", "-");
-        fprintf(stderr, "%-20s %12.3f %12s %12s %12s\n", "CC Defines",
-                self.stats.cc_defines_time_ms, "-", "-", "-");
+        fprintf(stderr, "%-20s %12.3f %12s %12s %12s\n", "CC Defines", self.stats.cc_defines_time_ms, "-",
+                "-", "-");
         print_stats_row("Parsing", self.stats.parse_time_ms, self.stats.parse_peak_mem,
                         self.stats.parse_capacity, self.stats.parse_final_mem);
         print_stats_row("Type Inference", self.stats.infer_time_ms, self.stats.infer_peak_mem,
@@ -2794,14 +2805,12 @@ done:
         fprintf(stderr, "%-26s %10s %10s\n", "Component", "Capacity", "Used");
         fprintf(stderr, "%-26s %10s %10s\n", "--------------------------", "----------", "----------");
         print_breakdown_row("Parser AST", self.stats.ast_arena_capacity, self.stats.ast_arena_used);
-        print_breakdown_row("AST node array", self.stats.nodes_arena_capacity,
-                            self.stats.nodes_arena_used);
+        print_breakdown_row("AST node array", self.stats.nodes_arena_capacity, self.stats.nodes_arena_used);
         print_breakdown_row("Infer", self.stats.infer_capacity, self.stats.infer_final_mem);
         print_breakdown_row("Infer transient", self.stats.infer_transient_capacity,
                             self.stats.infer_transient_used);
         if (self.stats.transpile_capacity) {
-            print_breakdown_row("Transpile", self.stats.transpile_capacity,
-                                self.stats.transpile_final_mem);
+            print_breakdown_row("Transpile", self.stats.transpile_capacity, self.stats.transpile_final_mem);
             print_breakdown_row("Transpile transient", self.stats.transpile_transient_capacity,
                                 self.stats.transpile_transient_used);
         }

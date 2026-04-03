@@ -622,7 +622,7 @@ static ast_node *make_from_literal(parser *self, char const *s) {
 // Parse a format spec string: [[fill]align][sign][#][0][width][.precision][type]
 // Returns 0 on success, 1 on parse error.
 static int parse_format_spec(char const *s, tl_format_spec *out) {
-    *out = (tl_format_spec){.precision = -1};
+    *out          = (tl_format_spec){.precision = -1};
 
     char const *p = s;
     if (!*p) return 0; // empty spec is valid (no-op)
@@ -638,13 +638,13 @@ static int parse_format_spec(char const *s, tl_format_spec *out) {
 
     // [sign]
     if (*p == '+' || *p == '-' || *p == ' ') {
-        out->sign          = *p++;
+        out->sign              = *p++;
         out->has_type_specific = 1;
     }
 
     // [#]
     if (*p == '#') {
-        out->alt           = 1;
+        out->alt               = 1;
         out->has_type_specific = 1;
         p++;
     }
@@ -657,22 +657,21 @@ static int parse_format_spec(char const *s, tl_format_spec *out) {
     }
     if (*p >= '1' && *p <= '9') {
         out->width = 0;
-        while (*p >= '0' && *p <= '9')
-            out->width = out->width * 10 + (*p++ - '0');
+        while (*p >= '0' && *p <= '9') out->width = out->width * 10 + (*p++ - '0');
     }
 
     // [.precision]
     if (*p == '.') {
         p++;
-        out->precision     = 0;
+        out->precision         = 0;
         out->has_type_specific = 1;
-        while (*p >= '0' && *p <= '9')
-            out->precision = out->precision * 10 + (*p++ - '0');
+        while (*p >= '0' && *p <= '9') out->precision = out->precision * 10 + (*p++ - '0');
     }
 
     // [type]
-    if (*p == 'd' || *p == 'x' || *p == 'X' || *p == 'o' || *p == 'b' || *p == 'e' || *p == 'E' || *p == 'f') {
-        out->type_char     = *p++;
+    if (*p == 'd' || *p == 'x' || *p == 'X' || *p == 'o' || *p == 'b' || *p == 'e' || *p == 'E' ||
+        *p == 'f') {
+        out->type_char         = *p++;
         out->has_type_specific = 1;
     }
 
@@ -696,7 +695,7 @@ int a_string(parser *self) {
         ast_node_array parts = {.alloc = self->ast_arena};
 
         // Track per-part format specs. Index-parallel with parts.
-        tl_format_spec_array specs = {.alloc = self->ast_arena};
+        tl_format_spec_array specs     = {.alloc = self->ast_arena};
         tl_format_spec const zero_spec = {0};
 
         // Add first literal segment (if non-empty)
@@ -768,10 +767,10 @@ int a_string(parser *self) {
         // Attach format specs if any were present
         if (has_any_spec && specs.size) {
             array_shrink(specs);
-            tl_fstring_format *ffmt = alloc_malloc(self->ast_arena, sizeof(tl_fstring_format));
-            ffmt->specs       = specs.v;
-            ffmt->uses_format = null;
-            ffmt->layout_fn   = str_empty();
+            tl_fstring_format *ffmt          = alloc_malloc(self->ast_arena, sizeof(tl_fstring_format));
+            ffmt->specs                      = specs.v;
+            ffmt->uses_format                = null;
+            ffmt->layout_fn                  = str_empty();
             r->named_application.fstring_fmt = ffmt;
         }
 
@@ -1322,8 +1321,7 @@ static void register_variadic_symbol(parser *self, str base_name, str mangled, u
 // Detect whether the last parameter has a variadic annotation (...TraitName),
 // compute arity, mangle the name, and register the variadic symbol if found.
 // Returns 1 if variadic, 0 otherwise. *out_arity receives the mangled arity.
-int detect_and_register_variadic(parser *self, ast_node *name, ast_node_sized params,
-                                        u8 *out_arity) {
+int detect_and_register_variadic(parser *self, ast_node *name, ast_node_sized params, u8 *out_arity) {
     int is_variadic = 0;
     u8  n_fixed     = (u8)params.size;
 
@@ -1363,10 +1361,9 @@ int toplevel_defun(parser *self) {
     if (0 == a_try(self, a_arrow)) {
 
         if (a_try(self, a_type_identifier)) return 1;
-        ast_node *ann = self->result;
+        ast_node *ann   = self->result;
 
-        ast_node *arrow =
-          parser_make_arrow(self, params, ann, (ast_node_sized)sized_all(type_params));
+        ast_node *arrow = parser_make_arrow(self, params, ann, (ast_node_sized)sized_all(type_params));
 
         // attach to name
         name->symbol.annotation = arrow;

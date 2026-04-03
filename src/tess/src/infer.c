@@ -659,21 +659,17 @@ void tl_infer_report_errors(tl_infer *self) {
 
                 // Location prefix: file:line:col or file:line (omit col if 0)
                 if (node->file && *node->file) {
-                    if (node->col)
-                        fprintf(stderr, "%s:%u:%u: ", node->file, node->line, node->col);
-                    else
-                        fprintf(stderr, "%s:%u: ", node->file, node->line);
+                    if (node->col) fprintf(stderr, "%s:%u:%u: ", node->file, node->line, node->col);
+                    else fprintf(stderr, "%s:%u: ", node->file, node->line);
                 }
 
-                if (show_ast)
-                    fprintf(stderr, "%s: %s: %s\n", tag, str_cstr(&message), str_cstr(&node_str));
-                else if (!str_is_empty(message))
-                    fprintf(stderr, "%s: %s\n", tag, str_cstr(&message));
-                else
-                    fprintf(stderr, "%s\n", tag);
+                if (show_ast) fprintf(stderr, "%s: %s: %s\n", tag, str_cstr(&message), str_cstr(&node_str));
+                else if (!str_is_empty(message)) fprintf(stderr, "%s: %s\n", tag, str_cstr(&message));
+                else fprintf(stderr, "%s\n", tag);
                 report_error_hints(self, err);
             } else {
-                fprintf(stderr, "error: %s: %s\n", tl_error_tag_to_user_string(err->tag), str_cstr(&message));
+                fprintf(stderr, "error: %s: %s\n", tl_error_tag_to_user_string(err->tag),
+                        str_cstr(&message));
             }
         }
     }

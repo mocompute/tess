@@ -2,7 +2,7 @@
 #import <String.tl>
 
 main() {
-    s := "hello"
+    s     := "hello"
     count := 0
     for c in s {
         count = count + 1

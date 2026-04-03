@@ -324,7 +324,7 @@ separator  ()             -> CChar
 
 // -- Private helpers --
 
-_is_sep       (c: CChar) -> Bool
+_is_sep       (c: CChar)                                          -> Bool
 _make_absolute(alloc: Ptr[Allocator], path: String, orig: String) -> Result[String, File.IOError]
 
 

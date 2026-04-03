@@ -163,7 +163,7 @@ static ast_node *create_variant_constructor(parser *self,
     }
 
     // 4. Build the arrow annotation for function type: (params) -> ReturnType
-    ast_node *arrow = parser_make_arrow(self, params, return_type, type_params);
+    ast_node *arrow              = parser_make_arrow(self, params, return_type, type_params);
     func_name->symbol.annotation = arrow;
 
     // 5. Build the function body

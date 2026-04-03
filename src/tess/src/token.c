@@ -76,7 +76,7 @@ void token_deinit(allocator *alloc, token *tok) {
     case tok_double_close_square:
     case tok_equal_sign:
     case tok_equal_equal:
-    case tok_invalid:             break;
+    case tok_invalid:              break;
     case tok_number:
     case tok_symbol:
     case tok_string:
@@ -88,7 +88,7 @@ void token_deinit(allocator *alloc, token *tok) {
     case tok_f_string_format_spec:
     case tok_char:
     case tok_comment:
-    case tok_hash_command:        alloc_free(alloc, tok->s); break;
+    case tok_hash_command:         alloc_free(alloc, tok->s); break;
     }
 
     if (tok->file) alloc_free(alloc, (void *)tok->file);
@@ -136,7 +136,7 @@ char *token_to_string(allocator *alloc, token const *tok) {
     case tok_double_close_square:
     case tok_equal_sign:
     case tok_equal_equal:
-    case tok_invalid:             sprintf(buf, "(%s)", token_tag_to_string(tok->tag)); break;
+    case tok_invalid:              sprintf(buf, "(%s)", token_tag_to_string(tok->tag)); break;
 
     case tok_number:
     case tok_symbol:
@@ -150,7 +150,7 @@ char *token_to_string(allocator *alloc, token const *tok) {
     case tok_char:
     case tok_comment:
     case tok_c_block:
-    case tok_hash_command:        {
+    case tok_hash_command:         {
         char *big = alloc_malloc(alloc, strlen(tok->s) + 64);
         if (!big) return big;
         sprintf(big, "(%s \"%s\")", token_tag_to_string(tok->tag), tok->s);

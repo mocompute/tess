@@ -7,7 +7,7 @@ Triple[T]: | A { v: T } | B { v: T } | C { v: T }
 
 test() -> CInt {
     val: M.Triple[CInt] := M.A(1)
-    a: A := val else other { return 1 }
+    a:   A              := val else other { return 1 }
     a.v
 }
 

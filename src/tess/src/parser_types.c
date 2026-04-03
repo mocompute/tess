@@ -530,7 +530,7 @@ int a_type_arrow(parser *self) {
     if (a_try(self, a_arrow)) return 1;
 
     if (a_try(self, a_type_identifier)) return 1;
-    ast_node *rhs = self->result;
+    ast_node *rhs   = self->result;
 
     ast_node *arrow = parser_make_arrow(self, params, rhs, (ast_node_sized){0});
     return result_ast_node(self, arrow);

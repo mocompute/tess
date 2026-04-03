@@ -14,7 +14,7 @@ main() {
     if inc(10) != 11 { error += 1 }
 
     // return type annotation on closure
-    offset := 100
+    offset  := 100
     shifted := (x: Int) -> Int { x + offset }
     if shifted(5) != 105 { error += 1 }
 
@@ -24,7 +24,7 @@ main() {
 
     // void return type
     count := 0
-    bump := (n: Int) -> Void { count = count + n, void }
+    bump  := (n: Int) -> Void { count = count + n, void }
     bump(3)
     if count != 3 { error += 1 }
 

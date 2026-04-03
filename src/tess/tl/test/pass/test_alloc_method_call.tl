@@ -15,7 +15,7 @@ main() -> CInt {
     // clear (zero-initialized)
     p2: Ptr[CSize] := a.clear(4, sizeof[CSize]())
     if p2 == null { error += 1 }
-    if p2.* != 0  { error += 1 }
+    if p2.* != 0 { error += 1 }
     a.dealloc(p2)
 
     // realloc

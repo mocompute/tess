@@ -302,8 +302,8 @@ static ast_node *desugar_entry(parser *self, receiver_block_info *info, receiver
     ast_node *name = entry->name;
 
     if (entry->return_type) {
-        ast_node *arrow = parser_make_arrow(self, full_params, entry->return_type,
-                                            (ast_node_sized)sized_all(full_type_params));
+        ast_node *arrow         = parser_make_arrow(self, full_params, entry->return_type,
+                                                    (ast_node_sized)sized_all(full_type_params));
 
         name->symbol.annotation = arrow;
     }

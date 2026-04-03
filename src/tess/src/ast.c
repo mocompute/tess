@@ -8,8 +8,8 @@
 #include "type.h"
 
 #include <assert.h>
-#include <string.h>
 #include <stdio.h>
+#include <string.h>
 
 #define DEBUG_TYPE_SET 0
 
@@ -438,11 +438,10 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
         // Clone fstring_fmt (set by parser for f-strings with format specifiers).
         if (vorig->fstring_fmt) {
             tl_fstring_format *ffmt = alloc_malloc(alloc, sizeof(tl_fstring_format));
-            ffmt->specs = alloc_malloc(alloc, vorig->n_arguments * sizeof(tl_format_spec));
-            memcpy(ffmt->specs, vorig->fstring_fmt->specs,
-                   vorig->n_arguments * sizeof(tl_format_spec));
-            ffmt->uses_format = null; // set by specializer, not cloned
-            ffmt->layout_fn   = str_empty();
+            ffmt->specs             = alloc_malloc(alloc, vorig->n_arguments * sizeof(tl_format_spec));
+            memcpy(ffmt->specs, vorig->fstring_fmt->specs, vorig->n_arguments * sizeof(tl_format_spec));
+            ffmt->uses_format   = null; // set by specializer, not cloned
+            ffmt->layout_fn     = str_empty();
             vclone->fstring_fmt = ffmt;
         } else {
             vclone->fstring_fmt = null;
@@ -837,20 +836,21 @@ ast_node *ast_node_body(ast_node *self) {
 ast_function_view ast_function_view_from(ast_node *node) {
     ast_function_view v = {0};
     if (ast_node_is_let(node)) {
-        v.node         = node;
-        v.name_node    = node->let.name;
-        v.parameters   = (ast_node_sized){.v = node->let.parameters, .size = node->let.n_parameters};
-        v.body         = node->let.body;
-        v.attributes   = NULL;
-        v.is_lambda    = 0;
+        v.node       = node;
+        v.name_node  = node->let.name;
+        v.parameters = (ast_node_sized){.v = node->let.parameters, .size = node->let.n_parameters};
+        v.body       = node->let.body;
+        v.attributes = NULL;
+        v.is_lambda  = 0;
     } else if (ast_node_is_let_in_lambda(node)) {
-        ast_node *lf   = node->let_in.value;
-        v.node         = node;
-        v.name_node    = node->let_in.name;
-        v.parameters   = (ast_node_sized){.v = lf->lambda_function.parameters, .size = lf->lambda_function.n_parameters};
-        v.body         = lf->lambda_function.body;
-        v.attributes   = lf->lambda_function.attributes;
-        v.is_lambda    = 1;
+        ast_node *lf = node->let_in.value;
+        v.node       = node;
+        v.name_node  = node->let_in.name;
+        v.parameters =
+          (ast_node_sized){.v = lf->lambda_function.parameters, .size = lf->lambda_function.n_parameters};
+        v.body       = lf->lambda_function.body;
+        v.attributes = lf->lambda_function.attributes;
+        v.is_lambda  = 1;
     }
     return v;
 }

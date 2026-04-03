@@ -52,7 +52,7 @@ typedef struct {
 } tl_type_registry_specialize_ctx;
 
 nodiscard tl_type_registry *tl_type_registry_create(allocator *, allocator *, tl_type_subs *) mallocfun;
-void tl_type_registry_destroy(tl_type_registry *);
+void                        tl_type_registry_destroy(tl_type_registry *);
 tl_polytype *tl_type_constructor_def_create(tl_type_registry *, str name, tl_type_variable_sized tvs,
                                             str_sized fields, tl_monotype_sized) mallocfun;
 tl_monotype *tl_type_registry_instantiate(tl_type_registry *, str);

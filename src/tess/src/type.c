@@ -2881,23 +2881,21 @@ static str tl_monotype_to_user_string_(allocator *alloc, tl_monotype *self, hash
         int  n = snprintf(buf, sizeof buf, "i%i", self->integer);
         str_build_cat_n(&b, buf, (u32)n);
     } break;
-    case tl_c_macro: str_build_cat(&b, self->c_macro_name); break;
+    case tl_c_macro:           str_build_cat(&b, self->c_macro_name); break;
 
     // Type variables: render as "_" instead of internal IDs
-    case tl_var:              str_build_cat(&b, S("_")); break;
-    case tl_weak:             str_build_cat(&b, S("_")); break;
-    case tl_weak_int_signed:  str_build_cat(&b, S("Int")); break;
-    case tl_weak_int_unsigned:str_build_cat(&b, S("UInt")); break;
-    case tl_weak_float:       str_build_cat(&b, S("Float")); break;
+    case tl_var:               str_build_cat(&b, S("_")); break;
+    case tl_weak:              str_build_cat(&b, S("_")); break;
+    case tl_weak_int_signed:   str_build_cat(&b, S("Int")); break;
+    case tl_weak_int_unsigned: str_build_cat(&b, S("UInt")); break;
+    case tl_weak_float:        str_build_cat(&b, S("Float")); break;
 
-    case tl_cons_inst: {
+    case tl_cons_inst:         {
         // Use the unmangled portion of the type name for user-facing output.
         // Module-qualified names are "Module__Type" — show just "Type".
         str name;
-        if (!str_is_empty(self->cons_inst->special_name))
-            name = self->cons_inst->special_name;
-        else
-            name = self->cons_inst->def->name;
+        if (!str_is_empty(self->cons_inst->special_name)) name = self->cons_inst->special_name;
+        else name = self->cons_inst->def->name;
         // Find last "__" separator and take everything after it
         char const *s    = str_buf(&name);
         int         slen = str_ilen(name);

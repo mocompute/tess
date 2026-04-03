@@ -101,7 +101,7 @@ int a_assignment_by_operator(parser *self, int min_prec) {
     case tok_f_string_format_spec:
     case tok_char:
     case tok_comment:
-    case tok_hash_command:        return 1;
+    case tok_hash_command:         return 1;
     }
 
     if (!op) return 1;
@@ -124,19 +124,19 @@ int a_binary_operator(parser *self, int min_prec) {
         } else return 1;
         break;
 
-    case tok_bang_equal:          op = "!="; break;
-    case tok_star:                op = "*"; break;
-    case tok_dot:                 op = "."; break;
-    case tok_equal_equal:         op = "=="; break;
-    case tok_logical_and:         op = "&&"; break;
-    case tok_logical_or:          op = "||"; break;
-    case tok_arrow:               op = "->"; break;
-    case tok_ampersand:           op = "&"; break;
-    case tok_open_square:         op = "["; break;
-    case tok_plus:                op = "+"; break;
-    case tok_minus:               op = "-"; break;
-    case tok_bar:                 op = "|"; break;
-    case tok_double_colon:        op = "::"; break;
+    case tok_bang_equal:           op = "!="; break;
+    case tok_star:                 op = "*"; break;
+    case tok_dot:                  op = "."; break;
+    case tok_equal_equal:          op = "=="; break;
+    case tok_logical_and:          op = "&&"; break;
+    case tok_logical_or:           op = "||"; break;
+    case tok_arrow:                op = "->"; break;
+    case tok_ampersand:            op = "&"; break;
+    case tok_open_square:          op = "["; break;
+    case tok_plus:                 op = "+"; break;
+    case tok_minus:                op = "-"; break;
+    case tok_bar:                  op = "|"; break;
+    case tok_double_colon:         op = "::"; break;
 
     case tok_bang:
     case tok_comma:
@@ -164,7 +164,7 @@ int a_binary_operator(parser *self, int min_prec) {
     case tok_f_string_format_spec:
     case tok_char:
     case tok_comment:
-    case tok_hash_command:        return 1;
+    case tok_hash_command:         return 1;
     }
 
     if (!op) return 1;
@@ -226,7 +226,7 @@ int a_unary_operator(parser *self, int min_prec) {
     case tok_f_string_format_spec:
     case tok_char:
     case tok_comment:
-    case tok_hash_command:        return 1;
+    case tok_hash_command:         return 1;
     }
 
     if (!op) return 1;
@@ -338,8 +338,8 @@ static ast_node *create_ufcs_iter_call(parser *self, ast_node *receiver, const c
 
 // Create a module-qualified iterator call: Module.method(arg).
 // The method name is arity-mangled and module-prefixed at parse time.
-static ast_node *create_module_iter_call(parser *self, str module_name,
-                                         const char *method_arity_mangled, ast_node *arg) {
+static ast_node *create_module_iter_call(parser *self, str module_name, const char *method_arity_mangled,
+                                         ast_node *arg) {
     ast_node_sized iter_args = {.size = 1, .v = alloc_malloc(self->ast_arena, sizeof(iter_args.v[0]))};
     iter_args.v[0]           = arg;
     ast_node *name           = ast_node_create_sym_c(self->ast_arena, method_arity_mangled);
@@ -393,7 +393,7 @@ int a_for_statement(parser *self) {
     char const *for_file = self->token.file;
     u32         for_line = self->token.line;
     u32         for_col  = self->token.col;
-    ast_node *variable = parse_expression(self, INT_MIN);
+    ast_node   *variable = parse_expression(self, INT_MIN);
     if (!variable || (!ast_node_is_symbol(variable) && !ast_node_is_unary_op(variable))) return 1;
 
     int is_pointer = 0;
@@ -456,7 +456,7 @@ int a_for_statement(parser *self) {
     // just need one let-in: to grab the iterator pointer and set the value variable.
 
     // First, we need a name for the hidden iterator variable
-    ast_node *iterator = ast_node_create_sym(self->ast_arena, next_var_name(self));
+    ast_node *iterator         = ast_node_create_sym(self->ast_arena, next_var_name(self));
 
     ast_node *call_iter_init   = null;
     ast_node *call_iter_value  = null;
@@ -467,16 +467,16 @@ int a_for_statement(parser *self) {
 
     if (module) {
         // Explicit-module path: emit module-mangled NFA nodes with explicit address-of.
-        str module_name = ast_node_str(module);
+        str       module_name      = ast_node_str(module);
 
         ast_node *address_of       = ast_node_create_sym_c(self->ast_arena, "&");
         ast_node *iterator_address = ast_node_create_unary_op(self->ast_arena, address_of, iterator);
         ast_node *iterable_address = ast_node_create_unary_op(self->ast_arena, address_of, iterable);
 
-        call_iter_init   = create_module_iter_call(self, module_name, "iter_init__1",   iterable_address);
-        call_iter_value  = create_module_iter_call(self, module_name, "iter_value__1",  iterator_address);
-        call_iter_ptr    = create_module_iter_call(self, module_name, "iter_ptr__1",    iterator_address);
-        call_iter_cond   = create_module_iter_call(self, module_name, "iter_cond__1",   iterator_address);
+        call_iter_init   = create_module_iter_call(self, module_name, "iter_init__1", iterable_address);
+        call_iter_value  = create_module_iter_call(self, module_name, "iter_value__1", iterator_address);
+        call_iter_ptr    = create_module_iter_call(self, module_name, "iter_ptr__1", iterator_address);
+        call_iter_cond   = create_module_iter_call(self, module_name, "iter_cond__1", iterator_address);
         call_iter_update = create_module_iter_call(self, module_name, "iter_update__1", iterator_address);
         call_iter_deinit = create_module_iter_call(self, module_name, "iter_deinit__1", iterator_address);
     } else {
@@ -492,7 +492,7 @@ int a_for_statement(parser *self) {
 
     // Propagate the `for` keyword's source location to all synthesized iter calls
     // so that type errors in desugared code point back to the for-loop.
-    ast_node *iter_calls[] = {call_iter_init, call_iter_value, call_iter_ptr,
+    ast_node *iter_calls[] = {call_iter_init, call_iter_value,  call_iter_ptr,
                               call_iter_cond, call_iter_update, call_iter_deinit};
     for (int i = 0; i < (int)(sizeof iter_calls / sizeof iter_calls[0]); i++) {
         iter_calls[i]->file = for_file;
@@ -676,10 +676,9 @@ int a_assignment(parser *self) {
         array_push(conditions, sentinel);
         array_push(arms, else_body);
 
-        ast_node *node =
-          ast_node_create_case(self->ast_arena, val, (ast_node_sized)array_sized(conditions),
-                               (ast_node_sized)array_sized(arms), null, null, else_binding,
-                               AST_TAGGED_UNION_VALUE);
+        ast_node *node = ast_node_create_case(self->ast_arena, val, (ast_node_sized)array_sized(conditions),
+                                              (ast_node_sized)array_sized(arms), null, null, else_binding,
+                                              AST_TAGGED_UNION_VALUE);
         set_node_file(self, node);
         return result_ast_node(self, node);
     }
@@ -734,9 +733,8 @@ ast_node *maybe_wrap_lambda_function_in_let_in(parser *self, ast_node *node) {
     if (!ast_node_is_lambda_function(node)) return node;
 
     ast_node *lval = ast_node_create_sym(self->ast_arena, next_var_name(self));
-    if (node->lambda_function.annotation)
-        lval->symbol.annotation = node->lambda_function.annotation;
-    ast_node *val  = node;
+    if (node->lambda_function.annotation) lval->symbol.annotation = node->lambda_function.annotation;
+    ast_node *val = node;
 
     // body of let: just the symbol referring to the lambda's name
     ast_node_array exprs = {.alloc = self->ast_arena};
@@ -1073,9 +1071,9 @@ static int a_conditional_variant_binding(parser *self) {
         is_union = AST_TAGGED_UNION_VALUE;
     }
 
-    ast_node *node = ast_node_create_case(self->ast_arena, val, (ast_node_sized)array_sized(conditions),
-                                          (ast_node_sized)array_sized(arms), null, null, else_binding,
-                                          is_union);
+    ast_node *node =
+      ast_node_create_case(self->ast_arena, val, (ast_node_sized)array_sized(conditions),
+                           (ast_node_sized)array_sized(arms), null, null, else_binding, is_union);
     set_node_file(self, node);
     return result_ast_node(self, node);
 }

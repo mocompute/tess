@@ -29,23 +29,23 @@ static inline str str_qualify(allocator *alloc, str parent, str child) {
 
 // Format specifier parsed from f-string syntax: {expr:[[fill]align][sign][#][0][width][.precision][type]}
 typedef struct {
-    int  alt;             // '#' flag
-    int  zero_pad;        // '0' flag
-    int  width;           // 0 = unspecified
-    int  precision;       // -1 = unspecified
+    int  alt;               // '#' flag
+    int  zero_pad;          // '0' flag
+    int  width;             // 0 = unspecified
+    int  precision;         // -1 = unspecified
     int  has_type_specific; // 1 if any of sign/alt/zero_pad/precision/type_char set
-    char fill;            // 0 for default (' ')
-    char align;           // '<', '>', '^', or 0 for default
-    char sign;            // '+', '-', ' ', or 0
-    char type_char;       // 'x','X','o','b','e','E','f', or 0
+    char fill;              // 0 for default (' ')
+    char align;             // '<', '>', '^', or 0 for default
+    char sign;              // '+', '-', ' ', or 0
+    char type_char;         // 'x','X','o','b','e','E','f', or 0
 } tl_format_spec;
 
 defarray(tl_format_spec_array, tl_format_spec);
 
 // Check if a format spec has any non-default values (anything worth emitting).
 static inline int tl_format_spec_has_any(tl_format_spec const *spec) {
-    return spec->fill || spec->align || spec->sign || spec->alt || spec->zero_pad ||
-           spec->width || spec->precision >= 0 || spec->type_char;
+    return spec->fill || spec->align || spec->sign || spec->alt || spec->zero_pad || spec->width ||
+           spec->precision >= 0 || spec->type_char;
 }
 
 // Grouped format data for f-string calls with format specifiers.
@@ -371,17 +371,17 @@ ast_node          *ast_node_body(ast_node *); // body of let or let in lambda.
 // -- function view: uniform access to ast_let and ast_let_in_lambda --
 
 typedef struct {
-    ast_node  *node;         // original node (ast_let or ast_let_in wrapping lambda)
-    ast_node  *name_node;    // symbol holding the function name
+    ast_node      *node;       // original node (ast_let or ast_let_in wrapping lambda)
+    ast_node      *name_node;  // symbol holding the function name
     ast_node_sized parameters; // formal parameter array
-    ast_node  *body;         // function body
-    ast_node  *attributes;   // lambda attrs (from ast_lambda_function) or NULL for named fns
-    int        is_lambda;    // 1 if lambda binding, 0 if named function
+    ast_node      *body;       // function body
+    ast_node      *attributes; // lambda attrs (from ast_lambda_function) or NULL for named fns
+    int            is_lambda;  // 1 if lambda binding, 0 if named function
 } ast_function_view;
 
 // Returns a valid view for ast_let and ast_let_in_lambda nodes.
 // Returns a zeroed view (node == NULL) for anything else.
-ast_function_view  ast_function_view_from(ast_node *);
+ast_function_view ast_function_view_from(ast_node *);
 
 // -- utilities --
 

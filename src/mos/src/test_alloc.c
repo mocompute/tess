@@ -167,7 +167,7 @@ static int test_arena_save_restore_nested(void) {
 }
 
 static int test_arena_save_restore_multi_bucket(void) {
-    int        error = 0;
+    int error = 0;
 
     // Small initial size to force multiple buckets
     allocator *arena = arena_create(default_allocator(), 64);

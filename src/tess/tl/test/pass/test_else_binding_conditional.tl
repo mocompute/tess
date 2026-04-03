@@ -7,8 +7,8 @@ MyResult[T, E]: | MyOk { value: T } | MyErr { error: E }
 
 // Test 1: if variant binding with else binding — match case
 test_if_match() -> CInt {
-    val: MyRes.MyResult[CInt, CInt] := MyRes.MyOk(42)
-    if ok: MyOk := val {
+    val:   MyRes.MyResult[CInt, CInt] := MyRes.MyOk(42)
+    if ok: MyOk                       := val {
         return ok.value - 42
     } else err {
         return err.error + 100
@@ -17,8 +17,8 @@ test_if_match() -> CInt {
 
 // Test 2: if variant binding with else binding — no match case
 test_if_no_match() -> CInt {
-    val: MyRes.MyResult[CInt, CInt] := MyRes.MyErr(7)
-    if ok: MyOk := val {
+    val:   MyRes.MyResult[CInt, CInt] := MyRes.MyErr(7)
+    if ok: MyOk                       := val {
         return ok.value + 100
     } else err {
         return err.error - 7
@@ -27,8 +27,8 @@ test_if_no_match() -> CInt {
 
 // Test 3: if variant binding without else binding still works
 test_if_no_binding() -> CInt {
-    val: MyRes.MyResult[CInt, CInt] := MyRes.MyErr(3)
-    if ok: MyOk := val {
+    val:   MyRes.MyResult[CInt, CInt] := MyRes.MyErr(3)
+    if ok: MyOk                       := val {
         return 1
     } else {
         return 0
@@ -37,8 +37,8 @@ test_if_no_binding() -> CInt {
 
 // Test 4: if variant binding — no else at all still works
 test_if_no_else() -> CInt {
-    val: MyRes.MyResult[CInt, CInt] := MyRes.MyOk(5)
-    if ok: MyOk := val {
+    val:   MyRes.MyResult[CInt, CInt] := MyRes.MyOk(5)
+    if ok: MyOk                       := val {
         return ok.value - 5
     }
     1
@@ -46,8 +46,8 @@ test_if_no_else() -> CInt {
 
 // Test 5: else binding field access in conditional
 test_if_err_fields() -> CInt {
-    val: MyRes.MyResult[CInt, CInt] := MyRes.MyErr(33)
-    if ok: MyOk := val {
+    val:   MyRes.MyResult[CInt, CInt] := MyRes.MyErr(33)
+    if ok: MyOk                       := val {
         return 1
     } else err {
         return err.error - 33

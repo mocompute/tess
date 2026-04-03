@@ -1,6 +1,6 @@
-format(1)
+format (1)
 package(mathlib)
-author("anonymous")
+author ("anonymous")
 version("0.0.1")
 
 source("src/")
