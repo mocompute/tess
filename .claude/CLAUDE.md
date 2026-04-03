@@ -80,6 +80,7 @@ These mistakes have caused repeated debugging sessions — avoid them:
 3. **`:=` vs `=` confusion.** `n: Int = 10` (reassignment to undeclared `n`) is NOT a binding — it causes confusing downstream errors. Use `n: Int := 10`.
 4. **`Hash` trait requires `#import <Hash.tl>`.** Unlike operator traits (compiler builtins), `Hash` is defined in the standard library. Any file using `.hash()` or `HashMap` must `#import <Hash.tl>`. The `Eq` trait and other operator traits remain compiler builtins in `infer.c`.
 5. **Don't use explicit `.&` in UFCS calls.** `arr.&.push(x)` works but is redundant — implicit address-of means `arr.push(x)` is sufficient when `push` expects `Ptr[T]`.
+6. **`fun/N` vs `var.&` for C callbacks.** Named functions use `fun/N` (raw C function pointer); lambda bindings use `var.&` (address of `tl_closure`). The C side must match: arrow-typed parameter for raw pointers, `Ptr[any]` for closures. See `docs/LANGUAGE_REFERENCE.md` § "Passing Callbacks to C".
 
 ## Source Architecture
 

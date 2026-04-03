@@ -2714,6 +2714,72 @@ c_strcmp(a: Ptr[Const[CChar]], b: Ptr[Const[CChar]]) -> CInt
 
 To call a C function named `foo`, declare it as `c_foo` in Tess.
 
+### Passing Callbacks to C
+
+Tess supports passing both named functions and lambdas (including capturing closures) to C code as callbacks. The mechanism depends on what the C function expects:
+
+**Named functions and non-capturing lambdas as raw C function pointers.**
+When the C function expects a plain function pointer, declare the parameter with an arrow type. Use `fun/N` for named functions or bind a non-capturing lambda to a variable and pass it by name:
+
+```tl
+// C: void sort(int *arr, int len, int (*cmp)(const void*, const void*));
+c_sort(arr: Ptr[CInt], len: CInt,
+       cmp: (Ptr[Const[any]], Ptr[Const[any]]) -> CInt) -> Void
+
+compare(a: Ptr[Const[any]], b: Ptr[Const[any]]) -> CInt { /* ... */ }
+
+main() {
+    c_sort(arr, n, compare/2)            // named function: fun/N
+
+    cmp := (a: Ptr[Const[any]], b: Ptr[Const[any]]) -> CInt { /* ... */ }
+    c_sort(arr, n, cmp)                  // non-capturing lambda: by name
+}
+```
+
+**Capturing lambdas and closures as `tl_closure*`.**
+When the C function needs to call a closure that captures variables, it must accept a `tl_closure*` (a struct with `fn` and `ctx` fields). Declare the parameter as `Ptr[any]` in the Tess binding, and pass the closure with `.&`:
+
+```tl
+// C: long long apply_op(long long a, long long b, tl_closure *op);
+c_apply_op(a: CLongLong, b: CLongLong, op: Ptr[any]) -> CLongLong
+
+main() {
+    offset: CLongLong := 100
+    op := (a: CLongLong, b: CLongLong) -> CLongLong { a + b + offset }
+    result := c_apply_op(3, 4, op.&)     // capturing lambda: var.&
+}
+```
+
+**Type annotations on closure parameters are important here.** Because the Tess binding declares the closure parameter as `Ptr[any]`, no type information flows back from the call site into the lambda. The compiler cannot infer the lambda's parameter types from the C function signature. If the types are not constrained by the lambda body (e.g. through arithmetic with a typed capture), you must annotate them explicitly — otherwise inference leaves them unresolved and code generation fails.
+
+The C side calls through the closure struct:
+
+```c
+typedef struct tl_closure { void *fn; void *ctx; } tl_closure;
+
+long long apply_op(long long a, long long b, tl_closure *op) {
+    return ((long long (*)(void*, long long, long long))op->fn)(op->ctx, a, b);
+}
+```
+
+Heap-allocated closures (`[[alloc, capture(...)]]`) work the same way. Because they capture by value onto the heap, they are safe to store and call later:
+
+```tl
+// C: void store_callback(tl_closure *fn);
+// C: long long run_stored_callback(void);
+c_store_callback(fn: Ptr[any]) -> Void
+c_run_stored_callback() -> CLongLong
+
+store_it() {
+    secret := 42
+    f := [[alloc, capture(secret)]] () -> CLongLong { secret }
+    c_store_callback(f.&)
+}
+```
+
+**`fun/N` vs `var.&` — why two syntaxes?**
+Named functions and lambdas have fundamentally different representations. A named function is a bare C function pointer with no associated state, so `fun/N` produces a raw pointer (the `/N` disambiguates overloads by arity). A lambda binding is a `tl_closure` value (pairing a function pointer with a context pointer), so `.&` takes its address — the same address-of operator used on any other value. The distinction matters for C interop: raw function pointers match C's `int (*)(...)` parameters, while `tl_closure*` requires the C side to call through the `fn`/`ctx` pair.
+
 ### Declaring C Symbols
 
 ```tl

@@ -14,7 +14,7 @@ build/callbacks.o: c/callbacks/callbacks.c c/callbacks/callbacks.h
 	$(CC) -c c/callbacks/callbacks.c -I c/callbacks -o build/callbacks.o
 
 build/main: build/main.c build/callbacks.o
-	$(CC) -Wno-format-security build/main.c build/callbacks.o -o build/main
+	$(CC) -Wno-format-security -I c build/main.c build/callbacks.o -o build/main
 
 run: build/main
 	./build/main

@@ -17,3 +17,4 @@ can be compiled with `tess exe` or run directly with `tess run`.
 | [c_import_basic](c_import_basic/)                 | Importing a C library into Tess using `tess cbind` and `tess c`                          |
 | [tess_project_with_c](tess_project_with_c/)       | A Tess project that incorporates a C library from a subdirectory                         |
 | [tess_project_with_c_link](tess_project_with_c_link/) | Same as above but using `#link` and `tess exe` instead of `tess c`                   |
+| [callbacks](callbacks/)                               | Passing functions, lambdas, and closures to C as callbacks (`fun/N`, `var.&`, `[[alloc, capture()]]`) |

@@ -1,8 +1,23 @@
+// Full struct definition — must come before callbacks.h so the forward
+// declaration there sees the complete type.
+struct tl_closure {
+    void *fn;
+    void *ctx;
+};
+
 #include "callbacks.h"
 #include <stdlib.h>
 
 void sort_ints(long long *arr, int len, int (*compare)(const void *, const void *)) {
     qsort(arr, len, sizeof(long long), compare);
+}
+
+long long apply_int_fn(long long x, long long (*f)(long long)) {
+    return f(x);
+}
+
+double apply_float_fn(double x, double (*f)(double)) {
+    return f(x);
 }
 
 long long apply_op(long long a, long long b, tl_closure *op) {

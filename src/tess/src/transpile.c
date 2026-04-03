@@ -1213,17 +1213,23 @@ static str generate_funcall_c(transpile *self, ast_node const *node, eval_ctx *c
     str_array      args_res = {.alloc = self->transient};
     array_reserve(args_res, args.size);
 
-    // C FFI: emit raw function pointers, not tl_closure
-    eval_ctx c_ctx        = ctx ? *ctx : (eval_ctx){0};
-    c_ctx.want_raw_fn_ptr = 1;
+    // Look up the C function's type (used for both per-argument fn ptr dispatch and result type).
+    eval_ctx          c_ctx       = ctx ? *ctx : (eval_ctx){0};
+    tl_monotype      *type        = env_lookup(self, ast_node_str(node->named_application.name));
+    tl_monotype_sized param_types = {0};
+    if (type && tl_monotype_is_arrow(type))
+        param_types = tl_monotype_arrow_get_args(type);
 
     forall(i, args) {
+        // Arrow-typed param → raw C fn ptr; non-arrow (e.g. Ptr[any]) → keep tl_closure.
+        // No type info → assume raw fn ptr (backwards compat).
+        c_ctx.want_raw_fn_ptr =
+          !param_types.size || (i < param_types.size && tl_monotype_is_arrow(param_types.v[i]));
         str res = generate_expr(self, null, args.v[i], &c_ctx);
         array_push(args_res, res);
     }
 
     // declare variable to hold funcall result if it's not nil
-    tl_monotype *type = env_lookup(self, ast_node_str(node->named_application.name));
 
     // Note: special case: if env lookup returns null, it could be a generic function that has not been
     // specialised. As a c function, it may be a valid part of the program regardless. If the funcall node

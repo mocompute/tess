@@ -3,20 +3,7 @@
 #import <Print.tl>
 #import <String.tl>
 
-// -- C forward declarations --
-//
-// We cannot #include "callbacks.h" because it defines tl_closure, which
-// the Tess runtime also defines.  Instead, forward-declare the C functions
-// so the generated C compiles without implicit-declaration errors.
-
-#ifc
-struct tl_closure;
-void sort_ints(long long *arr, int len,
-               int (*compare)(const void *, const void *));
-long long apply_op(long long a, long long b, struct tl_closure *op);
-void store_callback(struct tl_closure *fn);
-long long run_stored_callback(void);
-#endc
+#include <callbacks/callbacks.h>
 
 
 // -- Tess bindings --
@@ -24,9 +11,11 @@ long long run_stored_callback(void);
 c_sort_ints(arr: Ptr[CLongLong], len: CInt,
             compare: (Ptr[Const[any]], Ptr[Const[any]]) -> CInt) -> Void
 
-c_apply_op           (a: CLongLong, b: CLongLong, op: Ptr[any]) -> CLongLong
-c_store_callback     (fn: Ptr[any])                             -> Void
-c_run_stored_callback()                                         -> CLongLong
+c_apply_int_fn       (x: CLongLong, f: (CLongLong) -> CLongLong) -> CLongLong
+c_apply_float_fn     (x: CDouble, f: (CDouble) -> CDouble)       -> CDouble
+c_apply_op           (a: CLongLong, b: CLongLong, op: Ptr[any])  -> CLongLong
+c_store_callback     (fn: Ptr[any])                              -> Void
+c_run_stored_callback()                                          -> CLongLong
 
 
 // -- Helpers --
@@ -109,41 +98,49 @@ demo_lambda_binding() {
 
 
 // ============================================================
-// 2. Stack-based capturing lambda
+// 2. Generic function pointers with explicit type arguments
 // ============================================================
-//
-// TODO: Transpiler bug — lambda.& generates a function pointer
-// instead of a tl_closure{fn, ctx} struct.  The C side expects
-// tl_closure* so it can call fn(ctx, args...).
-//
-// demo_stack_capture() {
-//     Print.println("--- 2. Stack-based capturing lambda ---")
-//     offset := 100
-//     op     := (a: CLongLong, b: CLongLong) -> CLongLong { a + b + offset }
-//     result := c_apply_op(3, 4, op.&)
-//     Print.println(f"apply_op(3, 4, |a,b| a+b+100) = {result}")
-// }
+
+identity[T](x: T) -> T { x }
+
+demo_generic_fn_ptr() {
+    Print.println("--- 2. Generic function pointer (explicit type args) ---")
+    ri := c_apply_int_fn(42, identity[CLongLong]/1)
+    Print.println(f"apply_int_fn(42, identity[CLongLong]/1) = {ri}")
+    rf := c_apply_float_fn(3.14, identity[CDouble]/1)
+    Print.println(f"apply_float_fn(3.14, identity[CDouble]/1) = {rf}")
+}
 
 
 // ============================================================
-// 3. Heap-allocated capturing lambda
+// 3. Stack-based capturing closure
 // ============================================================
-//
-// TODO: Same transpiler bug as above, plus [[alloc, capture(...)]]
-// needs to emit heap-allocated tl_closure struct.
-//
-// store_a_callback() {
-//     secret := 42
-//     f      := [[alloc, capture(secret)]] () -> CLongLong { secret }
-//     c_store_callback(f.&)
-// }
-//
-// demo_alloc_capture() {
-//     Print.println("--- 3. Heap-allocated capturing lambda ---")
-//     store_a_callback()
-//     result := c_run_stored_callback()
-//     Print.println(f"run_stored_callback() = {result}")
-// }
+
+demo_stack_capture() {
+    Print.println("--- 3. Stack-based capturing closure ---")
+    offset: CLongLong := 100
+    op                := (a: CLongLong, b: CLongLong) -> CLongLong { a + b + offset }
+    result            := c_apply_op(3, 4, op.&)
+    Print.println(f"apply_op(3, 4, (a,b) a+b+100) = {result}")
+}
+
+
+// ============================================================
+// 4. Heap-allocated capturing closure
+// ============================================================
+
+store_a_callback() {
+    secret := 42
+    f      := [[alloc, capture(secret)]] () -> CLongLong { secret }
+    c_store_callback(f.&)
+}
+
+demo_alloc_capture() {
+    Print.println("--- 4. Heap-allocated capturing closure ---")
+    store_a_callback()
+    result := c_run_stored_callback()
+    Print.println(f"run_stored_callback() = {result}")
+}
 
 
 // ============================================================
@@ -154,7 +151,8 @@ main() {
     demo_named_function()
     demo_inline_lambda()
     demo_lambda_binding()
-    // demo_stack_capture()
-    // demo_alloc_capture()
+    demo_generic_fn_ptr()
+    demo_stack_capture()
+    demo_alloc_capture()
     0
 }
