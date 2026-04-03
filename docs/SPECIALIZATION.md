@@ -368,10 +368,13 @@ A second defaulting pass runs after specialization to handle weak ints created d
 
 For let-in lambdas like `f := (x) { x + n }`:
 
-1. **First pass**: When call sites in the body are specialized (e.g., `f(42)`), `specialize_arrow()` creates a specialized instance of the lambda
-2. **Second pass**: `specialize_let_in()` looks up the specialization created at call sites via `instance_lookup_arrow()` and renames the binding to point to the specialized lambda name
+1. **First pass**: When call sites are specialized (e.g., `f(42)`), `specialize_applications_cb()` calls `specialize_arrow()` to create a specialized toplevel instance of the lambda and renames the NFA node at each call site.
 
-This two-pass approach handles the fact that the lambda binding must be resolved after its call sites are processed.
+2. **Second pass** (`specialize_let_in`): For **monomorphic** closures (called at a single concrete type), looks up the specialization via `instance_lookup_arrow()` and renames the binding to the specialized name so that later phases and the transpiler can find it in toplevels.
+
+   For **polymorphic** closures (called at multiple types, e.g. `f(1.0)` and `f("hello")`), the binding cannot be reduced to a single specialization — it stays as the generic name.  The transpiler handles this by reading closure attributes directly from the AST node and iterating toplevels to find all specializations, generating a closure binding for each (same heap-allocated context, different function pointer).
+
+   A special case is lambdas inside generic functions that get specialized: `specialize_let_in_lambda_from_body()` creates the specialization from the now-concrete body type after the enclosing function was monomorphized.
 
 ### Allocated Closures
 
@@ -383,6 +386,7 @@ For allocated closures with `[[alloc, capture(...)]]` attributes:
 - Context struct generation uses different naming prefixes:
   - **Stack closures**: `tl_ctx_<hash>` (pointer fields)
   - **Allocated closures**: `tl_alloc_ctx_<hash>` (value fields, copied by value)
+- **Polymorphic closures**: When a closure is called at multiple types, the transpiler (`generate_let_in_lambda`) emits one `tl_closure` variable per specialization, all sharing the same context but with different `.fn` pointers
 
 ---
 

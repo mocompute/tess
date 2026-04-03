@@ -1655,10 +1655,9 @@ static int specialize_operand(tl_infer *self, traverse_ctx *traverse_ctx, ast_no
     return 0;
 }
 
-// For let-in lambdas whose name type is a polymorphic scheme (e.g., [[alloc]] closures
-// returning a generic identity function): add_generic generalizes the name, but the body
-// symbol carries the concrete instantiation after substitution.  Create the specialization
-// from the body type directly.
+// When a let-in lambda lives inside a generic function that has been specialized, the
+// lambda's body type becomes concrete.  Create the specialization from the body type
+// and rename the binding to point to it.
 static int specialize_let_in_lambda_from_body(tl_infer *self, traverse_ctx *traverse_ctx, ast_node *node) {
     tl_polytype *body_type = node->let_in.body->type;
     if (!body_type || !tl_polytype_is_concrete(body_type) || !tl_monotype_is_arrow(body_type->type))
@@ -1680,15 +1679,18 @@ static int specialize_let_in_lambda_from_body(tl_infer *self, traverse_ctx *trav
     return 0;
 }
 
-// For let-in lambdas with a concrete name type: look up the specialization that was created
-// when the body's call sites were processed and rename the binding to match.
-static int specialize_let_in_lambda_lookup(tl_infer *self, ast_node *node, tl_polytype *name_type) {
+// For a let-in lambda whose name type has become concrete (monomorphic closure called at
+// one type): look up the specialization created by call sites and rename the binding.
+// For polymorphic closures (called at multiple types), the binding stays generic — the
+// transpiler handles emitting closure bindings for each specialization it finds in toplevels.
+static int specialize_let_in_lambda_lookup(tl_infer *self, ast_node *node) {
+    tl_polytype *name_type = node->let_in.name->type;
+    if (!name_type || !tl_monotype_is_arrow(name_type->type)) return 0;
+
     tl_monotype *arrow = name_type->type;
     str          name  = ast_node_str(node->let_in.name);
 
-    // Resolve any remaining weak ints so the hash matches the call-site specialization.
-    // First apply substitutions, then default any weak ints that weren't resolved by
-    // substitution (their TVs may not have been registered in the subs map).
+    // Resolve weak ints so the hash matches the call-site specialization.
     if (!tl_monotype_is_concrete_no_weak(arrow))
         tl_monotype_substitute(self->arena, arrow, self->subs, null);
     if (!tl_monotype_is_concrete_no_weak(arrow))
@@ -1696,16 +1698,15 @@ static int specialize_let_in_lambda_lookup(tl_infer *self, ast_node *node, tl_po
                                       tl_type_registry_uint(self->registry),
                                       tl_type_registry_float(self->registry));
 
+    // Only attempt lookup when the arrow is concrete — polymorphic closures (called at
+    // multiple types) cannot be reduced to a single specialization.
+    if (!tl_monotype_is_concrete(arrow)) return 0;
+
     str *found = instance_lookup_arrow(self, name, arrow, (tl_monotype_sized){0});
     if (!found) {
-        // FIXME: not fully understood.  For annotated lambda closures, node->let_in.name->type
-        // at specialization time is an arrow WITHOUT free variables, while the env holds the
-        // same arrow WITH FVs (from add_free_variables_to_arrow).  The hash mismatch causes
-        // the lookup above to miss.  We don't know why name->type diverges from the env type —
-        // it may be set from annotation_type (which never receives FVs) or re-derived during
-        // the specialization traversal.  This fallback papers over the mismatch by retrying
-        // with the env's arrow.  A proper fix would ensure name->type and the env agree, making
-        // this fallback unnecessary.
+        // Fallback: the name's arrow may lack free variables while the env's arrow has them
+        // (from add_free_variables_to_arrow), causing a hash mismatch.  Retry with the env's
+        // arrow.
         tl_polytype *env_type = tl_type_env_lookup(self->env, name);
         if (env_type && tl_monotype_is_arrow(env_type->type) && env_type->type != arrow) {
             tl_monotype *env_arrow = env_type->type;
@@ -1724,28 +1725,40 @@ static int specialize_let_in_lambda_lookup(tl_infer *self, ast_node *node, tl_po
 
 static int specialize_let_in(tl_infer *self, traverse_ctx *traverse_ctx, ast_node *node) {
     assert(ast_node_is_let_in(node));
-    tl_polytype *name_type = node->let_in.name->type;
-    int          concrete  = name_type && tl_polytype_is_concrete(name_type);
 
-    // Non-concrete name with body: only lambdas need handling (via body type).
-    // Non-lambda non-concrete let-ins with a body are no-ops.
-    if (!concrete && node->let_in.body) {
-        if (ast_node_is_let_in_lambda(node)) {
-            // Annotated lambdas: the annotation provides a concrete-enough arrow
-            // (after the add_generic fix connects param TVs).  Route to lookup.
+    // Let-in lambdas: call sites are already specialized by the first pass
+    // (specialize_applications_cb).  For monomorphic closures, rename the binding to the
+    // single specialization so that later phases and the transpiler can find it in toplevels.
+    // For polymorphic closures (called at multiple types), the binding stays generic — the
+    // transpiler handles emitting closure bindings for each specialization.
+    if (ast_node_is_let_in_lambda(node)) {
+        tl_polytype *name_type = node->let_in.name->type;
+        int          concrete  = name_type && tl_polytype_is_concrete(name_type);
+
+        if (!concrete && node->let_in.body) {
+            // Non-concrete name with annotation arrow: try lookup (which resolves weak ints
+            // and applies substitutions to make the arrow concrete for the hash lookup).
             if (node->let_in.value->lambda_function.annotation && name_type &&
                 tl_monotype_is_arrow(name_type->type))
-                return specialize_let_in_lambda_lookup(self, node, name_type);
+                return specialize_let_in_lambda_lookup(self, node);
+            // Non-annotated: create specialization from the concrete body type.
             return specialize_let_in_lambda_from_body(self, traverse_ctx, node);
         }
+
+        // Concrete arrow: look up the single specialization created at call sites.
+        if (name_type && tl_monotype_is_arrow(name_type->type))
+            return specialize_let_in_lambda_lookup(self, node);
+
         return 0;
     }
 
-    // Let-in lambda with concrete arrow: look up specialization created by call sites.
-    if (ast_node_is_let_in_lambda(node) && tl_monotype_is_arrow(name_type->type))
-        return specialize_let_in_lambda_lookup(self, node, name_type);
+    tl_polytype *name_type = node->let_in.name->type;
+    int          concrete  = name_type && tl_polytype_is_concrete(name_type);
 
-    // Non-lambda let-in (or lambda without arrow type): specialize the bound value.
+    // Non-concrete non-lambda let-ins with a body are no-ops.
+    if (!concrete && node->let_in.body) return 0;
+
+    // Non-lambda let-in: specialize the bound value (e.g. function pointer RHS).
     return specialize_operand(self, traverse_ctx, node->let_in.value);
 }
 
