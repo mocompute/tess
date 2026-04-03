@@ -1217,8 +1217,7 @@ static str generate_funcall_c(transpile *self, ast_node const *node, eval_ctx *c
     eval_ctx          c_ctx       = ctx ? *ctx : (eval_ctx){0};
     tl_monotype      *type        = env_lookup(self, ast_node_str(node->named_application.name));
     tl_monotype_sized param_types = {0};
-    if (type && tl_monotype_is_arrow(type))
-        param_types = tl_monotype_arrow_get_args(type);
+    if (type && tl_monotype_is_arrow(type)) param_types = tl_monotype_arrow_get_args(type);
 
     forall(i, args) {
         // Arrow-typed param → raw C fn ptr; non-arrow (e.g. Ptr[any]) → keep tl_closure.
