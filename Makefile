@@ -652,7 +652,16 @@ else
 	@printf "  \033[1;31m[ERROR]\033[0m coverage target requires CONFIG=coverage\n"; exit 1
 endif
 
-.PHONY: clean cleanall install test tags coverage
+# ------------------------------------------------------------------------------
+# Source code formatting
+# ------------------------------------------------------------------------------
+
+format: tess
+	for f in $$(find src -name \*.tl); do ./tess fmt -i $$f; done
+	for f in $$(find src -name \*.c -or -name \*.h); do clang-format -i $$f; done
+
+
+.PHONY: clean cleanall install test tags coverage format
 .PHONY: test-mos test-tess test-tl
 .PHONY: build-mos-benchmarks bench-mos
 .DEFAULT_GOAL := all
