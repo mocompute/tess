@@ -1588,6 +1588,15 @@ str specialize_arrow(tl_infer *self, traverse_ctx *traverse_ctx, str name, tl_mo
     instance_add(self, &key, inst_name);
     if (self->report_stats) self->counters.specialize_created++;
 
+    str_array *specs = str_map_get(self->specializations, name);
+    if (specs) {
+        array_push(*specs, inst_name);
+    } else {
+        str_array arr = {.alloc = self->arena};
+        array_push(arr, inst_name);
+        str_map_set(&self->specializations, name, &arr);
+    }
+
     // 4. Clone generic function's AST
     hires_timer st;
     if (self->report_stats) {

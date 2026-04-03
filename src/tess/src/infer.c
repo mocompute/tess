@@ -53,6 +53,7 @@ tl_infer *tl_infer_create(allocator *alloc, tl_infer_opts const *opts) {
     self->traits                    = map_new(self->arena, str, tl_trait_def *, 64);
     self->instances                 = map_new(self->arena, name_and_type, str, 4096);
     self->instance_names            = hset_create(self->arena, 4096);
+    self->specializations           = map_new(self->arena, str, str_array, 64);
     self->attributes                = map_new(self->arena, str, void *, 4096);
     self->hash_includes             = (str_array){.alloc = self->arena};
     self->link_libs                 = (str_array){.alloc = self->arena};
@@ -163,6 +164,7 @@ void tl_infer_destroy(allocator *alloc, tl_infer **p) {
     if ((*p)->toplevels) map_destroy(&(*p)->toplevels);
     if ((*p)->instances) map_destroy(&(*p)->instances);
     if ((*p)->instance_names) hset_destroy(&(*p)->instance_names);
+    if ((*p)->specializations) map_destroy(&(*p)->specializations);
     if ((*p)->attributes) map_destroy(&(*p)->attributes);
 
     tl_type_registry_destroy((*p)->registry);
@@ -586,12 +588,13 @@ int tl_infer_run(tl_infer *self, ast_node_sized nodes, tl_infer_result *out_resu
 #undef PHASE_STOP
 
     if (out_result) {
-        out_result->infer     = self;
-        out_result->registry  = self->registry;
-        out_result->env       = self->env;
-        out_result->subs      = self->subs;
-        out_result->toplevels = self->toplevels;
-        out_result->nodes     = nodes;
+        out_result->infer           = self;
+        out_result->registry        = self->registry;
+        out_result->env             = self->env;
+        out_result->subs            = self->subs;
+        out_result->toplevels       = self->toplevels;
+        out_result->specializations = self->specializations;
+        out_result->nodes           = nodes;
 
         array_shrink(self->synthesized_nodes);
         array_shrink(self->hash_includes);

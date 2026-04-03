@@ -15,6 +15,7 @@ typedef struct {
     tl_type_env      *env;
     tl_type_subs     *subs;
     hashmap          *toplevels;         // str => ast_node*
+    hashmap          *specializations;   // str => str_array (generic name => specialization names)
     ast_node_sized    nodes;             // full ast (to get utds)
     ast_node_sized    synthesized_nodes; // nodes added by compiler
     str_sized         hash_includes;

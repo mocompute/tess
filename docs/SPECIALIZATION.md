@@ -372,7 +372,7 @@ For let-in lambdas like `f := (x) { x + n }`:
 
 2. **Second pass** (`specialize_let_in`): For **monomorphic** closures (called at a single concrete type), looks up the specialization via `instance_lookup_arrow()` and renames the binding to the specialized name so that later phases and the transpiler can find it in toplevels.
 
-   For **polymorphic** closures (called at multiple types, e.g. `f(1.0)` and `f("hello")`), the binding cannot be reduced to a single specialization — it stays as the generic name.  The transpiler handles this by reading closure attributes directly from the AST node and iterating toplevels to find all specializations, generating a closure binding for each (same heap-allocated context, different function pointer).
+   For **polymorphic** closures (called at multiple types, e.g. `f(1.0)` and `f("hello")`), the binding cannot be reduced to a single specialization — it stays as the generic name.  The transpiler looks up all specializations via the `specializations` map (generic name → `str_array` of instance names, built during `specialize_arrow`) and generates a closure binding for each (same heap-allocated context, different function pointer).
 
    A special case is lambdas inside generic functions that get specialized: `specialize_let_in_lambda_from_body()` creates the specialization from the now-concrete body type after the enclosing function was monomorphized.
 
@@ -386,7 +386,7 @@ For allocated closures with `[[alloc, capture(...)]]` attributes:
 - Context struct generation uses different naming prefixes:
   - **Stack closures**: `tl_ctx_<hash>` (pointer fields)
   - **Allocated closures**: `tl_alloc_ctx_<hash>` (value fields, copied by value)
-- **Polymorphic closures**: When a closure is called at multiple types, the transpiler (`generate_let_in_lambda`) emits one `tl_closure` variable per specialization, all sharing the same context but with different `.fn` pointers
+- **Polymorphic closures**: When a closure is called at multiple types, the transpiler (`generate_let_in_lambda`) looks up all specializations via the `specializations` map and emits one `tl_closure` variable per specialization, all sharing the same context but with different `.fn` pointers
 
 ---
 
@@ -419,6 +419,7 @@ The main inference context. Specialization-relevant fields:
 |-------|------|---------|
 | `instances` | `hashmap*` | Maps `name_and_type` → specialized name (instance cache) |
 | `instance_names` | `hashmap*` | Set of all generated instance names (for dedup) |
+| `specializations` | `hashmap*` | Reverse index: generic name → `str_array` of specialization names |
 | `next_instantiation` | `u32` | Counter for `_0`, `_1`, `_2`... naming |
 | `toplevels` | `hashmap*` | `str` → `ast_node*` — all definitions including specialized ones |
 | `env` | `tl_type_env*` | Type environment mapping names to polytypes |

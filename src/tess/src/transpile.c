@@ -35,6 +35,7 @@ struct transpile {
     tl_type_env      *env;
     tl_type_subs     *subs;
     hashmap          *toplevels;         // str => ast_node*
+    hashmap          *specializations;   // str => str_array (generic name => specialization names)
     hashmap          *structs;           // u64 set
     hashmap          *context_generated; // str set
     hashmap          *thunks_generated;  // str set — C FFI thunks already emitted
@@ -1845,22 +1846,6 @@ static void emit_closure_binding(transpile *self, str spec_name, str ctx_var) {
     cat(self, S(" };\n"));
 }
 
-// Check whether `candidate` is a monomorphized instance of `generic_name`,
-// i.e. matches the pattern `<generic_name>_<digits>`.
-static int is_specialization_of(str generic_name, str candidate) {
-    size_t prefix_len = str_len(generic_name);
-    size_t cand_len   = str_len(candidate);
-    if (cand_len <= prefix_len + 1) return 0;
-    if (!str_starts_with(candidate, generic_name)) return 0;
-
-    char const *cand_buf = str_buf(&candidate);
-    if (cand_buf[prefix_len] != '_') return 0;
-
-    for (size_t i = prefix_len + 1; i < cand_len; i++) {
-        if (cand_buf[i] < '0' || cand_buf[i] > '9') return 0;
-    }
-    return 1;
-}
 
 static str generate_let_in_lambda(transpile *self, tl_monotype *result_type, ast_node const *node,
                                   eval_ctx *ctx) {
@@ -1883,19 +1868,14 @@ static str generate_let_in_lambda(transpile *self, tl_monotype *result_type, ast
             emit_closure_binding(self, name, ctx_var);
         } else {
             // Polymorphic case: binding keeps the generic name (removed from toplevels).
-            // Find all specializations and emit a closure binding for each.
-            // Specializations are named <generic>_<digits> and are contiguous in the
-            // sorted toplevels, so we can break once we pass the prefix range.
-            int found_any = 0;
-            forall(i, self->toplevels_sorted) {
-                str spec = self->toplevels_sorted.v[i];
-                if (!is_specialization_of(name, spec)) {
-                    if (found_any) break;
-                    continue;
+            // Look up all specializations from the inference-side map.
+            str_array *specs = str_map_get(self->specializations, name);
+            if (specs) {
+                forall(i, *specs) {
+                    str spec = specs->v[i];
+                    if (!toplevel_closure_attrs(self, spec).has_alloc) continue;
+                    emit_closure_binding(self, spec, ctx_var);
                 }
-                found_any = 1;
-                if (!toplevel_closure_attrs(self, spec).has_alloc) continue;
-                emit_closure_binding(self, spec, ctx_var);
             }
         }
     }
@@ -3430,6 +3410,7 @@ transpile *transpile_create(allocator *alloc, transpile_opts const *opts) {
     self->env               = opts->infer_result.env;
     self->subs              = opts->infer_result.subs;
     self->toplevels         = opts->infer_result.toplevels;
+    self->specializations   = opts->infer_result.specializations;
     self->synthesized_nodes = opts->infer_result.synthesized_nodes;
     self->hash_includes     = opts->infer_result.hash_includes;
 
