@@ -1,7 +1,0 @@
-#module main
-#import <cstdlib.tl>
-
-main() {
-    p: Ptr[CInt] := c_malloc(1024zu)
-    if p == null { 1 } else { 0 }
-}
