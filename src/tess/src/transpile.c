@@ -1909,6 +1909,104 @@ static str generate_let_in_lambda(transpile *self, tl_monotype *result_type, ast
     return str_empty();
 }
 
+// If the value is void, just declare the binding without initialising it and return 1.
+static int emit_void_decl(transpile *self, str name, tl_monotype *type, ast_node const *node) {
+    if (should_assign_value(node->let_in.value)) return 0;
+    generate_decl(self, name, type);
+    return 1;
+}
+
+// If the binding's type is indeterminate (type variable or empty value), report an error and return 1.
+static int check_indeterminate_type(tl_monotype *type, str value, ast_node const *node) {
+    if (!tl_monotype_is_tv(type) && !str_is_empty(value)) return 0;
+    if (ast_node_is_symbol(node->let_in.value)) {
+        str value_str = ast_node_str(node->let_in.value);
+        exit_error(node->let_in.value->file, node->let_in.value->line, "unknown symbol: %s",
+                   str_cstr(&value_str));
+    } else {
+        // TODO: improve error
+        str original = ast_node_name_original(node->let_in.name);
+        exit_error(node->let_in.value->file, node->let_in.value->line,
+                   "value has incomplete type information: %s", str_cstr(&original));
+    }
+    return 1;
+}
+
+// If the type is non-concrete, emit what we can and return 1. Non-concrete types arise when the
+// variable is never referenced; we still emit c_ symbols and non-arrow values because return type
+// information is not always available for c_ functions.
+static int emit_non_concrete(transpile *self, str name, tl_monotype *type, str value,
+                             ast_node const *node) {
+    if (tl_monotype_is_concrete(type)) return 0;
+    if (is_c_symbol(value) || !tl_monotype_is_arrow(type)) {
+        generate_decl(self, name, type);
+        if (should_assign_value(node->let_in.value)) generate_assign(self, name, value);
+    }
+    return 1;
+}
+
+// Emit numeric bounds checks for narrowing conversions (integer or float).
+static void emit_numeric_bounds_checks(transpile *self, tl_monotype *inner_type, str value,
+                                       ast_node const *node) {
+    tl_monotype *val_type = let_in_val_type(self, node);
+    if (tl_monotype_is_integer_convertible(inner_type)) {
+        if (is_integer_narrowing_cast(inner_type, val_type))
+            emit_bounds_check(self, inner_type, val_type, value, node);
+        else if (is_float_to_int_val(val_type))
+            emit_float_to_int_bounds_check(self, inner_type, val_type, value, node);
+    } else {
+        if (is_float_narrowing_cast(inner_type, val_type))
+            emit_float_narrowing_bounds_check(self, inner_type, val_type, value, node);
+    }
+}
+
+// Wrap the value in an explicit C cast for pointers and numeric types.
+static str cast_value(transpile *self, tl_monotype *inner_type, str value, ast_node const *node) {
+    if (!tl_monotype_is_ptr(inner_type) && !tl_monotype_is_integer_convertible(inner_type) &&
+        !tl_monotype_is_float_convertible(inner_type))
+        return value;
+    if (!tl_monotype_is_ptr(inner_type)) emit_numeric_bounds_checks(self, inner_type, value, node);
+    return str_cat_4(self->transient, S("("), type_to_c_mono(self, inner_type), S(")"), value);
+}
+
+// Emit a single let-in binding: declaration, optional value assignment, casts, and bounds checks.
+static void emit_let_binding(transpile *self, ast_node const *node, eval_ctx *ctx) {
+    str          name = ast_node_str(node->let_in.name);
+    tl_monotype *type = env_lookup(self, name); // may be null
+    if (!type) return;
+
+    name = escape_c_keyword(self->transient, name);
+
+    if (emit_void_decl(self, name, type, node)) return;
+
+    str value = generate_expr(self, type, node->let_in.value, ctx);
+
+    if (check_indeterminate_type(type, value, node)) return;
+
+    if (emit_non_concrete(self, name, type, value, node)) return;
+
+    if (!should_assign_result(ctx, type)) return;
+
+    int          is_const_bind = tl_monotype_is_const(type);
+    tl_monotype *inner_type    = tl_monotype_strip_const(type);
+    str          emit_value    = cast_value(self, inner_type, value, node);
+
+    if (is_const_bind) {
+        // Const types require combined declaration+initialization in C.
+        generate_decl_init(self, name, type, emit_value);
+    } else {
+        generate_decl(self, name, type);
+        if (!str_eq(emit_value, value)) {
+            cat(self, name);
+            cat_assign(self);
+            cat(self, emit_value);
+            cat_semicolonln(self);
+        } else {
+            generate_assign(self, name, value);
+        }
+    }
+}
+
 static str generate_let_in(transpile *self, tl_monotype *result_type, ast_node const *node, eval_ctx *ctx) {
     if (ast_node_is_let_in_lambda(node)) return generate_let_in_lambda(self, result_type, node, ctx);
     assert(ast_node_is_let_in(node));
@@ -1916,94 +2014,7 @@ static str generate_let_in(transpile *self, tl_monotype *result_type, ast_node c
     // Iteratively process chains of regular let-in bindings to avoid
     // O(N) recursion depth (stack exhaustion on large functions).
     for (;;) {
-        str          name = ast_node_str(node->let_in.name);
-        tl_monotype *type = env_lookup(self, name); // may be null
-        name              = escape_c_keyword(self->transient, name);
-
-        if (type) {
-
-            if (!should_assign_value(node->let_in.value)) {
-                // binding a symbol to void means to declare it without initialising it
-                generate_decl(self, name, type);
-            } else {
-                str value = generate_expr(self, type, node->let_in.value, ctx);
-
-                if (tl_monotype_is_tv(type) || str_is_empty(value)) {
-                    // The assignment target has an indeterminate type, most likely because `value` is an
-                    // unknown symbol.
-                    if (ast_node_is_symbol(node->let_in.value)) {
-                        str value_str = ast_node_str(node->let_in.value);
-                        exit_error(node->let_in.value->file, node->let_in.value->line, "unknown symbol: %s",
-                                   str_cstr(&value_str));
-                    } else {
-                        // TODO: improve error
-                        str original = ast_node_name_original(node->let_in.name);
-                        exit_error(node->let_in.value->file, node->let_in.value->line,
-                                   "value has incomplete type information: %s", str_cstr(&original));
-                    }
-                } else if (tl_monotype_is_concrete(type)) {
-                    if (should_assign_result(ctx, type)) {
-                        int          is_const_bind = tl_monotype_is_const(type);
-                        tl_monotype *inner_type    = tl_monotype_strip_const(type);
-
-                        if (should_assign_value(node->let_in.value)) {
-                            str emit_value = value;
-
-                            if (tl_monotype_is_ptr(inner_type)) {
-                                // Pointer cast: (T*)value — suppresses C pointer-cast warnings.
-                                emit_value = str_cat_4(self->transient, S("("),
-                                                       type_to_c_mono(self, inner_type), S(")"), value);
-                            } else if (tl_monotype_is_integer_convertible(inner_type) ||
-                                       tl_monotype_is_float_convertible(inner_type)) {
-                                // Numeric cast with bounds check.
-                                tl_monotype *val_type = let_in_val_type(self, node);
-                                if (tl_monotype_is_integer_convertible(inner_type)) {
-                                    if (is_integer_narrowing_cast(inner_type, val_type))
-                                        emit_bounds_check(self, inner_type, val_type, value, node);
-                                    else if (is_float_to_int_val(val_type))
-                                        emit_float_to_int_bounds_check(self, inner_type, val_type, value,
-                                                                       node);
-                                } else {
-                                    if (is_float_narrowing_cast(inner_type, val_type))
-                                        emit_float_narrowing_bounds_check(self, inner_type, val_type, value,
-                                                                          node);
-                                }
-                                emit_value = str_cat_4(self->transient, S("("),
-                                                       type_to_c_mono(self, inner_type), S(")"), value);
-                            }
-
-                            if (is_const_bind) {
-                                // Const types require combined declaration+initialization in C.
-                                generate_decl_init(self, name, type, emit_value);
-                            } else {
-                                generate_decl(self, name, type);
-                                if (!str_eq(emit_value, value)) {
-                                    cat(self, name);
-                                    cat_assign(self);
-                                    cat(self, emit_value);
-                                    cat_semicolonln(self);
-                                } else {
-                                    generate_assign(self, name, value);
-                                }
-                            }
-                        } else {
-                            generate_decl(self, name, type);
-                        }
-                    }
-                } else {
-                    // Note: do not emit values that are not concrete. These can come out of type inference if
-                    // the variable is never referenced, so it is safe to avoid emitting them. Conversely, we
-                    // can't correctly emit them because the type information is incomplete. However, there are
-                    // exceptions: return value type information is not always available for c_ functions, so we
-                    // emit all non-arrow values and c_* arrow values.
-                    if (is_c_symbol(value) || !tl_monotype_is_arrow(type)) {
-
-                        generate_decl(self, name, type);
-                        if (should_assign_value(node->let_in.value)) generate_assign(self, name, value);
-                    }
-                }
-            }
-        }
+        emit_let_binding(self, node, ctx);
 
         // If the body is another regular let-in, continue iterating instead of recursing.
         // Also unwrap ast_body wrappers (no defers) that the parser inserts between
