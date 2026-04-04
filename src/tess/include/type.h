@@ -352,6 +352,8 @@ int  tl_type_subs_unify_mono(tl_type_subs *, tl_monotype *, tl_monotype *, type_
 void tl_type_subs_apply(tl_type_subs *, tl_type_env *);
 void tl_type_subs_default_weak_ints(tl_type_subs *, tl_monotype *int_type, tl_monotype *uint_type,
                                     tl_monotype *float_type);
+void tl_type_subs_default_weak_ints_from(tl_type_subs *, u32 from, tl_monotype *int_type,
+                                         tl_monotype *uint_type, tl_monotype *float_type);
 void tl_type_subs_log(tl_type_subs *);
 
 // -- type transient arena --

@@ -3928,6 +3928,33 @@ void tl_type_subs_default_weak_ints(tl_type_subs *subs, tl_monotype *int_type, t
     }
 }
 
+void tl_type_subs_default_weak_ints_from(tl_type_subs *subs, u32 from, tl_monotype *int_type,
+                                         tl_monotype *uint_type, tl_monotype *float_type) {
+    // Like tl_type_subs_default_weak_ints, but only iterates entries [from, size).
+    // Does NOT skip non-roots: a new entry may have been unified with an old root
+    // that now carries a weak int type.  We follow each new entry to its root and
+    // default if weak.  Defaulting is idempotent (changes tag from weak to concrete),
+    // so a root reached by multiple new entries is only defaulted once.
+    for (u32 i = from; i < subs->data.size; ++i) {
+        tl_type_variable root = uf_find(subs, i);
+        tl_monotype     *type = subs->data.v[root].type;
+        if (!type) continue;
+        if (tl_weak_int_signed == type->tag) {
+            tl_type_variable weak_root = uf_find(subs, type->var);
+            if (!subs->data.v[weak_root].type) subs->data.v[weak_root].type = int_type;
+            subs->data.v[root].type = subs->data.v[weak_root].type;
+        } else if (tl_weak_int_unsigned == type->tag) {
+            tl_type_variable weak_root = uf_find(subs, type->var);
+            if (!subs->data.v[weak_root].type) subs->data.v[weak_root].type = uint_type;
+            subs->data.v[root].type = subs->data.v[weak_root].type;
+        } else if (tl_weak_float == type->tag) {
+            tl_type_variable weak_root = uf_find(subs, type->var);
+            if (!subs->data.v[weak_root].type) subs->data.v[weak_root].type = float_type;
+            subs->data.v[root].type = subs->data.v[weak_root].type;
+        }
+    }
+}
+
 // Default weak int/float nodes in-place within a monotype tree.
 // Unlike tl_type_subs_default_weak_ints (which walks the subs map), this walks the monotype
 // structure directly, replacing any weak_int_signed/unsigned/float nodes with their concrete

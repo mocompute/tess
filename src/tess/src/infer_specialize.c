@@ -1182,6 +1182,7 @@ int post_specialize(tl_infer *self, traverse_ctx *traverse_ctx, ast_node *specia
             hires_timer_init(&st);
             hires_timer_start(&st);
         }
+        u32 subs_before = self->subs->data.size;
         if (traverse_ast(self, traverse_ctx, infer_target, infer_traverse_cb)) {
             dbg_at(2, self, "note: post_specialize failed infer");
             return 1;
@@ -1193,9 +1194,11 @@ int post_specialize(tl_infer *self, traverse_ctx *traverse_ctx, ast_node *specia
 
         // Default weak integer literals created during re-inference, so that
         // specialization sees concrete Int/UInt for instance keys.
-        tl_type_subs_default_weak_ints(self->subs, tl_type_registry_int(self->registry),
-                                       tl_type_registry_uint(self->registry),
-                                       tl_type_registry_float(self->registry));
+        // Only scan entries created since the last defaulting pass.
+        tl_type_subs_default_weak_ints_from(self->subs, subs_before,
+                                            tl_type_registry_int(self->registry),
+                                            tl_type_registry_uint(self->registry),
+                                            tl_type_registry_float(self->registry));
 
         // Apply substitutions to AST before specialization, so types are concrete
         if (stats) hires_timer_start(&st);
