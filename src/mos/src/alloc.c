@@ -43,6 +43,7 @@ typedef struct arena_allocator {
     arena_header    *head;
     arena_header    *tail; // cached pointer to current/last bucket for O(1) allocation
     size_t           peak_allocated;
+    void            *last_alloc; // last allocated pointer for O(1) arena_free fast path
 } arena_allocator;
 
 static void *default_malloc(allocator *a, size_t sz, char const *, int) mallocfun;
@@ -192,7 +193,9 @@ static void *arena_malloc(allocator *alloc, size_t sz, char const *file, int lin
     arena_header *tail = arena->tail;
     assert(tail);
     if (bucket_has_capacity(tail, sz)) {
-        return bump_alloc_assume_capacity(tail, sz);
+        void *res = bump_alloc_assume_capacity(tail, sz);
+        arena->last_alloc = res;
+        return res;
     }
 
     // Slow path: walk forward from tail looking for a bucket with capacity.
@@ -202,7 +205,9 @@ static void *arena_malloc(allocator *alloc, size_t sz, char const *file, int lin
     while (bucket) {
         if (bucket_has_capacity(bucket, sz)) {
             arena->tail = bucket;
-            return bump_alloc_assume_capacity(bucket, sz);
+            void *res = bump_alloc_assume_capacity(bucket, sz);
+            arena->last_alloc = res;
+            return res;
         }
         tail   = bucket;
         bucket = bucket->next;
@@ -221,7 +226,9 @@ static void *arena_malloc(allocator *alloc, size_t sz, char const *file, int lin
     if (null == tail->next) return null;
 
     arena->tail = tail->next;
-    return bump_alloc_assume_capacity(arena->tail, sz);
+    void *res = bump_alloc_assume_capacity(arena->tail, sz);
+    arena->last_alloc = res;
+    return res;
 }
 
 static void *arena_realloc(allocator *a, void *p, size_t sz, char const *file, int line) {
@@ -230,8 +237,9 @@ static void *arena_realloc(allocator *a, void *p, size_t sz, char const *file, i
 
     if (null == p) return arena_malloc(a, sz, __FILE__, __LINE__);
 
-    sz                   = alloc_align_to_pointer_size(sz);
-    arena_header *bucket = find_bucket((arena_allocator *)a, p);
+    arena_allocator *arena = (arena_allocator *)a;
+    sz                     = alloc_align_to_pointer_size(sz);
+    arena_header   *bucket = (p == arena->last_alloc) ? arena->tail : find_bucket(arena, p);
     if (null == bucket) {
         assert(0);
         return null;
@@ -286,20 +294,17 @@ static void arena_free(allocator *a, void *p, char const *file, int line) {
 
     if (null == p) return;
 
-    arena_header *bucket = find_bucket((arena_allocator *)a, p);
-    if (null == bucket) fatal("arena_free: attempt to free unknown pointer %p", p);
-
-    if (is_last_block(bucket, p)) {
-        // shrink bucket
-        bucket->size -= *block_size(p) + sizeof(arena_block);
-        return;
-    }
+    arena_allocator *arena = (arena_allocator *)a;
+    if (p != arena->last_alloc) return;
+    arena->last_alloc = null;
+    maybe_free_block(arena->tail, p);
 }
 
 static void arena_init(allocator *arena_, allocator *parent, size_t sz) {
     arena_allocator *arena = (arena_allocator *)arena_;
     arena->parent          = parent;
     arena->peak_allocated  = 0;
+    arena->last_alloc      = null;
     sz                     = alloc_next_power_of_two(sizeof(arena_header) + sz);
     if (0 == sz) sz = 16; // overflow (TODO)
 
@@ -349,7 +354,8 @@ void arena_reset(allocator *arena_) {
     }
 
     // Reset tail to head so allocations start from beginning
-    arena->tail = arena->head;
+    arena->tail       = arena->head;
+    arena->last_alloc = null;
 }
 
 arena_watermark arena_save(allocator *arena_) {
@@ -363,7 +369,8 @@ void arena_restore(allocator *arena_, arena_watermark wm) {
 
     saved->size            = wm.size;
     for (arena_header *h = saved->next; h; h = h->next) h->size = sizeof(arena_header);
-    arena->tail = saved;
+    arena->tail       = saved;
+    arena->last_alloc = null;
 }
 
 void arena_get_stats(allocator *arena_, arena_stats *out) {
