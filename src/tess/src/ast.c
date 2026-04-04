@@ -984,10 +984,14 @@ char const *ast_tag_to_string(ast_tag tag) {
     return strings2[tag];
 }
 
-str v2_ast_node_to_string(allocator *alloc, ast_node const *node) {
+#define V2_AST_NODE_TO_STRING_MAX_DEPTH 16
+
+static str v2_ast_node_to_string_inner(allocator *alloc, ast_node const *node, int depth) {
+#define R(n) v2_ast_node_to_string_inner(alloc, (n), depth + 1)
     char buf[64];
 
     if (!node) return str_init(alloc, "[null]");
+    if (depth >= V2_AST_NODE_TO_STRING_MAX_DEPTH) return str_init_small("...");
 
     str ty_str = node->type ? tl_polytype_to_string(alloc, node->type) : str_empty();
 
@@ -996,7 +1000,7 @@ str v2_ast_node_to_string(allocator *alloc, ast_node const *node) {
         str_build b = str_build_init(alloc, 128);
         str_build_cat(&b, S("[["));
         for (u32 i = 0; i < node->attribute_set.n; i++) {
-            str_build_cat(&b, v2_ast_node_to_string(alloc, node->attribute_set.nodes[i]));
+            str_build_cat(&b, R(node->attribute_set.nodes[i]));
             if (i + 1 < node->attribute_set.n) str_build_cat(&b, S(", "));
         }
         str_build_cat(&b, S("]]"));
@@ -1013,7 +1017,7 @@ str v2_ast_node_to_string(allocator *alloc, ast_node const *node) {
     case ast_body: {
         str_build b = str_build_init(alloc, 128);
         forall(i, node->body.expressions) {
-            str_build_cat(&b, v2_ast_node_to_string(alloc, node->body.expressions.v[i]));
+            str_build_cat(&b, R(node->body.expressions.v[i]));
             str_build_cat(&b, S(" "));
         }
         return str_build_finish(&b);
@@ -1024,21 +1028,21 @@ str v2_ast_node_to_string(allocator *alloc, ast_node const *node) {
 
         str_build b = str_build_init(alloc, 128);
         str_build_cat(&b, S("(case "));
-        str_build_cat(&b, v2_ast_node_to_string(alloc, node->case_.expression));
+        str_build_cat(&b, R(node->case_.expression));
 
         if (node->case_.binary_predicate) {
             str_build_cat(&b, S("(binary_predicate "));
-            str_build_cat(&b, v2_ast_node_to_string(alloc, node->case_.binary_predicate));
+            str_build_cat(&b, R(node->case_.binary_predicate));
             str_build_cat(&b, S(") "));
         }
 
         str_build_cat(&b, S("("));
         forall(i, node->case_.conditions) {
             str_build_cat(&b, S("("));
-            str_build_cat(&b, v2_ast_node_to_string(alloc, node->case_.conditions.v[i]));
+            str_build_cat(&b, R(node->case_.conditions.v[i]));
             str_build_cat(&b, S(") "));
 
-            str_build_cat(&b, v2_ast_node_to_string(alloc, node->case_.arms.v[i]));
+            str_build_cat(&b, R(node->case_.arms.v[i]));
 
             if (i + 1 < node->case_.conditions.size) str_build_cat(&b, S(" "));
         }
@@ -1046,7 +1050,7 @@ str v2_ast_node_to_string(allocator *alloc, ast_node const *node) {
 
         if (node->case_.else_binding) {
             str_build_cat(&b, S("(else_binding "));
-            str_build_cat(&b, v2_ast_node_to_string(alloc, node->case_.else_binding));
+            str_build_cat(&b, R(node->case_.else_binding));
             str_build_cat(&b, S(")"));
         }
 
@@ -1059,9 +1063,9 @@ str v2_ast_node_to_string(allocator *alloc, ast_node const *node) {
         str_build_cat(&b, S("(binary_op "));
         str_build_cat(&b, node->binary_op.op->symbol.name);
         str_build_cat(&b, S(" "));
-        str_build_cat(&b, v2_ast_node_to_string(alloc, node->binary_op.left));
+        str_build_cat(&b, R(node->binary_op.left));
         str_build_cat(&b, S(" "));
-        str_build_cat(&b, v2_ast_node_to_string(alloc, node->binary_op.right));
+        str_build_cat(&b, R(node->binary_op.right));
         str_build_cat(&b, S(")"));
         return str_build_finish(&b);
 
@@ -1089,16 +1093,16 @@ str v2_ast_node_to_string(allocator *alloc, ast_node const *node) {
     case ast_return:
         //
         if (!node->return_.is_break_statement)
-            return str_cat(alloc, S("return "), v2_ast_node_to_string(alloc, node->return_.value));
-        else return str_cat(alloc, S("break "), v2_ast_node_to_string(alloc, node->return_.value));
+            return str_cat(alloc, S("return "), R(node->return_.value));
+        else return str_cat(alloc, S("break "), R(node->return_.value));
 
-    case ast_try: return str_cat(alloc, S("try "), v2_ast_node_to_string(alloc, node->try_.operand));
+    case ast_try: return str_cat(alloc, S("try "), R(node->try_.operand));
 
     case ast_while:
         //
-        return str_cat_6(alloc, S("while ("), v2_ast_node_to_string(alloc, node->while_.condition),
-                         S("), ("), v2_ast_node_to_string(alloc, node->while_.update), S(") "),
-                         v2_ast_node_to_string(alloc, node->while_.body));
+        return str_cat_6(alloc, S("while ("), R(node->while_.condition),
+                         S("), ("), R(node->while_.update), S(") "),
+                         R(node->while_.body));
 
     case ast_symbol: {
         str_build b = str_build_init(alloc, 64);
@@ -1121,7 +1125,7 @@ str v2_ast_node_to_string(allocator *alloc, ast_node const *node) {
             str_build_cat(&b, S(")"));
         } else if (node->symbol.annotation) {
             str_build_cat(&b, S(" ("));
-            str_build_cat(&b, v2_ast_node_to_string(alloc, node->symbol.annotation));
+            str_build_cat(&b, R(node->symbol.annotation));
             str_build_cat(&b, S(")"));
         }
         if (node->type) {
@@ -1134,7 +1138,7 @@ str v2_ast_node_to_string(allocator *alloc, ast_node const *node) {
 
     case ast_let: {
         str out               = str_copy(alloc, S("let "));
-        out                   = str_cat(alloc, out, v2_ast_node_to_string(alloc, node->let.name));
+        out                   = str_cat(alloc, out, R(node->let.name));
 
         ast_node_sized params = ast_node_sized_from_ast_array((ast_node *)node);
         forall(i, params) {
@@ -1147,17 +1151,17 @@ str v2_ast_node_to_string(allocator *alloc, ast_node const *node) {
         }
 
         if (node->type) out = str_cat_3(alloc, out, S(" : "), tl_polytype_to_string(alloc, node->type));
-        out = str_cat_3(alloc, out, S(" = "), v2_ast_node_to_string(alloc, node->let.body));
+        out = str_cat_3(alloc, out, S(" = "), R(node->let.body));
         return out;
     }
 
     case ast_let_in: {
         str out = str_copy(alloc, S("let "));
-        out     = str_cat(alloc, out, v2_ast_node_to_string(alloc, node->let_in.name));
+        out     = str_cat(alloc, out, R(node->let_in.name));
         out     = str_cat(alloc, out, S(" = "));
-        out     = str_cat(alloc, out, v2_ast_node_to_string(alloc, node->let_in.value));
+        out     = str_cat(alloc, out, R(node->let_in.value));
         out     = str_cat(alloc, out, S(" in "));
-        if (node->let_in.body) out = str_cat(alloc, out, v2_ast_node_to_string(alloc, node->let_in.body));
+        if (node->let_in.body) out = str_cat(alloc, out, R(node->let_in.body));
         return out;
     }
 
@@ -1167,7 +1171,7 @@ str v2_ast_node_to_string(allocator *alloc, ast_node const *node) {
         str_build_cat(&b, node->named_application.name->symbol.name);
         for (u32 i = 0, n = node->named_application.n_arguments; i < n; ++i) {
             str_build_cat(&b, S(" "));
-            str_build_cat(&b, v2_ast_node_to_string(alloc, node->named_application.arguments[i]));
+            str_build_cat(&b, R(node->named_application.arguments[i]));
         }
         str_build_cat(&b, S(")"));
         return str_build_finish(&b);
@@ -1180,15 +1184,15 @@ str v2_ast_node_to_string(allocator *alloc, ast_node const *node) {
         if (argc) {
             str_build_cat(&b, S("["));
             for (u32 i = 0; i < argc; i++) {
-                str_build_cat(&b, v2_ast_node_to_string(alloc, argv[i]));
+                str_build_cat(&b, R(argv[i]));
                 if (i + 1 < argc) str_build_cat(&b, S(", "));
             }
             str_build_cat(&b, S("]"));
         }
 
-        str_build_cat(&b, v2_ast_node_to_string(alloc, node->arrow.left));
+        str_build_cat(&b, R(node->arrow.left));
         str_build_cat(&b, S(" -> "));
-        str_build_cat(&b, v2_ast_node_to_string(alloc, node->arrow.right));
+        str_build_cat(&b, R(node->arrow.right));
         return str_build_finish(&b);
     }
 
@@ -1198,19 +1202,19 @@ str v2_ast_node_to_string(allocator *alloc, ast_node const *node) {
         // here we want to include the nil value
         for (u32 i = 0; i < node->lambda_function.n_parameters; ++i) {
             out = str_cat_3(alloc, out, S(" "),
-                            v2_ast_node_to_string(alloc, node->lambda_function.parameters[i]));
+                            R(node->lambda_function.parameters[i]));
         }
         out = str_cat(alloc, out, S(" -> "));
-        out = str_cat(alloc, out, v2_ast_node_to_string(alloc, node->lambda_function.body));
+        out = str_cat(alloc, out, R(node->lambda_function.body));
         return out;
     }
 
     case ast_type_alias: {
         str_build b = str_build_init(alloc, 64);
         str_build_cat(&b, S("(alias "));
-        str_build_cat(&b, v2_ast_node_to_string(alloc, node->type_alias.name));
+        str_build_cat(&b, R(node->type_alias.name));
         str_build_cat(&b, S(" "));
-        str_build_cat(&b, v2_ast_node_to_string(alloc, node->type_alias.target));
+        str_build_cat(&b, R(node->type_alias.target));
         str_build_cat(&b, S(")"));
         return str_build_finish(&b);
     }
@@ -1218,9 +1222,9 @@ str v2_ast_node_to_string(allocator *alloc, ast_node const *node) {
     case ast_type_predicate: {
         str_build b = str_build_init(alloc, 64);
         str_build_cat(&b, S("(predicate "));
-        str_build_cat(&b, v2_ast_node_to_string(alloc, node->type_predicate.lhs));
+        str_build_cat(&b, R(node->type_predicate.lhs));
         str_build_cat(&b, S(" :: "));
-        str_build_cat(&b, v2_ast_node_to_string(alloc, node->type_predicate.rhs));
+        str_build_cat(&b, R(node->type_predicate.rhs));
         str_build_cat(&b, S(")"));
         return str_build_finish(&b);
     }
@@ -1244,41 +1248,41 @@ str v2_ast_node_to_string(allocator *alloc, ast_node const *node) {
     case ast_if_then_else: {
         str_build b = str_build_init(alloc, 80);
         str_build_cat(&b, S("if "));
-        str_build_cat(&b, v2_ast_node_to_string(alloc, node->if_then_else.condition));
+        str_build_cat(&b, R(node->if_then_else.condition));
         str_build_cat(&b, S(" { "));
-        str_build_cat(&b, v2_ast_node_to_string(alloc, node->if_then_else.yes));
+        str_build_cat(&b, R(node->if_then_else.yes));
         str_build_cat(&b, S("}"));
         if (node->if_then_else.no) {
             str_build_cat(&b, S(" else { "));
-            str_build_cat(&b, v2_ast_node_to_string(alloc, node->if_then_else.no));
+            str_build_cat(&b, R(node->if_then_else.no));
             str_build_cat(&b, S("}"));
         }
         return str_build_finish(&b);
     }
 
     case ast_unary_op:
-        return str_cat_5(alloc, S("(unary_op "), v2_ast_node_to_string(alloc, node->unary_op.op), S(" "),
-                         v2_ast_node_to_string(alloc, node->unary_op.operand), S(")"));
+        return str_cat_5(alloc, S("(unary_op "), R(node->unary_op.op), S(" "),
+                         R(node->unary_op.operand), S(")"));
 
     case ast_assignment:
-        return str_cat_3(alloc, v2_ast_node_to_string(alloc, node->assignment.name), S(" = "),
-                         v2_ast_node_to_string(alloc, node->assignment.value));
+        return str_cat_3(alloc, R(node->assignment.name), S(" = "),
+                         R(node->assignment.value));
 
     case ast_reassignment:
-        return str_cat_3(alloc, v2_ast_node_to_string(alloc, node->assignment.name), S(" re= "),
-                         v2_ast_node_to_string(alloc, node->assignment.value));
+        return str_cat_3(alloc, R(node->assignment.name), S(" re= "),
+                         R(node->assignment.value));
 
     case ast_reassignment_op:
-        return str_cat_3(alloc, v2_ast_node_to_string(alloc, node->assignment.name),
-                         v2_ast_node_to_string(alloc, node->assignment.op),
-                         v2_ast_node_to_string(alloc, node->assignment.value));
+        return str_cat_3(alloc, R(node->assignment.name),
+                         R(node->assignment.op),
+                         R(node->assignment.value));
 
     case ast_eof:
     case ast_tuple: {
         str_build b = str_build_init(alloc, 64);
         str_build_cat(&b, S("(tuple "));
         for (u32 i = 0, n = node->tuple.n_elements; i < n; ++i) {
-            str_build_cat(&b, v2_ast_node_to_string(alloc, node->tuple.elements[i]));
+            str_build_cat(&b, R(node->tuple.elements[i]));
             if (i + 1 < n) str_build_cat(&b, S(", "));
         }
         str_build_cat(&b, S(")"));
@@ -1289,6 +1293,11 @@ str v2_ast_node_to_string(allocator *alloc, ast_node const *node) {
     }
 
     fatal("unreachable");
+#undef R
+}
+
+str v2_ast_node_to_string(allocator *alloc, ast_node const *node) {
+    return v2_ast_node_to_string_inner(alloc, node, 0);
 }
 
 str ast_node_to_short_string(allocator *alloc, ast_node const *node) {
