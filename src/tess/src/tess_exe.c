@@ -122,6 +122,12 @@ typedef struct {
         size_t               infer_transient_used;
         size_t               transpile_transient_capacity;
         size_t               transpile_transient_used;
+        size_t               parser_tokens_capacity;
+        size_t               parser_tokens_used;
+        size_t               parser_temp_capacity;
+        size_t               parser_temp_used;
+        size_t               type_transient_capacity;
+        size_t               type_transient_used;
 
         tl_infer_phase_stats infer_phases;
         tl_infer_counters    infer_counters;
@@ -1255,7 +1261,7 @@ static void print_stats_footer(double total_ms, size_t total_peak, size_t root_c
             "------------", "------------");
     fprintf(stderr, "%-20s %12.3f %12s\n", "TOTAL", total_ms, peak_buf);
     fprintf(stderr, "\n");
-    fprintf(stderr, "Arena Total:         %s capacity / %s used\n", root_cap_buf, root_alloc_buf);
+    fprintf(stderr, "Compile Arena:       %s capacity / %s used\n", root_cap_buf, root_alloc_buf);
     fprintf(stderr, "\n");
 }
 
@@ -1421,6 +1427,11 @@ int compile(state *self) {
         self->stats.ast_arena_capacity = ast_stats.capacity;
         self->stats.ast_arena_used     = ast_stats.allocated;
 
+        self->stats.parser_tokens_capacity = token_stats.capacity;
+        self->stats.parser_tokens_used     = token_stats.allocated;
+        self->stats.parser_temp_capacity   = temp_stats.capacity;
+        self->stats.parser_temp_used       = temp_stats.allocated;
+
         arena_stats nodes_stats;
         arena_get_stats(nodes_alloc, &nodes_stats);
         self->stats.nodes_arena_capacity = nodes_stats.capacity;
@@ -1462,6 +1473,11 @@ int compile(state *self) {
         arena_get_stats(self->compile_arena, &root);
         self->stats.root_after_infer_capacity  = root.capacity;
         self->stats.root_after_infer_allocated = root.allocated;
+
+        arena_stats type_transient;
+        tl_type_transient_get_stats(&type_transient);
+        self->stats.type_transient_capacity = type_transient.capacity;
+        self->stats.type_transient_used     = type_transient.allocated;
 
         self->stats.infer_phases               = *tl_infer_get_phase_stats(infer);
         self->stats.infer_counters             = *tl_infer_get_counters(infer);
@@ -2820,7 +2836,7 @@ done:
         }
         print_stats_footer(total_ms, total_peak, root_cap, root_alloc);
 
-        fprintf(stderr, "=== Root Arena Growth ===\n\n");
+        fprintf(stderr, "=== Compile Arena Growth ===\n\n");
         print_root_arena_phase("After parsing:", self.stats.root_after_parse_capacity,
                                self.stats.root_after_parse_allocated);
         print_root_arena_phase("After inference:", self.stats.root_after_infer_capacity,
@@ -2829,24 +2845,32 @@ done:
                                self.stats.root_after_transpile_allocated);
         fprintf(stderr, "\n");
 
-        // Root arena breakdown by component
-        fprintf(stderr, "=== Root Arena Breakdown ===\n\n");
+        // Compile arena breakdown by component
+        fprintf(stderr, "=== Compile Arena Breakdown ===\n\n");
         fprintf(stderr, "%-26s %10s %10s\n", "Component", "Capacity", "Used");
         fprintf(stderr, "%-26s %10s %10s\n", "--------------------------", "----------", "----------");
         print_breakdown_row("Parser AST", self.stats.ast_arena_capacity, self.stats.ast_arena_used);
+        print_breakdown_row("Parser tokens (*)", self.stats.parser_tokens_capacity,
+                            self.stats.parser_tokens_used);
+        print_breakdown_row("Parser temp (*)", self.stats.parser_temp_capacity,
+                            self.stats.parser_temp_used);
         print_breakdown_row("AST node array", self.stats.nodes_arena_capacity, self.stats.nodes_arena_used);
         print_breakdown_row("Infer", self.stats.infer_capacity, self.stats.infer_final_mem);
         print_breakdown_row("Infer transient", self.stats.infer_transient_capacity,
                             self.stats.infer_transient_used);
+        print_breakdown_row("Type transient (**)", self.stats.type_transient_capacity,
+                            self.stats.type_transient_used);
         if (self.stats.transpile_capacity) {
             print_breakdown_row("Transpile", self.stats.transpile_capacity, self.stats.transpile_final_mem);
             print_breakdown_row("Transpile transient", self.stats.transpile_transient_capacity,
                                 self.stats.transpile_transient_used);
         }
 
-        // Child capacity = root footprint (bytes consumed from root arena).
+        // Child capacity = compile arena footprint (bytes consumed from compile arena).
         // Subtract tracked capacity (not used) so "Other" reflects only
-        // direct root allocations (scanner, hashmaps, structs, etc.).
+        // direct allocations (scanner, hashmaps, structs, etc.).
+        // Note: parser tokens/temp are released before final snapshot, and
+        // type transient is outside compile arena — neither is included here.
         size_t tracked_cap = self.stats.ast_arena_capacity + self.stats.nodes_arena_capacity +
                              self.stats.infer_capacity + self.stats.infer_transient_capacity +
                              self.stats.transpile_capacity + self.stats.transpile_transient_capacity;
@@ -2854,8 +2878,26 @@ done:
         size_t other_used = root_alloc > tracked_cap ? root_alloc - tracked_cap : 0;
         print_breakdown_row("Other", other_cap, other_used);
         fprintf(stderr, "%-26s %10s %10s\n", "--------------------------", "----------", "----------");
-        print_breakdown_row("Root total", root_cap, root_alloc);
+        print_breakdown_row("Compile total", root_cap, root_alloc);
         fprintf(stderr, "\n");
+        fprintf(stderr, "(*) released after parsing\n");
+        fprintf(stderr, "(**) outside compile arena (budgeted allocator)\n");
+        fprintf(stderr, "\n");
+
+        // Memory budget summary
+        allocator *budgeted = get_budgeted_allocator();
+        if (budgeted != default_allocator()) {
+            size_t budget_limit = budgeted_get_limit(budgeted);
+            size_t budget_used  = budgeted_get_used(budgeted);
+            char   limit_buf[32], used_buf[32];
+            format_memory(limit_buf, sizeof limit_buf, budget_limit);
+            format_memory(used_buf, sizeof used_buf, budget_used);
+            fprintf(stderr, "=== Memory Budget ===\n\n");
+            fprintf(stderr, "Budget limit:  %s\n", limit_buf);
+            fprintf(stderr, "Budget used:   %s  (%.0f%%)\n", used_buf,
+                    budget_limit > 0 ? (double)budget_used / (double)budget_limit * 100.0 : 0.0);
+            fprintf(stderr, "\n");
+        }
 
         // Inference sub-phase breakdown
         tl_infer_phase_stats const *ip = &self.stats.infer_phases;
