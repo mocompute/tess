@@ -112,9 +112,35 @@ void parser_set_module_symbols(parser *self, hashmap *mod_syms) {
     self->module_symbols = mod_syms;
 }
 
-void parser_get_arena_stats(parser *self, arena_stats *ast, arena_stats *tokens) {
+void parser_get_arena_stats(parser *self, arena_stats *ast, arena_stats *tokens, arena_stats *temp) {
     arena_get_stats(self->ast_arena, ast);
     arena_get_stats(self->tokens_arena, tokens);
+
+    // Aggregate temp arenas (file, transient, speculative) — these are allocated
+    // from default_allocator() and invisible to the root arena.
+    alloc_zero(temp);
+    arena_stats s;
+    if (self->file_arena) {
+        arena_get_stats(self->file_arena, &s);
+        temp->allocated += s.allocated;
+        temp->capacity += s.capacity;
+        temp->bucket_count += s.bucket_count;
+        temp->peak_allocated += s.peak_allocated;
+    }
+    if (self->transient) {
+        arena_get_stats(self->transient, &s);
+        temp->allocated += s.allocated;
+        temp->capacity += s.capacity;
+        temp->bucket_count += s.bucket_count;
+        temp->peak_allocated += s.peak_allocated;
+    }
+    if (self->speculative) {
+        arena_get_stats(self->speculative, &s);
+        temp->allocated += s.allocated;
+        temp->capacity += s.capacity;
+        temp->bucket_count += s.bucket_count;
+        temp->peak_allocated += s.peak_allocated;
+    }
 }
 
 // -- module --

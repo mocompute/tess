@@ -1405,11 +1405,14 @@ int compile(state *self) {
     hires_timer_stop(&phase_timer);
     if (self->report_stats) {
         self->stats.parse_time_ms = hires_timer_elapsed_sec(&phase_timer) * 1000.0;
-        arena_stats ast_stats, token_stats;
-        parser_get_arena_stats(parser, &ast_stats, &token_stats);
-        self->stats.parse_peak_mem     = ast_stats.peak_allocated + token_stats.peak_allocated;
-        self->stats.parse_capacity     = ast_stats.capacity + token_stats.capacity;
-        self->stats.parse_final_mem    = ast_stats.allocated + token_stats.allocated;
+        arena_stats ast_stats, token_stats, temp_stats;
+        parser_get_arena_stats(parser, &ast_stats, &token_stats, &temp_stats);
+        self->stats.parse_peak_mem     = ast_stats.peak_allocated + token_stats.peak_allocated
+                                       + temp_stats.peak_allocated;
+        self->stats.parse_capacity     = ast_stats.capacity + token_stats.capacity
+                                       + temp_stats.capacity;
+        self->stats.parse_final_mem    = ast_stats.allocated + token_stats.allocated
+                                       + temp_stats.allocated;
 
         self->stats.ast_arena_capacity = ast_stats.capacity;
         self->stats.ast_arena_used     = ast_stats.allocated;
