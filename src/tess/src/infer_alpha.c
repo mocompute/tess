@@ -702,11 +702,14 @@ void add_free_variables_to_arrow(tl_infer *self, ast_node *node, tl_polytype *ar
     collect_free_variables_ctx ctx;
     ctx.fvs                       = (str_array){.alloc = self->arena};
 
+    // Save/restore transient: called per toplevel from add_generic (Phase 3 loop).
+    arena_watermark wm            = arena_save(self->transient);
     traverse_ctx *traverse_ctx    = traverse_ctx_create(self->transient);
     traverse_ctx->user            = &ctx;
     traverse_ctx->skip_alloc_expr = 1; // alloc_expr is not part of the closure body
 
     int res                       = traverse_ast(self, traverse_ctx, node, collect_free_variables_cb);
+    arena_restore(self->transient, wm);
     if (res) fatal("runtime error");
 
     array_shrink(ctx.fvs);

@@ -1559,7 +1559,7 @@ static int verify_trait_bounds(tl_infer *self, ast_node *toplevel, tl_monotype *
 // Arrow specialization
 // ============================================================================
 
-str specialize_arrow(tl_infer *self, traverse_ctx *traverse_ctx, str name, tl_monotype *arrow,
+str specialize_arrow(tl_infer *self, traverse_ctx *tctx, str name, tl_monotype *arrow,
                      tl_monotype_sized resolved_type_args) {
 
     if (!tl_monotype_is_concrete_no_weak(arrow))
@@ -1614,7 +1614,7 @@ str specialize_arrow(tl_infer *self, traverse_ctx *traverse_ctx, str name, tl_mo
     arena_watermark clone_wm = arena_save(self->transient);
     ast_node       *generic_node =
       clone_generic_for_arrow(self, toplevel, arrow, inst_name,
-                              traverse_ctx ? traverse_ctx->type_arguments : null, resolved_type_args);
+                              tctx ? tctx->type_arguments : null, resolved_type_args);
     arena_restore(self->transient, clone_wm);
     if (self->report_stats) {
         hires_timer_stop(&st);
@@ -1627,9 +1627,22 @@ str specialize_arrow(tl_infer *self, traverse_ctx *traverse_ctx, str name, tl_mo
     tl_infer_set_attributes(self, toplevel_name_node(generic_node));
     dbg_at(2, self, "toplevel_add: %s", str_cstr(&inst_name));
 
-    // 6. CRITICAL: Process the specialized function body
-    ast_node *special = toplevel_get(self, inst_name);
-    if (post_specialize(self, traverse_ctx, special, arrow)) return str_empty();
+    // 6. CRITICAL: Process the specialized function body.
+    //    A fresh traverse_ctx is used rather than the caller's: post_specialize re-infers
+    //    a self-contained, already-cloned function body, so the caller's lexical_names and
+    //    type_arguments are irrelevant.  Only result_type (the arrow's return type) carries
+    //    over, since post_specialize uses it to constrain the body's result.
+    //
+    //    Wrapping in arena save/restore releases each specialization's transient
+    //    allocations (traverse_ctx, hashmaps, debug strings, re-inference temporaries)
+    //    so the transient arena doesn't grow proportionally to the specialization count.
+    ast_node        *special  = toplevel_get(self, inst_name);
+    arena_watermark  post_wm  = arena_save(self->transient);
+    traverse_ctx    *post_ctx = traverse_ctx_create(self->transient);
+    post_ctx->result_type     = tctx ? tctx->result_type : null;
+    int post_err = post_specialize(self, post_ctx, special, arrow);
+    arena_restore(self->transient, post_wm);
+    if (post_err) return str_empty();
     return inst_name;
 }
 
@@ -2408,20 +2421,24 @@ static int infer_one(tl_infer *self, ast_node *infer_target, tl_polytype *arrow)
     if (arrow && !ast_node_is_let(infer_target) && !ast_node_is_lambda_function(infer_target))
         fatal("logic error");
 
-    traverse_ctx *traverse = traverse_ctx_create(self->transient);
+    // Save/restore the transient arena so that per-toplevel inference temporaries
+    // (traverse_ctx, its hashmaps, debug strings) don't accumulate across calls.
+    arena_watermark wm       = arena_save(self->transient);
+    traverse_ctx   *traverse = traverse_ctx_create(self->transient);
     if (self->report_stats) self->counters.traverse_infer_calls++;
-    if (traverse_ast(self, traverse, infer_target, infer_traverse_cb)) return 1;
+    int err = traverse_ast(self, traverse, infer_target, infer_traverse_cb);
 
     // constrain arrow result type and infer target's type
-    if (arrow) {
+    if (!err && arrow) {
         if (tl_polytype_is_scheme(arrow)) fatal("logic error");
         ast_node *body = ast_node_body(infer_target);
         if (!body) fatal("logic error");
 
         tl_polytype wrap_result = tl_polytype_wrap(tl_monotype_arrow_result(arrow->type));
-        if (constrain(self, &wrap_result, body->type, body, TL_UNIFY_DIRECTED)) return 1;
+        err = constrain(self, &wrap_result, body->type, body, TL_UNIFY_DIRECTED);
     }
-    return 0;
+    arena_restore(self->transient, wm);
+    return err ? 1 : 0;
 }
 
 int add_generic(tl_infer *self, ast_node *node) {

@@ -480,14 +480,17 @@ void update_specialized_types(tl_infer *self) {
 
     // NOTE: this is an expensive traverse
     if (stats) hires_timer_start(&ut);
-    traverse_ctx *traverse = traverse_ctx_create(self->transient);
-    traverse->user         = &ctx;
-    hashmap_iterator iter  = {0};
+    hashmap_iterator iter = {0};
     ast_node        *node;
     while ((node = toplevel_iter(self, &iter))) {
         if (ast_node_is_utd(node)) continue;
         if (stats) self->counters.traverse_update_types_calls++;
+        // Save/restore per toplevel: traverse_ctx and its hashmaps are temporary.
+        arena_watermark  wm       = arena_save(self->transient);
+        traverse_ctx    *traverse = traverse_ctx_create(self->transient);
+        traverse->user            = &ctx;
         traverse_ast(self, traverse, node, update_types_cb);
+        arena_restore(self->transient, wm);
         // Note: traverse_ast does not traverse let nodes directly (just their sub-parts)
     }
     if (stats) {
@@ -519,12 +522,14 @@ static int check_unresolved_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_n
 
 void check_unresolved_types(tl_infer *self) {
     // checks if any nodes in ast are still type variables
-    traverse_ctx    *traverse = traverse_ctx_create(self->transient);
-    hashmap_iterator iter     = {0};
+    hashmap_iterator iter = {0};
     ast_node        *node;
     while ((node = toplevel_iter(self, &iter))) {
         if (ast_node_is_utd(node)) continue;
+        arena_watermark  wm       = arena_save(self->transient);
+        traverse_ctx    *traverse = traverse_ctx_create(self->transient);
         traverse_ast(self, traverse, node, check_unresolved_cb);
+        arena_restore(self->transient, wm);
     }
     arena_reset(self->transient);
     tl_type_transient_reset();
@@ -755,18 +760,21 @@ static int check_closure_checks_cb(tl_infer *self, traverse_ctx *ctx, ast_node *
 }
 
 void check_closure_checks(tl_infer *self) {
-    traverse_ctx           *traverse = traverse_ctx_create(self->transient);
-    hashmap_iterator        iter     = {0};
+    hashmap_iterator        iter = {0};
     ast_node               *node;
-
-    closure_escape_walk_ctx esc_ctx = {0};
-    traverse->user                  = &esc_ctx;
 
     while ((node = toplevel_iter(self, &iter))) {
         if (ast_node_is_utd(node)) continue;
 
-        // Reset per-function binding map so bindings from one function don't leak into another.
+        // Save/restore per toplevel: traverse_ctx, bindings map, and hashmap
+        // internals are all transient and don't need to persist across iterations.
+        arena_watermark wm = arena_save(self->transient);
+
+        closure_escape_walk_ctx esc_ctx = {0};
         esc_ctx.bindings = ast_node_str_map_create(self->transient, 16);
+
+        traverse_ctx *traverse = traverse_ctx_create(self->transient);
+        traverse->user         = &esc_ctx;
 
         // Check implicit return: top-level function's body last expression.
         // Skip ast_return nodes — those are caught by the traversal callback.
@@ -777,6 +785,7 @@ void check_closure_checks(tl_infer *self) {
 
         // Single traversal for both escape and alloc/capture checks
         traverse_ast(self, traverse, node, check_closure_checks_cb);
+        arena_restore(self->transient, wm);
         if (self->errors.size) return;
     }
 }
