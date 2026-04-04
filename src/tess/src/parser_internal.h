@@ -258,6 +258,7 @@ int           is_unary_operator(char const *);
 int           is_reserved(char const *);
 int           is_ampersand(ast_node const *node);
 
+nodiscard int a_peek(parser *, parse_fun);
 nodiscard int a_try(parser *, parse_fun);
 nodiscard int a_try_s(parser *, parse_fun_s, char const *);
 nodiscard int a_try_int(parser *p, parse_fun_int fun, int arg);

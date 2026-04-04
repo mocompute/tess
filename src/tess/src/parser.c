@@ -358,9 +358,25 @@ int next_token(parser *p) {
     }
 }
 
+nodiscard int a_peek(parser *p, parse_fun fun) {
+    int                   result     = 0;
+    u32 const             save_toks  = p->tokens.size;
+    arena_watermark const save_arena = arena_save(p->ast_arena);
+
+    result                           = fun(p);
+    assert(p->tokens.size >= save_toks);
+    if (p->tokens.size > save_toks) {
+        tokenizer_put_back(p->tokenizer, &p->tokens.v[save_toks], p->tokens.size - save_toks);
+        tokens_shrink(p, save_toks);
+    }
+    arena_restore(p->ast_arena, save_arena);
+
+    return result;
+}
+
 nodiscard int a_try(parser *p, parse_fun fun) {
-    int       result    = 0;
-    u32 const save_toks = p->tokens.size;
+    int                   result     = 0;
+    u32 const             save_toks  = p->tokens.size;
     arena_watermark const save_arena = arena_save(p->ast_arena);
 
     if ((result = fun(p))) {
@@ -1235,7 +1251,17 @@ void mangle_name(parser *self, ast_node *name) {
 ast_node *parse_lvalue(parser *self) {
     ast_node *ident = null;
 
-    ast_node *expr  = parse_expression(self, INT_MIN);
+    // Fast bail: if the next token cannot start an lvalue, skip the expensive
+    // parse_expression call. This prevents exponential backtracking when
+    // a_assignment/a_reassignment speculatively parse complex expressions
+    // (e.g. nested if/else) that can never be lvalues.
+    if (a_peek(self, next_token)) return null;
+    token_tag tag              = self->token.tag;
+    int       cannot_be_lvalue = (tag == tok_symbol) ? is_reserved(self->token.s)
+                                                     : (tag != tok_open_round && tag != tok_double_open_square);
+    if (cannot_be_lvalue) return null;
+
+    ast_node *expr = parse_expression(self, INT_MIN);
     if (!expr) return null;
 
     if (ast_node_is_symbol(expr)) ident = expr;
