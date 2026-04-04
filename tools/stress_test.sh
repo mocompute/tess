@@ -83,7 +83,7 @@ fi
 default_scales() {
     case $1 in
         volume)     echo "100 500 1000 2000 5000 10000 20000" ;;
-        specialize) echo "10 25 50 100 150 200 300" ;;
+        specialize) echo "100 200 300 400 500 600 700 800 900 1000" ;;
         nesting)    echo "10 50 100 200 500 1000 2000" ;;
         inference)  echo "100 500 1000 2000 5000 10000" ;;
     esac
