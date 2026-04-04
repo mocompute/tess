@@ -544,6 +544,61 @@ int platform_exec_replace(char const *path, char const *const *argv) {
 
 #endif
 
+// -- Memory info --
+#ifdef MOS_WINDOWS
+
+size_t platform_available_memory(void) {
+    MEMORYSTATUSEX ms;
+    ms.dwLength = sizeof(ms);
+    if (!GlobalMemoryStatusEx(&ms)) return 0;
+    return (size_t)ms.ullAvailPhys;
+}
+
+#elif defined(MOS_APPLE)
+
+#include <sys/sysctl.h>
+#include <mach/mach.h>
+
+size_t platform_available_memory(void) {
+    // On macOS, use mach VM statistics for free + inactive pages
+    mach_port_t            host = mach_host_self();
+    vm_statistics64_data_t stats;
+    mach_msg_type_number_t count = HOST_VM_INFO64_COUNT;
+    if (host_statistics64(host, HOST_VM_INFO64, (host_info64_t)&stats, &count) != KERN_SUCCESS)
+        return 0;
+    size_t page_size = (size_t)sysconf(_SC_PAGESIZE);
+    return (size_t)(stats.free_count + stats.inactive_count) * page_size;
+}
+
+#elif defined(MOS_LINUX)
+
+size_t platform_available_memory(void) {
+    // Read MemAvailable from /proc/meminfo — this is the kernel's own
+    // estimate of how much memory is available for new allocations
+    // without swapping. Available since Linux 3.14.
+    FILE *f = fopen("/proc/meminfo", "r");
+    if (!f) return 0;
+    size_t available = 0;
+    char   line[256];
+    while (fgets(line, sizeof line, f)) {
+        unsigned long long kb;
+        if (sscanf(line, "MemAvailable: %llu kB", &kb) == 1) {
+            available = (size_t)(kb * 1024);
+            break;
+        }
+    }
+    fclose(f);
+    return available;
+}
+
+#else
+
+size_t platform_available_memory(void) {
+    return 0; // unsupported platform
+}
+
+#endif
+
 // -- String utilities
 
 size_t platform_make_c_identifier(char *dest, char const *src, size_t len) {

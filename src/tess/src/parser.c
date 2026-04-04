@@ -25,11 +25,11 @@ parser *parser_create(allocator *alloc, parser_opts const *opts) {
     alloc_zero(self);
     self->opts                         = *opts;
     self->parent_alloc                 = alloc;
-    self->file_arena                   = arena_create(default_allocator(), 64 * 1024);
-    self->tokens_arena                 = arena_create(default_allocator(), PARSER_ARENA_SIZE);
+    self->file_arena                   = arena_create(alloc, 64 * 1024);
+    self->tokens_arena                 = arena_create(alloc, PARSER_ARENA_SIZE);
     self->ast_arena                    = arena_create(alloc, PARSER_ARENA_SIZE);
-    self->transient                    = arena_create(default_allocator(), PARSER_ARENA_SIZE);
-    self->speculative                  = arena_create(default_allocator(), PARSER_ARENA_SIZE);
+    self->transient                    = arena_create(alloc, PARSER_ARENA_SIZE);
+    self->speculative                  = arena_create(alloc, PARSER_ARENA_SIZE);
     self->tokenizer                    = null;
     self->files                        = opts->files;
     self->files_index                  = 0;
@@ -116,8 +116,7 @@ void parser_get_arena_stats(parser *self, arena_stats *ast, arena_stats *tokens,
     arena_get_stats(self->ast_arena, ast);
     arena_get_stats(self->tokens_arena, tokens);
 
-    // Aggregate temp arenas (file, transient, speculative) — these are allocated
-    // from default_allocator() and invisible to the root arena.
+    // Aggregate temp arenas (file, transient, speculative).
     alloc_zero(temp);
     arena_stats s;
     if (self->file_arena) {
@@ -396,8 +395,8 @@ cleanup:
 }
 
 nodiscard int a_try_s(parser *p, parse_fun_s fun, char const *arg) {
-    int       result    = 0;
-    u32 const save_toks = p->tokens.size;
+    int                   result     = 0;
+    u32 const             save_toks  = p->tokens.size;
     arena_watermark const save_arena = arena_save(p->ast_arena);
     if ((result = fun(p, arg))) {
         if (p->tokens.size > save_toks) {
@@ -417,8 +416,8 @@ nodiscard int a_try_s(parser *p, parse_fun_s fun, char const *arg) {
 }
 
 nodiscard int a_try_int(parser *p, parse_fun_int fun, int arg) {
-    int       result    = 0;
-    u32 const save_toks = p->tokens.size;
+    int                   result     = 0;
+    u32 const             save_toks  = p->tokens.size;
     arena_watermark const save_arena = arena_save(p->ast_arena);
     if ((result = fun(p, arg))) {
         if (p->tokens.size > save_toks) {

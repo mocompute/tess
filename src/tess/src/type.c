@@ -155,7 +155,7 @@ tl_type_registry *tl_type_registry_create(allocator *alloc, allocator *transient
     self->alloc            = alloc;
     self->transient        = transient;
 
-    transient_allocator    = arena_create(default_allocator(), 4096);
+    transient_allocator    = arena_create(get_budgeted_allocator(), 4096);
 
     self->subs             = subs;
     self->definitions      = map_new(self->alloc, str, tl_polytype *, 1024);       // key: str

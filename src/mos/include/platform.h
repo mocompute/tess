@@ -106,6 +106,10 @@ int platform_exec(platform_exec_opts const *opts);
 // argv must be NULL-terminated; argv[0] should be the program path.
 int platform_exec_replace(char const *path, char const *const *argv);
 
+// -- Memory info --
+// Returns available physical memory in bytes, or 0 if it cannot be determined.
+size_t platform_available_memory(void);
+
 // -- String utilities
 size_t platform_make_c_identifier(char *dest, char const *src, size_t len);
 

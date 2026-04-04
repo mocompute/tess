@@ -25,6 +25,8 @@ typedef double max_align_t;
 
 #define ALLOC_DEBUG_PATTERN 0xCD
 
+static allocator *default_budgeted_allocator = null;
+
 typedef struct {
     size_t size;
 } arena_block;
@@ -81,6 +83,21 @@ static void default_free(allocator *a, void *p, char const *file, int line) {
 allocator *default_allocator(void) {
     static allocator allocator = {&default_malloc, &default_calloc, &default_realloc, &default_free};
     return &allocator;
+}
+
+allocator *get_budgeted_allocator(void) {
+    if (default_budgeted_allocator) return default_budgeted_allocator;
+    else return default_allocator();
+}
+
+void alloc_default_budgeted_allocator_set(allocator *alloc) {
+    default_budgeted_allocator = alloc;
+}
+
+void alloc_default_budgeted_allocator_free(void) {
+    if (default_budgeted_allocator) {
+        budgeted_destroy(&default_budgeted_allocator);
+    }
 }
 
 // -- allocator malloc and friends --
@@ -193,7 +210,7 @@ static void *arena_malloc(allocator *alloc, size_t sz, char const *file, int lin
     arena_header *tail = arena->tail;
     assert(tail);
     if (bucket_has_capacity(tail, sz)) {
-        void *res = bump_alloc_assume_capacity(tail, sz);
+        void *res         = bump_alloc_assume_capacity(tail, sz);
         arena->last_alloc = res;
         return res;
     }
@@ -204,8 +221,8 @@ static void *arena_malloc(allocator *alloc, size_t sz, char const *file, int lin
     arena_header *bucket = tail->next;
     while (bucket) {
         if (bucket_has_capacity(bucket, sz)) {
-            arena->tail = bucket;
-            void *res = bump_alloc_assume_capacity(bucket, sz);
+            arena->tail       = bucket;
+            void *res         = bump_alloc_assume_capacity(bucket, sz);
             arena->last_alloc = res;
             return res;
         }
@@ -225,8 +242,8 @@ static void *arena_malloc(allocator *alloc, size_t sz, char const *file, int lin
     tail->next = arena_header_create(arena->parent, new_capacity);
     if (null == tail->next) return null;
 
-    arena->tail = tail->next;
-    void *res = bump_alloc_assume_capacity(arena->tail, sz);
+    arena->tail       = tail->next;
+    void *res         = bump_alloc_assume_capacity(arena->tail, sz);
     arena->last_alloc = res;
     return res;
 }
@@ -239,7 +256,7 @@ static void *arena_realloc(allocator *a, void *p, size_t sz, char const *file, i
 
     arena_allocator *arena = (arena_allocator *)a;
     sz                     = alloc_align_to_pointer_size(sz);
-    arena_header   *bucket = (p == arena->last_alloc) ? arena->tail : find_bucket(arena, p);
+    arena_header *bucket   = (p == arena->last_alloc) ? arena->tail : find_bucket(arena, p);
     if (null == bucket) {
         assert(0);
         return null;
@@ -382,6 +399,76 @@ void arena_get_stats(allocator *arena_, arena_stats *out) {
         out->bucket_count++;
     }
     out->peak_allocated = arena->peak_allocated > out->allocated ? arena->peak_allocated : out->allocated;
+}
+
+// -- budgeted allocator --
+
+typedef struct {
+    struct allocator allocator;
+    allocator       *inner;
+    size_t           used;
+    size_t           limit;
+} budgeted_allocator;
+
+static void budgeted_check(budgeted_allocator *b, size_t sz) {
+    if (b->used + sz > b->limit)
+        fatal("memory limit exceeded (%zu bytes used, %zu requested, %zu limit)", b->used, sz, b->limit);
+}
+
+static void *budgeted_malloc(allocator *a, size_t sz, char const *file, int line) {
+    budgeted_allocator *b = (budgeted_allocator *)a;
+    budgeted_check(b, sz);
+    void *p = b->inner->malloc(b->inner, sz, file, line);
+    if (p) b->used += sz;
+    return p;
+}
+
+static void *budgeted_calloc(allocator *a, size_t num, size_t sz, char const *file, int line) {
+    budgeted_allocator *b     = (budgeted_allocator *)a;
+    size_t              total = sz && num > SIZE_MAX / sz ? SIZE_MAX : num * sz;
+    budgeted_check(b, total);
+    void *p = b->inner->calloc(b->inner, num, sz, file, line);
+    if (p) b->used += total;
+    return p;
+}
+
+static void *budgeted_realloc(allocator *a, void *p, size_t sz, char const *file, int line) {
+    budgeted_allocator *b = (budgeted_allocator *)a;
+    budgeted_check(b, sz);
+    void *out = b->inner->realloc(b->inner, p, sz, file, line);
+    if (out) b->used += sz;
+    return out;
+}
+
+static void budgeted_free(allocator *a, void *p, char const *file, int line) {
+    budgeted_allocator *b = (budgeted_allocator *)a;
+    b->inner->free(b->inner, p, file, line);
+}
+
+allocator *budgeted_create(allocator *inner, size_t limit) {
+    budgeted_allocator *b = (budgeted_allocator *)malloc(sizeof *b);
+    if (!b) fatal("budgeted_create: malloc failed");
+    b->allocator.malloc  = &budgeted_malloc;
+    b->allocator.calloc  = &budgeted_calloc;
+    b->allocator.realloc = &budgeted_realloc;
+    b->allocator.free    = &budgeted_free;
+    b->inner             = inner;
+    b->used              = 0;
+    b->limit             = limit;
+    return (allocator *)b;
+}
+
+void budgeted_destroy(allocator **a) {
+    free(*a);
+    *a = null;
+}
+
+size_t budgeted_get_used(allocator *a) {
+    return ((budgeted_allocator *)a)->used;
+}
+
+size_t budgeted_get_limit(allocator *a) {
+    return ((budgeted_allocator *)a)->limit;
 }
 
 // -- leak detector allocator --

@@ -27,6 +27,9 @@ typedef struct allocator allocator;
 // -- default allocator --
 
 allocator *default_allocator(void);
+allocator *get_budgeted_allocator(void);
+void       alloc_default_budgeted_allocator_set(allocator *);
+void       alloc_default_budgeted_allocator_free(void);
 
 // -- leak detection --
 nodiscard allocator *leak_detector_create(void) mallocfun;
@@ -50,6 +53,13 @@ typedef struct {
 
 nodiscard arena_watermark arena_save(allocator *arena);
 void                      arena_restore(allocator *arena, arena_watermark wm);
+
+// -- budgeted allocator --
+
+nodiscard allocator *budgeted_create(allocator *inner, size_t limit) mallocfun;
+void                 budgeted_destroy(allocator **);
+size_t               budgeted_get_used(allocator *);
+size_t               budgeted_get_limit(allocator *);
 
 // -- arena statistics --
 
