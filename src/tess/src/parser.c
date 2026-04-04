@@ -2104,8 +2104,10 @@ int parser_parse_all_symbols(parser *self) {
     while (0 == (res = parser_next(self))) {
         ast_node *node;
         parser_result(self, &node);
-        str str = v2_ast_node_to_string(self->transient, node);
-        parser_dbg(self, "parse_all_symbols: parsed node %s", str_cstr(&str));
+        if (self->verbose) {
+            str str = v2_ast_node_to_string(self->transient, node);
+            parser_dbg(self, "parse_all_symbols: parsed node %s", str_cstr(&str));
+        }
     }
 
     save_current_module_symbols(self);
