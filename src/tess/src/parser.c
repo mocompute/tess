@@ -361,6 +361,7 @@ int next_token(parser *p) {
 nodiscard int a_try(parser *p, parse_fun fun) {
     int       result    = 0;
     u32 const save_toks = p->tokens.size;
+    arena_watermark const save_arena = arena_save(p->ast_arena);
 
     if ((result = fun(p))) {
         assert(p->tokens.size >= save_toks);
@@ -368,6 +369,7 @@ nodiscard int a_try(parser *p, parse_fun fun) {
             tokenizer_put_back(p->tokenizer, &p->tokens.v[save_toks], p->tokens.size - save_toks);
             tokens_shrink(p, save_toks);
         }
+        arena_restore(p->ast_arena, save_arena);
         goto cleanup;
     }
 
@@ -380,6 +382,7 @@ cleanup:
 nodiscard int a_try_s(parser *p, parse_fun_s fun, char const *arg) {
     int       result    = 0;
     u32 const save_toks = p->tokens.size;
+    arena_watermark const save_arena = arena_save(p->ast_arena);
     if ((result = fun(p, arg))) {
         if (p->tokens.size > save_toks) {
             if (0) {
@@ -389,7 +392,7 @@ nodiscard int a_try_s(parser *p, parse_fun_s fun, char const *arg) {
             tokenizer_put_back(p->tokenizer, &p->tokens.v[save_toks], p->tokens.size - save_toks);
             tokens_shrink(p, save_toks);
         }
-
+        arena_restore(p->ast_arena, save_arena);
         return result;
     }
     // do not reset tokens on success, because calls to a_try may be
@@ -400,6 +403,7 @@ nodiscard int a_try_s(parser *p, parse_fun_s fun, char const *arg) {
 nodiscard int a_try_int(parser *p, parse_fun_int fun, int arg) {
     int       result    = 0;
     u32 const save_toks = p->tokens.size;
+    arena_watermark const save_arena = arena_save(p->ast_arena);
     if ((result = fun(p, arg))) {
         if (p->tokens.size > save_toks) {
             if (0) {
@@ -409,7 +413,7 @@ nodiscard int a_try_int(parser *p, parse_fun_int fun, int arg) {
             tokenizer_put_back(p->tokenizer, &p->tokens.v[save_toks], p->tokens.size - save_toks);
             tokens_shrink(p, save_toks);
         }
-
+        arena_restore(p->ast_arena, save_arena);
         return result;
     }
     // do not reset tokens on success, because calls to a_try may be
