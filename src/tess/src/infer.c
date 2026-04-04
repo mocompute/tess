@@ -376,15 +376,6 @@ static int run_specialize(tl_infer *self, ast_node_sized nodes, ast_node *main) 
     // Types are concrete after Phase 4, so we can identify user-defined operands.
     rewrite_operator_overloads_all(self);
 
-    // Default weak ints from inference (Phase 3) before specialization begins.
-    // This ensures instance cache keys use concrete types (e.g. CLongLong) rather
-    // than weak int placeholders, preventing duplicate specializations of closures.
-    // A second defaulting pass runs after specialization (below) to handle new
-    // weak ints created during post_specialize re-inference.
-    tl_type_subs_default_weak_ints(self->subs, tl_type_registry_int(self->registry),
-                                   tl_type_registry_uint(self->registry),
-                                   tl_type_registry_float(self->registry));
-
     traverse_ctx *traverse = traverse_ctx_create(self->transient);
 
     if (main) {
@@ -450,13 +441,6 @@ static int run_specialize(tl_infer *self, ast_node_sized nodes, ast_node *main) 
     }
 
     transient_reset(self);
-
-    // Default unconstrained weak integer literals: weak_int_signed -> Int, weak_int_unsigned -> UInt.
-    // Must happen after specialization (which re-infers literals, creating new weak types)
-    // and before the final substitution pass.
-    tl_type_subs_default_weak_ints(self->subs, tl_type_registry_int(self->registry),
-                                   tl_type_registry_uint(self->registry),
-                                   tl_type_registry_float(self->registry));
 
     // apply subs to global environment
     tl_type_subs_apply(self->subs, self->env);
