@@ -1570,6 +1570,11 @@ str specialize_arrow(tl_infer *self, traverse_ctx *traverse_ctx, str name, tl_mo
 
     // 2. Cache lookup using pre-resolved monotypes
     str *found = instance_lookup_arrow(self, name, arrow, resolved_type_args);
+    // Fallback: explicit type args (e.g. identity[Foo](x)) may match an inferred specialization
+    // (e.g. identity(Foo(..))) that was cached with empty type_args.  Safe because an empty-key
+    // entry can only exist if the arrow alone was enough to infer all type parameters.
+    if (!found && resolved_type_args.size > 0 && tl_monotype_is_concrete(arrow))
+        found = instance_lookup_arrow(self, name, arrow, (tl_monotype_sized){0});
     if (found) {
         if (self->report_stats) self->counters.specialize_cache_hits++;
         return *found;
