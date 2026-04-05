@@ -616,9 +616,16 @@ arr: CArray[Int, 3] := {1, 2, 3}
 carr: Const[CArray[Int, 3]] := {10, 20, 30}
 ```
 
+The count can be omitted when an initializer is present — the compiler infers it from the number of elements:
+
+```tl
+arr: CArray[Int] := {1, 2, 3}        // inferred as CArray[Int, 3]
+carr: Const[CArray[Int]] := {10, 20} // inferred as Const[CArray[Int, 2]]
+```
+
 When all elements are compile-time constants, this emits a C initializer list (`int arr[3] = {1, 2, 3};`).
 When any element is a runtime expression, the compiler emits element-by-element assignment.
-The element count must exactly match the CArray size.
+When the count is explicit, the element count must exactly match the CArray size.
 
 Arrays can also be initialized to `void`, which leaves the underlying memory uninitialized:
 
