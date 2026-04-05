@@ -113,7 +113,7 @@ h(x: CInt) -> CInt { f(x) + f(x, 1) }
 #module main
 
 test_reopen() {
-    error := 0
+    error  := 0
     result := RF_Foo.create_pair(10, 32)
     if result.x - 42 != 0 { error += 1 }
     error
@@ -121,7 +121,7 @@ test_reopen() {
 
 test_reopen_cross_kind() {
     error := 0
-    x := RF_M_cross.f(value = 10)
+    x     := RF_M_cross.f(value = 10)
     if RF_M_cross.f(10) - x.value != 0 { error += 1 }
     error
 }
@@ -171,9 +171,9 @@ test_reopen_submodule() {
 
 test_reopen_submodule_types() {
     error := 0
-    d  := RF_Outer.Inner.make(10)
-    r  := RF_Outer.wrap(d)
-    d2 := RF_Outer.get_inner()
+    d     := RF_Outer.Inner.make(10)
+    r     := RF_Outer.wrap(d)
+    d2    := RF_Outer.get_inner()
     if r + d2.value - 52 != 0 { error += 1 }
     error
 }

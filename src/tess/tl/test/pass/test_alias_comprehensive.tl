@@ -63,25 +63,31 @@ Shape: | Circle { radius: Int } | Square { length: Int }
 
 // test_alias_basic
 #alias F1 AL_Foo1
+
 test_basic() {
     x := F1.value()
     y := F1.add(1, 2)
     if x == 42 && y == 3 { 0 } else { 1 }
 }
+
 #unalias F1
 
 // test_alias_deep_dotted
 #alias X AL_A.AL_B.AL_C
+
 test_deep_dotted() {
     if X.value() == 77 { 0 } else { 1 }
 }
+
 #unalias X
 
 // test_alias_dotted
 #alias OI AL_Outer.AL_Inner
+
 test_dotted() {
     if OI.value() == 99 { 0 } else { 1 }
 }
+
 #unalias OI
 
 // test_alias_file_boundary
@@ -93,15 +99,18 @@ test_file_boundary() {
 
 // test_alias_funcptr
 #alias L AL_Lib
+
 test_funcptr() {
     fp           := L.double/1
     result: CInt := fp(21) - 42
     result
 }
+
 #unalias L
 
 // test_alias_nested_type
 #alias S AL_Shapes
+
 test_nested_type() {
     c            := S.Circle(1)
     result: CInt := when c {
@@ -110,6 +119,7 @@ test_nested_type() {
     }
     result
 }
+
 #unalias S
 
 // test_alias_unalias
@@ -117,6 +127,7 @@ test_nested_type() {
 test_unalias_aliased() { F3.value() }
 #unalias F3
 test_unalias_original() { AL_Foo3.value() }
+
 test_unalias() {
     x := test_unalias_aliased()
     y := test_unalias_original()

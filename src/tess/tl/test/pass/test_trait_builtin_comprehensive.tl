@@ -112,8 +112,8 @@ test_trait_builtin_all_numeric() {
 
 // === test_trait_builtin_cross_chain ===
 
-cross_chain_show[T: Classify](x: T) -> CInt { x.classify() }
-cross_chain_id_ptr[T](p: Ptr[T]) -> T       { p.*          }
+cross_chain_show[T: Classify](x: T)      -> CInt { x.classify() }
+cross_chain_id_ptr[T]        (p: Ptr[T]) -> T    { p.*          }
 
 test_trait_builtin_cross_chain() {
     error := 0

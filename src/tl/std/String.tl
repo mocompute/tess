@@ -43,21 +43,21 @@ _STR_MAX_SMALL: CSize := 14
 // -- Synopsis --
 
 // Construction
-empty      ()                                -> String
-from_bytes (cs: Ptr[Const[CChar]], n: CSize) -> String
-rom_cstr   (cs: Ptr[Const[CChar]])           -> String
-from_int   (n: Int)                          -> String
-from_float (f: Float)                        -> String
-from_byte  (b: Byte)                         -> String
-from_bool  (b: Bool)                         -> String
-from_array[T](arr: Ptr[Const[Array[T]]])     -> String
+empty        ()                                -> String
+from_bytes   (cs: Ptr[Const[CChar]], n: CSize) -> String
+rom_cstr     (cs: Ptr[Const[CChar]])           -> String
+from_int     (n: Int)                          -> String
+from_float   (f: Float)                        -> String
+from_byte    (b: Byte)                         -> String
+from_bool    (b: Bool)                         -> String
+from_array[T](arr: Ptr[Const[Array[T]]])       -> String
 
 // Explicit allocator construction
-from_bytes (alloc: Ptr[Allocator], cs: Ptr[Const[CChar]], n: CSize) -> String
-from_cstr  (alloc: Ptr[Allocator], cs: Ptr[Const[CChar]])           -> String
-from_int   (alloc: Ptr[Allocator], n: Int)                          -> String
-from_float (alloc: Ptr[Allocator], f: Float)                        -> String
-from_array[T](alloc: Ptr[Allocator], arr: Ptr[Const[Array[T]]]) -> String
+from_bytes   (alloc: Ptr[Allocator], cs: Ptr[Const[CChar]], n: CSize) -> String
+from_cstr    (alloc: Ptr[Allocator], cs: Ptr[Const[CChar]])           -> String
+from_int     (alloc: Ptr[Allocator], n: Int)                          -> String
+from_float   (alloc: Ptr[Allocator], f: Float)                        -> String
+from_array[T](alloc: Ptr[Allocator], arr: Ptr[Const[Array[T]]])       -> String
 // from_byte and from_bool don't require allocators since they're small
 
 
@@ -276,8 +276,8 @@ from_bool(b: Bool) {
 }
 
 from_array(alloc, arr) {
-    elem_size := sizeof(arr->data.[0])
-    p: Ptr[any]      := arr->data
+    elem_size        := sizeof(arr->data.[0])
+    p:    Ptr[any]   := arr->data
     data: Ptr[CChar] := p
     from_bytes(alloc, data, arr->size * elem_size)
 }

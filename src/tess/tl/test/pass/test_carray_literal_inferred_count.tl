@@ -10,7 +10,7 @@ main() {
     error += if arr.[2] == 3 {0} else {1}
 
     // Runtime expressions with inferred count
-    x := 10
+    x                 := 10
     arr2: CArray[Int] := {x, x + 1, x * 2}
     error += if arr2.[0] == 10 {0} else {1}
     error += if arr2.[1] == 11 {0} else {1}

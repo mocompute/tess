@@ -22,7 +22,7 @@ destroy[K, V](self: Ptr[Lookup[K, V]]) -> Void {
 #import <String.tl>
 
 // test_generic_apply
-id(x) { x }
+id   (x)    { x    }
 apply(f, x) { f(x) }
 
 test_apply() {
@@ -30,12 +30,12 @@ test_apply() {
 }
 
 // test_generic_apply_through_pointer
-id2(x) { x }
+id2   (x)    { x    }
 apply2(f, x) { f(x) }
 
 test_apply_through_pointer() {
     f1 := id2/1
-    f1 := id2/1                          // shadow, the prior value is unspecialised and must not be emitted
+    f1 := id2/1                         // shadow, the prior value is unspecialised and must not be emitted
     apply2(f1, 0)
 }
 

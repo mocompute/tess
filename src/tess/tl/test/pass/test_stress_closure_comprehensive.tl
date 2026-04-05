@@ -110,7 +110,7 @@ test_alloc_closures() {
 
     add10 := make_adder(10)
     mul3  := make_multiplier(3)
-    f := compose_at(add10, mul3, 5)
+    f     := compose_at(add10, mul3, 5)
     error += if f(0) == 25 { 0 } else { 1 }
     error += if f(1) == 26 { 0 } else { 1 }
 
@@ -357,8 +357,8 @@ test_generic_closures() {
 // From: test_stress_generic_closure_adversarial
 // ============================================================
 
-GCAPair: { a: Int, b: Int }
-GCABox[T]: { val: T }
+GCAPair:   { a: Int, b: Int }
+GCABox[T]: { val: T         }
 
 gca_pair_sum(p: GCAPair) -> Int { p.a + p.b }
 
@@ -377,7 +377,7 @@ test_generic_closure_adversarial() {
 
     // Test 1: Deeply nested generic function calls with closures (3+ levels)
     ( {
-     x := 10
+     x     := 10
      outer := (v: Int) {
      y     := v + x
      inner := (w: Int) { gca_identity(w) + 1 }

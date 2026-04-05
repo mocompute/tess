@@ -266,10 +266,8 @@ void tl_type_transient_reset(void) {
 }
 
 void tl_type_transient_get_stats(arena_stats *out) {
-    if (transient_allocator)
-        arena_get_stats(transient_allocator, out);
-    else
-        alloc_zero(out);
+    if (transient_allocator) arena_get_stats(transient_allocator, out);
+    else alloc_zero(out);
 }
 
 static void tl_type_transient_destroy(void) {

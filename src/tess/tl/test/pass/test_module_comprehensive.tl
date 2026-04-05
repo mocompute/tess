@@ -45,7 +45,7 @@ f1() { 1 }
 // declares intermediate module to allow another level of submodule
 
 #module FooNested.Bar.Baz
-f2() { 2                    }
+f2() { 2                   }
 f3() { FooNested.f1() + 10 }
 
 // Bug: module-prefixed nullary tagged union variant not auto-invoked.
@@ -262,7 +262,7 @@ test_nullary_variant_named() {
 }
 
 test_nullary_variant_generic() {
-    a                  := Opt_generic.Has(42)
+    a                   := Opt_generic.Has(42)
     b: Opt_generic[Int] := Opt_generic.Empty
     error               := 0
     error += when a { s: Has { 0 } n: Empty { 1 } }

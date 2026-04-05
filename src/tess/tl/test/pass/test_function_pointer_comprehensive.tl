@@ -24,12 +24,12 @@ init_isd2() {
 #import <cstdlib.tl>
 
 // --- Helpers from test_function_pointer_argument ---
-add1_arg(x) { x + 1 }
-foo_arg(f, x) { f(x) }
+add1_arg(x)    { x + 1 }
+foo_arg (f, x) { f(x)  }
 
 // --- Helpers from test_function_pointer_value ---
-add1_val(x) { x + 1 }
-foo_val(f, x) { f(x) }
+add1_val(x)    { x + 1 }
+foo_val (f, x) { f(x)  }
 
 // --- Helpers from test_function_pointer_array ---
 double_array (x: Int) -> Int { x * 2 }
@@ -104,8 +104,8 @@ double_rec (x: Int) -> Int { x * 2 }
 triple_rec (x: Int) -> Int { x * 3 }
 add_one_rec(x: Int) -> Int { x + 1 }
 
-Handler: { fn: (Int) -> Int }
-Node: { handler: Handler, value: Int, next: Ptr[Node] }
+Handler: { fn: (Int) -> Int                              }
+Node:    { handler: Handler, value: Int, next: Ptr[Node] }
 
 apply_handler(h: Handler, x: Int) -> Int {
     h.fn(x)
@@ -239,11 +239,11 @@ test_mutable() {
     result1 := fp(5)
     error += if result1 == 10 {0} else {1}
 
-    fp = triple_mut/1                       // reassign
+    fp = triple_mut/1                   // reassign
     result2 := fp(5)
     error += if result2 == 15 {0} else {1}
 
-    fp = negate_mut/1                       // reassign again
+    fp = negate_mut/1                   // reassign again
     result3 := fp(7)
     error += if result3 == -7 {0} else {1}
 
@@ -379,13 +379,13 @@ test_value() {
 
 main() {
     test_argument()
-    + test_array()
-    + test_higher_order_return()
-    + test_in_struct()
-    + test_in_struct_direct()
-    + test_in_struct_direct_2()
-    + test_mutable()
-    + test_pointer()
-    + test_recursive_type()
-    + test_value()
+        + test_array()
+        + test_higher_order_return()
+        + test_in_struct()
+        + test_in_struct_direct()
+        + test_in_struct_direct_2()
+        + test_mutable()
+        + test_pointer()
+        + test_recursive_type()
+        + test_value()
 }

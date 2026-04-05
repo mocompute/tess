@@ -37,8 +37,8 @@ make_b() -> Op {
 }
 
 check() -> CInt {
-    a     := A(42)
-    b     := B
+    a           := A(42)
+    b           := B
     error: CInt := 0
     error += when a { x: A { 0 } y: B { 1 } }
     error += when b { x: A { 1 } y: B { 0 } }
@@ -225,7 +225,7 @@ make_box_has(x) {
 }
 
 gen_double_int(x: Int) -> Int { x * 2 }
-gen_negate(x: Int) -> Int { 0 - x }
+gen_negate    (x: Int) -> Int { 0 - x }
 
 apply_int_handler(h: IntHandler, x: Int) -> Int {
     h.fn(x)
@@ -414,9 +414,9 @@ test_carray() {
     }
     error += if r2 == -1.0 {0} else {1}
 
-    sum                    := 0.0
+    sum                   := 0.0
     ptr: Ptr[CArrayShape] := shapes
-    i                      := 0
+    i                     := 0
     while i < 4, i = i + 1 {
         elem := ptr.[i]
         sum = sum + when elem {

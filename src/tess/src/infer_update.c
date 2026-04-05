@@ -486,9 +486,9 @@ void update_specialized_types(tl_infer *self) {
         if (ast_node_is_utd(node)) continue;
         if (stats) self->counters.traverse_update_types_calls++;
         // Save/restore per toplevel: traverse_ctx and its hashmaps are temporary.
-        arena_watermark  wm       = arena_save(self->transient);
-        traverse_ctx    *traverse = traverse_ctx_create(self->transient);
-        traverse->user            = &ctx;
+        arena_watermark wm       = arena_save(self->transient);
+        traverse_ctx   *traverse = traverse_ctx_create(self->transient);
+        traverse->user           = &ctx;
         traverse_ast(self, traverse, node, update_types_cb);
         arena_restore(self->transient, wm);
         // Note: traverse_ast does not traverse let nodes directly (just their sub-parts)
@@ -526,8 +526,8 @@ void check_unresolved_types(tl_infer *self) {
     ast_node        *node;
     while ((node = toplevel_iter(self, &iter))) {
         if (ast_node_is_utd(node)) continue;
-        arena_watermark  wm       = arena_save(self->transient);
-        traverse_ctx    *traverse = traverse_ctx_create(self->transient);
+        arena_watermark wm       = arena_save(self->transient);
+        traverse_ctx   *traverse = traverse_ctx_create(self->transient);
         traverse_ast(self, traverse, node, check_unresolved_cb);
         arena_restore(self->transient, wm);
     }
@@ -676,8 +676,7 @@ static int check_closure_attrs_cb(tl_infer *self, traverse_ctx *ctx, ast_node *n
 
     // Check if Alloc module is imported (Alloc__Context type must be in the type environment).
     if (!tl_type_env_lookup(self->env, S("Alloc__Context"))) {
-        array_push(self->errors,
-                   ((tl_infer_error){.tag = tl_err_alloc_requires_import, .node = node}));
+        array_push(self->errors, ((tl_infer_error){.tag = tl_err_alloc_requires_import, .node = node}));
         return 0;
     }
 
@@ -760,21 +759,21 @@ static int check_closure_checks_cb(tl_infer *self, traverse_ctx *ctx, ast_node *
 }
 
 void check_closure_checks(tl_infer *self) {
-    hashmap_iterator        iter = {0};
-    ast_node               *node;
+    hashmap_iterator iter = {0};
+    ast_node        *node;
 
     while ((node = toplevel_iter(self, &iter))) {
         if (ast_node_is_utd(node)) continue;
 
         // Save/restore per toplevel: traverse_ctx, bindings map, and hashmap
         // internals are all transient and don't need to persist across iterations.
-        arena_watermark wm = arena_save(self->transient);
+        arena_watermark         wm      = arena_save(self->transient);
 
         closure_escape_walk_ctx esc_ctx = {0};
-        esc_ctx.bindings = ast_node_str_map_create(self->transient, 16);
+        esc_ctx.bindings                = ast_node_str_map_create(self->transient, 16);
 
-        traverse_ctx *traverse = traverse_ctx_create(self->transient);
-        traverse->user         = &esc_ctx;
+        traverse_ctx *traverse          = traverse_ctx_create(self->transient);
+        traverse->user                  = &esc_ctx;
 
         // Check implicit return: top-level function's body last expression.
         // Skip ast_return nodes — those are caught by the traversal callback.

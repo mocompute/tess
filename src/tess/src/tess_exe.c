@@ -1479,8 +1479,8 @@ int compile(state *self) {
         self->stats.type_transient_capacity = type_transient.capacity;
         self->stats.type_transient_used     = type_transient.allocated;
 
-        self->stats.infer_phases               = *tl_infer_get_phase_stats(infer);
-        self->stats.infer_counters             = *tl_infer_get_counters(infer);
+        self->stats.infer_phases            = *tl_infer_get_phase_stats(infer);
+        self->stats.infer_counters          = *tl_infer_get_counters(infer);
     }
 
     if (self->is_check) goto cleanup_ti;

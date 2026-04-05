@@ -716,15 +716,14 @@ static void maybe_infer_carray_count(parser *self, ast_node *lval, ast_node *val
         carray_nfa = ann;
     } else if (str_eq(ann_name, S("Const"))) {
         ast_node *inner = ann->named_application.type_arguments[0];
-        if (ast_node_is_nfa(inner) &&
-            str_eq(ast_node_str(inner->named_application.name), S("CArray")) &&
+        if (ast_node_is_nfa(inner) && str_eq(ast_node_str(inner->named_application.name), S("CArray")) &&
             inner->named_application.n_type_arguments == 1) {
             carray_nfa = inner;
         }
     }
     if (!carray_nfa) return;
 
-    ast_node *count_node  = ast_node_create_i64(self->ast_arena, (i64)val->body.expressions.size);
+    ast_node  *count_node = ast_node_create_i64(self->ast_arena, (i64)val->body.expressions.size);
     ast_node **new_targs  = alloc_malloc(self->ast_arena, 2 * sizeof(ast_node *));
     new_targs[0]          = carray_nfa->named_application.type_arguments[0];
     new_targs[1]          = count_node;

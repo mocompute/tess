@@ -54,9 +54,9 @@ MapList[T]: | MLCons { head: T, tail: Ptr[MapList[T]] }
 map_list[T, U](list: MapList[T], f: (T) -> U) -> Ptr[MapList[U]] {
     when list {
         c: MLCons {
-            next                     := c.tail.*
-            rest                     := map_list(next, f)
-            result: Ptr[MapList[U]]  := c_malloc(64zu)
+            next                    := c.tail.*
+            rest                    := map_list(next, f)
+            result: Ptr[MapList[U]] := c_malloc(64zu)
             result.* = MLCons(head = f(c.head), tail = rest)
             result
         }

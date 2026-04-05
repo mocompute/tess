@@ -2178,10 +2178,11 @@ static int infer_array_literal(tl_infer *self, traverse_ctx *ctx, tl_monotype *c
     i32          n_exprs   = (i32)body_node->body.expressions.size;
 
     if (n_exprs != count) {
-        str msg = str_fmt(self->transient, "array literal has %d elements, but CArray expects %d",
-                          n_exprs, count);
-        array_push(self->errors,
-                   ((tl_infer_error){.tag = tl_err_array_literal_count_mismatch, .node = origin, .message = msg}));
+        str msg =
+          str_fmt(self->transient, "array literal has %d elements, but CArray expects %d", n_exprs, count);
+        array_push(
+          self->errors,
+          ((tl_infer_error){.tag = tl_err_array_literal_count_mismatch, .node = origin, .message = msg}));
         return 1;
     }
 

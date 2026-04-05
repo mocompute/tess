@@ -1986,13 +1986,15 @@ static int is_const_literal(ast_node const *node) {
 // Return the raw C literal string for a constant AST node (no temporaries emitted).
 static str literal_to_c(transpile *self, ast_node const *node) {
     ast_tag t = node->tag;
-    if (t == ast_i64)    return str_init_i64(self->transient, node->i64.val);
-    if (t == ast_i64_z)  return str_init_i64(self->transient, node->i64_z.val);
-    if (t == ast_u64)    return str_cat(self->transient, str_init_u64(self->transient, node->u64.val), S("ULL"));
-    if (t == ast_u64_zu) return str_cat(self->transient, str_init_u64(self->transient, node->u64_zu.val), S("ULL"));
-    if (t == ast_f64)    return str_init_f64(self->transient, node->f64.val);
-    if (t == ast_char)   return str_cat_3(self->transient, S("'"), node->symbol.name, S("'"));
-    if (t == ast_bool)   return node->bool_.val ? S("1 /*true*/") : S("0 /*false*/");
+    if (t == ast_i64) return str_init_i64(self->transient, node->i64.val);
+    if (t == ast_i64_z) return str_init_i64(self->transient, node->i64_z.val);
+    if (t == ast_u64)
+        return str_cat(self->transient, str_init_u64(self->transient, node->u64.val), S("ULL"));
+    if (t == ast_u64_zu)
+        return str_cat(self->transient, str_init_u64(self->transient, node->u64_zu.val), S("ULL"));
+    if (t == ast_f64) return str_init_f64(self->transient, node->f64.val);
+    if (t == ast_char) return str_cat_3(self->transient, S("'"), node->symbol.name, S("'"));
+    if (t == ast_bool) return node->bool_.val ? S("1 /*true*/") : S("0 /*false*/");
     return str_empty();
 }
 
@@ -2027,13 +2029,16 @@ static int emit_carray_literal(transpile *self, str name, tl_monotype *type, ast
     // Check if all elements are compile-time constants
     int all_const = 1;
     for (u32 i = 0; i < value->body.expressions.size; i++) {
-        if (!is_const_literal(value->body.expressions.v[i])) { all_const = 0; break; }
+        if (!is_const_literal(value->body.expressions.v[i])) {
+            all_const = 0;
+            break;
+        }
     }
 
     if (all_const) {
         // Static path: T name[N1][N2]... = {{e0, e1}, ...};
         // Build dimension suffixes and find innermost element type for multi-dimensional arrays.
-        str dims = str_fmt(self->transient, "[%d]", count);
+        str          dims = str_fmt(self->transient, "[%d]", count);
         tl_monotype *base = elem_type;
         while (tl_monotype_is_carray(base)) {
             dims = str_cat(self->transient, dims,
@@ -2042,8 +2047,8 @@ static int emit_carray_literal(transpile *self, str name, tl_monotype *type, ast
         }
         str base_c = type_to_c_mono(self, base);
         if (is_const) cat(self, S("const "));
-        cat(self, str_fmt(self->transient, "%s %s%s = ", str_cstr(&base_c), str_cstr(&name),
-                          str_cstr(&dims)));
+        cat(self,
+            str_fmt(self->transient, "%s %s%s = ", str_cstr(&base_c), str_cstr(&name), str_cstr(&dims)));
         emit_brace_list(self, elem_type, value);
         cat_semicolonln(self);
     } else {
@@ -3193,8 +3198,8 @@ static str generate_void_else(transpile *self, tl_monotype *type, ast_node const
 
     // Get variant names: first = success, second = error
     str_sized variant_names = union_type->cons_inst->def->field_names;
-    str success_name = variant_names.v[0];
-    str error_name   = variant_names.v[1];
+    str       success_name  = variant_names.v[0];
+    str       error_name    = variant_names.v[1];
 
     // Build tag value for success variant
     str tag_enum_name    = tag_type->cons_inst->def->name;
@@ -3205,7 +3210,7 @@ static str generate_void_else(transpile *self, tl_monotype *type, ast_node const
 
     // Generate expression and save to temp
     str expr_str = generate_expr(self, null, expr, ctx);
-    str tmp = next_res(self);
+    str tmp      = next_res(self);
     generate_decl(self, tmp, wrapper_type);
     generate_assign(self, tmp, expr_str);
 
@@ -3218,7 +3223,7 @@ static str generate_void_else(transpile *self, tl_monotype *type, ast_node const
 
     // Declare and assign else binding
     tl_monotype *eb_type = binding->symbol.annotation_type->type;
-    str eb_name = escape_c_keyword(self->transient, ast_node_str(binding));
+    str          eb_name = escape_c_keyword(self->transient, ast_node_str(binding));
     generate_decl(self, eb_name, eb_type);
     cat(self, eb_name);
     cat(self, S(" = "));

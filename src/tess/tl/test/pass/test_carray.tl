@@ -21,7 +21,7 @@ test_decay_to_pointer() {
     arr.[2] = 30
 
     ptr: Ptr[Int] := arr
-    error := 0
+    error         := 0
     error += if ptr.[0] == 10 {0} else {1}
     error += if ptr.[2] == 30 {0} else {1}
     error

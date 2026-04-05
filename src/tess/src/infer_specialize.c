@@ -1195,8 +1195,7 @@ int post_specialize(tl_infer *self, traverse_ctx *traverse_ctx, ast_node *specia
         // Default weak integer literals created during re-inference, so that
         // specialization sees concrete Int/UInt for instance keys.
         // Only scan entries created since the last defaulting pass.
-        tl_type_subs_default_weak_ints_from(self->subs, subs_before,
-                                            tl_type_registry_int(self->registry),
+        tl_type_subs_default_weak_ints_from(self->subs, subs_before, tl_type_registry_int(self->registry),
                                             tl_type_registry_uint(self->registry),
                                             tl_type_registry_float(self->registry));
 
@@ -1611,10 +1610,9 @@ str specialize_arrow(tl_infer *self, traverse_ctx *tctx, str name, tl_monotype *
         hires_timer_init(&st);
         hires_timer_start(&st);
     }
-    arena_watermark clone_wm = arena_save(self->transient);
-    ast_node       *generic_node =
-      clone_generic_for_arrow(self, toplevel, arrow, inst_name,
-                              tctx ? tctx->type_arguments : null, resolved_type_args);
+    arena_watermark clone_wm     = arena_save(self->transient);
+    ast_node       *generic_node = clone_generic_for_arrow(
+      self, toplevel, arrow, inst_name, tctx ? tctx->type_arguments : null, resolved_type_args);
     arena_restore(self->transient, clone_wm);
     if (self->report_stats) {
         hires_timer_stop(&st);
@@ -1636,11 +1634,11 @@ str specialize_arrow(tl_infer *self, traverse_ctx *tctx, str name, tl_monotype *
     //    Wrapping in arena save/restore releases each specialization's transient
     //    allocations (traverse_ctx, hashmaps, debug strings, re-inference temporaries)
     //    so the transient arena doesn't grow proportionally to the specialization count.
-    ast_node        *special  = toplevel_get(self, inst_name);
-    arena_watermark  post_wm  = arena_save(self->transient);
-    traverse_ctx    *post_ctx = traverse_ctx_create(self->transient);
-    post_ctx->result_type     = tctx ? tctx->result_type : null;
-    int post_err = post_specialize(self, post_ctx, special, arrow);
+    ast_node       *special  = toplevel_get(self, inst_name);
+    arena_watermark post_wm  = arena_save(self->transient);
+    traverse_ctx   *post_ctx = traverse_ctx_create(self->transient);
+    post_ctx->result_type    = tctx ? tctx->result_type : null;
+    int post_err             = post_specialize(self, post_ctx, special, arrow);
     arena_restore(self->transient, post_wm);
     if (post_err) return str_empty();
     return inst_name;
@@ -2435,7 +2433,7 @@ static int infer_one(tl_infer *self, ast_node *infer_target, tl_polytype *arrow)
         if (!body) fatal("logic error");
 
         tl_polytype wrap_result = tl_polytype_wrap(tl_monotype_arrow_result(arrow->type));
-        err = constrain(self, &wrap_result, body->type, body, TL_UNIFY_DIRECTED);
+        err                     = constrain(self, &wrap_result, body->type, body, TL_UNIFY_DIRECTED);
     }
     arena_restore(self->transient, wm);
     return err ? 1 : 0;

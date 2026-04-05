@@ -53,14 +53,14 @@ DualHandler[T]: { transform: (T) -> T, predicate: (T) -> Bool }
 
 Wrapper[T]: { value: T, modify: (T) -> T }
 
-double_int(x: Int)  -> Int  { x * 2 }
-negate_int(x: Int)  -> Int  { 0 - x }
-not_bool  (x: Bool) -> Bool { !x    }
+double_int (x: Int)  -> Int  { x * 2  }
+negate_int (x: Int)  -> Int  { 0 - x  }
+not_bool   (x: Bool) -> Bool { !x     }
 is_positive(x: Int)  -> Bool { x > 0  }
 is_true    (x: Bool) -> Bool { x      }
 add_ten    (x: Int)  -> Int  { x + 10 }
 flip       (x: Bool) -> Bool { !x     }
-triple_int(x: Int) -> Int { x * 3 }
+triple_int (x: Int)  -> Int  { x * 3  }
 
 apply_wrapper[T](w: Wrapper[T]) -> T {
     w.modify(w.value)
@@ -541,14 +541,14 @@ test_generic_types() {
     // test_nested_generic_unions
     ( {
      x: GT.Outer[Int] := GT.OHas(GT.IHas(42))
-     result := when x {
-         oh: OHas {
-             when oh.inner {
-                 ih: IHas { ih.value }
-                 ie: IEmpty { -1 }
-             }
-         }
-         oe: OEmpty { -2 }
+     result           := when x {
+     oh: OHas {
+     when oh.inner {
+     ih: IHas { ih.value }
+     ie: IEmpty { -1 }
+     }
+     }
+     oe: OEmpty { -2 }
      }
      error += if result == 42 {0} else {1}
      void
@@ -557,14 +557,14 @@ test_generic_types() {
     // test_nested_generic_unions_float
     ( {
      x: GT.Outer[Float] := GT.OHas(GT.IHas(3.14))
-     result := when x {
-         oh: OHas {
-             when oh.inner {
-                 ih: IHas { ih.value }
-                 ie: IEmpty { 0.0 }
-             }
-         }
-         oe: OEmpty { 0.0 }
+     result             := when x {
+     oh: OHas {
+     when oh.inner {
+     ih: IHas { ih.value }
+     ie: IEmpty { 0.0 }
+     }
+     }
+     oe: OEmpty { 0.0 }
      }
      error += if result > 3.0 {0} else {1}
      void
@@ -574,8 +574,8 @@ test_generic_types() {
     ( {
      x      := GT.wrap(99)
      result := when x {
-         ih: IHas { ih.value }
-         ie: IEmpty { 0 }
+     ih: IHas { ih.value }
+     ie: IEmpty { 0 }
      }
      error += if result == 99 {0} else {1}
      void
@@ -585,9 +585,9 @@ test_generic_types() {
     ( {
      x: GT.Either[Int, Float] := GT.Left(10)
      y                        := GT.swap_either(x)
-     result := when y {
-         l: Left { 0 }
-         r: Right { r.v }
+     result                   := when y {
+     l: Left { 0 }
+     r: Right { r.v }
      }
      error += if result == 10 {0} else {1}
      void
@@ -595,10 +595,10 @@ test_generic_types() {
 
     // test_generic_unwrap_chain
     ( {
-     a             := GT.wrap(100)
+     a                := GT.wrap(100)
      b: GT.Inner[Int] := GT.IEmpty()
-     r1 := GT.my_unwrap(a, 0)
-     r2 := GT.my_unwrap(b, -1)
+     r1               := GT.my_unwrap(a, 0)
+     r2               := GT.my_unwrap(b, -1)
      error += if r1 == 100 {0} else {1}
      error += if r2 == -1 {0} else {1}
      void
@@ -607,14 +607,14 @@ test_generic_types() {
     // test_type_param_is_union
     ( {
      nested: GT.Inner[GT.Inner[Int]] := GT.IHas(GT.IHas(77))
-     result := when nested {
-         outer: IHas {
-             when outer.value {
-                 inner: IHas { inner.value }
-                 ie:    IEmpty { 0 }
-             }
-         }
-         oe: IEmpty { 0 }
+     result                          := when nested {
+     outer: IHas {
+     when outer.value {
+     inner: IHas { inner.value }
+     ie:    IEmpty { 0 }
+     }
+     }
+     oe: IEmpty { 0 }
      }
      error += if result == 77 {0} else {1}
      void
@@ -851,8 +851,8 @@ test_generic_tu_alias_adversarial() {
     error += if m3 == 7 { 0 } else { 1 }
 
     // Test 5: Auto-collapse + alias interaction
-    w1               := TUAWrapper.Wrap(42)
-    w2: TUA_F.IntWrap    := TUAWrapper.Wrap(99)
+    w1                  := TUAWrapper.Wrap(42)
+    w2: TUA_F.IntWrap   := TUAWrapper.Wrap(99)
     w3: TUAWrapper[Int] := TUAWrapper.WrapEmpty
 
     r3 := when w1 { w: Wrap { w.inner } e: WrapEmpty { 0 } }
@@ -970,8 +970,8 @@ test_higher_order_generic_tu_adversarial() {
     error += if HOGTA.res_unwrap(r4, 0) == 30 {0} else {1}
 
     // Test 5: cross-TU negative case
-    lst5 := HOGTA.make_cons(-5, HOGTA.make_cons(-10, HOGTA.make_nil[Int]()))
-    r5   := HOGTA.list_sum_to_res(lst5)
+    lst5     := HOGTA.make_cons(-5, HOGTA.make_cons(-10, HOGTA.make_nil[Int]()))
+    r5       := HOGTA.list_sum_to_res(lst5)
     err_code := when r5 {
         o: MyOk { 0 }
         e: MyErr { e.code }
@@ -1269,13 +1269,13 @@ test_weak_int_generics() {
     ( {
      opt := WIG.MySome(42)
      error += when opt {
-         s: MySome { if s.value == 42 {0} else {1} }
-         n: MyNone { 1 }
+     s: MySome { if s.value == 42 {0} else {1} }
+     n: MyNone { 1 }
      }
      opt2 := WIG.MySome(99u)
      error += when opt2 {
-         s: MySome { if s.value == 99u {0} else {1} }
-         n: MyNone { 1 }
+     s: MySome { if s.value == 99u {0} else {1} }
+     n: MyNone { 1 }
      }
      opt3 := Some(123)
      error += if (s: Some := opt3 else { 0 }, s.value) == 123 {0} else {1}
@@ -1328,13 +1328,13 @@ test_weak_int_generics_adversarial() {
     ( {
      opt := WIGA.wrap_in_opt(42)
      error += when opt {
-         s: MySome { if s.value.value == 42 {0} else {1} }
-         n: MyNone { 1 }
+     s: MySome { if s.value.value == 42 {0} else {1} }
+     n: MyNone { 1 }
      }
      opt2 := WIGA.wrap_in_opt(99u)
      error += when opt2 {
-         s: MySome { if s.value.value == 99u {0} else {1} }
-         n: MyNone { 1 }
+     s: MySome { if s.value.value == 99u {0} else {1} }
+     n: MyNone { 1 }
      }
      void
      })
@@ -1384,13 +1384,13 @@ test_weak_int_generics_adversarial() {
      error += if (s: Some := o else { 0 }, s.value) == 42 {0} else {1}
      nested := Some(Some(42))
      error += when nested {
-         outer: Some {
-             when outer.value {
-                 inner: Some { if inner.value == 42 {0} else {1} }
-                 n:     None { 1 }
-             }
-         }
-         n: None { 1 }
+     outer: Some {
+     when outer.value {
+     inner: Some { if inner.value == 42 {0} else {1} }
+     n:     None { 1 }
+     }
+     }
+     n: None { 1 }
      }
      opt_u := Some(99u)
      error += if (s: Some := opt_u else { 0u }, s.value) == 99u {0} else {1}
@@ -1401,18 +1401,18 @@ test_weak_int_generics_adversarial() {
     ( {
      r := WIGA.maybe_wrap(42, 1)
      error += when r {
-         s: MySome { if s.value == 42 {0} else {1} }
-         n: MyNone { 1 }
+     s: MySome { if s.value == 42 {0} else {1} }
+     n: MyNone { 1 }
      }
      r2 := WIGA.maybe_wrap(42, 0)
      error += when r2 {
-         s: MySome { 1 }
-         n: MyNone { 0 }
+     s: MySome { 1 }
+     n: MyNone { 0 }
      }
      r3 := WIGA.maybe_wrap(99u, 1)
      error += when r3 {
-         s: MySome { if s.value == 99u {0} else {1} }
-         n: MyNone { 1 }
+     s: MySome { if s.value == 99u {0} else {1} }
+     n: MyNone { 1 }
      }
      void
      })
@@ -1421,13 +1421,13 @@ test_weak_int_generics_adversarial() {
     ( {
      r := WIGA.chain_box_to_opt(42)
      error += when r {
-         s: MySome { if s.value.value == 42 {0} else {1} }
-         n: MyNone { 1 }
+     s: MySome { if s.value.value == 42 {0} else {1} }
+     n: MyNone { 1 }
      }
      r2 := WIGA.chain_box_to_opt(88u)
      error += when r2 {
-         s: MySome { if s.value.value == 88u {0} else {1} }
-         n: MyNone { 1 }
+     s: MySome { if s.value.value == 88u {0} else {1} }
+     n: MyNone { 1 }
      }
      void
      })

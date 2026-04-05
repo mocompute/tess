@@ -96,7 +96,7 @@ test_cast_generic() {
     arr.[0] = data
 
     p: Ptr[Int] := arr
-    b := cast_to_bytes(p)
+    b           := cast_to_bytes(p)
 
     // Note: assumes little-endian
     errors := 0
@@ -116,13 +116,13 @@ cast_to_cchar[T](p: Ptr[T]) -> Ptr[CChar] {
 
 test_cast_generic_signedness() {
     arr: CArray[CUnsignedChar, 4] := void
-    arr.[0] = 72u   // 'H'
-    arr.[1] = 105u  // 'i'
-    arr.[2] = 33u   // '!'
-    arr.[3] = 0u    // null terminator
+    arr.[0] = 72u                       // 'H'
+    arr.[1] = 105u                      // 'i'
+    arr.[2] = 33u                       // '!'
+    arr.[3] = 0u                        // null terminator
 
     p: Ptr[CUnsignedChar] := arr
-    cp := cast_to_cchar(p)
+    cp                    := cast_to_cchar(p)
 
     errors := 0
     errors += if (72 == cp.[0]) {0} else {1}

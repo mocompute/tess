@@ -52,9 +52,9 @@ test_none_diverge() -> CInt {
 
 // Test 5: else binding — access multiple fields
 test_err_multi_field() -> CInt {
-    error: CInt          := 0
+    error: CInt         := 0
     val:   EB_Pair.Pair := EB_Pair.Right(x = 10, y = 20, z = 30)
-    l:     Left          := val else r {
+    l:     Left         := val else r {
         if r.x != 10 { error += 1 }
         if r.y != 20 { error += 1 }
         if r.z != 30 { error += 1 }

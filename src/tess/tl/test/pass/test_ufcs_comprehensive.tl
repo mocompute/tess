@@ -434,7 +434,7 @@ test_ufcs_implicit_addr() {
     error += if v.y == 0 {0} else {1}
 
     // Test 4: Non-Ptr first param unchanged
-    v2 := AddrVec2(x = 3, y = 4)
+    v2  := AddrVec2(x = 3, y = 4)
     len := v2.addr_vec2_length_sq()
     error += if len == 25 {0} else {1}
 

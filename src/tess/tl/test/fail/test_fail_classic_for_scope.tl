@@ -6,6 +6,6 @@ main() -> CInt {
     for i := 0, i < 5, i += 1 {
         _ := i
     }
-    _ := i  // error: i is out of scope
+    _ := i                              // error: i is out of scope
     0
 }

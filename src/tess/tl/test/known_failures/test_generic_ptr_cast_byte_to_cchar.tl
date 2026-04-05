@@ -13,7 +13,7 @@ from_bytes(data: Ptr[CChar], len: CSize) -> Buf {
 }
 
 from_array[T](arr: Ptr[Const[Array[T]]]) -> Buf {
-    elem_size := sizeof(arr->data.[0])
+    elem_size        := sizeof(arr->data.[0])
     data: Ptr[CChar] := arr->data
     from_bytes(data, arr->size * elem_size)
 }
@@ -21,7 +21,7 @@ from_array[T](arr: Ptr[Const[Array[T]]]) -> Buf {
 #module main
 
 main() {
-    arr := Array.empty[Byte]()
+    arr     := Array.empty[Byte]()
     b: Byte := 0x41
     arr.push(b)
 

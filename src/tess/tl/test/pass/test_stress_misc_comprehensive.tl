@@ -406,9 +406,9 @@ EPPoint: { x: Int, y: Int }
 
 ep_test_block_as_field_init() {
     p := EPPoint(
-               x = ( { 1 + 2 }),
-               y = ( { 3 + 4 })
-               )
+                 x = ( { 1 + 2 }),
+                 y = ( { 3 + 4 })
+                 )
     error := 0
     error += if p.x == 3 {0} else {1}
     error += if p.y == 7 {0} else {1}
@@ -419,9 +419,9 @@ ep_add(a: Int, b: Int) -> Int { a + b }
 
 ep_test_if_as_argument() {
     result := ep_add(
-                  if 1 == 1 { 10 } else { 0 },
-                  if 2 == 2 { 20 } else { 0 }
-                  )
+                     if 1 == 1 { 10 } else { 0 },
+                     if 2 == 2 { 20 } else { 0 }
+                     )
     if result == 30 {0} else {1}
 }
 
@@ -638,13 +638,13 @@ test_scope_shadow() {
 // From: test_stress_trait_generic_operators
 // ============================================================
 
-TGOAddEq[T]: Add[T], Eq[T] { }
+TGOAddEq[T]:  Add[T], Eq[T]  { }
 TGOAddOrd[T]: Add[T], Ord[T] { }
 
-tgo_double[T: Add](x: T) -> T { x + x }
-tgo_are_equal[T: Eq](a: T, b: T) -> Bool { a == b }
-tgo_is_less[T: Ord](a: T, b: T) -> Bool { a < b }
-tgo_triple_add[T: Add](a: T, b: T, c: T) -> T { a + b + c }
+tgo_double[T: Add]    (x: T)             -> T    { x + x     }
+tgo_are_equal[T: Eq]  (a: T, b: T)       -> Bool { a == b    }
+tgo_is_less[T: Ord]   (a: T, b: T)       -> Bool { a < b     }
+tgo_triple_add[T: Add](a: T, b: T, c: T) -> T    { a + b + c }
 
 tgo_add_if_different[T: TGOAddEq](a: T, b: T) -> T {
     if a == b { a }
@@ -698,7 +698,7 @@ test_trait_generic_operators() {
     error += if tgo_double_then_compare(va1, va1) { 0 } else { 1 }
     error += if tgo_double_then_compare(va1, va2) { 1 } else { 0 }
 
-    ws_va        := tgo_wrap_sum(va1, va2)
+    ws_va           := tgo_wrap_sum(va1, va2)
     sv: TGOWrap.Has := ws_va else { return 99 }
     error += if sv.v.x == 4 && sv.v.y == 6 { 0 } else { 1 }
 
@@ -726,7 +726,7 @@ test_trait_generic_operators() {
 
     error += if tgo_double_then_compare(nb1, nb1) { 0 } else { 1 }
 
-    ws_nb          := tgo_wrap_sum(nb1, nb2)
+    ws_nb            := tgo_wrap_sum(nb1, nb2)
     snb: TGOWrap.Has := ws_nb else { return 99 }
     error += if snb.v.val == 30 { 0 } else { 1 }
 
@@ -881,19 +881,19 @@ test_trait_generic_operators_adversarial() {
 
     // Test 5: Chained adds
     r_chain := tgoa_chain_four_adds(
-                               Weight(grams = 10),
-                               Weight(grams = 20),
-                               Weight(grams = 30),
-                               Weight(grams = 40)
-                               )
+                                    Weight(grams = 10),
+                                    Weight(grams = 20),
+                                    Weight(grams = 30),
+                                    Weight(grams = 40)
+                                    )
     error += if r_chain.grams == 100 { 0 } else { 1 }
 
     r_chain_p := tgoa_chain_four_adds(
-                                 TGOAPair(x = 1, y = 0),
-                                 TGOAPair(x = 0, y = 1),
-                                 TGOAPair(x = 2, y = 0),
-                                 TGOAPair(x = 0, y = 2)
-                                 )
+                                      TGOAPair(x = 1, y = 0),
+                                      TGOAPair(x = 0, y = 1),
+                                      TGOAPair(x = 2, y = 0),
+                                      TGOAPair(x = 0, y = 2)
+                                      )
     error += if r_chain_p.x == 3 && r_chain_p.y == 3 { 0 } else { 1 }
 
     // Test 6: Clamp via Ord
@@ -1082,10 +1082,10 @@ wc_test_when_as_argument() {
     s := WCCircle(5)
 
     result := wc_pick_value(when s {
-                         c:  WCCircle { c.radius * 2 }
-                         sq: WCSquare { sq.length }
-                         n:  WCNone { 0 }
-                         })
+                            c:  WCCircle { c.radius * 2 }
+                            sq: WCSquare { sq.length }
+                            n:  WCNone { 0 }
+                            })
     if result == 10 {0} else {1}
 }
 

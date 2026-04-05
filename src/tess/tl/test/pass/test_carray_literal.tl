@@ -10,7 +10,7 @@ main() {
     error += if arr.[2] == 3 {0} else {1}
 
     // Runtime expressions
-    x := 10
+    x                    := 10
     arr2: CArray[Int, 3] := {x, x + 1, x * 2}
     error += if arr2.[0] == 10 {0} else {1}
     error += if arr2.[1] == 11 {0} else {1}

@@ -5,9 +5,9 @@
 PointConcrete: { x: Int, y: Int }
 
 // === Types from test_struct_construction ===
-PointConstruction: { x: Int, y: Int }
-Color: { r: Int, g: Int, b: Int }
-Pair[a, b]: { first: a, second: b }
+PointConstruction: { x: Int, y: Int         }
+Color:             { r: Int, g: Int, b: Int }
+Pair[a, b]:        { first: a, second: b    }
 
 // === Types from test_struct_empty ===
 EmptyStruct: { }
@@ -66,7 +66,7 @@ FooNested[T1, T2]: {
 }
 
 // === Types from test_struct_nested_access ===
-PointNested[a]: { x: a, y: a                               }
+PointNested[a]: { x: a, y: a                                        }
 Rect[a]:        { topleft: PointNested[a], botright: PointNested[a] }
 
 // === Test functions ===

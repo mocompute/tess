@@ -48,7 +48,7 @@ char const *tl_error_tag_to_string(tl_error_tag tag) {
     X(tl_err_try_requires_two_variant_union, "try requires a two-variant union")                           \
     X(tl_err_try_requires_single_field_variant, "try requires single-field variant")                       \
     X(tl_err_else_binding_requires_two_variant_union, "else binding requires a two-variant union")         \
-    X(tl_err_void_else_requires_two_variant_union, "void-else requires a two-variant union")              \
+    X(tl_err_void_else_requires_two_variant_union, "void-else requires a two-variant union")               \
     X(tl_err_nested_module_parent_not_found, "parent module not found")                                    \
     X(tl_err_auto_collapse_ambiguous, "ambiguous type (auto-collapse)")                                    \
     X(tl_err_invalid_format_spec, "invalid format specifier")                                              \

@@ -29,10 +29,10 @@ _NUL: Byte := 0u
 // ============================================================================
 
 // --- from test_integer_widening.tl ---
-take_int (x: Int)  -> Int  { x }
-take_uint(x: UInt) -> UInt { x }
+take_int   (x: Int)    -> Int    { x }
+take_uint  (x: UInt)   -> UInt   { x }
 take_cint32(x: CInt32) -> CInt32 { x }
-take_int_fn(x: Int) -> Int { x }
+take_int_fn(x: Int)    -> Int    { x }
 
 return_cint_as_int() -> Int {
     a: CInt := 77
@@ -49,14 +49,14 @@ take_cshort(x: CShort)       { x }
 take_cuint (x: CUnsignedInt) { x }
 take_cuint8(x: CUInt8)       { x }
 
-take_cint16 (x: CInt16)         { x }
-take_cint32_weak (x: CInt32)    { x }
-take_cint64 (x: CInt64)         { x }
-take_clong  (x: CLong)          { x }
-take_cuint16(x: CUInt16)        { x }
-take_cuint32(x: CUInt32)        { x }
-take_cuint64(x: CUInt64)        { x }
-take_cushort(x: CUnsignedShort) { x }
+take_cint16      (x: CInt16)         { x }
+take_cint32_weak (x: CInt32)         { x }
+take_cint64      (x: CInt64)         { x }
+take_clong       (x: CLong)          { x }
+take_cuint16     (x: CUInt16)        { x }
+take_cuint32     (x: CUInt32)        { x }
+take_cuint64     (x: CUInt64)        { x }
+take_cushort     (x: CUnsignedShort) { x }
 
 first[T](x: T, y: T) -> T { x }
 
@@ -86,7 +86,7 @@ sum_for(args: ...ToInt) -> Int {
 }
 
 // --- from test_integer_generic_type_args.tl ---
-wrap[T](x: T) -> T { x }
+wrap[T]         (x: T)       -> T { x }
 pair_first[T, U](x: T, y: U) -> T { x }
 
 // ============================================================================
@@ -697,7 +697,7 @@ test_unsigned_fixed_width_context() {
 }
 
 test_weak_literal_merging() {
-    error := 0
+    error  := 0
     result := first(42, 99)
     error += if result == 42 {0} else {1}
 

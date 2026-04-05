@@ -556,16 +556,15 @@ size_t platform_available_memory(void) {
 
 #elif defined(MOS_APPLE)
 
-#include <sys/sysctl.h>
 #include <mach/mach.h>
+#include <sys/sysctl.h>
 
 size_t platform_available_memory(void) {
     // On macOS, use mach VM statistics for free + inactive pages
     mach_port_t            host = mach_host_self();
     vm_statistics64_data_t stats;
     mach_msg_type_number_t count = HOST_VM_INFO64_COUNT;
-    if (host_statistics64(host, HOST_VM_INFO64, (host_info64_t)&stats, &count) != KERN_SUCCESS)
-        return 0;
+    if (host_statistics64(host, HOST_VM_INFO64, (host_info64_t)&stats, &count) != KERN_SUCCESS) return 0;
     size_t page_size = (size_t)sysconf(_SC_PAGESIZE);
     return (size_t)(stats.free_count + stats.inactive_count) * page_size;
 }
