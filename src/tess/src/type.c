@@ -162,6 +162,17 @@ tl_type_registry *tl_type_registry_create(allocator *alloc, allocator *transient
     self->specialized      = map_create(self->alloc, sizeof(tl_monotype *), 1024); // key: registry_key
     self->type_aliases     = map_new(self->alloc, str, tl_polytype *, 1024);
 
+    self->t_nil      = null;
+    self->t_int      = null;
+    self->t_uint     = null;
+    self->t_csize    = null;
+    self->t_cptrdiff = null;
+    self->t_float    = null;
+    self->t_bool     = null;
+    self->t_char     = null;
+    self->t_ptr_any  = null;
+    self->t_ptr_char = null;
+
     // Nullary built-in types with data-driven properties.
     // c_type: the C type string for transpilation (NULL if not a builtin C type)
     // c_min/c_max: C limit macros (NULL if not applicable)
@@ -653,28 +664,36 @@ int tl_type_registry_exists(tl_type_registry *self, str name) {
 }
 
 tl_monotype *tl_type_registry_nil(tl_type_registry *self) {
-    return tl_type_registry_instantiate(self, S("Void"));
+    if (!self->t_nil) self->t_nil = tl_type_registry_instantiate(self, S("Void"));
+    return self->t_nil;
 }
 tl_monotype *tl_type_registry_int(tl_type_registry *self) {
-    return tl_type_registry_instantiate(self, S("Int"));
+    if (!self->t_int) self->t_int = tl_type_registry_instantiate(self, S("Int"));
+    return self->t_int;
 }
 tl_monotype *tl_type_registry_uint(tl_type_registry *self) {
-    return tl_type_registry_instantiate(self, S("CUnsignedLongLong"));
+    if (!self->t_uint) self->t_uint = tl_type_registry_instantiate(self, S("CUnsignedLongLong"));
+    return self->t_uint;
 }
 tl_monotype *tl_type_registry_csize(tl_type_registry *self) {
-    return tl_type_registry_instantiate(self, S("CSize"));
+    if (!self->t_csize) self->t_csize = tl_type_registry_instantiate(self, S("CSize"));
+    return self->t_csize;
 }
 tl_monotype *tl_type_registry_cptrdiff(tl_type_registry *self) {
-    return tl_type_registry_instantiate(self, S("CPtrDiff"));
+    if (!self->t_cptrdiff) self->t_cptrdiff = tl_type_registry_instantiate(self, S("CPtrDiff"));
+    return self->t_cptrdiff;
 }
 tl_monotype *tl_type_registry_float(tl_type_registry *self) {
-    return tl_type_registry_instantiate(self, S("CDouble"));
+    if (!self->t_float) self->t_float = tl_type_registry_instantiate(self, S("CDouble"));
+    return self->t_float;
 }
 tl_monotype *tl_type_registry_bool(tl_type_registry *self) {
-    return tl_type_registry_instantiate(self, S("Bool"));
+    if (!self->t_bool) self->t_bool = tl_type_registry_instantiate(self, S("Bool"));
+    return self->t_bool;
 }
 tl_monotype *tl_type_registry_char(tl_type_registry *self) {
-    return tl_type_registry_instantiate(self, S("CChar"));
+    if (!self->t_char) self->t_char = tl_type_registry_instantiate(self, S("CChar"));
+    return self->t_char;
 }
 
 tl_monotype *tl_type_registry_str(tl_type_registry *self) {
@@ -706,12 +725,16 @@ tl_monotype *tl_type_registry_ptr(tl_type_registry *self, tl_monotype *arg) {
 }
 
 tl_monotype *tl_type_registry_ptr_any(tl_type_registry *self) {
-    tl_monotype *any = tl_monotype_create_any(self->alloc);
-    return tl_type_registry_ptr(self, any);
+    if (!self->t_ptr_any) {
+        tl_monotype *any = tl_monotype_create_any(self->alloc);
+        self->t_ptr_any  = tl_type_registry_ptr(self, any);
+    }
+    return self->t_ptr_any;
 }
 tl_monotype *tl_type_registry_ptr_char(tl_type_registry *self) {
-    tl_monotype *cchar = tl_type_registry_char(self);
-    return tl_type_registry_ptr(self, cchar);
+    if (!self->t_ptr_char)
+        self->t_ptr_char = tl_type_registry_ptr(self, tl_type_registry_char(self));
+    return self->t_ptr_char;
 }
 
 // ============================================================================

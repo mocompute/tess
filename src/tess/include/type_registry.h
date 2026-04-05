@@ -11,6 +11,18 @@ typedef struct {
     hashmap      *definitions;  // str => tl_polytype*
     hashmap      *specialized;  // registry_key => tl_monotype*
     hashmap      *type_aliases; // str => polytype*
+
+    // cached common monotypes — populated lazily on first access
+    tl_monotype *t_nil;
+    tl_monotype *t_int;
+    tl_monotype *t_uint;
+    tl_monotype *t_csize;
+    tl_monotype *t_cptrdiff;
+    tl_monotype *t_float;
+    tl_monotype *t_bool;
+    tl_monotype *t_char;
+    tl_monotype *t_ptr_any;
+    tl_monotype *t_ptr_char;
 } tl_type_registry;
 
 typedef struct {
