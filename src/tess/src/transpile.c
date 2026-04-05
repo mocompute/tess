@@ -2077,7 +2077,16 @@ static void emit_let_binding(transpile *self, ast_node const *node, eval_ctx *ct
 
     if (emit_carray_literal(self, name, type, node, ctx)) return;
 
-    str value = generate_expr(self, type, node->let_in.value, ctx);
+    // For pointer cast bindings (e.g. data: Ptr[CChar] := arr->data where arr->data is Ptr[T]),
+    // generate the value expression using the actual RHS type rather than the annotation type.
+    // This prevents C implicit-pointer-conversion warnings: the intermediate temp gets the
+    // correct source pointer type, and cast_value() below emits the explicit (T*) cast.
+    tl_monotype *gen_type  = type;
+    if (tl_monotype_is_ptr(tl_monotype_strip_const(type)) && node->let_in.value->type) {
+        tl_monotype *val_inner = tl_monotype_strip_const(node->let_in.value->type->type);
+        if (tl_monotype_is_ptr(val_inner)) gen_type = val_inner;
+    }
+    str value = generate_expr(self, gen_type, node->let_in.value, ctx);
 
     if (check_indeterminate_type(type, value, node)) return;
 

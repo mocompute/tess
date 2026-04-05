@@ -1271,13 +1271,17 @@ static int cast_constrain_let_in(tl_infer *self, ast_node *node) {
         }
         // Weak int to float: no constraint needed, weak int defaults and cast handles it.
     } else {
-        // Pointer cast: constrain with error suppression (the value may be a
-        // generic that needs the annotation to resolve).
+        // Pointer cast: verify that the RHS is some pointer (Ptr[any]), but do
+        // not propagate the pointee type back into the generic. The binding takes
+        // the annotation type from env_insert_constrain in the caller.
         // Skip CArray values — they decay to pointers without constraint.
         if (value_type) {
             tl_polytype_substitute(self->arena, value_type, self->subs);
-            if (!tl_monotype_is_carray(value_type->type))
-                constrain(self, annotation_type, value_type, node, TL_UNIFY_DIRECTED);
+            if (!tl_monotype_is_carray(value_type->type)) {
+                tl_monotype *ptr_any      = tl_type_registry_ptr_any(self->registry);
+                tl_polytype  ptr_any_poly = tl_polytype_wrap(ptr_any);
+                constrain(self, &ptr_any_poly, value_type, node, TL_UNIFY_DIRECTED);
+            }
         }
     }
 
