@@ -2022,11 +2022,10 @@ static str generate_let_in(transpile *self, tl_monotype *result_type, ast_node c
         // inline and continue the loop with the final expression.
         ast_node const *next = node->let_in.body;
         if (ast_node_is_body(next) && next->body.defers.size == 0 && next->body.expressions.size > 0) {
-            u32 n = next->body.expressions.size;
+            u32             n    = next->body.expressions.size;
             ast_node const *last = next->body.expressions.v[n - 1];
             if (ast_node_is_let_in(last) && !ast_node_is_let_in_lambda(last)) {
-                for (u32 i = 0; i + 1 < n; i++)
-                    generate_expr(self, null, next->body.expressions.v[i], ctx);
+                for (u32 i = 0; i + 1 < n; i++) generate_expr(self, null, next->body.expressions.v[i], ctx);
                 node = last;
                 emit_line_directive(self, node, ctx);
                 if (ctx) ctx->is_effective_void = 0;
@@ -3073,6 +3072,69 @@ static str generate_continue(transpile *self, tl_monotype *type, ast_node const 
     return str_empty();
 }
 
+static str generate_void_else(transpile *self, tl_monotype *type, ast_node const *node, eval_ctx *ctx) {
+    (void)type;
+    assert(ast_void_else == node->tag);
+    ast_node const *expr    = node->void_else.expression;
+    ast_node const *binding = node->void_else.else_binding;
+    ast_node const *body    = node->void_else.else_body;
+
+    // Get wrapper type from the expression
+    tl_monotype *wrapper_type = expr->type->type;
+
+    // Find tag and union fields
+    tl_monotype *tag_type   = null;
+    tl_monotype *union_type = null;
+    tagged_union_wrapper_fields(wrapper_type, &tag_type, &union_type);
+    if (!tag_type || !union_type)
+        exit_error(node->file, node->line,
+                   "void-else expression requires a tagged union with 'tag' and 'union' fields");
+
+    // Get variant names: first = success, second = error
+    str_sized variant_names = union_type->cons_inst->def->field_names;
+    str success_name = variant_names.v[0];
+    str error_name   = variant_names.v[1];
+
+    // Build tag value for success variant
+    str tag_enum_name    = tag_type->cons_inst->def->name;
+    str tag_success_name = str_qualify(self->transient, tag_enum_name, success_name);
+
+    // Emit scoped block
+    cat_open_curlyln(self);
+
+    // Generate expression and save to temp
+    str expr_str = generate_expr(self, null, expr, ctx);
+    str tmp = next_res(self);
+    generate_decl(self, tmp, wrapper_type);
+    generate_assign(self, tmp, expr_str);
+
+    // if (tmp.tag != SuccessTag) { ErrorVariant binding = tmp.u.ErrorName; body }
+    cat(self, S("if ("));
+    cat(self, tmp);
+    cat(self, S(".tag != "));
+    cat(self, tag_success_name);
+    cat(self, S(") {\n"));
+
+    // Declare and assign else binding
+    tl_monotype *eb_type = binding->symbol.annotation_type->type;
+    str eb_name = escape_c_keyword(self->transient, ast_node_str(binding));
+    generate_decl(self, eb_name, eb_type);
+    cat(self, eb_name);
+    cat(self, S(" = "));
+    cat(self, tmp);
+    cat(self, S(".u."));
+    cat(self, escape_c_keyword(self->transient, error_name));
+    cat_semicolonln(self);
+
+    // Generate else body
+    generate_expr(self, null, body, ctx);
+
+    cat(self, S("}\n"));
+    cat_close_curlyln(self);
+
+    return str_empty();
+}
+
 static str generate_expr(transpile *self, tl_monotype *type, ast_node const *node, eval_ctx *ctx) {
     // This function is used to generate output to evaluate an expression with a given type, for example
     // for function arguments. If type is null, then the type is taken from the expression. The str
@@ -3135,6 +3197,7 @@ static str generate_expr(transpile *self, tl_monotype *type, ast_node const *nod
     case ast_return:       return generate_return(self, type, node, ctx);
     case ast_try:          return generate_try(self, type, node, ctx);
     case ast_while:        return generate_while(self, type, node, ctx);
+    case ast_void_else:    return generate_void_else(self, type, node, ctx);
     case ast_continue:     return generate_continue(self, type, node, ctx);
 
     case ast_nil:

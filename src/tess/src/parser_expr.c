@@ -703,12 +703,25 @@ int a_assignment(parser *self) {
     return result_ast_node(self, a);
 }
 
+int a_void_else(parser *self) {
+
+    ast_node *expr = parse_expression(self, INT_MIN);
+    if (a_try_s(self, the_symbol, "else")) return 1;
+    if (a_try(self, a_identifier)) return ERROR_STOP;
+    ast_node *else_binding = self->result;
+    ast_node *else_body    = parse_body(self);
+    if (!else_body) return ERROR_STOP;
+
+    ast_node *a = ast_node_create_void_else(self->ast_arena, expr, else_binding, else_body);
+    set_node_file(self, a);
+    return result_ast_node(self, a);
+}
+
 int a_statement(parser *self) {
     int res;
     if (0 == (res = a_try(self, a_assignment))) return 0;
-    if (ERROR_STOP == res) {
-        return res;
-    }
+    if (ERROR_STOP == res) return res;
+
     if (0 == a_try(self, a_reassignment)) return 0;
     if (0 == a_try(self, a_while_statement)) return 0;
     if (0 == a_try(self, a_for_statement)) return 0;
@@ -722,6 +735,9 @@ int a_statement(parser *self) {
         result_ast_node(self, block_statement);
         return 0;
     }
+
+    if (0 == (res = a_try(self, a_void_else))) return 0;
+    if (ERROR_STOP == res) return res;
 
     return 1;
 }

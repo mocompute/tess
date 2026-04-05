@@ -415,6 +415,20 @@ void rename_variables(tl_infer *self, ast_node *node, rename_variables_ctx *ctx,
         rename_variables(self, node->while_.body, ctx, level + 1);
         break;
 
+    case ast_void_else: {
+        rename_variables(self, node->void_else.expression, ctx, level + 1);
+        // Introduce else_binding as a scoped name (like let-else at line 128-135)
+        hashmap *save = map_copy(ctx->lex);
+        str name   = ast_node_str(node->void_else.else_binding);
+        str newvar = next_variable_name(self, name);
+        str_map_set(&ctx->lex, name, &newvar);
+        rename_variables(self, node->void_else.else_binding, ctx, level + 1);
+        rename_variables(self, node->void_else.else_body, ctx, level + 1);
+        map_destroy(&ctx->lex);
+        ctx->lex = save;
+        break;
+    }
+
     case ast_body:
 
         forall(i, node->body.expressions) {
@@ -700,11 +714,11 @@ void add_free_variables_to_arrow(tl_infer *self, ast_node *node, tl_polytype *ar
     // collect free variables from infer target and add to the generic's arrow type
 
     collect_free_variables_ctx ctx;
-    ctx.fvs                       = (str_array){.alloc = self->arena};
+    ctx.fvs = (str_array){.alloc = self->arena};
 
     // Save/restore transient: called per toplevel from add_generic (Phase 3 loop).
     arena_watermark wm            = arena_save(self->transient);
-    traverse_ctx *traverse_ctx    = traverse_ctx_create(self->transient);
+    traverse_ctx   *traverse_ctx  = traverse_ctx_create(self->transient);
     traverse_ctx->user            = &ctx;
     traverse_ctx->skip_alloc_expr = 1; // alloc_expr is not part of the closure body
 

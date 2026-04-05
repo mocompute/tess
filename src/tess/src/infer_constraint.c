@@ -1367,6 +1367,47 @@ static int infer_while(tl_infer *self, ast_node *node) {
     return constrain_pm(self, node->type, nil, node, TL_UNIFY_SYMMETRIC);
 }
 
+static int infer_void_else(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
+    (void)ctx;
+    tl_monotype *operand_type = node->void_else.expression->type->type;
+    tl_monotype_substitute(self->arena, operand_type, self->subs, null);
+
+    // Must be a type constructor instance (tagged union wrapper)
+    if (!tl_monotype_is_inst(operand_type)) {
+        array_push(self->errors,
+                   ((tl_infer_error){.tag = tl_err_void_else_requires_two_variant_union, .node = node}));
+        return 1;
+    }
+
+    // Find the union field
+    i32 u_index = tl_monotype_type_constructor_field_index(operand_type, S(AST_TAGGED_UNION_UNION_FIELD));
+    if (u_index < 0) {
+        array_push(self->errors,
+                   ((tl_infer_error){.tag = tl_err_void_else_requires_two_variant_union, .node = node}));
+        return 1;
+    }
+
+    tl_monotype *union_type = operand_type->cons_inst->args.v[u_index];
+
+    // Must have exactly 2 variants
+    if (!tl_monotype_is_inst(union_type) || union_type->cons_inst->def->field_names.size != 2) {
+        array_push(self->errors,
+                   ((tl_infer_error){.tag = tl_err_void_else_requires_two_variant_union, .node = node}));
+        return 1;
+    }
+
+    // Bind else_binding to the second variant (error) type
+    tl_monotype *error_type = union_type->cons_inst->args.v[1];
+    tl_polytype *error_poly = tl_polytype_absorb_mono(self->arena, error_type);
+    ast_node_type_set(node->void_else.else_binding, error_poly);
+    node->void_else.else_binding->symbol.annotation_type = error_poly;
+
+    // void-else produces Void
+    ensure_tv(self, &node->type);
+    tl_monotype *nil = tl_type_registry_nil(self->registry);
+    return constrain_pm(self, node->type, nil, node, TL_UNIFY_SYMMETRIC);
+}
+
 static int infer_continue(tl_infer *self, ast_node *node) {
     ensure_tv(self, &node->type);
     return constrain_pm(self, node->type, tl_monotype_create_any(self->arena), node, TL_UNIFY_SYMMETRIC);
@@ -2545,6 +2586,38 @@ int traverse_ast_node_params(tl_infer *self, traverse_ctx *ctx, ast_node *node, 
 
 int traverse_ast(tl_infer *, traverse_ctx *, ast_node *, traverse_cb);
 
+// Pre-set the else_binding type for void-else BEFORE traversing else_body.
+// This ensures field accesses on the binding (e.g., err.message) resolve correctly in bottom-up traversal.
+static void prepare_void_else_binding(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
+    (void)ctx;
+    tl_polytype *expr_type = node->void_else.expression->type;
+    if (!expr_type) return;
+
+    tl_monotype *wrapper_type = expr_type->type;
+    tl_monotype_substitute(self->arena, wrapper_type, self->subs, null);
+
+    if (!tl_monotype_is_inst(wrapper_type)) return;
+
+    i32 u_index = tl_monotype_type_constructor_field_index(wrapper_type, S(AST_TAGGED_UNION_UNION_FIELD));
+    if (u_index < 0) return;
+
+    tl_monotype *union_type = wrapper_type->cons_inst->args.v[u_index];
+    if (!tl_monotype_is_inst(union_type) || union_type->cons_inst->def->field_names.size != 2) return;
+
+    // Don't overwrite already-specialized type
+    if (node->void_else.else_binding->symbol.annotation_type &&
+        tl_monotype_is_inst_specialized(node->void_else.else_binding->symbol.annotation_type->type))
+        return;
+
+    tl_monotype *error_type = union_type->cons_inst->args.v[1];
+    tl_polytype *error_poly = tl_polytype_absorb_mono(self->arena, error_type);
+
+    ast_node_type_set(node->void_else.else_binding, error_poly);
+    node->void_else.else_binding->symbol.annotation_type = error_poly;
+    env_insert_constrain(self, node->void_else.else_binding->symbol.name, error_poly,
+                         node->void_else.else_binding);
+}
+
 // Pre-set variant binding types on tagged union case conditions BEFORE traversing arm bodies.
 // This is essential for nested when: the inner when needs the outer binding's type to be resolved
 // so that field access (e.g., s.value) works and the inner scrutinee gets a concrete tagged union type.
@@ -2951,6 +3024,28 @@ int traverse_ast(tl_infer *self, traverse_ctx *ctx, ast_node *node, traverse_cb 
 
         ctx->node_pos = npos_operand;
         if (traverse_ast(self, ctx, node->while_.body, cb)) return 1;
+
+        ctx->node_pos = npos_operand;
+        if (cb(self, ctx, node)) return 1;
+        break;
+
+    case ast_void_else:
+        ctx->node_pos = npos_operand;
+        if (traverse_ast(self, ctx, node->void_else.expression, cb)) return 1;
+
+        // Pre-set else_binding type before traversing else_body (bottom-up requires it)
+        prepare_void_else_binding(self, ctx, node);
+
+        // Scope else_binding into else_body only
+        {
+            hashmap *save = map_copy(ctx->lexical_names);
+            if (node->void_else.else_binding && ast_node_is_symbol(node->void_else.else_binding)) {
+                str_hset_insert(&ctx->lexical_names, node->void_else.else_binding->symbol.name);
+            }
+            ctx->node_pos = npos_operand;
+            if (traverse_ast(self, ctx, node->void_else.else_body, cb)) return 1;
+            ctx->lexical_names = save;
+        }
 
         ctx->node_pos = npos_operand;
         if (cb(self, ctx, node)) return 1;
@@ -3713,6 +3808,7 @@ int infer_traverse_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_node *node
         return infer_continue(self, node);
 
     case ast_while:        return infer_while(self, node);
+    case ast_void_else:    return infer_void_else(self, traverse_ctx, node);
 
     case ast_let:          // intentionally not processed
     case ast_hash_command:

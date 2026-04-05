@@ -182,10 +182,12 @@ ast_node *ast_node_create_return(allocator *alloc, ast_node *value, int is_break
     self->return_.is_break_statement = is_break;
     return self;
 }
+
 ast_node *ast_node_create_continue(allocator *alloc) {
     ast_node *self = ast_node_create(alloc, ast_continue);
     return self;
 }
+
 ast_node *ast_node_create_while(allocator *alloc, ast_node *cond, ast_node *update, ast_node *body) {
     ast_node *self         = ast_node_create(alloc, ast_while);
     self->while_.condition = cond;
@@ -193,6 +195,16 @@ ast_node *ast_node_create_while(allocator *alloc, ast_node *cond, ast_node *upda
     self->while_.body      = body;
     return self;
 }
+
+ast_node *ast_node_create_void_else(allocator *alloc, ast_node *expr, ast_node *else_binding,
+                                    ast_node *else_body) {
+    ast_node *self               = ast_node_create(alloc, ast_void_else);
+    self->void_else.expression   = expr;
+    self->void_else.else_binding = else_binding;
+    self->void_else.else_body    = else_body;
+    return self;
+}
+
 ast_node *ast_node_create_let_in(allocator *alloc, ast_node *name, ast_node *value, ast_node *body) {
     ast_node *self     = ast_node_create(alloc, ast_let_in);
     self->let_in.name  = name;
@@ -473,6 +485,12 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
         clone->while_.body      = ast_node_clone(alloc, orig->while_.body);
         break;
 
+    case ast_void_else:
+        clone->void_else.expression   = ast_node_clone(alloc, orig->void_else.expression);
+        clone->void_else.else_binding = ast_node_clone(alloc, orig->void_else.else_binding);
+        clone->void_else.else_body    = ast_node_clone(alloc, orig->void_else.else_body);
+        break;
+
     case ast_trait_definition: {
         struct ast_trait_def *vclone = &clone->trait_def, *vorig = &((ast_node *)orig)->trait_def;
 
@@ -746,6 +764,13 @@ void ast_node_each_node(void *ctx, ast_node_each_node_fun fun, ast_node *node) {
         fun(ctx, node->while_.body);
         break;
 
+    case ast_void_else:
+        //
+        fun(ctx, node->void_else.expression);
+        fun(ctx, node->void_else.else_binding);
+        fun(ctx, node->void_else.else_body);
+        break;
+
     case ast_trait_definition: {
         struct ast_trait_def *v = &node->trait_def;
         fun(ctx, v->name);
@@ -962,6 +987,7 @@ char const *ast_tag_to_string(ast_tag tag) {
       "ast_trait_definition",
       "ast_unary_op",
       "ast_user_type_definition",
+      "ast_void_else",
       "ast_while",
     };
 
@@ -1092,17 +1118,20 @@ static str v2_ast_node_to_string_inner(allocator *alloc, ast_node const *node, i
 
     case ast_return:
         //
-        if (!node->return_.is_break_statement)
-            return str_cat(alloc, S("return "), R(node->return_.value));
+        if (!node->return_.is_break_statement) return str_cat(alloc, S("return "), R(node->return_.value));
         else return str_cat(alloc, S("break "), R(node->return_.value));
 
     case ast_try: return str_cat(alloc, S("try "), R(node->try_.operand));
 
     case ast_while:
         //
-        return str_cat_6(alloc, S("while ("), R(node->while_.condition),
-                         S("), ("), R(node->while_.update), S(") "),
-                         R(node->while_.body));
+        return str_cat_6(alloc, S("while ("), R(node->while_.condition), S("), ("), R(node->while_.update),
+                         S(") "), R(node->while_.body));
+
+    case ast_void_else:
+        //
+        return str_cat_6(alloc, S("void_else ("), R(node->void_else.expression), S("), else "),
+                         R(node->void_else.else_binding), S(" "), R(node->void_else.else_body));
 
     case ast_symbol: {
         str_build b = str_build_init(alloc, 64);
@@ -1201,8 +1230,7 @@ static str v2_ast_node_to_string_inner(allocator *alloc, ast_node const *node, i
 
         // here we want to include the nil value
         for (u32 i = 0; i < node->lambda_function.n_parameters; ++i) {
-            out = str_cat_3(alloc, out, S(" "),
-                            R(node->lambda_function.parameters[i]));
+            out = str_cat_3(alloc, out, S(" "), R(node->lambda_function.parameters[i]));
         }
         out = str_cat(alloc, out, S(" -> "));
         out = str_cat(alloc, out, R(node->lambda_function.body));
@@ -1261,20 +1289,17 @@ static str v2_ast_node_to_string_inner(allocator *alloc, ast_node const *node, i
     }
 
     case ast_unary_op:
-        return str_cat_5(alloc, S("(unary_op "), R(node->unary_op.op), S(" "),
-                         R(node->unary_op.operand), S(")"));
+        return str_cat_5(alloc, S("(unary_op "), R(node->unary_op.op), S(" "), R(node->unary_op.operand),
+                         S(")"));
 
     case ast_assignment:
-        return str_cat_3(alloc, R(node->assignment.name), S(" = "),
-                         R(node->assignment.value));
+        return str_cat_3(alloc, R(node->assignment.name), S(" = "), R(node->assignment.value));
 
     case ast_reassignment:
-        return str_cat_3(alloc, R(node->assignment.name), S(" re= "),
-                         R(node->assignment.value));
+        return str_cat_3(alloc, R(node->assignment.name), S(" re= "), R(node->assignment.value));
 
     case ast_reassignment_op:
-        return str_cat_3(alloc, R(node->assignment.name),
-                         R(node->assignment.op),
+        return str_cat_3(alloc, R(node->assignment.name), R(node->assignment.op),
                          R(node->assignment.value));
 
     case ast_eof:
@@ -1334,6 +1359,7 @@ str ast_node_to_short_string(allocator *alloc, ast_node const *node) {
     case ast_return:
     case ast_try:
     case ast_while:
+    case ast_void_else:
     case ast_ellipsis:
     case ast_if_then_else:
     case ast_unary_op:
@@ -1705,6 +1731,12 @@ u64 ast_node_hash(ast_node const *self) {
         combine_node(self->while_.condition);
         combine_node(self->while_.update);
         combine_node(self->while_.body);
+        break;
+
+    case ast_void_else:
+        combine_node(self->void_else.expression);
+        combine_node(self->void_else.else_binding);
+        combine_node(self->void_else.else_body);
         break;
 
     case ast_tuple: break;

@@ -44,6 +44,7 @@ typedef enum ast_tag {
     ast_trait_definition,
     ast_unary_op,
     ast_user_type_definition,
+    ast_void_else,
     ast_while,
 
     ast_lambda_function = BIT(TL_AST_BIT_ARRAY),

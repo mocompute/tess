@@ -198,6 +198,12 @@ typedef struct ast_node {
             struct ast_node *body;
         } while_;
 
+        struct ast_void_else {
+            struct ast_node *expression;
+            struct ast_node *else_binding;
+            struct ast_node *else_body;
+        } void_else;
+
         struct ast_binary_op {
             struct ast_node *left;
             struct ast_node *right;
@@ -322,6 +328,7 @@ nodiscard ast_node *ast_node_create_binary_op(allocator *, ast_node *, ast_node 
 nodiscard ast_node *ast_node_create_unary_op(allocator *, ast_node *, ast_node *) mallocfun;
 nodiscard ast_node *ast_node_create_return(allocator *, ast_node *, int) mallocfun;
 nodiscard ast_node *ast_node_create_while(allocator *, ast_node *, ast_node *, ast_node *) mallocfun;
+nodiscard ast_node *ast_node_create_void_else(allocator *, ast_node *, ast_node *, ast_node *) mallocfun;
 nodiscard ast_node *ast_node_create_let_in(allocator *, ast_node *, ast_node *, ast_node *) mallocfun;
 nodiscard ast_node *ast_node_create_let(allocator *, ast_node *, ast_node_sized, ast_node_sized,
                                         ast_node *) mallocfun;
