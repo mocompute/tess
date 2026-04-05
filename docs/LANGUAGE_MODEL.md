@@ -340,6 +340,30 @@ when result {
 }
 ```
 
+### Void-Else (Statement Form)
+
+When the success variant's value is not needed — either because it is `Void` or because you
+intentionally discard it — you can omit the left-hand binding entirely:
+
+```tl
+validate(input) else err { return err.error }
+// execution continues only if validate() returned the first variant
+```
+
+This is the **statement form** of variant binding. It checks the expression against the
+first variant: if it matches, execution continues; if not, the `else` block runs with the
+second variant bound. Like variant binding, it is restricted to two-variant unions.
+
+Common uses:
+
+```tl
+// Result[Void, E] — nothing to bind on success
+save_file(path) else err { return err.error }
+
+// Option[T] — discard the Some value, just guard against None
+lookup(key) else err { log("missing"); return -1 }
+```
+
 ## Closures and Capture
 
 A **lambda** is an anonymous function expression:

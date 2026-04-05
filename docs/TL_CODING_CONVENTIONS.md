@@ -257,6 +257,12 @@ For two-variant unions, the else arm can bind the other variant to access its fi
 ok: Ok := do_something() else err { return err.error }
 ```
 
+When the success value is not needed (e.g., `Result[Void, E]` or when intentionally discarding it), use **void-else** — the statement form without a left-hand binding:
+
+```tl
+validate(input) else err { return err.error }
+```
+
 ## Control Flow
 
 ### Keeping Code Flat

@@ -2411,6 +2411,27 @@ when val {
 }
 ```
 
+### Void-Else
+
+When you have a two-variant union and only need to handle the error/failure case — discarding the success value — use the statement form of `else` without a left-hand binding:
+
+```tl
+make_request() else err { return err.error }
+// execution continues only if the first variant matched
+```
+
+This is useful when the first variant is `Void` (e.g., `Result[Void, E]`) or when you intentionally discard a non-void success value:
+
+```tl
+// Result[Void, CInt] — nothing to bind on success
+validate(input) else err { return err.error }
+
+// Option[CInt] — discard the Some value, just check for None
+lookup(key) else err { log("not found"); return -1 }
+```
+
+The `else` block must diverge (`return`, `break`, `continue`) or the value it produces is discarded. Like variant binding, void-else is restricted to two-variant unions.
+
 ### Conditional Variant Binding
 
 When you need to check for a single variant and execute a block only if it matches, use a conditional variant binding with `if`:
