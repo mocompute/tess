@@ -1483,6 +1483,39 @@ test_from_bool() {
     error
 }
 
+test_from_array() {
+    error := 0
+
+    // Array[CChar]
+    a := Array.empty[CChar]()
+    a.push('h')
+    a.push('e')
+    a.push('l')
+    a.push('l')
+    a.push('o')
+    s := String.from_array(a)
+    if s.len() != 5 { error += 1 }
+    if !s.eq_cstr(c"hello") { error += 1 }
+    s.free()
+    a.free()
+
+    // Array[Byte]
+    b        := Array.empty[Byte]()
+    b1: Byte := 0x41
+    b2: Byte := 0x42
+    b3: Byte := 0x43
+    b.push(b1)
+    b.push(b2)
+    b.push(b3)
+    s2 := String.from_array(b)
+    if s2.len() != 3 { error += 1 }
+    if !s2.eq_cstr(c"ABC") { error += 1 }
+    s2.free()
+    b.free()
+
+    error
+}
+
 _check(name: CString, r: Int) -> Int {
     if r != 0 { c_printf(c"FAIL %s (%d)\n", name, r) }
     r
@@ -1539,6 +1572,7 @@ main() {
     error += _check(c"strip_prefix", test_strip_prefix())
     error += _check(c"strip_suffix", test_strip_suffix())
     error += _check(c"from_bool", test_from_bool())
+    error += _check(c"from_array", test_from_array())
     result: CInt := error
     result
 }
