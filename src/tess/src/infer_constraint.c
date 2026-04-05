@@ -1331,7 +1331,22 @@ static int infer_void(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
 static int infer_body(tl_infer *self, ast_node *node) {
     ensure_tv(self, &node->type);
     if (node->body.expressions.size) {
-        u32       sz   = node->body.expressions.size;
+        u32 sz = node->body.expressions.size;
+
+        // Statement-position expressions: values are discarded. Two-variant union
+        // results (Result, Option, ...) must not be silently dropped.
+        for (u32 i = 0; i < sz - 1; i++) {
+            ast_node *stmt = node->body.expressions.v[i];
+            if (!stmt->type || !stmt->type->type) continue;
+            tl_monotype *stmt_type = stmt->type->type;
+            tl_monotype_substitute(self->arena, stmt_type, self->subs, null);
+            if (get_two_variant_union(stmt_type)) {
+                array_push(self->errors,
+                           ((tl_infer_error){.tag = tl_err_discarded_two_variant_union, .node = stmt}));
+                return 1;
+            }
+        }
+
         ast_node *last = node->body.expressions.v[sz - 1];
         ensure_tv(self, &last->type);
 

@@ -60,7 +60,8 @@ char const *tl_error_tag_to_string(tl_error_tag tag) {
     X(tl_err_alias_source_is_alias, "alias source is itself an alias")                                     \
     X(tl_err_alias_source_is_main, "cannot alias main module")                                             \
     X(tl_err_unalias_not_found, "unalias target not found")                                                \
-    X(tl_err_double_underscore_in_identifier, "double underscore in identifier")
+    X(tl_err_double_underscore_in_identifier, "double underscore in identifier")                           \
+    X(tl_err_discarded_two_variant_union, "return value ignored: two-variant union must be used")
 
 #define USER_ERROR_ENTRY(tag, user_str) [tag] = user_str,
 
