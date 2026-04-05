@@ -2814,13 +2814,21 @@ static str generate_binary_op(transpile *self, tl_monotype *type, ast_node const
     }
 
     if (!ctx->want_lvalue) {
-        str res = next_res(self);
+        str res      = next_res(self);
+        int is_index = is_index_operator(str_cstr(&op));
+
+        // Indexing a CArray yields another CArray, and C forbids assigning array
+        // types with =. Use a combined decl+init so the type decays to T*.
+        if (is_index && !is_nil_result(type) && tl_monotype_is_carray(type)) {
+            generate_decl_init(self, res, type, str_cat_4(self->transient, left, S("["), right, S("]")));
+            return res;
+        }
+
         if (!is_nil_result(type)) {
             generate_decl(self, res, type);
             generate_assign_lhs(self, res);
         }
 
-        int is_index   = is_index_operator(str_cstr(&op));
         int is_ptr_cmp = !is_index && is_relational_operator(str_cstr(&op)) && node->binary_op.left->type &&
                          node->binary_op.right->type &&
                          tl_monotype_is_ptr(node->binary_op.left->type->type) &&
