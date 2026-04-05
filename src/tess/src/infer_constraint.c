@@ -21,6 +21,7 @@ int                 constrain(tl_infer *self, tl_polytype *left, tl_polytype *ri
                               tl_unify_direction dir);
 static int          types_strip_const(tl_monotype *param, tl_monotype *arg);
 static tl_polytype *lookup_poly(tl_infer *self, str name);
+static tl_monotype *get_two_variant_union(tl_monotype *);
 
 int env_insert_constrain(tl_infer *self, str name, tl_polytype *type, ast_node const *name_node) {
 
@@ -1371,30 +1372,28 @@ static int infer_while(tl_infer *self, ast_node *node) {
     return constrain_pm(self, node->type, nil, node, TL_UNIFY_SYMMETRIC);
 }
 
+static tl_monotype *get_two_variant_union(tl_monotype *operand_type) {
+    // Must be a type constructor instance (tagged union wrapper)
+    if (!tl_monotype_is_inst(operand_type)) return null;
+
+    // Find the union field
+    i32 u_index = tl_monotype_type_constructor_field_index(operand_type, S(AST_TAGGED_UNION_UNION_FIELD));
+    if (u_index < 0) return null;
+
+    tl_monotype *union_type = operand_type->cons_inst->args.v[u_index];
+    if (tl_monotype_is_inst(union_type) && union_type->cons_inst->def->field_names.size == 2)
+        return union_type;
+    return null;
+}
+
 static int infer_void_else(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
     (void)ctx;
     tl_monotype *operand_type = node->void_else.expression->type->type;
     tl_monotype_substitute(self->arena, operand_type, self->subs, null);
 
-    // Must be a type constructor instance (tagged union wrapper)
-    if (!tl_monotype_is_inst(operand_type)) {
-        array_push(self->errors,
-                   ((tl_infer_error){.tag = tl_err_void_else_requires_two_variant_union, .node = node}));
-        return 1;
-    }
-
-    // Find the union field
-    i32 u_index = tl_monotype_type_constructor_field_index(operand_type, S(AST_TAGGED_UNION_UNION_FIELD));
-    if (u_index < 0) {
-        array_push(self->errors,
-                   ((tl_infer_error){.tag = tl_err_void_else_requires_two_variant_union, .node = node}));
-        return 1;
-    }
-
-    tl_monotype *union_type = operand_type->cons_inst->args.v[u_index];
-
-    // Must have exactly 2 variants
-    if (!tl_monotype_is_inst(union_type) || union_type->cons_inst->def->field_names.size != 2) {
+    // Must be a union with exactly 2 variants
+    tl_monotype *union_type = get_two_variant_union(operand_type);
+    if (!union_type) {
         array_push(self->errors,
                    ((tl_infer_error){.tag = tl_err_void_else_requires_two_variant_union, .node = node}));
         return 1;
