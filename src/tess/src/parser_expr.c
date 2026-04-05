@@ -707,16 +707,13 @@ int a_assignment(parser *self) {
 
     if (a_try(self, a_colon_equal)) return 1;
 
-    ast_node *val         = null;
-    int       val_is_body = 0;
-    val                   = parse_body(self);
-    if (val) val_is_body = 1;
-    else val = parse_expression(self, INT_MIN);
+    ast_node *val = parse_body(self);
+    if (!val) val = parse_expression(self, INT_MIN);
     if (!val) return ERROR_STOP;
 
     // Let-else form: s: MySome := val else [name] { diverge-or-value }
     // Desugars to: when val { s: MySome { <remaining body> } else { <else-body> } }
-    if (!val_is_body && ast_node_is_symbol(lval) && lval->symbol.annotation &&
+    if (!ast_node_is_body(val) && ast_node_is_symbol(lval) && lval->symbol.annotation &&
         0 == a_try_s(self, the_symbol, "else")) {
         // Optional else binding: `else err { ... }` binds the other variant (two-variant unions only)
         ast_node *else_binding = null;
@@ -757,7 +754,7 @@ int a_assignment(parser *self) {
 
     // Transfer lambda return type annotation to the binding name, so inference
     // processes it the same way as a named function's arrow annotation.
-    if (!val_is_body && ast_node_is_lambda_function(val) && val->lambda_function.annotation)
+    if (!ast_node_is_body(val) && ast_node_is_lambda_function(val) && val->lambda_function.annotation)
         lval->symbol.annotation = val->lambda_function.annotation;
 
     // Normal let-in path

@@ -1990,9 +1990,9 @@ static str literal_to_c(transpile *self, ast_node const *node) {
     if (t == ast_i64_z)  return str_init_i64(self->transient, node->i64_z.val);
     if (t == ast_u64)    return str_cat(self->transient, str_init_u64(self->transient, node->u64.val), S("ULL"));
     if (t == ast_u64_zu) return str_cat(self->transient, str_init_u64(self->transient, node->u64_zu.val), S("ULL"));
-    if (t == ast_f64)    return str_fmt(self->transient, "%.17g", node->f64.val);
+    if (t == ast_f64)    return str_init_f64(self->transient, node->f64.val);
     if (t == ast_char)   return str_cat_3(self->transient, S("'"), node->symbol.name, S("'"));
-    if (t == ast_bool)   return node->bool_.val ? S("1") : S("0");
+    if (t == ast_bool)   return node->bool_.val ? S("1 /*true*/") : S("0 /*false*/");
     return str_empty();
 }
 
