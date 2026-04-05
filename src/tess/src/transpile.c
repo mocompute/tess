@@ -1969,6 +1969,97 @@ static str cast_value(transpile *self, tl_monotype *inner_type, str value, ast_n
     return str_cat_4(self->transient, S("("), type_to_c_mono(self, inner_type), S(")"), value);
 }
 
+// Return 1 if the node is a compile-time constant literal.
+static int is_const_literal(ast_node const *node) {
+    ast_tag t = node->tag;
+    if (t == ast_i64 || t == ast_u64 || t == ast_i64_z || t == ast_u64_zu || t == ast_f64 ||
+        t == ast_char || t == ast_bool)
+        return 1;
+    if (t == ast_body) {
+        for (u32 i = 0; i < node->body.expressions.size; i++)
+            if (!is_const_literal(node->body.expressions.v[i])) return 0;
+        return node->body.expressions.size > 0;
+    }
+    return 0;
+}
+
+// Return the raw C literal string for a constant AST node (no temporaries emitted).
+static str literal_to_c(transpile *self, ast_node const *node) {
+    ast_tag t = node->tag;
+    if (t == ast_i64)    return str_init_i64(self->transient, node->i64.val);
+    if (t == ast_i64_z)  return str_init_i64(self->transient, node->i64_z.val);
+    if (t == ast_u64)    return str_cat(self->transient, str_init_u64(self->transient, node->u64.val), S("ULL"));
+    if (t == ast_u64_zu) return str_cat(self->transient, str_init_u64(self->transient, node->u64_zu.val), S("ULL"));
+    if (t == ast_f64)    return str_fmt(self->transient, "%.17g", node->f64.val);
+    if (t == ast_char)   return str_cat_3(self->transient, S("'"), node->symbol.name, S("'"));
+    if (t == ast_bool)   return node->bool_.val ? S("1") : S("0");
+    return str_empty();
+}
+
+// Emit a C brace-enclosed initializer list for a CArray literal body, recursing for nested CArrays.
+static void emit_brace_list(transpile *self, tl_monotype *elem_type, ast_node const *body) {
+    cat_open_curly(self);
+    for (u32 i = 0; i < body->body.expressions.size; i++) {
+        if (i) cat_commasp(self);
+        ast_node const *expr = body->body.expressions.v[i];
+        if (ast_node_is_body(expr) && tl_monotype_is_carray(elem_type)) {
+            emit_brace_list(self, tl_monotype_carray_element(elem_type), expr);
+        } else {
+            cat(self, literal_to_c(self, expr));
+        }
+    }
+    cat_close_curly(self);
+}
+
+// Emit a CArray literal binding.  Returns 1 if handled, 0 if not a CArray literal.
+static int emit_carray_literal(transpile *self, str name, tl_monotype *type, ast_node const *node,
+                               eval_ctx *ctx) {
+    int          is_const = tl_monotype_is_const(type);
+    tl_monotype *inner    = tl_monotype_strip_const(type);
+    if (!tl_monotype_is_carray(inner)) return 0;
+
+    ast_node const *value = node->let_in.value;
+    if (!ast_node_is_body(value) || value->body.defers.size != 0) return 0;
+
+    tl_monotype *elem_type = tl_monotype_carray_element(inner);
+    i32          count     = tl_monotype_carray_count(inner);
+
+    // Check if all elements are compile-time constants
+    int all_const = 1;
+    for (u32 i = 0; i < value->body.expressions.size; i++) {
+        if (!is_const_literal(value->body.expressions.v[i])) { all_const = 0; break; }
+    }
+
+    if (all_const) {
+        // Static path: T name[N1][N2]... = {{e0, e1}, ...};
+        // Build dimension suffixes and find innermost element type for multi-dimensional arrays.
+        str dims = str_fmt(self->transient, "[%d]", count);
+        tl_monotype *base = elem_type;
+        while (tl_monotype_is_carray(base)) {
+            dims = str_cat(self->transient, dims,
+                           str_fmt(self->transient, "[%d]", tl_monotype_carray_count(base)));
+            base = tl_monotype_carray_element(base);
+        }
+        str base_c = type_to_c_mono(self, base);
+        if (is_const) cat(self, S("const "));
+        cat(self, str_fmt(self->transient, "%s %s%s = ", str_cstr(&base_c), str_cstr(&name),
+                          str_cstr(&dims)));
+        emit_brace_list(self, elem_type, value);
+        cat_semicolonln(self);
+    } else {
+        // Runtime path: T name[N]; name[0] = e0; ...
+        generate_decl(self, name, inner);
+        for (i32 i = 0; i < count; i++) {
+            str val = generate_expr(self, elem_type, value->body.expressions.v[i], ctx);
+            cat(self, str_fmt(self->transient, "%s[%d]", str_cstr(&name), i));
+            cat_assign(self);
+            cat(self, val);
+            cat_semicolonln(self);
+        }
+    }
+    return 1;
+}
+
 // Emit a single let-in binding: declaration, optional value assignment, casts, and bounds checks.
 static void emit_let_binding(transpile *self, ast_node const *node, eval_ctx *ctx) {
     str          name = ast_node_str(node->let_in.name);
@@ -1978,6 +2069,8 @@ static void emit_let_binding(transpile *self, ast_node const *node, eval_ctx *ct
     name = escape_c_keyword(self->transient, name);
 
     if (emit_void_decl(self, name, type, node)) return;
+
+    if (emit_carray_literal(self, name, type, node, ctx)) return;
 
     str value = generate_expr(self, type, node->let_in.value, ctx);
 

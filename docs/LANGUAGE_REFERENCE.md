@@ -597,18 +597,30 @@ copy_val[T](dst: Ptr[T], src: Ptr[Const[T]]) { dst.* = src.* }
 `CArray[T, N]` declares a fixed-size C array. It can be used as a local variable or a struct field.
 
 ```tl
-// Local variable
-arr: CArray[Int, 5] := void
-arr.[0] = 42                          // Direct indexing
+// Local variable — literal initialization
+arr: CArray[Int, 3] := {1, 2, 3}
+
+// Local variable — void initialization
+buf: CArray[Int, 5] := void
+buf.[0] = 42                          // Direct indexing
 
 // Struct field
 Buffer: { data: CArray[CChar, 256], len: CInt }
 b := Buffer(data = void, len = 0)
 ```
 
-**Static array initialization:** Not supported. The binding expression must initialize the array to `void`,
-which leaves the underlying memory uninitialized. Use direct indexing (or C library functions like `c_memset`)
-to initialize the array.
+**Array literal initialization:** CArrays can be initialized with a brace-enclosed literal:
+
+```tl
+arr: CArray[Int, 3] := {1, 2, 3}
+carr: Const[CArray[Int, 3]] := {10, 20, 30}
+```
+
+When all elements are compile-time constants, this emits a C initializer list (`int arr[3] = {1, 2, 3};`).
+When any element is a runtime expression, the compiler emits element-by-element assignment.
+The element count must exactly match the CArray size.
+
+Arrays can also be initialized to `void`, which leaves the underlying memory uninitialized:
 
 **Decay to pointer:** CArrays decay to pointers automatically at function call sites (matching C semantics)
 and in struct field access. Explicit decay via binding annotation is also supported:

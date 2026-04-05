@@ -139,7 +139,8 @@
     X(tl_err_alloc_requires_import, "alloc_requires_import")                                               \
     X(tl_err_undeclared_reassignment, "undeclared_variable")                                               \
     X(tl_err_auto_collapse_ambiguous, "auto_collapse_ambiguous")                                           \
-    X(tl_err_invalid_format_spec, "invalid_format_specifier")
+    X(tl_err_invalid_format_spec, "invalid_format_specifier")                                           \
+    X(tl_err_array_literal_count_mismatch, "array_literal_count_mismatch")
 
 typedef enum tl_error_tag { TESS_ERROR_TAG_LIST(MOS_TAG_NAME) } tl_error_tag;
 

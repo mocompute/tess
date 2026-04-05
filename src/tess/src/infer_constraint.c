@@ -2169,6 +2169,58 @@ static void promote_lambda_to_toplevel(tl_infer *self, ast_node *node) {
     toplevel_add(self, name, clone);
 }
 
+// Constrain a body node as a CArray literal: each body expression becomes an element.
+// Returns 1 on error, 0 on success.  Recurses for nested CArray element types.
+static int infer_array_literal(tl_infer *self, traverse_ctx *ctx, tl_monotype *carray_type,
+                               ast_node *body_node, ast_node const *origin) {
+    tl_monotype *elem_type = tl_monotype_carray_element(carray_type);
+    i32          count     = tl_monotype_carray_count(carray_type);
+    i32          n_exprs   = (i32)body_node->body.expressions.size;
+
+    if (n_exprs != count) {
+        str msg = str_fmt(self->transient, "array literal has %d elements, but CArray expects %d",
+                          n_exprs, count);
+        array_push(self->errors,
+                   ((tl_infer_error){.tag = tl_err_array_literal_count_mismatch, .node = origin, .message = msg}));
+        return 1;
+    }
+
+    tl_polytype elem_poly = tl_polytype_wrap(elem_type);
+
+    for (i32 i = 0; i < n_exprs; i++) {
+        ast_node *expr = body_node->body.expressions.v[i];
+
+        if (resolve_node(self, expr, ctx, npos_operand)) return 1;
+
+        // Nested CArray: recurse into sub-body
+        if (tl_monotype_is_carray(elem_type) && ast_node_is_body(expr) && expr->body.defers.size == 0) {
+            if (infer_array_literal(self, ctx, elem_type, expr, origin)) return 1;
+        } else {
+            if (constrain(self, &elem_poly, expr->type, origin, TL_UNIFY_DIRECTED)) return 1;
+        }
+    }
+
+    return 0;
+}
+
+// Check if a let-in binding is a CArray array literal (annotation is CArray, value is ast_body).
+// If so, apply array literal inference and return 1 (handled). Returns 0 if not an array literal.
+// Returns -1 on error.
+static int try_infer_carray_literal(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
+    tl_polytype *ann = node->let_in.name->symbol.annotation_type;
+    if (!ann) return 0;
+
+    tl_monotype *type = ann->type;
+    if (tl_monotype_is_const(type)) type = tl_monotype_const_target(type);
+    if (!tl_monotype_is_carray(type)) return 0;
+
+    ast_node *value = node->let_in.value;
+    if (!ast_node_is_body(value) || value->body.defers.size != 0) return 0;
+
+    if (infer_array_literal(self, ctx, type, value, node)) return -1;
+    return 1;
+}
+
 static int infer_let_in(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
     if (resolve_node(self, node->let_in.name, ctx, npos_formal_parameter)) return 1;
     if (resolve_node(self, node->let_in.value, ctx, npos_value_rhs)) return 1;
@@ -2207,13 +2259,19 @@ static int infer_let_in(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
         if (is_cast_annotation(node->let_in.name)) {
             if (cast_constrain_let_in(self, node)) return 1;
         } else {
-            // For Const[T] bindings, constrain value against unwrapped T so the Const
-            // wrapper does not back-propagate onto the value expression's type.
-            if (name_type && tl_monotype_is_const(name_type->type)) {
-                tl_polytype unwrapped = tl_polytype_wrap(tl_monotype_const_target(name_type->type));
-                if (constrain(self, &unwrapped, value_type, node, TL_UNIFY_DIRECTED)) return 1;
-            } else {
-                if (constrain(self, name_type, value_type, node, TL_UNIFY_DIRECTED)) return 1;
+            // CArray literal: {e0, e1, ...} assigned to a CArray binding
+            int arr_lit = try_infer_carray_literal(self, ctx, node);
+            if (arr_lit < 0) return 1;
+
+            if (!arr_lit) {
+                // For Const[T] bindings, constrain value against unwrapped T so the Const
+                // wrapper does not back-propagate onto the value expression's type.
+                if (name_type && tl_monotype_is_const(name_type->type)) {
+                    tl_polytype unwrapped = tl_polytype_wrap(tl_monotype_const_target(name_type->type));
+                    if (constrain(self, &unwrapped, value_type, node, TL_UNIFY_DIRECTED)) return 1;
+                } else {
+                    if (constrain(self, name_type, value_type, node, TL_UNIFY_DIRECTED)) return 1;
+                }
             }
         }
 
