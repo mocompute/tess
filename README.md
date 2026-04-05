@@ -69,6 +69,12 @@ Or, just bind the happy path, and ignore the rest:
     // ...
 ```
 
+For functions that return nothing on success but may return an error, use:
+
+```tl
+    file.write_str("hello") else err { log_error(err.error); return false }
+```
+
 Or, condition on a single variant:
 
 ```tl
