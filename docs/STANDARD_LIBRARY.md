@@ -1,6 +1,7 @@
 # Standard Library Reference
 
-> **Work in Progress.** The standard library is under active development. APIs may change.
+> **Work in Progress.** The standard library is under active
+> development. APIs may change. This document is completely out of date.
 
 The Tess standard library is automatically included when compiling with `tess exe` or `tess lib`. Standard library modules are imported using angle brackets (e.g., `#import <Array.tl>`). To disable default standard paths, pass `--no-standard-includes` and specify custom standard paths with `-S`.
 
