@@ -535,6 +535,72 @@ int a_for_statement(parser *self) {
     return result_ast_node(self, let_iter_init);
 }
 
+// Classic C-style for loop: `for init_var := init_val, condition, update { body }`
+// Desugared at parse time to a let-in wrapping a while loop:
+//
+//     let init_var = init_val in
+//         while condition, update {
+//             body
+//         }
+//
+// The let-in scopes init_var to the while loop only — it is not visible to subsequent
+// statements in the enclosing block.
+//
+// The init must be a new binding (`var := expr`). The update must be a reassignment
+// (`var = expr`, `var += expr`, etc.).
+int a_classic_for_statement(parser *self) {
+    if (a_try_s(self, the_symbol, "for")) return 1;
+
+    // Parse init binding: `lval := rhs`
+    // We do NOT call a_assignment here because a_assignment is a let-in expression that
+    // greedily consumes the rest of the enclosing block as its continuation. Instead we
+    // parse the lval and rhs manually, then build the let-in ourselves with the while
+    // loop as the sole continuation.
+    ast_node *init_lval = parse_lvalue(self);
+    if (!init_lval) return 1;
+
+    if (a_try(self, a_colon_equal)) return 1;
+
+    ast_node *init_rhs = parse_expression(self, INT_MIN);
+    if (!init_rhs) return 1;
+
+    // Expect comma separator
+    if (a_try(self, a_comma)) return 1;
+
+    // Parse condition expression (e.g. `i < 10`)
+    ast_node *condition = parse_expression(self, INT_MIN);
+    if (!condition) return ERROR_STOP;
+
+    // Expect comma separator
+    if (a_try(self, a_comma)) return ERROR_STOP;
+
+    // Parse update: must be a reassignment (e.g. `i += 1`, `i = i + 1`).
+    // a_reassignment does not consume the continuation, so it is safe to use here.
+    if (a_try(self, a_reassignment)) return ERROR_STOP;
+    ast_node *update = self->result;
+
+    // Parse the loop body `{ ... }`
+    if (a_try(self, a_open_curly)) return ERROR_STOP;
+
+    ast_node_array exprs  = {.alloc = self->ast_arena};
+    ast_node_array defers = {.alloc = self->ast_arena};
+    while (1) {
+        if (0 == a_try(self, a_close_curly)) break;
+        if (0 == a_try(self, a_defer_statement)) array_push(defers, self->result);
+        else if (a_try(self, a_body_element)) return ERROR_STOP;
+        else array_push(exprs, self->result);
+    }
+    ast_node *body = create_body(self, exprs, defers);
+
+    // Build: while condition, update { body }
+    ast_node *while_node = ast_node_create_while(self->ast_arena, condition, update, body);
+
+    // Build: let init_var = init_val in while_node
+    // The let-in scopes init_var to the while loop only.
+    ast_node *result = ast_node_create_let_in(self->ast_arena, init_lval, init_rhs, while_node);
+    return result_ast_node(self, result);
+}
+
 int a_break_statement(parser *self) {
     if (a_try_s(self, the_symbol, "break")) return 1;
 
@@ -572,6 +638,7 @@ int a_defer_eligible_statement(parser *self) {
     if (0 == a_try(self, a_reassignment)) return 0;
     if (0 == a_try(self, a_while_statement)) return 0;
     if (0 == a_try(self, a_for_statement)) return 0;
+    if (0 == a_try(self, a_classic_for_statement)) return 0;
 
     return 1;
 }
@@ -725,6 +792,7 @@ int a_statement(parser *self) {
     if (0 == a_try(self, a_reassignment)) return 0;
     if (0 == a_try(self, a_while_statement)) return 0;
     if (0 == a_try(self, a_for_statement)) return 0;
+    if (0 == a_try(self, a_classic_for_statement)) return 0;
     if (0 == a_try(self, a_break_statement)) return 0;
     if (0 == a_try(self, a_continue_statement)) return 0;
     if (0 == a_try(self, a_return_statement)) return 0;
