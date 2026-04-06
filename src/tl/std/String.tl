@@ -16,7 +16,7 @@ Allocator = Alloc.Allocator
 // -- Types --
 // Small string optimization: strings of 14 bytes or fewer are stored inline (no heap allocation).
 // The String type is a 16-byte union of _Big (len + pointer) and _Small (15-byte buffer + tag/len byte).
-// The 15-byte buffer holds up to 14 bytes of data + 1 byte for a null terminator (written lazily by cstr).
+// The 15-byte buffer holds up to 14 bytes of data + 1 byte for a null terminator (always written at construction).
 // The tag_len byte (byte 15) packs a 4-bit tag in the upper nibble and 4-bit length in the lower nibble.
 // Tag value 0x01 indicates a small string.
 
@@ -193,6 +193,7 @@ _init_small(src, n) {
         dst: Ptr[CChar] := s.ss.buf
         c_memcpy(dst, src, n)
     }
+    s.ss.buf.[n] = '\0'
     s
 }
 
@@ -200,6 +201,7 @@ _init_big(alloc, src, n) {
     buf: Ptr[CChar] := alloc.alloc(n + 1)
     if buf == null { _tl_fatal_(c"String: out of memory") }
     if n > 0 { c_memcpy(buf, src, n) }
+    buf.[n] = '\0'
     String(big = _Big(len = n, buf = buf))
 }
 
@@ -207,7 +209,9 @@ _init_big(alloc, src, n) {
 // -- Construction --
 
 empty() {
-    String(ss = _Small(buf = void, tag_len = _make_tag_len(0)))
+    s := String(ss = _Small(buf = void, tag_len = _make_tag_len(0)))
+    s.ss.buf.[0] = '\0'
+    s
 }
 
 from_bytes(alloc, cs, n) {
@@ -377,13 +381,7 @@ from_array(arr) {
     }
 
     cstr() {
-        n := len(s)
-
-        // Note: casts away const. This is safe because a String is always allocated with room for
-        // terminating \0, or else initialised from static C strings which are already terminated.
-        p: Ptr[CChar] := _cbuf(s)
-        if p.[n] != '\0' { p.[n] = '\0' }
-        p
+        _cbuf(s)
     }
 
     starts_with(prefix) {
@@ -676,6 +674,7 @@ from_array(arr) {
                 c_memcpy(d, sp, sn)
                 off += sn
             }
+            dst.[total] = '\0'
             return result
         }
 
@@ -688,6 +687,7 @@ from_array(arr) {
             c_memcpy(d, sp, sn)
             off += sn
         }
+        buf.[total] = '\0'
         String(big = _Big(len = total, buf = buf))
     }
 
@@ -740,6 +740,7 @@ from_array(arr) {
             alloc.dealloc(buf)
             return result
         }
+        buf.[total] = '\0'
         String(big = _Big(len = total, buf = buf))
     }
 
@@ -905,6 +906,7 @@ _cat_impl(alloc, bufs: Ptr[Ptr[Const[CChar]]], lens: Ptr[CSize], count: CSize) {
             }
             off += lens.[j]
         }
+        dst.[total] = '\0'
         return s
     }
 
@@ -919,6 +921,7 @@ _cat_impl(alloc, bufs: Ptr[Ptr[Const[CChar]]], lens: Ptr[CSize], count: CSize) {
         }
         off += lens.[j]
     }
+    buf.[total] = '\0'
     String(big = _Big(len = total, buf = buf))
 }
 
@@ -962,6 +965,7 @@ join(alloc, sep, arr) {
                 off += sn
             }
         }
+        dst.[total] = '\0'
         return result
     }
 
@@ -984,6 +988,7 @@ join(alloc, sep, arr) {
             off += sn
         }
     }
+    buf.[total] = '\0'
     String(big = _Big(len = total, buf = buf))
 }
 
