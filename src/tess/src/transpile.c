@@ -115,6 +115,7 @@ static void        generate_toplevels(transpile *);
 static void        generate_assign_lhs(transpile *, str);
 static void        generate_assign(transpile *, str, str);
 static void        generate_decl_init(transpile *, str, tl_monotype *, str);
+static void        generate_decl_init_str(transpile *, str, str, str);
 static str         generate_context(transpile *, str_sized, eval_ctx *, int, ast_node *);
 static lambda_closure_attrs toplevel_closure_attrs(transpile *, str);
 static void                 generate_assign_field(transpile *, str, str, str);
@@ -999,6 +1000,17 @@ static void generate_decl_init(transpile *self, str name, tl_monotype *type, str
     if (str_is_empty(value) || str_is_empty(name)) return;
     name      = escape_c_keyword(self->transient, name);
     str typec = type_to_c_mono(self, type);
+    cat(self, typec);
+    cat_sp(self);
+    cat(self, name);
+    cat_assign(self);
+    cat(self, value);
+    cat_semicolonln(self);
+}
+
+static void generate_decl_init_str(transpile *self, str name, str typec, str value) {
+    if (str_is_empty(value) || str_is_empty(name)) return;
+    name = escape_c_keyword(self->transient, name);
     cat(self, typec);
     cat_sp(self);
     cat(self, name);
@@ -2733,6 +2745,22 @@ static str generate_short_circuit_op(transpile *self, tl_monotype *type, ast_nod
     return res;
 }
 
+// Returns 1 if the field access node is reached via a const-qualified path:
+// s->field where s: Ptr[Const[T]], or s.field where s: Const[T], or recursively.
+static int expr_is_through_const_ptr(ast_node const *node) {
+    if (!node || ast_binary_op != node->tag) return 0;
+    str             op        = ast_node_str(node->binary_op.op);
+    char const     *op_s      = str_cstr(&op);
+    ast_node const *left      = node->binary_op.left;
+    tl_monotype    *left_type = (left && left->type) ? left->type->type : null;
+    if (0 == strcmp(op_s, "->") && left_type && tl_monotype_is_ptr_to_const(left_type)) return 1;
+    if (is_dot_operator(op_s)) {
+        if (left_type && tl_monotype_is_const(left_type)) return 1;
+        return expr_is_through_const_ptr(left);
+    }
+    return 0;
+}
+
 static str generate_binary_op(transpile *self, tl_monotype *type, ast_node const *node, eval_ctx *ctx) {
     assert(ast_binary_op == node->tag);
     str op = ast_node_str(node->binary_op.op);
@@ -2840,6 +2868,19 @@ static str generate_binary_op(transpile *self, tl_monotype *type, ast_node const
         // types with =. Use a combined decl+init so the type decays to T*.
         if (is_index && !is_nil_result(type) && tl_monotype_is_carray(type)) {
             generate_decl_init(self, res, type, str_cat_4(self->transient, left, S("["), right, S("]")));
+            return res;
+        }
+
+        // A CArray field accessed through a const-qualified struct pointer yields
+        // const T* (GCC propagates const from the containing struct to array fields).
+        // Emit "const T* res = left op right;" to avoid a discarded-qualifiers warning.
+        if (carray_field && !is_nil_result(type) && tl_monotype_is_ptr(type) &&
+            expr_is_through_const_ptr(node)) {
+            tl_monotype *elem   = tl_monotype_ptr_target(type);
+            str          elem_c = type_to_c_mono(self, elem);
+            str          type_c = str_cat_3(self->transient, S("const "), elem_c, S("*"));
+            str          val    = str_cat_5(self->transient, left, S(" "), op, S(" "), right);
+            generate_decl_init_str(self, res, type_c, val);
             return res;
         }
 
