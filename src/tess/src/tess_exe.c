@@ -1306,12 +1306,14 @@ int compile(state *self) {
         }
     }
 
-    // Validate that all input files exist before proceeding
-    for (u32 i = 0; i < paths.size; i++) {
-        str file = str_init_static(paths.v[i]);
-        if (!file_exists(file)) {
-            fprintf(stderr, "error: file not found: %s\n", paths.v[i]);
-            return 1;
+    // Validate that all input files exist before proceeding (skip when reading from stdin)
+    if (!self->stdin_data) {
+        for (u32 i = 0; i < paths.size; i++) {
+            str file = str_init_static(paths.v[i]);
+            if (!file_exists(file)) {
+                fprintf(stderr, "error: file not found: %s\n", paths.v[i]);
+                return 1;
+            }
         }
     }
 
