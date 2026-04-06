@@ -9,6 +9,6 @@ do_something() -> Outcome {
 }
 
 main() {
-    do_something()  // discarded Outcome (two-variant union) — must fail
+    do_something()                      // discarded Outcome (two-variant union) — must fail
     0
 }

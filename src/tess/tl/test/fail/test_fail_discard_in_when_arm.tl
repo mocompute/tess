@@ -11,7 +11,7 @@ make_option() -> Option[Int] {
 main() {
     when make_option() {
         s: Some {
-            make_result()  // discarded inside when arm — must fail
+            make_result()               // discarded inside when arm — must fail
             0
         }
         n: None { 0 }

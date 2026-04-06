@@ -198,10 +198,10 @@ static char tl_file_separator(void) {
 }
 #endc
 
-c_tl_file_exists   (path: Ptr[Const[CChar]])                -> CInt
-c_tl_file_is_dir   (path: Ptr[Const[CChar]])                -> CInt
-c_tl_file_size     (path: Ptr[Const[CChar]])                -> Int
-c_tl_file_mkdir    (path: Ptr[Const[CChar]])                -> CInt
+c_tl_file_exists   (path: Ptr[Const[CChar]])      -> CInt
+c_tl_file_is_dir   (path: Ptr[Const[CChar]])      -> CInt
+c_tl_file_size     (path: Ptr[Const[CChar]])      -> Int
+c_tl_file_mkdir    (path: Ptr[Const[CChar]])      -> CInt
 c_tl_file_tmpdir   (buf: Ptr[CChar], size: CSize) -> CInt
 c_tl_file_getcwd   (buf: Ptr[CChar], size: CSize) -> CInt
 c_tl_file_separator()                             -> CChar
@@ -929,9 +929,9 @@ static void tl_scan_dir_cleanup(tl_path_list *l) { tl_path_list_free(l); }
 c_struct_tl_path_list: { _opaque: CArray[Byte, 64] }
 
 c_tl_scan_dir_start  (dir: Ptr[Const[CChar]], ext: Ptr[Const[CChar]], out: Ptr[c_struct_tl_path_list]) -> Void
-c_tl_scan_dir_count  (l: Ptr[c_struct_tl_path_list])                               -> CSize
-c_tl_scan_dir_get    (l: Ptr[c_struct_tl_path_list], i: CSize)                     -> CString
-c_tl_scan_dir_cleanup(l: Ptr[c_struct_tl_path_list])                               -> Void
+c_tl_scan_dir_count  (l: Ptr[c_struct_tl_path_list])                                                   -> CSize
+c_tl_scan_dir_get    (l: Ptr[c_struct_tl_path_list], i: CSize)                                         -> CString
+c_tl_scan_dir_cleanup(l: Ptr[c_struct_tl_path_list])                                                   -> Void
 
 scan_dir(alloc, path, ext) {
     list: c_struct_tl_path_list := void

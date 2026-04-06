@@ -5,6 +5,6 @@ make_result() -> Result[Int, Int] {
 }
 
 main() {
-    make_result()  // discarded Result — must fail
+    make_result()                       // discarded Result — must fail
     0
 }

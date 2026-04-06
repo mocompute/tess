@@ -5,6 +5,6 @@ make_option() -> Option[Int] {
 }
 
 main() {
-    make_option()  // discarded Option — must fail
+    make_option()                       // discarded Option — must fail
     0
 }

@@ -10,6 +10,6 @@ validate(self: Widget) -> Result[Int, Int] {
 
 main() {
     w := Widget(42)
-    w.validate()  // discarded Result from UFCS method — must fail
+    w.validate()                        // discarded Result from UFCS method — must fail
     0
 }

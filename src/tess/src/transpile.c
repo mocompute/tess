@@ -2081,7 +2081,7 @@ static void emit_let_binding(transpile *self, ast_node const *node, eval_ctx *ct
     // generate the value expression using the actual RHS type rather than the annotation type.
     // This prevents C implicit-pointer-conversion warnings: the intermediate temp gets the
     // correct source pointer type, and cast_value() below emits the explicit (T*) cast.
-    tl_monotype *gen_type  = type;
+    tl_monotype *gen_type = type;
     if (tl_monotype_is_ptr(tl_monotype_strip_const(type)) && node->let_in.value->type) {
         tl_monotype *val_inner = tl_monotype_strip_const(node->let_in.value->type->type);
         if (tl_monotype_is_ptr(val_inner)) gen_type = val_inner;
@@ -2165,8 +2165,8 @@ static str generate_if_then_else(transpile *self, tl_monotype *type, ast_node co
     ast_node const *no          = node->if_then_else.no;
     tl_monotype    *result_type = yes->type->type;
     tl_monotype    *decl_type   = result_type;
-    if (type && tl_monotype_is_ptr_to_const(type) &&
-        tl_monotype_is_ptr(result_type) && !tl_monotype_is_ptr_to_const(result_type)) {
+    if (type && tl_monotype_is_ptr_to_const(type) && tl_monotype_is_ptr(result_type) &&
+        !tl_monotype_is_ptr_to_const(result_type)) {
         decl_type = type;
     }
 
@@ -3110,7 +3110,7 @@ static str generate_return(transpile *self, tl_monotype *type, ast_node const *n
     str value     = str_empty();
     if (has_value) {
         tl_monotype *ret_type = ctx->func_return_type ? ctx->func_return_type : type;
-        value = generate_expr(self, ret_type, node->return_.value, ctx);
+        value                 = generate_expr(self, ret_type, node->return_.value, ctx);
     }
 
     // Capture return value to a temp before running defers

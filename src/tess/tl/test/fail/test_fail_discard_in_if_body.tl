@@ -6,7 +6,7 @@ make_result() -> Result[Int, Int] {
 
 main() {
     if 1 == 1 {
-        make_result()  // discarded in stmt position inside if body — must fail
+        make_result()                   // discarded in stmt position inside if body — must fail
         0
     } else { 0 }
 }

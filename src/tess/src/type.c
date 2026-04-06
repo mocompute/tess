@@ -162,16 +162,16 @@ tl_type_registry *tl_type_registry_create(allocator *alloc, allocator *transient
     self->specialized      = map_create(self->alloc, sizeof(tl_monotype *), 1024); // key: registry_key
     self->type_aliases     = map_new(self->alloc, str, tl_polytype *, 1024);
 
-    self->t_nil      = null;
-    self->t_int      = null;
-    self->t_uint     = null;
-    self->t_csize    = null;
-    self->t_cptrdiff = null;
-    self->t_float    = null;
-    self->t_bool     = null;
-    self->t_char     = null;
-    self->t_ptr_any  = null;
-    self->t_ptr_char = null;
+    self->t_nil            = null;
+    self->t_int            = null;
+    self->t_uint           = null;
+    self->t_csize          = null;
+    self->t_cptrdiff       = null;
+    self->t_float          = null;
+    self->t_bool           = null;
+    self->t_char           = null;
+    self->t_ptr_any        = null;
+    self->t_ptr_char       = null;
 
     // Nullary built-in types with data-driven properties.
     // c_type: the C type string for transpilation (NULL if not a builtin C type)
@@ -732,8 +732,7 @@ tl_monotype *tl_type_registry_ptr_any(tl_type_registry *self) {
     return self->t_ptr_any;
 }
 tl_monotype *tl_type_registry_ptr_char(tl_type_registry *self) {
-    if (!self->t_ptr_char)
-        self->t_ptr_char = tl_type_registry_ptr(self, tl_type_registry_char(self));
+    if (!self->t_ptr_char) self->t_ptr_char = tl_type_registry_ptr(self, tl_type_registry_char(self));
     return self->t_ptr_char;
 }
 

@@ -6,7 +6,7 @@ make_result() -> Result[Int, Int] {
 
 main() {
     defer {
-        make_result()  // discarded Result inside defer block — must fail
+        make_result()                   // discarded Result inside defer block — must fail
         0
     }
     0

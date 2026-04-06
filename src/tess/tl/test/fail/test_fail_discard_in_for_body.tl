@@ -8,7 +8,7 @@ make_option() -> Option[Int] {
 main() {
     xs := Array.init(0, 3zu)
     for x in xs {
-        make_option()  // discarded in for body — must fail
+        make_option()                   // discarded in for body — must fail
     }
     0
 }
