@@ -55,6 +55,29 @@ test_option_void_else() -> CInt {
     0
 }
 
+// Test 7: Two-variant union passed as argument is fine (not discarded)
+consume(x: Result[Int, Int]) -> CInt { 0 }
+
+test_passed_as_argument() -> CInt {
+    consume(make_result())
+}
+
+// Test 8: Two-variant union stored in a struct field is fine
+Holder: { r: Result[Int, Int] }
+
+test_field_assignment() -> CInt {
+    h := Holder(make_result())
+    0
+}
+
+// Test 9: Generic function return bound to variable — not discarded
+identity[T](x: T) -> T { x }
+
+test_generic_identity_bound() -> CInt {
+    x := identity(make_result())
+    0
+}
+
 main() {
     error := 0
     error += test_three_variant()
@@ -63,5 +86,8 @@ main() {
     r := test_return_value()
     error += test_let_binding()
     error += test_option_void_else()
+    error += test_passed_as_argument()
+    error += test_field_assignment()
+    error += test_generic_identity_bound()
     error
 }
