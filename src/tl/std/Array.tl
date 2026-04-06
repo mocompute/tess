@@ -443,8 +443,8 @@ _merge[T](v, tmp, lo, mid, hi, cmp: (T, T) -> Int, width) {
 
     slice(start, end) {
         if end > arr->size || start > end { _tl_fatal_(c"Array.slice: index out of bounds") }
-        if start == end { return Slice[T](data: Ptr[T] = null, size = 0) }
-        p: Ptr[T] := arr->data.[start].&
+        if start == end { return Slice[T](data = null, size = 0) }
+        p: Ptr[Const[T]] := arr->data.[start].&
         Slice(data = p, size = end - start)
     }
 

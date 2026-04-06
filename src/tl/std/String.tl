@@ -109,6 +109,9 @@ from_array[T](alloc: Ptr[Allocator], arr: Ptr[Const[Array[T]]])       -> String
     split (delimiter: Ptr[Const[String]])                        -> Array[String]
     split (alloc: Ptr[Allocator], delimiter: Ptr[Const[String]]) -> Array[String]
 
+    // Return zero-terminated C string
+    cstr () -> CString
+
     // Explicit allocators
     cat         (alloc: Ptr[Allocator], other: Ptr[Const[String]])                              -> String
     cat_3       (alloc: Ptr[Allocator], other1: Ptr[Const[String]], other2: Ptr[Const[String]]) -> String
@@ -128,8 +131,6 @@ from_array[T](alloc: Ptr[Allocator], arr: Ptr[Const[Array[T]]])       -> String
 
 // Mutating methods
 (self: Ptr[String]): {
-    // Mutate to zero-terminated C string
-    cstr () -> CString
 
     // Mutable transformation.
     replace_byte_in_place(find: CChar, replace: CChar) -> Void
@@ -305,9 +306,9 @@ from_array(arr) {
         n := len(s)
         if start > end || end > n { _tl_fatal_(c"String.slice: index out of bounds") }
         slen := end - start
-        if slen == 0 { return Slice[CChar](data: Ptr[CChar] = null, size = 0) }
-        p               := s._buf()
-        src: Ptr[CChar] := Unsafe.pointer_add(p, start)
+        if slen == 0 { return Slice[CChar](data = null, size = 0) }
+        p                      := s._cbuf()
+        src: Ptr[Const[CChar]] := Unsafe.pointer_add(p, start)
         Slice(data = src, size = slen)
     }
 
@@ -373,6 +374,16 @@ from_array(arr) {
 
     len() {
         if _is_small(s) { _small_len(s) } else { s->big.len }
+    }
+
+    cstr() {
+        n := len(s)
+
+        // Note: casts away const. This is safe because a String is always allocated with room for
+        // terminating \0, or else initialised from static C strings which are already terminated.
+        p: Ptr[CChar] := _cbuf(s)
+        if p.[n] != '\0' { p.[n] = '\0' }
+        p
     }
 
     starts_with(prefix) {
@@ -798,13 +809,6 @@ from_array(arr) {
 }
 
 (self: Ptr[String]): {
-    cstr() {
-        n := len(self)
-        p := _buf(self)
-        if p.[n] != '\0' { p.[n] = '\0' }
-        p
-    }
-
     push(alloc, other) {
         result := self.cat(alloc, other)
         free(self, alloc)

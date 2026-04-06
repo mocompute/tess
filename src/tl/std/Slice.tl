@@ -18,7 +18,7 @@
 // -- Iterator interface --
 
 Iter[T]: {
-    data:  Ptr[T],
+    data:  Ptr[Const[T]],
     size:  CSize,
     index: CSize,
 }
@@ -26,9 +26,9 @@ Iter[T]: {
 iter_init[T](s: Ptr[Slice[T]]) { Iter(data = s->data, size = s->size, index = 0) }
 
 (iter: Ptr[Iter[T]]): {
-    iter_ptr   () -> Ptr[T] { iter->data.[iter->index].& }
-    iter_value () -> T      { iter->data.[iter->index]   }
-    iter_cond  () -> Bool   { iter->index < iter->size   }
-    iter_update() -> Void   { iter->index += 1           }
-    iter_deinit() -> Void   {                            }
+    iter_ptr   () -> Ptr[Const[T]] { iter->data.[iter->index].& }
+    iter_value () -> T             { iter->data.[iter->index]   }
+    iter_cond  () -> Bool          { iter->index < iter->size   }
+    iter_update() -> Void          { iter->index += 1           }
+    iter_deinit() -> Void          {                            }
 }

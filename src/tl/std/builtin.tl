@@ -30,7 +30,7 @@ _tl_fatal_ (s: CString) -> any
 // Used by variadic functions: the compiler packs variadic args into a stack-allocated
 // array and passes a Slice to the function body.
 
-Slice[T]: { data: Ptr[T], size: CSize }
+Slice[T]: { data: Ptr[Const[T]], size: CSize }
 
 // Option type
 
