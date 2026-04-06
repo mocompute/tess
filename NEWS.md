@@ -5,6 +5,112 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [v0.1.1] - 2026-03-31 to 2026-04-06 (cc50f567..6be7528f)
+
+### Highlights
+
+- **Classic `for` loop and `CArray` literals**: New C-style `for i := 0, i < n, i = i + 1 { ... }` loop
+  syntax, plus `arr: CArray[Int, 3] := {1, 2, 3}` literal syntax with count inference.
+- **`void-else` and `else` binding**: Two new ergonomic patterns for handling two-variant tagged unions
+  (e.g. Option, Result) without deep nesting — `void-else` for error propagation, named `else` binding for
+  extracting the unmatched variant.
+- **Major compiler performance fixes**: Exponential parser backtracking eliminated (O(3^N) → O(N)), arena
+  last-allocation cache adds 3.8x speedup, iterative let-in processing prevents stack exhaustion on large
+  programs.
+- **C interoperability expanded**: Capturing closures now work as C callbacks; `#link` directive lets Tess
+  files declare their own C library dependencies; six new worked examples.
+- **Discarded `Result`/`Option` values are now compile errors**: Silently dropping a tagged union return
+  value in statement position is rejected by the compiler.
+
+### Added
+
+- **Classic `for` loop** (`for i := 0, i < n, i = i + 1 { ... }`): C-style loop syntax desugared to a scoped
+  let-in wrapping a while loop.
+- **`CArray` literal syntax**: `arr: CArray[Int, 3] := {1, 2, 3}` with count inference — the size type
+  argument can be omitted when it can be inferred from the literal.
+- **Lambda return type annotations**: Lambdas now accept `-> Type` syntax, e.g. `(x: Int) -> Int { x + 1 }`.
+- **`else` binding for two-variant unions**: The unmatched variant in a let-else or if-variant-binding can
+  now be named and used: `ok: T := val else err { return err }`.
+- **`void-else` pattern**: `expr else binding { body }` — if the expression is the error/second variant,
+  binds it and executes the body; otherwise falls through. Idiomatic for early-return error handling.
+- **`#link` directive**: Tess source files can declare C library dependencies inline with `#link libname`
+  instead of relying on external `LDFLAGS`. `Thread.tl` now uses `#link pthread`.
+- **`or_else` builtin** for `Option` and `Result`: ergonomic unwrap-with-fallback.
+- **`HashMap` iterator interface**: Enables `for`-loop iteration over key-value pairs.
+- **`String.from_array` constructor**: Build a `String` from a generic array.
+- **Capturing closures as C callbacks**: Both stack-capturing and heap-allocated closures can now be passed
+  to C functions expecting callbacks; the transpiler selects the appropriate dispatch based on the declared
+  C parameter type.
+- **Budgeted allocator and `--memory-limit` option**: New compiler flag to cap memory consumption; all
+  compile arenas route through the budgeted allocator.
+- **`Allocator` receiver methods**: Ergonomic `alloc`, `clear`, `realloc`, `dealloc`, `aligned_alloc`, etc.
+  on `Ptr[Allocator]`, replacing the verbose `alloc->fn(alloc, ...)` pattern.
+- **C interoperability example suite**: Six new worked examples under `src/tl/examples/`: `c_export_basic`,
+  `c_export_package_basic`, `c_project_with_tess`, `c_import_basic`, `tess_project_with_c`,
+  `tess_project_with_c_link`, `callbacks`.
+- **Stress test tooling**: Generator tool (`tools/stress_gen.tl`) and harness (`tools/stress_test.sh`) for
+  measuring compiler scaling limits.
+- **`make format` target**: Convenience target for running `tess fmt` on the codebase.
+
+### Changed
+
+- **`HashMap.get` returns `Option`**: Breaking change — callers must handle the `Option` result rather than
+  checking a sentinel value.
+- **`String` type moved to `builtin.tl`**: String literals no longer require `#import <String.tl>` — the
+  type and `from_literal` are always available.
+- **`for`-loop iterator module inferred via UFCS**: Writing `for x in my_slice` now works without an
+  explicit module prefix; the loop infers the iterator module from the collection type.
+- **`Slice.get` now bounds-checks** accesses.
+- **`String` buffers always zero-terminated at construction**.
+- **`cstr()` return type changed to `Ptr[Const[CChar]]`**.
+- **Const propagated through if-expressions**: Result variables of if-expressions now carry const where
+  applicable.
+- **Generated library header placed alongside output**: Colocated with the `.a`/`.so` instead of a separate
+  location.
+- **Generated header filename strips `lib` prefix**: `libfoo.so` generates `foo.h` (not `libfoo.h`).
+- **`cbind` includes always use quotes**: `#include "header.h"` consistently instead of angle brackets.
+- **`--stats` output updated** for new allocator architecture; parser temp arenas now included in memory
+  reporting.
+- **Documentation**: `TYPE_SYSTEM.md` slimmed to conceptual content; float/int conversion moved to Language
+  Reference. `else` binding and `void-else` documented throughout language reference, model, and
+  conventions.
+
+### Removed
+
+- **Legacy `transient_*/managed_*` allocator wrappers** from `Alloc.tl`; replaced by receiver methods.
+- **Hardcoded `-lpthread`** in the compiler; `Thread.tl` now declares `#link pthread` directly.
+- **`array_move` function** from the MOS library.
+- **Test consolidation**: 454 integration test files consolidated to 188 (no coverage lost).
+
+### Fixed
+
+- **Parser exponential backtracking eliminated**: Speculative parses now use `a_peek()` for lookahead —
+  O(3^N) → O(N) complexity in nested structures; a 12-deep if/else was consuming 1.66 GB, now 125 KB.
+- **Arena last-allocation cache**: Eliminates O(n) `find_bucket` scans — 3.8x speedup on 300-struct stress
+  tests; type inference 5.2x faster.
+- **Speculative arena rollback in parser**: Failed speculative parses now correctly roll back arena
+  allocations.
+- **Iterative let-in chain processing**: Prevents stack exhaustion on programs with long let-in chains.
+- **Infer transient arena save/restore**: Prevents unbounded arena growth during type inference.
+- **Lambda annotation specialization**: Type variables properly connected; name-probing hack removed.
+- **Polymorphic multi-type closures**: Now generate correct closure bindings for closures specialized to
+  multiple types.
+- **Generic `Ptr[T]` cast to `Ptr[CChar]`**: Correctly constrained to `Ptr[any]`.
+- **Nested `CArray` indexing**: Emits `T*` decl+init instead of unassignable `T[N]`.
+- **`str_cstr` use-after-return**: Uses `str_cstr_copy` for escaping pointers.
+- **Null comparisons with non-pointer types rejected**: Prevents `struct == null` from silently compiling to
+  invalid C.
+- **`[[alloc]]` without `#import <Alloc.tl>`**: Now gives a clear diagnostic instead of a confusing type
+  mismatch error.
+- **Nonexistent file error**: Now emits a single clear message instead of three repeated messages.
+- **`aligned_alloc` on macOS**: Size is now rounded up to a multiple of alignment as required.
+- **Specialization cache lookup for explicit type args**: Fallback path now correctly finds cached
+  specializations.
+- **Off-by-one line numbers** in `field_not_found` errors.
+- **`'d'` format specifier** now accepted in format strings; error propagation fixed for invalid specs.
+- **`#link` directive**: Fields properly initialized, argument count validated.
+- **AST string generation**: Depth limit added to prevent stack overflow on deeply nested nodes.
+
 ## [v0.1.0] - 2026-03-30 to 2026-03-31 (eb8c9ec7..cc50f567)
 
 ### Highlights
