@@ -518,7 +518,8 @@ _realloc (a: Ptr[Allocator], p: Ptr[any], sz: CSize) -> Ptr[any] { c_realloc(p, 
 _free    (a: Ptr[Allocator], p: Ptr[any])            -> Void     { c_free(p)         }
 
 _aligned_alloc (a: Ptr[Allocator], sz: CSize, alignment: CSize) -> Ptr[any] {
-    c_aligned_alloc(alignment, sz)
+    // C11 requires size to be a multiple of alignment; round up to satisfy this.
+    c_aligned_alloc(alignment, align(sz, alignment))
 }
 
 _aligned_free (a: Ptr[Allocator], p: Ptr[any]) -> Void {
