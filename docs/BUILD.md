@@ -60,8 +60,15 @@ nix build .#asan         # ASAN build
 To install into your user profile:
 
 ```bash
-nix profile install .    # Install
+nix profile install .    # Install from local checkout
 nix profile upgrade tess # Upgrade after pulling new changes
+```
+
+To install directly from GitHub without a local checkout:
+
+```bash
+nix profile install github:mocompute/tess        # Latest commit on main
+nix profile install github:mocompute/tess/v0.1.1 # Specific tagged release
 ```
 
 To enter a development shell (includes Clang, CMake, LLDB, perf, Valgrind, and other tools):
