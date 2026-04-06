@@ -48,7 +48,7 @@
             description = "The Tess Language compiler";
             platforms = platforms.all;
             # TODO other meta fields
-            # license = licenses.mit
+            license = licenses.asl20;
           };
         };
     in
