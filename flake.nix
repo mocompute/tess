@@ -25,6 +25,7 @@
           pname = "tess";
           version = builtins.replaceStrings ["\n"] [""] (builtins.readFile ./VERSION);
           enableParallelBuilding = true;
+          enableParallelChecking = true;
 
           src = ./.;
           nativeBuildInputs = with pkgs; [ gnumake ];
