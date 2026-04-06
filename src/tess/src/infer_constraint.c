@@ -21,7 +21,8 @@ int                 constrain(tl_infer *self, tl_polytype *left, tl_polytype *ri
                               tl_unify_direction dir);
 static int          types_strip_const(tl_monotype *param, tl_monotype *arg);
 static tl_polytype *lookup_poly(tl_infer *self, str name);
-static tl_monotype *get_two_variant_union(tl_monotype *);
+static tl_monotype *maybe_union(tl_monotype *);
+static tl_monotype *maybe_two_variant_union(tl_monotype *);
 
 int env_insert_constrain(tl_infer *self, str name, tl_polytype *type, ast_node const *name_node) {
 
@@ -1328,14 +1329,14 @@ static int infer_void(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
     return 0;
 }
 
-// Returns 1 and records an error if node's type is a two-variant union (Option, Result, ...)
+// Returns 1 and records an error if node's type is a union (Option, Result, ...)
 // that would be silently discarded. Returns 0 if the type is safe or not yet resolved.
-static int check_discarded_two_variant_union(tl_infer *self, ast_node *node) {
+static int check_discarded_variant_union(tl_infer *self, ast_node *node) {
     if (!node->type || !node->type->type) return 0;
     tl_monotype *t = node->type->type;
     tl_monotype_substitute(self->arena, t, self->subs, null);
-    if (!get_two_variant_union(t)) return 0;
-    array_push(self->errors, ((tl_infer_error){.tag = tl_err_discarded_two_variant_union, .node = node}));
+    if (!maybe_union(t)) return 0;
+    array_push(self->errors, ((tl_infer_error){.tag = tl_err_discarded_variant_union, .node = node}));
     return 1;
 }
 
@@ -1347,7 +1348,7 @@ static int infer_body(tl_infer *self, ast_node *node) {
         // Statement-position expressions: values are discarded. Two-variant union
         // results (Result, Option, ...) must not be silently dropped.
         for (u32 i = 0; i < sz - 1; i++) {
-            if (check_discarded_two_variant_union(self, node->body.expressions.v[i])) return 1;
+            if (check_discarded_variant_union(self, node->body.expressions.v[i])) return 1;
         }
 
         ast_node *last = node->body.expressions.v[sz - 1];
@@ -1389,13 +1390,13 @@ static int infer_while(tl_infer *self, ast_node *node) {
 
     // The body's return value is always discarded — check for silently dropped
     // two-variant unions (Option, Result, ...) that infer_body skips as the last expression.
-    if (check_discarded_two_variant_union(self, node->while_.body)) return 1;
+    if (check_discarded_variant_union(self, node->while_.body)) return 1;
 
     tl_monotype *nil = tl_type_registry_nil(self->registry);
     return constrain_pm(self, node->type, nil, node, TL_UNIFY_SYMMETRIC);
 }
 
-static tl_monotype *get_two_variant_union(tl_monotype *operand_type) {
+static tl_monotype *maybe_union(tl_monotype *operand_type) {
     // Must be a type constructor instance (tagged union wrapper)
     if (!tl_monotype_is_inst(operand_type)) return null;
 
@@ -1404,8 +1405,14 @@ static tl_monotype *get_two_variant_union(tl_monotype *operand_type) {
     if (u_index < 0) return null;
 
     tl_monotype *union_type = operand_type->cons_inst->args.v[u_index];
-    if (tl_monotype_is_inst(union_type) && union_type->cons_inst->def->field_names.size == 2)
-        return union_type;
+    if (tl_monotype_is_inst(union_type)) return union_type;
+    return null;
+}
+
+static tl_monotype *maybe_two_variant_union(tl_monotype *operand_type) {
+
+    tl_monotype *union_type = maybe_union(operand_type);
+    if (union_type && union_type->cons_inst->def->field_names.size == 2) return union_type;
     return null;
 }
 
@@ -1415,7 +1422,7 @@ static int infer_void_else(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
     tl_monotype_substitute(self->arena, operand_type, self->subs, null);
 
     // Must be a union with exactly 2 variants
-    tl_monotype *union_type = get_two_variant_union(operand_type);
+    tl_monotype *union_type = maybe_two_variant_union(operand_type);
     if (!union_type) {
         array_push(self->errors,
                    ((tl_infer_error){.tag = tl_err_void_else_requires_two_variant_union, .node = node}));

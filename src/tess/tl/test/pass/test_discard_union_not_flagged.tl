@@ -17,12 +17,6 @@ make_option() -> Option[Int] {
     Some(1)
 }
 
-// Test 1: three-variant union in stmt position is fine
-test_three_variant() -> CInt {
-    make_shape()
-    0
-}
-
 // Test 2: Result consumed by void-else is fine (void_else type is Void)
 test_void_else() -> CInt {
     make_result() else err { return 1 }
@@ -80,7 +74,6 @@ test_generic_identity_bound() -> CInt {
 
 main() {
     error := 0
-    error += test_three_variant()
     error += test_void_else()
     error += test_when()
     r := test_return_value()
