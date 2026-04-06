@@ -54,6 +54,7 @@ do_count(content, path, track_unique, ignore_case) {
     word_start := 0
 
     word_map := HashMap.create[String, Int]()
+    defer word_map.destroy()
 
     record_word := (from, to) {
         words += 1
@@ -85,8 +86,6 @@ do_count(content, path, track_unique, ignore_case) {
     // Last word (content may not end with whitespace).
     if in_word { record_word(word_start, n) }
 
-    word_map.destroy()
-
     chars: Int := n
     Counts(path = path, lines = lines, words = words,
            chars = chars, unique_words = unique)
@@ -95,6 +94,7 @@ do_count(content, path, track_unique, ignore_case) {
 // Read all of stdin into a String.
 read_stdin() {
     buf := Array.empty[CChar]()
+    defer buf.free()
 
     while true {
         ch := c_fgetc(c_stdin)
@@ -103,13 +103,8 @@ read_stdin() {
         buf.push(c)
     }
 
-    if buf.size == 0 {
-        buf.free()
-        return String.empty()
-    }
-    result := String.from_bytes(buf.data, buf.size)
-    buf.free()
-    result
+    if buf.size == 0 { return String.empty() }
+    String.from_bytes(buf.data, buf.size)
 }
 
 // Print counts for one input.
@@ -133,6 +128,7 @@ report_error(path, error) {
 
 main(argc: CInt, argv: Ptr[CString]) {
     cl := CommandLine.create("wc", "Count lines, words, and characters in files")
+    defer cl.destroy()
     cl.flag("lines", 'l', "Show line count")
     cl.flag("words", 'w', "Show word count")
     cl.flag("chars", 'c', "Show character/byte count")
@@ -146,7 +142,6 @@ main(argc: CInt, argv: Ptr[CString]) {
 
     if args.get_flag("help") {
         cl.print_help()
-        cl.destroy()
         return 0
     }
 
@@ -213,6 +208,5 @@ main(argc: CInt, argv: Ptr[CString]) {
         print_line(total, show_lines, show_words, show_chars, show_unique)
     }
 
-    cl.destroy()
     0
 }
