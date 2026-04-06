@@ -109,8 +109,8 @@ from_array[T](alloc: Ptr[Allocator], arr: Ptr[Const[Array[T]]])       -> String
     split (delimiter: Ptr[Const[String]])                        -> Array[String]
     split (alloc: Ptr[Allocator], delimiter: Ptr[Const[String]]) -> Array[String]
 
-    // Return zero-terminated C string
-    cstr () -> CString
+    // Return zero-terminated C string (pointer into the string's internal buffer)
+    cstr () -> Ptr[Const[CChar]]
 
     // Explicit allocators
     cat         (alloc: Ptr[Allocator], other: Ptr[Const[String]])                              -> String
