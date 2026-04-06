@@ -160,7 +160,7 @@ join (alloc: Ptr[Allocator], sep: Ptr[Const[String]], arr: Array[String]) -> Str
 
 // -- Implementation --
 
-_cat_impl(alloc: Ptr[Allocator], bufs: Ptr[Ptr[CChar]], lens: Ptr[CSize], count: CSize) -> String
+_cat_impl(alloc: Ptr[Allocator], bufs: Ptr[Ptr[Const[CChar]]], lens: Ptr[CSize], count: CSize) -> String
 
 (s: Ptr[Const[String]]): {
     _is_small () { (s->ss.tag_len & _STR_SMALL_TAG) == _STR_SMALL_TAG }
@@ -348,7 +348,7 @@ from_array(arr) {
         xn := len(suffix)
         if xn > sn { return false }
         if xn == 0 { return true }
-        sp               := s._buf()
+        sp               := s._cbuf()
         tail: Ptr[CChar] := Unsafe.pointer_add(sp, sn - xn)
         xp               := suffix._cbuf()
         c_memcmp(tail, xp, xn) == 0
@@ -364,7 +364,7 @@ from_array(arr) {
     }
 
     hash() {
-        Hash.fnv1a(s._buf(), s.len())
+        Hash.fnv1a(s._cbuf(), s.len())
     }
 
     is_empty() {
@@ -390,7 +390,7 @@ from_array(arr) {
         nn := needle.len()
         if nn == 0 { _tl_fatal_(c"String.count: empty needle") }
         if nn > sn { return 0 }
-        sp       := s._buf()
+        sp       := s._cbuf()
         np       := needle._cbuf()
         c: CSize := 0
         i: CSize := 0
@@ -424,7 +424,7 @@ from_array(arr) {
         i: CSize := 0
         if nn == 0 { return Some(i) }
         if nn > sn { return None }
-        sp := _buf(s)
+        sp := _cbuf(s)
         np := _cbuf(needle)
         while i <= sn - nn, i += 1 {
             candidate: Ptr[CChar] := Unsafe.pointer_add(sp, i)
@@ -461,7 +461,7 @@ from_array(arr) {
         nn := needle.len()
         if nn == 0 { return Some(sn) }
         if nn > sn { return None }
-        sp       := s._buf()
+        sp       := s._cbuf()
         np       := needle._cbuf()
         i: CSize := sn - nn + 1
         while i > 0 {
@@ -542,36 +542,36 @@ from_array(arr) {
     // With allocators
 
     cat(alloc, b) {
-        bufs: CArray[Ptr[CChar], 2] := void
-        lens: CArray[CSize, 2]      := void
-        bufs.[0] = _buf(s), lens.[0] = len(s)
-        bufs.[1] = _buf(b), lens.[1] = len(b)
+        bufs: CArray[Ptr[Const[CChar]], 2] := void
+        lens: CArray[CSize, 2]             := void
+        bufs.[0] = _cbuf(s), lens.[0] = len(s)
+        bufs.[1] = _cbuf(b), lens.[1] = len(b)
 
         // no implicit pointer decomposition
-        bp: Ptr[Ptr[CChar]] := bufs
-        lp: Ptr[CSize]      := lens
+        bp: Ptr[Ptr[Const[CChar]]] := bufs
+        lp: Ptr[CSize]             := lens
 
         _cat_impl(alloc, bp, lp, 2)
 
     }
 
     cat_3(alloc, b, c) {
-        bufs: CArray[Ptr[CChar], 3] := void
-        lens: CArray[CSize, 3]      := void
-        bufs.[0] = _buf(s), lens.[0] = len(s)
-        bufs.[1] = _buf(b), lens.[1] = len(b)
-        bufs.[2] = _buf(c), lens.[2] = len(c)
+        bufs: CArray[Ptr[Const[CChar]], 3] := void
+        lens: CArray[CSize, 3]             := void
+        bufs.[0] = _cbuf(s), lens.[0] = len(s)
+        bufs.[1] = _cbuf(b), lens.[1] = len(b)
+        bufs.[2] = _cbuf(c), lens.[2] = len(c)
 
         // no implicit pointer decomposition
-        bp: Ptr[Ptr[CChar]] := bufs
-        lp: Ptr[CSize]      := lens
+        bp: Ptr[Ptr[Const[CChar]]] := bufs
+        lp: Ptr[CSize]             := lens
 
         _cat_impl(alloc, bp, lp, 3)
     }
 
     copy(alloc) {
         n := s.len()
-        p := s._buf()
+        p := s._cbuf()
         from_bytes(alloc, p, n)
     }
 
@@ -580,7 +580,7 @@ from_array(arr) {
         if start > end || end > n { _tl_fatal_(c"String.copy: index out of bounds") }
         slen := end - start
         if slen == 0 { return empty() }
-        sp              := _buf(s)
+        sp              := _cbuf(s)
         src: Ptr[CChar] := Unsafe.pointer_add(sp, start)
         from_bytes(alloc, src, slen)
     }
@@ -605,7 +605,7 @@ from_array(arr) {
 
     trim_left(alloc) {
         n        := s.len()
-        sp       := s._buf()
+        sp       := s._cbuf()
         i: CSize := 0
         while i < n {
             if !_is_whitespace(sp.[i]) { break }
@@ -619,7 +619,7 @@ from_array(arr) {
     trim_right(alloc) {
         n := s.len()
         if n == 0 { return empty() }
-        sp       := _buf(s)
+        sp       := _cbuf(s)
         i: CSize := n
         while i > 0 {
             if !_is_whitespace(sp.[i - 1]) { break }
@@ -632,7 +632,7 @@ from_array(arr) {
     trim(alloc) {
         n := s.len()
         if n == 0 { return empty() }
-        sp           := s._buf()
+        sp           := s._cbuf()
         start: CSize := 0
         while start < n {
             if !_is_whitespace(sp.[start]) { break }
@@ -653,7 +653,7 @@ from_array(arr) {
         sn := len(s)
         if sn == 0 { return empty() }
         total: CSize := sn * count
-        sp           := s._buf()
+        sp           := s._cbuf()
 
         if total <= _STR_MAX_SMALL {
             result          := String(ss = _Small(buf = void, tag_len = _make_tag_len(total)))
@@ -686,8 +686,8 @@ from_array(arr) {
         if on == 0 { _tl_fatal_(c"String.replace: empty search string") }
         if on > sn { return s.copy(alloc) }
         nn := len(new_s)
-        sp := _buf(s)
-        op := _buf(old)
+        sp := _cbuf(s)
+        op := _cbuf(old)
 
         occ := s.count(old)
 
@@ -704,7 +704,7 @@ from_array(arr) {
         j:   CSize := 0
         while j < sn {
             if j <= sn - on {
-                candidate: Ptr[CChar] := Unsafe.pointer_add(sp, j)
+                candidate: Ptr[Const[CChar]] := Unsafe.pointer_add(sp, j)
                 if c_memcmp(candidate, op, on) == 0 {
                     if nn > 0 {
                         d: Ptr[CChar] := Unsafe.pointer_add(buf, off)
@@ -738,8 +738,8 @@ from_array(arr) {
         sn        := len(s)
         remaining := sn - pn
         if remaining == 0 { return empty() }
-        sp              := _buf(s)
-        src: Ptr[CChar] := Unsafe.pointer_add(sp, pn)
+        sp                     := _cbuf(s)
+        src: Ptr[Const[CChar]] := Unsafe.pointer_add(sp, pn)
         from_bytes(alloc, src, remaining)
     }
 
@@ -749,7 +749,7 @@ from_array(arr) {
         sn        := len(s)
         remaining := sn - xn
         if remaining == 0 { return empty() }
-        sp := _buf(s)
+        sp := _cbuf(s)
         from_bytes(alloc, sp, remaining)
     }
 
@@ -771,15 +771,15 @@ from_array(arr) {
             return result
         }
 
-        sp           := _buf(s)
-        dp           := _buf(delimiter)
+        sp           := _cbuf(s)
+        dp           := _cbuf(delimiter)
         start: CSize := 0
         i:     CSize := 0
         while i <= sn - dn, i += 1 {
-            candidate: Ptr[CChar] := Unsafe.pointer_add(sp, i)
+            candidate: Ptr[Const[CChar]] := Unsafe.pointer_add(sp, i)
             if c_memcmp(candidate, dp, dn) == 0 {
-                src: Ptr[CChar] := Unsafe.pointer_add(sp, start)
-                part            := from_bytes(alloc, src, i - start)
+                src: Ptr[Const[CChar]] := Unsafe.pointer_add(sp, start)
+                part                   := from_bytes(alloc, src, i - start)
                 result.push(alloc, part)
                 start = i + dn
                 i += dn - 1
@@ -787,8 +787,8 @@ from_array(arr) {
         }
 
         // Push remaining segment
-        src: Ptr[CChar] := Unsafe.pointer_add(sp, start)
-        part            := from_bytes (alloc, src, sn - start)
+        src: Ptr[Const[CChar]] := Unsafe.pointer_add(sp, start)
+        part                   := from_bytes (alloc, src, sn - start)
 
         result.push(alloc, part)
         result
@@ -884,7 +884,7 @@ from_array(arr) {
 }
 
 
-_cat_impl(alloc, bufs: Ptr[Ptr[CChar]], lens: Ptr[CSize], count: CSize) {
+_cat_impl(alloc, bufs: Ptr[Ptr[Const[CChar]]], lens: Ptr[CSize], count: CSize) {
     total: CSize := 0
     i:     CSize := 0
     while i < count, i += 1 { total += lens.[i] }
