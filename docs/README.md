@@ -20,6 +20,8 @@ This directory contains technical documentation for the Tess programming languag
 
 ## Tutorials
 
+See [tutorials/README.md](tutorials/README.md) for the full list.
+
 | Tutorial | Description |
 |----------|-------------|
 | [Operator Overloading](tutorials/OPERATOR_OVERLOADING.md) | Defining custom operators, comparison, compound assignment, pointer parameters, traits, and conditional conformance |
