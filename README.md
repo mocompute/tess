@@ -187,6 +187,7 @@ tess exe -o myapp    # standalone binary
 - [Building](docs/BUILD.md): build configurations, installation, and standalone binary
 - [Glossary](docs/GLOSSARY.md): definitions of Tess-specific terms
 - [Tutorials](docs/tutorials/README.md): step-by-step guides for language features
+- [Changelog](NEWS.md): release notes and version history
 
 ## Examples
 
