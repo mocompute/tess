@@ -2733,22 +2733,6 @@ static str generate_short_circuit_op(transpile *self, tl_monotype *type, ast_nod
     return res;
 }
 
-// Returns 1 if the field access node is reached via a const-qualified path:
-// s->field where s: Ptr[Const[T]], or s.field where s: Const[T], or recursively.
-static int expr_is_through_const_ptr(ast_node const *node) {
-    if (!node || ast_binary_op != node->tag) return 0;
-    str             op        = ast_node_str(node->binary_op.op);
-    char const     *op_s      = str_cstr(&op);
-    ast_node const *left      = node->binary_op.left;
-    tl_monotype    *left_type = (left && left->type) ? left->type->type : null;
-    if (0 == strcmp(op_s, "->") && left_type && tl_monotype_is_ptr_to_const(left_type)) return 1;
-    if (is_dot_operator(op_s)) {
-        if (left_type && tl_monotype_is_const(left_type)) return 1;
-        return expr_is_through_const_ptr(left);
-    }
-    return 0;
-}
-
 static str generate_binary_op(transpile *self, tl_monotype *type, ast_node const *node, eval_ctx *ctx) {
     assert(ast_binary_op == node->tag);
     str op = ast_node_str(node->binary_op.op);
@@ -2856,21 +2840,6 @@ static str generate_binary_op(transpile *self, tl_monotype *type, ast_node const
         // types with =. Use a combined decl+init so the type decays to T*.
         if (is_index && !is_nil_result(type) && tl_monotype_is_carray(type)) {
             generate_decl_init(self, res, type, str_cat_4(self->transient, left, S("["), right, S("]")));
-            return res;
-        }
-
-        // A CArray field accessed through a const-qualified struct pointer yields
-        // const T* (C propagates const from the containing struct to array fields).
-        // Emit "const T* res = left op right;" to preserve the const qualifier.
-        // Note: by this point `type` is already the decayed Ptr type (not CArray itself),
-        // so we check `carray_field` (based on right node's type) rather than type.
-        if (carray_field && !is_nil_result(type) && tl_monotype_is_ptr(type) &&
-            expr_is_through_const_ptr(node)) {
-            tl_monotype *elem   = tl_monotype_ptr_target(type);
-            str          elem_c = type_to_c_mono(self, elem);
-            str          type_c = str_cat_3(self->transient, S("const "), elem_c, S("*"));
-            cat(self, type_c); cat_sp(self); cat(self, res);
-            cat_assign(self); cat(self, left); cat_op(self, op); cat(self, right); cat_semicolonln(self);
             return res;
         }
 
