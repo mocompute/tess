@@ -440,6 +440,9 @@ TL_FAIL_RUNTIME_TESTS = $(patsubst $(TL_DIR_FAIL_RT)/test_%.tl,%,$(wildcard $(TL
 TL_KNOWN_FAILURES     = $(patsubst $(TL_DIR_KNOWN)/test_%.tl,%,$(wildcard $(TL_DIR_KNOWN)/test_*.tl))
 TL_KNOWN_FAIL_FAILURES = $(patsubst $(TL_DIR_KNOWN_FF)/test_%.tl,%,$(wildcard $(TL_DIR_KNOWN_FF)/test_*.tl))
 
+# Use TMPDIR if set (nix sandbox and many unix conventions); fall back to /tmp.
+TL_TMPDIR = $(if $(TMPDIR),$(TMPDIR),/tmp)
+
 # Total test count across all suites
 TOTAL_TESTS = $(words $(MOS_TESTS) $(TESS_TESTS) $(VENDOR_TESTS) \
 	$(TL_TESTS) $(TL_TESTS_OPTIMIZED) $(TL_FAIL_TESTS) $(TL_FAIL_RUNTIME_TESTS) \
@@ -519,8 +522,8 @@ test-tl: build-tl-tests
 	count_fail_rt=0; \
 	for name in $(TL_FAIL_RUNTIME_TESTS); do \
 		$(MSG_TEST) $$name; \
-		if ./$(TESS_EXE) exe --bounds-check -o /tmp/tl_test_$$name $(TL_DIR_FAIL_RT)/test_$$name.tl 2>/dev/null; then \
-			if /tmp/tl_test_$$name 2>/dev/null; then \
+		if ./$(TESS_EXE) exe --bounds-check -o $(TL_TMPDIR)/tl_test_$$name $(TL_DIR_FAIL_RT)/test_$$name.tl 2>/dev/null; then \
+			if $(TL_TMPDIR)/tl_test_$$name 2>/dev/null; then \
 				$(MSG_FAIL2) $$name; \
 				failed=$$((failed + 1)); \
 			fi; \
@@ -545,7 +548,7 @@ test-tl: build-tl-tests
 	printf "  \033[1;36m[COUNT]\033[0m $$count_known_fail known fail-failure tests\n\n"; \
 	known=0; \
 	for name in $(TL_KNOWN_FAILURES); do \
-		if ./$(TESS_EXE) exe -o /tmp/tl_test_$$name $(TL_DIR_KNOWN)/test_$$name.tl 2>/dev/null && /tmp/tl_test_$$name 2>/dev/null; then \
+		if ./$(TESS_EXE) exe -o $(TL_TMPDIR)/tl_test_$$name $(TL_DIR_KNOWN)/test_$$name.tl 2>/dev/null && $(TL_TMPDIR)/tl_test_$$name 2>/dev/null; then \
 			printf "  \033[1;32m[FIXED]\033[0m  test_$$name (remove from TL_KNOWN_FAILURES)\n"; \
 		else \
 			printf "  \033[1;33m[KNOWN]\033[0m  test_$$name\n"; \
