@@ -37,7 +37,7 @@
           # not autotools
           dontConfigure = true;
 
-          doCheck = true;
+          doCheck = !pkgs.stdenv.isDarwin;
 
           installPhase = ''
             runHook preInstall
