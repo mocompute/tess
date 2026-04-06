@@ -37,7 +37,7 @@ main() {
 
 ## Features
 
-**Type inference.** Write the function, the compiler determines the types. No forward declarations, no header files.
+**Type inference.** Write the function, the compiler determines the types.
 
 ```tl
 factorial(n) {
@@ -47,7 +47,7 @@ factorial(n) {
 ```
 
 **Tagged unions.** Define variants with associated data. Match exhaustively, bind a single variant, or
-propagate errors: the compiler won't let anything slip.
+propagate errors: the compiler catches unhandled results.
 
 ```tl
 Shape: | Circle { radius: Float }
@@ -151,9 +151,12 @@ conditional compilation, and a package manager.
 
 ```bash
 make -j              # Build the compiler (~5 seconds)
-make -j test         # Run tests (~40 seconds)
+make -j test         # Run tests (~30 seconds)
 make install         # Install to /usr/local (see docs/BUILD.md)
 ```
+
+The `tess` executable can be run from anywhere. It bundles its standard library, so it doesn't need a
+system-wide installation.
 
 ## Quick Start
 
