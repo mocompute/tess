@@ -169,6 +169,10 @@ _cat_impl(alloc: Ptr[Allocator], bufs: Ptr[Ptr[CChar]], lens: Ptr[CSize], count:
     _buf () -> Ptr[CChar] {             // Note: casts away const
         return if _is_small(s) { s->ss.buf } else { s->big.buf }
     }
+
+    _cbuf () -> Ptr[Const[CChar]] {
+        return if _is_small(s) { s->ss.buf } else { s->big.buf }
+    }
 }
 
 
@@ -302,7 +306,7 @@ from_array(arr) {
         if start > end || end > n { _tl_fatal_(c"String.slice: index out of bounds") }
         slen := end - start
         if slen == 0 { return Slice[CChar](data: Ptr[CChar] = null, size = 0) }
-        p               := _buf(s)
+        p               := s._buf()
         src: Ptr[CChar] := Unsafe.pointer_add(p, start)
         Slice(data = src, size = slen)
     }
@@ -311,7 +315,7 @@ from_array(arr) {
     byte_at(index) {
         n := len(s)
         if index >= n { return None }
-        p       := _buf(s)
+        p       := s._cbuf()
         b: Byte := p.[index]            // cast CChar -> Byte
         Some(b)
     }
@@ -319,7 +323,7 @@ from_array(arr) {
     char_at(index) {
         n := len(s)
         if index >= n { return None }
-        p := _buf(s)
+        p := s._cbuf()
         Some(p.[index])
     }
 
@@ -330,7 +334,7 @@ from_array(arr) {
 
     contains_char(b: CChar) {
         n        := len(s)
-        sp       := _buf(s)
+        sp       := s._cbuf()
         i: CSize := 0
         while i < n, i += 1 {
             ch: CChar := sp.[i]
@@ -344,9 +348,9 @@ from_array(arr) {
         xn := len(suffix)
         if xn > sn { return false }
         if xn == 0 { return true }
-        sp               := _buf(s)
+        sp               := s._buf()
         tail: Ptr[CChar] := Unsafe.pointer_add(sp, sn - xn)
-        xp               := _buf(suffix)
+        xp               := suffix._cbuf()
         c_memcmp(tail, xp, xn) == 0
     }
 
@@ -355,7 +359,7 @@ from_array(arr) {
         cn := c_strlen(cs)
         if sn != cn { return false }
         if sn == 0 { return true }
-        sp := _buf(s)
+        sp := s._cbuf()
         c_memcmp(sp, cs, sn) == 0
     }
 
@@ -372,22 +376,22 @@ from_array(arr) {
     }
 
     starts_with(prefix) {
-        sn := len(s)
-        pn := len(prefix)
+        sn := s.len()
+        pn := prefix.len()
         if pn > sn { return false }
         if pn == 0 { return true }
-        sp := _buf(s)
-        pp := _buf(prefix)
+        sp := s._cbuf()
+        pp := prefix._cbuf()
         c_memcmp(sp, pp, pn) == 0
     }
 
     count(needle) {
-        sn := len(s)
-        nn := len(needle)
+        sn := s.len()
+        nn := needle.len()
         if nn == 0 { _tl_fatal_(c"String.count: empty needle") }
         if nn > sn { return 0 }
-        sp       := _buf(s)
-        np       := _buf(needle)
+        sp       := s._buf()
+        np       := needle._cbuf()
         c: CSize := 0
         i: CSize := 0
         while i <= sn - nn {
@@ -403,8 +407,8 @@ from_array(arr) {
     }
 
     count_byte(b) {
-        n        := len(s)
-        sp       := _buf(s)
+        n        := s.len()
+        sp       := s._cbuf()
         c: CSize := 0
         i: CSize := 0
         while i < n, i += 1 {
@@ -415,13 +419,13 @@ from_array(arr) {
     }
 
     index_of(needle) {
-        sn       := len(s)
-        nn       := len(needle)
+        sn       := s.len()
+        nn       := needle.len()
         i: CSize := 0
         if nn == 0 { return Some(i) }
         if nn > sn { return None }
         sp := _buf(s)
-        np := _buf(needle)
+        np := _cbuf(needle)
         while i <= sn - nn, i += 1 {
             candidate: Ptr[CChar] := Unsafe.pointer_add(sp, i)
             if c_memcmp(candidate, np, nn) == 0 { return Some(i) }
@@ -430,8 +434,8 @@ from_array(arr) {
     }
 
     index_of_char(b) {
-        n        := len(s)
-        sp       := _buf(s)
+        n        := s.len()
+        sp       := s._cbuf()
         i: CSize := 0
         while i < n, i += 1 {
             ch: CChar := sp.[i]
@@ -441,9 +445,9 @@ from_array(arr) {
     }
 
     index_of_char_from(b, start) {
-        n := len(s)
+        n := s.len()
         if start >= n { return None }
-        sp       := _buf(s)
+        sp       := s._cbuf()
         i: CSize := start
         while i < n, i += 1 {
             ch: CChar := sp.[i]
@@ -453,12 +457,12 @@ from_array(arr) {
     }
 
     last_index_of(needle) {
-        sn := len(s)
-        nn := len(needle)
+        sn := s.len()
+        nn := needle.len()
         if nn == 0 { return Some(sn) }
         if nn > sn { return None }
-        sp       := _buf(s)
-        np       := _buf(needle)
+        sp       := s._buf()
+        np       := needle._cbuf()
         i: CSize := sn - nn + 1
         while i > 0 {
             i -= 1
@@ -469,9 +473,9 @@ from_array(arr) {
     }
 
     last_index_of_char(b) {
-        n := len(s)
+        n := s.len()
         if n == 0 { return None }
-        sp       := _buf(s)
+        sp       := s._cbuf()
         i: CSize := n
         while i > 0 {
             i -= 1
@@ -566,8 +570,8 @@ from_array(arr) {
     }
 
     copy(alloc) {
-        n := len (s)
-        p := _buf (s)
+        n := s.len()
+        p := s._buf()
         from_bytes(alloc, p, n)
     }
 
@@ -600,8 +604,8 @@ from_array(arr) {
     }
 
     trim_left(alloc) {
-        n        := len(s)
-        sp       := _buf(s)
+        n        := s.len()
+        sp       := s._buf()
         i: CSize := 0
         while i < n {
             if !_is_whitespace(sp.[i]) { break }
@@ -613,7 +617,7 @@ from_array(arr) {
     }
 
     trim_right(alloc) {
-        n := len(s)
+        n := s.len()
         if n == 0 { return empty() }
         sp       := _buf(s)
         i: CSize := n
@@ -626,9 +630,9 @@ from_array(arr) {
     }
 
     trim(alloc) {
-        n := len(s)
+        n := s.len()
         if n == 0 { return empty() }
-        sp           := _buf(s)
+        sp           := s._buf()
         start: CSize := 0
         while start < n {
             if !_is_whitespace(sp.[start]) { break }
@@ -649,7 +653,7 @@ from_array(arr) {
         sn := len(s)
         if sn == 0 { return empty() }
         total: CSize := sn * count
-        sp           := _buf(s)
+        sp           := s._buf()
 
         if total <= _STR_MAX_SMALL {
             result          := String(ss = _Small(buf = void, tag_len = _make_tag_len(total)))
