@@ -443,6 +443,11 @@ TL_KNOWN_FAIL_FAILURES = $(patsubst $(TL_DIR_KNOWN_FF)/test_%.tl,%,$(wildcard $(
 # Use TMPDIR if set (nix sandbox and many unix conventions); fall back to /tmp.
 TL_TMPDIR = $(if $(TMPDIR),$(TMPDIR),/tmp)
 
+# Run a command in a subshell so that shells like dash don't re-raise fatal
+# signals (SIGABRT, SIGTRAP) and kill the recipe shell.  The explicit "exit $?"
+# forces a normal exit, breaking the signal propagation chain.
+TL_RUN = ($(1); exit $$?) 2>/dev/null
+
 # Total test count across all suites
 TOTAL_TESTS = $(words $(MOS_TESTS) $(TESS_TESTS) $(VENDOR_TESTS) \
 	$(TL_TESTS) $(TL_TESTS_OPTIMIZED) $(TL_FAIL_TESTS) $(TL_FAIL_RUNTIME_TESTS) \
@@ -512,7 +517,8 @@ test-tl: build-tl-tests
 	printf "  \033[1;36m[COUNT]\033[0m $$count_pass expected passing tests\n\n"; \
 	for name in $(TL_FAIL_TESTS); do \
 		$(MSG_TEST) $$name; \
-		if ./$(TESS_EXE) exe -o /dev/null $(TL_DIR_FAIL)/test_$$name.tl 2>/dev/null; then \
+		$(call TL_RUN,./$(TESS_EXE) exe -o /dev/null $(TL_DIR_FAIL)/test_$$name.tl); \
+		if [ $$? -eq 0 ]; then \
 			$(MSG_FAIL2) $$name; \
 			failed=$$((failed + 1)); \
 		fi; \
@@ -522,8 +528,10 @@ test-tl: build-tl-tests
 	count_fail_rt=0; \
 	for name in $(TL_FAIL_RUNTIME_TESTS); do \
 		$(MSG_TEST) $$name; \
-		if ./$(TESS_EXE) exe --bounds-check -o $(TL_TMPDIR)/tl_test_$$name $(TL_DIR_FAIL_RT)/test_$$name.tl 2>/dev/null; then \
-			if $(TL_TMPDIR)/tl_test_$$name 2>/dev/null; then \
+		$(call TL_RUN,./$(TESS_EXE) exe --bounds-check -o $(TL_TMPDIR)/tl_test_$$name $(TL_DIR_FAIL_RT)/test_$$name.tl); \
+		if [ $$? -eq 0 ]; then \
+			$(call TL_RUN,$(TL_TMPDIR)/tl_test_$$name); \
+			if [ $$? -eq 0 ]; then \
 				$(MSG_FAIL2) $$name; \
 				failed=$$((failed + 1)); \
 			fi; \
@@ -537,7 +545,8 @@ test-tl: build-tl-tests
 	count_known_fail=0; \
 	known_fail=0; \
 	for name in $(TL_KNOWN_FAIL_FAILURES); do \
-		if ! ./$(TESS_EXE) exe -o /dev/null $(TL_DIR_KNOWN_FF)/test_$$name.tl 2>/dev/null; then \
+		$(call TL_RUN,./$(TESS_EXE) exe -o /dev/null $(TL_DIR_KNOWN_FF)/test_$$name.tl); \
+		if [ $$? -ne 0 ]; then \
 			printf "  \033[1;32m[FIXED]\033[0m  test_$$name (remove from TL_KNOWN_FAIL_FAILURES)\n"; \
 		else \
 			printf "  \033[1;33m[KNOWN]\033[0m  test_$$name\n"; \
@@ -548,7 +557,8 @@ test-tl: build-tl-tests
 	printf "  \033[1;36m[COUNT]\033[0m $$count_known_fail known fail-failure tests\n\n"; \
 	known=0; \
 	for name in $(TL_KNOWN_FAILURES); do \
-		if ./$(TESS_EXE) exe -o $(TL_TMPDIR)/tl_test_$$name $(TL_DIR_KNOWN)/test_$$name.tl 2>/dev/null && $(TL_TMPDIR)/tl_test_$$name 2>/dev/null; then \
+		$(call TL_RUN,./$(TESS_EXE) exe -o $(TL_TMPDIR)/tl_test_$$name $(TL_DIR_KNOWN)/test_$$name.tl) && $(call TL_RUN,$(TL_TMPDIR)/tl_test_$$name); \
+		if [ $$? -eq 0 ]; then \
 			printf "  \033[1;32m[FIXED]\033[0m  test_$$name (remove from TL_KNOWN_FAILURES)\n"; \
 		else \
 			printf "  \033[1;33m[KNOWN]\033[0m  test_$$name\n"; \
