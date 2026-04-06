@@ -5,6 +5,31 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [v0.1.2] - 2026-04-06 (6be7528f..0e1a65d6)
+
+### Highlights
+
+- **Nix packaging fully working**: The Nix flake build now correctly runs all tests — including `fail_runtime` tests — inside the Nix sandbox, with parallel checking enabled.
+- **Build reliability on POSIX-minimal shells**: Fixed a class of test runner failures caused by signal propagation in dash (the shell used by Nix), making `make test` reliable across all POSIX shells.
+
+### Added
+
+- Nix flake now enables `enableParallelChecking`, so the check phase runs tests in parallel alongside the build.
+- `TL_TMPDIR` Makefile variable resolves to `$TMPDIR` when set (Nix sandbox) and falls back to `/tmp`, so test binaries are always written to an accessible location.
+- README now links to the changelog (`NEWS.md`).
+- Updated Nix installation instructions in `docs/BUILD.md`.
+
+### Fixed
+
+- **`fail_runtime` tests broken under Nix/dash**: Makefile used `if ./tess exe ...` which caused dash to re-raise fatal signals (SIGABRT, SIGTRAP) and kill the recipe shell. Now wrapped in a subshell with `exit $?` to break the signal propagation chain.
+- **`fail_runtime` tests writing to hardcoded `/tmp`**: Test binaries now use `$(TL_TMPDIR)`, which works correctly inside the Nix sandbox.
+- Nix flake license field correctly set to Apache 2.0 (was previously commented out).
+
+### Changed
+
+- Version bumped to 0.1.2.
+- Makefile test runner loops (`fail`, `fail_runtime`, `known_failures`, `known_fail_failures`) refactored to use consistent signal-safe invocation.
+
 ## [v0.1.1] - 2026-03-31 to 2026-04-06 (cc50f567..6be7528f)
 
 ### Highlights
