@@ -186,7 +186,22 @@ tess exe -o myapp    # standalone binary
 
 ## Examples
 
-The [examples directory](src/tl/examples/) contains complete projects demonstrating C interop, command-line handling, and shared/static libraries.
+The [examples directory](src/tl/examples/) contains complete projects
+demonstrating C interop, command-line handling, and shared/static
+libraries.
+
+## Status
+
+Currently at version 0.1.0, there are several known limitations:
+
+- The standard library is bare and its API is subject to breaking change.
+- The compiler operates as a whole-program compiler. Stress tests indicate that peak memory usage increases
+  substantially with large numbers of specialized functions. For example, specializing a generic function to
+  8,000 unique parameter types requires more than 4GB of memory to compile. Other than stress tests, the
+  compiler has not been tested on large scale programs.
+- The compiler is single-threaded. Compiling a program with 10,000 functions takes about five seconds, and
+  compilation of larger stress tests grows super-linearly. For comparison, the Tess compiler itself is less
+  than 1,500 functions of plain C.
 
 ## License
 
