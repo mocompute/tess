@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [v0.1.3] - 2026-04-06 to 2026-04-07 (e23c4399..95fb185f)
+
+### Highlights
+
+- **Fixed `#link` directive silently corrupting the compiler argv**: Dangling pointers from small-string-optimized `str_cat` results caused `#link pthread` (and similar) to pass garbage to the C compiler, breaking threaded programs.
+- **Fixed stdin (`-`) input broken by file-existence check**: Compiling from stdin was rejected by a file-existence guard that should not have run when content was already read.
+
+### Fixed
+
+- **`#link` directive corrupted C compiler argv**: `str_cat` returns small strings stored inline in the `str` struct. Calling `str_cstr` on a local `str` and storing the pointer in the argv array produced a dangling pointer after the local went out of scope. Fixed by using `str_cstr_copy` (arena-allocated copy) in `build_gcc_argv` and `build_msvc_argv`. This silently broke `test_thread.tl` and any program using `#link`.
+- **Stdin (`-`) compilation rejected by file-existence check**: The file-existence validation in `compile()` ran even when content had already been read from stdin, causing the `<stdin>` pseudo-path to fail the check. Validation is now skipped when stdin content is already present.
+- **`sprintf` replaced with `snprintf`** in `test_sha256.c` and `token.c` for bounds safety.
+
+### Changed
+
+- **Nix flake `checkPhase` disabled on Darwin**: macOS Nix builds skip the check phase to avoid sandbox incompatibilities.
+- **Wordcount example updated** to use `defer` for resource cleanup, replacing manual multi-path `destroy()` calls with a single `defer` at the allocation site.
+
 ## [v0.1.2] - 2026-04-06 (6be7528f..0e1a65d6)
 
 ### Highlights
