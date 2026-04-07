@@ -2,6 +2,8 @@
 #import <Alloc.tl>
 #import <Unsafe.tl>
 
+Allocator = Alloc.Allocator
+
 // ============================================================
 // From test_alloc_align.tl
 // ============================================================
@@ -585,7 +587,7 @@ _closure_test_capture_fn_call() {
 
 // --- explicit_allocator: [[alloc(expr)]] with explicit Ptr[Allocator] ---
 
-_ea_make_adder(n: Int, a: Ptr[Alloc.Allocator]) -> (Int) -> Int {
+_ea_make_adder(n: Int, a: Ptr[Allocator]) -> (Int) -> Int {
     f := [[alloc(a), capture(n)]] (x) { x + n }
     f
 }
@@ -740,7 +742,7 @@ _closure_test_nested_alloc_expr() {
 
 // --- no_leak: verify closure calls don't allocate ---
 
-_nl_make_adder(n: Int, a: Ptr[Alloc.Allocator]) -> (Int) -> Int {
+_nl_make_adder(n: Int, a: Ptr[Allocator]) -> (Int) -> Int {
     f := [[alloc(a), capture(n)]] (x) { x + n }
     f
 }

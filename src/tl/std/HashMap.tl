@@ -29,7 +29,7 @@ HashMap[K, V]: {
     _entries:  Ptr[_Entry[K, V]],
     _capacity: CSize,
     _size:     CSize,
-    _alloc:    Ptr[Alloc.Allocator],
+    _alloc:    Ptr[Allocator],
 }
 
 HashMapOpts: {

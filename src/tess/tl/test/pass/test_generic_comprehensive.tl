@@ -1,6 +1,6 @@
 #module Lookup
-
 #import <HashMap.tl>
+
 
 Lookup[K, V]: { map: Ptr[HashMap[K, V]] }
 
@@ -20,6 +20,8 @@ destroy[K, V](self: Ptr[Lookup[K, V]]) -> Void {
 
 #import <Alloc.tl>
 #import <String.tl>
+
+Allocator = Alloc.Allocator
 
 // test_generic_apply
 id   (x)    { x    }
@@ -87,7 +89,7 @@ Outer[K, V]: {
     size:  CSize,
 }
 
-_alloc_inner[K, V](alloc: Ptr[Alloc.Allocator], n: CSize) -> Ptr[Inner[K, V]] {
+_alloc_inner[K, V](alloc: Ptr[Allocator], n: CSize) -> Ptr[Inner[K, V]] {
     p: Ptr[Inner[K, V]] := alloc->calloc(alloc, n, sizeof[Inner[K, V]]())
     p
 }
