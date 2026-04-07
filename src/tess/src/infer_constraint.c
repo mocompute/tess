@@ -1230,6 +1230,17 @@ static int is_std_function(ast_node *node) {
 // prevent narrow-type back-propagation; pointer casts constrain with error
 // suppression for generic resolution.
 
+static int push_conflicting_types_error(tl_infer *self, tl_polytype *left, tl_polytype *right,
+                                        ast_node const *node, int saved) {
+    str left_str  = tl_polytype_to_user_string(self->transient, left);
+    str right_str = tl_polytype_to_user_string(self->transient, right);
+    str msg       = str_fmt(self->arena, "conflicting types: %s versus %s", str_cstr(&left_str),
+                            str_cstr(&right_str));
+    array_push(self->errors, ((tl_infer_error){.tag = tl_err_type_error, .node = node, .message = msg}));
+    self->is_constrain_ignore_error = saved;
+    return 1;
+}
+
 int is_cast_annotation(ast_node *node) {
     if (!ast_node_is_symbol(node) || !node->symbol.annotation_type) return 0;
     tl_monotype *type = node->symbol.annotation_type->type;
@@ -1260,14 +1271,7 @@ static int cast_constrain_let_in(tl_infer *self, ast_node *node) {
             i64 lit = (val->tag == ast_i64) ? ast_node_i64(val)->val : (i64)ast_node_u64(val)->val;
             if (negate) lit = -lit;
             if (!tl_monotype_integer_value_fits(annotation_type->type, lit)) {
-                str left_str  = tl_polytype_to_user_string(self->transient, annotation_type);
-                str right_str = tl_polytype_to_user_string(self->transient, value_type);
-                str msg       = str_fmt(self->arena, "conflicting types: %s versus %s", str_cstr(&left_str),
-                                        str_cstr(&right_str));
-                array_push(self->errors,
-                           ((tl_infer_error){.tag = tl_err_type_error, .node = node, .message = msg}));
-                self->is_constrain_ignore_error = saved;
-                return 1;
+                return push_conflicting_types_error(self, annotation_type, value_type, node, saved);
             }
         }
         // Weak integer literals resolve to the annotation type rather than
@@ -1289,7 +1293,15 @@ static int cast_constrain_let_in(tl_infer *self, ast_node *node) {
         // Skip CArray values — they decay to pointers without constraint.
         if (value_type) {
             tl_polytype_substitute(self->arena, value_type, self->subs);
-            if (!tl_monotype_is_carray(value_type->type)) {
+            tl_monotype *vt = value_type->type;
+            if (!tl_monotype_is_carray(vt)) {
+                // Reject known concrete non-pointer types (integers, floats, structs, etc.).
+                // Allow type variables, `any`, and unresolved weak literals — those may still
+                // resolve to pointers during defaulting.
+                if (!tl_monotype_is_ptr(vt) && !tl_monotype_is_any(vt) && !tl_monotype_is_tv(vt) &&
+                    !tl_monotype_is_weak(vt)) {
+                    return push_conflicting_types_error(self, annotation_type, value_type, node, saved);
+                }
                 tl_monotype *ptr_any      = tl_type_registry_ptr_any(self->registry);
                 tl_polytype  ptr_any_poly = tl_polytype_wrap(ptr_any);
                 constrain(self, &ptr_any_poly, value_type, node, TL_UNIFY_DIRECTED);
