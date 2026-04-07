@@ -1675,8 +1675,8 @@ static c_string_array build_gcc_argv(state *self, char const **extra_flags, int 
 
     // Append #link libraries (must come after source/object files for the linker)
     forall(i, self->link_libs) {
-        str         flag = str_cat(self->arena, S("-l"), self->link_libs.v[i]);
-        char const *cstr = str_cstr(&flag);
+        str   flag = str_cat(self->arena, S("-l"), self->link_libs.v[i]);
+        char *cstr = str_cstr_copy(self->arena, flag);
         array_push(argv, cstr);
     }
 
@@ -1727,8 +1727,8 @@ static c_string_array build_msvc_argv(state *self, char const **msvc_extra_flags
     str fe = str_cat(self->arena, S("/Fe"), str_init_static(self->out_path));
 
     // clang-format off
-    { char const *_t = str_cstr(&fo); array_push(argv, _t); }
-    { char const *_t = str_cstr(&fe); array_push(argv, _t); }
+    { char *_t = str_cstr_copy(self->arena, fo); array_push(argv, _t); }
+    { char *_t = str_cstr_copy(self->arena, fe); array_push(argv, _t); }
 
     { char const *_t = "/TC"; array_push(argv, _t); }
     array_push(argv, c_file);
@@ -1736,8 +1736,8 @@ static c_string_array build_msvc_argv(state *self, char const **msvc_extra_flags
 
     // Append #link libraries (MSVC uses foo.lib syntax)
     forall(i, self->link_libs) {
-        str         lib  = str_cat(self->arena, self->link_libs.v[i], S(".lib"));
-        char const *cstr = str_cstr(&lib);
+        str   lib  = str_cat(self->arena, self->link_libs.v[i], S(".lib"));
+        char *cstr = str_cstr_copy(self->arena, lib);
         array_push(argv, cstr);
     }
 
