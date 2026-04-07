@@ -136,7 +136,7 @@ char *token_to_string(allocator *alloc, token const *tok) {
     case tok_double_close_square:
     case tok_equal_sign:
     case tok_equal_equal:
-    case tok_invalid:              sprintf(buf, "(%s)", token_tag_to_string(tok->tag)); break;
+    case tok_invalid:              snprintf(buf, sizeof(buf), "(%s)", token_tag_to_string(tok->tag)); break;
 
     case tok_number:
     case tok_symbol:
@@ -151,9 +151,10 @@ char *token_to_string(allocator *alloc, token const *tok) {
     case tok_comment:
     case tok_c_block:
     case tok_hash_command:         {
-        char *big = alloc_malloc(alloc, strlen(tok->s) + 64);
+        size_t len = strlen(tok->s) + 64;
+        char  *big = alloc_malloc(alloc, len);
         if (!big) return big;
-        sprintf(big, "(%s \"%s\")", token_tag_to_string(tok->tag), tok->s);
+        snprintf(big, len, "(%s \"%s\")", token_tag_to_string(tok->tag), tok->s);
         big = alloc_realloc(alloc, big, strlen(big) + 1);
         return big;
     }

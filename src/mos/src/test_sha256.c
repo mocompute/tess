@@ -12,9 +12,8 @@
 static int digest_matches(byte const digest[SHA256_DIGEST_SIZE], char const *expected_hex) {
     char hex[SHA256_HEX_SIZE];
     for (int i = 0; i < SHA256_DIGEST_SIZE; ++i) {
-        sprintf(hex + i * 2, "%02x", digest[i]);
+        snprintf(hex + i * 2, sizeof(hex) - i * 2, "%02x", digest[i]);
     }
-    hex[64] = '\0';
     return strcmp(hex, expected_hex) == 0 ? 0 : 1;
 }
 
