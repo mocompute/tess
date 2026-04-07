@@ -36,7 +36,6 @@ HashMapOpts: {
     capacity: CSize,
 }
 
-Entry[K, V]: { key: K, value: V }
 
 // -- Synopsis --
 
@@ -333,17 +332,13 @@ _insert_entry[K: Eq, V](entries, capacity, key: K, value: V, hash: CSize) -> CSi
 
 // -- Iterator interface --
 
-
-IterEntry[K, V]: {
-    key:   K,
-    value: V,
-}
-
 Iter[K, V]: {
     data:     Ptr[_Entry[K, V]],
     capacity: CSize,
     index:    CSize,
 }
+
+IterEntry[K, V]: { key: K, value: V }
 
 iter_init (map) { Iter(data = map->_entries, capacity = map->_capacity, index = 0) }
 
