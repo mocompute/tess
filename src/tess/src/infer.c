@@ -776,6 +776,10 @@ str toplevel_name(ast_node const *node) {
     return toplevel_name_node((ast_node *)node)->symbol.name;
 }
 
+str toplevel_name_original(ast_node const *node) {
+    return toplevel_name_node((ast_node *)node)->symbol.original;
+}
+
 void log_constraint(tl_infer *self, tl_polytype *left, tl_polytype *right, ast_node const *node) {
     if (self->verbose < 3) return;
     str left_str  = tl_polytype_to_string(self->transient, left);

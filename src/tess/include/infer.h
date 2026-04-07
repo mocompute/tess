@@ -36,6 +36,7 @@ int                 tl_infer_run(tl_infer *, ast_node_sized, tl_infer_result *);
 void                tl_infer_report_errors(tl_infer *);
 
 str                 toplevel_name(ast_node const *);
+str                 toplevel_name_original(ast_node const *);
 ast_node           *toplevel_name_node(ast_node *);
 
 tl_monotype        *tl_infer_update_specialized_type(tl_infer *, tl_monotype *mono);

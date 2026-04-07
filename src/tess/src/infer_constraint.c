@@ -10,6 +10,7 @@
 // infer_* type inference handlers, constraint functions, and error reporting.
 
 #include "ast.h"
+#include "infer.h"
 #include "infer_internal.h"
 #include "type.h"
 
@@ -799,16 +800,25 @@ static int has_error(tl_infer *self, tl_error_tag tag, ast_node const *node) {
     return 0;
 }
 
+static void push_error_with_name(tl_infer *self, tl_error_tag tag, ast_node const *node) {
+    str name = toplevel_name_original(node);
+    if (!str_is_empty(name)) {
+        array_push(self->errors, ((tl_infer_error){.tag = tag, .node = node, .message = name}));
+    } else {
+        array_push(self->errors, ((tl_infer_error){.tag = tag, .node = node}));
+    }
+}
+
 int type_error(tl_infer *self, ast_node const *node) {
     // Suppress duplicate errors
     if (has_error(self, tl_err_type_error, node)) return 1;
-    array_push(self->errors, ((tl_infer_error){.tag = tl_err_type_error, .node = node}));
+    push_error_with_name(self, tl_err_type_error, node);
     return 1;
 }
 int unresolved_type_error(tl_infer *self, ast_node const *node) {
     // Suppress duplicate errors
     if (has_error(self, tl_err_unresolved_type, node)) return 1;
-    array_push(self->errors, ((tl_infer_error){.tag = tl_err_unresolved_type, .node = node}));
+    push_error_with_name(self, tl_err_unresolved_type, node);
     return 1;
 }
 
@@ -2356,8 +2366,7 @@ static int infer_type_constructor_nfa(tl_infer *self, traverse_ctx *ctx, ast_nod
     }
 
     if (!inst) {
-        wrong_number_of_arguments(self, node);
-        return 1;
+        return unresolved_type_error(self, node);
     }
 
 #if DEBUG_EXPLICIT_TYPE_ARGS
