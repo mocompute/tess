@@ -35,7 +35,6 @@ static inline int seen_set_visit(hashmap **seen, void *ptr) {
 
 static void                      dbg(tl_type_env *, char const *restrict fmt, ...);
 static void                      make_unary_tc(tl_type_registry *, str);
-static void                      make_variable_arity_tc(tl_type_registry *, str);
 static tl_type_constructor_def  *make_tc_def(tl_type_registry *, str);
 static tl_type_constructor_inst *make_tc_inst_args(tl_type_registry *, tl_type_constructor_def *,
                                                    tl_monotype_sized);
@@ -266,7 +265,6 @@ tl_type_registry *tl_type_registry_create(allocator *alloc, allocator *transient
     // Non-nullary built-in type constructors
     make_unary_tc(self, S("Ptr"));
     make_unary_tc(self, S("Const"));
-    make_variable_arity_tc(self, S("Union"));
     make_carray(self);
 
     return self;
@@ -363,21 +361,11 @@ static void make_unary_tc(tl_type_registry *self, str name) {
                                    (tl_monotype_sized)sized_all(mt_arr));
 }
 
-static void make_variable_arity_tc(tl_type_registry *self, str name) {
-    str_sized              empty    = {0};
-    tl_type_variable_sized empty_tv = {0};
-    tl_monotype_sized      empty_mt = {0};
-
-    tl_polytype           *poly     = tl_type_constructor_def_create(self, name, empty_tv, empty, empty_mt);
-    poly->type->cons_inst->def->is_variable_args = 1;
-}
-
 static tl_type_constructor_def *make_tc_def(tl_type_registry *self, str name) {
     tl_type_constructor_def *def = alloc_malloc(self->alloc, sizeof *def);
     def->name                    = str_copy(self->alloc, name);
     def->generic_name            = str_copy(self->alloc, name);
     def->field_names             = (str_sized){0};
-    def->is_variable_args        = 0;
     def->is_signed_integer       = 0;
     def->is_unsigned_integer     = 0;
     def->is_narrow_integer       = 0;
@@ -481,7 +469,6 @@ static void make_carray(tl_type_registry *self) {
 // Ptr, etc.).
 
 tl_monotype *tl_type_registry_instantiate(tl_type_registry *self, str name) {
-    if (str_eq(name, S("Union"))) fatal("runtime error");
     if (str_eq(name, S("Ptr"))) fatal("runtime error");
     tl_monotype *type = null;
     tl_polytype *poly = tl_type_registry_get(self, name);
@@ -493,29 +480,12 @@ tl_monotype *tl_type_registry_instantiate(tl_type_registry *self, str name) {
 }
 
 tl_monotype *tl_type_registry_instantiate_with(tl_type_registry *self, str name, tl_monotype_sized args) {
-    if (str_eq(name, S("Union"))) fatal("runtime error");
     if (str_eq(name, S("Ptr"))) fatal("runtime error");
     tl_monotype *type = null;
     tl_polytype *poly = tl_type_registry_get(self, name);
     if (!poly) return null;
 
     type = tl_polytype_instantiate_with(self->alloc, poly, args, self->subs);
-
-    return type;
-}
-
-tl_monotype *tl_type_registry_instantiate_union(tl_type_registry *self, tl_monotype_sized args) {
-    str          name = S("Union");
-    tl_monotype *type = null;
-
-    if (!args.size) fatal("runtime error");
-
-    tl_polytype *poly = str_map_get_ptr(self->definitions, name);
-    if (!poly) fatal("runtime error");
-
-    type = tl_polytype_instantiate(self->alloc, poly, self->subs);
-    assert(tl_monotype_is_inst(type));
-    type->cons_inst->args = args;
 
     return type;
 }
@@ -608,11 +578,8 @@ tl_type_registry_specialize_ctx tl_type_registry_specialize_begin(tl_type_regist
     if (!poly) return (tl_type_registry_specialize_ctx){.specialized = null};
 
     assert(tl_monotype_is_inst(poly->type));
-    tl_type_constructor_def *def = poly->type->cons_inst->def;
-    if (!def->is_variable_args) {
-        u32 arity = poly->type->cons_inst->args.size;
-        if (args.size != arity) fatal("runtime error");
-    }
+    u32 arity = poly->type->cons_inst->args.size;
+    if (args.size != arity) fatal("runtime error");
 
     type = tl_polytype_specialize_cons(self->alloc, poly, args, self, special_name);
 
@@ -1112,10 +1079,7 @@ static tl_monotype *parse_type_nfa(tl_type_registry *self, tl_type_registry_pars
         // clang-format on
     }
 
-    // Note: special case for parsing a Union(a, b, ...)
-    if (str_eq(name, S("Union"))) {
-        return tl_type_registry_instantiate_union(self, (tl_monotype_sized)array_sized(args));
-    } else if (str_eq(name, S("CArray")) && args.size == 2) {
+    if (str_eq(name, S("CArray")) && args.size == 2) {
         // CArray(T, N) has 1 quantifier but 2 args (element type + integer count)
         if (tl_monotype_is_c_macro(args.v[1])) {
             return tl_type_registry_instantiate_carray_mono(self, args.v[0], args.v[1]);
@@ -1840,11 +1804,9 @@ tl_monotype *tl_polytype_specialize_cons(allocator *alloc, tl_polytype *self, tl
 
     // ignores quantifiers
     if (tl_cons_inst == fresh->tag) {
-        tl_monotype_sized *inst             = &fresh->cons_inst->args;
-        int                is_variable_args = fresh->cons_inst->def->is_variable_args;
-        if (!is_variable_args) {
-            if (args.size != inst->size) fatal("logic error");
-        }
+        tl_monotype_sized *inst = &fresh->cons_inst->args;
+
+        if (args.size != inst->size) fatal("logic error");
 
         // specialise cons arguments using registry
         forall(i, args) {
@@ -1857,11 +1819,7 @@ tl_monotype *tl_polytype_specialize_cons(allocator *alloc, tl_polytype *self, tl
             }
         }
 
-        if (!is_variable_args) {
-            forall(i, *inst) inst->v[i] = args.v[i];
-        } else {
-            *inst = args;
-        }
+        forall(i, *inst) inst->v[i]    = args.v[i];
         fresh->cons_inst->special_name = str_copy(alloc, special_name);
     }
 
@@ -2355,9 +2313,7 @@ int tl_monotype_is_ptr_to_const(tl_monotype *self) {
 int tl_monotype_is_ptr_or_null(tl_monotype *self) {
     return tl_monotype_is_inst_of(self, S("PtrOrNull"));
 }
-int tl_monotype_is_union(tl_monotype *self) {
-    return tl_monotype_is_inst_of(self, S("Union"));
-}
+
 int tl_monotype_is_carray(tl_monotype *self) {
     return tl_monotype_is_inst_of(self, S("CArray"));
 }
@@ -2381,14 +2337,7 @@ str tl_monotype_carray_count_macro_name(tl_monotype *self) {
 }
 int tl_monotype_has_ptr(tl_monotype *self) {
     if (!tl_monotype_is_inst(self)) return 0;
-    if (tl_monotype_is_union(self)) {
-        forall(i, self->cons_inst->args) {
-            if (tl_monotype_has_ptr(self->cons_inst->args.v[i])) return 1;
-        }
-        return 0;
-    } else {
-        return tl_monotype_is_ptr(self) || tl_monotype_is_ptr_or_null(self);
-    }
+    return tl_monotype_is_ptr(self) || tl_monotype_is_ptr_or_null(self);
 }
 
 int tl_monotype_arrow_has_arrow(tl_monotype *self) {
@@ -2548,16 +2497,7 @@ tl_monotype *tl_monotype_ptr_target(tl_monotype *self) {
         assert(self->cons_inst->args.size == 2);
         // first argument is Ptr
         return tl_monotype_ptr_target(self->cons_inst->args.v[0]);
-    } else if (tl_monotype_is_union(self)) {
-        forall(i, self->cons_inst->args) {
-            tl_monotype *arg = self->cons_inst->args.v[i];
-            if (tl_monotype_is_ptr(arg)) return tl_monotype_ptr_target(arg);
-        }
-        fatal("runtime error");
-    }
-
-    else
-        fatal("unreachable");
+    } else fatal("unreachable");
 }
 
 void tl_monotype_ptr_set_target(tl_monotype *ptr, tl_monotype *target) {
@@ -3086,71 +3026,9 @@ static int unify_type_constructor_def(tl_type_constructor_def *lhs, tl_type_cons
     return 1;
 }
 
-int unify_type_constructor_union(tl_type_subs *subs, tl_monotype *left, tl_monotype *right,
-                                 type_error_cb_fun cb, void *user, hashmap **seen, tl_unify_direction dir) {
-    (void)dir; // union matching is always symmetric
-    assert(tl_monotype_is_inst(left));
-    assert(left->cons_inst->def->is_variable_args);
-
-    tl_monotype_sized unions = left->cons_inst->args;
-
-    switch (right->tag) {
-    case tl_integer:
-    case tl_c_macro:
-    case tl_placeholder: return 1;
-
-    case tl_any:
-    case tl_ellipsis:
-    case tl_variadic:    return 0;
-
-    case tl_var:
-        return tl_type_subs_unify_tv_mono(subs, right->var, left, cb, user, seen, TL_UNIFY_SYMMETRIC, 0);
-    case tl_weak: return tl_type_subs_unify_weak(subs, right, left, cb, user, seen);
-    case tl_weak_int_signed:
-    case tl_weak_int_unsigned:
-        return tl_type_subs_unify_weak_int_concrete(subs, right, left, cb, user, seen);
-    case tl_weak_float: return tl_type_subs_unify_weak_float_concrete(subs, right, left, cb, user, seen);
-
-    case tl_cons_inst:  {
-        if (right->cons_inst->def->is_variable_args) {
-            tl_monotype_sized right_unions = right->cons_inst->args;
-            forall(i, unions) {
-                forall(j, right_unions) {
-                    // don't pass cb so that any error is a soft error
-                    if (0 == tl_type_subs_unify_mono(subs, unions.v[i], right_unions.v[j], null, null, seen,
-                                                     TL_UNIFY_SYMMETRIC))
-                        return 0;
-                }
-            }
-        } else {
-            forall(i, unions) {
-                // don't pass cb so that any error is a soft error
-                if (0 ==
-                    tl_type_subs_unify_mono(subs, unions.v[i], right, null, null, seen, TL_UNIFY_SYMMETRIC))
-                    return 0;
-            }
-        }
-    } break;
-
-    case tl_arrow:
-    case tl_tuple:
-        // attempt to union with any of the union types
-        forall(i, unions) {
-            if (0 == tl_type_subs_unify_mono(subs, unions.v[i], right, cb, user, seen, TL_UNIFY_SYMMETRIC))
-                return 0;
-        }
-        break;
-    }
-
-    if (cb) cb(user, left, right);
-    return 1;
-}
-
 int unify_type_constructor(tl_type_subs *subs, tl_monotype *left, tl_monotype *right, type_error_cb_fun cb,
                            void *user, hashmap **seen, tl_unify_direction dir, int cons_is_left) {
     assert(tl_monotype_is_inst(left));
-    if (left->cons_inst->def->is_variable_args)
-        return unify_type_constructor_union(subs, left, right, cb, user, seen, dir);
 
     switch (right->tag) {
     case tl_integer:     return !tl_monotype_is_integer_convertible(left);
@@ -3172,9 +3050,6 @@ int unify_type_constructor(tl_type_subs *subs, tl_monotype *left, tl_monotype *r
     case tl_weak_float: return tl_type_subs_unify_weak_float_concrete(subs, right, left, cb, user, seen);
 
     case tl_cons_inst:  {
-
-        if (right->cons_inst->def->is_variable_args)
-            return unify_type_constructor_union(subs, right, left, cb, user, seen, dir);
 
         if (unify_type_constructor_def(left->cons_inst->def, right->cons_inst->def)) {
             if (cb) cb(user, left, right);

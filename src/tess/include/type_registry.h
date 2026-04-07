@@ -69,7 +69,6 @@ tl_polytype *tl_type_constructor_def_create(tl_type_registry *, str name, tl_typ
                                             str_sized fields, tl_monotype_sized) mallocfun;
 tl_monotype *tl_type_registry_instantiate(tl_type_registry *, str);
 tl_monotype *tl_type_registry_instantiate_with(tl_type_registry *, str, tl_monotype_sized);
-tl_monotype *tl_type_registry_instantiate_union(tl_type_registry *, tl_monotype_sized);
 tl_monotype *tl_type_registry_instantiate_carray(tl_type_registry *, tl_monotype *, i32);
 tl_monotype *tl_type_registry_instantiate_carray_mono(tl_type_registry *, tl_monotype *elem,
                                                       tl_monotype *count);

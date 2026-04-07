@@ -37,10 +37,9 @@ enum {
 
 typedef struct {
     str       name;
-    str       generic_name;      // used to recover canonical name, eg Ptr_1 -> Ptr
-    str_sized field_names;       // for user types
-    int       is_variable_args;  // non-zero if type allows a variable number of arguments, e.g. Union(...)
-    int       is_signed_integer; // unifies with other signed integers
+    str       generic_name;        // used to recover canonical name, eg Ptr_1 -> Ptr
+    str_sized field_names;         // for user types
+    int       is_signed_integer;   // unifies with other signed integers
     int       is_unsigned_integer; // unifies with other unsigned integers
     int is_narrow_integer;    // same-family unification OK, but preserve C ABI type (no canonicalization)
     int is_float_convertible; // the type is implicitly convertible to any other float type
@@ -254,7 +253,6 @@ str          tl_monotype_carray_count_macro_name(tl_monotype *);
 int          tl_monotype_is_unary(tl_monotype *);
 int          tl_monotype_arrow_has_arrow(tl_monotype *);
 int          tl_monotype_has_ptr(tl_monotype *);
-int          tl_monotype_is_union(tl_monotype *);
 int          tl_monotype_is_tv(tl_monotype *);
 int          tl_monotype_is_signed_integer(tl_monotype *);
 int          tl_monotype_is_unsigned_integer(tl_monotype *);
