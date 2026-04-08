@@ -274,30 +274,6 @@ static int test_undef(void) {
     return error;
 }
 
-// Stdlib files should not have their modules tracked
-static int test_stdlib_modules_ignored(void) {
-    int               error   = 0;
-    allocator        *alloc   = arena_create(default_allocator(), 1024);
-    import_resolver  *res     = import_resolver_create(alloc);
-    tl_source_scanner s       = tl_source_scanner_create(alloc, res);
-    str_array         imports = {.alloc = alloc};
-
-    // Register /std/ as a standard library path
-    import_resolver_add_standard_path(res, str_init(alloc, "/std"));
-
-    char const *src = "#module StdModule\nfoo() { 1 }\n";
-
-    // Scan as a file under the stdlib path
-    error += scan(&s, "/std/cstdlib.tl", src, &imports) != 0;
-
-    // Module should NOT be tracked (it's a stdlib file)
-    error += str_map_contains(s.modules_seen, S("StdModule"));
-
-    if (error) fprintf(stderr, "  %d check(s) failed\n", error);
-    arena_destroy(&alloc);
-    return error;
-}
-
 // Conditional skip depth resets between files
 static int test_skip_depth_resets(void) {
     int               error   = 0;
@@ -783,7 +759,6 @@ int main(void) {
     T(test_nested_ifdef)
     T(test_define_in_source)
     T(test_undef)
-    T(test_stdlib_modules_ignored)
     T(test_skip_depth_resets)
     T(test_module_at_eof)
     T(test_no_module)

@@ -30,8 +30,6 @@ static int process_hash_directive(tl_source_scanner *self, str file_path, str_ar
     if (len > 0 && data[pos - 1] == '\n') len -= 1;
     if (len > 0 && data[pos - 2] == '\r') len -= 1;
 
-    int       is_stdlib_file = import_resolver_is_stdlib_file(self->resolver, file_path);
-
     str       command        = str_init_n(imports->alloc, &data[capture_start], len);
     str_array words          = {.alloc = imports->alloc};
     str_parse_words(command, &words);
@@ -59,7 +57,7 @@ static int process_hash_directive(tl_source_scanner *self, str file_path, str_ar
     if (0 == self->conditional_skip_depth && words.size >= 2) {
         if (str_eq(words.v[0], S("import"))) {
             array_push(*imports, words.v[1]);
-        } else if (!is_stdlib_file && str_eq(words.v[0], S("module"))) {
+        } else if (str_eq(words.v[0], S("module"))) {
             str_map_set(&self->modules_seen, words.v[1], &file_path);
             self->current_file_module = words.v[1];
         }
