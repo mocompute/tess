@@ -362,7 +362,7 @@ int platform_exec(platform_exec_opts const *opts) {
 
     PROCESS_INFORMATION pi      = {0};
 
-    BOOL                success = CreateProcessA(NULL, cmdline, NULL, NULL, TRUE, 0, NULL, NULL, &si, &pi);
+    BOOL                success = CreateProcessA(NULL, cmdline, NULL, NULL, TRUE, 0, NULL, opts->cwd, &si, &pi);
 
     CloseHandle(output_write);
 
@@ -465,6 +465,11 @@ int platform_exec(platform_exec_opts const *opts) {
         dup2(output_pipe[1], STDERR_FILENO);
         close(stdin_pipe[0]);
         close(output_pipe[1]);
+
+        if (opts->cwd && chdir(opts->cwd) != 0) {
+            perror("chdir failed");
+            _exit(127);
+        }
 
         execvp(opts->argv[0], (char *const *)opts->argv);
         perror("exec failed");
