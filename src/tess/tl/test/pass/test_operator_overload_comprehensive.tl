@@ -176,12 +176,12 @@ eq (a: RGB, b: RGB) -> Bool { a.r == b.r && a.g == b.g && a.b == b.b           }
 
 #module Opt
 
-OptInt: | Val { v: Int } | Empty
+OptInt: | Present { v: Int } | Empty
 
 eq(a: OptInt, b: OptInt) -> Bool {
     when a {
-        sa: Val {
-            sb: Val := b else { return false }
+        sa: Present {
+            sb: Present := b else { return false }
             sa.v == sb.v
         }
         na: Empty {
@@ -194,9 +194,9 @@ eq(a: OptInt, b: OptInt) -> Bool {
 }
 
 add(a: OptInt, b: OptInt) -> OptInt {
-    sa: Val := a else { return OptInt.Empty }
-    sb: Val := b else { return OptInt.Empty }
-    OptInt.Val(v = sa.v + sb.v)
+    sa: Present := a else { return OptInt.Empty }
+    sb: Present := b else { return OptInt.Empty }
+    OptInt.Present(v = sa.v + sb.v)
 }
 
 // --- Module: Logic (from test_operator_overload_unary.tl) ---
@@ -570,8 +570,8 @@ test_multi() {
 test_tagged_union() {
     error := 0
 
-    a := Opt.OptInt.Val(v = 10)
-    b := Opt.OptInt.Val(v = 20)
+    a := Opt.OptInt.Present(v = 10)
+    b := Opt.OptInt.Present(v = 20)
     n := Opt.OptInt.Empty
 
     // == on tagged union
@@ -586,7 +586,7 @@ test_tagged_union() {
 
     // + on tagged union
     c := a + b
-    error += if c == Opt.OptInt.Val(v = 30) {0} else {1}
+    error += if c == Opt.OptInt.Present(v = 30) {0} else {1}
 
     // + with None propagates
     d := a + n

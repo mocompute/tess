@@ -28,6 +28,8 @@ struct tokenizer {
     u32            line;
     u32            pos;
     u32            col;
+    u32            prev_line; // line/col prior to the most recent next_char, so
+    u32            prev_col;  // reverse_pos can correctly undo a newline step
 
     token_array    backtrack;
     char_array     buf;
@@ -161,13 +163,22 @@ static void advance_pos_n(tokenizer *self, i32 n) {
 }
 
 static void reverse_pos(tokenizer *self) {
-    if (self->col > 0) self->col--;
-    else if (self->line > 0) self->line--; // reversing to previous line
+    // Restore the line/col that were active before the most recent next_char.
+    // This correctly undoes a newline step (where advance_line reset col to 0).
+    //
+    // INVARIANT: reverse_pos must be called at most once per next_char, with no
+    // intervening next_char between a second reverse_pos and the first. Only one
+    // step of history is remembered in prev_line/prev_col, so stacking reverses
+    // would restore to stale state.
+    self->line = self->prev_line;
+    self->col  = self->prev_col;
 
     if (self->pos > 0) self->pos--;
 }
 
 static char next_char(tokenizer *self) {
+    self->prev_line = self->line;
+    self->prev_col  = self->col;
     self->col++;
     char out = self->input.v[self->pos++];
     if (out == '\n') advance_line(self);

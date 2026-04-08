@@ -54,6 +54,7 @@ char const *tl_error_tag_to_string(tl_error_tag tag) {
     X(tl_err_invalid_format_spec, "invalid format specifier")                                              \
     X(tl_err_alias_source_not_found, "alias source not found")                                             \
     X(tl_err_alias_conflicts_with_module, "alias conflicts with module name")                              \
+    X(tl_err_type_name_already_defined, "type name is already defined")                                    \
     X(tl_err_alias_already_defined, "alias already defined")                                               \
     X(tl_err_alias_self_alias, "cannot alias to self")                                                     \
     X(tl_err_alias_invalid_name, "invalid alias name")                                                     \

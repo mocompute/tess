@@ -283,6 +283,34 @@ int is_reserved_type_name(ast_node const *name) {
     return 0;
 }
 
+int is_name_already_defined(parser *self, str name) {
+    // Only meaningful during the symbol-collection pass. In mode_source the module's
+    // symbols are pre-loaded into current_module_symbols (see load_module_symbols),
+    // so every declaration would look like a duplicate of itself.
+    if (self->mode != mode_symbols) return 0;
+
+    // Catches symbols from builtin.tl's top-level `#module builtin` section
+    // (Int, UInt, Float, Option, Result, sizeof, ...).
+    if (str_hset_contains(self->builtin_module_symbols, name)) return 1;
+
+    // Catches primitive types registered directly in the type registry.
+    if (tl_type_registry_get(self->opts.registry, name)) return 1;
+
+    // Reject variant names that shadow an existing module name.
+    // Example: `| String { ... }` in any module shadows `#module String`, making
+    // `value: String` field references inside the variant's payload unresolvable.
+    //
+    // Exempt the canonical `#module Foo` + `Foo: | ...` pattern where the tagged
+    // union's own name matches the enclosing module — that's idiomatic Tess.
+    if (str_hset_contains(self->modules_seen, name) && !str_eq(name, self->current_module))
+        return 1;
+
+    // Catches duplicates within the current module.
+    if (str_hset_contains(self->current_module_symbols, name)) return 1;
+
+    return 0;
+}
+
 int is_index_operator(char const *s) {
     return 0 == strcmp(s, ".[");
 }

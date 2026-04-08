@@ -267,6 +267,10 @@ int toplevel_tagged_union(parser *self) {
     if (is_reserved_type_name(tu_name)) return ERROR_STOP;
 
     str tu_name_str = tu_name->symbol.name;
+    if (is_name_already_defined(self, tu_name_str)) {
+        self->error.tag = tl_err_type_name_already_defined;
+        return ERROR_STOP;
+    }
     str_hset_insert(&self->nested_type_parents, tu_name_str);
     str_hset_insert(&self->tagged_union_variant_parents, tu_name_str);
 
@@ -302,6 +306,13 @@ int toplevel_tagged_union(parser *self) {
 
         // Check for reserved type keywords to disallow
         if (is_reserved_type_name(var_name)) return ERROR_STOP;
+        if (is_name_already_defined(self, var_name->symbol.name)) {
+            self->error.tag  = tl_err_type_name_already_defined;
+            self->error.line = var_name->line;
+            self->error.col  = var_name->col;
+            self->error.file = var_name->file;
+            return ERROR_STOP;
+        }
 
         tu_variant v = {.name = var_name, .fields = fields};
         array_push(variants, v);

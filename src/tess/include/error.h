@@ -87,6 +87,7 @@
     X(tl_err_unexpected_else, "unexpected_else")                                                           \
     X(tl_err_double_underscore_in_identifier, "double_underscore_in_identifier")                           \
     X(tl_err_alias_source_not_found, "alias_source_not_found")                                             \
+    X(tl_err_type_name_already_defined, "type_name_already_defined")                                       \
     X(tl_err_alias_conflicts_with_module, "alias_conflicts_with_module")                                   \
     X(tl_err_alias_already_defined, "alias_already_defined")                                               \
     X(tl_err_alias_self_alias, "alias_self_alias")                                                         \

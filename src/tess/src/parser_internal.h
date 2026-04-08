@@ -164,6 +164,7 @@ int a_type_identifier(parser *);
 int maybe_trait_bound(parser *);
 int maybe_type_parameters(parser *, ast_node_array *out);
 int is_reserved_type_name(ast_node const *);
+int is_name_already_defined(parser *self, str name);
 
 // Type definition helpers
 ast_node *create_utd(parser *, ast_node *name, u8 n_type_args, ast_node **type_args, ast_node_array fields,
