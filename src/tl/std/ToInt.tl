@@ -14,10 +14,10 @@ ToInt[T]: { to_int(a: T) -> Int }
 to_int(n) -> Int { n }
 
 #module UInt
-to_int(n) -> Int { res: Int := n, res }
+to_int(n) -> Int { res: Int := n }
 
 #module Float
-to_int(f) -> Int { res: Int := f, res }
+to_int(f) -> Int { res: Int := f }
 
 #module Bool
 to_int(b) -> Int { if b {1} else {0} }
