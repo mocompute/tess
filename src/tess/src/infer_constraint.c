@@ -3660,8 +3660,10 @@ int resolve_node(tl_infer *self, ast_node *node, traverse_ctx *ctx, node_positio
         if (!ast_node_is_symbol(node)) break;
         if (!ctx) fatal("logic error");
 
-        // Parse the annotation if present (no special opts)
-        if (process_annotation(self, ctx, node, (annotation_opts){0}) < 0) {
+        // Parse the annotation if present (no special opts). For LHS, ensure we do NOT call
+        // process_annotation unless there is actually an annotation, because it will consider c_symbols as
+        // if they were type declarations (inside tl_type_registry_parse_type).
+        if (node->symbol.annotation && process_annotation(self, ctx, node, (annotation_opts){0}) < 0) {
 #if DEBUG_RESOLVE
             fprintf(stderr,
                     "[DEBUG resolve_node] ERROR: npos_assign_lhs process_annotation failed for '%s'\n",

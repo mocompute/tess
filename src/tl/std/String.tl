@@ -814,7 +814,7 @@ from_array(arr) {
 
     parse_number() {
 
-        c_errno: CInt = 0               // FIXME: CInt annotation is required
+        c_errno = 0
         p                 := _cbuf(s)
         end               := Unsafe.pointer_add(p, s.len())
         p_end: Ptr[CChar] := null
@@ -822,18 +822,18 @@ from_array(arr) {
         i := c_strtoll(p, p_end.&, 10)
         if (p_end == end && c_errno == 0) { return Some(Integer(value = i)) }
 
-        c_errno: CInt = 0
-        p_end         = null
+        c_errno = 0
+        p_end   = null
         ui := c_strtoull(p, p_end.&, 10)
         if (p_end == end && c_errno == 0) { return Some(Unsigned(value = ui)) }
 
-        c_errno: CInt = 0
-        p_end         = null
+        c_errno = 0
+        p_end   = null
         d := c_strtod(p, p_end.&)
         if (p_end == end && c_errno == 0) { return Some(Floating(value = d)) }
 
-        c_errno: CInt = 0
-        p_end         = null
+        c_errno = 0
+        p_end   = null
         ld := c_strtold(p, p_end.&)
         if (p_end == end && c_errno == 0) { return Some(LDouble(value = ld)) }
 
