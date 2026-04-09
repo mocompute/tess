@@ -1289,11 +1289,12 @@ ast_node *parse_case_expr(parser *self) {
 
     int is_pointer = 0;
     if (ast_node_is_unary_op(expr)) {
-        if (is_ampersand(expr->unary_op.op)) is_pointer = 1;
-        else return null; // no other unary op is valid
-
-        // reset variable to the actual expression
-        expr = expr->unary_op.operand;
+        if (is_ampersand(expr->unary_op.op)) {
+            is_pointer = 1;
+            // reset variable to the actual expression
+            expr = expr->unary_op.operand;
+        }
+        // other unary ops (e.g. .* dereference) are valid as value scrutinees
     }
 
     // look for optional predicate
@@ -1395,11 +1396,12 @@ ast_node *parse_when_expr(parser *self) {
 
     int is_pointer = 0;
     if (ast_node_is_unary_op(expr)) {
-        if (is_ampersand(expr->unary_op.op)) is_pointer = 1;
-        else return null; // no other unary op is valid
-
-        // reset variable to the actual expression
-        expr = expr->unary_op.operand;
+        if (is_ampersand(expr->unary_op.op)) {
+            is_pointer = 1;
+            // reset variable to the actual expression
+            expr = expr->unary_op.operand;
+        }
+        // other unary ops (e.g. .* dereference) are valid as value scrutinees
     }
 
     if (a_try(self, a_open_curly)) return null;
