@@ -54,11 +54,15 @@ done:
 }
 
 // Like a_type_identifier_base but uses maybe_receiver_type_arguments.
-// Does NOT handle function arrow types or dotted names — receiver types
-// are always simple identifiers with optional type arguments.
+// Handles dotted names (e.g., J.Value, Json.Value.Value) via the same
+// maybe_mangle_binop loop used in a_type_identifier_base.
 static int a_receiver_type_expr(parser *self) {
     if (0 == a_try(self, a_attributed_identifier)) {
-        ast_node      *ident = self->result;
+        ast_node *ident = self->result;
+
+        int done;
+        if (parse_dotted_name(self, &ident, &done)) return 1;
+        if (done) return 0;
 
         ast_node_array type_args;
         if (ERROR_STOP == maybe_receiver_type_arguments(self, &type_args)) return ERROR_STOP;

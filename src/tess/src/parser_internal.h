@@ -243,6 +243,8 @@ void mangle_name_for_module(parser *, ast_node *, str module);
 void mangle_name_for_arity(parser *self, ast_node *name, u8 arity, int is_definition);
 str  mangle_str_for_module(parser *, str name, str module);
 void unmangle_name(parser *, ast_node *);
+int  maybe_mangle_binop(parser *self, ast_node *op, ast_node **inout, ast_node *right);
+int  parse_dotted_name(parser *self, ast_node **inout_ident, int *out_done);
 
 // Module symbols
 void     add_module_symbol(parser *, ast_node *);

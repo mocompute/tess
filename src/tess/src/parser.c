@@ -302,8 +302,7 @@ int is_name_already_defined(parser *self, str name) {
     //
     // Exempt the canonical `#module Foo` + `Foo: | ...` pattern where the tagged
     // union's own name matches the enclosing module — that's idiomatic Tess.
-    if (str_hset_contains(self->modules_seen, name) && !str_eq(name, self->current_module))
-        return 1;
+    if (str_hset_contains(self->modules_seen, name) && !str_eq(name, self->current_module)) return 1;
 
     // Catches duplicates within the current module.
     if (str_hset_contains(self->current_module_symbols, name)) return 1;
@@ -996,9 +995,31 @@ int set_node_parameters(parser *self, ast_node *node, ast_node_array *parameters
     return 0;
 }
 
-int a_type_identifier_base(parser *self);
+int parse_dotted_name(parser *self, ast_node **inout_ident, int *out_done) {
+    // Iteratively consume dotted-name segments into *inout_ident via maybe_mangle_binop.
+    // Returns 0 on success (all dots consumed), 1 on parse failure.
+    // When a non-module dot is taken, self->result is already set and *out_done = 1 —
+    // caller should return 0 immediately without parsing type arguments.
+    *out_done = 0;
+    while (0 == a_try(self, a_dot)) {
+        ast_node *op = self->result;
 
-int maybe_mangle_binop(parser *self, ast_node *op, ast_node **inout, ast_node *right);
+        if (a_try(self, a_attributed_identifier)) return 1;
+        ast_node *right = self->result;
+
+        if (maybe_mangle_binop(self, op, inout_ident, right)) {
+            continue; // combined module or resolved member — check for more dots
+        } else {
+            mangle_name(self, right);
+            result_ast_node(self, right);
+            *out_done = 1;
+            return 0;
+        }
+    }
+    return 0;
+}
+
+int a_type_identifier_base(parser *self);
 
 int a_type_identifier_base(parser *self) {
     // Callers expect name to be mangled.
@@ -1007,22 +1028,9 @@ int a_type_identifier_base(parser *self) {
     if (0 == a_try(self, a_attributed_identifier)) {
         ast_node *ident = self->result;
 
-        // Iteratively resolve dotted names left-to-right (e.g., CommandLine.Args.Args).
-        // This mirrors how parse_expression handles module-qualified names via
-        // maybe_mangle_binop in a while loop.
-        while (0 == a_try(self, a_dot)) {
-            ast_node *op = self->result;
-
-            if (a_try(self, a_attributed_identifier)) return 1;
-            ast_node *right = self->result;
-
-            if (maybe_mangle_binop(self, op, &ident, right)) {
-                continue; // combined module or resolved member — check for more dots
-            } else {
-                mangle_name(self, right);
-                return result_ast_node(self, right);
-            }
-        }
+        int       done;
+        if (parse_dotted_name(self, &ident, &done)) return 1;
+        if (done) return 0;
 
         // No (more) dots — parse optional type arguments.
         ast_node_array type_args;
