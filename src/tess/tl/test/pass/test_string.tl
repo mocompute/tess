@@ -1516,6 +1516,61 @@ test_from_array() {
     error
 }
 
+test_parse_number() {
+    error := 0
+
+    error += when "42".parse_number() {
+        opt: Some {
+            when opt.value {
+                n: Integer { if n.value == 42 { 0 } else { 1 } }
+                else { 1 }
+            }
+        }
+        else { 1 }
+    }
+
+    error += when "-5".parse_number() {
+        opt: Some {
+            when opt.value {
+                n: Integer { if n.value == -5 { 0 } else { 1 } }
+                else { 1 }
+            }
+        }
+        else { 1 }
+    }
+
+    error += when "9999999999999999999".parse_number() {
+        opt: Some {
+            when opt.value {
+                u: Unsigned { 0 } else { 1 }
+            }
+        }
+        else { 1 }
+    }
+
+    error += when "3.14".parse_number() {
+        opt: Some {
+            when opt.value { f: Floating { 0 }
+                else { 1 }
+            }
+        }
+        else { 1 }
+    }
+
+    error += when "1e400".parse_number() {
+        opt: Some {
+            when opt.value { l: LDouble { 0 } else { 1 } }
+        }
+        else { 1 }
+    }
+
+    error += when "hello".parse_number() {
+        opt: Some { 1 } else { 0 }
+    }
+
+    error
+}
+
 _check(name: CString, r: Int) -> Int {
     if r != 0 { c_printf(c"FAIL %s (%d)\n", name, r) }
     r
@@ -1573,6 +1628,7 @@ main() {
     error += _check(c"strip_suffix", test_strip_suffix())
     error += _check(c"from_bool", test_from_bool())
     error += _check(c"from_array", test_from_array())
+    error += _check(c"parse_number", test_parse_number())
     result: CInt := error
     result
 }

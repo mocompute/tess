@@ -39,13 +39,18 @@ _STR_MAX_SMALL: CSize := 14
 // String: { | big: _Big
 //           | ss: _Small }
 
+ParsedNumber: | Integer  { value: Int }
+              | Unsigned { value: CUnsignedLongLong }
+              | Floating { value: Float }
+              | LDouble  { value: CLongDouble }
+
 
 // -- Synopsis --
 
 // Construction
 empty        ()                                -> String
 from_bytes   (cs: Ptr[Const[CChar]], n: CSize) -> String
-rom_cstr     (cs: Ptr[Const[CChar]])           -> String
+from_cstr    (cs: Ptr[Const[CChar]])           -> String
 from_int     (n: Int)                          -> String
 from_float   (f: Float)                        -> String
 from_byte    (b: Byte)                         -> String
@@ -79,6 +84,7 @@ from_array[T](alloc: Ptr[Allocator], arr: Ptr[Const[Array[T]]])       -> String
     is_empty     ()                           -> Bool
     len          ()                           -> CSize
     starts_with  (prefix: Ptr[Const[String]]) -> Bool
+    parse_number ()                           -> Option[ParsedNumber]
 
     // Search
     count             (needle: Ptr[Const[String]]) -> CSize
@@ -804,6 +810,35 @@ from_array(arr) {
 
         result.push(alloc, part)
         result
+    }
+
+    parse_number() {
+
+        c_errno: CInt = 0               // FIXME: CInt annotation is required
+        p                 := _cbuf(s)
+        end               := Unsafe.pointer_add(p, s.len())
+        p_end: Ptr[CChar] := null
+
+        i := c_strtoll(p, p_end.&, 10)
+        if (p_end == end && c_errno == 0) { return Some(Integer(value = i)) }
+
+        c_errno: CInt = 0
+        p_end         = null
+        ui := c_strtoull(p, p_end.&, 10)
+        if (p_end == end && c_errno == 0) { return Some(Unsigned(value = ui)) }
+
+        c_errno: CInt = 0
+        p_end         = null
+        d := c_strtod(p, p_end.&)
+        if (p_end == end && c_errno == 0) { return Some(Floating(value = d)) }
+
+        c_errno: CInt = 0
+        p_end         = null
+        ld := c_strtold(p, p_end.&)
+        if (p_end == end && c_errno == 0) { return Some(LDouble(value = ld)) }
+
+        None
+
     }
 
 
