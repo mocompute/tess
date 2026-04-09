@@ -1,8 +1,13 @@
 #module main
-#import <String.tl>
 #import <Array.tl>
+#import <String.tl>
 #import <cstdio.tl>
+#import <cstdlib.tl>
 #import <cstring.tl>
+#include <float.h>  // for float limits
+
+c_DBL_MAX_10_EXP:  CInt
+c_LDBL_MAX_10_EXP: CInt
 
 // Sentinel for unwrapping Option[CSize] — any value impossible as a valid index.
 _NONE: CSize := 9999zu
@@ -1557,11 +1562,18 @@ test_parse_number() {
         else { 1 }
     }
 
-    error += when "1e400".parse_number() {
-        opt: Some {
-            when opt.value { l: LDouble { 0 } else { 1 } }
-        }
-        else { 1 }
+
+    if (c_LDBL_MAX_10_EXP > c_DBL_MAX_10_EXP) {
+        // Don't bother testing if the two types have the same max range
+        c_assert(c_LDBL_MAX_10_EXP >= 400)
+        p1: Some := "1e400".parse_number() else { return error + 1 }
+        p2: Some := "2e400".parse_number() else { return error + 1 }
+
+        ld1: LDouble := p1.value else { return error + 1 }
+        ld2: LDouble := p2.value else { return error + 1 }
+
+        // ensure two distinct values (they would both be `inf` if regular double)
+        error += if ld1.value != ld2.value {0} else {1}
     }
 
     error += when "hello".parse_number() {
