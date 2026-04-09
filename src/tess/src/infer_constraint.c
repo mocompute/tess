@@ -41,22 +41,30 @@ int env_insert_constrain(tl_infer *self, str name, tl_polytype *type, ast_node c
 
 void expected_type(tl_infer *self, ast_node const *node) {
     str msg = str_empty();
-    if (node && ast_node_is_symbol(node)) msg = ast_node_name_original(node);
+    if (node) msg = toplevel_name_original(node);
     array_push(self->errors, ((tl_infer_error){.tag = tl_err_expected_type, .node = node, .message = msg}));
 }
 
 void expected_tagged_union(tl_infer *self, ast_node const *node) {
-    array_push(self->errors,
-               ((tl_infer_error){.tag = tl_err_tagged_union_expected_tagged_union, .node = node}));
+    str msg = str_empty();
+    if (node) msg = toplevel_name_original(node);
+    array_push(
+      self->errors,
+      ((tl_infer_error){.tag = tl_err_tagged_union_expected_tagged_union, .node = node, .message = msg}));
 }
 
 void wrong_number_of_arguments(tl_infer *self, ast_node const *node) {
-    array_push(self->errors, ((tl_infer_error){.tag = tl_err_arity, .node = node}));
+    str msg = str_empty();
+    if (node) msg = toplevel_name_original(node);
+    array_push(self->errors, ((tl_infer_error){.tag = tl_err_arity, .node = node, .message = msg}));
 }
 
 void tagged_union_case_syntax_error(tl_infer *self, ast_node const *node) {
-    array_push(self->errors,
-               ((tl_infer_error){.tag = tl_err_tagged_union_case_syntax_error, .node = node}));
+    str msg = str_empty();
+    if (node) msg = toplevel_name_original(node);
+    array_push(
+      self->errors,
+      ((tl_infer_error){.tag = tl_err_tagged_union_case_syntax_error, .node = node, .message = msg}));
 }
 
 // Returns 1 if a module-mangled symbol's original name matches its module name,
@@ -1234,8 +1242,8 @@ static int push_conflicting_types_error(tl_infer *self, tl_polytype *left, tl_po
                                         ast_node const *node, int saved) {
     str left_str  = tl_polytype_to_user_string(self->transient, left);
     str right_str = tl_polytype_to_user_string(self->transient, right);
-    str msg       = str_fmt(self->arena, "conflicting types: %s versus %s", str_cstr(&left_str),
-                            str_cstr(&right_str));
+    str msg =
+      str_fmt(self->arena, "conflicting types: %s versus %s", str_cstr(&left_str), str_cstr(&right_str));
     array_push(self->errors, ((tl_infer_error){.tag = tl_err_type_error, .node = node, .message = msg}));
     self->is_constrain_ignore_error = saved;
     return 1;
