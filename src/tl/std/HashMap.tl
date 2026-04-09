@@ -146,21 +146,21 @@ _insert_entry[K: Eq, V](entries, capacity, key: K, value: V, hash: CSize) -> CSi
             return 0
         }
 
-        // Robin Hood: steal from rich
-        if _get_dist(e_meta) < cur_dist {
-            tmp_key   := e->key
-            tmp_value := e->value
-            tmp_tag   := _get_tag(e_meta)
-            tmp_dist  := _get_dist(e_meta)
+        // Robin Hood: swap if better
+        e_dist := _get_dist(e_meta)
+        if e_dist < cur_dist {
+            e_key   := e->key
+            e_value := e->value
+            e_tag   := _get_tag(e_meta)
 
             e->key   = cur_key
             e->value = cur_value
             e->meta  = _make_meta(cur_tag, cur_dist)
 
-            cur_key   = tmp_key
-            cur_value = tmp_value
-            cur_tag   = tmp_tag
-            cur_dist  = tmp_dist
+            cur_key   = e_key
+            cur_value = e_value
+            cur_tag   = e_tag
+            cur_dist  = e_dist
         }
 
         cur_dist += 1
