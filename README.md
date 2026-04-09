@@ -2,7 +2,8 @@
 
 A practical statically-typed language that builds on C.
 
-Tess adds type inference, generics, and tagged unions to a C foundation. It transpiles to plain C: you keep your toolchain, your debugger, and your performance.
+Tess adds type inference, generics, and tagged unions to a C foundation. It transpiles to plain C: you keep
+your toolchain and your performance.
 
 ```tl
 #module Point
@@ -47,7 +48,7 @@ factorial(n) {
 ```
 
 **Tagged unions.** Define variants with associated data. Match exhaustively, bind a single variant, or
-propagate errors: the compiler catches unhandled results.
+propagate errors: the compiler catches unhandled variants or ignored return values.
 
 ```tl
 Shape: | Circle { radius: Float }
@@ -90,7 +91,7 @@ Or, propagate errors with `try`:
     file := try open_file()    // unwraps Ok, or returns Err
 ```
 
-**Generics.** One definition, multiple types, no macros. Type parameters can be constrained by traits: checked at compile time, specialized to concrete types.
+**Generics.** One definition, multiple types. Type parameters can be constrained by traits, which are checked at compile time, specialized to concrete types.
 
 ```tl
 Summable[T]: Add[T], Eq[T] { }
@@ -98,7 +99,7 @@ Summable[T]: Add[T], Eq[T] { }
 sum[T: Summable](a, b) { a + b }
 ```
 
-**Receiver blocks.** Group methods by their receiver instead of repeating it on every function. No `impl` keyword — just parentheses and braces. Call sites use dot syntax.
+**Receiver blocks.** Group methods by their receiver instead of repeating it on every function. Call sites use dot syntax.
 
 ```tl
 #module Stack
@@ -111,7 +112,8 @@ Stack[T]: { data: Array[T] }
 }
 ```
 
-**C interop.** Include a C header and call its functions directly. Export Tess functions back to C: the compiler generates the `.h` for you.
+**C interop.** Include a C header and call its functions directly. Export Tess functions back to C: the
+compiler generates the `.h` header alongside the library.
 
 ```tl
 #include <math.h>
@@ -134,7 +136,7 @@ Conversely, generate Tess bindings from a C header automatically:
 tess cbind sqlite3.h
 ```
 
-**Error handling.** `Result` and `Option` replace error codes and null checks. `try` unwraps the success case or returns the error: no goto chains.
+**Error handling.** `Result` and `Option` are an alternative to error codes and null checks. `try` unwraps the success case or returns the error.
 
 ```tl
 read_config(path) {
@@ -145,7 +147,7 @@ read_config(path) {
 ```
 
 Tess also has closures, defer, operator overloading, function overloading, dot-call syntax, iterators,
-conditional compilation, and a package manager.
+conditional compilation, a package manager, and a host of other practical features. See the [Documentation](#documentation).
 
 ## Build
 
@@ -200,6 +202,7 @@ libraries.
 Currently at version 0.1.0, there are several known limitations:
 
 - The standard library is bare and its API is subject to breaking change.
+- Error messages are sometimes vague or misleading.
 - The compiler operates as a whole-program compiler. Stress tests indicate that peak memory usage increases
   substantially with large numbers of specialized functions. For example, specializing a generic function to
   8,000 unique parameter types requires more than 4GB of memory to compile. Other than stress tests, the
