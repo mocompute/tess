@@ -1,4 +1,5 @@
 #module stdlib
+#import <cerrno.tl>
 #include <stdlib.h>
 #include <assert.h>
 
@@ -23,29 +24,29 @@ static void aligned_free(void *p) {
 c_assert (condition: Bool) -> Void
 
 // stdlib.h
-c_atof         (nptr: Ptr[Const[CChar]])                       -> Float
-c_atoi         (nptr: Ptr[Const[CChar]])                       -> Int
-c_atol         (nptr: Ptr[Const[CChar]])                       -> Int
-c_atoll        (nptr: Ptr[Const[CChar]])                       -> Int
-c_strtod       (nptr: Ptr[Const[CChar]], endptr: Ptr[CString]) -> Float
-c_getenv       (name: Ptr[Const[CChar]])                       -> CString
-c_system       (str: Ptr[Const[CChar]])                        -> Int
-c_rand         ()                                              -> CInt
-c_srand        (seed: CUnsignedInt)                            -> Void
-c_aligned_alloc(alignment: CSize, size: CSize)                 -> Ptr[any]
-c_aligned_free (ptr: Ptr[any])                                 -> Void
-c_calloc       (num: CSize, size_each: CSize)                  -> Ptr[any]
-c_free[T]      (ptr: Ptr[T])                                   -> Void
-c_malloc       (size: CSize)                                   -> Ptr[any]
-c_realloc[T]   (ptr: Ptr[T], size: CSize)                      -> Ptr[any]
-c_exit         (status: CInt)                                  -> Void
-c_abort        ()                                              -> Void
+c_atof         (nptr: Ptr[Const[CChar]])       -> Float
+c_atoi         (nptr: Ptr[Const[CChar]])       -> Int
+c_atol         (nptr: Ptr[Const[CChar]])       -> Int
+c_atoll        (nptr: Ptr[Const[CChar]])       -> Int
+c_getenv       (name: Ptr[Const[CChar]])       -> CString
+c_system       (str: Ptr[Const[CChar]])        -> Int
+c_rand         ()                              -> CInt
+c_srand        (seed: CUnsignedInt)            -> Void
+c_aligned_alloc(alignment: CSize, size: CSize) -> Ptr[any]
+c_aligned_free (ptr: Ptr[any])                 -> Void
+c_calloc       (num: CSize, size_each: CSize)  -> Ptr[any]
+c_free[T]      (ptr: Ptr[T])                   -> Void
+c_malloc       (size: CSize)                   -> Ptr[any]
+c_realloc[T]   (ptr: Ptr[T], size: CSize)      -> Ptr[any]
+c_exit         (status: CInt)                  -> Void
+c_abort        ()                              -> Void
 
 c_abs   (j: CInt)      -> CInt
 c_labs  (j: CLong)     -> CLong
 c_llabs (j: CLongLong) -> CLongLong
 
 c_strtof   (nptr: Ptr[Const[CChar]], endptr: Ptr[CString]) -> CFloat
+c_strtod   (nptr: Ptr[Const[CChar]], endptr: Ptr[CString]) -> CDouble
 c_strtold  (nptr: Ptr[Const[CChar]], endptr: Ptr[CString]) -> CLongDouble
 c_strtol   (nptr: Ptr[Const[CChar]], endptr: Ptr[CString], base: CInt) -> CLong
 c_strtoll  (nptr: Ptr[Const[CChar]], endptr: Ptr[CString], base: CInt) -> CLongLong

@@ -1,6 +1,6 @@
 #module stdio
+#import <cerrno.tl>
 #include <stdio.h>
-#include <errno.h>
 
 // Standard streams
 c_stdin:  Ptr[c_FILE]
@@ -77,9 +77,3 @@ c_clearerr (stream: Ptr[c_FILE])  -> Void
 c_feof     (stream: Ptr[c_FILE])  -> CInt
 c_ferror   (stream: Ptr[c_FILE])  -> CInt
 c_perror   (s: Ptr[Const[CChar]]) -> Void
-
-// errno
-c_errno:  CInt
-c_ENOENT: CInt
-c_EACCES: CInt
-c_EEXIST: CInt

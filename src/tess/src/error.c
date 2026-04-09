@@ -17,7 +17,7 @@ char const *tl_error_tag_to_string(tl_error_tag tag) {
     X(tl_err_type_error, "type mismatch")                                                                  \
     X(tl_err_unresolved_type, "unresolved type")                                                           \
     X(tl_err_unknown_type, "unknown type")                                                                 \
-    X(tl_err_expected_type, "unknown type")                                                                \
+    X(tl_err_expected_type, "expected type")                                                               \
     X(tl_err_const_violation, "cannot mutate const value")                                                 \
     X(tl_err_closure_escape, "closure escapes its scope")                                                  \
     X(tl_err_capture_without_alloc, "closure captures variable without allocator")                         \
