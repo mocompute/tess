@@ -229,8 +229,10 @@ static size_t tl_float_format(
     char sign, int precision, char type_char)
 {
     double v;
+    long double ld;
+    int is_long = 0;
     if (sz == sizeof(float)) { float f; memcpy(&f, p, sizeof(f)); v = (double)f; }
-    else if (sz > sizeof(double)) { long double ld; memcpy(&ld, p, sz); v = (double)ld; }
+    else if (sz > sizeof(double)) { memcpy(&ld, p, sz); is_long = 1; }
     else { memcpy(&v, p, sizeof(v)); }
 
     char fmt[32];
@@ -240,13 +242,17 @@ static size_t tl_float_format(
     else if (sign == ' ') fmt[fi++] = ' ';
     if (precision >= 0) fi += snprintf(fmt + fi, sizeof(fmt) - fi, ".%d", precision);
 
+    if (is_long) fmt[fi++] = 'L'; // long double
+
     if      (type_char == 'e') fmt[fi++] = 'e';
     else if (type_char == 'E') fmt[fi++] = 'E';
     else if (type_char == 'f') fmt[fi++] = 'f';
     else                       fmt[fi++] = 'g'; // default
     fmt[fi] = '\0';
 
-    int r = snprintf(buf, bufsz, fmt, v);
+    int r;
+    if (is_long) r = snprintf(buf, bufsz, fmt, ld);
+    else r = snprintf(buf, bufsz, fmt, v);
     return r < 0 ? 0 : (size_t)r;
 }
 #endc

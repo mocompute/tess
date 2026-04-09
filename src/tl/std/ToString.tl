@@ -39,10 +39,14 @@ static size_t tl_unsigned_int_snprintf(char *buf, size_t bufsz, const void *p, s
 
 static size_t tl_float_snprintf(char *buf, size_t bufsz, const void *p, size_t sz) {
     double v;
+    long double ld;
+    int is_long = 0;
     if (sz == sizeof(float)) { float f; memcpy(&f, p, sizeof(f)); v = (double)f; }
-    else if (sz > sizeof(double)) { long double ld; memcpy(&ld, p, sz); v = (double)ld; }
+    else if (sz > sizeof(double)) { is_long = 1; memcpy(&ld, p, sz); }
     else { memcpy(&v, p, sizeof(v)); }
-    int r = snprintf(buf, bufsz, "%g", v);
+    int r;
+    if (is_long) r = snprintf(buf, bufsz, "%Lg", ld);
+    else r = snprintf(buf, bufsz, "%g", v);
     return r < 0 ? 0 : (size_t)r;
 }
 #endc
