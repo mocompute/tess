@@ -2037,7 +2037,7 @@ tl_monotype *tagged_union_other_variant(tl_monotype *wrapper_type, str matched_n
 // Wrap a variant type in Ptr if the binding is mutable (&), otherwise return as-is.
 static tl_polytype *tagged_union_variant_poly(tl_infer *self, tl_monotype *variant_type,
                                               int is_union_flag) {
-    if (is_union_flag == AST_TAGGED_UNION_MUTABLE)
+    if (AST_TAGGED_UNION_IS_MUTABLE(is_union_flag))
         return tl_polytype_absorb_mono(self->arena, tl_type_registry_ptr(self->registry, variant_type));
     return tl_polytype_absorb_mono(self->arena, variant_type);
 }
@@ -2129,7 +2129,7 @@ static int infer_tagged_union_case(tl_infer *self, traverse_ctx *ctx, ast_node *
 
     // Exhaustiveness check: if no else arm, verify all variants are covered.
     // Conditional variant bindings (AST_TAGGED_UNION_CONDITIONAL) are intentionally non-exhaustive.
-    if (!has_else_arm && node->case_.is_union != AST_TAGGED_UNION_CONDITIONAL) {
+    if (!has_else_arm && !AST_TAGGED_UNION_IS_CONDITIONAL(node->case_.is_union)) {
         forall(j, valid_variants) {
             if (!variant_covered[j]) {
                 array_push(self->errors,

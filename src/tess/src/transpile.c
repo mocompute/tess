@@ -2396,7 +2396,7 @@ static void tagged_union_wrapper_fields(tl_monotype *wrapper_type, tl_monotype *
 //   else if (s.tag == Foo__ShapeTag__Square) { ... }
 static str generate_tagged_union_case(transpile *self, ast_node const *node, eval_ctx *ctx) {
     assert(node->case_.is_union);
-    int is_pointer = node->case_.is_union == AST_TAGGED_UNION_MUTABLE;
+    int is_pointer = AST_TAGGED_UNION_IS_MUTABLE(node->case_.is_union);
 
     // Generate the expression being matched.
     // For mutable (.&) mode, generate as l-value to avoid copying into a temporary,
