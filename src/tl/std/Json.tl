@@ -4,7 +4,6 @@
 #import <HashMap.tl>
 #import "json/json_internal.tl"
 
-
 //
 // -- module Json.Value --
 //
@@ -83,13 +82,13 @@ Context: {
 
     create_array() {
         pval := self._alloc_value()
-        pval.* = J.JArray(value = Array.empty[Ptr[Value]]())
+        pval.* = J.JArray(value = Array.empty[Ptr[J.Value]]())
         pval
     }
 
     create_object() {
         pval := self._alloc_value()
-        pval.* = J.JObject(value = HashMap.create[String, Ptr[Value]](self->alloc))
+        pval.* = J.JObject(value = HashMap.create[String, Ptr[J.Value]](self->alloc))
         pval
 
     }
@@ -112,7 +111,6 @@ Context: {
         pval
     }
 
-
     create_long_double(x) {
         pval := self._alloc_value()
         pval.* = J.JLongDouble(x)
@@ -131,8 +129,8 @@ Context: {
 (ctx: Ptr[Context], self: Ptr[J.Value]): {
 
     push(item: Ptr[J.Value]) {
-        arr: JArray := self.* else { _tl_fatal_(c"wrong variant") }
-        arr.value.push(ctx->alloc, item)
+        arr: JArray := self.& else { _tl_fatal_(c"wrong variant") }
+        arr->value.push(ctx->alloc, item)
     }
 
 }
