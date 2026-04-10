@@ -1847,6 +1847,8 @@ static int specialize_case(tl_infer *self, traverse_ctx *traverse_ctx, ast_node 
                     tl_monotype *expr_type =
                       node->case_.expression->type ? node->case_.expression->type->type : null;
                     if (expr_type) tl_monotype_substitute(self->arena, expr_type, self->subs, null);
+                    // Auto-dereference Ptr for tagged union scrutinee
+                    if (expr_type) expr_type = tl_monotype_strip_ptr(expr_type);
 
                     if (expr_type && tl_monotype_is_concrete(expr_type) && tl_monotype_is_inst(expr_type)) {
                         str          variant_name = ast_node_name_original(cond->symbol.annotation);
@@ -1881,6 +1883,8 @@ static int specialize_case(tl_infer *self, traverse_ctx *traverse_ctx, ast_node 
                     tl_monotype *expr_type =
                       node->case_.expression->type ? node->case_.expression->type->type : null;
                     if (expr_type) tl_monotype_substitute(self->arena, expr_type, self->subs, null);
+                    // Auto-dereference Ptr for tagged union scrutinee
+                    if (expr_type) expr_type = tl_monotype_strip_ptr(expr_type);
 
                     if (expr_type && tl_monotype_is_concrete(expr_type) && tl_monotype_is_inst(expr_type)) {
                         str primary_name = str_empty();

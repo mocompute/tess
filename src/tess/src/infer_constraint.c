@@ -2067,6 +2067,9 @@ static int infer_tagged_union_case(tl_infer *self, traverse_ctx *ctx, ast_node *
 
     wrapper_type = tl_monotype_strip_const(wrapper_type);
 
+    // Auto-dereference: if scrutinee is Ptr[T], use T as the wrapper type.
+    wrapper_type = tl_monotype_strip_ptr(wrapper_type);
+
     if (!tl_monotype_is_inst(wrapper_type)) {
         // Receiver type is a type variable (e.g., unannotated parameter):
         // defer to specialization, where the type will be concrete.
@@ -2762,6 +2765,9 @@ static void prepare_tagged_union_bindings(tl_infer *self, traverse_ctx *ctx, ast
     }
 
     wrapper_type = tl_monotype_strip_const(wrapper_type);
+
+    // Auto-dereference: Ptr[T] -> T (mirrors infer_tagged_union_case)
+    wrapper_type = tl_monotype_strip_ptr(wrapper_type);
 
     if (!tl_monotype_is_inst(wrapper_type))
         return; // type not yet resolved; defer to infer_tagged_union_case

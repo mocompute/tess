@@ -2416,8 +2416,15 @@ static str generate_tagged_union_case(transpile *self, ast_node const *node, eva
         expr_str = str_cat_3(self->transient, S("("), expr_str, S(")"));
     }
 
-    // Get the wrapper type (Shape), looking through Const wrapper
+    // Get the wrapper type (Shape), looking through Const and Ptr wrappers.
+    // Handles Ptr[T], Const[Ptr[T]], and Ptr[Const[T]].
     tl_monotype *wrapper_type = tl_monotype_strip_const(node->case_.expression->type->type);
+    if (tl_monotype_is_ptr(wrapper_type)) {
+        // Auto-dereference: wrap expr_str so generated C accesses (*p).tag etc.
+        expr_str = str_cat_3(self->transient, S("(*"), expr_str, S(")"));
+        wrapper_type = tl_monotype_strip_ptr(wrapper_type);
+    }
+
     if (!tl_monotype_is_inst(wrapper_type))
         exit_error(node->file, node->line, "expected tagged union type in case expression");
 

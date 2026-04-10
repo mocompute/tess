@@ -2304,6 +2304,11 @@ tl_monotype *tl_monotype_strip_const(tl_monotype *self) {
     return tl_monotype_is_const(self) ? tl_monotype_const_target(self) : self;
 }
 
+tl_monotype *tl_monotype_strip_ptr(tl_monotype *self) {
+    if (!tl_monotype_is_ptr(self)) return self;
+    return tl_monotype_strip_const(tl_monotype_ptr_target(self));
+}
+
 int tl_monotype_is_ptr_to_const(tl_monotype *self) {
     if (!tl_monotype_is_ptr(self)) return 0;
     tl_monotype *target = tl_monotype_ptr_target(self);
