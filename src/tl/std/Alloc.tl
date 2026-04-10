@@ -64,6 +64,7 @@ _Header: {
     next:     Ptr[_Header],
     capacity: CSize,
     size:     CSize,
+    _pad:     CSize,          // align to sizeof(max_align_t)
 }
 
 create(alloc: Ptr[Allocator], capacity: CSize) -> Ptr[_Header]
@@ -73,6 +74,7 @@ create(alloc: Ptr[Allocator], capacity: CSize) -> Ptr[_Header]
 // Bump allocator block allocated by a client. Client data follows the size field.
 _Block: {
     size: CSize,
+    _pad: CSize,              // align to sizeof(max_align_t)
 }
 
 BumpAllocator: {
@@ -164,7 +166,7 @@ _alloc_assume_capacity(bucket: Ptr[_Header], sz: CSize) -> Ptr[any] {
 }
 
 _block_size(p: Ptr[any]) -> Ptr[CSize] {
-    block: Ptr[_Block] := Unsafe.pointer_subtract(p, sizeof[CSize]())
+    block: Ptr[_Block] := Unsafe.pointer_subtract(p, sizeof[_Block]())
     block->size.&
 }
 
