@@ -10,39 +10,47 @@
 #alias Arena Alloc.BumpAllocator
 #alias J Json.Value
 
-test_jtrue() {
-    val := J.JTrue
-
-    if _: JTrue := val {0} else {1}
+test_jtrue(json) {
+    v1 := json.create_true()
+    v2 := json.create_true()
+    if v1 == v2 {0} else {1}
 }
 
-test_jfalse() {
-    val := J.JFalse
-
-    if _: JFalse := val {0} else {1}
+test_jfalse(json) {
+    v1 := json.create_false()
+    v2 := json.create_false()
+    if v1 == v2 {0} else {1}
 }
 
-test_jnull() {
-    val := J.JNull
-
-    if _: JNull := val {0} else {1}
+test_jnull(json) {
+    v1 := json.create_null()
+    v2 := json.create_null()
+    if v1 == v2 {0} else {1}
 }
 
-test_jint() {
-    val := J.JInt64(42)
+test_jint(json) {
+    val       := json.create_int(42)
+    x: JInt64 := val else { return 1 }
+    if x.value == 42 {0} else {1}
 
-    _: CInt := if x: JInt64 := val {(x.value != 42).to_int()} else {1}
 }
 
-test_juint() {
-    val := J.JUInt64(42)
-
-    _: CInt := if x: JUInt64 := val {(x.value != 42).to_int()} else {1}
+test_juint(json) {
+    val        := json.create_uint(42)
+    x: JUInt64 := val else { return 1 }
+    if x.value == 42 {0} else {1}
 }
 
-test_jdouble() {
-    val     := J.JDouble(3.14)
-    _: CInt := if x: JDouble := val {(x.value != 3.14).to_int()} else {1}
+test_jdouble(json) {
+    val        := json.create_double(3.14)
+    x: JDouble := val else { return 1 }
+    if x.value == 3.14 {0} else {1}
+}
+
+test_string(json) {
+    val        := json.create_string("hello")
+    s: JString := val else { return 1 }
+    if s.value == "hello" {0} else {1}
 }
 
 
@@ -58,12 +66,13 @@ main() {
     json := Json.Context.create(arena)
     defer json.destroy()
 
-    error += test_jtrue()
-    error += test_jfalse()
-    error += test_jnull()
-    error += test_jint()
-    error += test_juint()
-    error += test_jdouble()
+    error += test_jtrue(json)
+    error += test_jfalse(json)
+    error += test_jnull(json)
+    error += test_jint(json)
+    error += test_juint(json)
+    error += test_jdouble(json)
+    error += test_string(json)
 
     error
 }
