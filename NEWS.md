@@ -5,6 +5,38 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [v0.1.4] - 2026-04-07 to 2026-04-10 (95fb185f..acfa628c)
+
+### Added
+
+- **`cerrno.tl`**: C FFI bindings for `<errno.h>` (`c_errno`, `c_ENOENT`, `c_EACCES`, `c_EEXIST`). Now imported by `cstdlib.tl` and `cstdio.tl` instead of each declaring its own errno bindings.
+- **`String.parse_number()`**: Parses a string into a `Number` tagged union (`Integer`, `Unsigned`, `Floating`, `LDouble`), returning `Option`. Handles overflow to unsigned, floating-point, and edge cases like `1e400`.
+- **Mutable variant bindings via `.&` on scrutinee**: `c: Circle := s.& else { ... }` and `if c: Circle := s.& { }` now work for mutable let-else and if-variant bindings, consistent with `when`/`case`. The AST gained an `is_mutable_bind` flag to represent this.
+- **`Ptr[T]` auto-dereference in `when`/`case`**: Passing a `Ptr[TaggedUnion]` directly to `when`/`case` now implicitly dereferences, eliminating the need for explicit `.&` or manual dereference.
+
+### Changed
+
+- **`when`/`case` accepts `.*` dereference as scrutinee**: A guard that only permitted `&` as a unary-op scrutinee now allows all unary ops, fixing a parse error on `p.* when { ... }`.
+- **Dotted type names in receiver block parameters**: `Ptr[Module.Type]` in receiver block type expressions previously caused a parse error. The module-qualified name loop was extracted into a shared `parse_dotted_name` helper.
+- **Stdlib files included in module registration**: Standard library files are no longer excluded from the source scanner's module registration pass. The old exclusion had no clear purpose and its removal causes no regressions.
+- **`long double` formatting**: `ToString.tl` and `ToStringFormat.tl` now format `long double` with `%Lg`/`%Lf` (etc.) instead of silently narrowing to `double` before passing to `snprintf`.
+- **`platform_exec` in tpkg tests**: `test_tpkg.c` migrated from `system()` shell invocations to `platform_exec()`. `platform_exec_opts` gained a `cwd` field, removing shell-quoting fragility and cross-platform `CD_CMD` workarounds.
+
+### Removed
+
+- **Incomplete variable-arity types implementation**: `is_variable_args` field on `tl_type_def`, the `tl_monotype_is_union()` function, and ~130 lines of supporting code in `type.c` were removed. The feature was unfinished and no longer needed.
+
+### Fixed
+
+- **Bump allocator alignment**: `_Header` (24→32 bytes) and `_Block` (8→16 bytes) are now padded to `max_align_t`, fixing segfaults with `long double` under optimized builds.
+- **`long double` printing precision**: Previously downcast to `double` in both `ToString` and `ToStringFormat`, producing incorrect output. Now passed directly with the `%L` format specifier.
+- **Tagged union variant names shadowing top-level names**: e.g., `Value: | String | Null` in `#module main` would crash during inference. Now rejected at parse time with a clear diagnostic.
+- **Non-pointer assignment to `Ptr` binding**: `p: Ptr[CInt] := 128` was silently accepted; now rejected with a "conflicting types" error.
+- **Unannotated LHS symbols incorrectly processed as annotations**: `c_errno = 0` (bare assignment) triggered `process_annotation`, causing type inference failures on C-prefixed symbol names.
+- **Invalid LHS of `:=`**: A subscript or other non-identifier on the left side of `:=` now produces a clear "expected identifier" error immediately, instead of a confusing downstream failure.
+- **`expected_type` error message**: `tl_err_expected_type` was displayed as "unknown type"; now correctly shows "expected type", and includes the human-readable name in the message.
+- **Tokenizer column tracking**: Column numbers were stuck at 0 for tokens ending just before a newline; now tracked correctly.
+
 ## [v0.1.3] - 2026-04-06 to 2026-04-07 (e23c4399..95fb185f)
 
 ### Highlights
