@@ -739,6 +739,12 @@ int a_assignment(parser *self) {
 
     if (a_try(self, a_colon_equal)) return 1;
 
+    // Error: non-symbol on LHS of a :=
+    if (!ast_node_is_symbol(lval)) {
+        self->error.tag = tl_err_expected_identifier;
+        return ERROR_STOP;
+    }
+
     ast_node *val = parse_body(self);
     if (!val) val = parse_expression(self, INT_MIN);
     if (!val) return ERROR_STOP;
