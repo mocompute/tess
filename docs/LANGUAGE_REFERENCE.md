@@ -2430,6 +2430,15 @@ when val {
 }
 ```
 
+**Mutable variant binding:** Use `.&` on the scrutinee to get a pointer to the variant, allowing in-place mutation — the same syntax as mutable `when`:
+
+```tl
+c: Circle := s.& else { return 0 }
+c->radius = 42  // modifies s in-place
+```
+
+The type annotation stays as the variant name (`Circle`, not `Ptr[Circle]`); the binding is automatically typed as `Ptr[Circle]`.
+
 ### Void-Else
 
 When you have a two-variant union and only need to handle the error/failure case — discarding the success value — use the statement form of `else` without a left-hand binding:
@@ -2491,6 +2500,14 @@ if err: Err := result {
     return err.message
 }
 // continue with the success path
+```
+
+**Mutable conditional variant binding:** Use `.&` on the scrutinee to get a mutable pointer, the same as mutable `when` and mutable variant binding:
+
+```tl
+if c: Circle := shape.& {
+    c->radius *= 2.0  // modifies shape in-place
+}
 ```
 
 ## Traits
