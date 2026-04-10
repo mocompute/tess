@@ -53,6 +53,22 @@ test_string(json) {
     if s.value == "hello" {0} else {1}
 }
 
+test_array(json) {
+    error := 0
+
+    arr := json.create_array()
+    json.push(arr, json.create_string("abc"))
+    json.push(arr, json.create_string("def"))
+
+    data: JArray  := arr else { return 1 }
+    s0:   JString := data.value.get(0) else { return 1 }
+    s1:   JString := data.value.get(1) else { return 1 }
+    error += if s0.value == "abc" {0} else {1}
+    error += if s1.value == "def" {0} else {1}
+
+    error
+}
+
 
 main() {
 
@@ -73,6 +89,7 @@ main() {
     error += test_juint(json)
     error += test_jdouble(json)
     error += test_string(json)
+    error += test_array(json)
 
     error
 }
