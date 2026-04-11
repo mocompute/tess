@@ -1436,13 +1436,6 @@ static int check_trait_bound_(tl_infer *self, ast_node *toplevel, tl_monotype *c
         for (u32 i = 0; i < trait->sigs.size; i++) {
             tl_trait_sig *sig = &trait->sigs.v[i];
             str func_name     = find_overload_func(self, concrete_type, str_cstr(&sig->name), sig->arity);
-            // Ptr[T] auto-deref: if direct lookup failed and type is Ptr[T], try T's module.
-            // Mirrors ufcs_rewrite_call() which auto-derefs pointer receivers.
-            if (str_is_empty(func_name) && tl_monotype_is_ptr(concrete_type)) {
-                tl_monotype *target = tl_monotype_strip_const(tl_monotype_ptr_target(concrete_type));
-                if (tl_monotype_is_inst(target))
-                    func_name = find_overload_func(self, target, str_cstr(&sig->name), sig->arity);
-            }
             if (!str_is_empty(func_name)) {
                 // Direct implementation — check full arrow conformance.
                 if (check_trait_arrow(self, toplevel, concrete_type, trait_name, sig, trait, func_name))
