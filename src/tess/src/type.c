@@ -379,6 +379,7 @@ static tl_type_constructor_def *make_tc_def(tl_type_registry *self, str name) {
     def->integer_max_value       = 0;
     def->has_integer_range       = 0;
     def->module                  = str_empty();
+    def->is_tagged_union_internal = 0;
     return def;
 }
 

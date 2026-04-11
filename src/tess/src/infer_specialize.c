@@ -885,9 +885,13 @@ static char const *unary_op_to_func_name(char const *op) {
 }
 
 // Check if a substituted monotype is a user-defined type (not a builtin).
+// Tagged-union-internal types (tag enum, variant structs, union struct) are
+// synthesized by the compiler and have no module of their own — they must not
+// inherit the containing module's operator overloads.
 static int is_user_defined_type(tl_monotype *mono) {
     if (!mono) return 0;
     if (!tl_monotype_is_inst(mono)) return 0;
+    if (mono->cons_inst->def->is_tagged_union_internal) return 0;
     return str_is_empty(mono->cons_inst->def->c_type_name);
 }
 

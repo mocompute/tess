@@ -245,6 +245,7 @@ typedef struct ast_node {
             u8                n_fields;
             u8                n_type_arguments;
             u8                is_union;
+            u8                is_tagged_union_internal; // tag/variant/union type synthesized from a tagged union; not a user-facing type
             str               tagged_union_name;
         } user_type_def;
 

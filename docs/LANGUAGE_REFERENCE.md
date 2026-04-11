@@ -2510,6 +2510,38 @@ if c: Circle := shape.& {
 }
 ```
 
+### Tag Field
+
+Every tagged union value has a `.tag` field that identifies which variant it holds. Two values of the same tagged union type have equal tags if and only if they are the same variant. The tag can be compared with `==` and `!=`:
+
+```tl
+a := Circle(2.0)
+b := Square(3.0)
+if a.tag == b.tag { /* same variant */ }
+```
+
+The tag's type is an implementation detail and cannot be named, stored in annotations, or returned from a function. It exists to enable fast discriminant checks — most notably, the short-circuit in a custom `eq` for a tagged union:
+
+```tl
+#module Shape
+eq(a: Shape, b: Shape) -> Bool {
+    if a.tag != b.tag { return false }
+    when a {
+        ca: Circle {
+            cb: Circle := b else { return false }
+            ca.radius == cb.radius
+        }
+        sa: Square {
+            sb: Square := b else { return false }
+            sa.length == sb.length
+        }
+        _: Empty { true }
+    }
+}
+```
+
+Without `.tag`, a structural equality check would need an N×N `when`-within-`when` to pair variants across both operands. The tag compare reduces this to an O(N) dispatch on one side.
+
 ## Traits
 
 Traits are compile-time type constraints that describe a set of functions a type must provide.
