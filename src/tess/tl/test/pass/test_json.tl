@@ -69,6 +69,24 @@ test_array(json) {
     error
 }
 
+test_object(json) {
+    error := 0
+
+    obj := json.create_object()
+    obj.set("abc", json.create_int(123))
+    obj.set("def", json.create_int(456))
+
+    error += if obj.contains("abc") {0} else {1}
+    error += if obj.contains("def") {0} else {1}
+
+    s: Some := obj.get("abc") else { return error + 1 }
+
+    // FIXME: fails due to lack of structural equality for Json.Value. Need to implement Eq trait.
+    error += if s.value == json.create_int(123) {0} else {1}
+
+    error
+}
+
 
 main() {
 
@@ -90,6 +108,7 @@ main() {
     error += test_jdouble(json)
     error += test_string(json)
     error += test_array(json)
+    error += test_object(json)
 
     error
 }
