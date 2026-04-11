@@ -27,6 +27,23 @@ Value: | JObject     { value: Ptr[HashMap[String, Ptr[Value]]] }
 
 }
 
+(self: Ptr[J.Value]): {
+    set(key: Ptr[Const[String]], value: Ptr[J.Value]) -> Void {
+        object: JObject := self.& else { _tl_fatal_(c"wrong variant") }
+        object->value.set(key.*, value)
+    }
+
+    get(key: Ptr[Const[String]]) -> Option[Ptr[J.Value]] {
+        object: JObject := self.& else { _tl_fatal_(c"wrong variant") }
+        val_ptr         := try object->value.get(key.*)
+        Some(val_ptr.*)
+    }
+
+    contains(key: Ptr[Const[String]]) -> Bool {
+        object: JObject := self.& else { _tl_fatal_(c"wrong variant") }
+        object->value.contains(key.*)
+    }
+}
 
 //
 // -- module Json.Context --
@@ -74,44 +91,44 @@ Context: {
         self->alloc.dealloc(self)
     }
 
-    create_string(str: Ptr[Const[String]]) {
+    create_string(str: Ptr[Const[String]]) -> Ptr[J.Value] {
         pval := self._alloc_value()
         pval.* = J.JString(value = str.copy(self->alloc))
         pval
     }
 
-    create_array() {
+    create_array() -> Ptr[J.Value] {
         pval := self._alloc_value()
         pval.* = J.JArray(value = Array.empty[Ptr[J.Value]]())
         pval
     }
 
-    create_object() {
+    create_object() -> Ptr[J.Value] {
         pval := self._alloc_value()
         pval.* = J.JObject(value = HashMap.create[String, Ptr[J.Value]](self->alloc))
         pval
 
     }
 
-    create_int(x) {
+    create_int(x: CInt64) -> Ptr[J.JInt64] {
         pval := self._alloc_value()
         pval.* = J.JInt64(x)
         pval
     }
 
-    create_uint(x) {
+    create_uint(x: CUInt64) -> Ptr[J.JUInt64] {
         pval := self._alloc_value()
         pval.* = J.JUInt64(x)
         pval
     }
 
-    create_double(x) {
+    create_double(x: CDouble) -> Ptr[J.Value] {
         pval := self._alloc_value()
         pval.* = J.JDouble(x)
         pval
     }
 
-    create_long_double(x) {
+    create_long_double(x: CLongDouble) -> Ptr[J.Value] {
         pval := self._alloc_value()
         pval.* = J.JLongDouble(x)
         pval
@@ -127,10 +144,8 @@ Context: {
 }
 
 (ctx: Ptr[Context], self: Ptr[J.Value]): {
-
     push(item: Ptr[J.Value]) {
         arr: JArray := self.& else { _tl_fatal_(c"wrong variant") }
         arr->value.push(ctx->alloc, item)
     }
-
 }
