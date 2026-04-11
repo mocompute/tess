@@ -2600,10 +2600,13 @@ u64 tl_monotype_hash64_(tl_monotype *self, u32 gen, hash_cycle_stack *in_progres
             forall(i, args) {
                 tl_monotype *arg = args.v[i];
 
-                // Look through unary (e.g. Ptr) specializations to the target. If the target is the same
-                // generic type constructor as ourselves, we simply tag it as "Self" and go no further.
-                if (tl_monotype_is_unary(arg)) {
-                    tl_monotype *target = tl_monotype_unary_target(arg);
+                // Look through Ptr specializations to the target so that `Ptr[T]` args hash the
+                // same whether T is a parameter or a concrete type, but narrowed to Ptr only — a
+                // broader unary check collides user types whose single field is itself a Ptr
+                // (e.g. `GenBoxPtr[T] = { value: Ptr[T] }`), because the walk would peel the outer
+                // user type down to its inner Ptr and discard T.
+                if (tl_monotype_is_ptr(arg)) {
+                    tl_monotype *target = tl_monotype_ptr_target(arg);
 
                     // Check if target is an ancestor in progress
                     u64 *ancestor = null;
@@ -2615,7 +2618,7 @@ u64 tl_monotype_hash64_(tl_monotype *self, u32 gen, hash_cycle_stack *in_progres
                         // back-reference: use the def hash as a stable hash
                         hash = hash64_combine(hash, ancestor, sizeof *ancestor);
                     } else {
-                        hash  = str_hash64_combine(hash, S("Unary"));
+                        hash  = str_hash64_combine(hash, S("Ptr"));
                         u64 h = tl_monotype_hash64_(target, gen, in_progress);
                         hash  = hash64_combine(hash, &h, sizeof h);
                     }

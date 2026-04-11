@@ -1287,6 +1287,100 @@ static int emit_trait_sig_error(tl_infer *self, ast_node *toplevel, tl_monotype 
               str_cstr(&expected_sig)));
 }
 
+static inline int seen_visit(hashmap **seen, void *ptr) {
+    if (ptr_hset_contains(*seen, ptr)) return 1;
+    ptr_hset_insert(seen, ptr);
+    return 0;
+}
+
+static tl_monotype *find_cons_inst_by_generic_name(tl_monotype *mono, str target_name, hashmap **seen) {
+    if (!mono || seen_visit(seen, mono)) return null;
+
+    if (tl_cons_inst == mono->tag) {
+        if (mono->cons_inst && mono->cons_inst->def &&
+            str_eq(mono->cons_inst->def->generic_name, target_name))
+            return mono;
+        forall(i, mono->cons_inst->args) {
+            tl_monotype *found =
+              find_cons_inst_by_generic_name(mono->cons_inst->args.v[i], target_name, seen);
+            if (found) return found;
+        }
+        return null;
+    }
+
+    if (tl_arrow == mono->tag || tl_tuple == mono->tag) {
+        forall(i, mono->list.xs) {
+            tl_monotype *found = find_cons_inst_by_generic_name(mono->list.xs.v[i], target_name, seen);
+            if (found) return found;
+        }
+    }
+    return null;
+}
+
+static i32 quant_index(tl_type_variable_sized quants, tl_type_variable tv) {
+    for (u32 i = 0; i < quants.size; i++)
+        if (quants.v[i] == tv) return (i32)i;
+    return -1;
+}
+
+// One-sided structural match: where impl_mono has a tl_var that names one of `quants`,
+// bind that slot in `v` to the corresponding subterm of concrete_mono. Bindings are
+// keyed by tl_type_variable identity so declaration order and field wrapping (e.g.
+// `GenBoxPtr[T]: {value: Ptr[T]}`) don't matter.
+static void collect_quant_bindings(tl_monotype *impl_mono, tl_monotype *concrete_mono,
+                                   tl_type_variable_sized quants, tl_monotype **v, hashmap **seen) {
+    if (!impl_mono || !concrete_mono) return;
+    if (seen_visit(seen, impl_mono)) return;
+
+    if (tl_var == impl_mono->tag) {
+        i32 idx = quant_index(quants, impl_mono->var);
+        if (idx >= 0 && v[idx] == null && tl_monotype_is_inst(concrete_mono)) {
+            v[idx] = concrete_mono;
+        }
+        return;
+    }
+
+    if (tl_cons_inst == impl_mono->tag && tl_cons_inst == concrete_mono->tag) {
+        tl_monotype_sized a = impl_mono->cons_inst->args;
+        tl_monotype_sized b = concrete_mono->cons_inst->args;
+        u32               n = a.size < b.size ? a.size : b.size;
+        for (u32 i = 0; i < n; i++) collect_quant_bindings(a.v[i], b.v[i], quants, v, seen);
+        return;
+    }
+
+    if ((tl_arrow == impl_mono->tag && tl_arrow == concrete_mono->tag) ||
+        (tl_tuple == impl_mono->tag && tl_tuple == concrete_mono->tag)) {
+        tl_monotype_sized a = impl_mono->list.xs;
+        tl_monotype_sized b = concrete_mono->list.xs;
+        u32               n = a.size < b.size ? a.size : b.size;
+        for (u32 i = 0; i < n; i++) collect_quant_bindings(a.v[i], b.v[i], quants, v, seen);
+    }
+}
+
+static tl_monotype_sized derive_impl_type_args(tl_infer *self, tl_polytype *impl_poly,
+                                               tl_monotype *concrete_type) {
+    tl_monotype_sized empty = {0};
+    if (!impl_poly || impl_poly->quantifiers.size == 0) return empty;
+    if (!concrete_type || !tl_monotype_is_inst(concrete_type)) return empty;
+    if (!concrete_type->cons_inst || !concrete_type->cons_inst->def) return empty;
+
+    str target_name = concrete_type->cons_inst->def->generic_name;
+    if (str_is_empty(target_name)) return empty;
+
+    hashmap     *walk_seen = hset_create(self->transient, 16);
+    tl_monotype *impl_inst = find_cons_inst_by_generic_name(impl_poly->type, target_name, &walk_seen);
+    if (!impl_inst) return empty;
+
+    u32           n = impl_poly->quantifiers.size;
+    tl_monotype **v = alloc_malloc(self->transient, n * sizeof *v);
+    for (u32 i = 0; i < n; i++) v[i] = null;
+
+    hashmap *match_seen = hset_create(self->transient, 16);
+    collect_quant_bindings(impl_inst, concrete_type, impl_poly->quantifiers, v, &match_seen);
+
+    return (tl_monotype_sized){.v = v, .size = n};
+}
+
 // Check that a function's full arrow type matches the trait signature's expected arrow.
 // Returns 0 on success, 1 on failure (error pushed).
 static int check_trait_arrow(tl_infer *self, ast_node *toplevel, tl_monotype *concrete_type, str trait_name,
@@ -1299,14 +1393,12 @@ static int check_trait_arrow(tl_infer *self, ast_node *toplevel, tl_monotype *co
     tl_monotype *actual_arrow = poly->type;
     if (!tl_monotype_is_arrow(actual_arrow)) return 0;
 
-    // Determine trait's type parameter name.
-    // Built-in traits (source_node == null) use "T".
-    // User-defined traits: first type argument name from the definition AST.
+    // Built-in traits have no source_node; fall back to "T".
+    // FIXME this is ridiculous: can't assume type argument naming
     str type_param = S("T");
     if (trait->source_node && trait->source_node->trait_def.n_type_arguments > 0)
         type_param = ast_node_str(trait->source_node->trait_def.type_arguments[0]);
 
-    // Parse the expected arrow AST with the trait's type parameter mapped to the concrete type.
     hot_parse_ctx_reinit(self, null);
     str_map_set_ptr(&self->hot_parse_ctx.type_arguments, type_param, concrete_type);
     tl_monotype *expected_arrow =
@@ -1314,24 +1406,27 @@ static int check_trait_arrow(tl_infer *self, ast_node *toplevel, tl_monotype *co
     self->hot_parse_ctx_guard = 0;
     if (!expected_arrow || !tl_monotype_is_arrow(expected_arrow)) return 0;
 
-    // Resolve the actual arrow to a concrete type.
-    // If the function is generic, instantiate its quantifiers with the concrete
-    // type's type arguments so that type parameters become concrete types.
-    tl_monotype      *actual_resolved;
-    tl_monotype_sized type_args = concrete_type->cons_inst->args;
+    tl_monotype *actual_resolved;
     if (poly->quantifiers.size > 0) {
-        if (type_args.size == 0 && poly->quantifiers.size == 1) {
-            // Generic trait function on a nullary type (e.g. Float.to_string[T] for CLongDouble):
-            // instantiate the single quantifier with the concrete type itself.
-            type_args = (tl_monotype_sized){.v = &concrete_type, .size = 1};
+        tl_monotype_sized derived = derive_impl_type_args(self, poly, concrete_type);
+
+        // Nullary-receiver shim: with a single quantifier and a nullary receiver, bind the
+        // quantifier to the receiver itself. Covers both a bare-var receiver param (e.g.
+        // `Int.classify(n) -> CInt` where `n` is unannotated, giving `forall t. (t) -> CInt`)
+        // and trait fns on nullary types like `Float.to_string[T]` on CLongDouble.
+        if (poly->quantifiers.size == 1 && concrete_type->cons_inst->args.size == 0 &&
+            (derived.size == 0 || derived.v[0] == null)) {
+            tl_monotype **v = alloc_malloc(self->transient, sizeof *v);
+            v[0]            = concrete_type;
+            derived         = (tl_monotype_sized){.v = v, .size = 1};
         }
-        actual_resolved = tl_polytype_instantiate_for_type(self->transient, poly, type_args, self->subs);
+
+        actual_resolved = tl_polytype_instantiate_for_type(self->transient, poly, derived, self->subs);
     } else {
         actual_resolved = tl_monotype_clone(self->transient, actual_arrow);
     }
     tl_monotype_substitute(self->transient, actual_resolved, self->subs, null);
 
-    // Compare full arrows by hash.
     if (tl_monotype_hash64(expected_arrow) != tl_monotype_hash64(actual_resolved)) {
         // Auto-address-of fallback: accept Ptr[T] or Ptr[Const[T]] params
         // where expected has T, with matching return type.
@@ -1436,7 +1531,6 @@ static int check_trait_bound_(tl_infer *self, ast_node *toplevel, tl_monotype *c
         }
     } else {
         // Function lookup path: user-defined traits on any type, or builtin traits on user types.
-        tl_monotype_sized type_args = concrete_type->cons_inst->args;
         for (u32 i = 0; i < trait->sigs.size; i++) {
             tl_trait_sig *sig = &trait->sigs.v[i];
             str func_name     = find_overload_func(self, concrete_type, str_cstr(&sig->name), sig->arity);
@@ -1453,12 +1547,19 @@ static int check_trait_bound_(tl_infer *self, ast_node *toplevel, tl_monotype *c
                 return emit_trait_bound_error(self, toplevel, concrete_type, trait_name, sig->name,
                                               sig->arity);
 
-            // Conditional conformance: if the conforming function has bounded type parameters,
-            // verify those bounds recursively using the concrete type's type arguments.
+            // Conditional conformance: recursively verify bounds on the impl function's own
+            // type parameters, using their concrete bindings derived from concrete_type.
             ast_node *func_top = toplevel_get(self, func_name);
             if (!func_top || !ast_node_is_let(func_top)) continue;
             u32 n_tp = func_top->let.n_type_parameters;
             if (n_tp == 0) continue;
+
+            // Use the final func_name's poly so the eq-from-cmp fallback maps through cmp's
+            // quantifiers, not eq's.
+            tl_polytype *func_poly = tl_type_env_lookup(self->env, func_name);
+            if (!func_poly) continue;
+
+            tl_monotype_sized derived = derive_impl_type_args(self, func_poly, concrete_type);
 
             for (u32 j = 0; j < n_tp; j++) {
                 ast_node *tp = func_top->let.type_parameters[j];
@@ -1466,9 +1567,13 @@ static int check_trait_bound_(tl_infer *self, ast_node *toplevel, tl_monotype *c
                 ast_node *bound = tp->symbol.annotation;
                 if (!bound) continue;
 
-                // Map the function's j-th type parameter to the concrete type's j-th type argument
-                if (j >= type_args.size) continue;
-                tl_monotype *inner_concrete = type_args.v[j];
+                // The AST type parameter's inferred polytype points at the tl_type_variable
+                // used as the impl poly's quantifier — look it up there to get its index.
+                if (!tp->type || !tp->type->type || !tl_monotype_is_tv(tp->type->type)) continue;
+                i32 qidx = quant_index(func_poly->quantifiers, tp->type->type->var);
+                if (qidx < 0 || (u32)qidx >= derived.size) continue;
+
+                tl_monotype *inner_concrete = derived.v[qidx];
                 if (!inner_concrete || !tl_monotype_is_inst(inner_concrete)) continue;
 
                 str inner_trait = trait_name_from_bound(bound);

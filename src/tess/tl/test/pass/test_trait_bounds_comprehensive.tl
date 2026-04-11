@@ -108,6 +108,37 @@ eq(a: Ptr[Const[Baz]], b: Ptr[Const[Baz]]) -> Bool {
     a->v == b->v
 }
 
+// --- Module for test_trait_bound_ptr_args ---
+
+#module PtrVec
+
+Vec: { x: Int, y: Int }
+
+add(a: Ptr[Const[Vec]], b: Ptr[Const[Vec]]) -> Vec {
+    Vec(x = a->x + b->x, y = a->y + b->y)
+}
+
+eq(a: Ptr[Const[Vec]], b: Ptr[Const[Vec]]) -> Bool {
+    a->x == b->x && a->y == b->y
+}
+
+cmp(a: Ptr[Const[Vec]], b: Ptr[Const[Vec]]) -> CInt {
+    dx: CInt := a->x - b->x
+    dy: CInt := a->y - b->y
+    if dx != 0 { dx }
+    else { dy }
+}
+
+// --- Module for test_trait_bound_generic_impl ---
+
+#module GenBox
+
+GenBox[T]: { value: T }
+
+eq[T: Eq](a: Ptr[Const[GenBox[T]]], b: Ptr[Const[GenBox[T]]]) -> Bool {
+    a->value == b->value
+}
+
 
 #module main
 
@@ -353,6 +384,62 @@ test_trait_bound_ptr_conform() {
     r
 }
 
+// === test_trait_bound_ptr_args ===
+//
+// Trait methods defined with Ptr[Const[T]] arguments should still satisfy
+// the Add/Eq/Ord bounds for T — generic code written in terms of `T` should
+// dispatch to them transparently.
+
+test_trait_bound_ptr_args() {
+    error := 0
+
+    a := PtrVec.Vec(x = 1, y = 2)
+    b := PtrVec.Vec(x = 1, y = 2)
+    c := PtrVec.Vec(x = 3, y = 4)
+
+    // Eq via methods taking Ptr[Const[Vec]]
+    error += if bounds_are_equal(a, b) { 0 } else { 1 }
+    error += if bounds_are_equal(a, c) { 1 } else { 0 }
+
+    // Ord via methods taking Ptr[Const[Vec]]
+    error += if bounds_is_less(a, c) { 0 } else { 1 }
+    error += if bounds_is_less(c, a) { 1 } else { 0 }
+
+    // Add via methods taking Ptr[Const[Vec]]
+    d := bounds_double(a)
+    error += if d.x == 2 && d.y == 4 { 0 } else { 1 }
+
+    error
+}
+
+// === test_trait_bound_generic_impl ===
+//
+// Generic trait implementation: `GenBox.eq` is itself parameterised by T,
+// with a `T: Eq` bound, and takes Ptr[Const[GenBox[T]]] arguments. Generic
+// code using the `Eq` bound on `GenBox[Int]` should dispatch to it.
+
+test_trait_bound_generic_impl() {
+    error := 0
+
+    // Specialisation 1: GenBox[Int]
+    b1 := GenBox(value = 42)
+    b2 := GenBox(value = 42)
+    b3 := GenBox(value = 99)
+
+    error += if bounds_are_equal(b1, b2) { 0 } else { 1 }
+    error += if bounds_are_equal(b1, b3) { 1 } else { 0 }
+
+    // Specialisation 2: GenBox[Float]
+    f1 := GenBox(value = 1.5)
+    f2 := GenBox(value = 1.5)
+    f3 := GenBox(value = 2.5)
+
+    error += if bounds_are_equal(f1, f2) { 0 } else { 1 }
+    error += if bounds_are_equal(f1, f3) { 1 } else { 0 }
+
+    error
+}
+
 // === main ===
 
 main() {
@@ -364,5 +451,7 @@ main() {
     error += test_trait_bounds_multi_type()
     error += test_trait_bound_forward_decl()
     error += test_trait_bound_ptr_conform()
+    error += test_trait_bound_ptr_args()
+    error += test_trait_bound_generic_impl()
     error
 }
