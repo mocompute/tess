@@ -239,6 +239,31 @@ test_operator_overload() {
     error += if a != b {0} else {1}
     error += if a != a {1} else {0}
 
+    // Pointer identity vs. structural equality on Ptr[Vec3].
+    // a2 has the same field values as a but lives at a different address.
+    a2 := OO_Vec1.Vec3(x = 1, y = 2, z = 3)
+    pa:  Ptr[OO_Vec1.Vec3] := a.&
+    pa2: Ptr[OO_Vec1.Vec3] := a2.&
+    pb:  Ptr[OO_Vec1.Vec3] := b.&
+
+    // == on Ptr[T] is raw pointer identity, NOT structural.
+    error += if pa == pa  {0} else {1}
+    error += if pa == pa2 {1} else {0}
+    error += if pa == pb  {1} else {0}
+    error += if pa != pa2 {0} else {1}
+
+    // Explicit deref dispatches to OO_Vec1.eq for structural equality.
+    error += if pa.* == pa2.* {0} else {1}
+    error += if pa.* == pb.*  {1} else {0}
+    error += if pa.* != pa2.* {1} else {0}
+    error += if pa.* != pb.*  {0} else {1}
+
+    // Same through Ptr[Const[Vec3]].
+    cpa:  Ptr[Const[OO_Vec1.Vec3]] := a.&
+    cpa2: Ptr[Const[OO_Vec1.Vec3]] := a2.&
+    error += if cpa == cpa2     {1} else {0}  // still pointer identity
+    error += if cpa.* == cpa2.* {0} else {1}  // structural via eq
+
     error
 }
 
