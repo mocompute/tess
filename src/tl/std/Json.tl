@@ -45,6 +45,51 @@ Value: | JObject     { value: Ptr[HashMap[String, Ptr[Value]]] }
     }
 }
 
+(self: Ptr[Const[J.Value]], other: Ptr[Const[J.Value]]): {
+    eq() {
+        if (self->tag != other->tag) { return false }
+        when self {
+            _: JTrue { true }
+            _: JFalse { true }
+            _: JNull { true }
+
+            s: JString {
+                o: JString := other else { false }
+                s.value == o.value
+            }
+            s: JInt64 {
+                o: JInt64 := other else { false }
+                s.value == o.value
+            }
+            s: JUInt64 {
+                o: JUInt64 := other else { false }
+                s.value == o.value
+            }
+            s: JDouble {
+                o: JDouble := other else { false }
+                s.value == o.value
+            }
+            s: JLongDouble {
+                o: JLongDouble := other else { false }
+                s.value == o.value
+            }
+
+            s: JArray {
+                o: JArray := other else { false }
+                // FIXME: array compare
+                false
+            }
+
+            s: JObject {
+                o: JObject := other else { false }
+                // FIXME: object compare
+                false
+            }
+
+        }
+    }
+}
+
 //
 // -- module Json.Context --
 //

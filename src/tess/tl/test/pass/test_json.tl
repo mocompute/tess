@@ -81,8 +81,8 @@ test_object(json) {
 
     s: Some := obj.get("abc") else { return error + 1 }
 
-    // FIXME: fails due to lack of structural equality for Json.Value. Need to implement Eq trait.
-    error += if s.value == json.create_int(123) {0} else {1}
+    // Deref pointers here to do structural equality rather than pointer identity
+    error += if s.value.* == json.create_int(123).* {0} else {1}
 
     error
 }
