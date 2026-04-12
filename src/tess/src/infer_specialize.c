@@ -1480,17 +1480,35 @@ static int emit_no_conform_bound_error(tl_infer *self, ast_node *toplevel, tl_mo
               str_cstr(&type_str), str_cstr(&trait_name), trait_generic_name));
 }
 
-// Check that a concrete type satisfies a trait bound. Returns 0 on success, 1 on failure.
-// On failure, pushes an error to self->errors.
-static int check_trait_bound_(tl_infer *self, ast_node *toplevel, tl_monotype *concrete_type,
-                              str trait_name, int depth) {
+static int emit_unknown_trait_error(tl_infer *self, ast_node *node, str trait_name) {
+    return push_trait_error(
+      self, node,
+      str_fmt(self->arena, "unknown trait '%s' in type parameter bound", str_cstr(&trait_name)));
+}
+
+static int emit_non_inst_bound_error(tl_infer *self, ast_node *node, tl_monotype *concrete_type,
+                                     str trait_name) {
+    str type_str = tl_monotype_to_user_string(self->transient, concrete_type);
+    return push_trait_error(
+      self, node,
+      str_fmt(self->arena,
+              "type %s cannot satisfy trait %s: only concrete instance types are supported",
+              str_cstr(&type_str), str_cstr(&trait_name)));
+}
+
+// `bound_node` is an optional precise error location (the type-parameter annotation);
+// when null, errors fall back to `toplevel`.
+static int check_trait_bound_(tl_infer *self, ast_node *toplevel, ast_node *bound_node,
+                              tl_monotype *concrete_type, str trait_name, int depth) {
 
     if (depth >= TRAIT_BOUND_MAX_DEPTH) return 0;
 
-    tl_trait_def *trait = str_map_get_ptr(self->traits, trait_name);
-    if (!trait) return 0; // Unknown trait — skip (may be a type, not a trait)
+    ast_node     *err_node = bound_node ? bound_node : toplevel;
+    tl_trait_def *trait    = str_map_get_ptr(self->traits, trait_name);
+    if (!trait) return emit_unknown_trait_error(self, err_node, trait_name);
 
-    if (!tl_monotype_is_inst(concrete_type)) return 0; // Not a concrete inst type — skip
+    if (!tl_monotype_is_inst(concrete_type))
+        return emit_non_inst_bound_error(self, err_node, concrete_type, trait_name);
 
     // Check for [[no_conform(Trait)]] on the type
     if (has_no_conform(self, concrete_type, str_cstr(&trait->generic_name)))
@@ -1579,21 +1597,23 @@ static int check_trait_bound_(tl_infer *self, ast_node *toplevel, tl_monotype *c
                 str inner_trait = trait_name_from_bound(bound);
                 if (str_is_empty(inner_trait)) continue;
 
-                if (check_trait_bound_(self, toplevel, inner_concrete, inner_trait, depth + 1)) return 1;
+                if (check_trait_bound_(self, toplevel, bound, inner_concrete, inner_trait, depth + 1))
+                    return 1;
             }
         }
     }
 
     // Check parent traits (trait inheritance)
     forall(i, trait->parents) {
-        if (check_trait_bound_(self, toplevel, concrete_type, trait->parents.v[i], depth + 1)) return 1;
+        if (check_trait_bound_(self, toplevel, bound_node, concrete_type, trait->parents.v[i], depth + 1))
+            return 1;
     }
 
     return 0;
 }
 
 int check_trait_bound(tl_infer *self, ast_node *toplevel, tl_monotype *concrete_type, str trait_name) {
-    return check_trait_bound_(self, toplevel, concrete_type, trait_name, 0);
+    return check_trait_bound_(self, toplevel, null, concrete_type, trait_name, 0);
 }
 
 // Resolve the concrete type for the i-th type parameter. Tries explicit call-site
@@ -1670,7 +1690,7 @@ static int verify_trait_bounds(tl_infer *self, ast_node *toplevel, str name, tl_
         str trait_name = trait_name_from_bound(bound);
         if (str_is_empty(trait_name)) continue;
 
-        if (check_trait_bound(self, toplevel, concrete, trait_name)) return 1;
+        if (check_trait_bound_(self, toplevel, bound, concrete, trait_name, 0)) return 1;
     }
     return 0;
 }
