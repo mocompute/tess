@@ -97,7 +97,7 @@ Mutate[T]: {
 }
 
 #module Int
-mutate(self) -> CInt { self.* = self.* + 1; 1 }
+mutate(self: Ptr[Int]) -> CInt { self.* = self.* + 1; 1 }
 
 
 #module main

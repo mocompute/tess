@@ -1596,8 +1596,17 @@ int check_trait_bound(tl_infer *self, ast_node *toplevel, tl_monotype *concrete_
     return check_trait_bound_(self, toplevel, concrete_type, trait_name, 0);
 }
 
-// Resolve the concrete type for the i-th type parameter from the arrow or resolved_type_args.
-static tl_monotype *resolve_type_param_concrete(tl_infer *self, ast_node *toplevel, tl_monotype *arrow,
+// Resolve the concrete type for the i-th type parameter. Tries explicit call-site
+// type arguments first, then falls back to slot i of the structural bindings the
+// caller precomputed by walking the generic's polytype arrow against the
+// substituted callsite arrow (see verify_trait_bounds).
+//
+// Positional (not identity) mapping: the AST's type_parameters[i]->type->type->var
+// and poly->quantifiers.v[i] are distinct tl_type_variable ids (they come from
+// separate generations — alpha-conversion vs. generalize), so quant_index lookup
+// doesn't work here. But both lists preserve declaration order, so slot i lines up.
+static tl_monotype *resolve_type_param_concrete(tl_infer *self, tl_polytype *poly,
+                                                tl_monotype **bindings, u32 n_quants,
                                                 tl_monotype_sized resolved_type_args, u32 i) {
     // First try resolved_type_args (explicit type arguments at call site)
     if (i < resolved_type_args.size && resolved_type_args.v[i]) {
@@ -1609,35 +1618,44 @@ static tl_monotype *resolve_type_param_concrete(tl_infer *self, ast_node *toplev
         if (tl_monotype_is_concrete(m)) return m;
     }
 
-    // Fall back: match the type parameter against the arrow's parameter types.
-    // The type parameter appears in the function's value parameters. Find the first
-    // value parameter whose original annotation references this type parameter,
-    // and read the corresponding concrete type from the arrow.
-    if (!tl_monotype_is_arrow(arrow)) return null;
-    tl_monotype_sized arrow_args = arrow->list.xs.v[0]->list.xs;
-    ast_node         *tp         = toplevel->let.type_parameters[i];
-    str               tp_name    = tp->symbol.name;
-
-    u32               n_params   = toplevel->let.n_parameters;
-    for (u32 j = 0; j < n_params && j < arrow_args.size; j++) {
-        ast_node *param = toplevel->let.parameters[j];
-        if (!ast_node_is_symbol(param)) continue;
-        // Check if this parameter's annotation references the type parameter
-        ast_node *ann = param->symbol.annotation;
-        if (ann && ast_node_is_symbol(ann) && str_eq(ann->symbol.name, tp_name)) {
-            return arrow_args.v[j];
-        }
-    }
-    return null;
+    if (!poly || !bindings || i >= n_quants) return null;
+    return bindings[i];
 }
 
 // Verify trait bounds on a generic function's type parameters against resolved concrete types.
 // Returns 0 on success, 1 if any bound is not satisfied.
-static int verify_trait_bounds(tl_infer *self, ast_node *toplevel, tl_monotype *arrow,
+static int verify_trait_bounds(tl_infer *self, ast_node *toplevel, str name, tl_monotype *arrow,
                                tl_monotype_sized resolved_type_args) {
     if (!ast_node_is_let(toplevel)) return 0;
     u32 n_tp = toplevel->let.n_type_parameters;
     if (n_tp == 0) return 0;
+
+    // Skip the structural walk entirely when no type parameter has a bound — the
+    // common case for most stdlib generics.
+    int any_bound = 0;
+    for (u32 i = 0; i < n_tp; i++) {
+        ast_node *tp = toplevel->let.type_parameters[i];
+        if (ast_node_is_symbol(tp) && tp->symbol.annotation) {
+            any_bound = 1;
+            break;
+        }
+    }
+    if (!any_bound) return 0;
+
+    // We inline collect_quant_bindings here instead of reusing derive_impl_type_args,
+    // which is keyed on searching for a specific cons_inst by generic_name — the wrong
+    // shape for walking a full arrow at the top level.
+    tl_polytype  *poly     = tl_type_env_lookup(self->env, name);
+    tl_monotype **bindings = null;
+    u32           n_quants = 0;
+    if (poly && poly->quantifiers.size > 0 && tl_monotype_is_arrow(poly->type) &&
+        tl_monotype_is_arrow(arrow)) {
+        n_quants = poly->quantifiers.size;
+        bindings = alloc_malloc(self->transient, n_quants * sizeof *bindings);
+        for (u32 k = 0; k < n_quants; k++) bindings[k] = null;
+        hashmap *seen = hset_create(self->transient, 16);
+        collect_quant_bindings(poly->type, arrow, poly->quantifiers, bindings, &seen);
+    }
 
     for (u32 i = 0; i < n_tp; i++) {
         ast_node *tp = toplevel->let.type_parameters[i];
@@ -1645,7 +1663,8 @@ static int verify_trait_bounds(tl_infer *self, ast_node *toplevel, tl_monotype *
         ast_node *bound = tp->symbol.annotation;
         if (!bound) continue;
 
-        tl_monotype *concrete = resolve_type_param_concrete(self, toplevel, arrow, resolved_type_args, i);
+        tl_monotype *concrete =
+          resolve_type_param_concrete(self, poly, bindings, n_quants, resolved_type_args, i);
         if (!concrete) continue;
 
         str trait_name = trait_name_from_bound(bound);
@@ -1689,7 +1708,7 @@ str specialize_arrow(tl_infer *self, traverse_ctx *tctx, str name, tl_monotype *
     if (!toplevel) return str_empty();
 
     // 2b. Verify trait bounds on type parameters
-    if (verify_trait_bounds(self, toplevel, arrow, resolved_type_args)) return str_empty();
+    if (verify_trait_bounds(self, toplevel, name, arrow, resolved_type_args)) return str_empty();
 
     // 3. Create unique instance name(e.g., "identity_0")
     name_and_type key       = make_instance_key(self, name, arrow, resolved_type_args);
