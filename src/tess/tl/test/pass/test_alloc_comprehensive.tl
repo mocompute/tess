@@ -1,6 +1,13 @@
 #module main
 #import <Alloc.tl>
 #import <Unsafe.tl>
+#include <stdalign.h>
+
+#ifc
+size_t tl_test_alignof_max_align_t(void) { return alignof(max_align_t); }
+#endc
+
+c_tl_test_alignof_max_align_t() -> CSize
 
 Allocator = Alloc.Allocator
 
@@ -22,6 +29,12 @@ test_align() {
     else {
         error += if Alloc.align_max(max_align + 1zu) == 2zu * max_align {0} else {1}
     }
+
+    // _Header and _Block sizes must be multiples of alignof(max_align_t) so user data stays aligned
+    align_max_align_t := c_tl_test_alignof_max_align_t()
+    error += if sizeof[Alloc.BumpAllocator._Header]() % align_max_align_t == 0zu {0} else {1}
+    error += if sizeof[Alloc.BumpAllocator._Block]() % align_max_align_t == 0zu {0} else {1}
+
     error
 }
 
