@@ -1385,20 +1385,21 @@ static tl_monotype_sized derive_impl_type_args(tl_infer *self, tl_polytype *impl
 // Returns 0 on success, 1 on failure (error pushed).
 static int check_trait_arrow(tl_infer *self, ast_node *toplevel, tl_monotype *concrete_type, str trait_name,
                              tl_trait_sig *sig, tl_trait_def *trait, str func_name) {
-    if (!sig->arrow) return 0;
+    if (!sig->arrow) fatal("trait signature arrow missing");
 
     tl_polytype *poly = tl_type_env_lookup(self->env, func_name);
-    if (!poly) return 0;
+    if (!poly) fatal("missing function '%s'", str_cstr(&func_name));
 
     tl_monotype *actual_arrow = poly->type;
-    if (!tl_monotype_is_arrow(actual_arrow)) return 0;
+    if (!tl_monotype_is_arrow(actual_arrow)) fatal("expected arrow: '%s'", str_cstr(&func_name));
 
     hot_parse_ctx_reinit(self, null);
     str_map_set_ptr(&self->hot_parse_ctx.type_arguments, trait->type_param_name, concrete_type);
     tl_monotype *expected_arrow =
       tl_type_registry_parse_type_with_ctx(self->registry, sig->arrow, &self->hot_parse_ctx);
     self->hot_parse_ctx_guard = 0;
-    if (!expected_arrow || !tl_monotype_is_arrow(expected_arrow)) return 0;
+    if (!expected_arrow || !tl_monotype_is_arrow(expected_arrow))
+        fatal("arrow reparse failed: '%s'", str_cstr(&func_name));
 
     tl_monotype *actual_resolved;
     if (poly->quantifiers.size > 0) {
@@ -1485,8 +1486,7 @@ static int emit_non_inst_bound_error(tl_infer *self, ast_node *node, tl_monotype
     str type_str = tl_monotype_to_user_string(self->transient, concrete_type);
     return push_trait_error(
       self, node,
-      str_fmt(self->arena,
-              "type %s cannot satisfy trait %s: only concrete instance types are supported",
+      str_fmt(self->arena, "type %s cannot satisfy trait %s: only concrete instance types are supported",
               str_cstr(&type_str), str_cstr(&trait_name)));
 }
 
@@ -1619,9 +1619,8 @@ int check_trait_bound(tl_infer *self, ast_node *toplevel, tl_monotype *concrete_
 // and poly->quantifiers.v[i] are distinct tl_type_variable ids (they come from
 // separate generations — alpha-conversion vs. generalize), so quant_index lookup
 // doesn't work here. But both lists preserve declaration order, so slot i lines up.
-static tl_monotype *resolve_type_param_concrete(tl_infer *self, tl_polytype *poly,
-                                                tl_monotype **bindings, u32 n_quants,
-                                                tl_monotype_sized resolved_type_args, u32 i) {
+static tl_monotype *resolve_type_param_concrete(tl_infer *self, tl_polytype *poly, tl_monotype **bindings,
+                                                u32 n_quants, tl_monotype_sized resolved_type_args, u32 i) {
     // First try resolved_type_args (explicit type arguments at call site)
     if (i < resolved_type_args.size && resolved_type_args.v[i]) {
         tl_monotype *m = resolved_type_args.v[i];
