@@ -64,17 +64,17 @@ _Header: {
     next:     Ptr[_Header],
     capacity: CSize,
     size:     CSize,
-    _pad:     CSize,          // align to sizeof(max_align_t)
+    _pad:     CSize,                    // align to sizeof(max_align_t)
 }
 
 create(alloc: Ptr[Allocator], capacity: CSize) -> Ptr[_Header]
 
 #module Alloc.BumpAllocator
 
-// Bump allocator block allocated by a client. Client data follows the size field.
+// Bump allocator block allocated by a client. Client data follows the block.
 _Block: {
     size: CSize,
-    _pad: CSize,              // align to sizeof(max_align_t)
+    _pad: CSize,                        // align to sizeof(max_align_t)
 }
 
 BumpAllocator: {
@@ -310,7 +310,7 @@ _aligned_alloc(a: Ptr[Allocator], sz: CSize, alignment: CSize) -> Ptr[any] {
 
     arena: Ptr[BumpAllocator] := a
 
-    sz = Alloc.align_max(sz)
+    sz = Alloc.align(sz, alignment)
     if 0 == sz { return null }
 
     // Upper bound on space needed: sz + alignment covers worst-case padding
