@@ -288,6 +288,10 @@ int toplevel_tagged_union(parser *self) {
             return ERROR_STOP;
         }
 
+        // Parse optional : between variant name and body.
+        // TODO: decide if this should be a required change in syntax
+        if (0 == a_try(self, a_colon)) (void)0;
+
         // Parse optional struct body { field: Type, ... }
         ast_node_array fields = {.alloc = self->ast_arena};
         if (0 == a_try(self, a_open_curly)) {
