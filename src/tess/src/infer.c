@@ -23,12 +23,12 @@ static inline void transient_reset(tl_infer *self) {
 // ============================================================================
 
 // Build a synthetic arrow AST for a built-in trait signature.
-// All parameters are named "T" (the trait's implicit type parameter).
-// ret_type is the return type name: "T" for Self, or a concrete name like "CSize".
-static ast_node *make_builtin_trait_arrow(allocator *a, u8 arity, char const *ret_type) {
+// type_param names the trait's implicit Self parameter; ret_type is either type_param
+// (for Self) or a concrete type name like "CSize".
+static ast_node *make_builtin_trait_arrow(allocator *a, str type_param, u8 arity, char const *ret_type) {
     ast_node_array params = {.alloc = a};
     for (u8 j = 0; j < arity; j++) {
-        ast_node *p = ast_node_create_sym_c(a, "T");
+        ast_node *p = ast_node_create_sym(a, type_param);
         array_push(params, p);
     }
     ast_node *tuple = ast_node_create_tuple(a, (ast_node_sized)array_sized(params));
@@ -93,33 +93,36 @@ tl_infer *tl_infer_create(allocator *alloc, tl_infer_opts const *opts) {
           {"Shr", "shr", 2, "T"},      {"Eq", "eq", 2, "Bool"},       {"Neg", "neg", 1, "T"},
           {"Not", "not", 1, "Bool"},   {"BitNot", "bit_not", 1, "T"},
         };
+        str const builtin_type_param = str_init(self->arena, "T");
         for (u32 i = 0; i < sizeof(builtins) / sizeof(builtins[0]); i++) {
-            tl_trait_def *def = new(self->arena, tl_trait_def);
-            def->name         = str_init(self->arena, builtins[i].name);
-            def->generic_name = str_init(self->arena, builtins[i].name);
-            def->parents      = (str_array){.alloc = self->arena};
-            def->sigs         = (tl_trait_sig_array){.alloc = self->arena};
-            def->source_node  = null;
-            tl_trait_sig sig  = {
-               .name  = str_init(self->arena, builtins[i].func),
-               .arity = builtins[i].arity,
-               .arrow = make_builtin_trait_arrow(self->arena, builtins[i].arity, builtins[i].ret)};
+            tl_trait_def *def    = new(self->arena, tl_trait_def);
+            def->name            = str_init(self->arena, builtins[i].name);
+            def->generic_name    = str_init(self->arena, builtins[i].name);
+            def->type_param_name = builtin_type_param;
+            def->parents         = (str_array){.alloc = self->arena};
+            def->sigs            = (tl_trait_sig_array){.alloc = self->arena};
+            def->source_node     = null;
+            tl_trait_sig sig     = {.name  = str_init(self->arena, builtins[i].func),
+                                    .arity = builtins[i].arity,
+                                    .arrow = make_builtin_trait_arrow(self->arena, builtin_type_param,
+                                                                      builtins[i].arity, builtins[i].ret)};
             array_push(def->sigs, sig);
             str_map_set_ptr(&self->traits, def->name, def);
         }
         // Ord inherits from Eq and has cmp
         {
-            tl_trait_def *def = new(self->arena, tl_trait_def);
-            def->name         = str_init(self->arena, "Ord");
-            def->generic_name = str_init(self->arena, "Ord");
-            def->parents      = (str_array){.alloc = self->arena};
-            def->sigs         = (tl_trait_sig_array){.alloc = self->arena};
-            def->source_node  = null;
-            str parent        = str_init(self->arena, "Eq");
+            tl_trait_def *def    = new(self->arena, tl_trait_def);
+            def->name            = str_init(self->arena, "Ord");
+            def->generic_name    = str_init(self->arena, "Ord");
+            def->type_param_name = builtin_type_param;
+            def->parents         = (str_array){.alloc = self->arena};
+            def->sigs            = (tl_trait_sig_array){.alloc = self->arena};
+            def->source_node     = null;
+            str parent           = str_init(self->arena, "Eq");
             array_push(def->parents, parent);
             tl_trait_sig sig = {.name  = str_init(self->arena, "cmp"),
                                 .arity = 2,
-                                .arrow = make_builtin_trait_arrow(self->arena, 2, "CInt")};
+                                .arrow = make_builtin_trait_arrow(self->arena, builtin_type_param, 2, "CInt")};
             array_push(def->sigs, sig);
             str_map_set_ptr(&self->traits, def->name, def);
         }

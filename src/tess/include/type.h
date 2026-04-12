@@ -66,11 +66,12 @@ defarray(tl_trait_sig_array, tl_trait_sig);
 
 // Trait definition (stored in trait registry)
 typedef struct {
-    str                name;         // module-mangled trait name (e.g., Math__Sortable)
-    str                generic_name; // unmangled name (Sortable)
-    str_array          parents;      // parent trait names (module-mangled)
-    tl_trait_sig_array sigs;         // function signatures
-    ast_node          *source_node;  // AST node for error reporting (null for builtins)
+    str                name;            // module-mangled trait name (e.g., Math__Sortable)
+    str                generic_name;    // unmangled name (Sortable)
+    str                type_param_name; // name of the implicit Self parameter (e.g. "T")
+    str_array          parents;         // parent trait names (module-mangled)
+    tl_trait_sig_array sigs;            // function signatures
+    ast_node          *source_node;     // AST node for error reporting (null for builtins)
 } tl_trait_def;
 
 typedef struct {

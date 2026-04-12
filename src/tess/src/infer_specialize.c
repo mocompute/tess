@@ -1393,14 +1393,8 @@ static int check_trait_arrow(tl_infer *self, ast_node *toplevel, tl_monotype *co
     tl_monotype *actual_arrow = poly->type;
     if (!tl_monotype_is_arrow(actual_arrow)) return 0;
 
-    // Built-in traits have no source_node; fall back to "T".
-    // FIXME this is ridiculous: can't assume type argument naming
-    str type_param = S("T");
-    if (trait->source_node && trait->source_node->trait_def.n_type_arguments > 0)
-        type_param = ast_node_str(trait->source_node->trait_def.type_arguments[0]);
-
     hot_parse_ctx_reinit(self, null);
-    str_map_set_ptr(&self->hot_parse_ctx.type_arguments, type_param, concrete_type);
+    str_map_set_ptr(&self->hot_parse_ctx.type_arguments, trait->type_param_name, concrete_type);
     tl_monotype *expected_arrow =
       tl_type_registry_parse_type_with_ctx(self->registry, sig->arrow, &self->hot_parse_ctx);
     self->hot_parse_ctx_guard = 0;
