@@ -4,6 +4,8 @@
 // Simple struct for testing
 Point: { x: Int, y: Int }
 
+Wrapper[T]: { val: T }
+
 main() {
     error := 0
 
@@ -34,6 +36,15 @@ main() {
     error += if alignof[CInt16]() >= 2zu {0} else {1}
     error += if alignof[CInt32]() >= 4zu {0} else {1}
     error += if alignof[CInt64]() >= 4zu {0} else {1} // 8 on most 64-bit platforms
+
+    // Test alignof on generic struct with CLongDouble (16-byte alignment)
+    error += if alignof[CLongDouble]() == 16zu {0} else {1}
+    error += if alignof[Wrapper[CLongDouble]]() == 16zu {0} else {1}
+    error += if alignof[Wrapper[CLongDouble]]() == alignof[CLongDouble]() {0} else {1}
+
+    // Test generic struct inherits alignment of its type parameter
+    error += if alignof[Wrapper[CChar]]() == alignof[CChar]() {0} else {1}
+    error += if alignof[Wrapper[CInt64]]() == alignof[CInt64]() {0} else {1}
 
     error
 }
