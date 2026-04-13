@@ -1802,11 +1802,9 @@ static int check_const_violation(tl_infer *self, ast_node *lhs) {
 
     // ptr.* = value: unary dereference of a const pointer
     if (lhs->tag == ast_unary_op && str_eq(ast_node_str(lhs->unary_op.op), S("*"))) {
-        ast_node *operand = lhs->unary_op.operand;
-        if (operand->type && operand->type->type) {
-            tl_monotype *t = operand->type->type;
-            if (tl_monotype_is_ptr_to_const(t)) return 1;
-        }
+        ast_node    *operand = lhs->unary_op.operand;
+        tl_monotype *t       = operand->type->type;
+        if (tl_monotype_is_ptr_to_const(t)) return 1;
     }
 
     // Walk the full binary-op chain (struct access / index).
@@ -1827,17 +1825,10 @@ static int check_const_violation(tl_infer *self, ast_node *lhs) {
     // If the root binding is Const[T], reject the mutation.
     {
         ast_node *cur = lhs;
-        while (cur && cur->tag == ast_binary_op) {
-            str         op   = ast_node_str(cur->binary_op.op);
-            char const *op_s = str_cstr(&op);
-            if (is_struct_access_operator(op_s) || is_index_operator(op_s)) cur = cur->binary_op.left;
-            else break;
-        }
-        if (cur && cur != lhs && cur->type && cur->type->type) {
-            tl_polytype_substitute(self->arena, cur->type, self->subs);
-            tl_monotype *root_type = cur->type->type;
-            if (tl_monotype_is_const(root_type)) return 1;
-        }
+        while (cur && cur->tag == ast_binary_op) cur = cur->binary_op.left;
+        tl_polytype_substitute(self->arena, cur->type, self->subs);
+        tl_monotype *root_type = cur->type->type;
+        if (tl_monotype_is_const(root_type)) return 1;
     }
 
     return 0;
