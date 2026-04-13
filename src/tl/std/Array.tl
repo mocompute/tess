@@ -98,6 +98,7 @@ Array[T]: {
 
     // -- Element access (bounds-checked) --
 
+    at   (index: CSize) -> T
     get  (index: CSize) -> T
     front()             -> T
     back ()             -> T
@@ -436,10 +437,12 @@ _merge[T](v, tmp, lo, mid, hi, cmp: (T, T) -> Int, width) {
 // -- Immutable operations --
 
 (arr: Ptr[Const[Array[T]]]): {
-    get(index: CSize) -> T {
-        if index >= arr->size { _tl_fatal_(c"Array.get: index out of bounds") }
+    at(index: CSize) -> T {
+        if index >= arr->size { _tl_fatal_(c"Array.at: index out of bounds") }
         arr->data.[index]
     }
+
+    get(index: CSize) -> T { arr.at(index) }
 
     front() -> T {
         if arr->size == 0 { _tl_fatal_(c"Array.front: empty array") }
