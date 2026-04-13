@@ -305,7 +305,13 @@ static char *normalize_ops(allocator *alloc, char const *line) {
                     continue;
                 }
             }
-            // Check for unary context
+            // Whitespace before the operator with a digit immediately after is a
+            // unary literal token (e.g. `return -1`, `if -n`).  Preserve as-is.
+            if (i > 0 && (line[i - 1] == ' ' || line[i - 1] == '\t') && isdigit((unsigned char)next)) {
+                EMIT_CHAR(out, c);
+                continue;
+            }
+            // Unary context from surrounding punctuation (e.g. `(-x)`, `{-1}`)
             char prev = last_nonspace(&out);
             if (prev == '\0' || is_unary_context(prev)) {
                 // Unary — no space before

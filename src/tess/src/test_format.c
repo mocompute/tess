@@ -81,6 +81,15 @@ static int test_normalize_ops(void) {
 
     error += check(alloc, "unary minus preserved", "(-x)", "(-x)\n");
 
+    error += check(alloc, "unary minus after return", "if true { return -1 }", "if true { return -1 }\n");
+
+    error += check(alloc, "unary minus after if", "f() {\nif -1 < n {\nx\n}\n}",
+                   "f() {\n"
+                   "    if -1 < n {\n"
+                   "        x\n"
+                   "    }\n"
+                   "}\n");
+
     error += check(alloc, "member -> no spaces", "a->b", "a->b\n");
 
     error += check(alloc, "dot no spaces", "a.b", "a.b\n");
