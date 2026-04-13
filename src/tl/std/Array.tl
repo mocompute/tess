@@ -76,6 +76,11 @@ Array[T]: {
 
     sort(cmp: (T, T) -> Int) -> Void
 
+    // -- Reordering --
+
+    reverse()                   -> Void
+    swap   (i: CSize, j: CSize) -> Void
+
     // -- With allocators --
 
     push         (alloc: Ptr[Allocator], x: T)                   -> Void
@@ -112,11 +117,6 @@ Array[T]: {
     // -- Sorting --
 
     sorted(cmp: (T, T) -> Int) -> Array[T]
-
-    // -- Reordering --
-
-    reverse()                   -> Void
-    swap   (i: CSize, j: CSize) -> Void
 
     // -- Functional operations --
 
@@ -318,6 +318,24 @@ _merge[T](v, tmp, lo, mid, hi, cmp: (T, T) -> Int, width) {
         self.sort(Alloc.context.transient, cmp)
     }
 
+    reverse() {
+        if self->size == 0 { return void }
+        i: CSize := 0
+        j        := self->size - 1
+        while i < j, i += 1 {
+            self.swap(i, j)
+            j -= 1
+        }
+    }
+
+    swap(i, j) {
+        if i >= self->size { _tl_fatal_(c"Array.swap: index out of bounds") }
+        if j >= self->size { _tl_fatal_(c"Array.swap: index out of bounds") }
+        tmp := self->data.[i]
+        self->data.[i] = self->data.[j]
+        self->data.[j] = tmp
+    }
+
     // -- With allocators --
 
     push(alloc, x) {
@@ -470,24 +488,6 @@ _merge[T](v, tmp, lo, mid, hi, cmp: (T, T) -> Int, width) {
 
     sorted(cmp: (T, T) -> Int) {
         arr.sorted(Alloc.context.default, Alloc.context.transient, cmp)
-    }
-
-    reverse() {
-        if arr->size == 0 { return void }
-        i: CSize := 0
-        j        := arr->size - 1
-        while i < j, i += 1 {
-            arr.swap(i, j)
-            j -= 1
-        }
-    }
-
-    swap(i, j) {
-        if i >= arr->size { _tl_fatal_(c"Array.swap: index out of bounds") }
-        if j >= arr->size { _tl_fatal_(c"Array.swap: index out of bounds") }
-        tmp := arr->data.[i]
-        arr->data.[i] = arr->data.[j]
-        arr->data.[j] = tmp
     }
 
     map[T, U](f: (T) -> U) {

@@ -1809,16 +1809,17 @@ static int check_const_violation(tl_infer *self, ast_node *lhs) {
         }
     }
 
-    // ptr->field = value, ptr.field = value, or ptr[i] = value
-    if (lhs->tag == ast_binary_op) {
-        str         op   = ast_node_str(lhs->binary_op.op);
-        char const *op_s = str_cstr(&op);
-        if (is_struct_access_operator(op_s) || is_index_operator(op_s)) {
-            ast_node *left = lhs->binary_op.left;
-            if (left->type && left->type->type) {
-                tl_monotype *t = left->type->type;
-                if (tl_monotype_is_ptr_to_const(t)) return 1;
-            }
+    // Walk the full binary-op chain (struct access / index).
+    // At each level, if the left operand is Ptr[Const[...]], reject the mutation.
+    // This catches both direct cases (ptr->field = v) and chained cases
+    // (ptr->field.[i] = v) where the Ptr[Const[...]] may be deeper in the chain.
+    {
+        ast_node *cur = lhs;
+        while (cur && cur->tag == ast_binary_op) {
+            ast_node    *left = cur->binary_op.left;
+            tl_monotype *t    = left->type->type;
+            if (tl_monotype_is_ptr_to_const(t)) return 1;
+            cur = cur->binary_op.left;
         }
     }
 
@@ -1882,7 +1883,7 @@ static int infer_reassignment(tl_infer *self, traverse_ctx *ctx, ast_node *node)
             array_push(self->errors, ((tl_infer_error){.tag = tl_err_const_violation, .node = node}));
             return 1;
         }
-    }
+    } else fatal("runtime error");
 
     // For compound assignment (+=, -=, etc.) the value is an arithmetic operand,
     // so require exact type match — same rule as binary operators.
