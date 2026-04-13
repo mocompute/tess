@@ -140,6 +140,8 @@ Array[T]: {
     sorted       (alloc: Ptr[Allocator], tmp_alloc: Ptr[Allocator], cmp: (T, T) -> Int) -> Array[T]
 }
 
+// Ord conformance, conditional on T: Ord
+cmp[T: Ord](self: Ptr[Const[Array[T]]], other: Ptr[Const[Array[T]]]) -> CInt
 
 // -- Private functions --
 
@@ -605,6 +607,18 @@ _merge[T](v, tmp, lo, mid, hi, cmp: (T, T) -> Int, width) {
     }
 
 }
+
+cmp[T: Ord](self: Ptr[Const[Array[T]]], other: Ptr[Const[Array[T]]]) -> CInt {
+    if self->size < other->size { return -1 }
+    if self->size > other->size { return +1 }
+
+    for i := 0, i < self->size, i += 1 {
+        if self->data.[i] < other->data.[i] { return -1 }
+        if self->data.[i] > other->data.[i] { return +1 }
+    }
+    return 0
+}
+
 
 // -- Iterator interface --
 

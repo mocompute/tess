@@ -198,6 +198,80 @@ test_zero_capacity() {
     error
 }
 
+test_cmp_equal() {
+    error := 0
+    a     := Array.empty[Int]()
+    defer a.free()
+    b := Array.empty[Int]()
+    defer b.free()
+    a.push(1)
+    a.push(2)
+    a.push(3)
+    b.push(1)
+    b.push(2)
+    b.push(3)
+    if a.cmp(b) != 0 { error += 1 }
+    error
+}
+
+test_cmp_empty() {
+    error := 0
+    a     := Array.empty[Int]()
+    defer a.free()
+    b := Array.empty[Int]()
+    defer b.free()
+    if a.cmp(b) != 0 { error += 1 }
+    error
+}
+
+test_cmp_less_by_element() {
+    error := 0
+    a     := Array.empty[Int]()
+    defer a.free()
+    b := Array.empty[Int]()
+    defer b.free()
+    a.push(1)
+    a.push(2)
+    b.push(1)
+    b.push(3)
+    if a.cmp(b) >= 0 { error += 1 }
+    error
+}
+
+test_cmp_greater_by_element() {
+    error := 0
+    a     := Array.empty[Int]()
+    defer a.free()
+    b := Array.empty[Int]()
+    defer b.free()
+    a.push(1)
+    a.push(3)
+    b.push(1)
+    b.push(2)
+    if a.cmp(b) <= 0 { error += 1 }
+    error
+}
+
+test_cmp_less_by_size() {
+    error := 0
+    a     := Array.init(1, 2zu)
+    defer a.free()
+    b := Array.init(1, 3zu)
+    defer b.free()
+    if a.cmp(b) >= 0 { error += 1 }
+    error
+}
+
+test_cmp_greater_by_size() {
+    error := 0
+    a     := Array.init(1, 3zu)
+    defer a.free()
+    b := Array.init(1, 2zu)
+    defer b.free()
+    if a.cmp(b) <= 0 { error += 1 }
+    error
+}
+
 test_indexed_iterator() {
     error := 0
     arr   := Array.init_undefined[CSize](4zu)
@@ -231,6 +305,12 @@ main() {
     error += test_iter_mutable()
     error += test_capacity_boundary()
     error += test_zero_capacity()
+    error += test_cmp_equal()
+    error += test_cmp_empty()
+    error += test_cmp_less_by_element()
+    error += test_cmp_greater_by_element()
+    error += test_cmp_less_by_size()
+    error += test_cmp_greater_by_size()
     error += test_indexed_iterator()
     error
 }
