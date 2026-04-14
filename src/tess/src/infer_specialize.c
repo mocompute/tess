@@ -1332,6 +1332,11 @@ static void collect_quant_bindings(tl_monotype *impl_mono, tl_monotype *concrete
     if (!impl_mono || !concrete_mono) return;
     if (seen_visit(seen, impl_mono)) return;
 
+    // Strip const, if any. Const correctness is enforced elsewhere, earlier, and is not this function's
+    // concern.
+    impl_mono     = tl_monotype_strip_const(impl_mono);
+    concrete_mono = tl_monotype_strip_const(concrete_mono);
+
     if (tl_var == impl_mono->tag) {
         i32 idx = quant_index(quants, impl_mono->var);
         if (idx >= 0 && v[idx] == null && tl_monotype_is_inst(concrete_mono)) {
