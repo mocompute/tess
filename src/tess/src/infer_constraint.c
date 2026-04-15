@@ -2029,9 +2029,12 @@ tl_monotype *tagged_union_other_variant(tl_monotype *wrapper_type, str matched_n
     return null;
 }
 
-// Wrap a variant type in Ptr if the binding is mutable (&), otherwise return as-is.
+// Build the binding type for a tagged-union variant: apply Const if the scrutinee was const-qualified,
+// then wrap in Ptr if the binding is mutable (&).
 static tl_polytype *tagged_union_variant_poly(tl_infer *self, tl_monotype *variant_type,
-                                              int is_union_flag) {
+                                              int is_union_flag, int is_const) {
+    if (is_const)
+        variant_type = tl_type_registry_const(self->registry, variant_type);
     if (AST_TAGGED_UNION_IS_MUTABLE(is_union_flag))
         return tl_polytype_absorb_mono(self->arena, tl_type_registry_ptr(self->registry, variant_type));
     return tl_polytype_absorb_mono(self->arena, variant_type);
@@ -2059,6 +2062,8 @@ static int infer_tagged_union_case(tl_infer *self, traverse_ctx *ctx, ast_node *
             tl_monotype_substitute(self->arena, wrapper_type, self->subs, null);
         }
     }
+
+    int expr_is_const = tl_monotype_is_const_qualified(wrapper_type);
 
     wrapper_type = tl_monotype_strip_const(wrapper_type);
 
@@ -2116,7 +2121,7 @@ static int infer_tagged_union_case(tl_infer *self, traverse_ctx *ctx, ast_node *
         // Set the binding's type (not as a literal - this is a value, not a type expression).
         // Note that we set both the condition node and the annotation_type.
         // If the case variable is mutable (var.&), we have a pointer type.
-        tl_polytype *variant_poly = tagged_union_variant_poly(self, variant_type, node->case_.is_union);
+        tl_polytype *variant_poly = tagged_union_variant_poly(self, variant_type, node->case_.is_union, expr_is_const);
 
         ast_node_type_set(cond, variant_poly);
         cond->symbol.annotation_type = variant_poly;
@@ -2153,7 +2158,7 @@ static int infer_tagged_union_case(tl_infer *self, traverse_ctx *ctx, ast_node *
         }
         assert(other_index >= 0); // two-variant union with one covered → one must be uncovered
         tl_monotype *other_type = union_type->cons_inst->args.v[other_index];
-        tl_polytype *other_poly = tagged_union_variant_poly(self, other_type, node->case_.is_union);
+        tl_polytype *other_poly = tagged_union_variant_poly(self, other_type, node->case_.is_union, expr_is_const);
 
         ast_node_type_set(node->case_.else_binding, other_poly);
         node->case_.else_binding->symbol.annotation_type = other_poly;
@@ -2759,6 +2764,8 @@ static void prepare_tagged_union_bindings(tl_infer *self, traverse_ctx *ctx, ast
         }
     }
 
+    int expr_is_const = tl_monotype_is_const_qualified(wrapper_type);
+
     wrapper_type = tl_monotype_strip_const(wrapper_type);
 
     // Auto-dereference: Ptr[T] -> T (mirrors infer_tagged_union_case)
@@ -2786,7 +2793,7 @@ static void prepare_tagged_union_bindings(tl_infer *self, traverse_ctx *ctx, ast
         tl_monotype *variant_type = tagged_union_find_variant(wrapper_type, variant_name, null);
         if (!variant_type) continue; // will be caught later by infer_tagged_union_case
 
-        tl_polytype *variant_poly = tagged_union_variant_poly(self, variant_type, node->case_.is_union);
+        tl_polytype *variant_poly = tagged_union_variant_poly(self, variant_type, node->case_.is_union, expr_is_const);
 
         ast_node_type_set(cond, variant_poly);
         cond->symbol.annotation_type = variant_poly;
@@ -2807,7 +2814,7 @@ static void prepare_tagged_union_bindings(tl_infer *self, traverse_ctx *ctx, ast
         }
         tl_monotype *other_type = tagged_union_other_variant(wrapper_type, primary_name, null);
         if (other_type) {
-            tl_polytype *other_poly = tagged_union_variant_poly(self, other_type, node->case_.is_union);
+            tl_polytype *other_poly = tagged_union_variant_poly(self, other_type, node->case_.is_union, expr_is_const);
 
             ast_node_type_set(node->case_.else_binding, other_poly);
             node->case_.else_binding->symbol.annotation_type = other_poly;

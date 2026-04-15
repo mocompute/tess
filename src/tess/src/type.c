@@ -692,6 +692,18 @@ tl_monotype *tl_type_registry_ptr(tl_type_registry *self, tl_monotype *arg) {
     return out;
 }
 
+tl_monotype *tl_type_registry_const(tl_type_registry *self, tl_monotype *arg) {
+    tl_monotype **arr = alloc_malloc(self->alloc, sizeof(void *));
+    arr[0]            = arg;
+    tl_monotype *out  = tl_type_registry_specialize(self, S("Const"), str_empty(),
+                                                    (tl_monotype_sized){
+                                                      .size = 1,
+                                                      .v    = arr,
+                                                    });
+    assert(out);
+    return out;
+}
+
 tl_monotype *tl_type_registry_ptr_any(tl_type_registry *self) {
     if (!self->t_ptr_any) {
         tl_monotype *any = tl_monotype_create_any(self->alloc);
@@ -2314,6 +2326,10 @@ int tl_monotype_is_ptr_to_const(tl_monotype *self) {
     if (!tl_monotype_is_ptr(self)) return 0;
     tl_monotype *target = tl_monotype_ptr_target(self);
     return tl_monotype_is_const(target);
+}
+
+int tl_monotype_is_const_qualified(tl_monotype *self) {
+    return tl_monotype_is_const(self) || tl_monotype_is_ptr_to_const(self);
 }
 
 int tl_monotype_is_ptr_or_null(tl_monotype *self) {

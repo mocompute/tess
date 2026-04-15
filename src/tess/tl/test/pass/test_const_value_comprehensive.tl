@@ -65,22 +65,6 @@ test_advanced() {
     0
 }
 
-test_edge_cases() {
-    // Tagged union destructuring: when-bindings are mutable
-    x: Const[Option[Int]] := Some(42)
-    result                := when x {
-        s: Some {
-            val := s.value
-            val = val + 1
-            val
-        }
-        else { 0 }
-    }
-    c_printf(c"result = %lld\n", result)
-
-    0
-}
-
 test_for_loop() {
     arr := Array.empty[Int]()
     arr.push(10)
@@ -162,7 +146,6 @@ main() {
     errors := 0
     errors = errors + test_basic()
     errors = errors + test_advanced()
-    errors = errors + test_edge_cases()
     errors = errors + test_for_loop()
     errors = errors + test_loop_reassign()
     errors = errors + test_struct()
