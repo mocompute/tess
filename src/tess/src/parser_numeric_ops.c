@@ -1,22 +1,28 @@
-// parser_numeric_ops.c — synthesize `cmp` and `eq` functions for builtin numeric
-// type families so that `a.cmp(b)` and `a.eq(b)` dispatch through normal UFCS
-// resolution for concrete numeric receivers instead of failing "field not found".
+// Synthesize `cmp` and `eq` UFCS methods for builtin numeric families so
+// `a.cmp(b)` resolves without the user defining anything.
 //
-// One family = one pair of functions. Family names match the `module` field in
-// the BUILTIN(...) table at type.c, which is also the key ufcs_rewrite_call uses
-// when looking up per-family overloads. Example: all signed integer widths share
-// module "Int", so a single Int__cmp__2(a: Int, b: Int) covers CInt, CInt32, ...
-//
-// Safety: rewrite_operator_overloads in infer_specialize.c skips builtin types
-// (is_user_defined_type guard), so `<`, `>`, `==` inside the synthesized bodies
-// remain raw C operators and never re-enter trait dispatch.
+// Generic [T] (not a concrete type) is load-bearing: one family ("Int") covers
+// multiple subchains (c-width CInt/CLongLong and fixed-width CInt8..CInt64)
+// that do not unify with any single concrete parameter type. The body calls a
+// type-erased C helper in builtin.tl with `sizeof(T)` — a per-specialization
+// constant, so the switch inside is folded at -O1+.
 
 #include "parser_internal.h"
 
-// Family name matches BUILTIN(...)::module in type.c (also the UFCS lookup key),
-// and doubles as the canonical type name for the synthesized parameters.
-static char const *const families[] = {
-  "Int", "UInt", "Float", "CSize", "CPtrDiff", "CChar", "Bool",
+typedef struct {
+    char const *family;      // UFCS module key (from BUILTIN(...).module in type.c)
+    char const *cmp_helper;  // C helper for cmp; NULL skips cmp synthesis (e.g. Bool)
+    char const *eq_helper;   // C helper for eq
+} family_info;
+
+static family_info const families[] = {
+  {"Int",      "c_tl_cmp_signed",   "c_tl_eq_bytes"},
+  {"UInt",     "c_tl_cmp_unsigned", "c_tl_eq_bytes"},
+  {"Float",    "c_tl_cmp_float",    "c_tl_eq_float"},
+  {"CSize",    "c_tl_cmp_unsigned", "c_tl_eq_bytes"},
+  {"CPtrDiff", "c_tl_cmp_signed",   "c_tl_eq_bytes"},
+  {"CChar",    "c_tl_cmp_signed",   "c_tl_eq_bytes"},
+  {"Bool",     null,                "c_tl_eq_bytes"},
 };
 
 static u32 const         n_families = sizeof(families) / sizeof(families[0]);
@@ -41,81 +47,55 @@ static ast_node *make_param(allocator *arena, char const *name, char const *type
     return p;
 }
 
-// Body: if a < b { -1 } else if a > b { 1 } else { 0 }
-static ast_node *build_cmp_body(allocator *arena) {
-    // -1 as unary_op(-, 1) — stays safely within inferred integer types.
-    ast_node *neg_one =
-      ast_node_create_unary_op(arena, make_sym(arena, "-"), ast_node_create_i64(arena, 1));
-    stamp(neg_one);
-    stamp(neg_one->unary_op.operand);
+// Build an NFA with an arity-mangled name, mirroring the parser's normal
+// call-site handling (mangle_name_for_arity with is_definition=0). Needed for
+// builtin functions like `sizeof` that live in #module builtin and are looked
+// up by the arity-mangled form. C-prefixed symbols (`c_*`) are left alone.
+static ast_node *build_mangled_call(parser *self, allocator *arena, char const *name,
+                                    ast_node_array args) {
+    ast_node *fn = make_sym(arena, name);
+    mangle_name_for_arity(self, fn, (u8)args.size, 0);
+    ast_node *nfa = ast_node_create_nfa(arena, fn, (ast_node_sized){0}, (ast_node_sized)array_sized(args));
+    stamp(nfa);
+    return nfa;
+}
 
-    ast_node_array then_exprs = {.alloc = arena};
-    array_push(then_exprs, neg_one);
-    ast_node *then_body = ast_node_create_body(arena, (ast_node_sized)array_sized(then_exprs));
-    stamp(then_body);
+// Body: helper(a.&, b.&, sizeof(a))
+static ast_node *build_helper_call_body(parser *self, allocator *arena, char const *helper_name) {
+    ast_node *addr_a = ast_node_create_unary_op(arena, make_sym(arena, "&"), make_sym(arena, "a"));
+    stamp(addr_a);
+    ast_node *addr_b = ast_node_create_unary_op(arena, make_sym(arena, "&"), make_sym(arena, "b"));
+    stamp(addr_b);
 
-    ast_node *gt =
-      ast_node_create_binary_op(arena, make_sym(arena, ">"), make_sym(arena, "a"), make_sym(arena, "b"));
-    stamp(gt);
+    ast_node_array sizeof_args = {.alloc = arena};
+    ast_node      *sizeof_arg  = make_sym(arena, "a");
+    array_push(sizeof_args, sizeof_arg);
+    ast_node *sizeof_call = build_mangled_call(self, arena, "sizeof", sizeof_args);
 
-    ast_node *one_lit = ast_node_create_i64(arena, 1);
-    stamp(one_lit);
-    ast_node_array inner_then_exprs = {.alloc = arena};
-    array_push(inner_then_exprs, one_lit);
-    ast_node *inner_then = ast_node_create_body(arena, (ast_node_sized)array_sized(inner_then_exprs));
-    stamp(inner_then);
-
-    ast_node *zero_lit = ast_node_create_i64(arena, 0);
-    stamp(zero_lit);
-    ast_node_array inner_else_exprs = {.alloc = arena};
-    array_push(inner_else_exprs, zero_lit);
-    ast_node *inner_else = ast_node_create_body(arena, (ast_node_sized)array_sized(inner_else_exprs));
-    stamp(inner_else);
-
-    ast_node *inner_if = ast_node_create_if_then_else(arena, gt, inner_then, inner_else);
-    stamp(inner_if);
-
-    ast_node_array else_exprs = {.alloc = arena};
-    array_push(else_exprs, inner_if);
-    ast_node *else_body = ast_node_create_body(arena, (ast_node_sized)array_sized(else_exprs));
-    stamp(else_body);
-
-    ast_node *lt =
-      ast_node_create_binary_op(arena, make_sym(arena, "<"), make_sym(arena, "a"), make_sym(arena, "b"));
-    stamp(lt);
-
-    ast_node *outer_if = ast_node_create_if_then_else(arena, lt, then_body, else_body);
-    stamp(outer_if);
+    ast_node_array call_args = {.alloc = arena};
+    array_push(call_args, addr_a);
+    array_push(call_args, addr_b);
+    array_push(call_args, sizeof_call);
+    ast_node *call = build_mangled_call(self, arena, helper_name, call_args);
 
     ast_node_array body_exprs = {.alloc = arena};
-    array_push(body_exprs, outer_if);
+    array_push(body_exprs, call);
     ast_node *body = ast_node_create_body(arena, (ast_node_sized)array_sized(body_exprs));
     stamp(body);
     return body;
 }
-
-// Body: a == b
-static ast_node *build_eq_body(allocator *arena) {
-    ast_node *eq =
-      ast_node_create_binary_op(arena, make_sym(arena, "=="), make_sym(arena, "a"), make_sym(arena, "b"));
-    stamp(eq);
-
-    ast_node_array body_exprs = {.alloc = arena};
-    array_push(body_exprs, eq);
-    ast_node *body = ast_node_create_body(arena, (ast_node_sized)array_sized(body_exprs));
-    stamp(body);
-    return body;
-}
-
-typedef ast_node *(*body_builder)(allocator *);
 
 static ast_node *build_family_let(parser *self, char const *family, char const *fn_name,
-                                  char const *ret_type, body_builder build_body) {
-    allocator     *arena  = self->ast_arena;
+                                  char const *ret_type, char const *helper_name) {
+    allocator     *arena       = self->ast_arena;
+
+    ast_node_array type_params = {.alloc = arena};
+    ast_node      *t_param     = make_sym(arena, "T");
+    array_push(type_params, t_param);
 
     ast_node_array params = {.alloc = arena};
-    ast_node      *p_a    = make_param(arena, "a", family);
-    ast_node      *p_b    = make_param(arena, "b", family);
+    ast_node      *p_a    = make_param(arena, "a", "T");
+    ast_node      *p_b    = make_param(arena, "b", "T");
     array_push(params, p_a);
     array_push(params, p_b);
 
@@ -123,7 +103,8 @@ static ast_node *build_family_let(parser *self, char const *family, char const *
     // build and stamp directly with the synthesized location instead.
     ast_node *tup = ast_node_create_tuple(arena, (ast_node_sized)array_sized(params));
     stamp(tup);
-    ast_node *arrow = ast_node_create_arrow(arena, tup, make_sym(arena, ret_type), (ast_node_sized){0});
+    ast_node *arrow = ast_node_create_arrow(arena, tup, make_sym(arena, ret_type),
+                                            (ast_node_sized)array_sized(type_params));
     stamp(arrow);
 
     ast_node *func_name = ast_node_create_sym_c(arena, fn_name);
@@ -133,8 +114,9 @@ static ast_node *build_family_let(parser *self, char const *family, char const *
     mangle_name_for_module(self, func_name, str_init(arena, family));
 
     ast_node *let =
-      ast_node_create_let(arena, func_name, (ast_node_sized){0},
-                          (ast_node_sized)array_sized(params), build_body(arena));
+      ast_node_create_let(arena, func_name, (ast_node_sized)array_sized(type_params),
+                          (ast_node_sized)array_sized(params),
+                          build_helper_call_body(self, arena, helper_name));
     stamp(let);
     return let;
 }
@@ -151,18 +133,26 @@ static int user_has_definition(parser *self, char const *module, char const *fn_
     return str_hset_contains(syms, mangled);
 }
 
-// Emit synthesized let nodes onto the toplevel stream. Skips a family when the
-// user has defined <family>__<fn>__2 so user definitions always win.
+// Emit synthesized let nodes at the FRONT of the toplevel stream. Prepending is
+// load-bearing: the inferrer generalizes each let's polytype after processing
+// its body, so the synth bodies must be inferred before any user code that
+// calls them — otherwise user call sites bind the yet-ungeneralized shared TVs
+// and cross-type calls in one function collide (e.g. CFloat.cmp then CDouble.cmp).
+//
+// Skips a family when the user has defined <family>__<fn>__2 so user
+// definitions always win.
 void parser_synthesize_builtin_numeric_lets(parser *self, ast_node_array *out) {
+    ast_node_array synth = {.alloc = self->ast_arena};
     for (u32 i = 0; i < n_families; i++) {
-        char const *family = families[i];
-        if (!user_has_definition(self, family, "cmp")) {
-            ast_node *let = build_family_let(self, family, "cmp", "CInt", build_cmp_body);
-            array_push(*out, let);
+        family_info const *fi = &families[i];
+        if (fi->cmp_helper && !user_has_definition(self, fi->family, "cmp")) {
+            ast_node *let = build_family_let(self, fi->family, "cmp", "CInt", fi->cmp_helper);
+            array_push(synth, let);
         }
-        if (!user_has_definition(self, family, "eq")) {
-            ast_node *let = build_family_let(self, family, "eq", "Bool", build_eq_body);
-            array_push(*out, let);
+        if (fi->eq_helper && !user_has_definition(self, fi->family, "eq")) {
+            ast_node *let = build_family_let(self, fi->family, "eq", "Bool", fi->eq_helper);
+            array_push(synth, let);
         }
     }
+    if (synth.size) array_insert(*out, 0, synth.v, synth.size);
 }

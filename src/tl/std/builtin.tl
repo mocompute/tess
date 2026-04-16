@@ -6,6 +6,7 @@
 #include <stdlib.h>             // for exit
 
 #include <stddef.h>
+#include <stdint.h>
 #include <string.h>
 
 Int     = CLongLong
@@ -25,6 +26,54 @@ alignof[T]()  -> CSize { _tl_alignof_[T]() }
 alignof   (x) -> CSize { _tl_alignof_(x)   }
 
 _tl_fatal_ (s: CString) -> any
+
+// -- Numeric cmp/eq helpers --
+//
+// Backing C functions for the parser-synthesized `cmp[T]` / `eq[T]` methods
+// on builtin numeric type families (see src/tess/src/parser_numeric_ops.c).
+// Type-erased on both pointer and size so one helper covers every width in a
+// family — the synthesizer always passes `sizeof(T)` at the call site, which
+// the C compiler constant-folds so each specialization is branch-free.
+
+#ifc
+static inline int tl_cmp_signed(const void *a, const void *b, size_t sz) {
+    if (sz == sizeof(int8_t))  { int8_t  x = *(const int8_t *)a,  y = *(const int8_t *)b;  return x < y ? -1 : x > y ? 1 : 0; }
+    if (sz == sizeof(int16_t)) { int16_t x = *(const int16_t *)a, y = *(const int16_t *)b; return x < y ? -1 : x > y ? 1 : 0; }
+    if (sz == sizeof(int32_t)) { int32_t x = *(const int32_t *)a, y = *(const int32_t *)b; return x < y ? -1 : x > y ? 1 : 0; }
+    if (sz == sizeof(int64_t)) { int64_t x = *(const int64_t *)a, y = *(const int64_t *)b; return x < y ? -1 : x > y ? 1 : 0; }
+    return 0;
+}
+static inline int tl_cmp_unsigned(const void *a, const void *b, size_t sz) {
+    if (sz == sizeof(uint8_t))  { uint8_t  x = *(const uint8_t *)a,  y = *(const uint8_t *)b;  return x < y ? -1 : x > y ? 1 : 0; }
+    if (sz == sizeof(uint16_t)) { uint16_t x = *(const uint16_t *)a, y = *(const uint16_t *)b; return x < y ? -1 : x > y ? 1 : 0; }
+    if (sz == sizeof(uint32_t)) { uint32_t x = *(const uint32_t *)a, y = *(const uint32_t *)b; return x < y ? -1 : x > y ? 1 : 0; }
+    if (sz == sizeof(uint64_t)) { uint64_t x = *(const uint64_t *)a, y = *(const uint64_t *)b; return x < y ? -1 : x > y ? 1 : 0; }
+    return 0;
+}
+// NaN sorts greater than every non-NaN (including itself), qsort-style.
+static inline int tl_cmp_float(const void *a, const void *b, size_t sz) {
+    if (sz == sizeof(float))       { float       x = *(const float *)a,       y = *(const float *)b;       if (x < y) return -1; if (x > y) return 1; if (x == y) return 0; return (x == x) ? -1 : (y == y) ? 1 : 0; }
+    if (sz == sizeof(double))      { double      x = *(const double *)a,      y = *(const double *)b;      if (x < y) return -1; if (x > y) return 1; if (x == y) return 0; return (x == x) ? -1 : (y == y) ? 1 : 0; }
+    if (sz == sizeof(long double)) { long double x = *(const long double *)a, y = *(const long double *)b; if (x < y) return -1; if (x > y) return 1; if (x == y) return 0; return (x == x) ? -1 : (y == y) ? 1 : 0; }
+    return 0;
+}
+static inline int tl_eq_bytes(const void *a, const void *b, size_t sz) {
+    return memcmp(a, b, sz) == 0;
+}
+static inline int tl_eq_float(const void *a, const void *b, size_t sz) {
+    if (sz == sizeof(float))       return *(const float       *)a == *(const float       *)b;
+    if (sz == sizeof(double))      return *(const double      *)a == *(const double      *)b;
+    if (sz == sizeof(long double)) return *(const long double *)a == *(const long double *)b;
+    return 0;
+}
+#endc
+
+c_tl_cmp_signed  (a: Ptr[any], b: Ptr[any], sz: CSize) -> CInt
+c_tl_cmp_unsigned(a: Ptr[any], b: Ptr[any], sz: CSize) -> CInt
+c_tl_cmp_float   (a: Ptr[any], b: Ptr[any], sz: CSize) -> CInt
+c_tl_eq_bytes    (a: Ptr[any], b: Ptr[any], sz: CSize) -> Bool
+// IEEE equality: NaN.eq(NaN) returns false, +0.0.eq(-0.0) returns true.
+c_tl_eq_float    (a: Ptr[any], b: Ptr[any], sz: CSize) -> Bool
 
 // Slice type — lightweight view over a contiguous array of elements.
 // Used by variadic functions: the compiler packs variadic args into a stack-allocated
