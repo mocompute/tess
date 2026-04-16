@@ -354,15 +354,15 @@ int platform_exec(platform_exec_opts const *opts) {
     SetHandleInformation(output_read, HANDLE_FLAG_INHERIT, 0);
 
     // Set up process startup info
-    STARTUPINFOA si             = {sizeof(STARTUPINFOA)};
-    si.dwFlags                  = STARTF_USESTDHANDLES;
-    si.hStdInput                = GetStdHandle(STD_INPUT_HANDLE);
-    si.hStdOutput               = output_write;
-    si.hStdError                = output_write;
+    STARTUPINFOA si        = {sizeof(STARTUPINFOA)};
+    si.dwFlags             = STARTF_USESTDHANDLES;
+    si.hStdInput           = GetStdHandle(STD_INPUT_HANDLE);
+    si.hStdOutput          = output_write;
+    si.hStdError           = output_write;
 
-    PROCESS_INFORMATION pi      = {0};
+    PROCESS_INFORMATION pi = {0};
 
-    BOOL                success = CreateProcessA(NULL, cmdline, NULL, NULL, TRUE, 0, NULL, opts->cwd, &si, &pi);
+    BOOL success           = CreateProcessA(NULL, cmdline, NULL, NULL, TRUE, 0, NULL, opts->cwd, &si, &pi);
 
     CloseHandle(output_write);
 

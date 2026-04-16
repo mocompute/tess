@@ -30,8 +30,8 @@ static int process_hash_directive(tl_source_scanner *self, str file_path, str_ar
     if (len > 0 && data[pos - 1] == '\n') len -= 1;
     if (len > 0 && data[pos - 2] == '\r') len -= 1;
 
-    str       command        = str_init_n(imports->alloc, &data[capture_start], len);
-    str_array words          = {.alloc = imports->alloc};
+    str       command = str_init_n(imports->alloc, &data[capture_start], len);
+    str_array words   = {.alloc = imports->alloc};
     str_parse_words(command, &words);
 
     // Conditional compilation: same logic as tokenizer.c stop_hash_command.

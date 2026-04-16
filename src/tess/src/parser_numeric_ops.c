@@ -10,19 +10,19 @@
 #include "parser_internal.h"
 
 typedef struct {
-    char const *family;      // UFCS module key (from BUILTIN(...).module in type.c)
-    char const *cmp_helper;  // C helper for cmp; NULL skips cmp synthesis (e.g. Bool)
-    char const *eq_helper;   // C helper for eq
+    char const *family;     // UFCS module key (from BUILTIN(...).module in type.c)
+    char const *cmp_helper; // C helper for cmp; NULL skips cmp synthesis (e.g. Bool)
+    char const *eq_helper;  // C helper for eq
 } family_info;
 
 static family_info const families[] = {
-  {"Int",      "c_tl_cmp_signed",   "c_tl_eq_bytes"},
-  {"UInt",     "c_tl_cmp_unsigned", "c_tl_eq_bytes"},
-  {"Float",    "c_tl_cmp_float",    "c_tl_eq_float"},
-  {"CSize",    "c_tl_cmp_unsigned", "c_tl_eq_bytes"},
-  {"CPtrDiff", "c_tl_cmp_signed",   "c_tl_eq_bytes"},
-  {"CChar",    "c_tl_cmp_signed",   "c_tl_eq_bytes"},
-  {"Bool",     null,                "c_tl_eq_bytes"},
+  {"Int", "c_tl_cmp_signed", "c_tl_eq_bytes"},
+  {"UInt", "c_tl_cmp_unsigned", "c_tl_eq_bytes"},
+  {"Float", "c_tl_cmp_float", "c_tl_eq_float"},
+  {"CSize", "c_tl_cmp_unsigned", "c_tl_eq_bytes"},
+  {"CPtrDiff", "c_tl_cmp_signed", "c_tl_eq_bytes"},
+  {"CChar", "c_tl_cmp_signed", "c_tl_eq_bytes"},
+  {"Bool", null, "c_tl_eq_bytes"},
 };
 
 static u32 const         n_families = sizeof(families) / sizeof(families[0]);
@@ -51,8 +51,7 @@ static ast_node *make_param(allocator *arena, char const *name, char const *type
 // call-site handling (mangle_name_for_arity with is_definition=0). Needed for
 // builtin functions like `sizeof` that live in #module builtin and are looked
 // up by the arity-mangled form. C-prefixed symbols (`c_*`) are left alone.
-static ast_node *build_mangled_call(parser *self, allocator *arena, char const *name,
-                                    ast_node_array args) {
+static ast_node *build_mangled_call(parser *self, allocator *arena, char const *name, ast_node_array args) {
     ast_node *fn = make_sym(arena, name);
     mangle_name_for_arity(self, fn, (u8)args.size, 0);
     ast_node *nfa = ast_node_create_nfa(arena, fn, (ast_node_sized){0}, (ast_node_sized)array_sized(args));
@@ -70,13 +69,13 @@ static ast_node *build_helper_call_body(parser *self, allocator *arena, char con
     ast_node_array sizeof_args = {.alloc = arena};
     ast_node      *sizeof_arg  = make_sym(arena, "a");
     array_push(sizeof_args, sizeof_arg);
-    ast_node *sizeof_call = build_mangled_call(self, arena, "sizeof", sizeof_args);
+    ast_node      *sizeof_call = build_mangled_call(self, arena, "sizeof", sizeof_args);
 
-    ast_node_array call_args = {.alloc = arena};
+    ast_node_array call_args   = {.alloc = arena};
     array_push(call_args, addr_a);
     array_push(call_args, addr_b);
     array_push(call_args, sizeof_call);
-    ast_node *call = build_mangled_call(self, arena, helper_name, call_args);
+    ast_node      *call       = build_mangled_call(self, arena, helper_name, call_args);
 
     ast_node_array body_exprs = {.alloc = arena};
     array_push(body_exprs, call);
@@ -113,10 +112,9 @@ static ast_node *build_family_let(parser *self, char const *family, char const *
     stamp(func_name);
     mangle_name_for_module(self, func_name, str_init(arena, family));
 
-    ast_node *let =
-      ast_node_create_let(arena, func_name, (ast_node_sized)array_sized(type_params),
-                          (ast_node_sized)array_sized(params),
-                          build_helper_call_body(self, arena, helper_name));
+    ast_node *let = ast_node_create_let(arena, func_name, (ast_node_sized)array_sized(type_params),
+                                        (ast_node_sized)array_sized(params),
+                                        build_helper_call_body(self, arena, helper_name));
     stamp(let);
     return let;
 }

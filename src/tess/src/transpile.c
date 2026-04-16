@@ -2421,7 +2421,7 @@ static str generate_tagged_union_case(transpile *self, ast_node const *node, eva
     tl_monotype *wrapper_type = tl_monotype_strip_const(node->case_.expression->type->type);
     if (tl_monotype_is_ptr(wrapper_type)) {
         // Auto-dereference: wrap expr_str so generated C accesses (*p).tag etc.
-        expr_str = str_cat_3(self->transient, S("(*"), expr_str, S(")"));
+        expr_str     = str_cat_3(self->transient, S("(*"), expr_str, S(")"));
         wrapper_type = tl_monotype_strip_ptr(wrapper_type);
     }
 

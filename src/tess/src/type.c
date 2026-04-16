@@ -362,23 +362,23 @@ static void make_unary_tc(tl_type_registry *self, str name) {
 }
 
 static tl_type_constructor_def *make_tc_def(tl_type_registry *self, str name) {
-    tl_type_constructor_def *def = alloc_malloc(self->alloc, sizeof *def);
-    def->name                    = str_copy(self->alloc, name);
-    def->generic_name            = str_copy(self->alloc, name);
-    def->field_names             = (str_sized){0};
-    def->is_signed_integer       = 0;
-    def->is_unsigned_integer     = 0;
-    def->is_narrow_integer       = 0;
-    def->is_float_convertible    = 0;
-    def->integer_subchain        = TL_INTEGER_SUBCHAIN_NONE;
-    def->integer_width_rank      = -1;
-    def->c_type_name             = str_empty();
-    def->c_min_macro             = NULL;
-    def->c_max_macro             = NULL;
-    def->integer_min_value       = 0;
-    def->integer_max_value       = 0;
-    def->has_integer_range       = 0;
-    def->module                  = str_empty();
+    tl_type_constructor_def *def  = alloc_malloc(self->alloc, sizeof *def);
+    def->name                     = str_copy(self->alloc, name);
+    def->generic_name             = str_copy(self->alloc, name);
+    def->field_names              = (str_sized){0};
+    def->is_signed_integer        = 0;
+    def->is_unsigned_integer      = 0;
+    def->is_narrow_integer        = 0;
+    def->is_float_convertible     = 0;
+    def->integer_subchain         = TL_INTEGER_SUBCHAIN_NONE;
+    def->integer_width_rank       = -1;
+    def->c_type_name              = str_empty();
+    def->c_min_macro              = NULL;
+    def->c_max_macro              = NULL;
+    def->integer_min_value        = 0;
+    def->integer_max_value        = 0;
+    def->has_integer_range        = 0;
+    def->module                   = str_empty();
     def->is_tagged_union_internal = 0;
     return def;
 }
@@ -699,7 +699,7 @@ tl_monotype *tl_type_registry_const(tl_type_registry *self, tl_monotype *arg) {
                                                     (tl_monotype_sized){
                                                       .size = 1,
                                                       .v    = arr,
-                                                    });
+                                                   });
     assert(out);
     return out;
 }

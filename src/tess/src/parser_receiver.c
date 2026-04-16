@@ -60,7 +60,7 @@ static int a_receiver_type_expr(parser *self) {
     if (0 == a_try(self, a_attributed_identifier)) {
         ast_node *ident = self->result;
 
-        int done;
+        int       done;
         if (parse_dotted_name(self, &ident, &done)) return 1;
         if (done) return 0;
 

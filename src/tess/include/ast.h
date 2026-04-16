@@ -14,13 +14,13 @@ defarray(ast_node_array, struct ast_node *);
 defsized(ast_node_sized, struct ast_node *);
 defslice(ast_node_slice, struct ast_node *);
 
-#define AST_TAGGED_UNION_VALUE       1
-#define AST_TAGGED_UNION_MUTABLE     2
-#define AST_TAGGED_UNION_CONDITIONAL          3
-#define AST_TAGGED_UNION_MUTABLE_CONDITIONAL  4
-#define AST_TAGGED_UNION_IS_MUTABLE(f) \
+#define AST_TAGGED_UNION_VALUE               1
+#define AST_TAGGED_UNION_MUTABLE             2
+#define AST_TAGGED_UNION_CONDITIONAL         3
+#define AST_TAGGED_UNION_MUTABLE_CONDITIONAL 4
+#define AST_TAGGED_UNION_IS_MUTABLE(f)                                                                     \
     ((f) == AST_TAGGED_UNION_MUTABLE || (f) == AST_TAGGED_UNION_MUTABLE_CONDITIONAL)
-#define AST_TAGGED_UNION_IS_CONDITIONAL(f) \
+#define AST_TAGGED_UNION_IS_CONDITIONAL(f)                                                                 \
     ((f) == AST_TAGGED_UNION_CONDITIONAL || (f) == AST_TAGGED_UNION_MUTABLE_CONDITIONAL)
 
 #define AST_TAGGED_UNION_TAG_FIELD   "tag"
@@ -245,8 +245,9 @@ typedef struct ast_node {
             u8                n_fields;
             u8                n_type_arguments;
             u8                is_union;
-            u8                is_tagged_union_internal; // tag/variant/union type synthesized from a tagged union; not a user-facing type
-            str               tagged_union_name;
+            u8 is_tagged_union_internal; // tag/variant/union type synthesized from a tagged union; not a
+                                         // user-facing type
+            str tagged_union_name;
         } user_type_def;
 
         struct ast_hash_command {

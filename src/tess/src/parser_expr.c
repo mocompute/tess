@@ -759,7 +759,7 @@ int a_assignment(parser *self) {
         int is_pointer = 0;
         if (ast_node_is_unary_op(val) && is_ampersand(val->unary_op.op)) {
             is_pointer = 1;
-            val = val->unary_op.operand;
+            val        = val->unary_op.operand;
         }
         // Optional else binding: `else err { ... }` binds the other variant (two-variant unions only)
         ast_node *else_binding = null;
@@ -791,9 +791,9 @@ int a_assignment(parser *self) {
         array_push(conditions, sentinel);
         array_push(arms, else_body);
 
-        ast_node *node = ast_node_create_case(self->ast_arena, val, (ast_node_sized)array_sized(conditions),
-                                              (ast_node_sized)array_sized(arms), null, null, else_binding,
-                                              is_pointer ? AST_TAGGED_UNION_MUTABLE : AST_TAGGED_UNION_VALUE);
+        ast_node *node = ast_node_create_case(
+          self->ast_arena, val, (ast_node_sized)array_sized(conditions), (ast_node_sized)array_sized(arms),
+          null, null, else_binding, is_pointer ? AST_TAGGED_UNION_MUTABLE : AST_TAGGED_UNION_VALUE);
         set_node_file(self, node);
         return result_ast_node(self, node);
     }
@@ -1178,7 +1178,7 @@ static int a_conditional_variant_binding(parser *self) {
     int is_pointer = 0;
     if (ast_node_is_unary_op(val) && is_ampersand(val->unary_op.op)) {
         is_pointer = 1;
-        val = val->unary_op.operand;
+        val        = val->unary_op.operand;
     }
 
     ast_node *yes = parse_body(self);
@@ -1189,7 +1189,7 @@ static int a_conditional_variant_binding(parser *self) {
     array_push(conditions, lval);
     array_push(arms, yes);
 
-    int       is_union     = is_pointer ? AST_TAGGED_UNION_MUTABLE_CONDITIONAL : AST_TAGGED_UNION_CONDITIONAL;
+    int       is_union = is_pointer ? AST_TAGGED_UNION_MUTABLE_CONDITIONAL : AST_TAGGED_UNION_CONDITIONAL;
     ast_node *else_binding = null;
 
     if (0 == a_try_s(self, the_symbol, "else")) {

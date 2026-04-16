@@ -523,7 +523,7 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
         vclone->is_tagged_union_internal = vorig->is_tagged_union_internal;
         vclone->tagged_union_name        = str_copy(alloc, vorig->tagged_union_name);
 
-        vclone->field_names       = alloc_malloc(alloc, vclone->n_fields * sizeof(ast_node *));
+        vclone->field_names              = alloc_malloc(alloc, vclone->n_fields * sizeof(ast_node *));
 
         // enums have no field annotations
         if (vorig->field_annotations)

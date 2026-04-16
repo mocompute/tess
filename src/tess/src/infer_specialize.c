@@ -983,7 +983,8 @@ static str find_overload_func(tl_infer *self, tl_monotype *type, char const *fun
               build_overload_func_name(self->transient, inner->cons_inst->def->module, func_name, arity);
             if (ast_node_str_map_get(self->toplevels, lookup)) {
                 tl_monotype_sized params = get_func_param_types(self, lookup);
-                if (params.size > 0 && tl_monotype_is_ptr(params.v[0])) return str_copy(self->arena, lookup);
+                if (params.size > 0 && tl_monotype_is_ptr(params.v[0]))
+                    return str_copy(self->arena, lookup);
             }
         }
     }

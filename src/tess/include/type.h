@@ -52,7 +52,8 @@ typedef struct {
     u64         integer_max_value; // maximum value for compile-time range checking (u64 for unsigned)
     int         has_integer_range; // non-zero if integer_min_value/max_value are valid
     str         module;            // module name (e.g., "Math"), empty for main module
-    int         is_tagged_union_internal; // tag enum / variant struct / union struct synthesized from a tagged union; excluded from operator-overload dispatch
+    int is_tagged_union_internal;  // tag enum / variant struct / union struct synthesized from a tagged
+                                   // union; excluded from operator-overload dispatch
 } tl_type_constructor_def;
 
 // Trait function signature (stored in trait registry)
@@ -246,7 +247,7 @@ int          tl_monotype_is_ptr(tl_monotype *);
 int          tl_monotype_is_const(tl_monotype *);
 tl_monotype *tl_monotype_const_target(tl_monotype *);
 tl_monotype *tl_monotype_strip_const(tl_monotype *);
-tl_monotype *tl_monotype_strip_ptr(tl_monotype *);   // Ptr[T] -> T (strips inner Const too); no-op if not Ptr
+tl_monotype *tl_monotype_strip_ptr(tl_monotype *); // Ptr[T] -> T (strips inner Const too); no-op if not Ptr
 int          tl_monotype_is_ptr_to_const(tl_monotype *);
 int          tl_monotype_is_const_qualified(tl_monotype *); // Const[T] or Ptr[Const[T]]
 int          tl_monotype_is_carray(tl_monotype *);

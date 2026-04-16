@@ -1010,27 +1010,27 @@ static int copy_file(char const *src, char const *dst) {
 
 static int run_tess(char const *cwd, char const *const *args) {
     char const *argv[32];
-    int         n    = 0;
-    argv[n++]        = e2e_tess_exe;
+    int         n = 0;
+    argv[n++]     = e2e_tess_exe;
     for (int i = 0; args[i] && n < 31; i++) argv[n++] = args[i];
-    argv[n]                   = NULL;
-    platform_exec_opts opts   = {.argv = argv, .cwd = cwd};
+    argv[n]                 = NULL;
+    platform_exec_opts opts = {.argv = argv, .cwd = cwd};
     return platform_exec(&opts);
 }
 
 static int run_tess_capture(char const *cwd, char const *const *args, char const *out_path) {
     char const *argv[32];
-    int         n    = 0;
-    argv[n++]        = e2e_tess_exe;
+    int         n = 0;
+    argv[n++]     = e2e_tess_exe;
     for (int i = 0; args[i] && n < 31; i++) argv[n++] = args[i];
-    argv[n]                = NULL;
-    char  *output          = NULL;
-    size_t output_len      = 0;
-    platform_exec_opts opts = {
-        .argv                = argv,
-        .cwd                 = cwd,
-        .captured_output     = &output,
-        .captured_output_len = &output_len,
+    argv[n]                       = NULL;
+    char              *output     = NULL;
+    size_t             output_len = 0;
+    platform_exec_opts opts       = {
+            .argv                = argv,
+            .cwd                 = cwd,
+            .captured_output     = &output,
+            .captured_output_len = &output_len,
     };
     int exit_code = platform_exec(&opts);
     file_write(out_path, output ? output : "", (u32)output_len);
@@ -1044,12 +1044,12 @@ static int run_exe(char const *exe_path) {
     return platform_exec(&opts);
 }
 
-static int run_cc(char const *cwd, char const *compiler, int is_msvc,
-                  char const *out_exe, char const *src, char const *lib) {
+static int run_cc(char const *cwd, char const *compiler, int is_msvc, char const *out_exe, char const *src,
+                  char const *lib) {
     char        fe_arg[512];
     char const *argv[16];
-    int         n    = 0;
-    argv[n++]        = compiler;
+    int         n = 0;
+    argv[n++]     = compiler;
     if (is_msvc) {
         argv[n++] = "/nologo";
         snprintf(fe_arg, sizeof(fe_arg), "/Fe:%s", out_exe);
@@ -1060,8 +1060,8 @@ static int run_cc(char const *cwd, char const *compiler, int is_msvc,
     }
     argv[n++] = src;
     if (lib) argv[n++] = lib;
-    argv[n]                   = NULL;
-    platform_exec_opts opts   = {.argv = argv, .cwd = cwd};
+    argv[n]                 = NULL;
+    platform_exec_opts opts = {.argv = argv, .cwd = cwd};
     return platform_exec(&opts);
 }
 
@@ -1099,9 +1099,8 @@ static char *lib_emit_c_output(char const *dir_suffix, char const *package_tl, c
     char output_log[512];
     snprintf(output_log, sizeof(output_log), "%semit.c", dir);
 
-    if (run_tess_capture(dir,
-            (char const *[]){"lib-emit-c", "--no-line-directive", src, NULL},
-            output_log) != 0) {
+    if (run_tess_capture(dir, (char const *[]){"lib-emit-c", "--no-line-directive", src, NULL},
+                         output_log) != 0) {
         fprintf(stderr, "  tess lib-emit-c failed\n");
         return null;
     }
@@ -1128,8 +1127,8 @@ static char *lib_emit_c_output(char const *dir_suffix, char const *package_tl, c
 // Returns 0 on success; the full .tpkg path is written to tpkg_out (>=512).
 // ---------------------------------------------------------------------------
 static int pack_lib(char const *dir_suffix, char const *package_tl, char const **filenames,
-                    char const **contents, int file_count, char const *tpkg_name, char const *const *cli_files_argv,
-                    char *tpkg_out, char *lib_dir_out) {
+                    char const **contents, int file_count, char const *tpkg_name,
+                    char const *const *cli_files_argv, char *tpkg_out, char *lib_dir_out) {
     char lib_dir[512];
     make_temp_path(lib_dir, sizeof(lib_dir), dir_suffix);
     test_mkdir_p(lib_dir);
@@ -1151,9 +1150,9 @@ static int pack_lib(char const *dir_suffix, char const *package_tl, char const *
 
     snprintf(tpkg_out, 512, "%s%s", lib_dir, tpkg_name);
 
-    char const *pack_args[40];  // "pack" + up to 31 files + "-o" + name + NULL
-    int         na       = 0;
-    pack_args[na++]      = "pack";
+    char const *pack_args[40]; // "pack" + up to 31 files + "-o" + name + NULL
+    int         na  = 0;
+    pack_args[na++] = "pack";
     if (cli_files_argv) {
         for (int i = 0; cli_files_argv[i] && na < 32; i++) pack_args[na++] = cli_files_argv[i];
     }
@@ -1231,7 +1230,8 @@ static int test_e2e_basic_package(void) {
     char const *files[] = {"greeter.tl"};
     char const *srcs[]  = {"#module Greeter\n\ngreet() { 42 }\n"};
     if (pack_lib("e2e_basic_lib/", "format(1)\npackage(Greeter)\nversion(\"1.0.0\")\nexport(Greeter)\n",
-                 files, srcs, 1, "Greeter-1.0.0.tpkg", (char const *[]){"greeter.tl", NULL}, tpkg_path, null))
+                 files, srcs, 1, "Greeter-1.0.0.tpkg", (char const *[]){"greeter.tl", NULL}, tpkg_path,
+                 null))
         return 1;
 
     char        out_exe[512];
@@ -1259,7 +1259,8 @@ static int test_e2e_version_mismatch(void) {
     char const *files[] = {"greeter.tl"};
     char const *srcs[]  = {"#module Greeter\n\ngreet() { 42 }\n"};
     if (pack_lib("e2e_vermis_lib/", "format(1)\npackage(Greeter)\nversion(\"1.0.0\")\nexport(Greeter)\n",
-                 files, srcs, 1, "Greeter-1.0.0.tpkg", (char const *[]){"greeter.tl", NULL}, tpkg_path, null))
+                 files, srcs, 1, "Greeter-1.0.0.tpkg", (char const *[]){"greeter.tl", NULL}, tpkg_path,
+                 null))
         return 1;
 
     // Consumer expects version 2.0.0 — should fail
@@ -1840,7 +1841,8 @@ static int test_e2e_internal_module_accessible(void) {
     char const *srcs[]  = {"#module MathPub\n#import \"mathint.tl\"\n\npub_val() { 10 }\n",
                            "#module MathInt\n\nint_val() { 32 }\n"};
     if (pack_lib("e2e_internal_lib/", "format(1)\npackage(MathPkg)\nversion(\"1.0.0\")\nexport(MathPub)\n",
-                 files, srcs, 2, "MathPkg-1.0.0.tpkg", (char const *[]){"mathpub.tl", NULL}, tpkg_path, null))
+                 files, srcs, 2, "MathPkg-1.0.0.tpkg", (char const *[]){"mathpub.tl", NULL}, tpkg_path,
+                 null))
         return 1;
 
     char        out_exe[512];
@@ -1968,9 +1970,8 @@ static int test_e2e_module_conflict(void) {
     char out_exe[512], output_log[512];
     snprintf(out_exe, sizeof(out_exe), "%sapp" EXE_SUFFIX, app_dir);
     snprintf(output_log, sizeof(output_log), "%soutput.log", app_dir);
-    if (run_tess_capture(app_dir,
-            (char const *[]){"exe", "-o", out_exe, "main.tl", NULL},
-            output_log) != 0) {
+    if (run_tess_capture(app_dir, (char const *[]){"exe", "-o", out_exe, "main.tl", NULL}, output_log) !=
+        0) {
         fprintf(stderr, "  tess exe should have succeeded\n");
         return 1;
     }
@@ -2722,9 +2723,7 @@ static int test_e2e_source_cli_override_warning(void) {
     char out_exe[512];
     snprintf(out_exe, sizeof(out_exe), "%sapp" EXE_SUFFIX, dir);
 
-    if (run_tess_capture(dir,
-            (char const *[]){"exe", "-o", out_exe, "main.tl", NULL},
-            stderr_log) != 0) {
+    if (run_tess_capture(dir, (char const *[]){"exe", "-o", out_exe, "main.tl", NULL}, stderr_log) != 0) {
         fprintf(stderr, "  tess exe with CLI override failed\n");
         return 1;
     }
@@ -2761,7 +2760,8 @@ static int test_e2e_pkg_prefix_cross_module(void) {
                            "#module Greeter\n\ngreet() -> Int { Helper.foo() + 32 }\n"};
     if (pack_lib("e2e_pkg_xmod_lib/",
                  "format(1)\npackage(Greeter)\nversion(\"2.0.0\")\nexport(Greeter)\nexport(Helper)\n",
-                 files, srcs, 2, "Greeter-2.0.0.tpkg", (char const *[]){"helper.tl", "greeter.tl", NULL}, tpkg_path, null))
+                 files, srcs, 2, "Greeter-2.0.0.tpkg", (char const *[]){"helper.tl", "greeter.tl", NULL},
+                 tpkg_path, null))
         return 1;
 
     char        out_exe[512];
@@ -2960,9 +2960,8 @@ static int test_e2e_pkg_prefix_generic(void) {
     char output_log[512];
     snprintf(output_log, sizeof(output_log), "%sout.c", app_dir);
 
-    if (run_tess_capture(app_dir,
-            (char const *[]){"c", "--no-line-directive", "main.tl", NULL},
-            output_log) != 0) {
+    if (run_tess_capture(app_dir, (char const *[]){"c", "--no-line-directive", "main.tl", NULL},
+                         output_log) != 0) {
         fprintf(stderr, "  tess c failed\n");
         return 1;
     }
@@ -3322,7 +3321,8 @@ static int test_e2e_fetch(void) {
     char const *files[] = {"fetchmod.tl"};
     char const *srcs[]  = {"#module FetchMod\n\nval() { 99 }\n"};
     if (pack_lib("e2e_fetch_lib/", "format(1)\npackage(FetchLib)\nversion(\"1.0.0\")\nexport(FetchMod)\n",
-                 files, srcs, 1, "FetchLib-1.0.0.tpkg", (char const *[]){"fetchmod.tl", NULL}, tpkg_path, null))
+                 files, srcs, 1, "FetchLib-1.0.0.tpkg", (char const *[]){"fetchmod.tl", NULL}, tpkg_path,
+                 null))
         return 1;
 
     // -- Set up consumer --

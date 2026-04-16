@@ -122,7 +122,8 @@ tl_infer *tl_infer_create(allocator *alloc, tl_infer_opts const *opts) {
             array_push(def->parents, parent);
             tl_trait_sig sig = {.name  = str_init(self->arena, "cmp"),
                                 .arity = 2,
-                                .arrow = make_builtin_trait_arrow(self->arena, builtin_type_param, 2, "CInt")};
+                                .arrow =
+                                  make_builtin_trait_arrow(self->arena, builtin_type_param, 2, "CInt")};
             array_push(def->sigs, sig);
             str_map_set_ptr(&self->traits, def->name, def);
         }
