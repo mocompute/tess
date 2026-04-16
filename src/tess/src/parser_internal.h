@@ -174,6 +174,10 @@ u8        collect_used_type_params(parser *, u8 n_type_args, ast_node **type_arg
                                    ast_node ***out_used_type_args);
 int       parse_param_list(parser *, ast_node_array *, int);
 
+// numeric op synthesis (cmp/eq for builtin numeric families)
+
+void parser_synthesize_builtin_numeric_lets(parser *, ast_node_array *out);
+
 // tagged union helpers
 
 int       toplevel_tagged_union(parser *);

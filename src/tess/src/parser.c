@@ -2111,7 +2111,10 @@ int parser_parse_all(parser *self, ast_node_array *out) {
         array_push(*out, node);
     }
 
-    if (is_eof(self)) return 0;
+    if (is_eof(self)) {
+        parser_synthesize_builtin_numeric_lets(self, out);
+        return 0;
+    }
 
     return res;
 }

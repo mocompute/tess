@@ -3454,6 +3454,16 @@ static int ufcs_rewrite_call(tl_infer *self, traverse_ctx *ctx, ast_node *node, 
     ast_node_name_replace(nfa->named_application.name, ufcs_name);
     ast_node_rewrite_to_nfa(node, nfa->named_application.name, new_args, ufcs_arity);
 
+    // Weak-int defaulting may have substituted the `.` node's polytype to a
+    // concrete monotype (e.g. CLongLong) before UFCS rewrite fired. Reset to a
+    // fresh TV so the rewritten NFA unifies against the arrow's actual result
+    // (e.g. cmp returns CInt). Skip if still a TV — Phase 3 keeps it linked to
+    // other unifications.
+    if (node->type && tl_polytype_is_concrete(node->type)) {
+        node->type = null;
+        ensure_tv(self, &node->type);
+    }
+
     return infer_named_function_application(self, ctx, node);
 }
 

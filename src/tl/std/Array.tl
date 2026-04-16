@@ -317,7 +317,7 @@ _merge[T](v, tmp, lo, mid, hi, cmp: (T, T) -> Int, width) {
         self.append(Alloc.context.default, other)
     }
 
-    sort(cmp: (T, T) -> Int) {
+    sort(cmp: (T, T) -> CInt) {
         self.sort(Alloc.context.transient, cmp)
     }
 
@@ -411,7 +411,7 @@ _merge[T](v, tmp, lo, mid, hi, cmp: (T, T) -> Int, width) {
         self->size += other.size
     }
 
-    sort(tmp_alloc, cmp: (T, T) -> Int) {
+    sort(tmp_alloc, cmp: (T, T) -> CInt) {
         n := self->size
         if n <= 1 { return void }
         width       := _type_width_aligned[T]()
@@ -491,7 +491,7 @@ _merge[T](v, tmp, lo, mid, hi, cmp: (T, T) -> Int, width) {
         None
     }
 
-    sorted(cmp: (T, T) -> Int) {
+    sorted(cmp: (T, T) -> CInt) {
         arr.sorted(Alloc.context.default, Alloc.context.transient, cmp)
     }
 
@@ -600,7 +600,7 @@ _merge[T](v, tmp, lo, mid, hi, cmp: (T, T) -> Int, width) {
         result
     }
 
-    sorted(alloc, tmp_alloc, cmp: (T, T) -> Int) {
+    sorted(alloc, tmp_alloc, cmp: (T, T) -> CInt) {
         result := arr.clone(alloc)
         result.sort(tmp_alloc, cmp)
         result

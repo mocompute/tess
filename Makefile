@@ -147,6 +147,7 @@ TESS_SOURCES =				\
 	$(TESS_SRC_DIR)/src/parser.c	\
 	$(TESS_SRC_DIR)/src/parser_expr.c \
 	$(TESS_SRC_DIR)/src/parser_statements.c \
+	$(TESS_SRC_DIR)/src/parser_numeric_ops.c \
 	$(TESS_SRC_DIR)/src/parser_tagged_union.c \
 	$(TESS_SRC_DIR)/src/parser_receiver.c \
 	$(TESS_SRC_DIR)/src/parser_types.c \

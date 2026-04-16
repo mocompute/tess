@@ -110,6 +110,7 @@ set(SOURCES
   src/parser.c
   src/parser_expr.c
   src/parser_statements.c
+  src/parser_numeric_ops.c
   src/parser_tagged_union.c
   src/parser_receiver.c
   src/parser_types.c
