@@ -238,16 +238,25 @@ int tl_monotype_is_arrow(tl_monotype *);
 // Ptr(T):       single-indirection pointer. Target via ptr_target().
 // Const(T):     const wrapper. Transparent in unification; meaningful
 //               only inside Ptr (Ptr(Const(T)) -> "const T*" in C).
-// CArray(T,N):  fixed-size C array. Element via carray_element(),
-//               count via carray_count(). Decays to Ptr(T) in values.
-// has_ptr()     traverses Union variants; is_ptr() does not.
-// ptr_target()  works on Ptr, PtrOrNull, and Union containing Ptr.
+// CArray(T,N):           fixed-size C array. Element via carray_element(),
+//                        count via carray_count(). Decays to Ptr(T) in values.
+// has_ptr()              same as is_ptr() for instantiated types; alias kept for call-site clarity.
+// ptr_target()           works on Ptr only; fatals if not Ptr. Always guard with is_ptr().
+// effective_target()     peels one outer Const, one Ptr, and one inner Const. See declaration.
+// strip_ptr_and_const()  peels one Ptr plus its inner Const (if any). No-op if not Ptr.
 
 int          tl_monotype_is_ptr(tl_monotype *);
 int          tl_monotype_is_const(tl_monotype *);
 tl_monotype *tl_monotype_const_target(tl_monotype *);
 tl_monotype *tl_monotype_strip_const(tl_monotype *);
-tl_monotype *tl_monotype_strip_ptr(tl_monotype *); // Ptr[T] -> T (strips inner Const too); no-op if not Ptr
+tl_monotype *tl_monotype_strip_ptr_and_const(tl_monotype *); // Ptr[T] or Ptr[Const[T]] -> T; no-op if not Ptr
+// Peel surface Ptr/Const wrappers to reach the underlying type for dispatch/lookup/match.
+// Handles T, Const[T], Ptr[T], Ptr[Const[T]], Const[Ptr[T]], Const[Ptr[Const[T]]].
+// Does NOT peel Ptr[Ptr[T]] (double-pointer is preserved; callers that need multi-level
+// indirection must walk manually, e.g. ptr_depth_to_arrow).
+// NULL-safe: returns NULL if self is NULL.
+// out_is_const (optional): set to 1 iff any Const layer was peeled, else 0.
+tl_monotype *tl_monotype_effective_target(tl_monotype *self, int *out_is_const);
 int          tl_monotype_is_ptr_to_const(tl_monotype *);
 int          tl_monotype_is_const_qualified(tl_monotype *); // Const[T] or Ptr[Const[T]]
 int          tl_monotype_is_carray(tl_monotype *);

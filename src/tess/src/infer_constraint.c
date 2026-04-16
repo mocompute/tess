@@ -2062,12 +2062,8 @@ static int infer_tagged_union_case(tl_infer *self, traverse_ctx *ctx, ast_node *
         }
     }
 
-    int expr_is_const = tl_monotype_is_const_qualified(wrapper_type);
-
-    wrapper_type      = tl_monotype_strip_const(wrapper_type);
-
-    // Auto-dereference: if scrutinee is Ptr[T], use T as the wrapper type.
-    wrapper_type = tl_monotype_strip_ptr(wrapper_type);
+    int expr_is_const;
+    wrapper_type = tl_monotype_effective_target(wrapper_type, &expr_is_const);
 
     if (!tl_monotype_is_inst(wrapper_type)) {
         // Receiver type is a type variable (e.g., unannotated parameter):
@@ -2765,12 +2761,8 @@ static void prepare_tagged_union_bindings(tl_infer *self, traverse_ctx *ctx, ast
         }
     }
 
-    int expr_is_const = tl_monotype_is_const_qualified(wrapper_type);
-
-    wrapper_type      = tl_monotype_strip_const(wrapper_type);
-
-    // Auto-dereference: Ptr[T] -> T (mirrors infer_tagged_union_case)
-    wrapper_type = tl_monotype_strip_ptr(wrapper_type);
+    int expr_is_const;
+    wrapper_type = tl_monotype_effective_target(wrapper_type, &expr_is_const);
 
     if (!tl_monotype_is_inst(wrapper_type))
         return; // type not yet resolved; defer to infer_tagged_union_case
@@ -3337,15 +3329,9 @@ static int ufcs_rewrite_call(tl_infer *self, traverse_ctx *ctx, ast_node *node, 
     u8  ufcs_arity = nfa->named_application.n_arguments + 1;
     str ufcs_name  = mangle_str_for_arity(self->arena, field_name, ufcs_arity);
 
-    // Auto-dereference: if struct_type is Ptr[T], use T's module for lookup.
+    // Auto-dereference: peel Ptr/Const wrappers so lookup uses the pointee's module.
     // This lets dot-UFCS work on pointer receivers (e.g. m.size() where m: Ptr[HashMap]).
-    tl_monotype *recv_type = struct_type;
-    if (tl_monotype_is_ptr(recv_type)) {
-        recv_type = tl_monotype_ptr_target(recv_type);
-    }
-    if (tl_monotype_is_const(recv_type)) {
-        recv_type = tl_monotype_const_target(recv_type);
-    }
+    tl_monotype *recv_type = tl_monotype_effective_target(struct_type, null);
 
     // Lookup: try unqualified, then module-qualified from receiver's type
     tl_polytype *fn_poly = lookup_poly(self, ufcs_name);

@@ -375,6 +375,90 @@ static int test_cchar_signedness(void) {
     return error;
 }
 
+// ---------------------------------------------------------------------------
+// Test: tl_monotype_effective_target
+//
+// Peels one outer Const, one Ptr, and one inner Const to reach the underlying
+// type for dispatch/lookup/match. Does NOT peel Ptr[Ptr[T]].
+// ---------------------------------------------------------------------------
+static int test_effective_target(void) {
+    int               error = 0;
+    tl_type_registry *reg   = test_registry();
+
+    tl_monotype *cint = lookup(reg, "CInt");
+    error += !cint;
+
+    tl_monotype *ptr_cint            = tl_type_registry_ptr(reg, cint);
+    tl_monotype *const_cint          = tl_type_registry_const(reg, cint);
+    tl_monotype *ptr_const_cint      = tl_type_registry_ptr(reg, const_cint);
+    tl_monotype *const_ptr_cint      = tl_type_registry_const(reg, ptr_cint);
+    tl_monotype *const_ptr_const_cint =
+      tl_type_registry_const(reg, tl_type_registry_ptr(reg, const_cint));
+    tl_monotype *ptr_ptr_cint = tl_type_registry_ptr(reg, ptr_cint);
+
+    int          is_const = -1;
+    tl_monotype *r;
+
+    // Bare T: unchanged, is_const = 0
+    r = tl_monotype_effective_target(cint, &is_const);
+    error += (r != cint) || (is_const != 0);
+
+    // Const[T] -> T, is_const = 1
+    is_const = -1;
+    r        = tl_monotype_effective_target(const_cint, &is_const);
+    error += (r != cint) || (is_const != 1);
+
+    // Ptr[T] -> T, is_const = 0
+    is_const = -1;
+    r        = tl_monotype_effective_target(ptr_cint, &is_const);
+    error += (r != cint) || (is_const != 0);
+
+    // Ptr[Const[T]] -> T, is_const = 1
+    is_const = -1;
+    r        = tl_monotype_effective_target(ptr_const_cint, &is_const);
+    error += (r != cint) || (is_const != 1);
+
+    // Const[Ptr[T]] -> T, is_const = 1
+    is_const = -1;
+    r        = tl_monotype_effective_target(const_ptr_cint, &is_const);
+    error += (r != cint) || (is_const != 1);
+
+    // Const[Ptr[Const[T]]] -> T, is_const = 1
+    is_const = -1;
+    r        = tl_monotype_effective_target(const_ptr_const_cint, &is_const);
+    error += (r != cint) || (is_const != 1);
+
+    // Ptr[Ptr[T]] -> Ptr[T], is_const = 0 (no recursion into inner Ptr)
+    is_const = -1;
+    r        = tl_monotype_effective_target(ptr_ptr_cint, &is_const);
+    error += (r != ptr_cint) || (is_const != 0);
+
+    // Type variable: unchanged, is_const = 0
+    tl_type_variable tv  = 42;
+    tl_monotype     *var = tl_monotype_create_tv(reg->alloc, tv);
+    is_const             = -1;
+    r                    = tl_monotype_effective_target(var, &is_const);
+    error += (r != var) || (is_const != 0);
+
+    // Ptr[Var(tv)] -> Var(tv), is_const = 0
+    tl_monotype *ptr_var = tl_type_registry_ptr(reg, var);
+    is_const             = -1;
+    r                    = tl_monotype_effective_target(ptr_var, &is_const);
+    error += (r != var) || (is_const != 0);
+
+    // NULL input: returns NULL, is_const = 0
+    is_const = -1;
+    r        = tl_monotype_effective_target(null, &is_const);
+    error += (r != null) || (is_const != 0);
+
+    // out_is_const = NULL: does not crash, returns the correct target
+    r = tl_monotype_effective_target(ptr_const_cint, null);
+    error += (r != cint);
+
+    test_registry_destroy(reg);
+    return error;
+}
+
 int main(void) {
     int error      = 0;
     int this_error = 0;
@@ -388,6 +472,7 @@ int main(void) {
     T(test_weak_int_predicates);
     T(test_registry_csize_cptrdiff);
     T(test_cchar_signedness);
+    T(test_effective_target);
 
     return error;
 }

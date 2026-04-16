@@ -2317,9 +2317,26 @@ tl_monotype *tl_monotype_strip_const(tl_monotype *self) {
     return tl_monotype_is_const(self) ? tl_monotype_const_target(self) : self;
 }
 
-tl_monotype *tl_monotype_strip_ptr(tl_monotype *self) {
+tl_monotype *tl_monotype_strip_ptr_and_const(tl_monotype *self) {
     if (!tl_monotype_is_ptr(self)) return self;
     return tl_monotype_strip_const(tl_monotype_ptr_target(self));
+}
+
+tl_monotype *tl_monotype_effective_target(tl_monotype *self, int *out_is_const) {
+    int is_const = 0;
+    if (tl_monotype_is_const(self)) {
+        is_const = 1;
+        self     = tl_monotype_const_target(self);
+    }
+    if (tl_monotype_is_ptr(self)) {
+        self = tl_monotype_ptr_target(self);
+        if (tl_monotype_is_const(self)) {
+            is_const = 1;
+            self     = tl_monotype_const_target(self);
+        }
+    }
+    if (out_is_const) *out_is_const = is_const;
+    return self;
 }
 
 int tl_monotype_is_ptr_to_const(tl_monotype *self) {

@@ -977,7 +977,7 @@ static str find_overload_func(tl_infer *self, tl_monotype *type, char const *fun
     // itself takes a pointer — otherwise Vec3.eq(Vec3, Vec3) would hijack `==`
     // on Ptr[Vec3], stealing raw pointer identity.
     if (tl_monotype_is_ptr(type)) {
-        tl_monotype *inner = tl_monotype_strip_ptr(type);
+        tl_monotype *inner = tl_monotype_strip_ptr_and_const(type);
         if (is_user_defined_type(inner) && !str_is_empty(inner->cons_inst->def->module)) {
             str lookup =
               build_overload_func_name(self->transient, inner->cons_inst->def->module, func_name, arity);
@@ -988,6 +988,9 @@ static str find_overload_func(tl_infer *self, tl_monotype *type, char const *fun
             }
         }
     }
+    // NOTE: No symmetric Const[UserType] fallback here. Const[T] as a binary-op LHS is
+    // uncommon; adding a fallback requires a dispatch guard analogous to the
+    // is_ptr(params.v[0]) guard above. Tracked as a follow-up — needs test coverage first.
     return str_empty();
 }
 
@@ -2008,7 +2011,7 @@ static int specialize_case(tl_infer *self, traverse_ctx *traverse_ctx, ast_node 
                       node->case_.expression->type ? node->case_.expression->type->type : null;
                     if (expr_type) tl_monotype_substitute(self->arena, expr_type, self->subs, null);
                     // Auto-dereference Ptr for tagged union scrutinee
-                    if (expr_type) expr_type = tl_monotype_strip_ptr(expr_type);
+                    if (expr_type) expr_type = tl_monotype_strip_ptr_and_const(expr_type);
 
                     if (expr_type && tl_monotype_is_concrete(expr_type) && tl_monotype_is_inst(expr_type)) {
                         str          variant_name = ast_node_name_original(cond->symbol.annotation);
@@ -2044,7 +2047,7 @@ static int specialize_case(tl_infer *self, traverse_ctx *traverse_ctx, ast_node 
                       node->case_.expression->type ? node->case_.expression->type->type : null;
                     if (expr_type) tl_monotype_substitute(self->arena, expr_type, self->subs, null);
                     // Auto-dereference Ptr for tagged union scrutinee
-                    if (expr_type) expr_type = tl_monotype_strip_ptr(expr_type);
+                    if (expr_type) expr_type = tl_monotype_strip_ptr_and_const(expr_type);
 
                     if (expr_type && tl_monotype_is_concrete(expr_type) && tl_monotype_is_inst(expr_type)) {
                         str primary_name = str_empty();
