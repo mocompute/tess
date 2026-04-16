@@ -988,9 +988,23 @@ static str find_overload_func(tl_infer *self, tl_monotype *type, char const *fun
             }
         }
     }
-    // NOTE: No symmetric Const[UserType] fallback here. Const[T] as a binary-op LHS is
-    // uncommon; adding a fallback requires a dispatch guard analogous to the
-    // is_ptr(params.v[0]) guard above. Tracked as a follow-up — needs test coverage first.
+    // Const fallback: Const[UserType] dispatches to the pointee's module only
+    // when the overload takes a value or Const receiver (not Ptr). Symmetric
+    // analogue of the Ptr fallback above. Const[T] is value-like (transparent
+    // in unification), so it must not hijack overloads expecting Ptr[T] —
+    // auto-address-of for operator rewriting is a separate concern.
+    if (tl_monotype_is_const(type) && !tl_monotype_is_ptr(type)) {
+        tl_monotype *inner = tl_monotype_strip_const(type);
+        if (is_user_defined_type(inner) && !str_is_empty(inner->cons_inst->def->module)) {
+            str lookup =
+              build_overload_func_name(self->transient, inner->cons_inst->def->module, func_name, arity);
+            if (ast_node_str_map_get(self->toplevels, lookup)) {
+                tl_monotype_sized params = get_func_param_types(self, lookup);
+                if (params.size > 0 && !tl_monotype_is_ptr(params.v[0]))
+                    return str_copy(self->arena, lookup);
+            }
+        }
+    }
     return str_empty();
 }
 
