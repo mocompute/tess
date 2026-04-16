@@ -46,46 +46,46 @@ Value: | JObject     { value: Ptr[HashMap[String, Ptr[Value]]] }
 }
 
 (self: Ptr[Const[J.Value]], other: Ptr[Const[J.Value]]): {
-    eq() {
-        if (self->tag != other->tag) { return false }
+    cmp() {
+        if self->tag < other->tag { return -1 }
+        if self->tag > other->tag { return 1 }
+
         when self {
-            _: JTrue { true }
-            _: JFalse { true }
-            _: JNull { true }
+            _: JTrue { 0 }
+            _: JFalse { 0 }
+            _: JNull { 0 }
 
             s: JString {
-                o: JString := other else { false }
-                s.value == o.value
+                o: JString := other else { -1 }
+                s.value.cmp(o.value)
             }
             s: JInt64 {
-                o: JInt64 := other else { false }
-                s.value == o.value
+                o: JInt64 := other else { -1 }
+                s.value.cmp(o.value)
             }
             s: JUInt64 {
-                o: JUInt64 := other else { false }
-                s.value == o.value
+                o: JUInt64 := other else { -1 }
+                s.value.cmp(o.value)
             }
             s: JDouble {
-                o: JDouble := other else { false }
-                s.value == o.value
+                o: JDouble := other else { -1 }
+                s.value.cmp(o.value)
             }
             s: JLongDouble {
-                o: JLongDouble := other else { false }
-                s.value == o.value
+                o: JLongDouble := other else { -1 }
+                s.value.cmp(o.value)
             }
 
             s: JArray {
-                o: JArray := other else { false }
-                // FIXME: array compare
-                false
+                o: JArray := other else { -1 }
+                s.value.cmp(o.value)
             }
 
             s: JObject {
-                o: JObject := other else { false }
+                o: JObject := other else { -1 }
                 // FIXME: object compare
-                false
+                -1
             }
-
         }
     }
 }
