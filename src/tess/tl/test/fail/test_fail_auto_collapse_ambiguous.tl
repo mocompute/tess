@@ -10,7 +10,7 @@ T: { y: Int }
 
 #module main
 
-main() -> CInt {
+main() {
     a := Foo(x = 1)
     0
 }

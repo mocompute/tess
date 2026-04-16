@@ -1,7 +1,7 @@
 // Synthesized eq works on concrete CUInt64 bindings (not weak-int defaulting).
 #module main
 
-main() -> CInt {
+main() {
     u: CUInt64 := 100zu
     v: CUInt64 := 100zu
     w: CUInt64 := 101zu

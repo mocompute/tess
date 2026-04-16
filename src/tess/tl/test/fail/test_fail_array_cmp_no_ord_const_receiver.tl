@@ -6,7 +6,7 @@
 
 Thing: { val: Int }
 
-main() -> CInt {
+main() {
     b: Const := Array.empty[Thing]()
     a        := Array.empty[Thing]()
     b.cmp(a)

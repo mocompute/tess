@@ -3,7 +3,7 @@
 
 println = Print.println
 
-main() -> CInt {
+main() {
     // Basic classic for loop: 0+1+2+3+4 = 10
     sum: Int := 0
     for i    := 0, i < 5, i += 1 {

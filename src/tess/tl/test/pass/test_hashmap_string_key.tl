@@ -119,7 +119,7 @@ test_str_key_long_strings() {
     error
 }
 
-main() -> CInt {
+main() {
     error: CInt := 0
     error += test_str_key_basic()
     error += test_str_key_overwrite()

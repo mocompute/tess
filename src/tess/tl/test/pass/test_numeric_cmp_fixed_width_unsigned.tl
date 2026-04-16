@@ -2,7 +2,7 @@
 // that live in a separate subchain from the c-width unsigned family.
 #module main
 
-main() -> CInt {
+main() {
     a: CUInt32 := 10
     b: CUInt32 := 20
     if a.cmp(b) >= 0 { return 1 }

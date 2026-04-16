@@ -2,7 +2,7 @@
 // (not just weak-float literals that default to CDouble).
 #module main
 
-main() -> CInt {
+main() {
     x: CFloat := 1.5
     y: CFloat := 2.5
     if c_tl_cmp_float(x.&, y.&, sizeof(x)) >= 0 { return 1 }

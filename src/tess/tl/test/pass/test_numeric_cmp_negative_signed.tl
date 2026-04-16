@@ -2,7 +2,7 @@
 // guarding against an accidental unsigned-load in the C helper.
 #module main
 
-main() -> CInt {
+main() {
     a: CInt32 := -5
     b: CInt32 := 5
     if a.cmp(b) >= 0 { return 1 }

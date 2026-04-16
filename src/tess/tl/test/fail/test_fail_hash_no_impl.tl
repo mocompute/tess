@@ -12,7 +12,7 @@ compute_hash[T: Hash](x: T) -> CSize {
     x.hash()
 }
 
-main() -> CInt {
+main() {
     f := Foo.Foo(x = 1)
     h := compute_hash(f)
     0

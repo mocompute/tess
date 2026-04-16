@@ -16,7 +16,7 @@ poke[T: Greet](p: Ptr[T]) -> CInt {
     0
 }
 
-main() -> CInt {
+main() {
     t := Foo.Thing(x = 1)
     poke(t.&)
 }

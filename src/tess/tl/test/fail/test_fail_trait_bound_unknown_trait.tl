@@ -7,7 +7,7 @@ f[T: Eqq](x: T) -> T {
     x
 }
 
-main() -> CInt {
+main() {
     f(1)
     0
 }

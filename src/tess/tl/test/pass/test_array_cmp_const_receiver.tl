@@ -5,7 +5,7 @@
 #module main
 #import <Array.tl>
 
-main() -> CInt {
+main() {
     b: Const := Array.empty[Int]()
     a        := Array.empty[Int]()
     defer a.free()

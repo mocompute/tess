@@ -13,7 +13,7 @@ Greet[T]: {
 
 poke_const[T: Greet](p: Ptr[Const[T]]) -> CInt { 0 }
 
-main() -> CInt {
+main() {
     t: Const := Foo.Thing(x = 1)
     poke_const(t.&)
 }

@@ -29,7 +29,7 @@ bar[K: Eq, V](self: Ptr[T[K, V]], key: K, value: V) {
 
 #module main
 
-main() -> CInt {
+main() {
     t := Repro.T[CInt, CInt](key = 0, value = 0, size = 0)
     Repro.bar(t.&, 1, 100)
     0

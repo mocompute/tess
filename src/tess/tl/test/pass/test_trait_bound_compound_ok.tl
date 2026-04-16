@@ -30,8 +30,8 @@ first[T: Greet](arr: Array[T]) -> T {
     arr.front()
 }
 
-main() -> CInt {
-    arr := Array.init(Thing(x = 7), 1zu)
+main() {
+    arr   := Array.init(Thing(x = 7), 1zu)
     error := 0
     error += first_greet(arr)
 

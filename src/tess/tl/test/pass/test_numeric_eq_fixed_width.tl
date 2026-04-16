@@ -2,7 +2,7 @@
 // to the c-width subchain's representative.
 #module main
 
-main() -> CInt {
+main() {
     a: CInt32 := 7
     b: CInt32 := 7
     if !a.eq(b) { return 1 }

@@ -8,7 +8,7 @@ cmp_first[T: Ord](a: Ptr[Array[T]], b: Ptr[Array[T]]) -> CInt {
     a->data.[0].cmp(b->data.[0])
 }
 
-main() -> CInt {
+main() {
     a := Array.empty[Int]()
     b := Array.empty[Int]()
     defer a.free()

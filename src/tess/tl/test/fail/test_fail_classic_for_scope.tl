@@ -2,7 +2,7 @@
 // This test should fail to compile.
 #module main
 
-main() -> CInt {
+main() {
     for i := 0, i < 5, i += 1 {
         _ := i
     }

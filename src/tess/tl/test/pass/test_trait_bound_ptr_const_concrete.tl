@@ -19,7 +19,7 @@ poke_const[T: Greet](p: Ptr[Const[T]]) -> CInt {
     t.greet()
 }
 
-main() -> CInt {
+main() {
     t: Const := Thing(x = 42)
     r        := poke_const(t.&)
     if r == 42 { 0 } else { 1 }

@@ -18,7 +18,7 @@ first_greet[T: Greet](arr: Array[T]) -> CInt {
     0
 }
 
-main() -> CInt {
+main() {
     arr := Array.init(Foo.Thing(x = 1), 1zu)
     first_greet(arr)
 }

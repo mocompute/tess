@@ -17,7 +17,7 @@ are_equal[T: Eq](a: T, b: T) -> Bool {
     a == b
 }
 
-main() -> CInt {
+main() {
     a := Wrapper.Pair(fst = 1, snd = 2)
     b := Wrapper.Pair(fst = 1, snd = 2)
     if are_equal(a, b) { 0 } else { 1 }

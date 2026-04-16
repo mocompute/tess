@@ -2,7 +2,7 @@
 #module main
 Pair[a, b]: { first: a, second: b }
 
-main() -> CInt {
+main() {
     v: Pair[Ptr[Quux], CInt] := null
     0
 }

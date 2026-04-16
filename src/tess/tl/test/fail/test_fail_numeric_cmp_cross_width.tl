@@ -2,7 +2,7 @@
 // Users must cast explicitly.
 #module main
 
-main() -> CInt {
+main() {
     a: CInt32 := 10
     b: CInt64 := 20
     if a.cmp(b) >= 0 { return 1 }

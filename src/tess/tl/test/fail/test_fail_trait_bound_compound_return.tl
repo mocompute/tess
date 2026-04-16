@@ -19,7 +19,7 @@ first[T: Greet](arr: Array[T]) -> T {
     arr.front()
 }
 
-main() -> CInt {
+main() {
     arr := Array.init(Foo.Thing(x = 7), 1zu)
     t   := first(arr)
     t.x

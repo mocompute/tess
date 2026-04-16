@@ -1,7 +1,7 @@
 // Unknown type name in a variable annotation should be rejected.
 #module main
 
-main() -> CInt {
+main() {
     v: Quux := 42
     v
 }

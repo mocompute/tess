@@ -3,7 +3,7 @@
 #module main
 #import <Array.tl>
 
-main() -> CInt {
+main() {
     inner1 := Array.empty[Int]()
     inner2 := Array.empty[Int]()
     defer inner1.free()

@@ -24,13 +24,13 @@ eq(a: Shape, b: Shape) -> Bool {
 
 #module main
 
-main() -> CInt {
+main() {
     errors: CInt := 0
 
-    a := TU_TagShape.Circle(2.0)
-    b := TU_TagShape.Square(3.0)
-    c := TU_TagShape.Circle(5.0)
-    d := TU_TagShape.Circle(2.0)
+    a                    := TU_TagShape.Circle(2.0)
+    b                    := TU_TagShape.Square(3.0)
+    c                    := TU_TagShape.Circle(5.0)
+    d                    := TU_TagShape.Circle(2.0)
     e: TU_TagShape.Shape := TU_TagShape.Empty
 
     // Different variants -> unequal tags.

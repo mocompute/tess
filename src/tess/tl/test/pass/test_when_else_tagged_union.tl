@@ -28,7 +28,7 @@ find(specs: Array[Spec], name: String) -> Option[CSize] {
     None
 }
 
-main() -> CInt {
+main() {
     error := 0
 
     specs := Array.empty[Spec]()
