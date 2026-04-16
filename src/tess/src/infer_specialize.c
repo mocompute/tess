@@ -973,6 +973,20 @@ static str find_overload_func(tl_infer *self, tl_monotype *type, char const *fun
         str lookup = build_overload_func_name(self->transient, S("CString"), func_name, arity);
         if (ast_node_str_map_get(self->toplevels, lookup)) return str_copy(self->arena, lookup);
     }
+    // Ptr fallback: dispatch to the pointee's module only when the overload
+    // itself takes a pointer — otherwise Vec3.eq(Vec3, Vec3) would hijack `==`
+    // on Ptr[Vec3], stealing raw pointer identity.
+    if (tl_monotype_is_ptr(type)) {
+        tl_monotype *inner = tl_monotype_strip_ptr(type);
+        if (is_user_defined_type(inner) && !str_is_empty(inner->cons_inst->def->module)) {
+            str lookup =
+              build_overload_func_name(self->transient, inner->cons_inst->def->module, func_name, arity);
+            if (ast_node_str_map_get(self->toplevels, lookup)) {
+                tl_monotype_sized params = get_func_param_types(self, lookup);
+                if (params.size > 0 && tl_monotype_is_ptr(params.v[0])) return str_copy(self->arena, lookup);
+            }
+        }
+    }
     return str_empty();
 }
 
@@ -1441,6 +1455,12 @@ static int check_trait_arrow(tl_infer *self, ast_node *toplevel, tl_monotype *co
                 if (tl_monotype_is_ptr(ap.v[j])) {
                     tl_monotype *target = tl_monotype_strip_const(tl_monotype_ptr_target(ap.v[j]));
                     if (tl_monotype_hash64(target) == eh) continue;
+                }
+                // Const variance at matching pointer depth: Ptr[Const[T]] satisfies Ptr[T].
+                if (tl_monotype_is_ptr(ap.v[j]) && tl_monotype_is_ptr(ep.v[j])) {
+                    tl_monotype *at = tl_monotype_strip_const(tl_monotype_ptr_target(ap.v[j]));
+                    tl_monotype *et = tl_monotype_strip_const(tl_monotype_ptr_target(ep.v[j]));
+                    if (tl_monotype_hash64(at) == tl_monotype_hash64(et)) continue;
                 }
                 compatible = 0;
                 break;
