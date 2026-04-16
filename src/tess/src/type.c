@@ -2332,10 +2332,6 @@ int tl_monotype_is_const_qualified(tl_monotype *self) {
     return tl_monotype_is_const(self) || tl_monotype_is_ptr_to_const(self);
 }
 
-int tl_monotype_is_ptr_or_null(tl_monotype *self) {
-    return tl_monotype_is_inst_of(self, S("PtrOrNull"));
-}
-
 int tl_monotype_is_carray(tl_monotype *self) {
     return tl_monotype_is_inst_of(self, S("CArray"));
 }
@@ -2359,7 +2355,7 @@ str tl_monotype_carray_count_macro_name(tl_monotype *self) {
 }
 int tl_monotype_has_ptr(tl_monotype *self) {
     if (!tl_monotype_is_inst(self)) return 0;
-    return tl_monotype_is_ptr(self) || tl_monotype_is_ptr_or_null(self);
+    return tl_monotype_is_ptr(self);
 }
 
 int tl_monotype_arrow_has_arrow(tl_monotype *self) {
@@ -2515,10 +2511,6 @@ tl_monotype *tl_monotype_ptr_target(tl_monotype *self) {
     if (tl_monotype_is_ptr(self)) {
         assert(self->cons_inst->args.size == 1);
         return self->cons_inst->args.v[0];
-    } else if (tl_monotype_is_ptr_or_null(self)) {
-        assert(self->cons_inst->args.size == 2);
-        // first argument is Ptr
-        return tl_monotype_ptr_target(self->cons_inst->args.v[0]);
     } else fatal("unreachable");
 }
 
