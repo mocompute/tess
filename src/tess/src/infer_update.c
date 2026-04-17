@@ -432,7 +432,18 @@ static int update_types_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_node 
             tl_monotype *value_type = node->let_in.value->type->type;
 
             if (tl_monotype_is_inst_specialized(value_type)) {
-                tl_polytype *new_type = tl_polytype_absorb_mono(self->arena, value_type);
+                // If the binding was declared `name: Const[T]`, the existing env entry
+                // carries the Const wrapper. The specialized RHS is the unwrapped T_spec,
+                // so re-wrap as Const[T_spec] to keep codegen aware that the binding is
+                // const-qualified.
+                tl_polytype *existing =
+                  tl_type_env_lookup(self->env, ast_node_str(node->let_in.name));
+                tl_monotype *type_for_env = value_type;
+                if (existing && tl_monotype_is_const(existing->type) &&
+                    !tl_monotype_is_const(value_type)) {
+                    type_for_env = tl_type_registry_const(self->registry, value_type);
+                }
+                tl_polytype *new_type = tl_polytype_absorb_mono(self->arena, type_for_env);
                 ast_node_type_set(node->let_in.name, new_type);
                 tl_type_env_insert(self->env, ast_node_str(node->let_in.name), new_type);
             }

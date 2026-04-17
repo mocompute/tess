@@ -2473,15 +2473,10 @@ static str generate_tagged_union_case(transpile *self, ast_node const *node, eva
                 if (!str_is_empty(other_variant_name)) {
                     str eb_binding_name =
                       escape_c_keyword(self->transient, ast_node_str(node->case_.else_binding));
-
-                    generate_decl(self, eb_binding_name, eb_type);
-                    cat(self, eb_binding_name);
-                    cat(self, S(" = "));
-                    if (is_pointer) cat(self, S("&"));
-                    cat(self, expr_str);
-                    cat(self, S(".u."));
-                    cat(self, escape_c_keyword(self->transient, other_variant_name));
-                    cat_semicolonln(self);
+                    str rhs = str_cat_4(self->transient, is_pointer ? S("&") : S(""), expr_str,
+                                        S(".u."),
+                                        escape_c_keyword(self->transient, other_variant_name));
+                    generate_decl_init(self, eb_binding_name, eb_type, rhs);
                 }
             }
 
@@ -2542,15 +2537,11 @@ static str generate_tagged_union_case(transpile *self, ast_node const *node, eva
         cat(self, S(") {\n"));
 
         // Generate binding: VariantType binding = expr.u.VariantName;
+        // Use generate_decl_init so a Const-qualified variant_type emits `const T name = ...`.
         str binding_name = escape_c_keyword(self->transient, ast_node_str(cond));
-        generate_decl(self, binding_name, variant_type);
-        cat(self, binding_name);
-        cat(self, S(" = "));
-        if (is_pointer) cat(self, S("&"));
-        cat(self, expr_str);
-        cat(self, S(".u."));
-        cat(self, escape_c_keyword(self->transient, variant_name));
-        cat_semicolonln(self);
+        str rhs          = str_cat_4(self->transient, is_pointer ? S("&") : S(""), expr_str,
+                                     S(".u."), escape_c_keyword(self->transient, variant_name));
+        generate_decl_init(self, binding_name, variant_type, rhs);
 
         // Generate arm body
         str arm_body = generate_expr(self, null, node->case_.arms.v[i], ctx);
@@ -3138,14 +3129,19 @@ static str generate_try(transpile *self, tl_monotype *type, ast_node const *node
 
     str          res                  = next_res(self);
     tl_monotype *success_type         = node->type->type;
-    generate_decl(self, res, success_type);
-    generate_assign_lhs(self, res);
-    cat(self, tmp);
-    cat(self, S(".u."));
-    cat(self, escape_c_keyword(self->transient, success_name));
-    cat(self, S("."));
-    cat(self, escape_c_keyword(self->transient, field_name));
-    cat_semicolonln(self);
+    str          esc_success           = escape_c_keyword(self->transient, success_name);
+    str          esc_field             = escape_c_keyword(self->transient, field_name);
+    str          unwrap_rhs            = str_fmt(self->transient, "%s.u.%s.%s", str_cstr(&tmp),
+                                                 str_cstr(&esc_success), str_cstr(&esc_field));
+    // For void success variants, generate_decl substitutes `char` for the type so the
+    // unwrap is well-formed C; generate_decl_init has no such substitution. Fall back to
+    // the split form for void; use the combined form (which preserves Const) otherwise.
+    if (tl_monotype_is_void(success_type)) {
+        generate_decl(self, res, success_type);
+        generate_assign(self, res, unwrap_rhs);
+    } else {
+        generate_decl_init(self, res, success_type, unwrap_rhs);
+    }
 
     return res;
 }
@@ -3287,16 +3283,12 @@ static str generate_void_else(transpile *self, tl_monotype *type, ast_node const
     cat(self, tag_success_name);
     cat(self, S(") {\n"));
 
-    // Declare and assign else binding
+    // Declare and assign else binding (preserve Const wrapper via generate_decl_init).
     tl_monotype *eb_type = binding->symbol.annotation_type->type;
     str          eb_name = escape_c_keyword(self->transient, ast_node_str(binding));
-    generate_decl(self, eb_name, eb_type);
-    cat(self, eb_name);
-    cat(self, S(" = "));
-    cat(self, tmp);
-    cat(self, S(".u."));
-    cat(self, escape_c_keyword(self->transient, error_name));
-    cat_semicolonln(self);
+    str          eb_rhs  = str_cat_3(self->transient, tmp, S(".u."),
+                                     escape_c_keyword(self->transient, error_name));
+    generate_decl_init(self, eb_name, eb_type, eb_rhs);
 
     // Generate else body
     generate_expr(self, null, body, ctx);

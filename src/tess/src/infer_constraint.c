@@ -2339,7 +2339,18 @@ static int infer_let_in(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
             }
         }
 
-        env_insert_constrain(self, node->let_in.name->symbol.name, name_type, node->let_in.name);
+        // When the binding has an explicit annotation, install the annotation polytype
+        // directly so wrappers like Const[T] survive into the env. The constrain path
+        // goes through symmetric unification, which strips Const (transparent for
+        // unification per docs/TYPE_SYSTEM.md:98) and loses the wrapper that codegen
+        // needs to emit C `const`. Value-vs-unwrapped-name constraints were already
+        // established above.
+        if (name_annotation_type) {
+            tl_type_env_insert(self->env, node->let_in.name->symbol.name, name_annotation_type);
+            tl_infer_set_attributes(self, node->let_in.name);
+        } else {
+            env_insert_constrain(self, node->let_in.name->symbol.name, name_type, node->let_in.name);
+        }
 
         if (node->let_in.body)
             if (constrain(self, node->type, node->let_in.body->type, node, TL_UNIFY_SYMMETRIC)) return 1;
