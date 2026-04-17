@@ -680,12 +680,16 @@ static int check_closure_attrs_cb(tl_infer *self, traverse_ctx *ctx, ast_node *n
         return 0;
     }
 
-    // Validate alloc_expr type is Ptr[Allocator].
+    // Validate alloc_expr type is Ptr[Allocator] or Ptr[Const[Allocator]]. Both
+    // shapes are valid — whether the allocator's methods accept a const self is
+    // a separate concern caught at method dispatch.
     if (attrs.alloc_expr && attrs.alloc_expr->type) {
         tl_polytype_substitute(self->arena, attrs.alloc_expr->type, self->subs);
         tl_monotype *resolved = attrs.alloc_expr->type->type;
-        if (!tl_monotype_is_ptr(resolved) ||
-            !tl_monotype_is_inst_of(tl_monotype_ptr_target(resolved), S("Alloc__Allocator"))) {
+        tl_monotype *pointee  = tl_monotype_is_ptr(resolved)
+                                  ? tl_monotype_effective_target(resolved, null)
+                                  : null;
+        if (!pointee || !tl_monotype_is_inst_of(pointee, S("Alloc__Allocator"))) {
             array_push(self->errors,
                        ((tl_infer_error){.tag = tl_err_alloc_expr_type_mismatch, .node = node}));
             return 0;

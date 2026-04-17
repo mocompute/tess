@@ -2289,13 +2289,13 @@ int tl_monotype_is_tv(tl_monotype *self) {
 
 int tl_monotype_is_ptr_to_char(tl_monotype *self) {
     if (!self || !tl_monotype_is_ptr(self)) return 0;
-    tl_monotype *target = tl_monotype_ptr_target(self);
+    tl_monotype *target = tl_monotype_ptr_target_unchecked(self);
     return tl_monotype_is_inst_of(target, S("CChar"));
 }
 
 int tl_monotype_is_ptr_to_tv(tl_monotype *self) {
     if (!self || !tl_monotype_is_ptr(self)) return 0;
-    tl_monotype *target = tl_monotype_ptr_target(self);
+    tl_monotype *target = tl_monotype_ptr_target_unchecked(self);
     return tl_monotype_is_tv(target);
 }
 
@@ -2307,41 +2307,41 @@ int tl_monotype_is_const(tl_monotype *self) {
     return tl_monotype_is_inst_of(self, S("Const"));
 }
 
-tl_monotype *tl_monotype_const_target(tl_monotype *self) {
+tl_monotype *tl_monotype_const_target_unchecked(tl_monotype *self) {
     assert(tl_monotype_is_const(self));
     assert(self->cons_inst->args.size == 1);
     return self->cons_inst->args.v[0];
 }
 
 tl_monotype *tl_monotype_strip_const(tl_monotype *self) {
-    return tl_monotype_is_const(self) ? tl_monotype_const_target(self) : self;
-}
-
-tl_monotype *tl_monotype_strip_ptr_and_const(tl_monotype *self) {
-    if (!tl_monotype_is_ptr(self)) return self;
-    return tl_monotype_strip_const(tl_monotype_ptr_target(self));
+    return tl_monotype_is_const(self) ? tl_monotype_const_target_unchecked(self) : self;
 }
 
 tl_monotype *tl_monotype_effective_target(tl_monotype *self, int *out_is_const) {
     int is_const = 0;
     if (tl_monotype_is_const(self)) {
         is_const = 1;
-        self     = tl_monotype_const_target(self);
+        self     = tl_monotype_const_target_unchecked(self);
     }
     if (tl_monotype_is_ptr(self)) {
-        self = tl_monotype_ptr_target(self);
+        self = tl_monotype_ptr_target_unchecked(self);
         if (tl_monotype_is_const(self)) {
             is_const = 1;
-            self     = tl_monotype_const_target(self);
+            self     = tl_monotype_const_target_unchecked(self);
         }
     }
     if (out_is_const) *out_is_const = is_const;
     return self;
 }
 
+tl_monotype *tl_monotype_pointer_element(tl_monotype *self) {
+    if (!tl_monotype_is_ptr(self)) return NULL;
+    return tl_monotype_ptr_target_unchecked(self);
+}
+
 int tl_monotype_is_ptr_to_const(tl_monotype *self) {
     if (!tl_monotype_is_ptr(self)) return 0;
-    tl_monotype *target = tl_monotype_ptr_target(self);
+    tl_monotype *target = tl_monotype_ptr_target_unchecked(self);
     return tl_monotype_is_const(target);
 }
 
@@ -2370,11 +2370,6 @@ str tl_monotype_carray_count_macro_name(tl_monotype *self) {
     assert(tl_monotype_carray_count_is_macro(self));
     return tl_monotype_c_macro_name(self->cons_inst->args.v[1]);
 }
-int tl_monotype_has_ptr(tl_monotype *self) {
-    if (!tl_monotype_is_inst(self)) return 0;
-    return tl_monotype_is_ptr(self);
-}
-
 int tl_monotype_arrow_has_arrow(tl_monotype *self) {
     int has_arrow = 0;
     if (tl_monotype_is_arrow(self)) {
@@ -2524,19 +2519,19 @@ tl_monotype *tl_monotype_unary_target(tl_monotype *self) {
     return self->cons_inst->args.v[0];
 }
 
-tl_monotype *tl_monotype_ptr_target(tl_monotype *self) {
+tl_monotype *tl_monotype_ptr_target_unchecked(tl_monotype *self) {
     if (tl_monotype_is_ptr(self)) {
         assert(self->cons_inst->args.size == 1);
         return self->cons_inst->args.v[0];
     } else fatal("unreachable");
 }
 
-void tl_monotype_ptr_set_target(tl_monotype *ptr, tl_monotype *target) {
+void tl_monotype_ptr_set_target_unchecked(tl_monotype *ptr, tl_monotype *target) {
     assert(tl_monotype_is_ptr(ptr));
     assert(target);
     ptr->cons_inst->args.v[0] = target;
     ptr->hash_gen             = 0; // invalidate any cached hash
-    assert(tl_monotype_ptr_target(ptr) == target);
+    assert(tl_monotype_ptr_target_unchecked(ptr) == target);
 }
 
 tl_monotype *tl_monotype_arrow_args(tl_monotype *self) {
@@ -2631,7 +2626,7 @@ u64 tl_monotype_hash64_(tl_monotype *self, u32 gen, hash_cycle_stack *in_progres
                 // (e.g. `GenBoxPtr[T] = { value: Ptr[T] }`), because the walk would peel the outer
                 // user type down to its inner Ptr and discard T.
                 if (tl_monotype_is_ptr(arg)) {
-                    tl_monotype *target = tl_monotype_ptr_target(arg);
+                    tl_monotype *target = tl_monotype_ptr_target_unchecked(arg);
 
                     // Check if target is an ancestor in progress
                     u64 *ancestor = null;
@@ -3378,7 +3373,7 @@ static int tl_type_subs_monotype_occurs_(tl_type_subs *self, tl_type_variable tv
             // Allow Ptr(tv): this is explicit support for recursive types where a field with a Ptr type is
             // used to refer to itself.
             if (tl_monotype_is_ptr(arr.v[i])) {
-                tl_monotype *target = tl_monotype_ptr_target(arr.v[i]);
+                tl_monotype *target = tl_monotype_ptr_target_unchecked(arr.v[i]);
                 if (tl_monotype_is_tv(target) && target->var == tv) continue;
             }
             if (tl_type_subs_monotype_occurs_(self, tv, arr.v[i], seen)) {

@@ -1697,8 +1697,8 @@ static int infer_assignment(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
 // has Const at any nesting level where the param type does not.
 static int types_strip_const(tl_monotype *param, tl_monotype *arg) {
     while (tl_monotype_is_ptr(param) && tl_monotype_is_ptr(arg)) {
-        tl_monotype *pt = tl_monotype_ptr_target(param);
-        tl_monotype *at = tl_monotype_ptr_target(arg);
+        tl_monotype *pt = tl_monotype_ptr_target_unchecked(param);
+        tl_monotype *at = tl_monotype_ptr_target_unchecked(arg);
         if (tl_monotype_is_const(at) && !tl_monotype_is_const(pt)) return 1;
         // Unwrap Const if present on both sides before continuing
         pt    = tl_monotype_strip_const(pt);
@@ -1934,8 +1934,8 @@ static int infer_binary_op(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
         tl_monotype_substitute(self->arena, right->type->type, self->subs, null);
 
         tl_monotype *left_mono = tl_monotype_strip_const(left->type->type);
-        if (tl_monotype_has_ptr(left_mono)) {
-            tl_monotype *target = tl_monotype_ptr_target(left_mono);
+        tl_monotype *target    = tl_monotype_pointer_element(left_mono);
+        if (target) {
             if (constrain_pm(self, node->type, target, node, TL_UNIFY_SYMMETRIC)) return 1;
         } else if (tl_monotype_is_carray(left_mono)) {
             tl_monotype *target = tl_monotype_carray_element(left_mono);
@@ -1960,9 +1960,9 @@ static int infer_unary_op(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
     if (str_eq(op, S("*"))) {
         tl_polytype_substitute(self->arena, operand->type, self->subs); // needed
         tl_monotype *operand_mono = tl_monotype_strip_const(operand->type->type);
-        if (tl_monotype_has_ptr(operand_mono)) {
+        tl_monotype *target       = tl_monotype_pointer_element(operand_mono);
+        if (target) {
             assert(!tl_polytype_is_scheme(operand->type));
-            tl_monotype *target = tl_monotype_ptr_target(operand_mono);
             if (constrain_pm(self, node->type, target, node, TL_UNIFY_SYMMETRIC)) return 1;
         } else if (tl_polytype_is_concrete(operand->type)) {
             array_push(self->errors, ((tl_infer_error){.tag = tl_err_expected_pointer, .node = node}));
@@ -2275,7 +2275,7 @@ static int try_infer_carray_literal(tl_infer *self, traverse_ctx *ctx, ast_node 
     if (!ann) return 0;
 
     tl_monotype *type = ann->type;
-    if (tl_monotype_is_const(type)) type = tl_monotype_const_target(type);
+    if (tl_monotype_is_const(type)) type = tl_monotype_const_target_unchecked(type);
     if (!tl_monotype_is_carray(type)) return 0;
 
     ast_node *value = node->let_in.value;
@@ -2331,7 +2331,7 @@ static int infer_let_in(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
                 // For Const[T] bindings, constrain value against unwrapped T so the Const
                 // wrapper does not back-propagate onto the value expression's type.
                 if (name_type && tl_monotype_is_const(name_type->type)) {
-                    tl_polytype unwrapped = tl_polytype_wrap(tl_monotype_const_target(name_type->type));
+                    tl_polytype unwrapped = tl_polytype_wrap(tl_monotype_const_target_unchecked(name_type->type));
                     if (constrain(self, &unwrapped, value_type, node, TL_UNIFY_DIRECTED)) return 1;
                 } else {
                     if (constrain(self, name_type, value_type, node, TL_UNIFY_DIRECTED)) return 1;
@@ -3478,7 +3478,7 @@ static int infer_struct_access(tl_infer *self, traverse_ctx *ctx, ast_node *node
         ensure_symbol_type_from_env(self, left);
 
         if (tl_monotype_is_ptr(left->type->type)) {
-            struct_type = tl_monotype_ptr_target(left->type->type);
+            struct_type = tl_monotype_ptr_target_unchecked(left->type->type);
         } else {
             tl_monotype *weak = tl_monotype_create_fresh_weak(self->subs);
             tl_monotype *ptr  = tl_type_registry_ptr(self->registry, weak);
@@ -3507,7 +3507,7 @@ static int infer_struct_access(tl_infer *self, traverse_ctx *ctx, ast_node *node
 
     // Const(T) is transparent for field access: unwrap to access T's fields
     if (tl_monotype_is_const(struct_type)) {
-        struct_type = tl_monotype_const_target(struct_type);
+        struct_type = tl_monotype_const_target_unchecked(struct_type);
     }
 
 #if DEBUG_TYPE_ALIAS

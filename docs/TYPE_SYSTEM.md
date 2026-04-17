@@ -89,6 +89,48 @@ main() {
 }
 ```
 
+## Ptr and Const Peeling Policy
+
+Many type-system operations need to look "through" `Ptr` and `Const` wrappers. To keep the policy consistent, each wrapper-peeling site must call an intent-named helper whose name identifies the *semantic operation*, not the primitive transformation.
+
+### Representation
+
+`Ptr[T]` and `Const[T]` are unary type-constructor instances, not qualifier flags. Const is **transparent** for unification and dispatch but **structural** for C codegen; Ptr is always structural.
+
+### Intent-named helpers
+
+| Helper | Intent | Strips |
+|--------|--------|--------|
+| `tl_monotype_effective_target(t, *is_const)` | Dispatch / lookup / pattern-match target | outer Const, outer Ptr, inner Const |
+| `tl_monotype_pointer_element(t)` | Element/pointee type for `*p` and `p[i]` result | Ptr only; preserves inner Const |
+| `tl_monotype_strip_const(t)` | Primitive: peel one outer Const | outer Const only |
+| `tl_monotype_is_ptr_to_const(t)` | Predicate: is this exactly `Ptr[Const[T]]`? | — |
+| `tl_monotype_is_const_qualified(t)` | Predicate: does surface have any Const? | — |
+| `tl_monotype_ptr_target_unchecked(t)` | Primitive: extract Ptr pointee; precondition `is_ptr` | Ptr only; preserves inner Const |
+| `tl_monotype_const_target_unchecked(t)` | Primitive: extract Const target; precondition `is_const` | Const only |
+
+The `_unchecked` suffix signals that the caller asserts a precondition without checking at the call site — a reviewer seeing one should see a nearby `is_ptr` / `is_const` guard.
+
+### Per-operation policy
+
+- **Dispatch** (UFCS, operator overload lookup, tagged-union case match, trait-module resolution): use `effective_target`. The distinction between `T`, `Const[T]`, `Ptr[T]`, and `Ptr[Const[T]]` is not visible to method or case lookup.
+- **Pointer element for `*p` and `p[i]`**: use `pointer_element`. It preserves the inner Const so mutation through the result is still rejected by later checks.
+- **Unification**: `strip_const` at each level; Ptr is never stripped (structural recursion handles it).
+- **Field access**: `->` peels exactly one Ptr; `.` peels exactly one Const. Ptr field-access via `.` delegates to UFCS.
+- **C codegen**: `Ptr[T]` → `T*`, `Ptr[Const[T]]` → `const T*`, `Const[T]` declaration stripped when emitted without initializer. Full wrapper awareness required — do not use peeling helpers here.
+- **Trait conformance**: `check_trait_arrow` allows `Ptr[Const[T]]` to satisfy `Ptr[T]` (Const-variance at matching Ptr depth).
+
+### Predicates
+
+- `is_ptr(t)` — true iff `t` is `Ptr[_]` (any pointee).
+- `is_const(t)` — true iff `t` is `Const[_]`.
+- `is_ptr_to_const(t)` — true iff `t` is exactly `Ptr[Const[_]]`.
+- `is_const_qualified(t)` — true iff the surface has any Const (`Const[T]` or `Ptr[Const[T]]`).
+
+### Rule for new code
+
+Every site that peels a `Ptr` or `Const` wrapper must either call an intent-named helper (`effective_target`, `pointer_element`, `strip_const`, or a predicate) **or** include a comment linking to this policy section explaining why a primitive is used directly.
+
 ## Monomorphization (Specialization)
 
 Tess compiles generic code by **monomorphization**: creating specialized versions for each concrete type used.

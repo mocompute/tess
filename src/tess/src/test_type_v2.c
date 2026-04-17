@@ -459,6 +459,55 @@ static int test_effective_target(void) {
     return error;
 }
 
+// ---------------------------------------------------------------------------
+// Test: tl_monotype_pointer_element
+//
+// Extracts the element type of a Ptr, preserving inner Const. Returns NULL
+// when self is not a Ptr.
+// ---------------------------------------------------------------------------
+static int test_pointer_element(void) {
+    int               error = 0;
+    tl_type_registry *reg   = test_registry();
+
+    tl_monotype *cint = lookup(reg, "CInt");
+    error += !cint;
+
+    tl_monotype *ptr_cint       = tl_type_registry_ptr(reg, cint);
+    tl_monotype *const_cint     = tl_type_registry_const(reg, cint);
+    tl_monotype *ptr_const_cint = tl_type_registry_ptr(reg, const_cint);
+    tl_monotype *const_ptr_cint = tl_type_registry_const(reg, ptr_cint);
+    tl_monotype *ptr_ptr_cint   = tl_type_registry_ptr(reg, ptr_cint);
+
+    // Bare T: not a Ptr, returns NULL.
+    error += (tl_monotype_pointer_element(cint) != null);
+
+    // Const[T]: not a Ptr, returns NULL.
+    error += (tl_monotype_pointer_element(const_cint) != null);
+
+    // Ptr[T] -> T.
+    error += (tl_monotype_pointer_element(ptr_cint) != cint);
+
+    // Ptr[Const[T]] -> Const[T] (inner Const is preserved).
+    error += (tl_monotype_pointer_element(ptr_const_cint) != const_cint);
+
+    // Const[Ptr[T]]: not a Ptr at the surface, returns NULL.
+    error += (tl_monotype_pointer_element(const_ptr_cint) != null);
+
+    // Ptr[Ptr[T]] -> Ptr[T].
+    error += (tl_monotype_pointer_element(ptr_ptr_cint) != ptr_cint);
+
+    // NULL input: returns NULL.
+    error += (tl_monotype_pointer_element(null) != null);
+
+    // Type variable: not a Ptr, returns NULL.
+    tl_type_variable tv  = 99;
+    tl_monotype     *var = tl_monotype_create_tv(reg->alloc, tv);
+    error += (tl_monotype_pointer_element(var) != null);
+
+    test_registry_destroy(reg);
+    return error;
+}
+
 int main(void) {
     int error      = 0;
     int this_error = 0;
@@ -473,6 +522,7 @@ int main(void) {
     T(test_registry_csize_cptrdiff);
     T(test_cchar_signedness);
     T(test_effective_target);
+    T(test_pointer_element);
 
     return error;
 }

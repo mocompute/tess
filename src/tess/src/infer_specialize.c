@@ -488,7 +488,7 @@ static str specialize_type_constructor_(tl_infer *self, str name, tl_monotype_si
 
             // Do not recurse into pointer target: fixup after
             if (tl_monotype_is_ptr(args.v[i])) {
-                tl_monotype *target = tl_monotype_ptr_target(args.v[i]);
+                tl_monotype *target = tl_monotype_ptr_target_unchecked(args.v[i]);
                 if (tl_monotype_is_inst(target) && str_eq(name, target->cons_inst->def->generic_name)) {
 #if DEBUG_RECURSIVE_TYPES
                     fprintf(
@@ -977,7 +977,7 @@ static str find_overload_func(tl_infer *self, tl_monotype *type, char const *fun
     // itself takes a pointer — otherwise Vec3.eq(Vec3, Vec3) would hijack `==`
     // on Ptr[Vec3], stealing raw pointer identity.
     if (tl_monotype_is_ptr(type)) {
-        tl_monotype *inner = tl_monotype_strip_ptr_and_const(type);
+        tl_monotype *inner = tl_monotype_effective_target(type, null);
         if (is_user_defined_type(inner) && !str_is_empty(inner->cons_inst->def->module)) {
             str lookup =
               build_overload_func_name(self->transient, inner->cons_inst->def->module, func_name, arity);
@@ -1471,13 +1471,13 @@ static int check_trait_arrow(tl_infer *self, ast_node *toplevel, tl_monotype *co
                 u64 eh = tl_monotype_hash64(ep.v[j]);
                 if (tl_monotype_hash64(ap.v[j]) == eh) continue;
                 if (tl_monotype_is_ptr(ap.v[j])) {
-                    tl_monotype *target = tl_monotype_strip_const(tl_monotype_ptr_target(ap.v[j]));
+                    tl_monotype *target = tl_monotype_strip_const(tl_monotype_ptr_target_unchecked(ap.v[j]));
                     if (tl_monotype_hash64(target) == eh) continue;
                 }
                 // Const variance at matching pointer depth: Ptr[Const[T]] satisfies Ptr[T].
                 if (tl_monotype_is_ptr(ap.v[j]) && tl_monotype_is_ptr(ep.v[j])) {
-                    tl_monotype *at = tl_monotype_strip_const(tl_monotype_ptr_target(ap.v[j]));
-                    tl_monotype *et = tl_monotype_strip_const(tl_monotype_ptr_target(ep.v[j]));
+                    tl_monotype *at = tl_monotype_strip_const(tl_monotype_ptr_target_unchecked(ap.v[j]));
+                    tl_monotype *et = tl_monotype_strip_const(tl_monotype_ptr_target_unchecked(ep.v[j]));
                     if (tl_monotype_hash64(at) == tl_monotype_hash64(et)) continue;
                 }
                 compatible = 0;
@@ -2009,7 +2009,7 @@ static int specialize_case(tl_infer *self, traverse_ctx *traverse_ctx, ast_node 
             // Handle pointer types (for mutable case bindings)
             tl_monotype *inner_type = variant_type;
             if (tl_monotype_is_ptr(variant_type)) {
-                inner_type = tl_monotype_ptr_target(variant_type);
+                inner_type = tl_monotype_ptr_target_unchecked(variant_type);
             }
 
             // If the variant type is a generic inst that needs specialization
@@ -2024,8 +2024,8 @@ static int specialize_case(tl_infer *self, traverse_ctx *traverse_ctx, ast_node 
                     tl_monotype *expr_type =
                       node->case_.expression->type ? node->case_.expression->type->type : null;
                     if (expr_type) tl_monotype_substitute(self->arena, expr_type, self->subs, null);
-                    // Auto-dereference Ptr for tagged union scrutinee
-                    if (expr_type) expr_type = tl_monotype_strip_ptr_and_const(expr_type);
+                    // Auto-dereference Ptr (and drop Const) to reach the concrete union.
+                    if (expr_type) expr_type = tl_monotype_effective_target(expr_type, null);
 
                     if (expr_type && tl_monotype_is_concrete(expr_type) && tl_monotype_is_inst(expr_type)) {
                         str          variant_name = ast_node_name_original(cond->symbol.annotation);
@@ -2050,7 +2050,7 @@ static int specialize_case(tl_infer *self, traverse_ctx *traverse_ctx, ast_node 
             node->case_.else_binding->symbol.annotation_type) {
             tl_monotype *variant_type = node->case_.else_binding->symbol.annotation_type->type;
             tl_monotype *inner_type   = variant_type;
-            if (tl_monotype_is_ptr(variant_type)) inner_type = tl_monotype_ptr_target(variant_type);
+            if (tl_monotype_is_ptr(variant_type)) inner_type = tl_monotype_ptr_target_unchecked(variant_type);
 
             if (tl_monotype_is_inst(inner_type) && !tl_monotype_is_inst_specialized(inner_type)) {
                 str               generic_name = inner_type->cons_inst->def->generic_name;
@@ -2060,8 +2060,8 @@ static int specialize_case(tl_infer *self, traverse_ctx *traverse_ctx, ast_node 
                     tl_monotype *expr_type =
                       node->case_.expression->type ? node->case_.expression->type->type : null;
                     if (expr_type) tl_monotype_substitute(self->arena, expr_type, self->subs, null);
-                    // Auto-dereference Ptr for tagged union scrutinee
-                    if (expr_type) expr_type = tl_monotype_strip_ptr_and_const(expr_type);
+                    // Auto-dereference Ptr (and drop Const) to reach the concrete union.
+                    if (expr_type) expr_type = tl_monotype_effective_target(expr_type, null);
 
                     if (expr_type && tl_monotype_is_concrete(expr_type) && tl_monotype_is_inst(expr_type)) {
                         str primary_name = str_empty();
@@ -2442,7 +2442,7 @@ int specialize_applications_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_n
                             if (slice_mon && tl_monotype_is_inst(slice_mon) &&
                                 slice_mon->cons_inst->args.size > 0 &&
                                 tl_monotype_is_ptr(slice_mon->cons_inst->args.v[0]))
-                                elem_type = tl_monotype_ptr_target(slice_mon->cons_inst->args.v[0]);
+                                elem_type = tl_monotype_ptr_target_unchecked(slice_mon->cons_inst->args.v[0]);
                         }
 
                         if (elem_type) {

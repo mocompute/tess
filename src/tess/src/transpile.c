@@ -1401,7 +1401,7 @@ static str generate_funcall_variadic(transpile *self, ast_node const *node, eval
 
     tl_monotype *slice_param = params.v[n_fixed]; // Slice[ElemType]
     // Slice[T] = { v: Ptr[T], size: CSize }, so args.v[0] = Ptr[T]; extract T.
-    tl_monotype *elem_type = tl_monotype_ptr_target(slice_param->cons_inst->args.v[0]);
+    tl_monotype *elem_type = tl_monotype_ptr_target_unchecked(slice_param->cons_inst->args.v[0]);
 
     // Generate fixed args
     str_array args_res = {.alloc = self->transient};
@@ -2884,7 +2884,7 @@ static str generate_binary_op(transpile *self, tl_monotype *type, ast_node const
         // Emit "const T* res = left op right;" to avoid a discarded-qualifiers warning.
         if (carray_field && !is_nil_result(type) && tl_monotype_is_ptr(type) &&
             expr_is_through_const_ptr(node)) {
-            tl_monotype *elem   = tl_monotype_ptr_target(type);
+            tl_monotype *elem   = tl_monotype_ptr_target_unchecked(type);
             str          elem_c = type_to_c_mono(self, elem);
             str          type_c = str_cat_3(self->transient, S("const "), elem_c, S("*"));
             str          val    = str_cat_5(self->transient, left, S(" "), op, S(" "), right);
@@ -3423,7 +3423,7 @@ static int ptr_depth_to_arrow(tl_monotype *type, tl_monotype **out_arrow) {
     int depth = 0;
     while (tl_monotype_is_ptr(type)) {
         depth++;
-        type = tl_monotype_ptr_target(type);
+        type = tl_monotype_ptr_target_unchecked(type);
     }
     // Skip Const wrapper (e.g. Ptr(Const(Arrow(...))))
     type = tl_monotype_strip_const(type);
@@ -3887,9 +3887,9 @@ static str render_ptr_to_c(transpile *self, tl_monotype *mono) {
     str ptr_arrow = ptr_to_arrow_to_c(self, mono);
     if (!str_is_empty(ptr_arrow)) return ptr_arrow;
 
-    tl_monotype *arg = tl_monotype_ptr_target(mono);
+    tl_monotype *arg = tl_monotype_ptr_target_unchecked(mono);
     if (tl_monotype_is_const(arg)) {
-        tl_monotype *inner = tl_monotype_const_target(arg);
+        tl_monotype *inner = tl_monotype_const_target_unchecked(arg);
         tl_polytype  wrap  = tl_polytype_wrap(inner);
         str          typec = type_to_c(self, &wrap);
         return str_cat_3(self->transient, S("const "), typec, S("*"));
@@ -3914,7 +3914,7 @@ static str type_to_c(transpile *self, tl_polytype *type) {
         }
 
         else if (tl_monotype_is_const(mono)) {
-            tl_monotype *inner = tl_monotype_const_target(mono);
+            tl_monotype *inner = tl_monotype_const_target_unchecked(mono);
             tl_polytype  wrap  = tl_polytype_wrap(inner);
             if (tl_monotype_is_ptr(inner)) {
                 // Const[Ptr[T]] -> T* const  (or const T* const for Const[Ptr[Const[T]]])
@@ -4346,14 +4346,14 @@ static int is_c_exportable_type(tl_monotype *type) {
     if (tl_monotype_is_tuple(type)) return 0;
 
     if (tl_monotype_is_ptr(type)) {
-        tl_monotype *target = tl_monotype_ptr_target(type);
+        tl_monotype *target = tl_monotype_ptr_target_unchecked(type);
         target              = tl_monotype_strip_const(target);
         if (tl_monotype_is_any(target)) return 1; // Ptr[any] is opaque, ok
         return is_c_exportable_type(target);
     }
 
     if (tl_monotype_is_const(type)) {
-        return is_c_exportable_type(tl_monotype_const_target(type));
+        return is_c_exportable_type(tl_monotype_const_target_unchecked(type));
     }
 
     if (!tl_monotype_is_concrete_inst(type)) return 0;

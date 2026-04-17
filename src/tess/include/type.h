@@ -235,21 +235,19 @@ int tl_monotype_is_arrow(tl_monotype *);
 
 // -- Pointer, Const, and CArray type queries --
 //
-// Ptr(T):       single-indirection pointer. Target via ptr_target().
+// Ptr(T):       single-indirection pointer. Target via ptr_target_unchecked().
 // Const(T):     const wrapper. Transparent in unification; meaningful
 //               only inside Ptr (Ptr(Const(T)) -> "const T*" in C).
 // CArray(T,N):           fixed-size C array. Element via carray_element(),
 //                        count via carray_count(). Decays to Ptr(T) in values.
-// has_ptr()              same as is_ptr() for instantiated types; alias kept for call-site clarity.
-// ptr_target()           works on Ptr only; fatals if not Ptr. Always guard with is_ptr().
+// ptr_target_unchecked() works on Ptr only; fatals if not Ptr. Always guard with is_ptr().
 // effective_target()     peels one outer Const, one Ptr, and one inner Const. See declaration.
-// strip_ptr_and_const()  peels one Ptr plus its inner Const (if any). No-op if not Ptr.
+// pointer_element()      Ptr element type, preserving inner Const. Returns NULL if not a Ptr.
 
 int          tl_monotype_is_ptr(tl_monotype *);
 int          tl_monotype_is_const(tl_monotype *);
-tl_monotype *tl_monotype_const_target(tl_monotype *);
+tl_monotype *tl_monotype_const_target_unchecked(tl_monotype *);
 tl_monotype *tl_monotype_strip_const(tl_monotype *);
-tl_monotype *tl_monotype_strip_ptr_and_const(tl_monotype *); // Ptr[T] or Ptr[Const[T]] -> T; no-op if not Ptr
 // Peel surface Ptr/Const wrappers to reach the underlying type for dispatch/lookup/match.
 // Handles T, Const[T], Ptr[T], Ptr[Const[T]], Const[Ptr[T]], Const[Ptr[Const[T]]].
 // Does NOT peel Ptr[Ptr[T]] (double-pointer is preserved; callers that need multi-level
@@ -257,6 +255,14 @@ tl_monotype *tl_monotype_strip_ptr_and_const(tl_monotype *); // Ptr[T] or Ptr[Co
 // NULL-safe: returns NULL if self is NULL.
 // out_is_const (optional): set to 1 iff any Const layer was peeled, else 0.
 tl_monotype *tl_monotype_effective_target(tl_monotype *self, int *out_is_const);
+// Element type of a pointer: Ptr[T] -> T, Ptr[Const[T]] -> Const[T].
+// Returns NULL if self is not a Ptr (no fatal). Preserves inner Const so callers
+// propagating the element type to a binding retain the Const qualification —
+// essential for result types of dereference (*p) and index ([]).
+//
+// Compare to effective_target, which also drops the inner Const; use that when
+// the caller wants the bare underlying type for dispatch.
+tl_monotype *tl_monotype_pointer_element(tl_monotype *self);
 int          tl_monotype_is_ptr_to_const(tl_monotype *);
 int          tl_monotype_is_const_qualified(tl_monotype *); // Const[T] or Ptr[Const[T]]
 int          tl_monotype_is_carray(tl_monotype *);
@@ -266,7 +272,6 @@ int          tl_monotype_carray_count_is_macro(tl_monotype *);
 str          tl_monotype_carray_count_macro_name(tl_monotype *);
 int          tl_monotype_is_unary(tl_monotype *);
 int          tl_monotype_arrow_has_arrow(tl_monotype *);
-int          tl_monotype_has_ptr(tl_monotype *);
 int          tl_monotype_is_tv(tl_monotype *);
 int          tl_monotype_is_signed_integer(tl_monotype *);
 int          tl_monotype_is_unsigned_integer(tl_monotype *);
@@ -286,8 +291,8 @@ char const       *tl_monotype_integer_c_min(tl_monotype *);      // e.g. "SHRT_M
 char const       *tl_monotype_integer_c_max(tl_monotype *);      // e.g. "SHRT_MAX"
 int               tl_monotype_is_unsigned_family(tl_monotype *); // unsigned subchains (2, 4, 5=CSize)
 tl_monotype      *tl_monotype_unary_target(tl_monotype *);
-tl_monotype      *tl_monotype_ptr_target(tl_monotype *);
-void              tl_monotype_ptr_set_target(tl_monotype *, tl_monotype *);
+tl_monotype      *tl_monotype_ptr_target_unchecked(tl_monotype *);
+void              tl_monotype_ptr_set_target_unchecked(tl_monotype *, tl_monotype *);
 tl_monotype      *tl_monotype_arrow_args(tl_monotype *);
 tl_monotype_sized tl_monotype_arrow_get_args(tl_monotype *);
 i32               tl_monotype_type_constructor_field_index(tl_monotype *, str);
