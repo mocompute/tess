@@ -9,7 +9,7 @@ Generate a changelog entry for the Tess compiler project and add it to `NEWS.md`
 The commit range is determined automatically:
 
 - **Start commit** (last commit in NEWS.md): !`grep -m1 '^\#\# ' NEWS.md | sed 's/.*\.\.\([a-f0-9]*\)).*/\1/'`
-- **End commit** (current HEAD of main): !`git rev-parse --short main`
+- **End commit** (current HEAD of dev): !`git rev-parse --short dev`
 
 If the start and end commits are the same, tell the user there are no new commits to document.
 
