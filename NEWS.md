@@ -2,8 +2,54 @@
 
 All notable changes to this project will be documented in this file.
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/),
-and this project adheres to [Semantic Versioning](https://semver.org/).
+The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project will adhere to
+[Semantic Versioning](https://semver.org/) beginning with the 0.2.0 release.
+
+## [v0.1.5] - 2026-04-10 to 2026-04-17 (acfa628c..110b83cf)
+
+### Highlights
+
+- **`Const[T]` now emits C `const`**: The type system already enforced immutability, but the transpiler was silently dropping it. `Const[T]` bindings now produce `const` in generated C.
+- **`cmp` and `eq` on all numeric types**: `a.cmp(b)` and `a.eq(b)` now work on every integer and float width, unlocking generic functions with `T: Ord`/`T: Eq` bounds over numeric types.
+- **Tagged union `.tag` field**: Tagged union values now expose a `.tag` field for fast discriminant comparison, enabling fast-reject patterns without a full `when` dispatch.
+- **Trait dispatch through `Ptr[T]` and `Const[T]`**: Operator overloads and trait methods now correctly dispatch when the receiver is `Ptr[UserType]` or `Const[UserType]`.
+- **Trait bound enforcement in compound positions**: Trait bounds on type parameters now work when `T` appears inside `Array[T]`, `Ptr[T]`, or a return type — not just as a bare symbol.
+
+### Added
+
+- **Tagged union `.tag` field**: Tagged union values expose a `.tag` field holding an opaque discriminant. Tags support `==` and `!=`, enabling fast variant checks without a full `when` dispatch. Documented in `docs/LANGUAGE_REFERENCE.md` with a canonical custom-`eq` pattern.
+- **`cmp` and `eq` on builtin numeric types**: `a.cmp(b)` and `a.eq(b)` now work on all numeric families (`Int`, `UInt`, `Float`, `CSize`, `CPtrDiff`, `CChar`, `Bool`). The compiler synthesizes generic `cmp[T]`/`eq[T]` implementations backed by type-erased C helpers. This unlocks `Array.cmp`, generic functions with `T: Ord`/`T: Eq` bounds, and UFCS ordering on all integer and float widths.
+- **`Array.at()`**: Added `at(index: CSize) -> T` as the canonical bounds-checked element accessor. The existing `get()` now delegates to `at()`.
+- **`Array.cmp()` for structural ordering**: `Array.cmp[T: Ord]` performs lexicographic comparison, enabling arrays to satisfy the `Ord` trait.
+- **Optional colon after tagged union variant name**: The parser now accepts `VariantName: { ... }` as an alternative to `VariantName { ... }` in tagged union declarations. This may be removed.
+
+### Changed
+
+- **`Const[T]` emits C `const` in generated code**: Two inference passes were silently stripping the `Const` wrapper before transpile ran.
+- **Trait dispatch through `Ptr[UserType]` and `Const[UserType]`**: Overload resolution now has dedicated fallback paths for both wrappers — dispatching to the pointee's module while preserving raw pointer-identity semantics for `==` on `Ptr[T]`.
+- **`Const` propagation through `when` variant bindings**: `when` scrutinees typed `Const[T]` or `Ptr[Const[T]]` now produce `Const`-qualified bindings in case arms, preventing silent mutation.
+- **Trait bound checking for type parameters in compound positions**: Previously, bounds on `T` were silently skipped when `T` appeared inside `Array[T]`, `Ptr[T]`, or a return type. Now uses a structural walk to correctly find and verify `T` wherever it appears.
+- **Trait impl quantifier mapping fixed for nested field types**: `check_trait_arrow` was using field types as quantifier values — coincidentally correct only when every field was a bare type parameter. Replaced with `derive_impl_type_args`, which structurally matches the impl receiver type constructor against the concrete type.
+- **Unified Ptr/Const peeling policy**: Introduced `tl_monotype_effective_target` as the single canonical helper for unwrapping `Const`, `Ptr`, and inner `Const`. Previously divergent multi-step idioms at various call sites are now unified. Policy documented in `docs/TYPE_SYSTEM.md`.
+- **Internal tagged union types excluded from user-defined type dispatch**: Synthetic tag enum and variant structs were inheriting operator overloads from the parent module. They are now excluded, so builtin enum equality applies to tag comparisons instead of recursing into user overloads.
+- **Trait infrastructure hardened**: Silent `return 0` fallbacks on missing sig arrows, polytypes, and arrow reparses converted to `fatal()` assertions. Unknown trait names and non-inst concrete types in bounds now produce hard errors.
+
+### Removed
+
+- `ptr_or_null` helper and its single use (unused).
+- `strip_ptr_and_const` helper — replaced by `effective_target` at all call sites.
+- `has_ptr` — redundant with `is_ptr`.
+- Stale `Ptr[T]` auto-deref fallback in `check_trait_bound_` — semantically wrong and replaced by the new pointer-param-gated fallback in `find_overload_func`.
+- Explicit `-> CInt` return-type annotations on `main()` in test files (the compiler enforces this; the annotations were noise).
+
+### Fixed
+
+- **Bump allocator `aligned_alloc` size rounding**: `_aligned_alloc` was rounding the allocation size to `max_align_t` instead of the requested alignment, producing unaligned memory when `alignment > max_align_t`.
+- **`const` violation detection through chained access**: `check_const_violation` only walked the outermost expression level, missing cases like `arr->data.[i] = v` where `arr: Ptr[Const[Array[T]]]`. Now walks the full LHS chain.
+- **Formatter: unary `+`/`-` before digit literals**: `return -1` was being formatted as `return - 1`. Fixed by treating `+`/`-` as a unary token (not a binary operator) when preceded by whitespace and immediately followed by a digit.
+- **`[[alloc(expr)]]` validation**: The allocator expression validator now accepts `Ptr[Const[Allocator]]` as a valid allocator shape.
+- **`Const` stripped during trait binding search**: `collect_quant_bindings` failed to strip `Const` from either side before structural matching, causing trait conformance failures when a call site passed `Ptr[Const[T]]` to a bound expecting `Ptr[T]`.
+- **Hash collision for single-field user types**: A hash lookthrough path generalized to any unary `cons_inst` caused collisions on types like `GenBoxPtr[T]`. Reverted to `Ptr`-only lookthrough.
 
 ## [v0.1.4] - 2026-04-07 to 2026-04-10 (95fb185f..acfa628c)
 
