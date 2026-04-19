@@ -99,7 +99,8 @@ Summable[T]: Add[T], Eq[T] { }
 sum[T: Summable](a, b) { a + b }
 ```
 
-**Receiver blocks.** Group methods by their receiver instead of repeating it on every function. Call sites use dot syntax.
+**Receiver blocks.** Group methods by their receiver instead of repeating it on every function. Pairs
+naturally with dot-call syntax, aka UFCS, where the left operand becomes the first argument.
 
 ```tl
 #module Stack
@@ -146,7 +147,7 @@ read_config(path) {
 }
 ```
 
-Tess also has closures, defer, operator overloading, function overloading, dot-call syntax, iterators,
+Tess also has closures, defer, operator overloading, function overloading, dot-call syntax (UFCS), iterators,
 conditional compilation, a package manager, and a host of other practical features. See the [Documentation](#documentation).
 
 ## Build
