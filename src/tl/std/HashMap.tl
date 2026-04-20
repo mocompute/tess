@@ -13,9 +13,10 @@
 
 Allocator = Alloc.Allocator
 
-// -- Combined trait --
+// -- Combined traits --
 
-HashEq[K]: Hash[K], Eq[K] { }
+HashEq[K]:    Hash[K], Eq[K]         { }
+HashEqOrd[K]: Hash[K], Eq[K], Ord[K] { }
 
 // -- Types --
 
@@ -58,10 +59,15 @@ HashMapOpts: {
     is_empty() -> Bool
     clear   () -> Void
 
-    keys  ()                      -> Array[K]
-    values()                      -> Array[V]
-    values(alloc: Ptr[Allocator]) -> Array[V]
-    keys  (alloc: Ptr[Allocator]) -> Array[K]
+    keys   ()                      -> Array[K]
+    values ()                      -> Array[V]
+    values (alloc: Ptr[Allocator]) -> Array[V]
+    keys   (alloc: Ptr[Allocator]) -> Array[K]
+}
+
+(self: Ptr[HashMap[K: HashEqOrd, V]]): {
+    sorted_keys ()                      -> Array[K]
+    sorted_keys (alloc: Ptr[Allocator]) -> Array[K]
 }
 
 
@@ -288,6 +294,16 @@ _insert_entry[K: Eq, V](entries, capacity, key: K, value: V, hash: CSize) -> CSi
 
     keys() {
         keys(self, Alloc.context.default)
+    }
+
+    sorted_keys(alloc) {
+        ks := self.keys(alloc)
+        ks.sort()
+        ks
+    }
+
+    sorted_keys() {
+        sorted_keys(self, Alloc.context.default)
     }
 
     values(alloc) {

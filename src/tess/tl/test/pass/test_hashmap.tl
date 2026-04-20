@@ -36,15 +36,16 @@ eq(a: CollidingKey, b: CollidingKey) -> Bool {
 test_create_destroy() {
     error := 0
     m     := HashMap.create[Int, Int]()
-    if m.size() != 0zu { error += 1 }
+    defer m.destroy()
+    if m.size() != 0 { error += 1 }
     if !m.is_empty() { error += 1 }
-    m.destroy()
     error
 }
 
 test_set_get() {
     error := 0
     m     := HashMap.create[Int, Int]()
+    defer m.destroy()
 
     m.set(1, 100)
     m.set(2, 200)
@@ -68,13 +69,13 @@ test_set_get() {
     p4 := m.get(999).or_else(null)
     if p4 != null { error += 1 }
 
-    m.destroy()
     error
 }
 
 test_get_copy() {
     error := 0
     m     := HashMap.create[Int, Int]()
+    defer m.destroy()
     m.set(42, 84)
 
     opt := m.get_copy(42)
@@ -89,13 +90,13 @@ test_get_copy() {
         n: None { }
     }
 
-    m.destroy()
     error
 }
 
 test_contains() {
     error := 0
     m     := HashMap.create[Int, Int]()
+    defer m.destroy()
     m.set(10, 1)
     m.set(20, 2)
 
@@ -103,13 +104,13 @@ test_contains() {
     if !m.contains(20) { error += 1 }
     if m.contains(30) { error += 1 }
 
-    m.destroy()
     error
 }
 
 test_overwrite() {
     error := 0
     m     := HashMap.create[Int, Int]()
+    defer m.destroy()
 
     m.set(1, 100)
     if m.size() != 1 { error += 1 }
@@ -121,13 +122,13 @@ test_overwrite() {
     if p == null { error += 1 }
     if p != null && p.* != 200 { error += 1 }
 
-    m.destroy()
     error
 }
 
 test_remove() {
     error := 0
     m     := HashMap.create[Int, Int]()
+    defer m.destroy()
 
     m.set(1, 10)
     m.set(2, 20)
@@ -154,13 +155,13 @@ test_remove() {
     if !m.remove(3) { error += 1 }
     if m.size() != 0zu { error += 1 }
 
-    m.destroy()
     error
 }
 
 test_grow() {
     error := 0
     m     := HashMap.create[Int, Int]()
+    defer m.destroy()
 
     // Insert enough entries to trigger multiple resizes (default cap = 16, grows at 85%)
     n := 200
@@ -179,13 +180,13 @@ test_grow() {
         if p != null && p.* != i * 10 { error += 1 }
     }
 
-    m.destroy()
     error
 }
 
 test_clear() {
     error := 0
     m     := HashMap.create[Int, Int]()
+    defer m.destroy()
 
     m.set(1, 10)
     m.set(2, 20)
@@ -203,20 +204,22 @@ test_clear() {
     if p == null { error += 1 }
     if p != null && p.* != 40 { error += 1 }
 
-    m.destroy()
     error
 }
 
 test_keys_values() {
     error := 0
     m     := HashMap.create[Int, Int]()
+    defer m.destroy()
 
     m.set(1, 10)
     m.set(2, 20)
     m.set(3, 30)
 
     ks := m.keys()
+    defer ks.free()
     vs := m.values()
+    defer vs.free()
 
     if ks.size != 3zu { error += 1 }
     if vs.size != 3zu { error += 1 }
@@ -248,15 +251,13 @@ test_keys_values() {
     if !found_20 { error += 1 }
     if !found_30 { error += 1 }
 
-    Array.free(ks.&)
-    Array.free(vs.&)
-    m.destroy()
     error
 }
 
 test_empty_map() {
     error := 0
     m     := HashMap.create[Int, Int]()
+    defer m.destroy()
 
     if m.get(1).or_else(null) != null { error += 1 }
     if m.contains(1) { error += 1 }
@@ -271,19 +272,19 @@ test_empty_map() {
     }
 
     ks := m.keys()
+    defer ks.free()
     vs := m.values()
+    defer vs.free()
     if ks.size != 0zu { error += 1 }
     if vs.size != 0zu { error += 1 }
 
-    Array.free(ks.&)
-    Array.free(vs.&)
-    m.destroy()
     error
 }
 
 test_struct_keys() {
     error := 0
     m     := HashMap.create[Point, Int]()
+    defer m.destroy()
 
     p1 := Point(x = 1, y = 2)
     p2 := Point(x = 3, y = 4)
@@ -307,13 +308,13 @@ test_struct_keys() {
     v = m.get(Point(x = 7, y = 8)).or_else(null)
     if v != null { error += 1 }
 
-    m.destroy()
     error
 }
 
 test_remove_and_reinsert() {
     error := 0
     m     := HashMap.create[Int, Int]()
+    defer m.destroy()
 
     m.set(1, 10)
     m.set(2, 20)
@@ -327,7 +328,6 @@ test_remove_and_reinsert() {
     if p == null { error += 1 }
     if p != null && p.* != 99 { error += 1 }
 
-    m.destroy()
     error
 }
 
@@ -335,6 +335,7 @@ test_collision_stress() {
     error := 0
     opts  := HashMap.HashMapOpts(capacity = 8zu)
     m     := HashMap.create[CollidingKey, Int](Alloc.context.default, opts)
+    defer m.destroy()
 
     // Insert 32 entries — all land in buckets 0-3, forces Robin Hood swaps
     n := 32
@@ -380,13 +381,13 @@ test_collision_stress() {
         if m.contains(CollidingKey(value = i)) { error += 1 }
     }
 
-    m.destroy()
     error
 }
 
 test_large_remove() {
     error := 0
     m     := HashMap.create[Int, Int]()
+    defer m.destroy()
 
     // Insert 200, remove all, verify empty
     n := 200
@@ -416,13 +417,13 @@ test_large_remove() {
         if p != null && p.* != i * 3 { error += 1 }
     }
 
-    m.destroy()
     error
 }
 
 test_zero_and_negative_keys() {
     error := 0
     m     := HashMap.create[Int, Int]()
+    defer m.destroy()
 
     m.set(0, 100)
     m.set(-1, 200)
@@ -447,13 +448,13 @@ test_zero_and_negative_keys() {
     if m.contains(0) { error += 1 }
     if m.size() != 2zu { error += 1 }
 
-    m.destroy()
     error
 }
 
 test_struct_values() {
     error := 0
     m     := HashMap.create[Int, Point]()
+    defer m.destroy()
 
     m.set(1, Point(x = 10, y = 20))
     m.set(2, Point(x = 30, y = 40))
@@ -476,13 +477,13 @@ test_struct_values() {
     if p == null { error += 1 }
     if p != null && (p->x != 99 || p->y != 88) { error += 1 }
 
-    m.destroy()
     error
 }
 
 test_create_with_alloc() {
     error := 0
     m     := HashMap.create[Int, Int](Alloc.context.default)
+    defer m.destroy()
 
     m.set(1, 10)
     m.set(2, 20)
@@ -492,20 +493,22 @@ test_create_with_alloc() {
     if p == null { error += 1 }
     if p != null && p.* != 10 { error += 1 }
 
-    m.destroy()
     error
 }
 
 test_keys_values_with_alloc() {
     error := 0
     m     := HashMap.create[Int, Int]()
+    defer m.destroy()
 
     m.set(1, 10)
     m.set(2, 20)
 
     alloc := Alloc.context.default
     ks    := m.keys(alloc)
-    vs    := m.values(alloc)
+    defer ks.free()
+    vs := m.values(alloc)
+    defer vs.free()
 
     if ks.size != 2zu { error += 1 }
     if vs.size != 2zu { error += 1 }
@@ -530,15 +533,13 @@ test_keys_values_with_alloc() {
     if !found_10 { error += 1 }
     if !found_20 { error += 1 }
 
-    Array.free(ks.&)
-    Array.free(vs.&)
-    m.destroy()
     error
 }
 
 test_remove_then_grow() {
     error := 0
     m     := HashMap.create[Int, Int]()
+    defer m.destroy()
 
     // Fill up, remove half, then insert enough to trigger growth
     i := 0
@@ -581,7 +582,6 @@ test_remove_then_grow() {
         if m.contains(i) { error += 1 }
     }
 
-    m.destroy()
     error
 }
 
@@ -590,6 +590,7 @@ test_default_eq() {
 
     // Use default hash/eq (exercises _default_eq via byte-level comparison)
     m := HashMap.create[Int, Int]()
+    defer m.destroy()
 
     m.set(42, 100)
 
@@ -610,6 +611,7 @@ test_default_eq() {
 
     // Test with struct keys: byte-equal structs must match
     m2 := HashMap.create[Point, Int]()
+    defer m2.destroy()
     m2.set(Point(x = 10, y = 20), 999)
 
     p2 := m2.get(Point(x = 10, y = 20)).or_else(null)
@@ -621,14 +623,13 @@ test_default_eq() {
     if m2.get(Point(x = 11, y = 20)).or_else(null) != null { error += 1 }
     if m2.get(Point(x = 0, y = 0)).or_else(null) != null { error += 1 }
 
-    m.destroy()
-    m2.destroy()
     error
 }
 
 test_iter() {
     error := 0
     m     := HashMap.create[Int, Int]()
+    defer m.destroy()
 
     m.set(1, 10)
     m.set(2, 20)
@@ -648,13 +649,13 @@ test_iter() {
     if key_sum != 6 { error += 1 }      // 1+2+3
     if val_sum != 60 { error += 1 }     // 10+20+30
 
-    m.destroy()
     error
 }
 
 test_iter_empty() {
     error := 0
     m     := HashMap.create[Int, Int]()
+    defer m.destroy()
 
     count := 0
     for entry in m {
@@ -662,13 +663,13 @@ test_iter_empty() {
     }
     if count != 0 { error += 1 }
 
-    m.destroy()
     error
 }
 
 test_iter_after_remove() {
     error := 0
     m     := HashMap.create[Int, Int]()
+    defer m.destroy()
 
     m.set(1, 10)
     m.set(2, 20)
@@ -688,13 +689,13 @@ test_iter_after_remove() {
     if key_sum != 4 { error += 1 }      // 1+3
     if val_sum != 40 { error += 1 }     // 10+30
 
-    m.destroy()
     error
 }
 
 test_iter_mut() {
     error := 0
     m     := HashMap.create[Int, Int]()
+    defer m.destroy()
 
     m.set(1, 10)
     m.set(2, 20)
@@ -718,13 +719,68 @@ test_iter_mut() {
     if p == null { error += 1 }
     if p != null && p.* != 60 { error += 1 }
 
-    m.destroy()
+    error
+}
+
+test_sorted_keys() {
+    error := 0
+    m     := HashMap.create[Int, Int]()
+    defer m.destroy()
+
+    m.set(3, 30)
+    m.set(1, 10)
+    m.set(2, 20)
+
+    ks := m.sorted_keys()
+
+    if ks.size != 3 { error += 1 }
+    if ks.data.[0] != 1 { error += 1 }
+    if ks.data.[1] != 2 { error += 1 }
+    if ks.data.[2] != 3 { error += 1 }
+
+    ks.free()
+    error
+}
+
+test_sorted_keys_with_alloc() {
+    error := 0
+    m     := HashMap.create[Int, Int]()
+    defer m.destroy()
+
+    m.set(5, 50)
+    m.set(2, 20)
+    m.set(8, 80)
+    m.set(1, 10)
+
+    alloc := Alloc.context.default
+    ks    := m.sorted_keys(alloc)
+
+    if ks.size != 4 { error += 1 }
+    if ks.data.[0] != 1 { error += 1 }
+    if ks.data.[1] != 2 { error += 1 }
+    if ks.data.[2] != 5 { error += 1 }
+    if ks.data.[3] != 8 { error += 1 }
+
+    ks.free()
+    error
+}
+
+test_sorted_keys_empty() {
+    error := 0
+    m     := HashMap.create[Int, Int]()
+    defer m.destroy()
+
+    ks := m.sorted_keys()
+    if ks.size != 0 { error += 1 }
+
+    ks.free()
     error
 }
 
 test_iter_struct_values() {
     error := 0
     m     := HashMap.create[Int, Point]()
+    defer m.destroy()
 
     m.set(1, Point(x = 10, y = 20))
     m.set(2, Point(x = 30, y = 40))
@@ -742,7 +798,6 @@ test_iter_struct_values() {
     if x_sum != 40 { error += 1 }       // 10+30
     if y_sum != 60 { error += 1 }       // 20+40
 
-    m.destroy()
     error
 }
 
@@ -773,5 +828,8 @@ main() {
     error += test_iter_after_remove()
     error += test_iter_mut()
     error += test_iter_struct_values()
+    error += test_sorted_keys()
+    error += test_sorted_keys_with_alloc()
+    error += test_sorted_keys_empty()
     error
 }
