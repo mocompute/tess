@@ -238,21 +238,21 @@ test_ufcs_chained_module_resolve() {
     error := 0
 
     // 1. Same-module chain: String → String → String
-    s := String.from_cstr(c" HELLO ").trim().to_lower()
+    s := " HELLO ".trim().to_lower()
     error += if s.len() == 5zu {0} else {1}
 
     // 2. Cross-module: String.split → Array[String]
-    parts := String.from_cstr(c"a,b,c").split(String.from_cstr(c","))
+    parts := "a,b,c".split(",")
     error += if parts.size == 3zu {0} else {1}
     error += if parts.get(0zu).len() == 1zu {0} else {1}
 
     // 3. Full round-trip chain: String → Array → String
-    first_len := String.from_cstr(c"hello,world").split(String.from_cstr(c",")).get(0zu).len()
+    first_len := "hello,world".split(",").get(0).len()
     error += if first_len == 5zu {0} else {1}
 
     // 4. Array methods after cross-module result
-    words := String.from_cstr(c"one,two,three").split(String.from_cstr(c","))
-    words.push(String.from_cstr(c"four"))
+    words := "one,two,three".split(",")
+    words.push("four")
     error += if words.size == 4zu {0} else {1}
 
     words.free()
@@ -575,7 +575,7 @@ test_ufcs_ptr_const() {
 test_ufcs_string() {
     error := 0
 
-    s := String.from_cstr(c"Hello, World!")
+    s := "Hello, World!"
 
     // Queries — value receiver
     error += if s.len() == 13zu {0} else {1}
@@ -585,36 +585,36 @@ test_ufcs_string() {
     error += if empty.is_empty() == true {0} else {1}
 
     // Comparison — value receiver
-    s2 := String.from_cstr(c"Hello, World!")
-    error += if s.eq(s2) == true {0} else {1}
+    s2 := "Hello, World!"
+    error += if s == s2 == true {0} else {1}
 
     // Predicates — value receiver
-    error += if s.starts_with(String.from_cstr(c"Hello")) == true {0} else {1}
-    error += if s.ends_with(String.from_cstr(c"World!")) == true {0} else {1}
-    error += if s.contains(String.from_cstr(c"lo, W")) == true {0} else {1}
-    error += if s.contains(String.from_cstr(c"xyz")) == false {0} else {1}
+    error += if s.starts_with("Hello") == true {0} else {1}
+    error += if s.ends_with("World!") == true {0} else {1}
+    error += if s.contains("lo, W") == true {0} else {1}
+    error += if s.contains("xyz") == false {0} else {1}
 
     // Transformations — value receiver, returns new String
-    upper := String.from_cstr(c"hello").to_upper()
-    error += if upper.eq(String.from_cstr(c"HELLO")) {0} else {1}
+    upper := "hello".to_upper()
+    error += if upper == "HELLO" {0} else {1}
 
-    lower := String.from_cstr(c"HELLO").to_lower()
-    error += if lower.eq(String.from_cstr(c"hello")) {0} else {1}
+    lower := "HELLO".to_lower()
+    error += if lower == "hello" {0} else {1}
 
-    trimmed := String.from_cstr(c"  hi  ").trim()
-    error += if trimmed.eq(String.from_cstr(c"hi")) {0} else {1}
+    trimmed := "  hi  ".trim()
+    error += if trimmed == "hi" {0} else {1}
 
     // Cross-module return: split returns Array[String]
-    parts := String.from_cstr(c"a,b,c").split(String.from_cstr(c","))
+    parts := "a,b,c".split(",")
     error += if parts.size == 3zu {0} else {1}
-    error += if parts.get(0zu).eq(String.from_cstr(c"a")) {0} else {1}
-    error += if parts.get(2zu).eq(String.from_cstr(c"c")) {0} else {1}
+    error += if parts.get(0zu) == "a" {0} else {1}
+    error += if parts.get(2zu) == "c" {0} else {1}
     parts.free()
 
     // Mutation: push — Ptr receiver, implicit & + implicit module
-    greeting := String.from_cstr(c"Hello")
-    greeting.push(String.from_cstr(c", World!"))
-    error += if greeting.eq(String.from_cstr(c"Hello, World!")) {0} else {1}
+    greeting := "Hello"
+    greeting.push(", World!")
+    error += if greeting == "Hello, World!" {0} else {1}
 
     error
 }

@@ -122,13 +122,13 @@ test_eq() {
     a     := String.from_cstr(c"hello")
     b     := String.from_cstr(c"hello")
     c     := String.from_cstr(c"world")
-    if !a.eq(b) { error += 1 }
-    if a.eq(c) { error += 1 }
+    if a != b { error += 1 }
+    if a == c { error += 1 }
 
     // Empty strings
     e1 := String.empty()
     e2 := String.empty()
-    if !e1.eq(e2) { error += 1 }
+    if e1 != e2 { error += 1 }
 
     a.free()
     b.free()

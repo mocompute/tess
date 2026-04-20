@@ -156,7 +156,6 @@ from_array[T](alloc: Ptr[Allocator], arr: Ptr[Const[Array[T]]])       -> String
 
 // Immutable binary operations
 (self: Ptr[Const[String]], other: Ptr[Const[String]]): {
-    eq  () -> Bool
     cmp () -> CInt
 }
 
@@ -904,9 +903,6 @@ from_array(arr) {
 
 
 (self: Ptr[Const[String]], other: Ptr[Const[String]]): {
-    eq() {
-        0 == self.cmp(other)
-    }
 
     cmp() {
         la      := len(self)

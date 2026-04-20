@@ -10,7 +10,7 @@ main() {
     if s.len() != 5 { errors += 1 }
 
     // Can call String methods on "..."
-    if !s.eq(String.from_cstr(c"hello")) { errors += 1 }
+    if s != "hello" { errors += 1 }
 
     // Empty s-string
     e := ""
@@ -24,7 +24,7 @@ main() {
     // "..." and plain strings coexist
     combined := String.cat("hello", " world")
     if combined.len() != 11 { errors += 1 }
-    if !combined.eq("hello world") { errors += 1 }
+    if combined != "hello world" { errors += 1 }
 
     // s-string with escape sequences
     nl := "a\nb"

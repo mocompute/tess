@@ -194,7 +194,7 @@ command(self, name: String) {
 
 _find_spec_long(self, name) {
     for spec in Array.Indexed self->_specs {
-        if spec.value.long_name.eq(name) {
+        if spec.value.long_name == name {
             return Some(spec.index)
         }
     }
@@ -328,7 +328,7 @@ parse(self, argc, argv) {
         }
 
         // Check for --
-        if arg.eq(dd) {
+        if arg == dd {
             past_separator = true
             i += 1
             continue
@@ -353,7 +353,7 @@ parse(self, argc, argv) {
         if self->_commands.size > 0 && positional.size == 0 {
             found_cmd := 0
             for command in self->_commands {
-                if command.eq(arg) {
+                if command == arg {
                     cmd       = Some(arg)
                     found_cmd = 1
                     break

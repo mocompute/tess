@@ -212,12 +212,12 @@ test_trait_builtin_family() {
     // CShort has module c"Int" — finds Int__describe__1 directly
     n: CShort := 42
     s         := family_show(n)
-    error += if String.eq(s, String.from_cstr(c"42")) { 0 } else { 1 }
+    error += if s == "42" { 0 } else { 1 }
 
     // CInt also has module c"Int"
     m: CInt := 99
     s2      := family_show(m)
-    error += if String.eq(s2, String.from_cstr(c"99")) { 0 } else { 1 }
+    error += if s2 == "99" { 0 } else { 1 }
 
     error
 }
@@ -231,11 +231,11 @@ test_trait_builtin_user_trait() {
 
     // Int satisfies Describe
     s := user_trait_show(42)
-    error += if String.eq(s, String.from_cstr(c"42")) { 0 } else { 1 }
+    error += if s == "42" { 0 } else { 1 }
 
     // Bool satisfies Describe
     sb := user_trait_show(true)
-    error += if String.eq(sb, String.from_cstr(c"true")) { 0 } else { 1 }
+    error += if sb == "true" { 0 } else { 1 }
 
     // Float satisfies Describe
     sf := user_trait_show(3.14)

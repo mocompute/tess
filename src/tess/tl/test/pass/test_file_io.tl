@@ -17,7 +17,7 @@ test_write_and_read() {
         return 1
     }
 
-    if !String.eq(rd.value, content) {
+    if rd.value != content {
         c_printf(c"FAIL content mismatch\n")
         fails += 1
     }
@@ -41,15 +41,15 @@ test_read_lines() {
         return 1
     }
 
-    if !String.eq(lr.value.data.[0], "alpha") {
+    if lr.value.data.[0] != "alpha" {
         c_printf(c"FAIL line 0\n")
         fails += 1
     }
-    if !String.eq(lr.value.data.[1], "beta") {
+    if lr.value.data.[1] != "beta" {
         c_printf(c"FAIL line 1\n")
         fails += 1
     }
-    if !String.eq(lr.value.data.[2], "gamma") {
+    if lr.value.data.[2] != "gamma" {
         c_printf(c"FAIL line 2\n")
         fails += 1
     }
@@ -78,7 +78,7 @@ test_streaming_read_line() {
         c_printf(c"FAIL readline eof 1\n")
         return 1
     }
-    if !String.eq(l1.value, "one") {
+    if l1.value != "one" {
         c_printf(c"FAIL line 1: %s\n", String.cstr(l1.value.&))
         fails += 1
     }
@@ -92,7 +92,7 @@ test_streaming_read_line() {
         c_printf(c"FAIL readline eof 2\n")
         return 1
     }
-    if !String.eq(l2.value, "two") {
+    if l2.value != "two" {
         c_printf(c"FAIL line 2: %s\n", String.cstr(l2.value.&))
         fails += 1
     }
@@ -106,7 +106,7 @@ test_streaming_read_line() {
         c_printf(c"FAIL readline eof 3\n")
         return 1
     }
-    if !String.eq(l3.value, "three") {
+    if l3.value != "three" {
         c_printf(c"FAIL line 3: %s\n", String.cstr(l3.value.&))
         fails += 1
     }
@@ -149,7 +149,7 @@ test_streaming_write_read() {
         return 1
     }
 
-    if !String.eq(content.value, "stream test") {
+    if content.value != "stream test" {
         c_printf(c"FAIL stream content: %s\n", String.cstr(content.value.&))
         fails += 1
     }
@@ -209,7 +209,7 @@ test_append() {
         return 1
     }
 
-    if !String.eq(rd.value, "first second") {
+    if rd.value != "first second" {
         c_printf(c"FAIL append content: %s\n", String.cstr(rd.value.&))
         fails += 1
     }
@@ -305,7 +305,7 @@ test_seek_tell() {
         c_printf(c"FAIL read after seek\n")
         return 1
     }
-    if !String.eq(rest.value, "fghij") {
+    if rest.value != "fghij" {
         c_printf(c"FAIL read after seek: %s\n", String.cstr(rest.value.&))
         fails += 1
     }

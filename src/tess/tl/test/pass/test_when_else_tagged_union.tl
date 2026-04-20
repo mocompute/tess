@@ -21,7 +21,7 @@ Spec: { name: String, kind: Kind }
 find(specs: Array[Spec], name: String) -> Option[CSize] {
     i: CSize := 0zu
     while i < specs.size, i += 1zu {
-        if String.eq(specs.data.[i].name, name) { return Some(i) }
+        if specs.data.[i].name == name { return Some(i) }
     }
     None
 }

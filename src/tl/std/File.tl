@@ -459,12 +459,12 @@ normalize(alloc, path) {
     // Process components
     stack := Array.empty[String]()
     for part in parts {
-        if part.len() == 0 || part.eq(".") {
+        if part.len() == 0 || part == "." {
             continue
         }
 
-        if part.eq("..") {
-            if stack.size > 0 && !stack.data.[stack.size - 1].eq("..") {
+        if part == ".." {
+            if stack.size > 0 && stack.data.[stack.size - 1] != ".." {
                 stack.pop()
                 void
             } else if !abs {
@@ -511,7 +511,7 @@ relative(alloc, from_dir, to_path) {
     common: CSize := 0
     max_common    := if from_parts.size < to_parts.size { from_parts.size } else { to_parts.size }
     while common < max_common {
-        if !from_parts.data.[common].eq(to_parts.data.[common]) { break }
+        if from_parts.data.[common] != to_parts.data.[common] { break }
         common += 1
     }
 
