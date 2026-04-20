@@ -1,5 +1,21 @@
-#module main
 #import <Array.tl>
+
+#module Tuple
+
+Tuple: { x1: Int, x2: Int }
+
+// Ord conformance for Tuple:
+cmp(a: Ptr[Const[Tuple]], b: Ptr[Const[Tuple]]) -> CInt {
+    if a->x1 < b->x1 { -1 }
+    else if a->x1 > b->x1 { 1 }
+    else {
+        if a->x2 < b->x2 { -1 }
+        else if a->x2 > b->x2 { 1 }
+        else { 0 }
+    }
+}
+
+#module main
 
 cmp_asc(a, b) { a - b }
 
@@ -122,6 +138,21 @@ test_sort_with_allocator() {
     error
 }
 
+test_sort_ord() {
+    error := 0
+
+    arr := Array.empty[Tuple]()
+    defer arr.free()
+    arr.push(Tuple(x1 = 3, x2 = 3))
+    arr.push(Tuple(x1 = 2, x2 = 2))
+    arr.push(Tuple(x1 = 1, x2 = 1))
+    arr.sort()
+    if arr.data.[0].x1 != 1 { error += 1 }
+    if arr.data.[1].x1 != 2 { error += 1 }
+    if arr.data.[2].x1 != 3 { error += 1 }
+    error
+}
+
 main() {
     error := 0
     error += test_empty()
@@ -132,5 +163,7 @@ main() {
     error += test_sorted()
     error += test_already_sorted()
     error += test_sort_with_allocator()
+    error += test_sort_ord()
+
     error
 }

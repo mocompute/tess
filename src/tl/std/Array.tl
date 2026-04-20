@@ -141,14 +141,18 @@ Array[T]: {
 }
 
 // Ord conformance, conditional on T: Ord
-cmp[T: Ord](self: Ptr[Const[Array[T]]], other: Ptr[Const[Array[T]]]) -> CInt
+cmp[T: Ord]   (self: Ptr[Const[Array[T]]], other: Ptr[Const[Array[T]]])                      -> CInt
+sort[T: Ord]  (self: Ptr[Array[T]])                                                          -> Void
+sort[T: Ord]  (self: Ptr[Array[T]], tmp_alloc: Ptr[Allocator])                               -> Void
+sorted[T: Ord](self: Ptr[Const[Array[T]]])                                                   -> Array[T]
+sorted[T: Ord](self: Ptr[Const[Array[T]]], alloc: Ptr[Allocator], tmp_alloc: Ptr[Allocator]) -> Array[T]
 
 // -- Private functions --
 
 _grow[T]              (self: Ptr[Array[T]], alloc: Ptr[Allocator], at_least: CSize)                                -> Void
 _is_full[T]           (self: Ptr[Const[Array[T]]])                                                                 -> Bool
 _type_width_aligned[T]()                                                                                           -> CSize
-_merge[T]             (v: Ptr[T], tmp: Ptr[T], lo: CSize, mid: CSize, hi: CSize, cmp: (T, T) -> Int, width: CSize) -> Void
+_merge_with[T]        (v: Ptr[T], tmp: Ptr[T], lo: CSize, mid: CSize, hi: CSize, cmp: (T, T) -> Int, width: CSize) -> Void
 
 // -- Implementation --
 
@@ -167,13 +171,42 @@ _grow(self, alloc, at_least) {
 
 _type_width_aligned[T]() { Alloc.align(sizeof[T](), alignof[T]()) }
 
-_merge[T](v, tmp, lo, mid, hi, cmp: (T, T) -> Int, width) {
+
+// Note: the two nearly identical versions of _merge sort here are unfortunately required because the language currently has
+// no way to directly access the comparator function of an Ord-conforming type (cmp).
+
+_merge_with[T](v, tmp, lo, mid, hi, cmp: (T, T) -> Int, width) {
     c_memcpy(tmp.[lo].&, v.[lo].&, (hi - lo) * width)
     i := lo
     j := mid
     k := lo
     while i < mid && j < hi {
-        if cmp(tmp.[i], tmp.[j]) <= 0 {
+        if cmp(tmp.[i], tmp.[j]) <= 0 { // explicit cmp
+            v.[k] = tmp.[i]
+            i += 1
+        } else {
+            v.[k] = tmp.[j]
+            j += 1
+        }
+        k += 1
+    }
+    while i < mid, i += 1 {
+        v.[k] = tmp.[i]
+        k += 1
+    }
+    while j < hi, j += 1 {
+        v.[k] = tmp.[j]
+        k += 1
+    }
+}
+
+_merge[T](v, tmp, lo, mid, hi, width) {
+    c_memcpy(tmp.[lo].&, v.[lo].&, (hi - lo) * width)
+    i := lo
+    j := mid
+    k := lo
+    while i < mid && j < hi {
+        if tmp.[i] <= tmp.[j] {         // implicit cmp
             v.[k] = tmp.[i]
             i += 1
         } else {
@@ -411,6 +444,7 @@ _merge[T](v, tmp, lo, mid, hi, cmp: (T, T) -> Int, width) {
         self->size += other.size
     }
 
+    // Note: see note above _merge for why these nearly duplicate functions exist.
     sort_with(tmp_alloc, cmp: (T, T) -> CInt) {
         n := self->size
         if n <= 1 { return void }
@@ -426,13 +460,45 @@ _merge[T](v, tmp, lo, mid, hi, cmp: (T, T) -> Int, width) {
                 hi := i + w * 2
                 if hi > n { hi = n }
                 if mid < hi {
-                    _merge(self->data, tmp, i, mid, hi, cmp, width)
+                    _merge_with(self->data, tmp, i, mid, hi, cmp, width)
                 }
                 i += w * 2
             }
             w *= 2
         }
         tmp_alloc.dealloc(tmp)
+    }
+
+
+}
+
+(self: Ptr[Array[T: Ord]]): {
+    sort(tmp_alloc) {
+        n := self->size
+        if n <= 1 { return void }
+        width       := _type_width_aligned[T]()
+        tmp: Ptr[T] := tmp_alloc.alloc(n * width)
+        if tmp == null { _tl_fatal_(c"Array.sort: oom") }
+        w: CSize := 1
+        while w < n {
+            i: CSize := 0
+            while i < n {
+                mid := i + w
+                if mid > n { mid = n }
+                hi := i + w * 2
+                if hi > n { hi = n }
+                if mid < hi {
+                    _merge(self->data, tmp, i, mid, hi, width)
+                }
+                i += w * 2
+            }
+            w *= 2
+        }
+        tmp_alloc.dealloc(tmp)
+    }
+
+    sort() {
+        self.sort(Alloc.context.transient)
     }
 }
 
@@ -493,6 +559,10 @@ _merge[T](v, tmp, lo, mid, hi, cmp: (T, T) -> Int, width) {
 
     sorted_with(cmp: (T, T) -> CInt) {
         arr.sorted_with(Alloc.context.default, Alloc.context.transient, cmp)
+    }
+
+    sorted() {
+        arr.sorted(Alloc.context.default, Alloc.context.transient)
     }
 
     map[T, U](f: (T) -> U) {
@@ -606,19 +676,28 @@ _merge[T](v, tmp, lo, mid, hi, cmp: (T, T) -> Int, width) {
         result
     }
 
+
 }
 
-cmp[T: Ord](self: Ptr[Const[Array[T]]], other: Ptr[Const[Array[T]]]) -> CInt {
-    if self->size < other->size { return -1 }
-    if self->size > other->size { return +1 }
+(self: Ptr[Const[Array[T: Ord]]]): {
+    cmp[T: Ord](other: Ptr[Const[Array[T]]]) -> CInt {
+        if self->size < other->size { return -1 }
+        if self->size > other->size { return +1 }
 
-    for i := 0, i < self->size, i += 1 {
-        if self->data.[i] < other->data.[i] { return -1 }
-        if self->data.[i] > other->data.[i] { return +1 }
+        for i := 0, i < self->size, i += 1 {
+            if self->data.[i] < other->data.[i] { return -1 }
+            if self->data.[i] > other->data.[i] { return +1 }
+        }
+        return 0
     }
-    return 0
-}
 
+    sorted(alloc, tmp_alloc) {
+        result := arr.clone(alloc)
+        result.sort(tmp_alloc)
+        result
+    }
+
+}
 
 // -- Iterator interface --
 

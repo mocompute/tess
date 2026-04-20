@@ -1065,8 +1065,9 @@ static void rewrite_operator_overloads(void *ctx, ast_node *node) {
 
         str full_name = find_overload_func(self, left_type, func_name, 2);
 
-        // For == and !=: fall back to cmp if eq is not found.
-        if (str_is_empty(full_name) && (is_eq || is_neq)) {
+        // For == and !=: fall back to cmp if eq is not found, UNLESS left_type is a pointer, because
+        // that would hijack valid pointer comparisons.
+        if (!tl_monotype_is_ptr(left_type) && str_is_empty(full_name) && (is_eq || is_neq)) {
             func_name = "cmp";
             if (check_no_conform_operator(self, node, left_type, func_name, op)) return;
             full_name = find_overload_func(self, left_type, func_name, 2);
