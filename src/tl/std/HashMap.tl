@@ -280,7 +280,7 @@ _insert_entry[K: Eq, V](entries, capacity, key: K, value: V, hash: CSize) -> CSi
         while i < self->_capacity, i += 1 {
             e := self->_entries.[i].&
             if _is_occupied(e->meta) {
-                Array.push(result.&, alloc, e->key)
+                result.push(alloc, e->key)
             }
         }
         result
@@ -296,7 +296,7 @@ _insert_entry[K: Eq, V](entries, capacity, key: K, value: V, hash: CSize) -> CSi
         while i < self->_capacity, i += 1 {
             e := self->_entries.[i].&
             if _is_occupied(e->meta) {
-                Array.push(result.&, alloc, e->value)
+                result.push(alloc, e->value)
             }
         }
         result
