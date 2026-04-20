@@ -74,7 +74,7 @@ Array[T]: {
 
     // -- Sorting --
 
-    sort(cmp: (T, T) -> Int) -> Void
+    sort_with(cmp: (T, T) -> Int) -> Void
 
     // -- Reordering --
 
@@ -90,7 +90,7 @@ Array[T]: {
     resize       (alloc: Ptr[Allocator], count: CSize, val: T)   -> Void
     shrink_to_fit(alloc: Ptr[Allocator])                         -> Void
     append       (alloc: Ptr[Allocator], other: Array[T])        -> Void
-    sort         (tmp_alloc: Ptr[Allocator], cmp: (T, T) -> Int) -> Void
+    sort_with    (tmp_alloc: Ptr[Allocator], cmp: (T, T) -> Int) -> Void
 }
 
 // Immutable operations
@@ -117,7 +117,7 @@ Array[T]: {
 
     // -- Sorting --
 
-    sorted(cmp: (T, T) -> Int) -> Array[T]
+    sorted_with(cmp: (T, T) -> Int) -> Array[T]
 
     // -- Functional operations --
 
@@ -137,7 +137,7 @@ Array[T]: {
     filter       (alloc: Ptr[Allocator], f: (T) -> Bool)                                -> Array[T]
     map[U]       (alloc: Ptr[Allocator], f: (T) -> U)                                   -> Array[U]
     filter_map[U](alloc: Ptr[Allocator], pred: (T) -> Bool, f: (T) -> U)                -> Array[U]
-    sorted       (alloc: Ptr[Allocator], tmp_alloc: Ptr[Allocator], cmp: (T, T) -> Int) -> Array[T]
+    sorted_with  (alloc: Ptr[Allocator], tmp_alloc: Ptr[Allocator], cmp: (T, T) -> Int) -> Array[T]
 }
 
 // Ord conformance, conditional on T: Ord
@@ -317,8 +317,8 @@ _merge[T](v, tmp, lo, mid, hi, cmp: (T, T) -> Int, width) {
         self.append(Alloc.context.default, other)
     }
 
-    sort(cmp: (T, T) -> CInt) {
-        self.sort(Alloc.context.transient, cmp)
+    sort_with(cmp: (T, T) -> CInt) {
+        self.sort_with(Alloc.context.transient, cmp)
     }
 
     reverse() {
@@ -411,12 +411,12 @@ _merge[T](v, tmp, lo, mid, hi, cmp: (T, T) -> Int, width) {
         self->size += other.size
     }
 
-    sort(tmp_alloc, cmp: (T, T) -> CInt) {
+    sort_with(tmp_alloc, cmp: (T, T) -> CInt) {
         n := self->size
         if n <= 1 { return void }
         width       := _type_width_aligned[T]()
         tmp: Ptr[T] := tmp_alloc.alloc(n * width)
-        if tmp == null { _tl_fatal_(c"Array.sort: oom") }
+        if tmp == null { _tl_fatal_(c"Array.sort_with: oom") }
         w: CSize := 1
         while w < n {
             i: CSize := 0
@@ -491,8 +491,8 @@ _merge[T](v, tmp, lo, mid, hi, cmp: (T, T) -> Int, width) {
         None
     }
 
-    sorted(cmp: (T, T) -> CInt) {
-        arr.sorted(Alloc.context.default, Alloc.context.transient, cmp)
+    sorted_with(cmp: (T, T) -> CInt) {
+        arr.sorted_with(Alloc.context.default, Alloc.context.transient, cmp)
     }
 
     map[T, U](f: (T) -> U) {
@@ -600,9 +600,9 @@ _merge[T](v, tmp, lo, mid, hi, cmp: (T, T) -> Int, width) {
         result
     }
 
-    sorted(alloc, tmp_alloc, cmp: (T, T) -> CInt) {
+    sorted_with(alloc, tmp_alloc, cmp: (T, T) -> CInt) {
         result := arr.clone(alloc)
-        result.sort(tmp_alloc, cmp)
+        result.sort_with(tmp_alloc, cmp)
         result
     }
 

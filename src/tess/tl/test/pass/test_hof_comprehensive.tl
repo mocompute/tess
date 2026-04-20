@@ -193,7 +193,7 @@ test_sort_then_filter() {
     Array.push(arr.&, 4)
     Array.push(arr.&, 2)
     Array.push(arr.&, 3)
-    Array.sort(arr.&, (a, b) { a - b })
+    Array.sort_with(arr.&, (a, b) { a - b })
     result := Array.filter(arr, (x) { x > threshold })
     if result.size != 2zu { error += 1 }
     if result.data.[0] != 4 { error += 1 }
@@ -500,13 +500,13 @@ test_comparator_sort() {
     Array.push(arr.&, 3)
     Array.push(arr.&, 1)
     Array.push(arr.&, 2)
-    Array.sort(arr.&, cmp_asc)
+    Array.sort_with(arr.&, cmp_asc)
     if arr.data.[0] != 1 { error += 1 }
     if arr.data.[1] != 2 { error += 1 }
     if arr.data.[2] != 3 { error += 1 }
 
     cmp_desc := make_comparator(0 - 1)
-    Array.sort(arr.&, cmp_desc)
+    Array.sort_with(arr.&, cmp_desc)
     if arr.data.[0] != 3 { error += 1 }
     if arr.data.[1] != 2 { error += 1 }
     if arr.data.[2] != 1 { error += 1 }
@@ -650,14 +650,14 @@ test_sort_capture() {
     Array.push(arr.&, 3)
     Array.push(arr.&, 1)
     Array.push(arr.&, 2)
-    Array.sort(arr.&, (a, b) { (a - b) * direction })
+    Array.sort_with(arr.&, (a, b) { (a - b) * direction })
     if arr.data.[0] != 1 { error += 1 }
     if arr.data.[1] != 2 { error += 1 }
     if arr.data.[2] != 3 { error += 1 }
 
     // Now descending
     direction = 0 - 1
-    Array.sort(arr.&, (a, b) { (a - b) * direction })
+    Array.sort_with(arr.&, (a, b) { (a - b) * direction })
     if arr.data.[0] != 3 { error += 1 }
     if arr.data.[1] != 2 { error += 1 }
     if arr.data.[2] != 1 { error += 1 }
@@ -769,7 +769,7 @@ test_sort_alloc() {
     Array.push(arr.&, 3)
     Array.push(arr.&, 1)
     Array.push(arr.&, 2)
-    Array.sort(arr.&, cmp)
+    Array.sort_with(arr.&, cmp)
     if arr.data.[0] != 1 { error += 1 }
     if arr.data.[1] != 2 { error += 1 }
     if arr.data.[2] != 3 { error += 1 }

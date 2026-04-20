@@ -6,7 +6,7 @@ cmp_asc(a, b) { a - b }
 test_empty() {
     error := 0
     arr   := Array.empty[Int]()
-    Array.sort(arr.&, (a, b) { a - b })
+    arr.sort_with((a, b) { a - b })
     if arr.size != 0zu { error += 1 }
     error
 }
@@ -14,71 +14,73 @@ test_empty() {
 test_single() {
     error := 0
     arr   := Array.empty[Int]()
-    Array.push(arr.&, 42)
-    Array.sort(arr.&, (a, b) { a - b })
+    defer arr.free()
+    arr.push(42)
+    arr.sort_with((a, b) { a - b })
     if arr.size != 1zu { error += 1 }
     if arr.data.[0] != 42 { error += 1 }
-    Array.free(arr.&)
     error
 }
 
 test_ascending() {
     error := 0
     arr   := Array.empty[Int]()
-    Array.push(arr.&, 5)
-    Array.push(arr.&, 3)
-    Array.push(arr.&, 1)
-    Array.push(arr.&, 4)
-    Array.push(arr.&, 2)
-    Array.sort(arr.&, (a, b) { a - b })
+    defer arr.free()
+    arr.push(5)
+    arr.push(3)
+    arr.push(1)
+    arr.push(4)
+    arr.push(2)
+    arr.sort_with((a, b) { a - b })
     if arr.data.[0] != 1 { error += 1 }
     if arr.data.[1] != 2 { error += 1 }
     if arr.data.[2] != 3 { error += 1 }
     if arr.data.[3] != 4 { error += 1 }
     if arr.data.[4] != 5 { error += 1 }
-    Array.free(arr.&)
     error
 }
 
 test_descending() {
     error := 0
     arr   := Array.empty[Int]()
-    Array.push(arr.&, 1)
-    Array.push(arr.&, 2)
-    Array.push(arr.&, 3)
-    Array.push(arr.&, 4)
-    Array.push(arr.&, 5)
-    Array.sort(arr.&, (a, b) { b - a })
+    defer arr.free()
+    arr.push(1)
+    arr.push(2)
+    arr.push(3)
+    arr.push(4)
+    arr.push(5)
+    arr.sort_with((a, b) { b - a })
     if arr.data.[0] != 5 { error += 1 }
     if arr.data.[1] != 4 { error += 1 }
     if arr.data.[2] != 3 { error += 1 }
     if arr.data.[3] != 2 { error += 1 }
     if arr.data.[4] != 1 { error += 1 }
-    Array.free(arr.&)
     error
 }
 
 test_named_comparator() {
     error := 0
     arr   := Array.empty[Int]()
-    Array.push(arr.&, 3)
-    Array.push(arr.&, 1)
-    Array.push(arr.&, 2)
-    Array.sort(arr.&, cmp_asc/2)
+    defer arr.free()
+    arr.push(3)
+    arr.push(1)
+    arr.push(2)
+    arr.sort_with(cmp_asc/2)
     if arr.data.[0] != 1 { error += 1 }
     if arr.data.[1] != 2 { error += 1 }
     if arr.data.[2] != 3 { error += 1 }
-    Array.free(arr.&)
     error
 }
 
 test_sorted() {
     error := 0
     arr   := Array.empty[Int]()
-    Array.push(arr.&, 3)
-    Array.push(arr.&, 1)
-    Array.push(arr.&, 2)
-    result := Array.sorted(arr, (a, b) { a - b })
+    defer arr.free()
+    arr.push(3)
+    arr.push(1)
+    arr.push(2)
+    result := arr.sorted_with((a, b) { a - b })
+    defer result.free()
     // Result is sorted
     if result.data.[0] != 1 { error += 1 }
     if result.data.[1] != 2 { error += 1 }
@@ -87,38 +89,36 @@ test_sorted() {
     if arr.data.[0] != 3 { error += 1 }
     if arr.data.[1] != 1 { error += 1 }
     if arr.data.[2] != 2 { error += 1 }
-    Array.free(arr.&)
-    Array.free(result.&)
     error
 }
 
 test_already_sorted() {
     error := 0
     arr   := Array.empty[Int]()
-    Array.push(arr.&, 1)
-    Array.push(arr.&, 2)
-    Array.push(arr.&, 3)
-    Array.push(arr.&, 4)
-    Array.sort(arr.&, (a, b) { a - b })
+    defer arr.free()
+    arr.push(1)
+    arr.push(2)
+    arr.push(3)
+    arr.push(4)
+    arr.sort_with((a, b) { a - b })
     if arr.data.[0] != 1 { error += 1 }
     if arr.data.[1] != 2 { error += 1 }
     if arr.data.[2] != 3 { error += 1 }
     if arr.data.[3] != 4 { error += 1 }
-    Array.free(arr.&)
     error
 }
 
 test_sort_with_allocator() {
     error := 0
     arr   := Array.empty[Int]()
-    Array.push(arr.&, 5)
-    Array.push(arr.&, 3)
-    Array.push(arr.&, 1)
-    Array.sort(arr.&, Alloc.context.transient, (a, b) { a - b })
+    defer arr.free()
+    arr.push(5)
+    arr.push(3)
+    arr.push(1)
+    arr.sort_with(Alloc.context.transient, (a, b) { a - b })
     if arr.data.[0] != 1 { error += 1 }
     if arr.data.[1] != 3 { error += 1 }
     if arr.data.[2] != 5 { error += 1 }
-    Array.free(arr.&)
     error
 }
 

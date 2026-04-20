@@ -310,7 +310,7 @@ test_ufcs_functional() {
     arr2.push(5)
     arr2.push(1)
     arr2.push(3)
-    sorted := arr2.sorted((a, b) { a - b })
+    sorted := arr2.sorted_with((a, b) { a - b })
     error += if sorted.get(0zu) == 1 {0} else {1}
     error += if sorted.get(2zu) == 5 {0} else {1}
 

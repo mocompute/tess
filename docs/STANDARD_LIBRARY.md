@@ -171,7 +171,7 @@ main() {
     Array.push(arr.&, 1)
     Array.push(arr.&, 2)
 
-    Array.sort(arr.&, (a, b) { a - b })
+    Array.sort_with(arr.&, (a, b) { a - b })
 
     sum := Array.reduce(arr, 0, (acc, x) { acc + x })
     c_printf(c"sum = %d\n", sum)  // sum = 6

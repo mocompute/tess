@@ -176,7 +176,7 @@ main(argc: CInt, argv: Ptr[CString]) {
 
     // Sort by word count descending.
     if do_sort {
-        results.sort((a, b) { b.words - a.words })
+        results.sort_with((a, b) { b.words - a.words })
     }
 
     // Apply --top N limit.
