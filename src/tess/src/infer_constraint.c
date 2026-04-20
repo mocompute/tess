@@ -3818,8 +3818,7 @@ int check_type_predicate(tl_infer *self, traverse_ctx *traverse_ctx, ast_node *n
             }
 
             self->is_constrain_ignore_error = save;
-            ast_node_type_set(node, tl_polytype_bool(self->arena, self->registry));
-            return 0;
+            goto done;
         }
     }
     // Fall through to existing expression handling...
@@ -3854,7 +3853,13 @@ int check_type_predicate(tl_infer *self, traverse_ctx *traverse_ctx, ast_node *n
         self->is_constrain_ignore_error = save;
     }
 
+done:
     ast_node_type_set(node, tl_polytype_bool(self->arena, self->registry));
+
+    // Handle comptime type predicate
+    if (node->type_predicate.is_comptime && !node->type_predicate.is_valid) {
+        return unresolved_type_error(self, node->type_predicate.lhs);
+    }
     return 0;
 }
 

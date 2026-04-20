@@ -20,6 +20,7 @@
     X(tok_colon, "colon")                                                                                  \
     X(tok_colon_equal, "colon_equal")                                                                      \
     X(tok_double_colon, "double_colon")                                                                    \
+    X(tok_hash_double_colon, "hash_double_colon")                                                          \
     X(tok_semicolon, "semicolon")                                                                          \
     X(tok_ampersand, "ampersand")                                                                          \
     X(tok_logical_and, "logical_and")                                                                      \

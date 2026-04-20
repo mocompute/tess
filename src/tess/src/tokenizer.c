@@ -268,6 +268,7 @@ start:; // loop point for skip_depth > 0
         in_comment,
         stop_comment,
 
+        in_hash,
         start_hash_command,
         in_hash_command,
         in_ifc,
@@ -355,7 +356,7 @@ start:; // loop point for skip_depth > 0
                 state = in_colon;
                 continue;
             case '!': state = in_bang; continue;
-            case '#': state = start_hash_command; continue;
+            case '#': state = in_hash; continue;
 
             case '~':
                 replace_token_s(self->strings, &res, tok_symbol, "~");
@@ -1024,6 +1025,19 @@ start:; // loop point for skip_depth > 0
                              self->pos - start_capture);
             state = stop;
             break;
+
+        case in_hash: {
+            size_t const pos = self->pos;
+            if (':' == peek_char(self, pos) && ':' == peek_char(self, pos + 1)) {
+                advance_pos_n(self, 2);
+                replace_token_s(self->strings, &res, tok_hash_double_colon, "#::");
+                state = stop;
+                continue;
+            } else {
+                state = start_hash_command;
+                continue;
+            }
+        } break;
 
         case start_hash_command:
             start_capture = self->pos;

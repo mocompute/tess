@@ -79,6 +79,7 @@ int a_assignment_by_operator(parser *self, int min_prec) {
     case tok_colon:
     case tok_colon_equal:
     case tok_double_colon:
+    case tok_hash_double_colon:
     case tok_semicolon:
     case tok_ellipsis:
     case tok_open_round:
@@ -137,6 +138,7 @@ int a_binary_operator(parser *self, int min_prec) {
     case tok_minus:                op = "-"; break;
     case tok_bar:                  op = "|"; break;
     case tok_double_colon:         op = "::"; break;
+    case tok_hash_double_colon:    op = "#::"; break;
 
     case tok_bang:
     case tok_comma:
@@ -200,6 +202,7 @@ int a_unary_operator(parser *self, int min_prec) {
     case tok_colon:
     case tok_colon_equal:
     case tok_double_colon:
+    case tok_hash_double_colon:
     case tok_semicolon:
     case tok_logical_and:
     case tok_logical_or:
@@ -1036,23 +1039,23 @@ int operator_precedence(char const *op, int is_prefix) {
     };
     static struct item const infix[] = {
 
-      {"=", 5},   {"+=", 5},   {"-=", 5},  {"*=", 5}, {"/=", 5}, {"%=", 5},
+      {"=", 5},    {"+=", 5},   {"-=", 5},  {"*=", 5},  {"/=", 5}, {"%=", 5},
 
-      {"<<=", 5}, {">>=", 5},  {"&=", 5},  {"^=", 5}, {"|=", 5},
+      {"<<=", 5},  {">>=", 5},  {"&=", 5},  {"^=", 5},  {"|=", 5},
 
-      {"||", 10}, {"&&", 20},  {"|", 30},  {"&", 40},
+      {"||", 10},  {"&&", 20},  {"|", 30},  {"&", 40},
 
-      {"::", 50}, {"==", 50},  {"!=", 50},
+      {"#::", 50}, {"::", 50},  {"==", 50}, {"!=", 50},
 
-      {"<", 60},  {"<=", 60},  {">=", 60}, {">", 60},
+      {"<", 60},   {"<=", 60},  {">=", 60}, {">", 60},
 
-      {"<<", 70}, {">>", 70},
+      {"<<", 70},  {">>", 70},
 
-      {"+", 80},  {"-", 80},
+      {"+", 80},   {"-", 80},
 
-      {"*", 90},  {"/", 90},   {"%", 90},
+      {"*", 90},   {"/", 90},   {"%", 90},
 
-      {".", 110}, {"->", 110}, {"[", 110},
+      {".", 110},  {"->", 110}, {"[", 110},
 
       {null, 0},
     };
@@ -1767,8 +1770,10 @@ ast_node *parse_expression(parser *self, int min_prec) {
 
             // Note: special case: detect type predicate with binop ::
             ast_node *binop = null;
-            if (0 == str_cmp_c(op->symbol.name, "::")) {
-                binop = ast_node_create_type_predicate(self->ast_arena, left, right);
+            if (0 == str_cmp_c(op->symbol.name, "#::")) {
+                binop = ast_node_create_type_predicate(self->ast_arena, left, right, 1);
+            } else if (0 == str_cmp_c(op->symbol.name, "::")) {
+                binop = ast_node_create_type_predicate(self->ast_arena, left, right, 0);
             } else {
                 binop = ast_node_create_binary_op(self->ast_arena, op, left, right);
             }

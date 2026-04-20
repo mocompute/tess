@@ -269,6 +269,7 @@ typedef struct ast_node {
             struct ast_node *lhs; // lvalue
             struct ast_node *rhs; // type annotation
             int              is_valid;
+            int              is_comptime;
         } type_predicate;
     };
 
@@ -346,7 +347,8 @@ nodiscard ast_node *ast_node_create_lfa(allocator *, ast_node *, ast_node_sized)
 nodiscard ast_node *ast_node_create_tuple(allocator *, ast_node_sized) mallocfun;
 nodiscard ast_node *ast_node_create_try(allocator *, ast_node *) mallocfun;
 nodiscard ast_node *ast_node_create_type_alias(allocator *, ast_node *, ast_node *) mallocfun;
-nodiscard ast_node *ast_node_create_type_predicate(allocator *, ast_node *, ast_node *) mallocfun;
+nodiscard ast_node *ast_node_create_type_predicate(allocator *, ast_node *, ast_node *,
+                                                   int is_comptime) mallocfun;
 nodiscard ast_node *ast_node_create_sym(allocator *alloc, str str); // copies str
 nodiscard ast_node *ast_node_create_sym_c(allocator *, char const *);
 nodiscard ast_node *ast_node_clone(allocator *, ast_node const *) mallocfun;

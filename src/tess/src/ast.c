@@ -244,11 +244,13 @@ ast_node *ast_node_create_type_alias(allocator *alloc, ast_node *name, ast_node 
     return self;
 }
 
-ast_node *ast_node_create_type_predicate(allocator *alloc, ast_node *name, ast_node *annotation) {
-    ast_node *self                = ast_node_create(alloc, ast_type_predicate);
-    self->type_predicate.lhs      = name;
-    self->type_predicate.rhs      = annotation;
-    self->type_predicate.is_valid = 0;
+ast_node *ast_node_create_type_predicate(allocator *alloc, ast_node *name, ast_node *annotation,
+                                         int is_comptime) {
+    ast_node *self                   = ast_node_create(alloc, ast_type_predicate);
+    self->type_predicate.lhs         = name;
+    self->type_predicate.rhs         = annotation;
+    self->type_predicate.is_valid    = 0;
+    self->type_predicate.is_comptime = is_comptime;
     return self;
 }
 
@@ -468,9 +470,10 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
     } break;
 
     case ast_type_predicate: {
-        clone->type_predicate.lhs      = ast_node_clone(alloc, orig->type_predicate.lhs);
-        clone->type_predicate.rhs      = ast_node_clone(alloc, orig->type_predicate.rhs);
-        clone->type_predicate.is_valid = orig->type_predicate.is_valid;
+        clone->type_predicate.lhs         = ast_node_clone(alloc, orig->type_predicate.lhs);
+        clone->type_predicate.rhs         = ast_node_clone(alloc, orig->type_predicate.rhs);
+        clone->type_predicate.is_valid    = orig->type_predicate.is_valid;
+        clone->type_predicate.is_comptime = orig->type_predicate.is_comptime;
     } break;
 
     case ast_return:
@@ -1250,9 +1253,11 @@ static str v2_ast_node_to_string_inner(allocator *alloc, ast_node const *node, i
 
     case ast_type_predicate: {
         str_build b = str_build_init(alloc, 64);
-        str_build_cat(&b, S("(predicate "));
+        if (node->type_predicate.is_comptime) str_build_cat(&b, S("(comptime-predicate "));
+        else str_build_cat(&b, S("(predicate "));
         str_build_cat(&b, R(node->type_predicate.lhs));
-        str_build_cat(&b, S(" :: "));
+        if (node->type_predicate.is_comptime) str_build_cat(&b, S(" #:: "));
+        else str_build_cat(&b, S(" :: "));
         str_build_cat(&b, R(node->type_predicate.rhs));
         str_build_cat(&b, S(")"));
         return str_build_finish(&b);
