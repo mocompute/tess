@@ -709,7 +709,7 @@ Iter[T]: {
 
 iter_init[T](arr: Ptr[Array[T]]) -> Iter[T]
 
-iter_init(arr) { Iter(data = arr->data, size = arr->size, index = 0) }
+iter_init[T](arr) { Iter(data: Ptr[T] = arr->data, size = arr->size, index = 0) }
 
 (iter: Ptr[Iter[T]]): {
     iter_ptr   () -> Ptr[T] { iter->data.[iter->index].& }
@@ -742,7 +742,7 @@ Iter[T]: {
     ivp:   IterValuePtr[T],
 }
 
-iter_init[T](arr: Ptr[Array[T]]) { Iter (data = arr->data,
+iter_init[T](arr: Ptr[Array[T]]) { Iter (data: Ptr[T] = arr->data,
                                          size  = arr->size,
                                          index = 0,
                                          iv    = IterValue (value = void, index = 0),

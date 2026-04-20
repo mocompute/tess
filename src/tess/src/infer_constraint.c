@@ -649,150 +649,133 @@ void traverse_ctx_load_type_arguments(tl_infer *self, traverse_ctx *ctx, ast_nod
 }
 
 int traverse_ctx_assign_type_arguments(tl_infer *self, traverse_ctx *ctx, ast_node const *node) {
-    if (ast_node_is_nfa(node)) {
-        if (!node->named_application.is_specialized && !node->named_application.is_function_reference &&
-            !node->named_application.is_type_constructor)
-            return 0;
+    // This function handles explicit type arguments at function call sites by adding them to the type
+    // context.
+    if (!ast_node_is_nfa(node)) return 0;
+    u32 argc = node->named_application.n_type_arguments;
+    if (0 == argc) return 0;
+    ast_node **argv = node->named_application.type_arguments;
 
-        u32 argc = node->named_application.n_type_arguments;
-        if (argc == 0) return 0;
-        ast_node **argv   = node->named_application.type_arguments;
+    for (u32 i = 0; i < argc; i++) {
+        ast_node *arg = argv[i];
+        if (ast_node_is_symbol(arg) && !tl_type_registry_exists(self->registry, arg->symbol.name)) return 0;
+    }
 
-        ast_node  *let    = toplevel_get(self, ast_node_str(node->named_application.name));
-        u32        paramc = (let && ast_node_is_let(let)) ? let->let.n_type_parameters : 0;
+    ast_node *let    = toplevel_get(self, ast_node_str(node->named_application.name));
+    u32       paramc = (let && ast_node_is_let(let)) ? let->let.n_type_parameters : 0;
 
 #if DEBUG_INVARIANTS
-        // Invariant: Type argument count must match type parameter count
-        if (argc > 0 && paramc > 0 && argc != paramc) {
-            str  callee_name = ast_node_str(node->named_application.name);
-            char detail[256];
-            snprintf(detail, sizeof detail,
-                     "Call site has %u type arguments but function '%.*s' has %u type parameters", argc,
-                     str_ilen(callee_name), str_buf(&callee_name), paramc);
-            report_invariant_failure(self, "traverse_ctx_assign_type_arguments",
-                                     "Type argument count must match type parameter count", detail,
-                                     (ast_node *)node);
+    // Invariant: Type argument count must match type parameter count
+    if (argc > 0 && paramc > 0 && argc != paramc) {
+        str  callee_name = ast_node_str(node->named_application.name);
+        char detail[256];
+        snprintf(detail, sizeof detail,
+                 "Call site has %u type arguments but function '%.*s' has %u type parameters", argc,
+                 str_ilen(callee_name), str_buf(&callee_name), paramc);
+        report_invariant_failure(self, "traverse_ctx_assign_type_arguments",
+                                 "Type argument count must match type parameter count", detail,
+                                 (ast_node *)node);
+    }
+#endif
+
+#if DEBUG_EXPLICIT_TYPE_ARGS
+    str name = ast_node_str(node->named_application.name);
+    fprintf(stderr, "[DEBUG EXPLICIT TYPE ARGS] traverse_ctx_assign_type_arguments:\n");
+    fprintf(stderr, "  callee: %s\n", str_cstr(&name));
+    fprintf(stderr, "  n_type_arguments: %u, n_type_parameters: %u\n", argc, paramc);
+    fprintf(stderr, "  type_arguments contains: %i\n", str_map_contains(ctx->type_arguments, name));
+#endif
+
+    for (u32 i = 0; i < argc; i++) {
+        ast_node *arg = argv[i];
+
+#if DEBUG_EXPLICIT_TYPE_ARGS
+        fprintf(stderr, "  type_arg[%u] AST tag=%d", i, type_arg_node->tag);
+        if (ast_node_is_symbol(type_arg_node)) {
+            str n = type_arg_node->symbol.name;
+            fprintf(stderr, " name='%s'", str_cstr(&n));
+            fprintf(stderr, " type_arguments contains: %i", str_map_contains(ctx->type_arguments, n));
+
+        } else if (ast_node_is_nfa(type_arg_node)) {
+            str n = ast_node_str(type_arg_node->named_application.name);
+            fprintf(stderr, " nfa='%s' n_type_args=%u", str_cstr(&n),
+                    type_arg_node->named_application.n_type_arguments);
         }
+        if (type_arg_node->type) {
+            str t = tl_polytype_to_string(self->transient, type_arg_node->type);
+            fprintf(stderr, " type=%s", str_cstr(&t));
+        }
+        fprintf(stderr, "\n");
 #endif
+
+        tl_monotype *parsed = parse_type_arg(self, ctx->type_arguments, arg);
+
+        if (!parsed) {
+            array_push(self->errors, ((tl_infer_error){.tag = tl_err_expected_type, .node = arg}));
+            return 1;
+        }
 
 #if DEBUG_EXPLICIT_TYPE_ARGS
-        str name = ast_node_str(node->named_application.name);
-        fprintf(stderr, "[DEBUG EXPLICIT TYPE ARGS] traverse_ctx_assign_type_arguments:\n");
-        fprintf(stderr, "  callee: %s\n", str_cstr(&name));
-        fprintf(stderr, "  n_type_arguments: %u, n_type_parameters: %u\n", argc, paramc);
-        fprintf(stderr, "  type_arguments contains: %i\n", str_map_contains(ctx->type_arguments, name));
+        str parsed_str = tl_monotype_to_string(self->transient, parsed);
+        fprintf(stderr, "  type_arg[%u]: parsed = %s\n", i, str_cstr(&parsed_str));
 #endif
 
-        for (u32 i = 0; i < argc; i++) {
-            ast_node *type_arg_node = argv[i];
-
-#if DEBUG_EXPLICIT_TYPE_ARGS
-            fprintf(stderr, "  type_arg[%u] AST tag=%d", i, type_arg_node->tag);
-            if (ast_node_is_symbol(type_arg_node)) {
-                str n = type_arg_node->symbol.name;
-                fprintf(stderr, " name='%s'", str_cstr(&n));
-                fprintf(stderr, " type_arguments contains: %i", str_map_contains(ctx->type_arguments, n));
-
-            } else if (ast_node_is_nfa(type_arg_node)) {
-                str n = ast_node_str(type_arg_node->named_application.name);
-                fprintf(stderr, " nfa='%s' n_type_args=%u", str_cstr(&n),
-                        type_arg_node->named_application.n_type_arguments);
+        // If the type argument is a type constructor instance with arguments, specialize it.
+        // This is an exception to the normal design where specialization happens in
+        // specialize_applications_cb. We must do it here because intrinsics (like
+        // _tl_sizeof_) are skipped by specialize_applications_cb, so their explicit
+        // type arguments would never be specialized otherwise.
+        if (tl_monotype_is_inst(parsed) && parsed->cons_inst->args.size > 0) {
+            tl_polytype *specialized = null;
+            (void)specialize_type_constructor(self, parsed->cons_inst->def->generic_name,
+                                              parsed->cons_inst->args, &specialized);
+            if (specialized && tl_monotype_is_inst_specialized(specialized->type)) {
+                parsed = specialized->type;
             }
-            if (type_arg_node->type) {
-                str t = tl_polytype_to_string(self->transient, type_arg_node->type);
-                fprintf(stderr, " type=%s", str_cstr(&t));
-            }
-            fprintf(stderr, "\n");
-#endif
+        }
 
-            tl_monotype *parsed = null;
-
-            // If the type argument is a symbol bound in the current context's type_arguments
-            // (set by concretize_params), prefer that binding over any type on the node.
-            // The node may carry a stale type variable from the add_free_variables_to_arrow
-            // traversal that runs before concretize_params.
-            if (ast_node_is_symbol(type_arg_node)) {
-                tl_monotype *from_ctx = str_map_get_ptr(ctx->type_arguments, type_arg_node->symbol.name);
-                if (from_ctx) {
-                    parsed = from_ctx;
-                }
-            }
-
-            if (!parsed) {
-                parsed = parse_type_arg(self, ctx->type_arguments, type_arg_node);
-            }
-
-            if (!parsed) {
-                array_push(self->errors,
-                           ((tl_infer_error){.tag = tl_err_expected_type, .node = type_arg_node}));
-                return 1;
-            }
+        // If the callee has a matching type parameter, add to the type argument context
+        if (i < paramc) {
+            assert(ast_node_is_symbol(let->let.type_parameters[i]));
+            // Always use the alpha-converted name, not the original, because the type
+            // environment relies on alpha conversion to prevent pollution between generic
+            // and specialized phases.
+            str param_name = let->let.type_parameters[i]->symbol.name;
 
 #if DEBUG_EXPLICIT_TYPE_ARGS
             str parsed_str = tl_monotype_to_string(self->transient, parsed);
-            fprintf(stderr, "  type_arg[%u]: parsed = %s\n", i, str_cstr(&parsed_str));
-#endif
-
-            // If the type argument is a type constructor instance with arguments, specialize it.
-            // This is an exception to the normal design where specialization happens in
-            // specialize_applications_cb. We must do it here because intrinsics (like
-            // _tl_sizeof_) are skipped by specialize_applications_cb, so their explicit
-            // type arguments would never be specialized otherwise.
-            if (tl_monotype_is_inst(parsed) && parsed->cons_inst->args.size > 0) {
-                tl_polytype *specialized = null;
-                (void)specialize_type_constructor(self, parsed->cons_inst->def->generic_name,
-                                                  parsed->cons_inst->args, &specialized);
-                if (specialized && tl_monotype_is_inst_specialized(specialized->type)) {
-                    parsed = specialized->type;
-                }
-            }
-
-            // If the callee has a matching type parameter, add to the type argument context
-            if (i < paramc) {
-                assert(ast_node_is_symbol(let->let.type_parameters[i]));
-                // Always use the alpha-converted name, not the original, because the type
-                // environment relies on alpha conversion to prevent pollution between generic
-                // and specialized phases.
-                str param_name = let->let.type_parameters[i]->symbol.name;
-
-#if DEBUG_EXPLICIT_TYPE_ARGS
-                str parsed_str = tl_monotype_to_string(self->transient, parsed);
-                fprintf(stderr, "  mapping type param '%s' -> %s\n", str_cstr(&param_name),
-                        str_cstr(&parsed_str));
+            fprintf(stderr, "  mapping type param '%s' -> %s\n", str_cstr(&param_name),
+                    str_cstr(&parsed_str));
 #endif
 
 #if DEBUG_INVARIANTS
-                // Invariant: If type parameter already has a binding, it must be the same type
-                // Type pollution occurs when the same alpha-converted name gets different types
-                // in different specialization contexts
-                tl_monotype *existing_binding = str_map_get_ptr(ctx->type_arguments, param_name);
-                if (existing_binding &&
-                    tl_monotype_hash64(existing_binding) != tl_monotype_hash64(parsed)) {
-                    char detail[512];
-                    str  existing_str = tl_monotype_to_string(self->transient, existing_binding);
-                    str  new_str      = tl_monotype_to_string(self->transient, parsed);
-                    snprintf(detail, sizeof detail,
-                             "Type parameter '%.*s' already bound to '%s', cannot rebind to '%s'",
-                             str_ilen(param_name), str_buf(&param_name), str_cstr(&existing_str),
-                             str_cstr(&new_str));
-                    report_invariant_failure(self, "traverse_ctx_assign_type_arguments",
-                                             "Type parameter binding conflict (type pollution)", detail,
-                                             (ast_node *)node);
-                }
+            // Invariant: If type parameter already has a binding, it must be the same type
+            // Type pollution occurs when the same alpha-converted name gets different types
+            // in different specialization contexts
+            tl_monotype *existing_binding = str_map_get_ptr(ctx->type_arguments, param_name);
+            if (existing_binding && tl_monotype_hash64(existing_binding) != tl_monotype_hash64(parsed)) {
+                char detail[512];
+                str  existing_str = tl_monotype_to_string(self->transient, existing_binding);
+                str  new_str      = tl_monotype_to_string(self->transient, parsed);
+                snprintf(detail, sizeof detail,
+                         "Type parameter '%.*s' already bound to '%s', cannot rebind to '%s'",
+                         str_ilen(param_name), str_buf(&param_name), str_cstr(&existing_str),
+                         str_cstr(&new_str));
+                report_invariant_failure(self, "traverse_ctx_assign_type_arguments",
+                                         "Type parameter binding conflict (type pollution)", detail,
+                                         (ast_node *)node);
+            }
 #endif
 
-                tl_type_registry_add_type_argument(self->registry, param_name, parsed,
-                                                   &ctx->type_arguments);
+            tl_type_registry_add_type_argument(self->registry, param_name, parsed, &ctx->type_arguments);
 
-                assert(str_map_contains(ctx->type_arguments, param_name));
-            }
-
-            // Set type on the type argument AST node for the transpiler.
-            ast_node_type_set((ast_node *)node->named_application.type_arguments[i],
-                              tl_polytype_absorb_mono(self->arena, parsed));
+            assert(str_map_contains(ctx->type_arguments, param_name));
         }
-    }
 
+        // Set type on the type argument AST node for the transpiler.
+        ast_node_type_set((ast_node *)node->named_application.type_arguments[i],
+                          tl_polytype_absorb_mono(self->arena, parsed));
+    }
     return 0;
 }
 
@@ -2330,7 +2313,8 @@ static int infer_let_in(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
                 // For Const[T] bindings, constrain value against unwrapped T so the Const
                 // wrapper does not back-propagate onto the value expression's type.
                 if (name_type && tl_monotype_is_const(name_type->type)) {
-                    tl_polytype unwrapped = tl_polytype_wrap(tl_monotype_const_target_unchecked(name_type->type));
+                    tl_polytype unwrapped =
+                      tl_polytype_wrap(tl_monotype_const_target_unchecked(name_type->type));
                     if (constrain(self, &unwrapped, value_type, node, TL_UNIFY_DIRECTED)) return 1;
                 } else {
                     if (constrain(self, name_type, value_type, node, TL_UNIFY_DIRECTED)) return 1;
