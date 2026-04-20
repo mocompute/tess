@@ -57,6 +57,11 @@ static void rtrim(char *s) {
     s[len] = '\0';
 }
 
+// Check if line starts with a directive (# but not #::)
+static int is_directive(char const *s) {
+    return s[0] == '#' && !starts_with(s, "#::");
+}
+
 // ---------------------------------------------------------------------------
 // Operator spacing
 // ---------------------------------------------------------------------------
@@ -93,9 +98,9 @@ static int is_ident_char(char c) {
 }
 
 static char *normalize_ops(allocator *alloc, char const *line) {
-    // If line starts with # directive, return as-is
+    // If line starts with # directive, return as-is (but not #:: which is an operator)
     char const *trimmed = ltrim(line);
-    if (trimmed[0] == '#') {
+    if (is_directive(trimmed)) {
         return alloc_strdup(alloc, line);
     }
 
@@ -150,6 +155,11 @@ static char *normalize_ops(allocator *alloc, char const *line) {
         char next2 = (i + 2 < len) ? line[i + 2] : '\0';
 
         // Three-character operators (order matters: check before single-char)
+        if (c == '#' && next == ':' && next2 == ':') {
+            emit_spaced_op(&out, "#::");
+            i += 2;
+            continue;
+        }
         if (c == '<' && next == '<' && next2 == '=') {
             emit_spaced_op(&out, "<<=");
             i += 2;
@@ -895,7 +905,7 @@ static void align_pass(allocator *alloc, char **lines, int nlines) {
             i++;
             continue;
         }
-        if (lines[i][0] == '\0' || t[0] == '#') {
+        if (lines[i][0] == '\0' || is_directive(t)) {
             i++;
             continue;
         }
@@ -903,8 +913,9 @@ static void align_pass(allocator *alloc, char **lines, int nlines) {
         int group_start  = i;
         int group_indent = leading_spaces(lines[i]);
 
-        while (i < nlines && lines[i][0] != '\0' && ltrim(lines[i])[0] != '#' &&
-               leading_spaces(lines[i]) == group_indent) {
+        while (i < nlines && lines[i][0] != '\0' && leading_spaces(lines[i]) == group_indent) {
+            char const *lt = ltrim(lines[i]);
+            if (is_directive(lt)) break;
             i++;
         }
 
@@ -1052,7 +1063,9 @@ static int ends_with_binary_op(char const *line) {
     int end = code_end(line);
     if (end < 1) return 0;
     char c1 = line[end - 1];
-    // Two-char operators ending at end
+    // Three-char operators
+    if (end >= 3 && starts_with(line + end - 3, "#::")) return 1;
+    // Two-char operators
     if (end >= 2) {
         char c0 = line[end - 2];
         if (c0 == '&' && c1 == '&') return 1;
@@ -1083,10 +1096,12 @@ static int ends_with_binary_op(char const *line) {
 // Excludes *, &, | which could be unary/dereference/address-of/pipe.
 static int starts_with_binary_op(char const *trimmed) {
     if (trimmed[0] == '\0') return 0;
-    if (trimmed[0] == '/' && trimmed[1] == '/') return 0;
+    if (starts_with(trimmed, "//")) return 0;
+    // Three-char operators
+    if (starts_with(trimmed, "#::")) return 1;
+    // Two-char operators
     char c0 = trimmed[0];
     char c1 = trimmed[1];
-    // Two-char operators
     if (c0 == '&' && c1 == '&') return 1;
     if (c0 == '|' && c1 == '|') return 1;
     if (c0 == '=' && c1 == '=') return 1;
@@ -1226,8 +1241,8 @@ str tl_format(allocator *alloc, char const *data, u32 size, char const *filename
         }
 
         // #endc outside C block (shouldn't happen but handle gracefully)
-        // #module, #import, #include — indent 0
-        if (trimmed[0] == '#') {
+        // #module, #import, #include — indent 0 (but not #:: which is an operator)
+        if (is_directive(trimmed)) {
             // Ensure blank line after a multi-line construct before a directive
             if (prev_was_multiline && !last_output_was_blank) {
                 EMIT_LINE(alloc_strdup(alloc, ""));

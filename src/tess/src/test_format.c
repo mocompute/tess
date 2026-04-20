@@ -153,6 +153,10 @@ static int test_normalize_ops(void) {
 
     error += check(alloc, ">>= no spaces", "s>>=four", "s >>= four\n");
 
+    error += check(alloc, "#:: spaced", "a#::b", "a #:: b\n");
+
+    error += check(alloc, "#:: already spaced", "a #:: b", "a #:: b\n");
+
     arena_destroy(&alloc);
     return error;
 }
@@ -310,6 +314,16 @@ static int test_continuation_binop(void) {
                    "    b\n"
                    "}\n");
 
+    error += check(alloc, "#:: triggers continuation",
+                   "f() {\n"
+                   "a #::\n"
+                   "b\n"
+                   "}",
+                   "f() {\n"
+                   "    a #::\n"
+                   "        b\n"
+                   "}\n");
+
     arena_destroy(&alloc);
     return error;
 }
@@ -378,6 +392,16 @@ static int test_continuation_next_line_binop(void) {
                    "        i = i + 1\n"
                    "    }\n"
                    "    -1\n"
+                   "}\n");
+
+    error += check(alloc, "next line starts with #::",
+                   "f() {\n"
+                   "a\n"
+                   "#:: b\n"
+                   "}",
+                   "f() {\n"
+                   "    a\n"
+                   "        #:: b\n"
                    "}\n");
 
     arena_destroy(&alloc);
