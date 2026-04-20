@@ -413,6 +413,14 @@ static void instance_add(tl_infer *self, name_and_type *key, str instance_name) 
 // Type constructor specialization
 // ============================================================================
 
+int is_same_cons_inst_type(tl_monotype *target, str name, tl_monotype_sized args) {
+    if (tl_monotype_is_inst(target) && str_eq(name, target->cons_inst->def->generic_name) &&
+        tl_monotype_sized_hash64(0, target->cons_inst->args) == tl_monotype_sized_hash64(0, args)) {
+        return 1;
+    }
+    return 0;
+}
+
 static str specialize_type_constructor_(tl_infer *self, str name, tl_monotype_sized args,
                                         tl_polytype **out_type, hashmap **seen) {
     if (out_type) *out_type = null;
@@ -473,7 +481,8 @@ static str specialize_type_constructor_(tl_infer *self, str name, tl_monotype_si
             str          generic_name = arg_mono->cons_inst->def->generic_name;
 
             // Do not recurse: fixup after
-            if (str_eq(name, generic_name)) {
+            if (is_same_cons_inst_type(arg_mono, name, args)) {
+
 #if DEBUG_RECURSIVE_TYPES
                 fprintf(stderr,
                         "[DEBUG_RECURSIVE_TYPES]   DIRECT SELF-REF: arg[%u] '%s' matches name='%s'\n", i,
@@ -489,7 +498,8 @@ static str specialize_type_constructor_(tl_infer *self, str name, tl_monotype_si
             // Do not recurse into pointer target: fixup after
             if (tl_monotype_is_ptr(args.v[i])) {
                 tl_monotype *target = tl_monotype_ptr_target_unchecked(args.v[i]);
-                if (tl_monotype_is_inst(target) && str_eq(name, target->cons_inst->def->generic_name)) {
+                if (is_same_cons_inst_type(target, name, args)) {
+
 #if DEBUG_RECURSIVE_TYPES
                     fprintf(
                       stderr,
@@ -1472,7 +1482,8 @@ static int check_trait_arrow(tl_infer *self, ast_node *toplevel, tl_monotype *co
                 u64 eh = tl_monotype_hash64(ep.v[j]);
                 if (tl_monotype_hash64(ap.v[j]) == eh) continue;
                 if (tl_monotype_is_ptr(ap.v[j])) {
-                    tl_monotype *target = tl_monotype_strip_const(tl_monotype_ptr_target_unchecked(ap.v[j]));
+                    tl_monotype *target =
+                      tl_monotype_strip_const(tl_monotype_ptr_target_unchecked(ap.v[j]));
                     if (tl_monotype_hash64(target) == eh) continue;
                 }
                 // Const variance at matching pointer depth: Ptr[Const[T]] satisfies Ptr[T].
@@ -2051,7 +2062,8 @@ static int specialize_case(tl_infer *self, traverse_ctx *traverse_ctx, ast_node 
             node->case_.else_binding->symbol.annotation_type) {
             tl_monotype *variant_type = node->case_.else_binding->symbol.annotation_type->type;
             tl_monotype *inner_type   = variant_type;
-            if (tl_monotype_is_ptr(variant_type)) inner_type = tl_monotype_ptr_target_unchecked(variant_type);
+            if (tl_monotype_is_ptr(variant_type))
+                inner_type = tl_monotype_ptr_target_unchecked(variant_type);
 
             if (tl_monotype_is_inst(inner_type) && !tl_monotype_is_inst_specialized(inner_type)) {
                 str               generic_name = inner_type->cons_inst->def->generic_name;
@@ -2443,7 +2455,8 @@ int specialize_applications_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_n
                             if (slice_mon && tl_monotype_is_inst(slice_mon) &&
                                 slice_mon->cons_inst->args.size > 0 &&
                                 tl_monotype_is_ptr(slice_mon->cons_inst->args.v[0]))
-                                elem_type = tl_monotype_ptr_target_unchecked(slice_mon->cons_inst->args.v[0]);
+                                elem_type =
+                                  tl_monotype_ptr_target_unchecked(slice_mon->cons_inst->args.v[0]);
                         }
 
                         if (elem_type) {
