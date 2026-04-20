@@ -11,16 +11,16 @@
 
 // RFC 8259
 
-Value: | JObject     { value: Ptr[HashMap[String, Ptr[Value]]] }
-       | JArray      { value: Array[Ptr[Value]] }
-       | JString     { value: String }
+Value: | JNull
+       | JTrue
+       | JFalse
        | JInt64      { value: CInt64 }
        | JUInt64     { value: CUInt64 }
        | JDouble     { value: CDouble }
        | JLongDouble { value: CLongDouble }
-       | JTrue
-       | JFalse
-       | JNull
+       | JString     { value: String }
+       | JArray      { value: Array[Ptr[Value]] }
+       | JObject     { value: Ptr[HashMap[String, Ptr[Value]]] }
 
 
 (): {
@@ -35,8 +35,7 @@ Value: | JObject     { value: Ptr[HashMap[String, Ptr[Value]]] }
 
     get(key: Ptr[Const[String]]) -> Option[Ptr[J.Value]] {
         object: JObject := self.& else { _tl_fatal_(c"wrong variant") }
-        val_ptr         := try object->value.get(key.*)
-        Some(val_ptr.*)
+        object->value.get(key.*)
     }
 
     contains(key: Ptr[Const[String]]) -> Bool {
@@ -46,7 +45,7 @@ Value: | JObject     { value: Ptr[HashMap[String, Ptr[Value]]] }
 }
 
 (self: Ptr[Const[J.Value]], other: Ptr[Const[J.Value]]): {
-    cmp() {
+    cmp() -> CInt {
         if self->tag < other->tag { return -1 }
         if self->tag > other->tag { return 1 }
 
@@ -82,9 +81,24 @@ Value: | JObject     { value: Ptr[HashMap[String, Ptr[Value]]] }
             }
 
             s: JObject {
+                // Object comparison: if keys array does not compare-equal, return its status.
+                // Otherwise, return first non-equal value comparison.
                 o: JObject := other else { -1 }
-                // FIXME: object compare
-                -1
+
+                my_map     := s.value
+                their_map  := o.value
+                my_keys    := my_map.sorted_keys()
+                their_keys := their_map.sorted_keys()
+                keys_cmp   := my_keys.cmp(their_keys)
+                if keys_cmp != 0 { return keys_cmp }
+
+                for key in my_keys {
+                    my:    Some := my_map.get(key) else { _tl_fatal_(c"unreachable") }
+                    their: Some := their_map.get(key) else { _tl_fatal_(c"unreachable") }
+                    val_cmp     := cmp(my.value, their.value)
+                    if val_cmp != 0 { return val_cmp }
+                }
+                0
             }
         }
     }
