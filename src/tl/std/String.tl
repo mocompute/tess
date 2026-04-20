@@ -712,7 +712,7 @@ from_array(arr) {
 
         total: CSize := sn - (occ * on) + (occ * nn)
         if total == 0 { return empty() }
-        np := _buf(new_s)
+        np := _cbuf(new_s)
 
         // Build result into heap buffer, then decide SSO
         buf: Ptr[CChar] := alloc.alloc(total + 1)
@@ -911,8 +911,8 @@ from_array(arr) {
     cmp() {
         la      := len(self)
         lb      := len(other)
-        pa      := _buf(self)
-        pb      := _buf(other)
+        pa      := _cbuf(self)
+        pb      := _cbuf(other)
         min_len := if la < lb { la } else { lb }
         if min_len > 0 {
             r := c_memcmp(pa, pb, min_len)
@@ -967,7 +967,7 @@ join(alloc, sep, arr) {
     if arr.size == 1 { return e0.copy(alloc) }
 
     sn := sep.len()
-    sp := sep._buf()
+    sp := sep._cbuf()
 
     // Calculate total length
     total: CSize := 0
