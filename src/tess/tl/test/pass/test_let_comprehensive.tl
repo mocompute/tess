@@ -126,11 +126,39 @@ _nd_test_diverging_still_works() {
     1
 }
 
+_nd_test_block_scope_fallback() {
+    // Fallback returns from enclosing BLOCK, not function.
+    // When match fails, 99 becomes the block's value, function continues.
+    val: MyOption.T[CInt] := MyOption.MyNone
+    block_result := ({
+        s: MySome := val else { 99 }
+        s.value + 1
+    })
+    // If fallback returned from function, we'd never reach here.
+    // block_result should be 99 (the fallback), not 100 (s.value + 1).
+    if block_result != 99 { return 1 }
+    0
+}
+
+_nd_test_block_scope_match() {
+    // When match succeeds, continuation runs and becomes block's value.
+    val := MyOption.MySome(10)
+    block_result := ({
+        s: MySome := val else { 99 }
+        s.value + 1
+    })
+    // block_result should be 11 (s.value + 1), not 99.
+    if block_result != 11 { return 1 }
+    0
+}
+
 test_else_non_diverging() {
     r := _nd_test_match_path()
     r = r + _nd_test_no_match_fallback()
     r = r + _nd_test_match_continuation()
     r = r + _nd_test_diverging_still_works()
+    r = r + _nd_test_block_scope_fallback()
+    r = r + _nd_test_block_scope_match()
     r
 }
 

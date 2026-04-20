@@ -2384,18 +2384,26 @@ s: MySome := val else { return 0 }
 s.value + 1
 ```
 
-The `else` block may either diverge (`return`, `break`, `continue`) or produce a value. When it produces a value, the overall expression evaluates to that value if the match fails — the continuation after the variant binding is not reached:
+The `else` block may either diverge (`return`, `break`, `continue`) or produce a fallback value:
 
 ```tl
 // Diverging: exit the function if no match
 s: MySome := val else { return -1 }
 s.value + 1
-
-// Non-diverging: use a fallback value if no match
-s: MySome := val else { 0 }
-// if val was MyNone, the whole expression evaluated to 0
-// if val was MySome, s is bound and execution continues here
 ```
+
+**Non-diverging fallback:** When the `else` block produces a value instead of diverging, that value becomes the result of the enclosing block if the match fails. The continuation after the variant binding is skipped:
+
+```tl
+result := ({
+    s: MySome := val else { 0 }
+    s.value + 1
+})
+// If val was MyNone: result is 0 (the fallback), continuation skipped
+// If val was MySome: result is s.value + 1, continuation ran
+```
+
+The fallback type must match the enclosing block's result type, not the variant type. This is useful for providing default values in expression context without an explicit `return`.
 
 **Else binding:** For two-variant unions, the `else` arm can optionally bind the other variant by placing an identifier before the block. This gives access to the unmatched variant's fields:
 
