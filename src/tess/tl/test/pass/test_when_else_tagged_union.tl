@@ -5,8 +5,6 @@
 #import <Array.tl>
 #import <HashMap.tl>
 
-S(s: Ptr[Const[CChar]]) -> String.String { String.from_cstr(s) }
-
 // Bug: `when...else` on a tagged union falls through — the else branch
 // executes AFTER the matched branch when:
 //   1. The when is nested 3 levels deep inside other when expressions
@@ -32,14 +30,14 @@ main() {
     error := 0
 
     specs := Array.empty[Spec]()
-    Array.push(specs.&, Spec(name = S(c"output"), kind = FlagValue))
+    Array.push(specs.&, Spec(name = "output", kind = FlagValue))
 
     values := HashMap.create[String, Int]()
     errors := 0
 
-    when String.index_of_char(S(c"output=bar"), '=') {
+    when String.index_of_char("output=bar", '=') {
         eq: Some {
-            key := String.copy(S(c"output=bar"), 0zu, eq.value)
+            key := String.copy("output=bar", 0zu, eq.value)
             when find(specs, key) {
                 si: Some {
                     spec := specs.data.[si.value]
@@ -69,7 +67,7 @@ main() {
 
     // errors should be 0 (FlagValue matched), value should be stored
     if errors != 0 { error += 1 }
-    if values.get(S(c"output")).or_else(null) == null { error += 1 }
+    if values.get_ptr("output").or_else(null) == null { error += 1 }
 
     values.destroy()
     Array.free(specs.&)

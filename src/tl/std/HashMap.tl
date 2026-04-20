@@ -50,7 +50,7 @@ HashMapOpts: {
     destroy() -> Void
 
     set     (key: K, value: V) -> Void
-    get     (key: K)           -> Option[Ptr[V]]
+    get_ptr (key: K)           -> Option[Ptr[V]]
     get_copy(key: K)           -> Option[V]
     contains(key: K)           -> Bool
     remove  (key: K)           -> Bool
@@ -190,7 +190,7 @@ _insert_entry[K: Eq, V](entries, capacity, key: K, value: V, hash: CSize) -> CSi
         }
     }
 
-    get(key) {
+    get_ptr(key) {
         if self->_size == 0 { return None }
 
         hash        := key.hash()
@@ -217,12 +217,12 @@ _insert_entry[K: Eq, V](entries, capacity, key: K, value: V, hash: CSize) -> CSi
     }
 
     get_copy(key) {
-        p := try get(self, key)
+        p := try get_ptr(self, key)
         Some(p.*)
     }
 
     contains(key) {
-        if _: Some := get(self, key) {true} else {false}
+        if _: Some := get_ptr(self, key) {true} else {false}
     }
 
     // -- Remove (backward-shift deletion) --

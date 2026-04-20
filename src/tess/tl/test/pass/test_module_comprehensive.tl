@@ -169,7 +169,7 @@ test_auto_collapse_hashmap() {
     if map_size(m) != 1zu { error += 1 }
     if map_size_qualified(m) != 1zu { error += 1 }
     if map_size(convert_map(m)) != 1zu { error += 1 }
-    p := m.get(1).or_else(null)
+    p := m.get_ptr(1).or_else(null)
     if p == null { error += 1 }
     else if p.* != 100 { error += 1 }
     m.destroy()

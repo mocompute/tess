@@ -374,7 +374,7 @@ test_ufcs_hashmap() {
     error += if m.contains(99) == false {0} else {1}
 
     // get returns Option[Ptr[V]]
-    p := when m.get(2) {
+    p := when m.get_ptr(2) {
         s: Some { s.value }
         n: None { null }
     }
