@@ -381,14 +381,14 @@ test_ufcs_hashmap() {
     error += if p != null && p.* == 200 {0} else {1}
 
     // get_copy returns Option[V]
-    opt := m.get_copy(3)
+    opt := m.get(3)
     val := when opt {
         s: Some { s.value }
         n: None { -1 }
     }
     error += if val == 300 {0} else {1}
 
-    none_opt := m.get_copy(99)
+    none_opt := m.get(99)
     none_val := when none_opt {
         s: Some { s.value }
         n: None { -1 }

@@ -216,7 +216,7 @@ _store_bool(values, name) {
 }
 
 _store_count(values, name) {
-    s: Some := values.get_copy(name) else {
+    s: Some := values.get(name) else {
         values.set(name, Args.CountVal(value = 1))
         return
     }
@@ -496,7 +496,7 @@ from_argv(argc, argv) {
 // -- Query --
 
 get_flag(args, name) {
-    s: Some := args->_values.get_copy(name) else { return false }
+    s: Some := args->_values.get(name) else { return false }
     when s.value {
         b: BoolVal { b.value }
         else { false }
@@ -504,7 +504,7 @@ get_flag(args, name) {
 }
 
 get_count(args, name) {
-    s: Some := args->_values.get_copy(name) else { return 0 }
+    s: Some := args->_values.get(name) else { return 0 }
     when s.value {
         c: CountVal { c.value }
         else { 0 }
@@ -512,7 +512,7 @@ get_count(args, name) {
 }
 
 get_option(args, name) {
-    s: Some := args->_values.get_copy(name) else { return None }
+    s: Some := args->_values.get(name) else { return None }
     when s.value {
         sv: StrVal { Some(sv.value) }
         else { None }

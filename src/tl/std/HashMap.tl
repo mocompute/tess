@@ -51,7 +51,7 @@ HashMapOpts: {
 
     set     (key: K, value: V) -> Void
     get_ptr (key: K)           -> Option[Ptr[V]]
-    get_copy(key: K)           -> Option[V]
+    get     (key: K)           -> Option[V]
     contains(key: K)           -> Bool
     remove  (key: K)           -> Bool
 
@@ -216,7 +216,7 @@ _insert_entry[K: Eq, V](entries, capacity, key: K, value: V, hash: CSize) -> CSi
         None
     }
 
-    get_copy(key) {
+    get(key) {
         p := try get_ptr(self, key)
         Some(p.*)
     }

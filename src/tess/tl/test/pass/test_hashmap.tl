@@ -78,13 +78,13 @@ test_get_copy() {
     defer m.destroy()
     m.set(42, 84)
 
-    opt := m.get_copy(42)
+    opt := m.get(42)
     when opt {
         s: Some { if s.value != 84 { error += 1 } }
         n: None { error += 1 }
     }
 
-    opt2 := m.get_copy(999)
+    opt2 := m.get(999)
     when opt2 {
         s: Some { error += 1 }
         n: None { }
@@ -265,7 +265,7 @@ test_empty_map() {
     if m.size() != 0zu { error += 1 }
     if !m.is_empty() { error += 1 }
 
-    opt := m.get_copy(1)
+    opt := m.get(1)
     when opt {
         s: Some { error += 1 }
         n: None { }

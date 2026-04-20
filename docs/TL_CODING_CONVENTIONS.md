@@ -248,7 +248,7 @@ when spec.kind {
 Use a **variant binding** when a single variant is expected and all others should diverge or produce a fallback:
 
 ```tl
-s: Some := HashMap.get_copy(values, name) else { return 0 }
+s: Some := HashMap.get(values, name) else { return 0 }
 ```
 
 For two-variant unions, the else arm can bind the other variant to access its fields:
