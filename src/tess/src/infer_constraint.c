@@ -1660,15 +1660,14 @@ static int infer_if_then_else(tl_infer *self, ast_node *node) {
 
     ensure_tv(self, &node->type);
     if (node->if_then_else.no) {
+        // Both arms must be the same type, and the type of the if-expression is that type.
         if (constrain(self, node->if_then_else.yes->type, node->if_then_else.no->type, node,
                       TL_UNIFY_EXACT))
             return 1;
         if (constrain(self, node->type, node->if_then_else.yes->type, node, TL_UNIFY_SYMMETRIC)) return 1;
     } else {
-        tl_monotype *nil      = tl_type_registry_nil(self->registry);
+        // This arm is for if statements, not expressions. By having only a single arm, they have no type.
         tl_monotype *any_type = tl_monotype_create_any(self->arena);
-        if (constrain_pm(self, node->type, nil, node, TL_UNIFY_SYMMETRIC)) return 1;
-
         if (constrain_pm(self, node->if_then_else.yes->type, any_type, node, TL_UNIFY_SYMMETRIC)) return 1;
     }
 
