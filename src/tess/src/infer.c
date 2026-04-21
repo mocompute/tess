@@ -406,7 +406,7 @@ static int run_specialize(tl_infer *self, ast_node_sized nodes, ast_node *main) 
                     // never get unified back, but the reconstruction is
                     // unnecessary at any arity since the type is already known.
                     str inst_name =
-                      specialize_arrow(self, traverse_ctx, fun_name, type->type, (tl_monotype_sized){0});
+                      specialize_arrow(self, traverse_ctx, fun_name, type->type, tl_monotype_sized_empty());
                     // FIXME: ignores specialize_arrow error
                     dbg_at(2, self, "library: exporting '%s' => '%s'", str_cstr(&fun_name),
                            str_cstr(&inst_name));

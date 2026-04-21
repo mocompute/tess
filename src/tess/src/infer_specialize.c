@@ -6,6 +6,7 @@
 // and post-inference validation helpers.
 
 #include "infer_internal.h"
+#include "type.h"
 
 #include <string.h>
 
@@ -17,7 +18,7 @@ tl_polytype *make_arrow_result_type(tl_infer *self, traverse_ctx *ctx, ast_node_
                                     tl_polytype *result_type, int is_parameters) {
     if (args.size == 0 || (args.size == 1 && ast_node_is_nil(args.v[0]))) {
         // always use a tuple on the left side of arrow, even if zero elements
-        tl_monotype *lhs   = tl_monotype_create_tuple(self->arena, (tl_monotype_sized){0});
+        tl_monotype *lhs   = tl_monotype_create_tuple(self->arena, tl_monotype_sized_empty());
         tl_monotype *rhs   = result_type ? result_type->type : null;
         tl_monotype *arrow = tl_type_registry_create_arrow(self->registry, lhs, rhs);
 
@@ -562,7 +563,7 @@ static str specialize_type_constructor_(tl_infer *self, str name, tl_monotype_si
     }
     if (!tl_monotype_is_inst(inst_ctx.specialized)) fatal("runtime error");
 
-    name_and_type key      = make_instance_key(self, name, inst_ctx.specialized, (tl_monotype_sized){0});
+    name_and_type key      = make_instance_key(self, name, inst_ctx.specialized, tl_monotype_sized_empty());
     str          *existing = instance_lookup(self, &key);
     if (existing) {
 #if DEBUG_RECURSIVE_TYPES
@@ -923,9 +924,9 @@ static void rewrite_op_to_nfa(tl_infer *self, ast_node *node, str func_name, ast
 // Get parameter types for a function from the type environment.
 static tl_monotype_sized get_func_param_types(tl_infer *self, str func_name) {
     tl_polytype *poly = tl_type_env_lookup(self->env, func_name);
-    if (!poly) return (tl_monotype_sized){0};
+    if (!poly) return tl_monotype_sized_empty();
     tl_monotype *arrow = poly->type;
-    if (!tl_monotype_is_arrow(arrow)) return (tl_monotype_sized){0};
+    if (!tl_monotype_is_arrow(arrow)) return tl_monotype_sized_empty();
     return tl_monotype_arrow_get_args(arrow);
 }
 
@@ -1765,7 +1766,7 @@ str specialize_arrow(tl_infer *self, traverse_ctx *tctx, str name, tl_monotype *
     // (e.g. identity(Foo(..))) that was cached with empty type_args.  Safe because an empty-key
     // entry can only exist if the arrow alone was enough to infer all type parameters.
     if (!found && resolved_type_args.size > 0 && tl_monotype_is_concrete(arrow))
-        found = instance_lookup_arrow(self, name, arrow, (tl_monotype_sized){0});
+        found = instance_lookup_arrow(self, name, arrow, tl_monotype_sized_empty());
     if (found) {
         if (self->report_stats) self->counters.specialize_cache_hits++;
         return *found;
@@ -1864,7 +1865,7 @@ static int specialize_operand(tl_infer *self, traverse_ctx *traverse_ctx, ast_no
     str value_name = ast_node_str(node);
     // TODO: function pointers with callsite type arguments
     str inst_name =
-      specialize_arrow(self, traverse_ctx, value_name, value_type->type, (tl_monotype_sized){0});
+      specialize_arrow(self, traverse_ctx, value_name, value_type->type, tl_monotype_sized_empty());
     // Empty means either no toplevel found (benign: C binding) or trait bound failure
     // (already reported in self->errors). Either way, keep the original name.
     if (str_is_empty(inst_name)) return 0;
@@ -1882,7 +1883,7 @@ static int specialize_let_in_lambda_from_body(tl_infer *self, traverse_ctx *trav
 
     tl_monotype *arrow     = body_type->type;
     str          name      = ast_node_str(node->let_in.name);
-    str          inst_name = specialize_arrow(self, traverse_ctx, name, arrow, (tl_monotype_sized){0});
+    str          inst_name = specialize_arrow(self, traverse_ctx, name, arrow, tl_monotype_sized_empty());
 
     if (!str_is_empty(inst_name)) {
         ast_node_name_replace(node->let_in.name, inst_name);
@@ -1919,7 +1920,7 @@ static int specialize_let_in_lambda_lookup(tl_infer *self, ast_node *node) {
     // multiple types) cannot be reduced to a single specialization.
     if (!tl_monotype_is_concrete(arrow)) return 0;
 
-    str *found = instance_lookup_arrow(self, name, arrow, (tl_monotype_sized){0});
+    str *found = instance_lookup_arrow(self, name, arrow, tl_monotype_sized_empty());
     if (!found) {
         // Fallback: the name's arrow may lack free variables while the env's arrow has them
         // (from add_free_variables_to_arrow), causing a hash mismatch.  Retry with the env's
@@ -1933,7 +1934,7 @@ static int specialize_let_in_lambda_lookup(tl_infer *self, ast_node *node) {
                 tl_monotype_default_weak_ints(env_arrow, tl_type_registry_int(self->registry),
                                               tl_type_registry_uint(self->registry),
                                               tl_type_registry_float(self->registry));
-            found = instance_lookup_arrow(self, name, env_arrow, (tl_monotype_sized){0});
+            found = instance_lookup_arrow(self, name, env_arrow, tl_monotype_sized_empty());
         }
     }
     if (found) ast_node_name_replace(node->let_in.name, *found);
@@ -2113,7 +2114,7 @@ static int specialize_case(tl_infer *self, traverse_ctx *traverse_ctx, ast_node 
 
     str predicate_name = ast_node_str(predicate);
     str inst_name =
-      specialize_arrow(self, traverse_ctx, predicate_name, pred_arrow->type, (tl_monotype_sized){0});
+      specialize_arrow(self, traverse_ctx, predicate_name, pred_arrow->type, tl_monotype_sized_empty());
 
     // Empty means no toplevel found or trait bound failure (already reported).
     if (str_is_empty(inst_name)) return 0;
@@ -2188,7 +2189,8 @@ static int specialize_value_arguments(tl_infer *self, traverse_ctx *traverse_ctx
             str old_name = name_node->symbol.name;
 
             // Specialize the lambda argument
-            if (specialize_arrow_with_name(self, traverse_ctx, name_node, expected, (tl_monotype_sized){0}))
+            if (specialize_arrow_with_name(self, traverse_ctx, name_node, expected,
+                                           tl_monotype_sized_empty()))
                 return 1;
 
             str new_name = name_node->symbol.name;
@@ -2214,7 +2216,7 @@ static int specialize_value_arguments(tl_infer *self, traverse_ctx *traverse_ctx
         if (!is_toplevel_function_name(self, arg)) goto next;
         if (i >= expected_types.size) fatal("runtime error");
         if (specialize_arrow_with_name(self, traverse_ctx, arg, expected_types.v[i],
-                                       (tl_monotype_sized){0}))
+                                       tl_monotype_sized_empty()))
             return 1;
 
     next:
@@ -2320,20 +2322,20 @@ static void specialize_variadic_call(tl_infer *self, traverse_ctx *traverse_ctx,
             }
         }
 
-        // Fall back to regular to_string.
+        // Fall back to unary "to_string", "hash", "to_int", etc.
+        if (1 != sig->arity) fatal("logic error");
         if (str_is_empty(impl) && arg_type && tl_monotype_is_inst(arg_type))
-            impl = find_overload_func(self, arg_type, str_cstr(&sig->name), sig->arity);
+            impl = find_overload_func(self, arg_type, str_cstr(&sig->name), 1);
 
         // Build callsite arrow and specialize.
         if (!str_is_empty(impl)) {
-            u32           arity    = use_format && fs_type ? 2 : 1;
-            tl_monotype **param_vs = alloc_malloc(self->arena, arity * sizeof(tl_monotype *));
-            param_vs[0]            = arg_type;
-            if (arity == 2) param_vs[1] = fs_type;
-            tl_monotype *ptup =
-              tl_monotype_create_tuple(self->arena, (tl_monotype_sized){.v = param_vs, .size = arity});
+            u32               arity = use_format && fs_type ? 2 : 1;
+            tl_monotype_sized args  = {0};
+            if (2 == arity) args = tl_monotype_sized_create_binary(self->arena, arg_type, fs_type);
+            else args = tl_monotype_sized_create_unary(self->arena, arg_type);
+            tl_monotype *ptup     = tl_monotype_create_tuple(self->arena, args);
             tl_monotype *va_arrow = tl_type_registry_create_arrow(self->registry, ptup, elem_type);
-            str spec = specialize_arrow(self, traverse_ctx, impl, va_arrow, (tl_monotype_sized){0});
+            str spec = specialize_arrow(self, traverse_ctx, impl, va_arrow, tl_monotype_sized_empty());
             impl     = str_is_empty(spec) ? impl : spec;
         }
         node->named_application.variadic_impl_fns[vi] = impl;
@@ -2347,16 +2349,15 @@ static void specialize_variadic_call(tl_infer *self, traverse_ctx *traverse_ctx,
             if (tl_format_spec_has_any(&fspecs[n_fixed + vi])) needs_layout = 1;
         }
         if (needs_layout && fs_type) {
-            specialize_type_constructor(self, S("FormatSpec"), (tl_monotype_sized){0}, null);
+            specialize_type_constructor(self, S("FormatSpec"), tl_monotype_sized_empty(), null);
             // Arrow: (elem_type, FormatSpec) -> elem_type
-            tl_monotype **lp = alloc_malloc(self->arena, 2 * sizeof(tl_monotype *));
-            lp[0]            = elem_type;
-            lp[1]            = fs_type;
-            tl_monotype *ptup =
-              tl_monotype_create_tuple(self->arena, (tl_monotype_sized){.v = lp, .size = 2});
+
+            tl_monotype *ptup = tl_monotype_create_tuple(
+              self->arena, tl_monotype_sized_create_binary(self->arena, elem_type, fs_type));
+
             tl_monotype *layout_arrow = tl_type_registry_create_arrow(self->registry, ptup, elem_type);
             str          base         = S("FormatSpec__apply_layout__2");
-            str spec = specialize_arrow(self, traverse_ctx, base, layout_arrow, (tl_monotype_sized){0});
+            str spec = specialize_arrow(self, traverse_ctx, base, layout_arrow, tl_monotype_sized_empty());
             ffmt->layout_fn = str_is_empty(spec) ? base : spec;
         }
     }
@@ -2562,7 +2563,7 @@ int specialize_applications_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_n
         dbg(self, "specialize_applications_cb: anon");
         callsite = make_arrow(self, traverse_ctx, ast_node_sized_from_ast_array(node), node, 0);
 
-        concretize_params(self, node, callsite->type, null, (tl_monotype_sized){0});
+        concretize_params(self, node, callsite->type, null, tl_monotype_sized_empty());
         if (post_specialize(self, traverse_ctx, node->lambda_application.lambda, callsite->type)) {
             return 1;
         }

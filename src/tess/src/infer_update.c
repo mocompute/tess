@@ -391,7 +391,7 @@ static void fixup_arrow_name(tl_infer *self, ast_node *ident) {
         str name = ast_node_str(ident);
 
         // TODO: function pointers with type arguments
-        str *inst_name = instance_lookup_arrow(self, name, type, (tl_monotype_sized){0});
+        str *inst_name = instance_lookup_arrow(self, name, type, tl_monotype_sized_empty());
         if (inst_name) ast_node_name_replace(ident, *inst_name);
     }
 }
@@ -436,11 +436,9 @@ static int update_types_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_node 
                 // carries the Const wrapper. The specialized RHS is the unwrapped T_spec,
                 // so re-wrap as Const[T_spec] to keep codegen aware that the binding is
                 // const-qualified.
-                tl_polytype *existing =
-                  tl_type_env_lookup(self->env, ast_node_str(node->let_in.name));
+                tl_polytype *existing     = tl_type_env_lookup(self->env, ast_node_str(node->let_in.name));
                 tl_monotype *type_for_env = value_type;
-                if (existing && tl_monotype_is_const(existing->type) &&
-                    !tl_monotype_is_const(value_type)) {
+                if (existing && tl_monotype_is_const(existing->type) && !tl_monotype_is_const(value_type)) {
                     type_for_env = tl_type_registry_const(self->registry, value_type);
                 }
                 tl_polytype *new_type = tl_polytype_absorb_mono(self->arena, type_for_env);
@@ -697,9 +695,8 @@ static int check_closure_attrs_cb(tl_infer *self, traverse_ctx *ctx, ast_node *n
     if (attrs.alloc_expr && attrs.alloc_expr->type) {
         tl_polytype_substitute(self->arena, attrs.alloc_expr->type, self->subs);
         tl_monotype *resolved = attrs.alloc_expr->type->type;
-        tl_monotype *pointee  = tl_monotype_is_ptr(resolved)
-                                  ? tl_monotype_effective_target(resolved, null)
-                                  : null;
+        tl_monotype *pointee =
+          tl_monotype_is_ptr(resolved) ? tl_monotype_effective_target(resolved, null) : null;
         if (!pointee || !tl_monotype_is_inst_of(pointee, S("Alloc__Allocator"))) {
             array_push(self->errors,
                        ((tl_infer_error){.tag = tl_err_alloc_expr_type_mismatch, .node = node}));

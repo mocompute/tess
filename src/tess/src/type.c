@@ -1029,7 +1029,7 @@ static tl_monotype *parse_type_nfa(tl_type_registry *self, tl_type_registry_pars
                         "deferring\n",
                         str_cstr(&name), str_cstr(&target_name_str));
 #endif
-                result = defer_parse(self, ctx, target_name_str, (tl_monotype_sized){0});
+                result = defer_parse(self, ctx, target_name_str, tl_monotype_sized_empty());
             } else {
                 // Try to parse normally (handles specials like `any`, nullary types, type args).
                 // If that fails, the target may be a forward reference in a multi-type recursion
@@ -1038,7 +1038,7 @@ static tl_monotype *parse_type_nfa(tl_type_registry *self, tl_type_registry_pars
                 if (!parsed && map_size(ctx->in_progress)) {
                     // Inside a UTD parse and target is unknown — forward reference in a
                     // multi-type recursion cycle (e.g. A->B->C->A, parsing A, B not yet registered).
-                    result = defer_parse(self, ctx, target_name_str, (tl_monotype_sized){0});
+                    result = defer_parse(self, ctx, target_name_str, tl_monotype_sized_empty());
                 }
             }
         } else {
@@ -1769,7 +1769,7 @@ static tl_monotype *tl_polytype_instantiate_(allocator *alloc, tl_polytype *self
 }
 
 tl_monotype *tl_polytype_instantiate(allocator *alloc, tl_polytype *self, tl_type_subs *subs) {
-    return tl_polytype_instantiate_(alloc, self, subs, (tl_monotype_sized){0});
+    return tl_polytype_instantiate_(alloc, self, subs, tl_monotype_sized_empty());
 }
 
 tl_monotype *tl_polytype_instantiate_with(allocator *alloc, tl_polytype *self, tl_monotype_sized args,
@@ -4049,6 +4049,24 @@ tl_polytype_sized tl_monotype_sized_clone_poly(allocator *alloc, tl_monotype_siz
     }
     array_shrink(arr);
     return (tl_polytype_sized)sized_all(arr);
+}
+
+tl_monotype_sized tl_monotype_sized_empty() {
+    return (tl_monotype_sized){0};
+}
+
+tl_monotype_sized tl_monotype_sized_create_unary(allocator *alloc, tl_monotype *arg) {
+    tl_monotype **args = alloc_malloc(alloc, sizeof(tl_monotype *));
+    args[0]            = arg;
+    return (tl_monotype_sized){.size = 1, .v = args};
+}
+
+tl_monotype_sized tl_monotype_sized_create_binary(allocator *alloc, tl_monotype *first,
+                                                  tl_monotype *second) {
+    tl_monotype **args = alloc_malloc(alloc, 2 * sizeof(tl_monotype *));
+    args[0]            = first;
+    args[1]            = second;
+    return (tl_monotype_sized){.size = 2, .v = args};
 }
 
 tl_monotype_sized tl_polytype_sized_concrete(allocator *alloc, tl_polytype_sized polys) {

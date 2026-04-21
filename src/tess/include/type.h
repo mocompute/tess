@@ -387,4 +387,8 @@ tl_monotype      *tl_monotype_sized_last(tl_monotype_sized);
 tl_monotype_sized tl_polytype_sized_concrete(allocator *, tl_polytype_sized);
 tl_polytype_sized tl_polytype_sized_clone(allocator *, tl_polytype_sized);
 
+tl_monotype_sized tl_monotype_sized_empty();
+tl_monotype_sized tl_monotype_sized_create_unary(allocator *, tl_monotype *);
+tl_monotype_sized tl_monotype_sized_create_binary(allocator *, tl_monotype *, tl_monotype *);
+
 #endif
