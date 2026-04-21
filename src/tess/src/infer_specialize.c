@@ -2233,6 +2233,135 @@ static int specialize_arguments(tl_infer *self, traverse_ctx *traverse_ctx, ast_
     return specialize_value_arguments(self, traverse_ctx, node, app_args);
 }
 
+// Specialize the trait function implementation for each variadic arg in a variadic call.
+// This ensures the specialized function exists for the transpiler to emit trait fn calls.
+static void specialize_variadic_call(tl_infer *self, traverse_ctx *traverse_ctx, ast_node *node) {
+    if (!node->named_application.is_variadic_call) return;
+
+    str       func_name = ast_node_str(node->named_application.name);
+    u8        n_fixed   = node->named_application.n_fixed_args;
+    u32       n_total   = node->named_application.n_arguments;
+    u32       n_va      = n_total - n_fixed;
+
+    ast_node *func_let  = toplevel_get(self, func_name);
+    if (!func_let || !ast_node_is_let(func_let) || !func_let->let.is_variadic) return;
+
+    ast_node *last_param = func_let->let.parameters[func_let->let.n_parameters - 1];
+    ast_node *ann        = last_param->symbol.annotation;
+    if (!ann || !ast_node_is_nfa(ann) || ann->named_application.n_type_arguments != 1) return;
+
+    str           trait_name = ast_node_str(ann->named_application.type_arguments[0]);
+    tl_trait_def *trait      = str_map_get_ptr(self->traits, trait_name);
+    if (!trait || trait->sigs.size != 1) return;
+
+    tl_trait_sig *sig = &trait->sigs.v[0];
+
+    // Extract elem_type from Slice param (last param of function's arrow).
+    // Slice[T] = { v: Ptr[T], size: CSize }, so args.v[0] = Ptr[T].
+    tl_polytype *func_poly  = tl_type_env_lookup(self->env, func_name);
+    tl_monotype *func_arrow = func_poly ? func_poly->type : null;
+    tl_monotype *elem_type  = null;
+    tl_monotype *slice_mon  = null;
+    if (func_arrow && tl_monotype_is_arrow(func_arrow)) {
+        tl_monotype      *ptuple = func_arrow->list.xs.v[0];
+        tl_monotype_sized pms    = ptuple->list.xs;
+        slice_mon                = (pms.size > 0) ? pms.v[pms.size - 1] : null;
+        if (slice_mon && tl_monotype_is_inst(slice_mon) && slice_mon->cons_inst->args.size > 0 &&
+            tl_monotype_is_ptr(slice_mon->cons_inst->args.v[0]))
+            elem_type = tl_monotype_ptr_target_unchecked(slice_mon->cons_inst->args.v[0]);
+    }
+
+    if (!elem_type) return;
+
+    // Ensure Slice[ElemType] is specialized as a C struct.
+    // Pass the concrete field types from the arrow's Slice instance.
+    specialize_type_constructor(self, S("Slice"), slice_mon->cons_inst->args, null);
+
+    node->named_application.variadic_impl_fns = alloc_malloc(self->arena, n_va * sizeof(str));
+    node->named_application.variadic_trait_fn = sig->name;
+
+    // Allocate format dispatch flags if format specs are present.
+    tl_fstring_format *ffmt   = node->named_application.fstring_fmt;
+    tl_format_spec    *fspecs = ffmt ? ffmt->specs : null;
+
+    // Look up FormatSpec type once (used by both per-arg and layout paths).
+    tl_monotype *fs_type = null;
+    if (ffmt) {
+        ffmt->uses_format = alloc_malloc(self->arena, n_va * sizeof(u8));
+        memset(ffmt->uses_format, 0, n_va * sizeof(u8));
+        tl_polytype *fs_poly = tl_type_env_lookup(self->env, S("FormatSpec__FormatSpec"));
+        fs_type              = fs_poly ? fs_poly->type : null;
+    }
+
+    for (u32 vi = 0; vi < n_va; vi++) {
+        ast_node    *arg      = node->named_application.arguments[n_fixed + vi];
+        tl_monotype *arg_type = arg->type ? arg->type->type : null;
+        if (arg_type && !tl_monotype_is_concrete(arg_type))
+            tl_monotype_substitute(self->arena, arg_type, self->subs, null);
+
+        // Check if this argument has a type-specific format spec.
+        int has_fmt_spec = fspecs && fspecs[n_fixed + vi].has_type_specific;
+
+        str impl         = str_empty();
+        int use_format   = 0;
+
+        // Two-phase lookup: try to_string_format first if format spec present.
+        if (has_fmt_spec && arg_type && tl_monotype_is_inst(arg_type)) {
+            impl = find_overload_func(self, arg_type, "to_string_format", 2);
+            if (!str_is_empty(impl)) {
+                use_format = 1;
+            } else {
+                str type_str = tl_monotype_to_user_string(self->transient, arg_type);
+                push_trait_error(self, arg,
+                                 str_fmt(self->arena,
+                                         "format specifier requires ToStringFormat trait, "
+                                         "not implemented for type %s",
+                                         str_cstr(&type_str)));
+            }
+        }
+
+        // Fall back to regular to_string.
+        if (str_is_empty(impl) && arg_type && tl_monotype_is_inst(arg_type))
+            impl = find_overload_func(self, arg_type, str_cstr(&sig->name), sig->arity);
+
+        // Build callsite arrow and specialize.
+        if (!str_is_empty(impl)) {
+            u32           arity    = use_format && fs_type ? 2 : 1;
+            tl_monotype **param_vs = alloc_malloc(self->arena, arity * sizeof(tl_monotype *));
+            param_vs[0]            = arg_type;
+            if (arity == 2) param_vs[1] = fs_type;
+            tl_monotype *ptup =
+              tl_monotype_create_tuple(self->arena, (tl_monotype_sized){.v = param_vs, .size = arity});
+            tl_monotype *va_arrow = tl_type_registry_create_arrow(self->registry, ptup, elem_type);
+            str spec = specialize_arrow(self, traverse_ctx, impl, va_arrow, (tl_monotype_sized){0});
+            impl     = str_is_empty(spec) ? impl : spec;
+        }
+        node->named_application.variadic_impl_fns[vi] = impl;
+        if (ffmt && use_format) ffmt->uses_format[vi] = 1;
+    }
+
+    // Pre-specialize FormatSpec.apply_layout if any arg has layout specs.
+    if (fspecs) {
+        int needs_layout = 0;
+        for (u32 vi = 0; vi < n_va && !needs_layout; vi++) {
+            if (tl_format_spec_has_any(&fspecs[n_fixed + vi])) needs_layout = 1;
+        }
+        if (needs_layout && fs_type) {
+            specialize_type_constructor(self, S("FormatSpec"), (tl_monotype_sized){0}, null);
+            // Arrow: (elem_type, FormatSpec) -> elem_type
+            tl_monotype **lp = alloc_malloc(self->arena, 2 * sizeof(tl_monotype *));
+            lp[0]            = elem_type;
+            lp[1]            = fs_type;
+            tl_monotype *ptup =
+              tl_monotype_create_tuple(self->arena, (tl_monotype_sized){.v = lp, .size = 2});
+            tl_monotype *layout_arrow = tl_type_registry_create_arrow(self->registry, ptup, elem_type);
+            str          base         = S("FormatSpec__apply_layout__2");
+            str spec = specialize_arrow(self, traverse_ctx, base, layout_arrow, (tl_monotype_sized){0});
+            ffmt->layout_fn = str_is_empty(spec) ? base : spec;
+        }
+    }
+}
+
 // ============================================================================
 // Generic function specialization (Phase 5)
 // ============================================================================
@@ -2424,151 +2553,7 @@ int specialize_applications_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_n
             return 1;
         }
 
-        // Variadic call: specialize the trait function implementation for each variadic arg.
-        // This ensures the specialized function exists for the transpiler to emit trait fn calls.
-        if (node->named_application.is_variadic_call) {
-            str       func_name = ast_node_str(node->named_application.name);
-            u8        n_fixed   = node->named_application.n_fixed_args;
-            u32       n_total   = node->named_application.n_arguments;
-            u32       n_va      = n_total - n_fixed;
-
-            ast_node *func_let  = toplevel_get(self, func_name);
-            if (func_let && ast_node_is_let(func_let) && func_let->let.is_variadic) {
-                ast_node *last_param = func_let->let.parameters[func_let->let.n_parameters - 1];
-                ast_node *ann        = last_param->symbol.annotation;
-                if (ann && ast_node_is_nfa(ann) && ann->named_application.n_type_arguments == 1) {
-                    str           trait_name = ast_node_str(ann->named_application.type_arguments[0]);
-                    tl_trait_def *trait      = str_map_get_ptr(self->traits, trait_name);
-                    if (trait && trait->sigs.size == 1) {
-                        tl_trait_sig *sig = &trait->sigs.v[0];
-
-                        // Extract elem_type from Slice param (last param of function's arrow).
-                        // Slice[T] = { v: Ptr[T], size: CSize }, so args.v[0] = Ptr[T].
-                        tl_polytype *func_poly  = tl_type_env_lookup(self->env, func_name);
-                        tl_monotype *func_arrow = func_poly ? func_poly->type : null;
-                        tl_monotype *elem_type  = null;
-                        tl_monotype *slice_mon  = null;
-                        if (func_arrow && tl_monotype_is_arrow(func_arrow)) {
-                            tl_monotype      *ptuple = func_arrow->list.xs.v[0];
-                            tl_monotype_sized pms    = ptuple->list.xs;
-                            slice_mon                = (pms.size > 0) ? pms.v[pms.size - 1] : null;
-                            if (slice_mon && tl_monotype_is_inst(slice_mon) &&
-                                slice_mon->cons_inst->args.size > 0 &&
-                                tl_monotype_is_ptr(slice_mon->cons_inst->args.v[0]))
-                                elem_type =
-                                  tl_monotype_ptr_target_unchecked(slice_mon->cons_inst->args.v[0]);
-                        }
-
-                        if (elem_type) {
-                            // Ensure Slice[ElemType] is specialized as a C struct.
-                            // Pass the concrete field types from the arrow's Slice instance.
-                            specialize_type_constructor(self, S("Slice"), slice_mon->cons_inst->args, null);
-
-                            node->named_application.variadic_impl_fns =
-                              alloc_malloc(self->arena, n_va * sizeof(str));
-                            node->named_application.variadic_trait_fn = sig->name;
-
-                            // Allocate format dispatch flags if format specs are present.
-                            tl_fstring_format *ffmt   = node->named_application.fstring_fmt;
-                            tl_format_spec    *fspecs = ffmt ? ffmt->specs : null;
-
-                            // Look up FormatSpec type once (used by both per-arg and layout paths).
-                            tl_monotype *fs_type = null;
-                            if (ffmt) {
-                                ffmt->uses_format = alloc_malloc(self->arena, n_va * sizeof(u8));
-                                memset(ffmt->uses_format, 0, n_va * sizeof(u8));
-                                tl_polytype *fs_poly =
-                                  tl_type_env_lookup(self->env, S("FormatSpec__FormatSpec"));
-                                fs_type = fs_poly ? fs_poly->type : null;
-                            }
-
-                            for (u32 vi = 0; vi < n_va; vi++) {
-                                ast_node    *arg      = node->named_application.arguments[n_fixed + vi];
-                                tl_monotype *arg_type = arg->type ? arg->type->type : null;
-                                if (arg_type && !tl_monotype_is_concrete(arg_type))
-                                    tl_monotype_substitute(self->arena, arg_type, self->subs, null);
-
-                                // Check if this argument has a type-specific format spec.
-                                int has_fmt_spec = fspecs && fspecs[n_fixed + vi].has_type_specific;
-
-                                str impl         = str_empty();
-                                int use_format   = 0;
-
-                                // Two-phase lookup: try to_string_format first if format spec present.
-                                if (has_fmt_spec && arg_type && tl_monotype_is_inst(arg_type)) {
-                                    impl = find_overload_func(self, arg_type, "to_string_format", 2);
-                                    if (!str_is_empty(impl)) {
-                                        use_format = 1;
-                                    } else {
-                                        // Type-specific spec but no ToStringFormat impl — error.
-                                        str type_str =
-                                          tl_monotype_to_user_string(self->transient, arg_type);
-                                        str msg = str_fmt(self->arena,
-                                                          "format specifier requires ToStringFormat trait, "
-                                                          "not implemented for type %s",
-                                                          str_cstr(&type_str));
-                                        array_push(self->errors, ((tl_infer_error){
-                                                                   .tag  = tl_err_trait_bound_not_satisfied,
-                                                                   .node = arg,
-                                                                   .message = msg}));
-                                    }
-                                }
-
-                                // Fall back to regular to_string.
-                                if (str_is_empty(impl) && arg_type && tl_monotype_is_inst(arg_type))
-                                    impl =
-                                      find_overload_func(self, arg_type, str_cstr(&sig->name), sig->arity);
-
-                                // Build callsite arrow and specialize.
-                                if (!str_is_empty(impl)) {
-                                    u32           arity = use_format && fs_type ? 2 : 1;
-                                    tl_monotype **param_vs =
-                                      alloc_malloc(self->arena, arity * sizeof(tl_monotype *));
-                                    param_vs[0] = arg_type;
-                                    if (arity == 2) param_vs[1] = fs_type;
-                                    tl_monotype *ptup = tl_monotype_create_tuple(
-                                      self->arena, (tl_monotype_sized){.v = param_vs, .size = arity});
-                                    tl_monotype *va_arrow =
-                                      tl_type_registry_create_arrow(self->registry, ptup, elem_type);
-                                    str spec = specialize_arrow(self, traverse_ctx, impl, va_arrow,
-                                                                (tl_monotype_sized){0});
-                                    impl     = str_is_empty(spec) ? impl : spec;
-                                }
-                                node->named_application.variadic_impl_fns[vi] = impl;
-                                if (ffmt && use_format) ffmt->uses_format[vi] = 1;
-                            }
-
-                            // Pre-specialize FormatSpec.apply_layout if any arg has layout specs.
-                            if (fspecs) {
-                                int needs_layout = 0;
-                                for (u32 vi = 0; vi < n_va && !needs_layout; vi++) {
-                                    if (tl_format_spec_has_any(&fspecs[n_fixed + vi])) needs_layout = 1;
-                                }
-                                if (needs_layout && fs_type) {
-                                    specialize_type_constructor(self, S("FormatSpec"),
-                                                                (tl_monotype_sized){0}, null);
-                                    if (elem_type) {
-                                        // Arrow: (String, FormatSpec) -> String
-                                        tl_monotype **lp =
-                                          alloc_malloc(self->arena, 2 * sizeof(tl_monotype *));
-                                        lp[0]             = elem_type;
-                                        lp[1]             = fs_type;
-                                        tl_monotype *ptup = tl_monotype_create_tuple(
-                                          self->arena, (tl_monotype_sized){.v = lp, .size = 2});
-                                        tl_monotype *layout_arrow =
-                                          tl_type_registry_create_arrow(self->registry, ptup, elem_type);
-                                        str base = S("FormatSpec__apply_layout__2");
-                                        str spec = specialize_arrow(self, traverse_ctx, base, layout_arrow,
-                                                                    (tl_monotype_sized){0});
-                                        ffmt->layout_fn = str_is_empty(spec) ? base : spec;
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
+        specialize_variadic_call(self, traverse_ctx, node);
 
         dbg(self, "specialize_applications_cb done: nfa '%s'",
             str_cstr(&node->named_application.name->symbol.name));
