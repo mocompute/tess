@@ -965,7 +965,8 @@ str builtin_trait_family_module(tl_monotype *type) {
 // Look up an overload function by operator name and arity. Returns the function name on
 // success (allocated on self->arena), or empty string if not found.
 // For builtin types, falls back to the trait family canonical module if the direct lookup misses.
-static str find_overload_func(tl_infer *self, tl_monotype *type, char const *func_name, u8 arity) {
+str find_overload_func(tl_infer *self, tl_monotype *type, char const *func_name, u8 arity) {
+    if (!tl_monotype_is_inst(type)) fatal("logic error");
     str module = type->cons_inst->def->module;
     // Use transient arena for the lookup key to avoid leaking on miss.
     if (!str_is_empty(module)) {

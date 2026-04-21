@@ -284,6 +284,7 @@ ast_node     *get_infer_target(ast_node *);
 void          toplevel_name_replace(ast_node *, str);
 name_and_type make_instance_key(tl_infer *, str, tl_monotype *, tl_monotype_sized);
 str          *instance_lookup(tl_infer *, name_and_type *);
+str           find_overload_func(tl_infer *self, tl_monotype *type, char const *func_name, u8 arity);
 
 // ============================================================================
 // Internal API: infer_update.c (Phases 6-7)

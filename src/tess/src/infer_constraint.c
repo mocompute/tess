@@ -12,6 +12,7 @@
 #include "ast.h"
 #include "infer.h"
 #include "infer_internal.h"
+#include "str.h"
 #include "type.h"
 
 // ============================================================================
@@ -1636,9 +1637,39 @@ static int infer_lambda_function(tl_infer *self, traverse_ctx *ctx, ast_node *no
 }
 
 static int infer_if_then_else(tl_infer *self, ast_node *node) {
-    tl_monotype *bool_type = tl_type_registry_bool(self->registry);
-    if (constrain_pm(self, node->if_then_else.condition->type, bool_type, node, TL_UNIFY_SYMMETRIC))
-        return 1;
+    tl_monotype *bool_type          = tl_type_registry_bool(self->registry);
+
+    int          save               = self->is_constrain_ignore_error;
+    self->is_constrain_ignore_error = 1;
+
+    if (constrain_pm(self, node->if_then_else.condition->type, bool_type, node, TL_UNIFY_SYMMETRIC)) {
+        self->is_constrain_ignore_error = save;
+
+        // Attempt to apply to_bool(cond) transformation
+        ast_node *cond = node->if_then_else.condition;
+        if (tl_polytype_is_scheme(cond->type)) return 1;
+        tl_monotype_substitute(cond->type->type, self->subs, null);
+
+        if (!tl_monotype_is_concrete_no_weak(cond->type->type)) {
+            tl_monotype_default_weak_ints(cond->type->type, tl_type_registry_int(self->registry),
+                                          tl_type_registry_uint(self->registry),
+                                          tl_type_registry_float(self->registry));
+        }
+
+        if (!tl_monotype_is_inst(cond->type->type)) return 1;
+
+        str to_bool = find_overload_func(self, cond->type->type, "to_bool", 1);
+        if (str_is_empty(to_bool)) return 1;
+
+        ast_node  *a_to_bool = ast_node_create_sym(self->arena, to_bool);
+        ast_node **args      = alloc_malloc(self->arena, sizeof(ast_node *));
+        args[0]              = ast_node_clone(self->arena, cond);
+
+        // Rewrite to NFA and force the type to Bool
+        ast_node_rewrite_to_nfa(cond, a_to_bool, args, 1);
+        cond->type = tl_polytype_absorb_mono(self->arena, bool_type);
+    }
+    self->is_constrain_ignore_error = save;
 
     ensure_tv(self, &node->type);
     if (node->if_then_else.no) {

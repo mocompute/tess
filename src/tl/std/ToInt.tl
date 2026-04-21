@@ -24,7 +24,7 @@ to_int(b) -> Int { if b {1} else {0} }
 
 
 #module CString
-to_int(cs) -> Int { if cs && cs.[0] {1} else {0} }
+to_int(cs) -> Int { if cs != null && cs.[0] != '\0' {1} else {0} }
 
 #module String
 to_int(s) -> Int { if s.is_empty() {0} else {1} }
