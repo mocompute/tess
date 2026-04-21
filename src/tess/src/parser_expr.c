@@ -293,16 +293,14 @@ int a_body_element(parser *self) {
     if (0 == (res = a_try(self, a_statement))) return 0;
     if (ERROR_STOP == res) return res;
 
-    if (0 == a_try(self, a_expression)) return 0;
-
-    else return 1;
+    return a_try(self, a_expression);
 }
 
 int a_while_statement(parser *self) {
     if (a_try_s(self, the_symbol, "while")) return 1;
 
     ast_node *condition = parse_expression(self, INT_MIN);
-    if (!condition) return 1;
+    if (!condition) return ERROR_STOP;
 
     // optional update expression: a command, then expression, before the open curly
     ast_node *update = null;
@@ -318,8 +316,9 @@ int a_while_statement(parser *self) {
     ast_node_array defers = {.alloc = self->ast_arena};
     while (1) {
         if (0 == a_try(self, a_close_curly)) break;
+        int res;
         if (0 == a_try(self, a_defer_statement)) array_push(defers, self->result);
-        else if (a_try(self, a_body_element)) return 1;
+        else if ((res = a_try(self, a_body_element))) return res;
         else array_push(exprs, self->result);
     }
 
@@ -397,7 +396,7 @@ int a_for_statement(parser *self) {
     u32         for_line = self->token.line;
     u32         for_col  = self->token.col;
     ast_node   *variable = parse_expression(self, INT_MIN);
-    if (!variable || (!ast_node_is_symbol(variable) && !ast_node_is_unary_op(variable))) return 1;
+    if (!variable || (!ast_node_is_symbol(variable) && !ast_node_is_unary_op(variable))) return ERROR_STOP;
 
     int is_pointer = 0;
     if (ast_node_is_unary_op(variable)) {
@@ -406,10 +405,10 @@ int a_for_statement(parser *self) {
 
         // reset variable to the actual symbol
         variable = variable->unary_op.operand;
-        if (!ast_node_is_symbol(variable)) return 1;
+        if (!ast_node_is_symbol(variable)) return ERROR_STOP;
     }
 
-    if (a_try_s(self, the_symbol, "in")) return 1;
+    if (a_try_s(self, the_symbol, "in")) return ERROR_STOP;
 
     // one or two expressions can follow before the open brace
 
@@ -424,13 +423,13 @@ int a_for_statement(parser *self) {
     ast_node *iterable = null;
     if (!second) {
         // either second failed to parse, or we saw a curly
-        if (!saw_curly) return 1;
+        if (!saw_curly) return ERROR_STOP;
         iterable = first;
     } else {
         // we saw two expressions, make sure they meet our requirements
 
         // first expression must be a symbol because it's a module name
-        if (!ast_node_is_symbol(first)) return 1;
+        if (!ast_node_is_symbol(first)) return ERROR_STOP;
         module = first;
 
         // second can be anything
@@ -440,7 +439,7 @@ int a_for_statement(parser *self) {
     if (module) {
         assert(!saw_curly);
         // Now we need the open curly
-        if (a_try(self, a_open_curly)) return 1;
+        if (a_try(self, a_open_curly)) return ERROR_STOP;
     }
 
     // Read body of for loop
@@ -448,7 +447,7 @@ int a_for_statement(parser *self) {
     ast_node_array defers = {.alloc = self->ast_arena};
     while (1) {
         if (0 == a_try(self, a_defer_statement)) array_push(defers, self->result);
-        else if (a_try(self, a_body_element)) return 1;
+        else if (a_try(self, a_body_element)) return ERROR_STOP;
         else array_push(exprs, self->result);
         if (0 == a_try(self, a_close_curly)) break;
     }
@@ -750,7 +749,9 @@ int a_assignment(parser *self) {
 
     ast_node *val = parse_body(self);
     if (!val) val = parse_expression(self, INT_MIN);
-    if (!val) return ERROR_STOP;
+    if (!val) {
+        return ERROR_STOP;
+    }
 
     maybe_infer_carray_count(self, lval, val);
 
@@ -776,11 +777,13 @@ int a_assignment(parser *self) {
         // Parse remaining body expressions (the continuation after the bail)
         ast_node_array exprs  = {.alloc = self->ast_arena};
         ast_node_array defers = {.alloc = self->ast_arena};
+        int            res    = 0;
         while (1) {
             if (0 == a_try(self, a_defer_statement)) array_push(defers, self->result);
-            else if (a_try(self, a_body_element)) break;
+            else if ((res = a_try(self, a_body_element))) break;
             else array_push(exprs, self->result);
         }
+        if (ERROR_STOP == res) return res;
         ast_node *success_body = create_body_fallback(self, exprs, defers, val);
 
         // Build case node: condition is the annotated lval, else arm is the bail body
@@ -809,11 +812,13 @@ int a_assignment(parser *self) {
     // Normal let-in path
     ast_node_array exprs  = {.alloc = self->ast_arena};
     ast_node_array defers = {.alloc = self->ast_arena};
+    int            res    = 0;
     while (1) {
         if (0 == a_try(self, a_defer_statement)) array_push(defers, self->result);
-        else if (a_try(self, a_body_element)) break;
+        else if ((res = a_try(self, a_body_element))) break;
         else array_push(exprs, self->result);
     }
+    if (ERROR_STOP == res) return res;
 
     ast_node *body = create_body_fallback(self, exprs, defers, lval);
 
@@ -933,7 +938,8 @@ decl_done:;
 
     while (1) {
         if (0 == a_try(self, a_close_curly)) break;
-        if (a_try(self, a_body_element)) return 1;
+        int res;
+        if ((res = a_try(self, a_body_element))) return res;
         array_push(exprs, self->result);
     }
 
@@ -957,12 +963,16 @@ int a_lambda_funcall(parser *self) {
 
     ast_node_array args = {.alloc = self->ast_arena};
     if (0 == a_try(self, a_close_round)) goto done;
-    if (0 == a_try(self, a_expression)) array_push(args, self->result);
+    int res;
+    if (0 == (res = a_try(self, a_expression))) array_push(args, self->result);
+    if (ERROR_STOP == res) return res;
 
     while (1) {
         if (0 == a_try(self, a_close_round)) goto done;
         if (a_try(self, a_comma)) return 1;
-        if (a_try(self, a_expression)) return 1;
+
+        int res;
+        if ((res = a_try(self, a_expression))) return res;
         array_push(args, self->result);
     }
 
@@ -1080,7 +1090,10 @@ int operator_precedence(char const *op, int is_prefix) {
 
 int a_expression(parser *self) {
     ast_node *res = parse_expression(self, INT_MIN);
-    if (!res) return 1;
+    if (!res) {
+        if (self->tokenizer_error.tag != tl_err_ok) return ERROR_STOP;
+        return 1;
+    }
     return result_ast_node(self, res);
 }
 
@@ -1104,7 +1117,8 @@ int a_funcall(parser *self) {
     while (1) {
         if (0 == a_try(self, a_close_round)) goto done;
         if (a_try(self, a_comma)) return 1;
-        if (a_try(self, a_expression)) return 1;
+        int res;
+        if ((res = a_try(self, a_expression))) return res;
         {
             ast_node *_t = maybe_wrap_lambda_function_in_let_in(self, self->result);
             array_push(args, _t);

@@ -1296,9 +1296,9 @@ start:; // loop point for skip_depth > 0
                     char brace = '}';
                     array_push(self->buf, brace);
                 } else {
-                    // Lone } in literal — error
-                    tok_error(self, out_err, tl_err_invalid_token);
-                    state = error;
+                    // Lone } in literal: accept it, because we have no good error recovery from this point.
+                    char brace = '}';
+                    array_push(self->buf, brace);
                 }
                 break;
             case '"':

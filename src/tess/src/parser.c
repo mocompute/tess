@@ -346,7 +346,7 @@ int eat_comments(parser *p) {
             p->error.line = p->tokenizer_error.line;
             p->error.col  = p->tokenizer_error.col;
             p->error.tag  = tl_err_tokenizer_error;
-            return 1;
+            return ERROR_STOP;
         }
 
         token_tag const tag = p->token.tag;
@@ -360,7 +360,8 @@ int eat_comments(parser *p) {
 }
 
 int next_token(parser *p) {
-    if (eat_comments(p)) return 1;
+    int res;
+    if ((res = eat_comments(p))) return res;
 
     while (1) {
 
@@ -369,7 +370,7 @@ int next_token(parser *p) {
             p->error.line = p->tokenizer_error.line;
             p->error.col  = p->tokenizer_error.col;
             p->error.tag  = tl_err_tokenizer_error;
-            return 1;
+            return ERROR_STOP;
         }
 
         // always update file/line
@@ -752,7 +753,8 @@ static int parse_format_spec(char const *s, tl_format_spec *out) {
 }
 
 int a_string(parser *self) {
-    if (next_token(self)) return 1;
+    int res;
+    if ((res = next_token(self))) return res;
 
     if (tok_c_string == self->token.tag) return result_ast_str(self, ast_string, self->token.s);
 
@@ -801,7 +803,9 @@ int a_string(parser *self) {
                 array_push(specs, spec);
                 has_any_spec = 1;
 
-                if (next_token(self)) return ERROR_STOP;
+                if (next_token(self)) {
+                    return ERROR_STOP;
+                }
             } else {
                 array_push(specs, zero_spec);
             }
@@ -1335,7 +1339,7 @@ int a_field_assignment(parser *self) {
     if (a_try(self, a_equal_sign)) return 1;
 
     ast_node *val = parse_expression(self, INT_MIN);
-    if (!val) return 1;
+    if (!val) return ERROR_STOP;
 
     ast_node *a                           = ast_node_create_assignment(self->ast_arena, name, val);
     a->assignment.is_field_name           = 1;
