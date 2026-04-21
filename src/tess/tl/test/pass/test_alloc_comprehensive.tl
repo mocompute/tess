@@ -9,6 +9,7 @@ size_t tl_test_alignof_max_align_t(void) { return alignof(max_align_t); }
 
 c_tl_test_alignof_max_align_t() -> CSize
 
+#alias Arena Alloc.BumpAllocator
 Allocator = Alloc.Allocator
 
 // ============================================================
@@ -24,16 +25,16 @@ test_align() {
     error += if sizeof[Ptr[Void]]() >= sizeof[CSize]() {0} else {1}
 
     if sizeof[Ptr[Void]]() < max_align {
-        error += if Alloc.align_max(sizeof[Ptr[Void]]() + 1zu) == max_align {0} else {1}
+        error += if Alloc.align_max(sizeof[Ptr[Void]]() + 1) == max_align {0} else {1}
     }
     else {
-        error += if Alloc.align_max(max_align + 1zu) == 2zu * max_align {0} else {1}
+        error += if Alloc.align_max(max_align + 1) == 2 * max_align {0} else {1}
     }
 
     // _Header and _Block sizes must be multiples of alignof(max_align_t) so user data stays aligned
     align_max_align_t := c_tl_test_alignof_max_align_t()
-    error += if sizeof[Alloc.BumpAllocator._Header]() % align_max_align_t == 0zu {0} else {1}
-    error += if sizeof[Alloc.BumpAllocator._Block]() % align_max_align_t == 0zu {0} else {1}
+    error += if sizeof[Arena._Header]() % align_max_align_t == 0 {0} else {1}
+    error += if sizeof[Arena._Block]() % align_max_align_t == 0 {0} else {1}
 
     error
 }
@@ -44,33 +45,33 @@ test_align() {
 
 _allocators_test_transient_realloc() {
     error := 0
-    p1    := Alloc.context.transient.alloc(64zu)
-    p2    := Alloc.context.transient.realloc(p1, 128zu)
+    p1    := Alloc.context.transient.alloc(64)
+    p2    := Alloc.context.transient.realloc(p1, 128)
     if p1 != p2 { error += 1 }
     error
 }
 
 _allocators_test_transient_free_alloc() {
     error := 0
-    p1    := Alloc.context.transient.alloc(64zu)
+    p1    := Alloc.context.transient.alloc(64)
     Alloc.context.transient.dealloc(p1)
-    p2 := Alloc.context.transient.alloc(128zu)
+    p2 := Alloc.context.transient.alloc(128)
     if p1 != p2 { error += 1 }
 
-    p3 := Alloc.context.transient.alloc(64zu)
+    p3 := Alloc.context.transient.alloc(64)
     if p2 == p3 { error += 1 }
     error
 }
 
 _allocators_test_transient_free_alloc_2() {
     error := 0
-    p1    := Alloc.context.transient.alloc(64zu)
-    p2    := Alloc.context.transient.alloc(128zu)
+    p1    := Alloc.context.transient.alloc(64)
+    p2    := Alloc.context.transient.alloc(128)
     if p2 <= p1 { error += 1 }
 
     Alloc.context.transient.dealloc(p1)
 
-    p3 := Alloc.context.transient.alloc(64zu)
+    p3 := Alloc.context.transient.alloc(64)
     if p3 <= p2 { error += 1 }
     error
 }
@@ -78,19 +79,19 @@ _allocators_test_transient_free_alloc_2() {
 // The following tests use bump allocators directly.
 
 _allocators_test_bump_create_destroy() {
-    bump := Alloc.BumpAllocator.create(Alloc.context.managed, 1024zu)
-    Alloc.BumpAllocator.destroy(bump)
+    bump := Arena.create(Alloc.context.managed, 1024)
+    defer Arena.destroy(bump)
     0
 }
 
 _allocators_test_bump_realloc() {
     error := 0
 
-    bump := Alloc.BumpAllocator.create(Alloc.context.managed, 1024zu)
-    p1   := bump.alloc( 64zu)
-    p2   := bump.realloc( p1, 128zu)
+    bump := Arena.create(Alloc.context.managed, 1024)
+    defer Arena.destroy(bump)
+    p1 := bump.alloc(64)
+    p2 := bump.realloc(p1, 128)
     if p1 != p2 { error += 1 }
-    Alloc.BumpAllocator.destroy(bump)
 
     error
 }
@@ -99,16 +100,15 @@ _allocators_test_bump_realloc() {
 _allocators_test_bump_realloc_non_contiguous() {
     error := 0
 
-    bump := Alloc.BumpAllocator.create(Alloc.context.managed, 1024zu)
+    bump := Arena.create(Alloc.context.managed, 1024)
+    defer Arena.destroy(bump)
 
-    p1 := bump.alloc( 64zu)
-    p2 := bump.alloc( 16zu)
-    p3 := bump.realloc( p1, 128zu)
+    p1 := bump.alloc(64)
+    p2 := bump.alloc(16)
+    p3 := bump.realloc(p1, 128)
 
     if p1 == p2 { error += 1 }
     if p1 == p3 { error += 1 }
-
-    Alloc.BumpAllocator.destroy(bump)
 
     error
 }
@@ -116,15 +116,14 @@ _allocators_test_bump_realloc_non_contiguous() {
 _allocators_test_bump_free_reuse() {
     error := 0
 
-    bump := Alloc.BumpAllocator.create(Alloc.context.managed, 1024zu)
+    bump := Arena.create(Alloc.context.managed, 1024)
+    defer Arena.destroy(bump)
 
-    p1 := bump.alloc( 64zu)
-    bump.dealloc( p1)
-    p2 := bump.alloc( 128zu)
+    p1 := bump.alloc(64)
+    bump.dealloc(p1)
+    p2 := bump.alloc(128)
 
     if p1 != p2 { error += 1 }
-
-    Alloc.BumpAllocator.destroy(bump)
 
     error
 }
@@ -132,85 +131,85 @@ _allocators_test_bump_free_reuse() {
 _allocators_test_align_next_power_of_two() {
     error := 0
 
-    error += if 1zu == Alloc.next_power_of_two(0zu) {0} else {1}
-    error += if 1zu == Alloc.next_power_of_two(1zu << 0zu) {0} else {1}
-    error += if 2zu == Alloc.next_power_of_two(1zu << 1zu) {0} else {1}
-    error += if 4zu == Alloc.next_power_of_two(3zu) {0} else {1}
-    error += if 4zu == Alloc.next_power_of_two(4zu) {0} else {1}
-    error += if 8zu == Alloc.next_power_of_two(5zu) {0} else {1}
+    error += if 1 == Alloc.next_power_of_two(0) {0} else {1}
+    error += if 1 == Alloc.next_power_of_two(1 << 0) {0} else {1}
+    error += if 2 == Alloc.next_power_of_two(1 << 1) {0} else {1}
+    error += if 4 == Alloc.next_power_of_two(3) {0} else {1}
+    error += if 4 == Alloc.next_power_of_two(4) {0} else {1}
+    error += if 8 == Alloc.next_power_of_two(5) {0} else {1}
 
     error
 }
 
 _allocators_test_bump_calloc_zero_fill() {
     error := 0
-    bump  := Alloc.BumpAllocator.create(Alloc.context.managed, 1024zu)
+    bump  := Arena.create(Alloc.context.managed, 1024)
+    defer Arena.destroy(bump)
 
-    p: Ptr[CSize] := bump.clear( 4zu, sizeof[CSize]())
+    p: Ptr[CSize] := bump.clear(4, sizeof[CSize]())
     // Check that calloc returns zeroed memory
-    if p.* != 0zu { error += 1 }
+    if p.* != 0 { error += 1 }
 
-    Alloc.BumpAllocator.destroy(bump)
     error
 }
 
 _allocators_test_bump_aligned_alloc() {
     error := 0
-    bump  := Alloc.BumpAllocator.create(Alloc.context.managed, 4096zu)
+    bump  := Arena.create(Alloc.context.managed, 4096)
+    defer Arena.destroy(bump)
 
     // Allocate with 256-byte alignment, verify with independent modulo check
-    p := bump.aligned_alloc( 64zu, 256zu)
+    p := bump.aligned_alloc(64, 256)
     if p == null { error += 1 }
-    if !Alloc.is_aligned(p, 256zu) { error += 1 }
+    if !Alloc.is_aligned(p, 256) { error += 1 }
 
     // Allocate with 128-byte alignment
-    p2 := bump.aligned_alloc( 32zu, 128zu)
+    p2 := bump.aligned_alloc(32, 128)
     if p2 == null { error += 1 }
-    if !Alloc.is_aligned(p2, 128zu) { error += 1 }
+    if !Alloc.is_aligned(p2, 128) { error += 1 }
 
-    Alloc.BumpAllocator.destroy(bump)
     error
 }
 
 _allocators_test_bump_resize_last_block() {
     error := 0
-    bump  := Alloc.BumpAllocator.create(Alloc.context.managed, 1024zu)
+    bump  := Arena.create(Alloc.context.managed, 1024)
+    defer Arena.destroy(bump)
 
-    p := bump.alloc( 64zu)
+    p := bump.alloc(64)
 
     // Resize in place (last block, should succeed)
-    p2 := bump.resize( p, 128zu)
+    p2 := bump.resize(p, 128)
     if p2 != p { error += 1 }
 
     // Shrink in place
-    p3 := bump.resize( p, 32zu)
+    p3 := bump.resize(p, 32)
     if p3 != p { error += 1 }
 
-    Alloc.BumpAllocator.destroy(bump)
     error
 }
 
 _allocators_test_bump_resize_non_last_block() {
     error := 0
-    bump  := Alloc.BumpAllocator.create(Alloc.context.managed, 1024zu)
+    bump  := Arena.create(Alloc.context.managed, 1024)
+    defer Arena.destroy(bump)
 
-    p1 := bump.alloc( 64zu)
-    p2 := bump.alloc( 64zu)
+    p1 := bump.alloc(64)
+    p2 := bump.alloc(64)
 
     // Resize p1 (not last block) - should fail
-    p3 := bump.resize( p1, 128zu)
+    p3 := bump.resize(p1, 128)
     if p3 != null { error += 1 }
 
-    Alloc.BumpAllocator.destroy(bump)
     error
 }
 
 _allocators_test_managed_resize_null() {
     error := 0
-    p     := Alloc.context.managed.alloc(64zu)
+    p     := Alloc.context.managed.alloc(64)
 
     // Managed resize always returns null
-    p2 := Alloc.context.managed.resize(p, 128zu)
+    p2 := Alloc.context.managed.resize(p, 128)
     if p2 != null { error += 1 }
 
     Alloc.context.managed.dealloc(p)
@@ -219,65 +218,65 @@ _allocators_test_managed_resize_null() {
 
 _allocators_test_bump_reset() {
     error := 0
-    bump  := Alloc.BumpAllocator.create(Alloc.context.managed, 1024zu)
+    bump  := Arena.create(Alloc.context.managed, 1024)
+    defer Arena.destroy(bump)
 
-    p1 := bump.alloc( 64zu)
-    Alloc.BumpAllocator.reset(bump)
-    p2 := bump.alloc( 64zu)
+    p1 := bump.alloc(64)
+    Arena.reset(bump)
+    p2 := bump.alloc(64)
 
     // After reset, next allocation should reuse same address
     if p1 != p2 { error += 1 }
 
-    Alloc.BumpAllocator.destroy(bump)
     error
 }
 
 _allocators_test_bump_stats() {
     error := 0
-    bump  := Alloc.BumpAllocator.create(Alloc.context.managed, 1024zu)
+    bump  := Arena.create(Alloc.context.managed, 1024)
+    defer Arena.destroy(bump)
 
-    bump.alloc( 64zu)
-    stats := Alloc.BumpAllocator.get_stats(bump)
+    bump.alloc(64)
+    stats := Arena.get_stats(bump)
 
-    if stats.allocated == 0zu { error += 1 }
-    if stats.capacity == 0zu { error += 1 }
-    if stats.bucket_count != 1zu { error += 1 }
+    if stats.allocated == 0 { error += 1 }
+    if stats.capacity == 0 { error += 1 }
+    if stats.bucket_count != 1 { error += 1 }
 
-    Alloc.BumpAllocator.destroy(bump)
     error
 }
 
 _allocators_test_bump_stats_peak() {
     error := 0
-    bump  := Alloc.BumpAllocator.create(Alloc.context.managed, 1024zu)
+    bump  := Arena.create(Alloc.context.managed, 1024)
+    defer Arena.destroy(bump)
 
-    bump.alloc( 256zu)
-    Alloc.BumpAllocator.reset(bump)
-    bump.alloc( 64zu)
+    bump.alloc(256)
+    Arena.reset(bump)
+    bump.alloc(64)
 
-    stats := Alloc.BumpAllocator.get_stats(bump)
+    stats := Arena.get_stats(bump)
 
     // Peak should be from before reset (256 + overhead), greater than current (64 + overhead)
     if stats.peak_allocated <= stats.allocated { error += 1 }
 
-    Alloc.BumpAllocator.destroy(bump)
     error
 }
 
 _allocators_test_bump_save_restore() {
     error := 0
-    bump  := Alloc.BumpAllocator.create(Alloc.context.managed, 1024zu)
+    bump  := Arena.create(Alloc.context.managed, 1024)
+    defer Arena.destroy(bump)
 
-    p1    := bump.alloc( 64zu)
-    state := Alloc.BumpAllocator.save(bump)
-    p2    := bump.alloc( 64zu)
-    Alloc.BumpAllocator.restore(bump, state)
-    p3 := bump.alloc( 64zu)
+    p1    := bump.alloc(64)
+    state := Arena.save(bump)
+    p2    := bump.alloc(64)
+    Arena.restore(bump, state)
+    p3 := bump.alloc(64)
 
     // After restore, p3 should reuse p2's address
     if p2 != p3 { error += 1 }
 
-    Alloc.BumpAllocator.destroy(bump)
     error
 }
 
@@ -285,23 +284,23 @@ _allocators_test_bump_save_restore_bucket_freed() {
     error := 0
 
     // Create a small bump allocator to force bucket creation
-    bump := Alloc.BumpAllocator.create(Alloc.context.managed, 128zu)
+    bump := Arena.create(Alloc.context.managed, 128)
+    defer Arena.destroy(bump)
 
-    bump.alloc( 32zu)
-    state := Alloc.BumpAllocator.save(bump)
+    bump.alloc(32)
+    state := Arena.save(bump)
 
     // Allocate enough to trigger new bucket(s)
-    bump.alloc( 256zu)
-    stats_before := Alloc.BumpAllocator.get_stats(bump)
-    if stats_before.bucket_count <= 1zu { error += 1 }
+    bump.alloc(256)
+    stats_before := Arena.get_stats(bump)
+    if stats_before.bucket_count <= 1 { error += 1 }
 
-    Alloc.BumpAllocator.restore(bump, state)
-    stats_after := Alloc.BumpAllocator.get_stats(bump)
+    Arena.restore(bump, state)
+    stats_after := Arena.get_stats(bump)
 
     // Bucket count should decrease after restore
     if stats_after.bucket_count >= stats_before.bucket_count { error += 1 }
 
-    Alloc.BumpAllocator.destroy(bump)
     error
 }
 
@@ -761,12 +760,12 @@ _nl_make_adder(n: Int, a: Ptr[Allocator]) -> (Int) -> Int {
 }
 
 _closure_test_no_leak() {
-    arena := Alloc.BumpAllocator.create(Alloc.context.default, 4096zu)
+    arena := Arena.create(Alloc.context.default, 4096)
 
     add10 := _nl_make_adder(10, arena)
 
     // Snapshot stats after closure creation
-    stats_before := Alloc.BumpAllocator.get_stats(arena)
+    stats_before := Arena.get_stats(arena)
 
     // Call the closure many times
     sum := 0
@@ -777,7 +776,7 @@ _closure_test_no_leak() {
     }
 
     // Snapshot stats after calls
-    stats_after := Alloc.BumpAllocator.get_stats(arena)
+    stats_after := Arena.get_stats(arena)
 
     error := 0
 
@@ -862,7 +861,7 @@ test_closure() {
 // [[alloc(arena)]] where arena is Ptr[Allocator] must pass type checking.
 
 test_expr_type_valid() {
-    bump        := Alloc.BumpAllocator.create(Alloc.context.transient, 1024zu)
+    bump        := Arena.create(Alloc.context.transient, 1024)
     n           := 42
     f           := [[alloc(bump), capture(n)]] (x: Int) { x + n }
     error: CInt := 0
