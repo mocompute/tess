@@ -1285,7 +1285,7 @@ static int cast_constrain_let_in(tl_infer *self, ast_node *node) {
         // the annotation type from env_insert_constrain in the caller.
         // Skip CArray values — they decay to pointers without constraint.
         if (value_type) {
-            tl_polytype_substitute(self->arena, value_type, self->subs);
+            tl_polytype_substitute(value_type, self->subs);
             tl_monotype *vt = value_type->type;
             if (!tl_monotype_is_carray(vt)) {
                 // Reject known concrete non-pointer types (integers, floats, structs, etc.).
@@ -1807,7 +1807,7 @@ static int check_const_violation(tl_infer *self, ast_node *lhs) {
     {
         ast_node *cur = lhs;
         while (cur && cur->tag == ast_binary_op) cur = cur->binary_op.left;
-        tl_polytype_substitute(self->arena, cur->type, self->subs);
+        tl_polytype_substitute(cur->type, self->subs);
         tl_monotype *root_type = cur->type->type;
         if (tl_monotype_is_const(root_type)) return 1;
     }
@@ -1834,7 +1834,7 @@ static int infer_reassignment(tl_infer *self, traverse_ctx *ctx, ast_node *node)
     if (ast_node_is_symbol(node->assignment.name)) {
         tl_polytype *env_type = tl_type_env_lookup(self->env, ast_node_str(node->assignment.name));
         if (env_type) {
-            tl_polytype_substitute(self->arena, env_type, self->subs);
+            tl_polytype_substitute(env_type, self->subs);
             if (tl_monotype_is_const(env_type->type)) {
                 array_push(self->errors, ((tl_infer_error){.tag = tl_err_const_violation, .node = node}));
                 return 1;
@@ -1849,8 +1849,8 @@ static int infer_reassignment(tl_infer *self, traverse_ctx *ctx, ast_node *node)
     // Check for const stripping before unification (which would erase it).
     // Resolve TVs first — both sides may still be type variables at this point.
     if (node->assignment.name->type && node->assignment.name->type->type && node->assignment.value->type) {
-        tl_polytype_substitute(self->arena, node->assignment.name->type, self->subs);
-        tl_polytype_substitute(self->arena, node->assignment.value->type, self->subs);
+        tl_polytype_substitute(node->assignment.name->type, self->subs);
+        tl_polytype_substitute(node->assignment.value->type, self->subs);
         if (types_strip_const(node->assignment.name->type->type, node->assignment.value->type->type)) {
             array_push(self->errors, ((tl_infer_error){.tag = tl_err_const_violation, .node = node}));
             return 1;
@@ -1939,7 +1939,7 @@ static int infer_unary_op(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
 
     str op = ast_node_str(node->unary_op.op);
     if (str_eq(op, S("*"))) {
-        tl_polytype_substitute(self->arena, operand->type, self->subs); // needed
+        tl_polytype_substitute(operand->type, self->subs); // needed
         tl_monotype *operand_mono = tl_monotype_strip_const(operand->type->type);
         tl_monotype *target       = tl_monotype_pointer_element(operand_mono);
         if (target) {
@@ -3830,7 +3830,7 @@ int check_type_predicate(tl_infer *self, traverse_ctx *traverse_ctx, ast_node *n
     }
     tl_polytype *name_type = node->type_predicate.lhs->type;
     if (!tl_polytype_is_concrete(name_type)) {
-        tl_polytype_substitute(self->arena, name_type, self->subs);
+        tl_polytype_substitute(name_type, self->subs);
         if (!tl_polytype_is_concrete(name_type)) {
             log_subs(self);
             return unresolved_type_error(self, node->type_predicate.lhs);

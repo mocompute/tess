@@ -3807,12 +3807,12 @@ static void tl_polytype_substitute_ext(tl_polytype *self, tl_type_subs *subs, ha
     tl_monotype_substitute(self->type, subs, exclude ? *exclude : null);
 }
 
-void tl_polytype_substitute(allocator *alloc, tl_polytype *self, tl_type_subs *subs) {
+void tl_polytype_substitute(tl_polytype *self, tl_type_subs *subs) {
     hashmap *exclude = null;
 
-    if (self->quantifiers.size) exclude = map_create(alloc, sizeof(tl_type_variable), 8);
+    if (self->quantifiers.size) exclude = map_create(transient_allocator, sizeof(tl_type_variable), 8);
     tl_polytype_substitute_ext(self, subs, exclude ? &exclude : null);
-    if (exclude) map_destroy(&exclude);
+    tl_type_transient_reset();
 }
 
 tl_polytype tl_polytype_wrap(tl_monotype *mono) {

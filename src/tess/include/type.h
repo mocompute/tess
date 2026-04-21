@@ -324,7 +324,7 @@ nodiscard tl_monotype *tl_polytype_instantiate_with(allocator *, tl_polytype *, 
 nodiscard tl_monotype *tl_polytype_instantiate_for_type(allocator *, tl_polytype *, tl_monotype_sized,
                                                         tl_type_subs *);
 nodiscard tl_monotype *tl_polytype_specialize(allocator *, tl_polytype *, tl_monotype_sized);
-void                   tl_polytype_substitute(allocator *, tl_polytype *, tl_type_subs *);
+void                   tl_polytype_substitute(tl_polytype *, tl_type_subs *);
 void                   tl_polytype_generalize(tl_polytype *, tl_type_env *, tl_type_subs *);
 
 tl_monotype           *tl_polytype_concrete(tl_polytype *);

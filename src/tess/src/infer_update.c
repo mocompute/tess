@@ -516,13 +516,13 @@ static int check_unresolved_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_n
     if (ast_node_is_let_in(node) && !tl_monotype_is_arrow(node->let_in.value->type->type)) {
         if (!tl_polytype_is_concrete(node->let_in.name->type)) {
             // try substitute again before error
-            tl_polytype_substitute(self->arena, node->let_in.name->type, self->subs);
+            tl_polytype_substitute(node->let_in.name->type, self->subs);
             if (!tl_polytype_is_concrete(node->let_in.name->type))
                 unresolved_type_error(self, node->let_in.name);
         }
     } else if (ast_node_is_reassignment(node) && !tl_polytype_is_concrete(node->type)) {
         // try substitute again before error
-        tl_polytype_substitute(self->arena, node->type, self->subs);
+        tl_polytype_substitute(node->type, self->subs);
         if (!tl_polytype_is_concrete(node->type)) unresolved_type_error(self, node);
     }
 
@@ -693,7 +693,7 @@ static int check_closure_attrs_cb(tl_infer *self, traverse_ctx *ctx, ast_node *n
     // shapes are valid — whether the allocator's methods accept a const self is
     // a separate concern caught at method dispatch.
     if (attrs.alloc_expr && attrs.alloc_expr->type) {
-        tl_polytype_substitute(self->arena, attrs.alloc_expr->type, self->subs);
+        tl_polytype_substitute(attrs.alloc_expr->type, self->subs);
         tl_monotype *resolved = attrs.alloc_expr->type->type;
         tl_monotype *pointee =
           tl_monotype_is_ptr(resolved) ? tl_monotype_effective_target(resolved, null) : null;

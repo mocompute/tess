@@ -705,7 +705,7 @@ void do_apply_subs(void *ctx, ast_node *node) {
     tl_infer *self = ctx;
     if (self->report_stats) self->counters.subs_nodes_visited++;
     if (node->type) {
-        tl_polytype_substitute(self->arena, node->type, self->subs);
+        tl_polytype_substitute(node->type, self->subs);
     }
 }
 
