@@ -895,7 +895,7 @@ static void resolve_deferred_placeholders(tl_type_registry *self, tl_type_regist
                 }
 
                 // C. Substitute + re-generalize current poly
-                tl_monotype_substitute(self->alloc, poly->type, self->subs, null);
+                tl_monotype_substitute(poly->type, self->subs, null);
                 {
                     tl_type_variable_array quant = {.alloc = self->alloc};
                     hashmap               *gseen = hset_create(transient_allocator, 64);
@@ -906,7 +906,7 @@ static void resolve_deferred_placeholders(tl_type_registry *self, tl_type_regist
                 // D. Clone + substitute + re-generalize + re-insert source registry poly
                 if (source_poly) {
                     tl_monotype *clone = tl_monotype_clone(self->alloc, source_poly->type);
-                    tl_monotype_substitute(self->alloc, clone, self->subs, null);
+                    tl_monotype_substitute(clone, self->subs, null);
                     tl_polytype *new_poly = tl_monotype_generalize(self->alloc, clone);
                     tl_type_registry_insert(self, source_name, new_poly);
                 }
@@ -969,7 +969,7 @@ static void resolve_deferred_placeholders(tl_type_registry *self, tl_type_regist
 
                         // Clone + substitute + re-generalize + re-insert
                         tl_monotype *dclone = tl_monotype_clone(self->alloc, def_poly->type);
-                        tl_monotype_substitute(self->alloc, dclone, self->subs, null);
+                        tl_monotype_substitute(dclone, self->subs, null);
                         tl_polytype *new_def = tl_monotype_generalize(self->alloc, dclone);
                         tl_type_registry_insert(self, all_defs.v[di], new_def);
 #if DEBUG_RECURSIVE_TYPES
@@ -3737,8 +3737,7 @@ static inline int tl_monotype_needs_substitute(tl_monotype *self, u32 gen) {
     return self && self->visited_gen != gen && self->hash_gen != HASH_GEN_PERMANENT;
 }
 
-static void tl_monotype_substitute_(allocator *alloc, tl_monotype *self, tl_type_subs *subs,
-                                    hashmap *exclude, u32 gen) {
+static void tl_monotype_substitute_(tl_monotype *self, tl_type_subs *subs, hashmap *exclude, u32 gen) {
     // exclude may be null.
     if (!self) return;
     if (self->visited_gen == gen) return;
@@ -3765,7 +3764,7 @@ static void tl_monotype_substitute_(allocator *alloc, tl_monotype *self, tl_type
         tl_monotype *resolved = subs->data.v[root].type;
         if (resolved) {
             if (tl_monotype_needs_substitute(resolved, gen)) {
-                tl_monotype_substitute_(alloc, resolved, subs, exclude, gen);
+                tl_monotype_substitute_(resolved, subs, exclude, gen);
             }
 
             *self             = *resolved;
@@ -3783,21 +3782,20 @@ static void tl_monotype_substitute_(allocator *alloc, tl_monotype *self, tl_type
         tl_monotype_sized arr = tl_monotype_children(self);
         forall(i, arr) {
             if (tl_monotype_needs_substitute(arr.v[i], gen))
-                tl_monotype_substitute_(alloc, arr.v[i], subs, exclude, gen);
+                tl_monotype_substitute_(arr.v[i], subs, exclude, gen);
         }
 
     } break;
     }
 }
 
-void tl_monotype_substitute(allocator *alloc, tl_monotype *self, tl_type_subs *subs, hashmap *exclude) {
+void tl_monotype_substitute(tl_monotype *self, tl_type_subs *subs, hashmap *exclude) {
     u32 gen = substitute_gen++;
     if (gen == 0) gen = substitute_gen++; // skip 0 on wraparound (0 means "never visited")
-    tl_monotype_substitute_(alloc, self, subs, exclude, gen);
+    tl_monotype_substitute_(self, subs, exclude, gen);
 }
 
-static void tl_polytype_substitute_ext(allocator *alloc, tl_polytype *self, tl_type_subs *subs,
-                                       hashmap **exclude) {
+static void tl_polytype_substitute_ext(tl_polytype *self, tl_type_subs *subs, hashmap **exclude) {
     if (exclude) map_reset(*exclude);
 
     if (exclude && self->quantifiers.size) {
@@ -3806,14 +3804,14 @@ static void tl_polytype_substitute_ext(allocator *alloc, tl_polytype *self, tl_t
         }
     }
 
-    tl_monotype_substitute(alloc, self->type, subs, exclude ? *exclude : null);
+    tl_monotype_substitute(self->type, subs, exclude ? *exclude : null);
 }
 
 void tl_polytype_substitute(allocator *alloc, tl_polytype *self, tl_type_subs *subs) {
     hashmap *exclude = null;
 
     if (self->quantifiers.size) exclude = map_create(alloc, sizeof(tl_type_variable), 8);
-    tl_polytype_substitute_ext(alloc, self, subs, exclude ? &exclude : null);
+    tl_polytype_substitute_ext(self, subs, exclude ? &exclude : null);
     if (exclude) map_destroy(&exclude);
 }
 
@@ -3827,7 +3825,7 @@ void tl_type_subs_apply(tl_type_subs *subs, tl_type_env *env) {
     hashmap_iterator iter    = {0};
     while (map_iter(env->map, &iter)) {
         tl_polytype *poly = *(tl_polytype **)iter.data;
-        tl_polytype_substitute_ext(subs->data.alloc, poly, subs, &exclude);
+        tl_polytype_substitute_ext(poly, subs, &exclude);
     }
     tl_type_transient_reset();
 }

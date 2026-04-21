@@ -41,7 +41,7 @@ tl_polytype *make_arrow_result_type(tl_infer *self, traverse_ctx *ctx, ast_node_
             tl_monotype *mono = args.v[i]->type->type;
 
             // make concrete if possible
-            tl_monotype_substitute(self->arena, mono, self->subs, null);
+            tl_monotype_substitute(mono, self->subs, null);
             array_push(args_types, mono);
         }
 
@@ -334,7 +334,7 @@ name_and_type make_instance_key(tl_infer *self, str generic_name, tl_monotype *a
             // Clone before substituting: parse_type_arg may return node->type->type
             // (a direct pointer into the AST), so in-place substitution would corrupt the AST.
             resolved_type_args.v[i] = tl_monotype_clone(self->arena, resolved_type_args.v[i]);
-            tl_monotype_substitute(self->arena, resolved_type_args.v[i], self->subs, null);
+            tl_monotype_substitute(resolved_type_args.v[i], self->subs, null);
         }
 
         // Keep non-concrete type args in the hash as-is (don't null them out).
@@ -755,7 +755,7 @@ static int specialize_user_type(tl_infer *self, traverse_ctx *traverse_ctx, ast_
             tl_monotype *mono = null;
             if (!tl_polytype_is_concrete(arg_type)) {
                 mono = tl_polytype_instantiate(self->arena, arg_type, self->subs);
-                tl_monotype_substitute(self->arena, mono, self->subs, null); // needed
+                tl_monotype_substitute(mono, self->subs, null); // needed
             } else {
                 mono = arg_type->type;
             }
@@ -1469,7 +1469,7 @@ static int check_trait_arrow(tl_infer *self, ast_node *toplevel, tl_monotype *co
     } else {
         actual_resolved = tl_monotype_clone(self->transient, actual_arrow);
     }
-    tl_monotype_substitute(self->transient, actual_resolved, self->subs, null);
+    tl_monotype_substitute(actual_resolved, self->subs, null);
 
     if (tl_monotype_hash64(expected_arrow) != tl_monotype_hash64(actual_resolved)) {
         // Auto-address-of fallback: accept Ptr[T] or Ptr[Const[T]] params
@@ -1682,7 +1682,7 @@ static tl_monotype *resolve_type_param_concrete(tl_infer *self, tl_polytype *pol
         tl_monotype *m = resolved_type_args.v[i];
         if (!tl_monotype_is_concrete(m)) {
             m = tl_monotype_clone(self->transient, m);
-            tl_monotype_substitute(self->transient, m, self->subs, null);
+            tl_monotype_substitute(m, self->subs, null);
         }
         if (tl_monotype_is_concrete(m)) return m;
     }
@@ -1751,8 +1751,7 @@ static int verify_trait_bounds(tl_infer *self, ast_node *toplevel, str name, tl_
 str specialize_arrow(tl_infer *self, traverse_ctx *tctx, str name, tl_monotype *arrow,
                      tl_monotype_sized resolved_type_args) {
 
-    if (!tl_monotype_is_concrete_no_weak(arrow))
-        tl_monotype_substitute(self->arena, arrow, self->subs, null);
+    if (!tl_monotype_is_concrete_no_weak(arrow)) tl_monotype_substitute(arrow, self->subs, null);
 
     // 1. Check if already specialized
     if (instance_name_exists(self, name)) {
@@ -1909,8 +1908,7 @@ static int specialize_let_in_lambda_lookup(tl_infer *self, ast_node *node) {
     str          name  = ast_node_str(node->let_in.name);
 
     // Resolve weak ints so the hash matches the call-site specialization.
-    if (!tl_monotype_is_concrete_no_weak(arrow))
-        tl_monotype_substitute(self->arena, arrow, self->subs, null);
+    if (!tl_monotype_is_concrete_no_weak(arrow)) tl_monotype_substitute(arrow, self->subs, null);
     if (!tl_monotype_is_concrete_no_weak(arrow))
         tl_monotype_default_weak_ints(arrow, tl_type_registry_int(self->registry),
                                       tl_type_registry_uint(self->registry),
@@ -1929,7 +1927,7 @@ static int specialize_let_in_lambda_lookup(tl_infer *self, ast_node *node) {
         if (env_type && tl_monotype_is_arrow(env_type->type) && env_type->type != arrow) {
             tl_monotype *env_arrow = env_type->type;
             if (!tl_monotype_is_concrete_no_weak(env_arrow))
-                tl_monotype_substitute(self->arena, env_arrow, self->subs, null);
+                tl_monotype_substitute(env_arrow, self->subs, null);
             if (!tl_monotype_is_concrete_no_weak(env_arrow))
                 tl_monotype_default_weak_ints(env_arrow, tl_type_registry_int(self->registry),
                                               tl_type_registry_uint(self->registry),
@@ -2036,7 +2034,7 @@ static int specialize_case(tl_infer *self, traverse_ctx *traverse_ctx, ast_node 
                     // concrete variant types from the expression's now-concrete wrapper type.
                     tl_monotype *expr_type =
                       node->case_.expression->type ? node->case_.expression->type->type : null;
-                    if (expr_type) tl_monotype_substitute(self->arena, expr_type, self->subs, null);
+                    if (expr_type) tl_monotype_substitute(expr_type, self->subs, null);
                     // Auto-dereference Ptr (and drop Const) to reach the concrete union.
                     if (expr_type) expr_type = tl_monotype_effective_target(expr_type, null);
 
@@ -2073,7 +2071,7 @@ static int specialize_case(tl_infer *self, traverse_ctx *traverse_ctx, ast_node 
                 if (!tl_monotype_is_concrete(inner_type)) {
                     tl_monotype *expr_type =
                       node->case_.expression->type ? node->case_.expression->type->type : null;
-                    if (expr_type) tl_monotype_substitute(self->arena, expr_type, self->subs, null);
+                    if (expr_type) tl_monotype_substitute(expr_type, self->subs, null);
                     // Auto-dereference Ptr (and drop Const) to reach the concrete union.
                     if (expr_type) expr_type = tl_monotype_effective_target(expr_type, null);
 
@@ -2299,7 +2297,7 @@ static void specialize_variadic_call(tl_infer *self, traverse_ctx *traverse_ctx,
         ast_node    *arg      = node->named_application.arguments[n_fixed + vi];
         tl_monotype *arg_type = arg->type ? arg->type->type : null;
         if (arg_type && !tl_monotype_is_concrete(arg_type))
-            tl_monotype_substitute(self->arena, arg_type, self->subs, null);
+            tl_monotype_substitute(arg_type, self->subs, null);
 
         // Check if this argument has a type-specific format spec.
         int has_fmt_spec = fspecs && fspecs[n_fixed + vi].has_type_specific;
@@ -2467,7 +2465,7 @@ int specialize_applications_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_n
                 // as the callsite instead of constructing an arrow from (empty) value arguments.
                 if (!node->type) return 1;
                 if (!tl_monotype_is_concrete_no_weak(node->type->type))
-                    tl_monotype_substitute(self->arena, node->type->type, self->subs, null);
+                    tl_monotype_substitute(node->type->type, self->subs, null);
                 callsite = node->type;
             } else {
                 // Important: use _with variant to copy free variables info to the arrow, which is added to

@@ -610,8 +610,7 @@ void traverse_ctx_load_type_arguments(tl_infer *self, traverse_ctx *ctx, ast_nod
             // type variable.
             if (type_param->type) {
                 tl_monotype *mono = type_param->type->type;
-                if (!tl_monotype_is_concrete(mono))
-                    tl_monotype_substitute(self->arena, mono, self->subs, null);
+                if (!tl_monotype_is_concrete(mono)) tl_monotype_substitute(mono, self->subs, null);
 #if DEBUG_EXPLICIT_TYPE_ARGS
                 str mono_str = tl_monotype_to_string(self->transient, mono);
                 fprintf(stderr, "[DEBUG LOAD TYPE ARGS] '%s' type_param '%s' has existing type: %s\n",
@@ -1350,7 +1349,7 @@ static int infer_void(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
 static int check_discarded_variant_union(tl_infer *self, ast_node *node) {
     if (!node->type || !node->type->type) return 0;
     tl_monotype *t = node->type->type;
-    tl_monotype_substitute(self->arena, t, self->subs, null);
+    tl_monotype_substitute(t, self->subs, null);
     if (!maybe_union(t)) return 0;
     array_push(self->errors, ((tl_infer_error){.tag = tl_err_discarded_variant_union, .node = node}));
     return 1;
@@ -1435,7 +1434,7 @@ static tl_monotype *maybe_two_variant_union(tl_monotype *operand_type) {
 static int infer_void_else(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
     (void)ctx;
     tl_monotype *operand_type = node->void_else.expression->type->type;
-    tl_monotype_substitute(self->arena, operand_type, self->subs, null);
+    tl_monotype_substitute(operand_type, self->subs, null);
 
     // Must be a union with exactly 2 variants
     tl_monotype *union_type = maybe_two_variant_union(operand_type);
@@ -1493,7 +1492,7 @@ static int infer_try(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
     // Unwraps first variant (success), or early-returns second variant (error).
 
     tl_monotype *operand_type = node->try_.operand->type->type;
-    tl_monotype_substitute(self->arena, operand_type, self->subs, null);
+    tl_monotype_substitute(operand_type, self->subs, null);
 
     // Must be a type constructor instance (the tagged union wrapper struct)
     if (!tl_monotype_is_inst(operand_type)) {
@@ -1897,7 +1896,7 @@ static int infer_binary_op(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
         int right_is_nil = ast_node_is_nil(right);
         if (left_is_nil != right_is_nil) {
             ast_node *other = left_is_nil ? right : left;
-            tl_monotype_substitute(self->arena, other->type->type, self->subs, null);
+            tl_monotype_substitute(other->type->type, self->subs, null);
             tl_monotype *mono = other->type->type;
             if (tl_polytype_is_concrete_no_weak(other->type) && !tl_monotype_is_ptr(mono) &&
                 !tl_monotype_is_arrow(mono)) {
@@ -1912,8 +1911,8 @@ static int infer_binary_op(tl_infer *self, traverse_ctx *ctx, ast_node *node) {
     } else if (is_index_operator(op)) {
 
         // needed
-        tl_monotype_substitute(self->arena, left->type->type, self->subs, null);
-        tl_monotype_substitute(self->arena, right->type->type, self->subs, null);
+        tl_monotype_substitute(left->type->type, self->subs, null);
+        tl_monotype_substitute(right->type->type, self->subs, null);
 
         tl_monotype *left_mono = tl_monotype_strip_const(left->type->type);
         tl_monotype *target    = tl_monotype_pointer_element(left_mono);
@@ -2026,7 +2025,7 @@ static int infer_tagged_union_case(tl_infer *self, traverse_ctx *ctx, ast_node *
 
     // Get wrapper type and extract valid variants
     tl_monotype *wrapper_type = expr_type->type;
-    tl_monotype_substitute(self->arena, wrapper_type, self->subs, null); // needed
+    tl_monotype_substitute(wrapper_type, self->subs, null); // needed
 
     // If there is an explicit type annotation (e.g., "case x: Option[T]"), always parse and
     // use it as the wrapper type for variant lookup.
@@ -2040,7 +2039,7 @@ static int infer_tagged_union_case(tl_infer *self, traverse_ctx *ctx, ast_node *
             // constraint would permanently bind the expression's type variable in self->subs,
             // making subsequent branches fail. The annotation provides the correct wrapper_type
             // for variant lookup; the expression's type stays polymorphic until specialization.
-            tl_monotype_substitute(self->arena, wrapper_type, self->subs, null);
+            tl_monotype_substitute(wrapper_type, self->subs, null);
         }
     }
 
@@ -2617,7 +2616,7 @@ static int infer_named_function_application(tl_infer *self, traverse_ctx *ctx, a
                     str trait_name = ast_node_str(ann->named_application.type_arguments[0]);
                     for (u32 i = n_fixed; i < n_total; i++) {
                         tl_monotype *arg_type = iter.nodes.v[i]->type->type;
-                        tl_monotype_substitute(self->arena, arg_type, self->subs, null);
+                        tl_monotype_substitute(arg_type, self->subs, null);
                         if (tl_monotype_is_inst(arg_type)) {
                             check_trait_bound(self, node, arg_type, trait_name);
                         }
@@ -2630,7 +2629,7 @@ static int infer_named_function_application(tl_infer *self, traverse_ctx *ctx, a
             array_reserve(args_types, (u32)(n_fixed + 1));
             for (u32 i = 0; i < n_fixed; i++) {
                 tl_monotype *mono = iter.nodes.v[i]->type->type;
-                tl_monotype_substitute(self->arena, mono, self->subs, null);
+                tl_monotype_substitute(mono, self->subs, null);
                 array_push(args_types, mono);
             }
             if (slice_type) {
@@ -2709,7 +2708,7 @@ static void prepare_void_else_binding(tl_infer *self, traverse_ctx *ctx, ast_nod
     if (!expr_type) return;
 
     tl_monotype *wrapper_type = expr_type->type;
-    tl_monotype_substitute(self->arena, wrapper_type, self->subs, null);
+    tl_monotype_substitute(wrapper_type, self->subs, null);
 
     if (!tl_monotype_is_inst(wrapper_type)) return;
 
@@ -2743,7 +2742,7 @@ static void prepare_tagged_union_bindings(tl_infer *self, traverse_ctx *ctx, ast
     if (!expr_type) return;
 
     tl_monotype *wrapper_type = expr_type->type;
-    tl_monotype_substitute(self->arena, wrapper_type, self->subs, null);
+    tl_monotype_substitute(wrapper_type, self->subs, null);
 
     // Handle explicit type annotation (when x: Type { ... })
     if (node->case_.union_annotation) {
@@ -2751,7 +2750,7 @@ static void prepare_tagged_union_bindings(tl_infer *self, traverse_ctx *ctx, ast
         if (result.parsed && tl_monotype_is_inst(result.parsed)) {
             wrapper_type = result.parsed;
             // Do NOT constrain expr_type here — see comment in infer_tagged_union_case.
-            tl_monotype_substitute(self->arena, wrapper_type, self->subs, null);
+            tl_monotype_substitute(wrapper_type, self->subs, null);
         }
     }
 
@@ -3385,7 +3384,7 @@ static int ufcs_rewrite_call(tl_infer *self, traverse_ctx *ctx, ast_node *node, 
     if (first_param_is_ptr) {
         // val.f() where f expects Ptr[T]: implicit address-of
         tl_monotype *recv_mono = left->type->type;
-        tl_monotype_substitute(self->arena, recv_mono, self->subs, null);
+        tl_monotype_substitute(recv_mono, self->subs, null);
         if (!tl_monotype_is_ptr(recv_mono) && !tl_monotype_is_carray(recv_mono)) {
             ast_node *addr = constraint_wrap_address_of(self, left);
             if (!addr) return 1;
@@ -3398,7 +3397,7 @@ static int ufcs_rewrite_call(tl_infer *self, traverse_ctx *ctx, ast_node *node, 
     // first parameter, wrap in a let-in cast: let _widen: ParamType = recv in _widen
     if (!first_param_is_ptr && param0) {
         tl_monotype *recv = left->type ? left->type->type : null;
-        if (recv) tl_monotype_substitute(self->arena, recv, self->subs, null);
+        if (recv) tl_monotype_substitute(recv, self->subs, null);
         if (recv && tl_monotype_is_inst(param0) && tl_monotype_is_integer_convertible(param0) &&
             tl_monotype_is_inst(recv) && tl_monotype_is_integer_convertible(recv) &&
             !tl_monotype_same_integer_subchain(param0, recv)) {
@@ -3497,7 +3496,7 @@ static int infer_struct_access(tl_infer *self, traverse_ctx *ctx, ast_node *node
     }
 
     // Note: must substitute to resolve type of chained field access, eg: foo.bar.baz
-    tl_monotype_substitute(self->arena, struct_type, self->subs, null); // needed
+    tl_monotype_substitute(struct_type, self->subs, null); // needed
 
     // Const(T) is transparent for field access: unwrap to access T's fields
     if (tl_monotype_is_const(struct_type)) {
@@ -3799,7 +3798,7 @@ int check_type_predicate(tl_infer *self, traverse_ctx *traverse_ctx, ast_node *n
             tl_monotype *lhs_mono = lhs_type_arg;
 
             if (!tl_monotype_is_concrete(lhs_mono)) {
-                tl_monotype_substitute(self->arena, lhs_mono, self->subs, null);
+                tl_monotype_substitute(lhs_mono, self->subs, null);
                 if (!tl_monotype_is_concrete(lhs_mono)) {
                     log_subs(self);
                     return unresolved_type_error(self, node->type_predicate.lhs);

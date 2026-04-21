@@ -564,7 +564,7 @@ void concretize_params(tl_infer *self, ast_node *node, tl_monotype *callsite, ha
                     bound_type = src;
                 } else {
                     tl_monotype *resolved = tl_monotype_clone(self->arena, src);
-                    tl_monotype_substitute(self->arena, resolved, self->subs, null);
+                    tl_monotype_substitute(resolved, self->subs, null);
                     if (tl_monotype_is_concrete(resolved)) bound_type = resolved;
                 }
             }

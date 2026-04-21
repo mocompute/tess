@@ -314,7 +314,7 @@ tl_monotype *tl_infer_update_specialized_type_(tl_infer *self, tl_monotype *mono
 
 tl_monotype *tl_infer_update_specialized_type(tl_infer *self, tl_monotype *mono) {
     switch (mono->tag) {
-    case tl_var:               tl_monotype_substitute(self->arena, mono, self->subs, null); break;
+    case tl_var:               tl_monotype_substitute(mono, self->subs, null); break;
 
     case tl_any:
     case tl_ellipsis:
