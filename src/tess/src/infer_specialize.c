@@ -1233,8 +1233,8 @@ int post_specialize(tl_infer *self, traverse_ctx *traverse_ctx, ast_node *specia
         }
         u32 subs_before = self->subs->data.size;
         if (traverse_ast(self, traverse_ctx, infer_target, infer_traverse_cb)) {
-            dbg_at(2, self, "note: post_specialize failed infer");
-            return 1;
+            dbg_at(0, self, "error: post_specialize failed infer");
+            fatal("runtime error");
         }
         if (stats) {
             hires_timer_stop(&st);
@@ -1774,10 +1774,13 @@ str specialize_arrow(tl_infer *self, traverse_ctx *tctx, str name, tl_monotype *
 
     // 2a. Check that name is valid
     ast_node *toplevel = toplevel_get(self, name);
-    if (!toplevel) return str_empty();
+    if (!toplevel) return str_empty(); // soft failure
 
     // 2b. Verify trait bounds on type parameters
-    if (verify_trait_bounds(self, toplevel, name, arrow, resolved_type_args)) return str_empty();
+    if (verify_trait_bounds(self, toplevel, name, arrow, resolved_type_args)) {
+        dbg_at(0, self, "error: verify_trait_bounds failed.");
+        fatal("runtime error");
+    }
 
     // 3. Create unique instance name(e.g., "identity_0")
     name_and_type key       = make_instance_key(self, name, arrow, resolved_type_args);
@@ -1830,7 +1833,10 @@ str specialize_arrow(tl_infer *self, traverse_ctx *tctx, str name, tl_monotype *
     post_ctx->result_type    = tctx ? tctx->result_type : null;
     int post_err             = post_specialize(self, post_ctx, special, arrow);
     arena_restore(self->transient, post_wm);
-    if (post_err) return str_empty();
+    if (post_err) {
+        dbg_at(0, self, "error: post_specialize failed.");
+        fatal("runtime error");
+    }
     return inst_name;
 }
 
@@ -2544,13 +2550,13 @@ int specialize_applications_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_n
 #endif
         if (specialize_arrow_with_name(self, traverse_ctx, node->named_application.name, callsite->type,
                                        resolved_type_args)) {
-            dbg_at(2, self, "note: failed to specialize '%s'", str_cstr(&name));
-            return 1;
+            dbg_at(0, self, "error: failed to specialize '%s'", str_cstr(&name));
+            fatal("runtime error");
         }
         // and recurse over any arguments which are toplevel functions
         if (specialize_arguments(self, traverse_ctx, node, callsite->type)) {
-            dbg_at(2, self, "note: failed to specialize arguments of '%s'", str_cstr(&name));
-            return 1;
+            dbg_at(0, self, "error: failed to specialize arguments of '%s'", str_cstr(&name));
+            fatal("runtime error");
         }
 
         specialize_variadic_call(self, traverse_ctx, node);
