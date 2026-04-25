@@ -75,7 +75,7 @@ See `docs/LANGUAGE_REFERENCE.md` for full syntax.
 
 These mistakes have caused repeated debugging sessions — avoid them:
 
-1. **Trait methods must be in a named module.** `hash(p: Point)` in `#module main` won't be found by trait dispatch. Define it in `#module Point`.
+1. **Trait methods in `#module main` only scale to ONE type per method name.** A single `hash(p: Point)` / `eq(a: Point, b: Point)` in main works (trait dispatch finds it via `find_overload_func`'s empty-module branch). A *second* main-module type that wants the same trait method (e.g. `hash(v: Vec3)`) will collide on the arity-mangled key `hash__1` and fail with `function already defined` — Tess has no overloading on parameter type. For multi-type programs, give each type its own module (`#module Point`, `#module Vec3`) so impls mangle distinctly. Main-module impls are fine for scratch files and single-type tests.
 2. **Don't alias types over module names.** `Str = Str.Str` inside a module shadows the `Str` module. Auto-collapse handles bare `Str` in type positions.
 3. **`:=` vs `=` confusion.** `n: Int = 10` (reassignment to undeclared `n`) is NOT a binding — it causes confusing downstream errors. Use `n: Int := 10`.
 4. **`Hash` trait requires `#import <Hash.tl>`.** Unlike operator traits (compiler builtins), `Hash` is defined in the standard library. Any file using `.hash()` or `HashMap` must `#import <Hash.tl>`. The `Eq` trait and other operator traits remain compiler builtins in `infer.c`.

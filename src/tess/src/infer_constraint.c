@@ -258,8 +258,26 @@ static void load_toplevel_let(tl_infer *self, ast_node *node) {
 
     if (p) {
         // merge type if the existing node is a forward-declaration symbol;
-        // same-kind duplicate (let over let): first wins, silently skip.
+        // let over let: distinguish "same source seen twice" from a real duplicate
+        // definition. Files can be parsed more than once via symlinks, double-slash
+        // paths, or `source(...)` recursion overlapping with `#import` — those
+        // re-parses produce distinct AST nodes that share (line, col), and the
+        // existing strategy handles them gracefully (later wins below).
+        // A real duplicate (e.g. `hash(p: Point)` and `hash(v: Vec3)` in main,
+        // both colliding on `hash__1` because Tess has no overloading on parameter
+        // type) lives at a different line/col, so we emit a clear diagnostic
+        // instead of letting the loser surface as a downstream type mismatch.
         if (!ast_node_is_symbol(*p)) {
+            // TODO: use a better heuristic to determine if nodes come from the same source file. We
+            // intentionally don't rely on filename here due to the problem of symlinks. But a hash, at
+            // least, would be better.
+            int same_source = (*p)->line == node->line && (*p)->col == node->col;
+            if (!same_source) {
+                array_push(self->errors, ((tl_infer_error){.tag = tl_err_function_exists, .node = node}));
+            }
+            // later wins: replace the prior entry so a re-parse picks up the
+            // freshest AST (e.g. one that has been through symbol resolution).
+            *p = node;
             return;
         }
 

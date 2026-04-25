@@ -972,6 +972,25 @@ str find_overload_func(tl_infer *self, tl_monotype *type, char const *func_name,
     if (!str_is_empty(module)) {
         str lookup = build_overload_func_name(self->transient, module, func_name, arity);
         if (ast_node_str_map_get(self->toplevels, lookup)) return str_copy(self->arena, lookup);
+    } else if (is_user_defined_type(type) && !tl_monotype_is_ptr(type) && !tl_monotype_is_const(type)) {
+        // Empty module on a user-defined struct/union/enum is the main-module
+        // convention: trait methods defined in main are unmangled, so look them
+        // up by their bare arity-mangled name (e.g. `hash(p: Point)` registers
+        // as `hash__1`). Skip the builtin generic constructors Ptr / Const —
+        // is_user_defined_type accepts them too, but their dispatch belongs to
+        // the Ptr/Const fallbacks below, not to free functions in main.
+        //
+        // CAVEAT: this only scales to *one* type per trait method name in main.
+        // Tess has no overloading on parameter type, so as soon as a second main
+        // module type wants the same trait method (e.g. both `hash(p: Point)`
+        // and `hash(v: Vec3)` in main), the arity-mangled key `hash__1`
+        // collides and load_toplevel_let raises tl_err_function_exists. The
+        // workaround is to put one of the types — and its trait impls — in a
+        // named module so the impl mangles to `Vec3__hash__1`. So this fix is
+        // useful for scratch programs and single-type cases; production code
+        // with multiple user types should still prefer dedicated modules.
+        str lookup = build_overload_func_name(self->transient, str_empty(), func_name, arity);
+        if (ast_node_str_map_get(self->toplevels, lookup)) return str_copy(self->arena, lookup);
     }
     // Family fallback: standalone builtin types (CChar, CSize, CPtrDiff) fall back to their
     // canonical family module (Int, UInt).
