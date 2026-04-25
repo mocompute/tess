@@ -1,5 +1,12 @@
+#module Wrapper
+
+Wrapper[T]: { value: T }
+
+to_bool[T](wrapper: Wrapper[T]) -> Bool { wrapper.value.to_bool() }
+
 #module main
 #import <String.tl>
+
 
 test_int() {
     error := 0
@@ -110,12 +117,21 @@ test_null() {
     if null {1} else {0}
 }
 
-_get_int() { 42 }
-_get_uint() { 42zu }
-_get_float() { 42.0 }
-_get_bool() { true }
+test_wrapper() {
+    error := 0
+    zero  := Wrapper(value = 0)
+    one   := Wrapper(value = 1)
+    error += if zero {1} else {0}
+    error += if one {0} else {1}
+    error
+}
+
+_get_int    () { 42       }
+_get_uint   () { 42zu     }
+_get_float  () { 42.0     }
+_get_bool   () { true     }
 _get_cstring() { c"hello" }
-_get_string() { "hello" }
+_get_string () { "hello"  }
 
 test_int_call() {
     error := 0
@@ -174,5 +190,6 @@ main() {
     error += test_bool_call()
     error += test_cstring_call()
     error += test_string_call()
+    error += test_wrapper()
     error
 }
