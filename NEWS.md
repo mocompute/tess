@@ -5,6 +5,75 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project will adhere to
 [Semantic Versioning](https://semver.org/) beginning with the 0.2.0 release.
 
+## [v0.1.6] - 2026-04-17 to 2026-04-25 (110b83cf..6cd7fd5f)
+
+### Highlights
+
+- **Breaking: HashMap and Array sort APIs renamed** — `HashMap.get` is now `get_ptr` and `get_copy` is now
+  `get`; `Array.sort`/`sorted` are now `sort_with`/`sorted_with` to make room for the new Ord-based sort.
+- **`ToBool` trait**: Non-`Bool` types can now appear in `if`/`while` conditions — the compiler synthesizes
+  a `to_bool(cond)` call automatically. Built-in support for `Int`, `UInt`, `Float`, `Bool`, `CString`, and
+  `String`.
+- **Comptime type predicate `#::`**: `x #:: T` causes a compile-time error if `x` is not inferred as type
+  `T`, enabling lightweight static assertions without a runtime cost.
+- **Trait dispatch for main-module user types**: Trait methods (e.g. `hash`, `eq`) defined in `#module main`
+  now work with trait-bound generics like `HashMap[Point, _]` — no boilerplate module wrapper needed for
+  single-type programs.
+- **Several correctness fixes**: Miscompilation with explicit type arguments at call sites, incorrect
+  self-reference detection in nested generic specializations, and trait failures now produce hard errors
+  instead of silently emitting broken C.
+
+### Added
+
+- **`ToBool` trait with synthesized conditional transform**: Non-`Bool` values can now be used directly in
+  `if`/`while` conditions. When the condition type doesn't unify with `Bool`, the compiler automatically
+  rewrites it to `to_bool(cond)` if an implementation exists. Built-in implementations provided in
+  `builtin.tl` for `Int`, `UInt`, `Float`, `Bool`, `CString`, and `String`. `ToBool` can be implemented for
+  user types too.
+- **Comptime type predicate `#::`**: A compile-time-only counterpart to the runtime `::` type predicate.
+  `x#:: T` raises a compile-time error if `x` is not of type `T`, enabling lightweight static assertions.
+- **Trait dispatch for `#module main` user types**: `find_overload_func` now falls back to the bare
+  arity-mangled name for user-defined types in the main module, allowing trait-bound generics like
+  `HashMap[Point, _]` in single-type scratch programs without needing a dedicated module. (Limited to one
+  user type per trait method name in main.)
+- **`Array.sort()` / `Array.sorted()`**: New overloads using `Ord` trait conformance (`cmp/2`) — no explicit
+  comparator needed. The existing comparator-taking functions are renamed to `sort_with`/`sorted_with`.
+- **`HashMap.sorted_keys()`**: Returns a sorted copy of the key array for maps with `K: HashEqOrd` keys.
+  Added combined trait `HashEqOrd[K]: Hash[K], Eq[K], Ord[K]`.
+
+### Changed
+
+- **`HashMap` API renamed (breaking)**: `get(key) -> Option[Ptr[V]]` is now `get_ptr(key)`; `get_copy(key)
+  -> Option[V]` is now `get(key)`. Align naming with the more common use case (value copy).
+- **`Array.sort` / `Array.sorted` renamed to `sort_with` / `sorted_with` (breaking)**: Frees up
+  `sort`/`sorted` for the new Ord-based variants.
+- **`String.eq` removed**: `String.eq` has been removed from `String.tl`. Use `==` and `!=` directly, which
+  was already the idiomatic form.
+- **Trait failures are now hard errors**: Several specialization failure paths that previously returned a
+  soft error (allowing compilation to continue with broken C output) now call `fatal()` immediately; stopgap
+  until better error reporting is implemented.
+- **Duplicate main-module function names now produce a clear diagnostic**: Previously, two functions with
+  the same arity-mangled name in `#module main` (e.g. two `hash` overloads for different types) silently
+  dropped one and produced a confusing downstream error. The conflict is now detected at load time with a
+  clear message.
+
+### Fixed
+
+- **Miscompilation with explicit type arguments**: `traverse_ctx_assign_type_arguments` looked up type
+  parameter bindings from a stale AST type, causing incorrect concrete types to be emitted under certain
+  generic specializations.
+- **Single-arm `if` no longer constrained to void**: A previous change incorrectly forced single-arm `if`
+  statements to the void type, breaking diverging patterns like `if cond { return res }`. The constraint has
+  been removed.
+- **Nested generic self-reference false positive**: The self-reference check in generic type constructor
+  specialization matched on name alone, causing false positives for types like `Array[Array[Int]]` where the
+  outer and inner type share the same generic name. Fixed by also comparing the argument list.
+- **F-string lone `}` no longer crashes**: A stray `}` inside an f-string literal previously triggered an
+  unrecoverable tokenizer error with no diagnostic. It is now accepted as a literal `}`.
+- **Pointer comparisons no longer hijacked by user `cmp`**: The operator overload rewrite step was falling
+  back to the user's `cmp` function for `==` and `!=` on pointer types, incorrectly replacing pointer
+  identity with structural comparison. The fallback is now skipped for `Ptr[_]`.
+
 ## [v0.1.5] - 2026-04-10 to 2026-04-17 (acfa628c..110b83cf)
 
 ### Highlights
