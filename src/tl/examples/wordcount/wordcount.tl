@@ -61,7 +61,7 @@ do_count(content, path, track_unique, ignore_case) {
         if !track_unique { return }
         word := content.copy(from, to)
         if ignore_case { word = word.to_lower() }
-        when word_map.get(word) {
+        when word_map.get_ptr(word) {
             s: Some { s.value.* += 1 }
             n: None { word_map.set(word, 1); unique += 1 }
         }
