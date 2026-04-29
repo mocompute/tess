@@ -6,6 +6,7 @@
 // and post-inference validation helpers.
 
 #include "infer_internal.h"
+#include "str.h"
 #include "type.h"
 
 #include <string.h>
@@ -1253,7 +1254,8 @@ int post_specialize(tl_infer *self, traverse_ctx *traverse_ctx, ast_node *specia
         u32 subs_before = self->subs->data.size;
         if (traverse_ast(self, traverse_ctx, infer_target, infer_traverse_cb)) {
             dbg_at(0, self, "error: post_specialize failed infer");
-            fatal("runtime error");
+            if (!self->errors.size) fatal("runtime error");
+            else return 1;
         }
         if (stats) {
             hires_timer_stop(&st);
@@ -1854,7 +1856,8 @@ str specialize_arrow(tl_infer *self, traverse_ctx *tctx, str name, tl_monotype *
     arena_restore(self->transient, post_wm);
     if (post_err) {
         dbg_at(0, self, "error: post_specialize failed.");
-        fatal("runtime error");
+        if (!self->errors.size) fatal("runtime error");
+        else return str_empty();
     }
     return inst_name;
 }
@@ -2570,12 +2573,14 @@ int specialize_applications_cb(tl_infer *self, traverse_ctx *traverse_ctx, ast_n
         if (specialize_arrow_with_name(self, traverse_ctx, node->named_application.name, callsite->type,
                                        resolved_type_args)) {
             dbg_at(0, self, "error: failed to specialize '%s'", str_cstr(&name));
-            fatal("runtime error");
+            if (!self->errors.size) fatal("runtime error");
+            else return 1;
         }
         // and recurse over any arguments which are toplevel functions
         if (specialize_arguments(self, traverse_ctx, node, callsite->type)) {
             dbg_at(0, self, "error: failed to specialize arguments of '%s'", str_cstr(&name));
-            fatal("runtime error");
+            if (!self->errors.size) fatal("runtime error");
+            else return 1;
         }
 
         specialize_variadic_call(self, traverse_ctx, node);
