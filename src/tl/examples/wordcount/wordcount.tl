@@ -10,7 +10,7 @@
 //   tess run wordcount.tl -- file.tl                # lines, words, chars
 //   tess run wordcount.tl -- -u -i file.tl          # + unique words, case-insensitive
 //   tess run wordcount.tl -- -s -t 5 src/*.tl       # sort by words, top 5
-//   echo c"hello world" | tess run wordcount.tl      # read from stdin
+//   echo "hello world" | tess run wordcount.tl      # read from stdin
 
 
 #module main
