@@ -815,7 +815,7 @@ void report_invariant_failure(tl_infer *self, char const *phase, char const *inv
     if (node) {
         fprintf(stderr, "  Location:  %s:%u\n", node->file, node->line);
         str s = ast_node_to_short_string(self->transient, node);
-        fprintf(stderr, "  Node:      %.*s\n", str_ilen(s), str_buf(&s));
+        fprintf(stderr, "  Node:      %s\n", str_cstr(&s));
         str_deinit(self->transient, &s);
     }
     fprintf(stderr, "\n");

@@ -727,12 +727,12 @@ static c_type parse_type(cbind_state *st) {
         t.kind = CT_INT;
     } else if (saw_struct && !str_is_empty(named)) {
         t.kind = CT_NAMED;
-        t.name = str_fmt(st->alloc, "struct %.*s", str_ilen(named), str_buf(&named));
+        t.name = str_fmt(st->alloc, "struct %s", str_cstr(&named));
     } else if (saw_enum && !str_is_empty(named)) {
         t.kind = CT_INT; // enums are ints in Tess bindings
     } else if (saw_union && !str_is_empty(named)) {
         t.kind = CT_NAMED;
-        t.name = str_fmt(st->alloc, "union %.*s", str_ilen(named), str_buf(&named));
+        t.name = str_fmt(st->alloc, "union %s", str_cstr(&named));
     } else if (!str_is_empty(named)) {
         t.kind = CT_NAMED;
         t.name = named;
@@ -1162,8 +1162,7 @@ static void parse_struct_or_union(cbind_state *st, int is_target, str tag_name, 
                 if (str_is_empty(tag_name)) {
                     // anonymous struct: typedef struct { ... } foo;
                     // emit as c_foo
-                    str tess_name =
-                      str_fmt(st->alloc, "c_%.*s", str_ilen(typedef_name), str_buf(&typedef_name));
+                    str tess_name = str_fmt(st->alloc, "c_%s", str_cstr(&typedef_name));
                     str_map_set(&st->typedefs, typedef_name, &tess_name);
 
                     if (is_target) {
@@ -1176,8 +1175,7 @@ static void parse_struct_or_union(cbind_state *st, int is_target, str tag_name, 
                     }
                 } else {
                     // named struct: typedef struct tag { ... } name;
-                    str tess_name =
-                      str_fmt(st->alloc, "c_%.*s", str_ilen(typedef_name), str_buf(&typedef_name));
+                    str tess_name = str_fmt(st->alloc, "c_%s", str_cstr(&typedef_name));
                     str_map_set(&st->typedefs, typedef_name, &tess_name);
 
                     if (is_target) {
@@ -1229,8 +1227,7 @@ static void parse_struct_or_union(cbind_state *st, int is_target, str tag_name, 
                 if (out_typedef_name) *out_typedef_name = typedef_name;
 
                 if (ptr == 0 && !str_is_empty(tag_name)) {
-                    str tess_name =
-                      str_fmt(st->alloc, "c_%.*s", str_ilen(typedef_name), str_buf(&typedef_name));
+                    str tess_name = str_fmt(st->alloc, "c_%s", str_cstr(&typedef_name));
                     str_map_set(&st->typedefs, typedef_name, &tess_name);
                 }
                 // If not defined yet, register forward decl
@@ -1456,8 +1453,7 @@ static int parse_toplevel_decl(cbind_state *st) {
                         // skip param list — we register the typedef as a named type
                         // (function pointer signature is not preserved yet)
                         skip_paren_block(st);
-                        str tess =
-                          str_fmt(st->alloc, "c_%.*s", str_ilen(typedef_name), str_buf(&typedef_name));
+                        str tess = str_fmt(st->alloc, "c_%s", str_cstr(&typedef_name));
                         str_map_set(&st->typedefs, typedef_name, &tess);
                     }
                 }
@@ -1698,7 +1694,7 @@ static str resolve_named_type(allocator *a, str name, hashmap *typedefs) {
     }
 
     // unknown — emit as c_name
-    return str_fmt(a, "c_%.*s", str_ilen(name), str_buf(&name));
+    return str_fmt(a, "c_%s", str_cstr(&name));
 }
 
 static str type_to_tess(allocator *a, c_type const *t, hashmap *typedefs) {
@@ -1719,12 +1715,11 @@ static str type_to_tess(allocator *a, c_type const *t, hashmap *typedefs) {
                 pname = str_fmt(a, "arg%u", i);
             }
             str ptype = type_to_tess(a, &t->fp_params[i].type, typedefs);
-            str part =
-              str_fmt(a, "%.*s: %.*s", str_ilen(pname), str_buf(&pname), str_ilen(ptype), str_buf(&ptype));
+            str part  = str_fmt(a, "%s: %s", str_cstr(&pname), str_cstr(&ptype));
             str_build_cat(&sb, part);
         }
         str ret        = type_to_tess(a, t->fp_ret, typedefs);
-        str arrow_part = str_fmt(a, ") -> %.*s", str_ilen(ret), str_buf(&ret));
+        str arrow_part = str_fmt(a, ") -> %s", str_cstr(&ret));
         str_build_cat(&sb, arrow_part);
         return str_build_finish(&sb);
     }
@@ -1734,7 +1729,7 @@ static str type_to_tess(allocator *a, c_type const *t, hashmap *typedefs) {
         c_type elem     = *t;
         elem.array_size = 0;
         str elem_str    = type_to_tess(a, &elem, typedefs);
-        return str_fmt(a, "CArray[%.*s, %u]", str_ilen(elem_str), str_buf(&elem_str), t->array_size);
+        return str_fmt(a, "CArray[%s, %u]", str_cstr(&elem_str), t->array_size);
     }
 
     // base type name
@@ -1760,14 +1755,14 @@ static str type_to_tess(allocator *a, c_type const *t, hashmap *typedefs) {
             result = str_fmt(a, "Const[any]");
         }
         for (int i = 0; i < t->pointer_depth; i++) {
-            result = str_fmt(a, "Ptr[%.*s]", str_ilen(result), str_buf(&result));
+            result = str_fmt(a, "Ptr[%s]", str_cstr(&result));
         }
         return result;
     }
 
     if (t->pointer_depth == 0) {
         if (t->is_const) {
-            return str_fmt(a, "Const[%.*s]", str_ilen(base), str_buf(&base));
+            return str_fmt(a, "Const[%s]", str_cstr(&base));
         }
         return base;
     }
@@ -1775,12 +1770,12 @@ static str type_to_tess(allocator *a, c_type const *t, hashmap *typedefs) {
     // build pointer chain from inside out
     str inner = base;
     if (t->is_const) {
-        inner = str_fmt(a, "Const[%.*s]", str_ilen(inner), str_buf(&inner));
+        inner = str_fmt(a, "Const[%s]", str_cstr(&inner));
     }
     for (int i = 0; i < t->pointer_depth; i++) {
-        inner = str_fmt(a, "Ptr[%.*s]", str_ilen(inner), str_buf(&inner));
+        inner = str_fmt(a, "Ptr[%s]", str_cstr(&inner));
         if (i < 4 && t->const_at[i]) {
-            inner = str_fmt(a, "Const[%.*s]", str_ilen(inner), str_buf(&inner));
+            inner = str_fmt(a, "Const[%s]", str_cstr(&inner));
         }
     }
     return inner;
@@ -1798,8 +1793,7 @@ static str emit_bindings(allocator *a, cbind_state *st, char const *module_name)
     str mod_line = str_fmt(a, "#module %s\n", module_name);
     str_build_cat(&sb, mod_line);
 
-    str inc_line =
-      str_fmt(a, "#include \"%.*s\"\n\n", str_ilen(st->target_file), str_buf(&st->target_file));
+    str inc_line = str_fmt(a, "#include \"%s\"\n\n", str_cstr(&st->target_file));
     str_build_cat(&sb, inc_line);
 
     // Emit forward-declared (opaque) structs
@@ -1811,8 +1805,7 @@ static str emit_bindings(allocator *a, cbind_state *st, char const *module_name)
         // skip if this struct was later fully defined (O(1) hashmap check)
         if (!str_map_contains(st->struct_defs, d->name)) {
             str_hset_insert(&emitted, d->name);
-            str line =
-              str_fmt(a, "c_struct_%.*s: { _opaque: Byte }\n", str_ilen(d->name), str_buf(&d->name));
+            str line = str_fmt(a, "c_struct_%s: { _opaque: Byte }\n", str_cstr(&d->name));
             str_build_cat(&sb, line);
             has_fwd = 1;
         }
@@ -1833,13 +1826,13 @@ static str emit_bindings(allocator *a, cbind_state *st, char const *module_name)
 
         str prefix;
         if (is_tag) {
-            prefix = str_fmt(a, "c_struct_%.*s", str_ilen(d->name), str_buf(&d->name));
+            prefix = str_fmt(a, "c_struct_%s", str_cstr(&d->name));
         } else {
-            prefix = str_fmt(a, "c_%.*s", str_ilen(d->name), str_buf(&d->name));
+            prefix = str_fmt(a, "c_%s", str_cstr(&d->name));
         }
 
         str_build line_sb = str_build_init(a, 128);
-        str       lpart   = str_fmt(a, "%.*s: { ", str_ilen(prefix), str_buf(&prefix));
+        str       lpart   = str_fmt(a, "%s: { ", str_cstr(&prefix));
         str_build_cat(&line_sb, lpart);
 
         for (u32 f = 0; f < d->field_count; f++) {
@@ -1848,8 +1841,7 @@ static str emit_bindings(allocator *a, cbind_state *st, char const *module_name)
                 str_build_cat(&line_sb, comma);
             }
             str ftype = type_to_tess(a, &d->fields[f].type, st->typedefs);
-            str fpart = str_fmt(a, "%.*s: %.*s", str_ilen(d->fields[f].name), str_buf(&d->fields[f].name),
-                                str_ilen(ftype), str_buf(&ftype));
+            str fpart = str_fmt(a, "%s: %s", str_cstr(&d->fields[f].name), str_cstr(&ftype));
             str_build_cat(&line_sb, fpart);
         }
 
@@ -1872,7 +1864,7 @@ static str emit_bindings(allocator *a, cbind_state *st, char const *module_name)
         if (d->kind == CDECL_ENUM_VALUE || d->kind == CDECL_DEFINE) {
             if (str_hset_contains(emitted, d->name)) continue;
             str_hset_insert(&emitted, d->name);
-            str line = str_fmt(a, "c_%.*s: CInt\n", str_ilen(d->name), str_buf(&d->name));
+            str line = str_fmt(a, "c_%s: CInt\n", str_cstr(&d->name));
             str_build_cat(&sb, line);
             has_const = 1;
         }
@@ -1890,7 +1882,7 @@ static str emit_bindings(allocator *a, cbind_state *st, char const *module_name)
         str_hset_insert(&emitted, d->name);
 
         str_build fn_sb = str_build_init(a, 128);
-        str       fname = str_fmt(a, "c_%.*s(", str_ilen(d->name), str_buf(&d->name));
+        str       fname = str_fmt(a, "c_%s(", str_cstr(&d->name));
         str_build_cat(&fn_sb, fname);
 
         for (u32 p = 0; p < d->param_count; p++) {
@@ -1903,13 +1895,12 @@ static str emit_bindings(allocator *a, cbind_state *st, char const *module_name)
                 pname = d->params[p].name;
                 // Strip leading __ from parameter names
                 if (str_len(pname) > 2 && str_buf(&pname)[0] == '_' && str_buf(&pname)[1] == '_')
-                    pname = str_fmt(a, "%.*s", str_ilen(pname) - 2, str_buf(&pname) + 2);
+                    pname = str_fmt(a, "%s", str_cstr(&pname) + 2);
             } else {
                 pname = str_fmt(a, "arg%u", p);
             }
             str ptype = type_to_tess(a, &d->params[p].type, st->typedefs);
-            str ppart =
-              str_fmt(a, "%.*s: %.*s", str_ilen(pname), str_buf(&pname), str_ilen(ptype), str_buf(&ptype));
+            str ppart = str_fmt(a, "%s: %s", str_cstr(&pname), str_cstr(&ptype));
             str_build_cat(&fn_sb, ppart);
         }
 
@@ -1923,7 +1914,7 @@ static str emit_bindings(allocator *a, cbind_state *st, char const *module_name)
         }
 
         str ret  = type_to_tess(a, &d->return_type, st->typedefs);
-        str tail = str_fmt(a, ") -> %.*s\n", str_ilen(ret), str_buf(&ret));
+        str tail = str_fmt(a, ") -> %s\n", str_cstr(&ret));
         str_build_cat(&fn_sb, tail);
 
         str fn_line = str_build_finish(&fn_sb);

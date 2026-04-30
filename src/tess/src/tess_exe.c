@@ -1048,11 +1048,11 @@ static void output_program(state *self) {
         FILE *f = fopen(self->out_path, "wb");
         if (!f) fatal("could not open output file: '%s'", self->out_path);
 
-        fprintf(f, "%.*s", str_ilen(self->program), str_buf(&self->program));
+        fprintf(f, "%s", str_cstr(&self->program));
 
         fclose(f);
     } else {
-        printf("%.*s", str_ilen(self->program), str_buf(&self->program));
+        printf("%s", str_cstr(&self->program));
     }
 }
 

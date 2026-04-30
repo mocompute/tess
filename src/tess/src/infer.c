@@ -221,12 +221,12 @@ tl_infer_counters const *tl_infer_get_counters(tl_infer const *self) {
 
 str next_variable_name(tl_infer *self, str name) {
     int         has_prefix = (0 == str_cmp_nc(name, "tl_", 3));
-    char const *fmt        = has_prefix ? "%.*s_v%u" : "tl_%.*s_v%u";
-    return str_fmt(self->arena, fmt, str_ilen(name), str_buf(&name), self->next_var_name++);
+    char const *fmt        = has_prefix ? "%s_v%u" : "tl_%s_v%u";
+    return str_fmt(self->arena, fmt, str_cstr(&name), self->next_var_name++);
 }
 
 str next_instantiation(tl_infer *self, str name) {
-    return str_fmt(self->arena, "%.*s_%u", str_ilen(name), str_buf(&name), self->next_instantiation++);
+    return str_fmt(self->arena, "%s_%u", str_cstr(&name), self->next_instantiation++);
 }
 
 void cancel_last_instantiation(tl_infer *self) {
@@ -339,8 +339,8 @@ static int run_generic_inference(tl_infer *self, ast_node_sized nodes) {
             tl_polytype *poly = tl_type_env_lookup(self->env, name);
             if (!poly) {
                 char detail[256];
-                snprintf(detail, sizeof detail, "Function '%.*s' not found in type environment",
-                         str_ilen(name), str_buf(&name));
+                snprintf(detail, sizeof detail, "Function '%s' not found in type environment",
+                         str_cstr(&name));
                 report_invariant_failure(self, "Phase 3: Generic Inference",
                                          "All functions must have polytypes in env", detail, node);
                 failures++;
@@ -677,7 +677,7 @@ void tl_infer_dbg(tl_infer const *self, char const *restrict fmt, ...) {
 
 static void log_str(tl_infer const *self, str str) {
     if (self->verbose < 3) return;
-    tl_infer_dbg(self, "%.*s", str_ilen(str), str_buf(&str));
+    tl_infer_dbg(self, "%s", str_cstr(&str));
 }
 
 void log_toplevels(tl_infer const *self) {

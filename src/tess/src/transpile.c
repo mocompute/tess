@@ -1612,17 +1612,16 @@ static str generate_interned_string(transpile *self, ast_node const *call_node, 
     if (decoded_len <= TL_SSO_MAX_SMALL) {
         unsigned char tl = sso_tag_len(decoded_len);
         generate_assign_lhs(self, res);
-        cat(self, str_fmt(self->transient, "(%.*s){ .ss = { .buf = \"%.*s\", .tag_len = 0x%02X } }",
-                          str_ilen(type_name), str_buf(&type_name), str_ilen(content), str_buf(&content),
-                          (unsigned)tl));
+        cat(self, str_fmt(self->transient, "(%s){ .ss = { .buf = \"%s\", .tag_len = 0x%02X } }",
+                          str_cstr(&type_name), str_cstr(&content), (unsigned)tl));
         cat_semicolonln(self);
     } else {
         u64 offset = intern_string(self, content, decoded_len);
         generate_assign_lhs(self, res);
-        cat(self, str_fmt(self->transient,
-                          "(%.*s){ .big = { .len = %llu, .buf = (char*)(tl_interned_strings_ + %llu) } }",
-                          str_ilen(type_name), str_buf(&type_name), (unsigned long long)decoded_len,
-                          (unsigned long long)offset));
+        cat(self,
+            str_fmt(self->transient,
+                    "(%s){ .big = { .len = %llu, .buf = (char*)(tl_interned_strings_ + %llu) } }",
+                    str_cstr(&type_name), (unsigned long long)decoded_len, (unsigned long long)offset));
         cat_semicolonln(self);
     }
 
@@ -1661,8 +1660,7 @@ static void emit_interned_block(transpile *self) {
 
     cat(self, S("static const char tl_interned_strings_[] =\n"));
     for (size_t i = 0; i < n; i++) {
-        cat(self, str_fmt(self->transient, "    \"%.*s\\0\"\n", str_ilen(entries[i].content),
-                          str_buf(&entries[i].content)));
+        cat(self, str_fmt(self->transient, "    \"%s\\0\"\n", str_cstr(&entries[i].content)));
     }
     cat(self, S(";\n"));
 }
@@ -2473,8 +2471,7 @@ static str generate_tagged_union_case(transpile *self, ast_node const *node, eva
                 if (!str_is_empty(other_variant_name)) {
                     str eb_binding_name =
                       escape_c_keyword(self->transient, ast_node_str(node->case_.else_binding));
-                    str rhs = str_cat_4(self->transient, is_pointer ? S("&") : S(""), expr_str,
-                                        S(".u."),
+                    str rhs = str_cat_4(self->transient, is_pointer ? S("&") : S(""), expr_str, S(".u."),
                                         escape_c_keyword(self->transient, other_variant_name));
                     generate_decl_init(self, eb_binding_name, eb_type, rhs);
                 }
@@ -2539,8 +2536,8 @@ static str generate_tagged_union_case(transpile *self, ast_node const *node, eva
         // Generate binding: VariantType binding = expr.u.VariantName;
         // Use generate_decl_init so a Const-qualified variant_type emits `const T name = ...`.
         str binding_name = escape_c_keyword(self->transient, ast_node_str(cond));
-        str rhs          = str_cat_4(self->transient, is_pointer ? S("&") : S(""), expr_str,
-                                     S(".u."), escape_c_keyword(self->transient, variant_name));
+        str rhs          = str_cat_4(self->transient, is_pointer ? S("&") : S(""), expr_str, S(".u."),
+                                     escape_c_keyword(self->transient, variant_name));
         generate_decl_init(self, binding_name, variant_type, rhs);
 
         // Generate arm body
@@ -3129,10 +3126,10 @@ static str generate_try(transpile *self, tl_monotype *type, ast_node const *node
 
     str          res                  = next_res(self);
     tl_monotype *success_type         = node->type->type;
-    str          esc_success           = escape_c_keyword(self->transient, success_name);
-    str          esc_field             = escape_c_keyword(self->transient, field_name);
-    str          unwrap_rhs            = str_fmt(self->transient, "%s.u.%s.%s", str_cstr(&tmp),
-                                                 str_cstr(&esc_success), str_cstr(&esc_field));
+    str          esc_success          = escape_c_keyword(self->transient, success_name);
+    str          esc_field            = escape_c_keyword(self->transient, field_name);
+    str          unwrap_rhs =
+      str_fmt(self->transient, "%s.u.%s.%s", str_cstr(&tmp), str_cstr(&esc_success), str_cstr(&esc_field));
     // For void success variants, generate_decl substitutes `char` for the type so the
     // unwrap is well-formed C; generate_decl_init has no such substitution. Fall back to
     // the split form for void; use the combined form (which preserves Const) otherwise.
@@ -3286,8 +3283,7 @@ static str generate_void_else(transpile *self, tl_monotype *type, ast_node const
     // Declare and assign else binding (preserve Const wrapper via generate_decl_init).
     tl_monotype *eb_type = binding->symbol.annotation_type->type;
     str          eb_name = escape_c_keyword(self->transient, ast_node_str(binding));
-    str          eb_rhs  = str_cat_3(self->transient, tmp, S(".u."),
-                                     escape_c_keyword(self->transient, error_name));
+    str eb_rhs = str_cat_3(self->transient, tmp, S(".u."), escape_c_keyword(self->transient, error_name));
     generate_decl_init(self, eb_name, eb_type, eb_rhs);
 
     // Generate else body
@@ -3490,8 +3486,8 @@ static void generate_decl(transpile *self, str name, tl_monotype *type) {
             if (tl_monotype_carray_count_is_macro(type)) {
                 str macro  = tl_monotype_carray_count_macro_name(type);
                 str c_name = remove_c_prefix(self->transient, macro);
-                str line   = str_fmt(self->transient, "%s %s[%.*s];\n", str_cstr(&typec), str_cstr(&name),
-                                     str_ilen(c_name), str_buf(&c_name));
+                str line   = str_fmt(self->transient, "%s %s[%s];\n", str_cstr(&typec), str_cstr(&name),
+                                     str_cstr(&c_name));
                 cat(self, line);
             } else {
                 i32 count = tl_monotype_carray_count(type);
@@ -3596,9 +3592,9 @@ int transpile_compile(transpile *self, str_build *out_build) {
         struct tm *tm  = localtime(&now);
         char       buf[256];
         int        n = snprintf(buf, sizeof(buf),
-                                "/* Generated by Tess compiler %.*s on %04d-%02d-%02d %02d:%02d:%02d */\n",
-                                str_ilen(self->opts.version), str_buf(&self->opts.version), tm->tm_year + 1900,
-                                tm->tm_mon + 1, tm->tm_mday, tm->tm_hour, tm->tm_min, tm->tm_sec);
+                                "/* Generated by Tess compiler %s on %04d-%02d-%02d %02d:%02d:%02d */\n",
+                                str_cstr(&self->opts.version), tm->tm_year + 1900, tm->tm_mon + 1, tm->tm_mday,
+                                tm->tm_hour, tm->tm_min, tm->tm_sec);
         str_build_cat_n(&self->build, buf, (u32)n);
     }
 
@@ -3994,7 +3990,7 @@ static str carray_type_to_c(transpile *self, tl_monotype *type) {
     if (tl_monotype_carray_count_is_macro(type)) {
         str macro  = tl_monotype_carray_count_macro_name(type);
         str c_name = remove_c_prefix(self->transient, macro);
-        return str_fmt(self->transient, "%s[%.*s]", str_cstr(&typec), str_ilen(c_name), str_buf(&c_name));
+        return str_fmt(self->transient, "%s[%s]", str_cstr(&typec), str_cstr(&c_name));
     }
     i32 count = tl_monotype_carray_count(type);
     return str_fmt(self->transient, "%s[%i]", str_cstr(&typec), count);

@@ -21,9 +21,8 @@ void rename_let_in(tl_infer *self, ast_node *node, rename_variables_ctx *ctx) {
     ast_node_name_replace(node->let_in.name, newvar);
 
 #if DEBUG_RENAME
-    dbg(self, "rename %.*s => %.*s", str_ilen(node->let_in.name->symbol.original),
-        str_buf(&node->let_in.name->symbol.original), str_ilen(node->let_in.name->symbol.name),
-        str_buf(&node->let_in.name->symbol.name));
+    dbg(self, "rename %s => %s", str_cstr(&node->let_in.name->symbol.original),
+        str_cstr(&node->let_in.name->symbol.name));
 #endif
 
     str_map_set(&ctx->lex, name, &newvar);
@@ -50,9 +49,8 @@ static void rename_one_function_param(tl_infer *self, ast_node *param, rename_va
         if ((found = str_map_get(ctx->lex, param->symbol.name))) {
             ast_node_name_replace(param, *found);
 #if DEBUG_RENAME
-            fprintf(stderr, "rename %.*s => %.*s\n", str_ilen(param->symbol.original),
-                    str_buf(&param->symbol.original), str_ilen(param->symbol.name),
-                    str_buf(&param->symbol.name));
+            fprintf(stderr, "rename %s => %s\n",
+                    str_cstr(&param->symbol.original) str_cstr(&param->symbol.name));
 #endif
         } else if (param->symbol.is_module_mangled &&
                    (found = str_map_get(ctx->lex, param->symbol.original))) {
@@ -60,9 +58,8 @@ static void rename_one_function_param(tl_infer *self, ast_node *param, rename_va
             // to take precedence over mangling to match toplevel names.
             ast_node_name_replace(param, *found);
 #if DEBUG_RENAME
-            fprintf(stderr, "rename mangled %.*s => %.*s\n", str_ilen(param->symbol.original),
-                    str_buf(&param->symbol.original), str_ilen(param->symbol.name),
-                    str_buf(&param->symbol.name));
+            fprintf(stderr, "rename mangled %s => %s\n", str_cstr(&param->symbol.original),
+                    str_cstr(&param->symbol.name));
 #endif
         } else {
             // a param or type argument seen for the first time: add renamed var to lexical scope
@@ -221,9 +218,8 @@ void rename_variables(tl_infer *self, ast_node *node, rename_variables_ctx *ctx,
             if ((found = str_map_get(ctx->lex, node->symbol.name))) {
                 ast_node_name_replace(node, *found);
 #if DEBUG_RENAME
-                dbg(self, "rename %.*s => %.*s", str_ilen(node->symbol.original),
-                    str_buf(&node->symbol.original), str_ilen(node->symbol.name),
-                    str_buf(&node->symbol.name));
+                dbg(self, "rename %s => %s", str_cstr(&node->symbol.original),
+                    str_cstr(&node->symbol.name));
 #endif
             } else if (node->symbol.is_module_mangled &&
                        (found = str_map_get(ctx->lex, node->symbol.original))) {
@@ -231,9 +227,8 @@ void rename_variables(tl_infer *self, ast_node *node, rename_variables_ctx *ctx,
                 // to take precedence over mangling to match toplevel names.
                 ast_node_name_replace(node, *found);
 #if DEBUG_RENAME
-                dbg(self, "rename mangled %.*s => %.*s", str_ilen(node->symbol.original),
-                    str_buf(&node->symbol.original), str_ilen(node->symbol.name),
-                    str_buf(&node->symbol.name));
+                dbg(self, "rename mangled %s => %s", str_cstr(&node->symbol.original),
+                    str_cstr(&node->symbol.name));
 #endif
             } else {
                 // a free variable, a field name, a toplevel function name, etc
@@ -729,7 +724,7 @@ void add_free_variables_to_arrow(tl_infer *self, ast_node *node, tl_polytype *ar
     array_shrink(ctx.fvs);
     dbg(self, "-- free variables: %u --", ctx.fvs.size);
     forall(i, ctx.fvs) {
-        dbg(self, "%.*s", str_ilen(ctx.fvs.v[i]), str_buf(&ctx.fvs.v[i]));
+        dbg(self, "%s", str_cstr(&ctx.fvs.v[i]));
     }
 
     // find any sublists with free variables and bring them to the top

@@ -617,8 +617,8 @@ void traverse_ctx_load_type_arguments(tl_infer *self, traverse_ctx *ctx, ast_nod
             // Invariant: No duplicate type parameter names in ctx->type_arguments
             if (str_map_contains(ctx->type_arguments, type_param->symbol.name)) {
                 char detail[256];
-                snprintf(detail, sizeof detail, "Duplicate type parameter name '%.*s'",
-                         str_ilen(type_param->symbol.name), str_buf(&type_param->symbol.name));
+                snprintf(detail, sizeof detail, "Duplicate type parameter name '%s'",
+                         str_cstr(&type_param->symbol.name));
                 report_invariant_failure(self, "traverse_ctx_load_type_arguments",
                                          "No duplicate type parameter names allowed", detail, type_param);
             }
@@ -688,8 +688,8 @@ int traverse_ctx_assign_type_arguments(tl_infer *self, traverse_ctx *ctx, ast_no
         str  callee_name = ast_node_str(node->named_application.name);
         char detail[256];
         snprintf(detail, sizeof detail,
-                 "Call site has %u type arguments but function '%.*s' has %u type parameters", argc,
-                 str_ilen(callee_name), str_buf(&callee_name), paramc);
+                 "Call site has %u type arguments but function '%s' has %u type parameters", argc,
+                 str_cstr(&callee_name), paramc);
         report_invariant_failure(self, "traverse_ctx_assign_type_arguments",
                                  "Type argument count must match type parameter count", detail,
                                  (ast_node *)node);
@@ -776,9 +776,8 @@ int traverse_ctx_assign_type_arguments(tl_infer *self, traverse_ctx *ctx, ast_no
                 str  existing_str = tl_monotype_to_string(self->transient, existing_binding);
                 str  new_str      = tl_monotype_to_string(self->transient, parsed);
                 snprintf(detail, sizeof detail,
-                         "Type parameter '%.*s' already bound to '%s', cannot rebind to '%s'",
-                         str_ilen(param_name), str_buf(&param_name), str_cstr(&existing_str),
-                         str_cstr(&new_str));
+                         "Type parameter '%s' already bound to '%s', cannot rebind to '%s'",
+                         str_cstr(&param_name), str_cstr(&existing_str), str_cstr(&new_str));
                 report_invariant_failure(self, "traverse_ctx_assign_type_arguments",
                                          "Type parameter binding conflict (type pollution)", detail,
                                          (ast_node *)node);
@@ -1615,8 +1614,8 @@ static int infer_lambda_function_application(tl_infer *self, traverse_ctx *ctx, 
     if (self->verbose >= 3) {
         str inst_str = tl_monotype_to_string(self->transient, inst);
         str app_str  = tl_polytype_to_string(self->transient, app);
-        dbg(self, "application: anon lambda %.*s callsite arrow: %.*s", str_ilen(inst_str),
-            str_buf(&inst_str), str_ilen(app_str), str_buf(&app_str));
+        dbg(self, "application: anon lambda %s callsite arrow: %s", str_cstr(&inst_str),
+            str_cstr(&app_str));
     }
 
     if (check_const_strip_in_call(self, inst, app, node)) return 1;
@@ -2590,8 +2589,8 @@ static int infer_named_function_application(tl_infer *self, traverse_ctx *ctx, a
                     if (!is_alpha_converted_name(param_name)) {
                         char detail[256];
                         snprintf(detail, sizeof detail,
-                                 "Looking up '%.*s' which is not alpha-converted in type_arguments",
-                                 str_ilen(param_name), str_buf(&param_name));
+                                 "Looking up '%s' which is not alpha-converted in type_arguments",
+                                 str_cstr(&param_name));
                         report_invariant_failure(self, "infer_named_function_application",
                                                  "Type argument lookup must use alpha-converted names",
                                                  detail, node);

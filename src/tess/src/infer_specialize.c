@@ -25,7 +25,7 @@ tl_polytype *make_arrow_result_type(tl_infer *self, traverse_ctx *ctx, ast_node_
 
         {
             str str = tl_monotype_to_string(self->transient, arrow);
-            dbg(self, "arrow: %.*s", str_ilen(str), str_buf(&str));
+            dbg(self, "arrow: %s", str_cstr(&str));
             str_deinit(self->transient, &str);
         }
         return tl_polytype_absorb_mono(self->arena, arrow);
@@ -58,7 +58,7 @@ tl_polytype *make_arrow_result_type(tl_infer *self, traverse_ctx *ctx, ast_node_
 
         if (self->verbose >= 3) {
             str str = tl_monotype_to_string(self->transient, out);
-            dbg(self, "arrow: %.*s", str_ilen(str), str_buf(&str));
+            dbg(self, "arrow: %s", str_cstr(&str));
             str_deinit(self->transient, &str);
         }
 
@@ -149,8 +149,8 @@ ast_node *clone_generic_for_arrow(tl_infer *self, ast_node const *node, tl_monot
                 char detail[256];
                 str  type_str = tl_polytype_to_string(self->transient, existing);
                 snprintf(detail, sizeof detail,
-                         "Type parameter '%.*s' already exists in environment with type: %s",
-                         str_ilen(tp_name), str_buf(&tp_name), str_cstr(&type_str));
+                         "Type parameter '%s' already exists in environment with type: %s",
+                         str_cstr(&tp_name), str_cstr(&type_str));
                 report_invariant_failure(self, "clone_generic_for_arrow",
                                          "New specialization type parameters must have fresh names", detail,
                                          tp);
@@ -181,12 +181,11 @@ ast_node *clone_generic_for_arrow(tl_infer *self, ast_node const *node, tl_monot
                 if (tp->type) {
                     str type_str = tl_polytype_to_string(self->transient, tp->type);
                     snprintf(detail, sizeof detail,
-                             "Type parameter '%.*s' with explicit binding has non-concrete type: %s",
-                             str_ilen(tp_name), str_buf(&tp_name), str_cstr(&type_str));
+                             "Type parameter '%s' with explicit binding has non-concrete type: %s",
+                             str_cstr(&tp_name), str_cstr(&type_str));
                 } else {
                     snprintf(detail, sizeof detail,
-                             "Type parameter '%.*s' with explicit binding has null type", str_ilen(tp_name),
-                             str_buf(&tp_name));
+                             "Type parameter '%s' with explicit binding has null type", str_cstr(&tp_name));
                 }
                 report_invariant_failure(
                   self, "clone_generic_for_arrow",
@@ -2698,8 +2697,7 @@ int add_generic(tl_infer *self, ast_node *node) {
         return 0;
     } else if (ast_node_is_let_in(node)) {
         if (infer_one(self, infer_target, null)) {
-            dbg_at(2, self, "-- add_generic error: %.*s (%.*s) --", str_ilen(name), str_buf(&name),
-                   str_ilen(orig_name), str_buf(&orig_name));
+            dbg_at(2, self, "-- add_generic error: %s (%s) --", str_cstr(&name), str_cstr(&orig_name));
         }
 
         assert(node->let_in.value->type);
@@ -2714,8 +2712,7 @@ int add_generic(tl_infer *self, ast_node *node) {
         fatal("logic error");
     }
 
-    dbg(self, "-- add_generic: %.*s (%.*s) --", str_ilen(name), str_buf(&name), str_ilen(orig_name),
-        str_buf(&orig_name));
+    dbg(self, "-- add_generic: %s (%s) --", str_cstr(&name), str_cstr(&orig_name));
 
     if (!infer_target) {
         // no function body, so let's treat this as a type declaration
@@ -2736,8 +2733,7 @@ int add_generic(tl_infer *self, ast_node *node) {
 
     // run inference
     if (infer_one(self, infer_target, provisional)) {
-        dbg_at(2, self, "-- add_generic error: %.*s (%.*s) --", str_ilen(name), str_buf(&name),
-               str_ilen(orig_name), str_buf(&orig_name));
+        dbg_at(2, self, "-- add_generic error: %s (%s) --", str_cstr(&name), str_cstr(&orig_name));
         return 1;
     }
 
@@ -2762,8 +2758,8 @@ int add_generic(tl_infer *self, ast_node *node) {
 
     {
         str tmp = tl_polytype_to_string(self->transient, arrow);
-        dbg(self, "-- done add_generic: %.*s (%.*s): type : %s --", str_ilen(name), str_buf(&name),
-            str_ilen(orig_name), str_buf(&orig_name), str_cstr(&tmp));
+        dbg(self, "-- done add_generic: %s (%s): type : %s --", str_cstr(&name), str_cstr(&orig_name),
+            str_cstr(&tmp));
         str_deinit(self->transient, &tmp);
     }
 

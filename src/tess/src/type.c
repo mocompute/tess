@@ -1430,8 +1430,7 @@ tl_type_env *tl_type_env_create(allocator *alloc) {
 void tl_type_env_insert(tl_type_env *self, str name, tl_polytype *type) {
     if (self->verbose >= 3) {
         str type_str = tl_polytype_to_string(transient_allocator, type);
-        dbg(self, "insert %.*s :  %.*s", str_ilen(name), str_buf(&name), str_ilen(type_str),
-            str_buf(&type_str));
+        dbg(self, "insert %s :  %s", str_cstr(&name), str_cstr(&type_str));
     }
     str_map_set_ptr(&self->map, name, type);
 }
@@ -1440,8 +1439,7 @@ void tl_type_env_insert_mono(tl_type_env *self, str name, tl_monotype *type) {
     tl_polytype *poly = tl_polytype_absorb_mono(self->alloc, type);
     if (self->verbose >= 3) {
         str type_str = tl_polytype_to_string(transient_allocator, poly);
-        dbg(self, "insert_mono %.*s :  %.*s", str_ilen(name), str_buf(&name), str_ilen(type_str),
-            str_buf(&type_str));
+        dbg(self, "insert_mono %s :  %s", str_cstr(&name), str_cstr(&type_str));
     }
     str_map_set_ptr(&self->map, name, poly);
 }
@@ -3950,8 +3948,7 @@ void tl_type_env_log(tl_type_env *self) {
         tl_polytype *type     = str_map_get_ptr(self->map, name);
         str          type_str = tl_polytype_to_string(transient_allocator, type);
 
-        fprintf(stderr, "%.*s : %.*s\n", str_ilen(name), str_buf(&name), str_ilen(type_str),
-                str_buf(&type_str));
+        fprintf(stderr, "%s : %s\n", str_cstr(&name), str_cstr(&type_str));
         str_deinit(transient_allocator, &type_str);
     }
     array_free(sorted);
@@ -3985,7 +3982,7 @@ void tl_type_subs_log(tl_type_subs *self) {
         if (type) {
             fprintf(stderr, " = ");
             str s = tl_monotype_to_string(transient_allocator, type);
-            fprintf(stderr, "%.*s", str_ilen(s), str_buf(&s));
+            fprintf(stderr, "%s", str_cstr(&s));
         }
 
         fprintf(stderr, "\n");

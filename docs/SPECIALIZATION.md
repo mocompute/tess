@@ -330,7 +330,7 @@ This failure mode is silent because the compiler doesn't error — it produces v
 
 ```c
 str next_instantiation(tl_infer *self, str name) {
-    return str_fmt(self->arena, "%.*s_%u", str_ilen(name), str_buf(&name),
+    return str_fmt(self->arena, "%s_%u", str_cstr(&name),
                    self->next_instantiation++);
 }
 ```
