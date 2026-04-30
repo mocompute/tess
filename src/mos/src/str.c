@@ -960,10 +960,9 @@ str str_build_str(allocator *alloc, str_build self) {
 
 str str_build_finish(str_build *p) {
     // grow buffer to make room for \0 for str_cstr
-    // clang-format off
-    {char _t = '\0'; array_push(*p, _t);}
+
+    array_push_r(*p, '\0');
     p->size--;
-    // clang-format on
 
     str out = str_init_move_n(&p->v, p->size);
     // move will leave p->v unchanged if it's copying into small

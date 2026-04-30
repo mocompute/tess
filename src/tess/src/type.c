@@ -1087,9 +1087,8 @@ static tl_monotype *parse_type_nfa(tl_type_registry *self, tl_type_registry_pars
         if (!mono) {
             return null;
         }
-        // clang-format off
-        { tl_monotype *_t = mono; array_push(args, _t); }
-        // clang-format on
+
+        array_push(args, mono);
     }
 
     if (str_eq(name, S("CArray")) && args.size == 2) {
@@ -1296,9 +1295,7 @@ static tl_monotype *tl_type_registry_parse_type_(tl_type_registry               
                 // Use a fresh type variable so the return type is still preserved.
                 mono = tl_monotype_create_fresh_tv(self->subs);
             }
-            // clang-format off
-            { tl_monotype *_t = mono; array_push(args, _t); }
-            // clang-format on
+            array_push(args, mono);
         }
         tl_monotype *left_mono =
           tl_monotype_create_tuple(self->alloc, (tl_monotype_sized)array_sized(args));

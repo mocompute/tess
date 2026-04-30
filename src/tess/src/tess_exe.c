@@ -1583,17 +1583,14 @@ static void add_c_flags(state *self, c_string_array *argv) {
     // If CFLAGS is present, do not add optimize flags
     if (!self->cflags.size) {
         if (self->debug) {
-            char const *_t = "-O0";
-            array_push(*argv, _t);
+            array_push_r(*argv, "-O0");
         } else {
-            char const *_t = "-O2";
-            array_push(*argv, _t);
+            array_push_r(*argv, "-O2");
         }
     }
 
     if (self->effective_bounds_check) {
-        char const *_t = "-DTL_BOUNDS_CHECK";
-        array_push(*argv, _t);
+        array_push_r(*argv, "-DTL_BOUNDS_CHECK");
     }
 
     forall(i, self->cflags) {
@@ -1605,26 +1602,20 @@ static void add_c_flags(state *self, c_string_array *argv) {
 #ifdef MOS_WINDOWS
 static void add_c_flags_msvc(state *self, c_string_array *argv) {
     // Transpiled C requires C11 (mixed declarations, _Static_assert)
-    {
-        char const *_t = "/std:c11";
-        array_push(*argv, _t);
-    }
+    array_push_r(*argv, "/std:c11");
 
     // If CFLAGS is present, do not add optimize flags
     if (!self->cflags.size) {
         if (self->debug) {
             // msvc: /Od disables optimization
-            char const *_t = "/Od";
-            array_push(*argv, _t);
+            array_push_r(*argv, "/Od");
         } else {
-            char const *_t = "/O2";
-            array_push(*argv, _t);
+            array_push_r(*argv, "/O2");
         }
     }
 
     if (self->effective_bounds_check) {
-        char const *_t = "/DTL_BOUNDS_CHECK";
-        array_push(*argv, _t);
+        array_push_r(*argv, "/DTL_BOUNDS_CHECK");
     }
 
     forall(i, self->cflags) {
@@ -1647,17 +1638,13 @@ static c_string_array build_gcc_argv(state *self, char const **extra_flags, int 
                   self->cflags.size + self->link_libs.size + self->ldflags.size + extra_flags_count + 16);
     array_push(argv, cc);
 
-    // clang-format off
-    { char const *_t = "-o"; array_push(argv, _t); }
+    array_push_r(argv, "-o");
     array_push(argv, self->out_path);
-    // clang-format on
 
     add_c_flags(self, &argv);
 
-    // clang-format off
-    { char const *_t = "-std=c11"; array_push(argv, _t); }
-    { char const *_t = "-Wno-format-security"; array_push(argv, _t); }
-    // clang-format on
+    array_push_r(argv, "-std=c11");
+    array_push_r(argv, "-Wno-format-security");
 
     for (int i = 0; i < extra_flags_count; i++) {
         array_push(argv, extra_flags[i]);
@@ -1666,11 +1653,9 @@ static c_string_array build_gcc_argv(state *self, char const **extra_flags, int 
     if (temp_file) {
         array_push(argv, temp_file);
     } else {
-        // clang-format off
-        { char const *_t = "-x"; array_push(argv, _t); }
-        { char const *_t = "c"; array_push(argv, _t); }
-        { char const *_t = "-"; array_push(argv, _t); }
-        // clang-format on
+        array_push_r(argv, "-x");
+        array_push_r(argv, "c");
+        array_push_r(argv, "-");
     }
 
     // Append #link libraries (must come after source/object files for the linker)
@@ -1686,10 +1671,7 @@ static c_string_array build_gcc_argv(state *self, char const **extra_flags, int 
         array_push(argv, cstr);
     }
 
-    {
-        char const *_t = null;
-        array_push(argv, _t);
-    }
+    array_push_r(argv, null);
 
     return argv;
 }
@@ -1711,10 +1693,7 @@ static c_string_array build_msvc_argv(state *self, char const **msvc_extra_flags
     char const *cc = str_cstr(&self->cc);
     array_push(argv, cc);
 
-    {
-        char const *_t = "/nologo";
-        array_push(argv, _t);
-    }
+    array_push_r(argv, "/nologo");
 
     for (int i = 0; i < msvc_extra_flags_count; i++) {
         array_push(argv, msvc_extra_flags[i]);
@@ -1726,13 +1705,11 @@ static c_string_array build_msvc_argv(state *self, char const **msvc_extra_flags
     str fo = str_cat(self->arena, S("/Fo"), str_init_static(obj_file));
     str fe = str_cat(self->arena, S("/Fe"), str_init_static(self->out_path));
 
-    // clang-format off
-    { char *_t = str_cstr_copy(self->arena, fo); array_push(argv, _t); }
-    { char *_t = str_cstr_copy(self->arena, fe); array_push(argv, _t); }
+    array_push_r(argv, str_cstr_copy(self->arena, fo));
+    array_push_r(argv, str_cstr_copy(self->arena, fe));
 
-    { char const *_t = "/TC"; array_push(argv, _t); }
+    array_push_r(argv, "/TC");
     array_push(argv, c_file);
-    // clang-format on
 
     // Append #link libraries (MSVC uses foo.lib syntax)
     forall(i, self->link_libs) {
@@ -1747,9 +1724,7 @@ static c_string_array build_msvc_argv(state *self, char const **msvc_extra_flags
         array_push(argv, cstr);
     }
 
-    // clang-format off
-    { char const *_t = null; array_push(argv, _t); }
-    // clang-format on
+    array_push_r(argv, null);
 
     return argv;
 }
@@ -1941,34 +1916,17 @@ int compile_c_static_lib(state *self) {
         c_string_array argv = {.alloc = self->arena};
         array_reserve(argv, 8);
         array_push(argv, cc);
-        {
-            char const *_t = "/nologo";
-            array_push(argv, _t);
-        }
-        {
-            char const *_t = "/c";
-            array_push(argv, _t);
-        }
+        array_push_r(argv, "/nologo");
+        array_push_r(argv, "/c");
 
         add_c_flags_msvc(self, &argv);
 
         str fo = str_cat(self->arena, S("/Fo"), str_init_static(obj_file.path));
-        {
-            char const *_t = str_cstr(&fo);
-            array_push(argv, _t);
-        }
-        {
-            char const *_t = "/TC";
-            array_push(argv, _t);
-        }
-        {
-            char const *_t = c_file.path;
-            array_push(argv, _t);
-        }
-        {
-            char const *_t = null;
-            array_push(argv, _t);
-        }
+
+        array_push_r(argv, (char *)str_cstr(&fo)); // cast away const
+        array_push_r(argv, "/TC");
+        array_push_r(argv, c_file.path);
+        array_push_r(argv, null);
 
         platform_exec_opts opts = {
           .argv       = (char const *const *)argv.v,
@@ -1982,27 +1940,14 @@ int compile_c_static_lib(state *self) {
             // lib /nologo /OUT:<out_path> <obj_file>
             c_string_array lib_argv = {.alloc = self->arena};
             array_reserve(lib_argv, 8);
-            {
-                char const *_t = "lib";
-                array_push(lib_argv, _t);
-            }
-            {
-                char const *_t = "/nologo";
-                array_push(lib_argv, _t);
-            }
+            array_push_r(lib_argv, "lib");
+            array_push_r(lib_argv, "/nologo");
+
             str out_flag = str_cat(self->arena, S("/OUT:"), str_init_static(self->out_path));
-            {
-                char const *_t = str_cstr(&out_flag);
-                array_push(lib_argv, _t);
-            }
-            {
-                char const *_t = obj_file.path;
-                array_push(lib_argv, _t);
-            }
-            {
-                char const *_t = null;
-                array_push(lib_argv, _t);
-            }
+
+            array_push_r(lib_argv, (char *)str_cstr(&out_flag)); // cast away const
+            array_push_r(lib_argv, obj_file.path);
+            array_push_r(lib_argv, null);
 
             platform_exec_opts lib_opts = {
               .argv       = (char const *const *)lib_argv.v,
@@ -2018,37 +1963,15 @@ int compile_c_static_lib(state *self) {
         c_string_array argv = {.alloc = self->arena};
         array_reserve(argv, 16);
         array_push(argv, cc);
-        {
-            char const *_t = "-c";
-            array_push(argv, _t);
-        }
-        {
-            char const *_t = "-o";
-            array_push(argv, _t);
-        }
-        {
-            char const *_t = obj_file.path;
-            array_push(argv, _t);
-        }
 
+        array_push_r(argv, "-c");
+        array_push_r(argv, "-o");
+        array_push_r(argv, obj_file.path);
         add_c_flags(self, &argv);
-
-        {
-            char const *_t = "-std=c11";
-            array_push(argv, _t);
-        }
-        {
-            char const *_t = "-Wno-format-security";
-            array_push(argv, _t);
-        }
-        {
-            char const *_t = c_file.path;
-            array_push(argv, _t);
-        }
-        {
-            char const *_t = null;
-            array_push(argv, _t);
-        }
+        array_push_r(argv, "-std=c11");
+        array_push_r(argv, "-Wno-format-security");
+        array_push_r(argv, c_file.path);
+        array_push_r(argv, null);
 
         platform_exec_opts opts = {
           .argv       = (char const *const *)argv.v,
@@ -2062,23 +1985,11 @@ int compile_c_static_lib(state *self) {
             // ar rcs <out_path> <obj_file>
             c_string_array ar_argv = {.alloc = self->arena};
             array_reserve(ar_argv, 8);
-            {
-                char const *_t = "ar";
-                array_push(ar_argv, _t);
-            }
-            {
-                char const *_t = "rcs";
-                array_push(ar_argv, _t);
-            }
+            array_push_r(ar_argv, "ar");
+            array_push_r(ar_argv, "rcs");
             array_push(ar_argv, self->out_path);
-            {
-                char const *_t = obj_file.path;
-                array_push(ar_argv, _t);
-            }
-            {
-                char const *_t = null;
-                array_push(ar_argv, _t);
-            }
+            array_push_r(ar_argv, obj_file.path);
+            array_push_r(ar_argv, null);
 
             platform_exec_opts ar_opts = {
               .argv       = (char const *const *)ar_argv.v,
@@ -2096,41 +2007,15 @@ int compile_c_static_lib(state *self) {
         c_string_array argv = {.alloc = self->arena};
         array_reserve(argv, 16);
         array_push(argv, cc);
-        {
-            char const *_t = "-fPIC";
-            array_push(argv, _t);
-        }
-        {
-            char const *_t = "-c";
-            array_push(argv, _t);
-        }
-        {
-            char const *_t = "-o";
-            array_push(argv, _t);
-        }
-        {
-            char const *_t = obj_file.path;
-            array_push(argv, _t);
-        }
-
+        array_push_r(argv, "-fPIC");
+        array_push_r(argv, "-c");
+        array_push_r(argv, "-o");
+        array_push_r(argv, obj_file.path);
         add_c_flags(self, &argv);
-
-        {
-            char const *_t = "-std=c11";
-            array_push(argv, _t);
-        }
-        {
-            char const *_t = "-Wno-format-security";
-            array_push(argv, _t);
-        }
-        {
-            char const *_t = c_file.path;
-            array_push(argv, _t);
-        }
-        {
-            char const *_t = null;
-            array_push(argv, _t);
-        }
+        array_push_r(argv, "-std=c11");
+        array_push_r(argv, "-Wno-format-security");
+        array_push_r(argv, c_file.path);
+        array_push_r(argv, null);
 
         platform_exec_opts opts = {
           .argv       = (char const *const *)argv.v,
@@ -2145,23 +2030,11 @@ int compile_c_static_lib(state *self) {
         // ar rcs <out_path> <obj_file>
         c_string_array ar_argv = {.alloc = self->arena};
         array_reserve(ar_argv, 8);
-        {
-            char const *_t = "ar";
-            array_push(ar_argv, _t);
-        }
-        {
-            char const *_t = "rcs";
-            array_push(ar_argv, _t);
-        }
+        array_push_r(ar_argv, "ar");
+        array_push_r(ar_argv, "rcs");
         array_push(ar_argv, self->out_path);
-        {
-            char const *_t = obj_file.path;
-            array_push(ar_argv, _t);
-        }
-        {
-            char const *_t = null;
-            array_push(ar_argv, _t);
-        }
+        array_push_r(ar_argv, obj_file.path);
+        array_push_r(ar_argv, null);
 
         platform_exec_opts ar_opts = {
           .argv       = (char const *const *)ar_argv.v,

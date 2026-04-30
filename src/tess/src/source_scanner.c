@@ -187,8 +187,7 @@ static int collect_imports_callback(void *raw_ctx, char const *data, u32 start, 
     str_parse_words(command, &words);
 
     if (words.size >= 2 && str_eq(words.v[0], S("import"))) {
-        str _t = str_copy(ctx->alloc, words.v[1]);
-        array_push(*ctx->imports, _t);
+        array_push_r(*ctx->imports, str_copy(ctx->alloc, words.v[1]));
     }
 
     forall(i, words) str_deinit(ctx->alloc, &words.v[i]);
@@ -220,8 +219,7 @@ static int collect_modules_callback(void *raw_ctx, char const *data, u32 start, 
     str_parse_words(command, &words);
 
     if (words.size >= 2 && (str_eq(words.v[0], S("module")))) {
-        str _t = str_copy(ctx->alloc, words.v[1]);
-        array_push(*ctx->modules, _t);
+        array_push_r(*ctx->modules, str_copy(ctx->alloc, words.v[1]));
     }
 
     forall(i, words) str_deinit(ctx->alloc, &words.v[i]);

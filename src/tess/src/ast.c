@@ -372,8 +372,7 @@ nodiscard ast_node *ast_node_clone(allocator *alloc, ast_node const *orig) {
         clone->hash_command.full = str_copy(alloc, orig->hash_command.full);
         str_array arr            = {.alloc = alloc};
         forall(i, orig->hash_command.words) {
-            str _t = str_copy(alloc, orig->hash_command.words.v[i]);
-            array_push(arr, _t);
+            array_push_r(arr, str_copy(alloc, orig->hash_command.words.v[i]));
         }
         array_shrink(arr);
         clone->hash_command.words      = (str_sized)sized_all(arr);

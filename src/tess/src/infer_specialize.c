@@ -489,10 +489,9 @@ static str specialize_type_constructor_(tl_infer *self, str name, tl_monotype_si
                         "[DEBUG_RECURSIVE_TYPES]   DIRECT SELF-REF: arg[%u] '%s' matches name='%s'\n", i,
                         str_cstr(&generic_name), str_cstr(&name));
 #endif
-                {
-                    tl_monotype **_t = &args.v[i];
-                    array_push(recur_refs, _t);
-                }
+
+                array_push_r(recur_refs, &args.v[i]);
+
                 continue;
             }
 
@@ -507,10 +506,8 @@ static str specialize_type_constructor_(tl_infer *self, str name, tl_monotype_si
                       "[DEBUG_RECURSIVE_TYPES]   PTR SELF-REF: arg[%u] Ptr to '%s' matches name='%s'\n", i,
                       str_cstr(&generic_name), str_cstr(&name));
 #endif
-                    {
-                        tl_monotype **_t = &arg_mono->cons_inst->args.v[0];
-                        array_push(recur_refs, _t);
-                    }
+
+                    array_push_r(recur_refs, &arg_mono->cons_inst->args.v[0]);
                     continue;
                 }
             }

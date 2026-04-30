@@ -69,6 +69,16 @@ defslice(c_string_cslice, char const *);
           array_push_impl((array_t *)&(p), (p).v, sizeof(p).v[0], infer_align(sizeof(p).v[0]), (&(x)));    \
     } while (0)
 
+// Uses __typeof__, respected by gcc and msvc.
+#define array_push_r(p, rval)                                                                              \
+    do {                                                                                                   \
+        static_assert(sizeof(p) >= sizeof(array_t), "not an array");                                       \
+        /* string literals would typeof to char[N], so use array element type */                           \
+        __typeof__((p).v[0]) _x = (rval);                                                                  \
+        (p).v =                                                                                            \
+          array_push_impl((array_t *)&(p), (p).v, sizeof(p).v[0], infer_align(sizeof(p).v[0]), (&_x));     \
+    } while (0)
+
 #define array_contains(p, x)                                                                               \
     array_contains_impl((array_t *)&(p), (p).v, sizeof(p).v[0], infer_align(sizeof(p).v[0]), (&(x)))
 
