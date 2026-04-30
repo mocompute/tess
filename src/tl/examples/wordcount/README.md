@@ -1,7 +1,7 @@
 # Word Count
 
 A command-line word counting tool demonstrating several standard library
-modules: CommandLine, File, HashMap, Array, and String.
+modules: CommandLine, File, HashMap, Array, String and Alloc.
 
 ## Features
 
@@ -69,11 +69,12 @@ echo "hello world" | tess run wordcount.tl
 
 ## What it demonstrates
 
-- **CommandLine** — declarative flag/option parsing with short and long names
-- **File** — reading files with typed error handling (`NotFound`,
+- **Explicit allocator:** uses explicit allocator APIs with a bump allocator.
+- **CommandLine:** declarative flag/option parsing with short and long names
+- **File:** reading files with typed error handling (`NotFound`,
   `PermissionDenied`)
-- **HashMap** — tracking unique word frequencies
-- **Array** — collecting results, sorting, slicing
-- **String** — character iteration, slicing, case conversion
-- **Tagged unions** — `when`/`else` pattern matching on `Result` and error
+- **HashMap:** tracking unique word frequencies
+- **Array:** collecting results, sorting, slicing
+- **String:** character iteration, slicing, case conversion
+- **Tagged unions:** `when`/`else` pattern matching on `Result` and error
   variants

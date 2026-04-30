@@ -14,6 +14,7 @@
 
 
 #module main
+#import <Alloc.tl>
 #import <CommandLine.tl>
 #import <File.tl>
 #import <HashMap.tl>
@@ -22,6 +23,8 @@
 #import <Print.tl>
 #import <cstdio.tl>
 #import <cstdlib.tl>
+
+Allocator = Alloc.Allocator
 
 println  = Print.println
 fprintln = Print.fprintln
@@ -45,7 +48,7 @@ is_space(c) {
 }
 
 // Count lines, words, chars (and optionally unique words) in a string.
-do_count(content, path, track_unique, ignore_case) {
+do_count(alloc, content, path, track_unique, ignore_case) {
     n          := content.len()
     lines      := 0
     words      := 0
@@ -53,16 +56,16 @@ do_count(content, path, track_unique, ignore_case) {
     in_word    := false
     word_start := 0
 
-    word_map := HashMap.create[String, Int]()
+    word_map := HashMap.create[String, Int](alloc)
     defer word_map.destroy()
 
     record_word := (from, to) {
         words += 1
         if !track_unique { return }
-        word := content.copy(from, to)
-        if ignore_case { word = word.to_lower() }
+        word := content.copy(alloc, from, to)
+        if ignore_case { word = word.to_lower(alloc) }
         when word_map.get_ptr(word) {
-            s: Some { s.value.* += 1 }
+            s: Some { word.free(); s.value.* += 1 }
             n: None { word_map.set(word, 1); unique += 1 }
         }
     }
@@ -92,19 +95,19 @@ do_count(content, path, track_unique, ignore_case) {
 }
 
 // Read all of stdin into a String.
-read_stdin() {
+read_stdin(alloc) {
     buf := Array.empty[CChar]()
-    defer buf.free()
+    defer buf.free(alloc)
 
     while true {
         ch := c_fgetc(c_stdin)
         if ch == c_EOF { break }
         c: CChar := ch
-        buf.push(c)
+        buf.push(alloc, c)
     }
 
     if buf.size == 0 { return String.empty() }
-    String.from_bytes(buf.data, buf.size)
+    String.from_bytes(alloc, buf.data, buf.size)
 }
 
 // Print counts for one input.
@@ -127,7 +130,8 @@ report_error(path, error) {
 // -- Entry point --
 
 main(argc: CInt, argv: Ptr[CString]) {
-    cl := CommandLine.create("wc", "Count lines, words, and characters in files")
+    alloc := Alloc.context.transient
+    cl    := CommandLine.create(alloc, "wc", "Count lines, words, and characters in files")
     defer cl.destroy()
     cl.flag("lines", 'l', "Show line count")
     cl.flag("words", 'w', "Show word count")
@@ -164,13 +168,13 @@ main(argc: CInt, argv: Ptr[CString]) {
 
     if files.size == 0 {
         // Read from stdin.
-        content := read_stdin()
-        c       := do_count(content, "<stdin>", show_unique, ignore_case)
-        results.push(c)
+        content := read_stdin(alloc)
+        c       := do_count(alloc, content, "<stdin>", show_unique, ignore_case)
+        results.push(alloc, c)
     } else {
         for path in files {
             ok: Ok := File.read_file(path) else err { report_error(path, err.error); continue }
-            results.push(do_count(ok.value, path, show_unique, ignore_case))
+            results.push(alloc, do_count(alloc, ok.value, path, show_unique, ignore_case))
         }
     }
 
@@ -185,7 +189,7 @@ main(argc: CInt, argv: Ptr[CString]) {
         if top_n > 0 {
             limit: CSize := top_n
             if limit < results.size {
-                results = results.copy(0, limit)
+                results = results.copy(alloc, 0, limit)
             }
         }
     }
