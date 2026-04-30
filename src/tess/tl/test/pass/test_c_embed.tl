@@ -1,15 +1,13 @@
-#ifc
-
-int add(int a, int b) { return a + b; }
-
-#endc
-
 #module main
 
+#ifc
+int add(int a, int b) { return a + b; }
+#endc
+
 // Required: type annotation for C functions
-c_add(a: Int, b: Int) -> Int
+c_add(a: CInt, b: CInt) -> CInt
 
 main() {
-    result: CInt := c_add(-1, 1)
+    result := c_add(-1, 1)
     result
 }
