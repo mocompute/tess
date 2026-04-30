@@ -149,8 +149,8 @@ from_array[T](alloc: Ptr[Allocator], arr: Ptr[Const[Array[T]]])       -> String
     push (alloc: Ptr[Allocator], other: Ptr[Const[String]]) -> Void
 
     // Memory.
-    free( alloc: Ptr[Allocator]) -> Void
-    free()                       -> Void
+    free(alloc: Ptr[Allocator]) -> Void
+    free()                      -> Void
 
 }
 
