@@ -139,6 +139,14 @@ test_widening() {
     error
 }
 
+test_from_int() {
+    error := 0
+    x     := 42
+    xf    := take_cfloat(42)
+    error += if xf == 42.0 {0} else {1}
+    error
+}
+
 main() {
     error := 0
     error += test_cast()
@@ -146,5 +154,6 @@ main() {
     error += test_types()
     error += test_weak_literal()
     error += test_widening()
+    error += test_from_int()
     error
 }
