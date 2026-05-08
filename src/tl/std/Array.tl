@@ -81,16 +81,18 @@ Array[T]: {
     reverse()                   -> Void
     swap   (i: CSize, j: CSize) -> Void
 
-    // -- With allocators --
+    sort_with (tmp_alloc: Ptr[Allocator], cmp: (T, T) -> Int) -> Void
+}
 
-    push         (alloc: Ptr[Allocator], x: T)                   -> Void
-    reserve      (alloc: Ptr[Allocator], count: CSize)           -> Void
-    free         (alloc: Ptr[Allocator])                         -> Void
-    insert       (alloc: Ptr[Allocator], index: CSize, val: T)   -> Void
-    resize       (alloc: Ptr[Allocator], count: CSize, val: T)   -> Void
-    shrink_to_fit(alloc: Ptr[Allocator])                         -> Void
-    append       (alloc: Ptr[Allocator], other: Array[T])        -> Void
-    sort_with    (tmp_alloc: Ptr[Allocator], cmp: (T, T) -> Int) -> Void
+// -- With allocators --
+(self: Ptr[Array[T]], alloc: Ptr[Allocator]): {
+    push         (x: T)                 -> Void
+    reserve      (count: CSize)         -> Void
+    free         ()                     -> Void
+    insert       (index: CSize, val: T) -> Void
+    resize       (count: CSize, val: T) -> Void
+    shrink_to_fit()                     -> Void
+    append       (other: Array[T])      -> Void
 }
 
 // Immutable operations
