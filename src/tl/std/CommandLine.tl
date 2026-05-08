@@ -72,13 +72,15 @@ Args: {
     _command:    Option[String],
 }
 
-get_flag   (args: Ptr[Const[Args]], name: String) -> Bool
-get_count  (args: Ptr[Const[Args]], name: String) -> Int
-get_option (args: Ptr[Const[Args]], name: String) -> Option[String]
-get_command(args: Ptr[Const[Args]])               -> Option[String]
-positionals(args: Ptr[Const[Args]])               -> Array[String]
-rest       (args: Ptr[Const[Args]])               -> Array[String]
-has        (args: Ptr[Const[Args]], name: String) -> Bool
+(args: Ptr[Const[Args]]): {
+    get_flag   (name: String) -> Bool
+    get_count  (name: String) -> Int
+    get_option (name: String) -> Option[String]
+    get_command()             -> Option[String]
+    positionals()             -> Array[String]
+    rest       ()             -> Array[String]
+    has        (name: String) -> Bool
+}
 
 #module CommandLine
 
@@ -92,32 +94,41 @@ create (alloc: Ptr[Allocator], name: String, description: String) -> Ptr[Command
 create (name: String, description: String)                        -> Ptr[CommandLine]
 destroy(self: Ptr[CommandLine])                                   -> Void
 
-flag    (self: Ptr[CommandLine], long_name: String, short_name: CChar, desc: String) -> Void
-flag    (self: Ptr[CommandLine], long_name: String, desc: String)                    -> Void
-counter (self: Ptr[CommandLine], long_name: String, short_name: CChar, desc: String) -> Void
-option  (self: Ptr[CommandLine], long_name: String, short_name: CChar, desc: String) -> Void
-option  (self: Ptr[CommandLine], long_name: String, desc: String)                    -> Void
-required(self: Ptr[CommandLine], long_name: String, short_name: CChar, desc: String) -> Void
-required(self: Ptr[CommandLine], long_name: String, desc: String)                    -> Void
-command (self: Ptr[CommandLine], name: String)                                       -> Void
+(self: Ptr[CommandLine], long_name: String): {
+    // The functions in this block all have a required long_name argument.
+    flag    (short_name: CChar, desc: String) -> Void
+    flag    (desc: String)                    -> Void
+    counter (short_name: CChar, desc: String) -> Void
+    option  (short_name: CChar, desc: String) -> Void
+    option  (desc: String)                    -> Void
+    required(short_name: CChar, desc: String) -> Void
+    required(desc: String)                    -> Void
+}
 
-parse        (self: Ptr[CommandLine], argc: CInt, argv: Ptr[CString]) -> Result[Args, ParseErrors]
-parse_or_exit(self: Ptr[CommandLine], argc: CInt, argv: Ptr[CString]) -> Args
+(self: Ptr[CommandLine]): {
+    command (name: String) -> Void
 
+    parse        (argc: CInt, argv: Ptr[CString]) -> Result[Args, ParseErrors]
+    parse_or_exit(argc: CInt, argv: Ptr[CString]) -> Args
 
-help_text (self: Ptr[CommandLine]) -> String
-print_help(self: Ptr[CommandLine]) -> Void
+    help_text () -> String
+    print_help() -> Void
+}
 
 from_argv(argc: CInt, argv: Ptr[CString]) -> Array[String]
 
 // -- Private helpers --
 
-_find_spec_long (self: Ptr[CommandLine], name: String)                              -> Option[CSize]
-_find_spec_short(self: Ptr[CommandLine], ch: CChar)                                 -> Option[CSize]
-_store_bool     (values: Ptr[HashMap[String, ArgValue]], name: String)              -> Void
-_store_count    (values: Ptr[HashMap[String, ArgValue]], name: String)              -> Void
-_store_str      (values: Ptr[HashMap[String, ArgValue]], name: String, val: String) -> Void
+(self: Ptr[CommandLine]): {
+    _find_spec_long (name: String) -> Option[CSize]
+    _find_spec_short(ch: CChar)    -> Option[CSize]
+}
 
+(values: Ptr[HashMap[String, ArgValue]], name: String): {
+    _store_bool  ()            -> Void
+    _store_count ()            -> Void
+    _store_str   (val: String) -> Void
+}
 
 // -- Implementation --
 
