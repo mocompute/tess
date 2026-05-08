@@ -10,11 +10,12 @@ test_basic_flag() {
     parser.flag("verbose", 'v', "Enable verbose output")
     parser.flag("help", 'h', "Show help")
 
-    argv: CArray[CString, 3] := void
-    argv.[0] = c"test"
-    argv.[1] = c"--verbose"
-    argv.[2] = c"--help"
-    result := parser.parse(3, argv.[0].&)
+    argv: CArray[CString] := {
+        c"test",
+        c"--verbose",
+        c"--help"
+    }
+    result := parser.parse(3, argv)
 
     ok: Ok := result else { parser.destroy(), return error + 1 }
 
@@ -33,10 +34,11 @@ test_short_flag() {
     parser.flag("verbose", 'v', "Enable verbose output")
     parser.flag("help", 'h', "Show help")
 
-    argv: CArray[CString, 2] := void
-    argv.[0] = c"test"
-    argv.[1] = c"-vh"
-    result := parser.parse(2, argv.[0].&)
+    argv: CArray[CString] := {
+        c"test",
+        c"-vh"
+    }
+    result := parser.parse(2, argv)
 
     ok: Ok := result else { parser.destroy(), return error + 1 }
 
@@ -53,11 +55,12 @@ test_option_long() {
     parser := CommandLine.create("test", "A test tool")
     parser.option("output", 'o', "Output file")
 
-    argv: CArray[CString, 3] := void
-    argv.[0] = c"test"
-    argv.[1] = c"--output"
-    argv.[2] = c"foo.txt"
-    result := parser.parse(3, argv.[0].&)
+    argv: CArray[CString] := {
+        c"test",
+        c"--output",
+        c"foo.txt"
+    }
+    result := parser.parse(3, argv)
 
     ok: Ok := result else { parser.destroy(), return error + 1 }
 
@@ -76,10 +79,11 @@ test_option_eq() {
     parser := CommandLine.create("test", "A test tool")
     parser.option("output", 'o', "Output file")
 
-    argv: CArray[CString, 2] := void
-    argv.[0] = c"test"
-    argv.[1] = c"--output=bar.txt"
-    result := parser.parse(2, argv.[0].&)
+    argv: CArray[CString] := {
+        c"test",
+        c"--output=bar.txt"
+    }
+    result := parser.parse(2, argv)
 
     ok: Ok := result else { parser.destroy(), return error + 1 }
 
@@ -98,11 +102,12 @@ test_option_short() {
     parser := CommandLine.create("test", "A test tool")
     parser.option("output", 'o', "Output file")
 
-    argv: CArray[CString, 3] := void
-    argv.[0] = c"test"
-    argv.[1] = c"-o"
-    argv.[2] = c"baz.txt"
-    result := parser.parse(3, argv.[0].&)
+    argv: CArray[CString] := {
+        c"test",
+        c"-o",
+        c"baz.txt"
+    }
+    result := parser.parse(3, argv)
 
     ok: Ok := result else { parser.destroy(), return error + 1 }
 
@@ -121,10 +126,11 @@ test_option_short_inline() {
     parser := CommandLine.create("test", "A test tool")
     parser.option("output", 'o', "Output file")
 
-    argv: CArray[CString, 2] := void
-    argv.[0] = c"test"
-    argv.[1] = c"-ofile.txt"
-    result := parser.parse(2, argv.[0].&)
+    argv: CArray[CString] := {
+        c"test",
+        c"-ofile.txt"
+    }
+    result := parser.parse(2, argv)
 
     ok: Ok := result else { parser.destroy(), return error + 1 }
 
@@ -144,12 +150,13 @@ test_counter() {
     parser := CommandLine.create("test", "A test tool")
     parser.counter("verbose", 'v', "Verbosity level")
 
-    argv: CArray[CString, 4] := void
-    argv.[0] = c"test"
-    argv.[1] = c"-v"
-    argv.[2] = c"-v"
-    argv.[3] = c"-v"
-    result := parser.parse(4, argv.[0].&)
+    argv: CArray[CString] := {
+        c"test",
+        c"-v",
+        c"-v",
+        c"-v"
+    }
+    result := parser.parse(4, argv)
 
     ok: Ok := result else { parser.destroy(), return error + 1 }
 
@@ -165,12 +172,13 @@ test_positional() {
     parser := CommandLine.create("test", "A test tool")
     parser.flag("verbose", 'v', "Verbose")
 
-    argv: CArray[CString, 4] := void
-    argv.[0] = c"test"
-    argv.[1] = c"-v"
-    argv.[2] = c"file1.txt"
-    argv.[3] = c"file2.txt"
-    result := parser.parse(4, argv.[0].&)
+    argv: CArray[CString] := {
+        c"test",
+        c"-v",
+        c"file1.txt",
+        c"file2.txt"
+    }
+    result := parser.parse(4, argv)
 
     ok: Ok := result else { parser.destroy(), return error + 1 }
 
@@ -193,13 +201,14 @@ test_double_dash() {
     parser := CommandLine.create("test", "A test tool")
     parser.flag("verbose", 'v', "Verbose")
 
-    argv: CArray[CString, 5] := void
-    argv.[0] = c"test"
-    argv.[1] = c"-v"
-    argv.[2] = c"--"
-    argv.[3] = c"--not-a-flag"
-    argv.[4] = c"foo"
-    result := parser.parse(5, argv.[0].&)
+    argv: CArray[CString] := {
+        c"test",
+        c"-v",
+        c"--",
+        c"--not-a-flag",
+        c"foo"
+    }
+    result := parser.parse(5, argv)
 
     ok: Ok := result else { parser.destroy(), return error + 1 }
 
@@ -224,10 +233,11 @@ test_unknown_flag_error() {
     parser := CommandLine.create("test", "A test tool")
     parser.flag("verbose", 'v', "Verbose")
 
-    argv: CArray[CString, 2] := void
-    argv.[0] = c"test"
-    argv.[1] = c"--unknown"
-    result := parser.parse(2, argv.[0].&)
+    argv: CArray[CString] := {
+        c"test",
+        c"--unknown"
+    }
+    result := parser.parse(2, argv)
 
     err: Err := result else { parser.destroy(), return error + 1 }
 
@@ -243,10 +253,11 @@ test_missing_value_error() {
     parser := CommandLine.create("test", "A test tool")
     parser.option("output", 'o', "Output file")
 
-    argv: CArray[CString, 2] := void
-    argv.[0] = c"test"
-    argv.[1] = c"--output"
-    result := parser.parse(2, argv.[0].&)
+    argv: CArray[CString] := {
+        c"test",
+        c"--output"
+    }
+    result := parser.parse(2, argv)
 
     err: Err := result else { parser.destroy(), return error + 1 }
 
@@ -262,9 +273,8 @@ test_required_missing() {
     parser := CommandLine.create("test", "A test tool")
     parser.required("config", 'c', "Config file path")
 
-    argv: CArray[CString, 1] := void
-    argv.[0] = c"test"
-    result := parser.parse(1, argv.[0].&)
+    argv: CArray[CString] := { c"test" }
+    result                := parser.parse(1, argv)
 
     err: Err := result else { parser.destroy(), return error + 1 }
 
@@ -280,11 +290,12 @@ test_required_provided() {
     parser := CommandLine.create("test", "A test tool")
     parser.required("config", 'c', "Config file path")
 
-    argv: CArray[CString, 3] := void
-    argv.[0] = c"test"
-    argv.[1] = c"--config"
-    argv.[2] = c"app.conf"
-    result := parser.parse(3, argv.[0].&)
+    argv: CArray[CString] := {
+        c"test",
+        c"--config",
+        c"app.conf"
+    }
+    result := parser.parse(3, argv)
 
     ok: Ok := result else { parser.destroy(), return error + 1 }
 
@@ -305,12 +316,13 @@ test_command() {
     parser.command("run")
     parser.flag("verbose", 'v', "Verbose")
 
-    argv: CArray[CString, 4] := void
-    argv.[0] = c"test"
-    argv.[1] = c"build"
-    argv.[2] = c"-v"
-    argv.[3] = c"file.txt"
-    result := parser.parse(4, argv.[0].&)
+    argv: CArray[CString] := {
+        c"test",
+        c"build",
+        c"-v",
+        c"file.txt"
+    }
+    result := parser.parse(4, argv)
 
     ok: Ok := result else { parser.destroy(), return error + 1 }
 
@@ -336,11 +348,12 @@ test_has() {
     parser.flag("verbose", 'v', "Verbose")
     parser.option("output", 'o', "Output file")
 
-    argv: CArray[CString, 3] := void
-    argv.[0] = c"test"
-    argv.[1] = c"-v"
-    argv.[2] = c"-ofoo"
-    result := parser.parse(3, argv.[0].&)
+    argv: CArray[CString] := {
+        c"test",
+        c"-v",
+        c"-ofoo"
+    }
+    result := parser.parse(3, argv)
 
     ok: Ok := result else { parser.destroy(), return error + 1 }
 
@@ -373,11 +386,12 @@ test_help_text() {
 test_from_argv() {
     error := 0
 
-    argv: CArray[CString, 3] := void
-    argv.[0] = c"prog"
-    argv.[1] = c"arg1"
-    argv.[2] = c"arg2"
-    result := CommandLine.from_argv(3, argv.[0].&)
+    argv: CArray[CString] := {
+        c"prog",
+        c"arg1",
+        c"arg2"
+    }
+    result := CommandLine.from_argv(3, argv)
 
     if result.size != 3 { error += 1 }
     if result.size >= 1 {
@@ -400,9 +414,8 @@ test_empty_args() {
     parser := CommandLine.create("test", "A test tool")
     parser.flag("verbose", 'v', "Verbose")
 
-    argv: CArray[CString, 1] := void
-    argv.[0] = c"test"
-    result := parser.parse(1, argv.[0].&)
+    argv: CArray[CString] := { c"test" }
+    result                := parser.parse(1, argv)
 
     ok: Ok := result else { parser.destroy(), return error + 1 }
 
@@ -421,13 +434,14 @@ test_mixed_flags_and_positionals() {
     parser.flag("verbose", 'v', "Verbose")
     parser.option("output", 'o', "Output file")
 
-    argv: CArray[CString, 5] := void
-    argv.[0] = c"test"
-    argv.[1] = c"-v"
-    argv.[2] = c"input.txt"
-    argv.[3] = c"--output=out.txt"
-    argv.[4] = c"extra.txt"
-    result := parser.parse(5, argv.[0].&)
+    argv: CArray[CString] := {
+        c"test",
+        c"-v",
+        c"input.txt",
+        c"--output=out.txt",
+        c"extra.txt"
+    }
+    result := parser.parse(5, argv)
 
     ok: Ok := result else { parser.destroy(), return error + 1 }
 
@@ -456,12 +470,13 @@ test_parse_or_exit() {
     parser.flag("verbose", 'v', "Enable verbose output")
     parser.option("output", 'o', "Output file")
 
-    argv: CArray[CString, 4] := void
-    argv.[0] = c"test"
-    argv.[1] = c"-v"
-    argv.[2] = c"--output"
-    argv.[3] = c"out.txt"
-    args := parser.parse_or_exit(4, argv.[0].&)
+    argv: CArray[CString] := {
+        c"test",
+        c"-v",
+        c"--output",
+        c"out.txt"
+    }
+    args := parser.parse_or_exit(4, argv)
 
     if !args.get_flag("verbose") { error += 1 }
     when args.get_option("output") {
