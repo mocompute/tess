@@ -141,8 +141,8 @@ create(name, description) {
 
 destroy(self) {
     alloc := self->_alloc
-    self->_specs.&.free()
-    self->_commands.&.free()
+    self->_specs.free()
+    self->_commands.free()
     alloc.dealloc(self)
 }
 
@@ -152,7 +152,7 @@ destroy(self) {
 flag(self, long_name: String, short_name: CChar, desc: String) {
     spec := ArgSpec(long_name = long_name, short_name = short_name,
                     description = desc, kind = FlagBool, required = false)
-    self->_specs.&.push(spec)
+    self->_specs.push(spec)
 }
 
 flag(self, long_name: String, desc: String) {
@@ -162,13 +162,13 @@ flag(self, long_name: String, desc: String) {
 counter(self, long_name: String, short_name: CChar, desc: String) {
     spec := ArgSpec(long_name = long_name, short_name = short_name,
                     description = desc, kind = FlagCount, required = false)
-    self->_specs.&.push(spec)
+    self->_specs.push(spec)
 }
 
 option(self, long_name: String, short_name: CChar, desc: String) {
     spec := ArgSpec(long_name = long_name, short_name = short_name,
                     description = desc, kind = FlagValue, required = false)
-    self->_specs.&.push(spec)
+    self->_specs.push(spec)
 }
 
 option(self, long_name: String, desc: String) {
@@ -178,7 +178,7 @@ option(self, long_name: String, desc: String) {
 required(self, long_name: String, short_name: CChar, desc: String) {
     spec := ArgSpec(long_name = long_name, short_name = short_name,
                     description = desc, kind = FlagValue, required = true)
-    self->_specs.&.push(spec)
+    self->_specs.push(spec)
 }
 
 required(self, long_name: String, desc: String) {
@@ -186,7 +186,7 @@ required(self, long_name: String, desc: String) {
 }
 
 command(self, name: String) {
-    self->_commands.&.push(name)
+    self->_commands.push(name)
 }
 
 
@@ -292,7 +292,7 @@ _parse_short(self, values, errors, arg: Ptr[Const[String]], argc, argv, ip) {
                     _store_str(values, spec.long_name, val)
                     j = arg_len
                 } else if ip.* + 1 < argc {
-                    ip.* = ip.* + 1
+                    ip.* += 1
                     _store_str(values, spec.long_name, String.from_cstr(argv.[ip.*]))
                 } else {
                     Array.push(errors, MissingValue(flag = spec.long_name))
@@ -322,7 +322,7 @@ parse(self, argc, argv) {
 
         // After --, everything is rest
         if past_separator {
-            rest_args.&.push(arg)
+            rest_args.push(arg)
             i += 1
             continue
         }
@@ -360,10 +360,10 @@ parse(self, argc, argv) {
                 }
             }
             if found_cmd == 0 {
-                positional.&.push(arg)
+                positional.push(arg)
             }
         } else {
-            positional.&.push(arg)
+            positional.push(arg)
         }
 
         i += 1
@@ -373,7 +373,7 @@ parse(self, argc, argv) {
     for spec in self->_specs {
         if spec.required {
             if !values.contains(spec.long_name) {
-                errors.&.push(MissingRequired(name = spec.long_name))
+                errors.push(MissingRequired(name = spec.long_name))
             }
         }
     }
