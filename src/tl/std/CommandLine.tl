@@ -16,8 +16,6 @@ Allocator = Alloc.Allocator
 print     = Print.print
 println   = Print.println
 
-// Shorthand for string literal to String conversion.
-
 // -- Types --
 
 // What kind of argument a spec describes.
@@ -241,24 +239,24 @@ _store_str(values, name, val) {
     values.set(name, Args.StrVal(value = val))
 }
 
-_parse_long(self, values, errors, name, arg, argc, argv, ip) {
+_parse_long(self, values, errors: Ptr[Array[ParseError]], name, arg, argc, argv, ip) {
     when name.index_of_char('=') {
         eq_pos: Some {
             key      := name.copy(0, eq_pos.value)
             val      := name.copy(eq_pos.value + 1, name.len())
             si: Some := _find_spec_long(self, key) else {
-                Array.push(errors, UnknownFlag(flag = arg))
+                errors.push(UnknownFlag(flag = arg))
                 return
             }
             spec := self->_specs.data.[si.value]
             when spec.kind {
                 fv: FlagValue { _store_str(values, key, val) }
-                else { Array.push(errors, UnknownFlag(flag = arg)) }
+                else { errors.push(UnknownFlag(flag = arg)) }
             }
         }
         n: None {
             si: Some := _find_spec_long(self, name) else {
-                Array.push(errors, UnknownFlag(flag = arg))
+                errors.push(UnknownFlag(flag = arg))
                 return
             }
             spec := self->_specs.data.[si.value]
@@ -270,7 +268,7 @@ _parse_long(self, values, errors, name, arg, argc, argv, ip) {
                         ip.* += 1
                         _store_str(values, name, String.from_cstr(argv.[ip.*]))
                     } else {
-                        Array.push(errors, MissingValue(flag = name))
+                        errors.push(MissingValue(flag = name))
                     }
                 }
             }
@@ -278,7 +276,7 @@ _parse_long(self, values, errors, name, arg, argc, argv, ip) {
     }
 }
 
-_parse_short(self, values, errors, arg: Ptr[Const[String]], argc, argv, ip) {
+_parse_short(self, values, errors: Ptr[Array[ParseError]], arg: Ptr[Const[String]], argc, argv, ip) {
     arg_len  := arg.len()
     j: CSize := 1
     while j < arg_len {
@@ -289,7 +287,7 @@ _parse_short(self, values, errors, arg: Ptr[Const[String]], argc, argv, ip) {
         ch: CChar := bv.value
         si: Some  := _find_spec_short(self, ch) else {
             flag_str := "-".cat(String.from_bytes(ch.&, 1))
-            Array.push(errors, UnknownFlag(flag = flag_str))
+            errors.push(UnknownFlag(flag = flag_str))
             j += 1
             continue
         }
@@ -306,7 +304,7 @@ _parse_short(self, values, errors, arg: Ptr[Const[String]], argc, argv, ip) {
                     ip.* += 1
                     _store_str(values, spec.long_name, String.from_cstr(argv.[ip.*]))
                 } else {
-                    Array.push(errors, MissingValue(flag = spec.long_name))
+                    errors.push(MissingValue(flag = spec.long_name))
                 }
             }
         }
@@ -324,8 +322,8 @@ parse(self, argc, argv) {
     errors              := Array.empty[ParseError]()
     cmd: Option[String] := None
 
-    dd           := "--"
-    short_prefix := "-"
+    dd   := "--"
+    dash := "-"
 
     i := 1; past_separator := false
     while i < argc {
@@ -354,23 +352,23 @@ parse(self, argc, argv) {
         }
 
         // Check for -x (short options)
-        if arg.starts_with(short_prefix) && arg.len() > 1 {
+        if arg.starts_with(dash) && arg.len() > 1 {
             _parse_short(self, values, errors.&, arg, argc, argv, i.&)
             i += 1
             continue
         }
 
-        // Not a flag — check for command or positional
+        // Not a flag, check for command or positional
         if self->_commands.size > 0 && positional.size == 0 {
-            found_cmd := 0
+            found_cmd := false
             for command in self->_commands {
                 if command == arg {
                     cmd       = Some(arg)
-                    found_cmd = 1
+                    found_cmd = true
                     break
                 }
             }
-            if found_cmd == 0 {
+            if !found_cmd {
                 positional.push(arg)
             }
         } else {

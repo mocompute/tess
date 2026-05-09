@@ -58,13 +58,14 @@ from_bool    (b: Bool)                         -> String
 from_array[T](arr: Ptr[Const[Array[T]]])       -> String
 
 // Explicit allocator construction
-from_bytes   (alloc: Ptr[Allocator], cs: Ptr[Const[CChar]], n: CSize) -> String
-from_cstr    (alloc: Ptr[Allocator], cs: Ptr[Const[CChar]])           -> String
-from_int     (alloc: Ptr[Allocator], n: Int)                          -> String
-from_float   (alloc: Ptr[Allocator], f: Float)                        -> String
-from_array[T](alloc: Ptr[Allocator], arr: Ptr[Const[Array[T]]])       -> String
-// from_byte and from_bool don't require allocators since they're small
-
+(alloc: Ptr[Allocator]): {
+    from_bytes   (cs: Ptr[Const[CChar]], n: CSize) -> String
+    from_cstr    (cs: Ptr[Const[CChar]])           -> String
+    from_int     (n: Int)                          -> String
+    from_float   (f: Float)                        -> String
+    from_array[T](arr: Ptr[Const[Array[T]]])       -> String
+    // from_byte and from_bool don't require allocators since they're small
+}
 
 // Immutable methods
 (self: Ptr[Const[String]]): {
@@ -117,22 +118,25 @@ from_array[T](alloc: Ptr[Allocator], arr: Ptr[Const[Array[T]]])       -> String
 
     // Return zero-terminated C string (pointer into the string's internal buffer)
     cstr () -> Ptr[Const[CChar]]
+}
 
-    // Explicit allocators
-    cat         (alloc: Ptr[Allocator], other: Ptr[Const[String]])                              -> String
-    cat_3       (alloc: Ptr[Allocator], other1: Ptr[Const[String]], other2: Ptr[Const[String]]) -> String
-    copy        (alloc: Ptr[Allocator])                                                         -> String
-    copy        (alloc: Ptr[Allocator], start: CSize, end: CSize)                               -> String
-    repeat      (alloc: Ptr[Allocator], count: CSize)                                           -> String
-    replace     (alloc: Ptr[Allocator], old: Ptr[Const[String]], new_s: Ptr[Const[String]])     -> String
-    replace_byte(alloc: Ptr[Allocator], find: CChar, replace: CChar)                            -> String
-    strip_prefix(alloc: Ptr[Allocator], prefix: Ptr[Const[String]])                             -> String
-    strip_suffix(alloc: Ptr[Allocator], suffix: Ptr[Const[String]])                             -> String
-    to_upper    (alloc: Ptr[Allocator])                                                         -> String
-    to_lower    (alloc: Ptr[Allocator])                                                         -> String
-    trim_left   (alloc: Ptr[Allocator])                                                         -> String
-    trim_right  (alloc: Ptr[Allocator])                                                         -> String
-    trim        (alloc: Ptr[Allocator])                                                         -> String
+
+// Explicit allocators
+(self: Ptr[Const[String]], alloc: Ptr[Allocator]): {
+    cat         (other: Ptr[Const[String]])                              -> String
+    cat_3       (other1: Ptr[Const[String]], other2: Ptr[Const[String]]) -> String
+    copy        ()                                                       -> String
+    copy        (start: CSize, end: CSize)                               -> String
+    repeat      (count: CSize)                                           -> String
+    replace     (old: Ptr[Const[String]], new_s: Ptr[Const[String]])     -> String
+    replace_byte(find: CChar, replace: CChar)                            -> String
+    strip_prefix(prefix: Ptr[Const[String]])                             -> String
+    strip_suffix(suffix: Ptr[Const[String]])                             -> String
+    to_upper    ()                                                       -> String
+    to_lower    ()                                                       -> String
+    trim_left   ()                                                       -> String
+    trim_right  ()                                                       -> String
+    trim        ()                                                       -> String
 }
 
 // Mutating methods
