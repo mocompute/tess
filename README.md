@@ -161,6 +161,8 @@ make install         # Install to /usr/local (see docs/BUILD.md)
 The `tess` executable can be run from anywhere. It bundles its standard library, so it doesn't need a
 system-wide installation.
 
+Package management features like `tess fetch` require that `curl` is installed and on your path.
+
 ## Quick Start
 
 Run a single file: no project setup needed:
