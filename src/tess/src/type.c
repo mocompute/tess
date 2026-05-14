@@ -3010,6 +3010,12 @@ static void uf_union(tl_type_subs *self, tl_type_variable tv1, tl_type_variable 
     if (self->data.v[x].rank == self->data.v[y].rank) self->data.v[x].rank++;
 }
 
+#define return_error(cb, user, a, b)                                                                       \
+    do {                                                                                                   \
+        if (cb) (cb)(user, a, b);                                                                          \
+        return 1;                                                                                          \
+    } while (0)
+
 static int unify_list(tl_type_subs *subs, tl_monotype_sized left, tl_monotype_sized right, tl_monotype *lhs,
                       tl_monotype *rhs, type_error_cb_fun cb, void *user, hashmap **seen,
                       tl_unify_direction dir);
@@ -3076,17 +3082,14 @@ int unify_type_constructor(tl_type_subs *subs, tl_monotype *left, tl_monotype *r
     case tl_cons_inst:  {
 
         if (unify_type_constructor_def(left->cons_inst->def, right->cons_inst->def)) {
-            if (cb) cb(user, left, right);
-            return 1;
+            return_error(cb, user, left, right);
         }
         // Type constructor args are invariant — always SYMMETRIC
         return unify_list(subs, left->cons_inst->args, right->cons_inst->args, left, right, cb, user, seen,
                           TL_UNIFY_SYMMETRIC);
     }
     case tl_arrow:
-    case tl_tuple:
-        if (cb) cb(user, left, right);
-        return 1;
+    case tl_tuple: return_error(cb, user, left, right);
     }
     fatal("unreachable");
 }
@@ -3155,26 +3158,22 @@ static int check_integer_direction(tl_monotype *expected, tl_monotype *actual, t
         int esc = expected->cons_inst->def->integer_subchain;
         int asc = actual->cons_inst->def->integer_subchain;
         if (esc >= 1 && esc <= 4 && asc >= 1 && asc <= 4) {
-            if (cb) cb(user, expected, actual);
-            return 1;
+            return_error(cb, user, expected, actual);
         }
         // At this point, at least one side is a standalone type (subchain >= 5:
         // CSize, CPtrDiff, CChar). All cross-subchain standalone conversions
         // require explicit annotation.
-        if (cb) cb(user, expected, actual);
-        return 1;
+        return_error(cb, user, expected, actual);
     }
 
     if (dir == TL_UNIFY_EXACT) {
-        if (cb) cb(user, expected, actual);
-        return 1;
+        return_error(cb, user, expected, actual);
     }
     // TL_UNIFY_DIRECTED: check width ordering
     int cmp = tl_monotype_compare_integer_width(expected, actual);
     if (cmp >= 0) return 0; // expected wider or equal → widening OK
     // cmp == -1 (narrowing) → error
-    if (cb) cb(user, expected, actual);
-    return 1;
+    return_error(cb, user, expected, actual);
 }
 
 int tl_type_subs_unify_mono(tl_type_subs *subs, tl_monotype *left, tl_monotype *right, type_error_cb_fun cb,
@@ -3262,8 +3261,7 @@ int tl_type_subs_unify_mono(tl_type_subs *subs, tl_monotype *left, tl_monotype *
 
     // Remaining structural cases: both sides must have the same tag
     if (left->tag != right->tag) {
-        if (cb) cb(user, left, right);
-        return 1;
+        return_error(cb, user, left, right);
     }
 
     switch (left->tag) {
@@ -3290,14 +3288,12 @@ int tl_type_subs_unify_mono(tl_type_subs *subs, tl_monotype *left, tl_monotype *
 int unify_list(tl_type_subs *subs, tl_monotype_sized left, tl_monotype_sized right, tl_monotype *lhs,
                tl_monotype *rhs, type_error_cb_fun cb, void *user, hashmap **seen, tl_unify_direction dir) {
     if (left.size != right.size) {
-        if (cb) cb(user, lhs, rhs);
-        return 1;
+        return_error(cb, user, lhs, rhs);
     }
 
     forall(i, left) {
         if (tl_type_subs_unify_mono(subs, left.v[i], right.v[i], cb, user, seen, dir)) {
-            if (cb) cb(user, lhs, rhs);
-            return 1;
+            return_error(cb, user, lhs, rhs);
         }
     }
 
@@ -3316,14 +3312,12 @@ int unify_tuple(tl_type_subs *subs, tl_monotype_sized left, tl_monotype_sized ri
             (tl_monotype_is_ellipsis(right.v[i]) || tl_monotype_is_variadic(right.v[i])))
             goto success;
         if (i >= right.size || tl_type_subs_unify_mono(subs, left.v[i], right.v[i], cb, user, seen, dir)) {
-            if (cb) cb(user, lhs, rhs);
-            return 1;
+            return_error(cb, user, lhs, rhs);
         }
     }
 
     if (left.size != right.size) {
-        if (cb) cb(user, lhs, rhs);
-        return 1;
+        return_error(cb, user, lhs, rhs);
     }
 
     return 0;
@@ -3486,18 +3480,15 @@ static int tl_type_subs_unify_weak_int_concrete(tl_type_subs *subs, tl_monotype 
     // weak_int_unsigned (u-suffixed literal) requires an unsigned integer, non-standalone.
     if (tl_weak_int_unsigned == weak_int->tag) {
         if (!def->is_unsigned_integer) {
-            if (cb) cb(user, weak_int, concrete);
-            return 1;
+            return_error(cb, user, weak_int, concrete);
         }
         if (def->integer_subchain >= TL_INTEGER_SUBCHAIN_CSIZE) {
-            if (cb) cb(user, weak_int, concrete);
-            return 1;
+            return_error(cb, user, weak_int, concrete);
         }
     } else {
         if (!def->is_signed_integer && !def->is_unsigned_integer &&
             def->integer_subchain == TL_INTEGER_SUBCHAIN_NONE) {
-            if (cb) cb(user, weak_int, concrete);
-            return 1;
+            return_error(cb, user, weak_int, concrete);
         }
     }
 
@@ -3507,8 +3498,7 @@ static int tl_type_subs_unify_weak_int_concrete(tl_type_subs *subs, tl_monotype 
         if (subs->data.v[lit_root].has_literal_value) {
             i64 val = subs->data.v[lit_root].literal_value;
             if (!integer_value_fits(def, val)) {
-                if (cb) cb(user, weak_int, concrete);
-                return 1;
+                return_error(cb, user, weak_int, concrete);
             }
         }
     }
@@ -3564,17 +3554,13 @@ static int unify_weak_int_other(tl_type_subs *subs, tl_monotype *weak_int, tl_mo
         if (weak_int->tag == other->tag)
             return tl_type_subs_unify_tv_tv(subs, weak_int->var, other->var, cb, user, seen,
                                             TL_UNIFY_SYMMETRIC);
-        if (cb) cb(user, weak_int, other);
-        return 1;
+        return_error(cb, user, weak_int, other);
     case tl_weak_float:
         // weak int meets weak float = error
-        if (cb) cb(user, weak_int, other);
-        return 1;
+        return_error(cb, user, weak_int, other);
     case tl_cons_inst: return tl_type_subs_unify_weak_int_concrete(subs, weak_int, other, cb, user, seen);
     case tl_arrow:
-    case tl_tuple:
-        if (cb) cb(user, weak_int, other);
-        return 1;
+    case tl_tuple:     return_error(cb, user, weak_int, other);
     }
     fatal("unreachable");
 }
@@ -3588,8 +3574,7 @@ static int tl_type_subs_unify_weak_float_concrete(tl_type_subs *subs, tl_monotyp
 
     // Check: concrete must be a float type.
     if (!concrete->cons_inst->def->is_float_convertible) {
-        if (cb) cb(user, weak_float, concrete);
-        return 1;
+        return_error(cb, user, weak_float, concrete);
     }
 
     // Resolve: store the concrete type at the weak-float's root in union-find.
@@ -3637,8 +3622,7 @@ static int unify_weak_float_other(tl_type_subs *subs, tl_monotype *weak_float, t
     case tl_weak_int_signed:
     case tl_weak_int_unsigned:
         // weak int meets weak float = error
-        if (cb) cb(user, weak_float, other);
-        return 1;
+        return_error(cb, user, weak_float, other);
     case tl_weak_float:
         // merge: both weak floats resolve together
         return tl_type_subs_unify_tv_tv(subs, weak_float->var, other->var, cb, user, seen,
@@ -3646,9 +3630,7 @@ static int unify_weak_float_other(tl_type_subs *subs, tl_monotype *weak_float, t
     case tl_cons_inst:
         return tl_type_subs_unify_weak_float_concrete(subs, weak_float, other, cb, user, seen);
     case tl_arrow:
-    case tl_tuple:
-        if (cb) cb(user, weak_float, other);
-        return 1;
+    case tl_tuple: return_error(cb, user, weak_float, other);
     }
     fatal("unreachable");
 }
