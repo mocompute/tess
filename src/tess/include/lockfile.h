@@ -35,7 +35,7 @@ int tl_lockfile_parse(allocator *alloc, char const *content, u32 content_len, tl
 
 // Write a package.tl.lock file. Returns 0 on success.
 // Deps and edges should already be sorted.
-int tl_lockfile_write(char const *path, tl_locked_dep const *deps, u32 dep_count, tl_lock_edge const *edges,
+int tl_lockfile_write(char const *path, tl_locked_dep *deps, u32 dep_count, tl_lock_edge *edges,
                       u32 edge_count);
 
 #endif

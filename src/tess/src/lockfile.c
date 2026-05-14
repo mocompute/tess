@@ -281,7 +281,7 @@ int tl_lockfile_parse(allocator *alloc, char const *content, u32 content_len, tl
 // Writer
 // ---------------------------------------------------------------------------
 
-int tl_lockfile_write(char const *path, tl_locked_dep const *deps, u32 dep_count, tl_lock_edge const *edges,
+int tl_lockfile_write(char const *path, tl_locked_dep *deps, u32 dep_count, tl_lock_edge *edges,
                       u32 edge_count) {
     FILE *f = fopen(path, "w");
     if (!f) {
@@ -292,19 +292,16 @@ int tl_lockfile_write(char const *path, tl_locked_dep const *deps, u32 dep_count
     fprintf(f, "lock_format(1)\n\n");
 
     for (u32 i = 0; i < dep_count; i++) {
-        fprintf(f, "locked(%.*s, \"%.*s\", \"%.*s\", \"%.*s\")\n", (int)str_len(deps[i].name),
-                str_buf(&deps[i].name), (int)str_len(deps[i].version), str_buf(&deps[i].version),
-                (int)str_len(deps[i].base_url), str_buf(&deps[i].base_url), (int)str_len(deps[i].hash),
-                str_buf(&deps[i].hash));
+        fprintf(f, "locked(%s, \"%s\", \"%s\", \"%s\")\n", str_cstr(&deps[i].name),
+                str_cstr(&deps[i].version), str_cstr(&deps[i].base_url), str_cstr(&deps[i].hash));
     }
 
     if (edge_count > 0) {
         fprintf(f, "\n");
         for (u32 i = 0; i < edge_count; i++) {
-            fprintf(f, "needs(%.*s, \"%.*s\", %.*s, \"%.*s\")\n", (int)str_len(edges[i].name),
-                    str_buf(&edges[i].name), (int)str_len(edges[i].version), str_buf(&edges[i].version),
-                    (int)str_len(edges[i].dep_name), str_buf(&edges[i].dep_name),
-                    (int)str_len(edges[i].dep_version), str_buf(&edges[i].dep_version));
+            fprintf(f, "needs(%s, \"%s\", %s, \"%s\")\n", str_cstr(&edges[i].name),
+                    str_cstr(&edges[i].version), str_cstr(&edges[i].dep_name),
+                    str_cstr(&edges[i].dep_version));
         }
     }
 
