@@ -85,7 +85,7 @@
                   tree
                   xxd
 
-                ] ++ (with pkgs.llvmPackages_20; [
+                ] ++ (with pkgs.llvmPackages; [
 
                   clangUseLLVM
                   clang-tools
@@ -98,7 +98,7 @@
                   # gcc15
 
                   # some perf things
-                  linuxKernel.packages.linux_6_6.perf
+                  perf
                   poop
                   valgrind-light
 
