@@ -1,3 +1,4 @@
+#include "array.h"
 #include "ast.h"
 #include "ast_tags.h"
 #include "error.h"
@@ -1100,7 +1101,21 @@ int a_expression(parser *self) {
 int a_funcall(parser *self) {
 
     if (a_try(self, a_attributed_identifier)) return 1;
-    ast_node      *name = self->result;
+    ast_node *name = self->result;
+
+    if (str_eq(S("unreachable"), ast_node_str(name))) {
+        // Note: special case: synthesize `_tl_fatal(c"unreachable")' and return.
+        ast_node_array args = {.alloc = self->ast_arena};
+        array_push_r(args, ast_node_create_c_string(self->ast_arena, "unreachable"));
+
+        ast_node *fun_name = ast_node_create_sym_c(self->ast_arena, "_tl_fatal_");
+        mangle_name_for_arity(self, fun_name, args.size, 0); // 0 = function call, not definition
+        mangle_name(self, fun_name);
+
+        ast_node *node = ast_node_create_nfa(self->ast_arena, fun_name, (ast_node_sized){0},
+                                             (ast_node_sized)array_sized(args));
+        return result_ast_node(self, node);
+    }
 
     ast_node_array type_args;
     if (ERROR_STOP == maybe_type_arguments(self, &type_args)) return ERROR_STOP;

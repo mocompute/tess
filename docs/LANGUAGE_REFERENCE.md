@@ -2910,6 +2910,7 @@ These low-level intrinsics are used internally by the standard library:
 _tl_sizeof_[T]()    // Type-parameterized sizeof (for generic code)
 _tl_alignof_[T]()   // Type-parameterized alignof (for generic code)
 _tl_fatal_(msg)     // Terminate with error message
+unreachable         // Equivalent to: _tl_fatal_(c"unreachable")
 ```
 
 The `_tl_sizeof_` and `_tl_alignof_` intrinsics differ from `sizeof`/`alignof` in that they work with type variables in generic functions:

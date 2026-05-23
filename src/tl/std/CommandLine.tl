@@ -412,7 +412,7 @@ parse_or_exit(self, argc, argv) {
             println("")
             print_help(self)
             c_exit(1)
-            _tl_fatal_(c"unreachable")
+            unreachable
         }
     }
 }

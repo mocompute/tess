@@ -2142,7 +2142,15 @@ static str generate_let_in(transpile *self, tl_monotype *result_type, ast_node c
             u32             n    = next->body.expressions.size;
             ast_node const *last = next->body.expressions.v[n - 1];
             if (ast_node_is_let_in(last) && !ast_node_is_let_in_lambda(last)) {
-                for (u32 i = 0; i + 1 < n; i++) generate_expr(self, null, next->body.expressions.v[i], ctx);
+                for (u32 i = 0; i + 1 < n; i++) {
+                    str inter = generate_expr(self, null, next->body.expressions.v[i], ctx);
+                    if (ctx->is_effective_void && !str_is_empty(inter)) {
+                        // is_effective_void signals a side-effecting expression, so we must emit it rather
+                        // than dropping it on the floor.
+                        cat(self, inter);
+                        cat_semicolonln(self);
+                    }
+                }
                 node = last;
                 emit_line_directive(self, node, ctx);
                 if (ctx) ctx->is_effective_void = 0;
@@ -2344,6 +2352,12 @@ static str generate_body(transpile *self, tl_monotype *type, ast_node const *nod
     str out = str_empty();
     forall(i, node->body.expressions) {
         out = generate_expr(self, null, node->body.expressions.v[i], ctx);
+        if (ctx->is_effective_void && !str_is_empty(out)) {
+            // is_effective_void signals a side-effecting expression, so we must emit it rather
+            // than dropping it on the floor.
+            cat(self, out);
+            cat_semicolonln(self);
+        }
     }
 
     // Capture result before running defers (defers could modify the variable that out refers to)

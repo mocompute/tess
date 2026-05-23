@@ -351,6 +351,7 @@ nodiscard ast_node *ast_node_create_type_predicate(allocator *, ast_node *, ast_
                                                    int is_comptime) mallocfun;
 nodiscard ast_node *ast_node_create_sym(allocator *alloc, str str); // copies str
 nodiscard ast_node *ast_node_create_sym_c(allocator *, char const *);
+nodiscard ast_node *ast_node_create_c_string(allocator *, char const *);
 nodiscard ast_node *ast_node_clone(allocator *, ast_node const *) mallocfun;
 void                ast_node_move(ast_node *dst, ast_node *src);
 

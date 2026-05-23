@@ -286,6 +286,17 @@ ast_node *ast_node_create_sym(allocator *alloc, str str) {
     return self;
 }
 
+ast_node *ast_node_create_c_string(allocator *alloc, char const *str) {
+    ast_node *self                 = ast_node_create(alloc, ast_string);
+    self->symbol.name              = str_init(alloc, str);
+    self->symbol.original          = str_empty();
+    self->symbol.annotation        = null;
+    self->symbol.annotation_type   = null;
+    self->symbol.is_module_mangled = 0;
+    self->symbol.module            = str_empty();
+    return self;
+}
+
 void ast_node_move(ast_node *dst, ast_node *src) {
     alloc_copy(dst, src);
     alloc_zero(src); // valid nil node
