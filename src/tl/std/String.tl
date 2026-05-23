@@ -51,11 +51,14 @@ ParsedNumber: | Integer  { value: Int }
 empty        ()                                -> String
 from_bytes   (cs: Ptr[Const[CChar]], n: CSize) -> String
 from_cstr    (cs: Ptr[Const[CChar]])           -> String
+take_cstr    (cs: Ptr[CChar])                  -> String
 from_int     (n: Int)                          -> String
 from_float   (f: Float)                        -> String
 from_byte    (b: Byte)                         -> String
 from_bool    (b: Bool)                         -> String
 from_array[T](arr: Ptr[Const[Array[T]]])       -> String
+take_array[T](arr: Ptr[Array[T]])              -> String
+
 
 // Explicit allocator construction
 (alloc: Ptr[Allocator]): {
@@ -64,6 +67,7 @@ from_array[T](arr: Ptr[Const[Array[T]]])       -> String
     from_int     (n: Int)                          -> String
     from_float   (f: Float)                        -> String
     from_array[T](arr: Ptr[Const[Array[T]]])       -> String
+    take_array[T](arr: Ptr[Array[T]])              -> String
     // from_byte and from_bool don't require allocators since they're small
 }
 
@@ -236,6 +240,24 @@ from_bytes(cs, n) {
     from_bytes(Alloc.context.default, cs, n)
 }
 
+take_cstr(cs) {
+    n := c_strlen(cs)
+
+    if n <= _STR_MAX_SMALL {
+        s := String(ss = _Small(buf = void, tag_len = _make_tag_len(n)))
+        if n > 0 {
+            dst: Ptr[CChar] := s.ss.buf
+            c_memcpy(dst, cs, n)
+            dst.[n] = '\0'
+        }
+        s
+    }
+    else {
+        String(big = _Big(len = n, buf = cs))
+    }
+
+}
+
 from_cstr(alloc, cs) {
     n := c_strlen(cs)
     from_bytes (alloc, cs, n)
@@ -302,6 +324,34 @@ from_array(alloc, arr) {
 
 from_array(arr) {
     from_array(Alloc.context.default, arr)
+}
+
+take_array(alloc, arr) {
+    n := arr->size
+
+    // add 1 byte for c-string \0
+    arr.push(0)
+
+    if n <= _STR_MAX_SMALL {
+        // free the taken array before returning
+        defer arr.free(alloc)
+
+        s := String(ss = _Small(buf = void, tag_len = _make_tag_len(n)))
+        if n > 0 {
+            dst: Ptr[CChar] := s.ss.buf
+            c_memcpy(dst, arr->data, n)
+            dst.[n] = '\0'
+        }
+        s
+    }
+    else {
+        data: Ptr[CChar] := arr->data
+        String(big = _Big(len = n, buf = data))
+    }
+}
+
+take_array(arr) {
+    take_array(Alloc.context.default, arr)
 }
 
 

@@ -97,7 +97,6 @@ do_count(alloc, content, path, track_unique, ignore_case) {
 // Read all of stdin into a String.
 read_stdin(alloc) {
     buf := Array.empty[CChar]()
-    defer buf.free(alloc)
 
     while true {
         ch := c_fgetc(c_stdin)
@@ -106,8 +105,12 @@ read_stdin(alloc) {
         buf.push(alloc, c)
     }
 
-    if buf.size == 0 { return String.empty() }
-    String.from_bytes(alloc, buf.data, buf.size)
+    if buf.size == 0 {
+        buf.free(alloc)
+        return String.empty()
+    }
+
+    String.take_array(alloc, buf.&)     // takes ownership of allocated array
 }
 
 // Print counts for one input.

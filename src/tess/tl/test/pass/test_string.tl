@@ -1521,6 +1521,125 @@ test_from_array() {
     error
 }
 
+test_take_cstr() {
+    error := 0
+
+    // Small case: c-string literal (impl copies into SSO)
+    s := String.take_cstr(c"hello")
+    if s.len() != 5 { error += 1 }
+    if !s._is_small() { error += 1 }
+    if !s.eq_cstr(c"hello") { error += 1 }
+    cs := s.cstr()
+    if c_strcmp(cs, c"hello") != 0 { error += 1 }
+    s.free()
+
+    // Empty c-string
+    e := String.take_cstr(c"")
+    if e.len() != 0 { error += 1 }
+    if !e.is_empty() { error += 1 }
+    e.free()
+
+    // SSO boundary: 14 bytes (still small)
+    s14 := String.take_cstr(c"12345678901234")
+    if s14.len() != 14 { error += 1 }
+    if !s14._is_small() { error += 1 }
+    if !s14.eq_cstr(c"12345678901234") { error += 1 }
+    cs14 := s14.cstr()
+    if c_strcmp(cs14, c"12345678901234") != 0 { error += 1 }
+    s14.free()
+
+    // Big case (>14 bytes): heap-allocated buffer, take_cstr takes ownership
+    src: CString    := c"this is a longer string!!"
+    n:   CSize      := c_strlen(src)
+    buf: Ptr[CChar] := Alloc.context.default.alloc(n + 1)
+    c_memcpy(buf, src, n + 1)
+    big := String.take_cstr(buf)
+    if big.len() != 25 { error += 1 }
+    if big._is_small() { error += 1 }
+    if !big.eq_cstr(c"this is a longer string!!") { error += 1 }
+    cs_big := big.cstr()
+    if c_strcmp(cs_big, c"this is a longer string!!") != 0 { error += 1 }
+    big.free()
+
+    error
+}
+
+test_take_array() {
+    error := 0
+
+    // Small case (≤14 bytes): impl copies into SSO and frees array
+    a := Array.empty[CChar]()
+    a.push('h')
+    a.push('i')
+    s := String.take_array(a.&)
+    if s.len() != 2 { error += 1 }
+    if !s._is_small() { error += 1 }
+    if !s.eq_cstr(c"hi") { error += 1 }
+    cs := s.cstr()
+    if c_strcmp(cs, c"hi") != 0 { error += 1 }
+    s.free()
+
+    // Empty array
+    a2 := Array.empty[CChar]()
+    s2 := String.take_array(a2.&)
+    if s2.len() != 0 { error += 1 }
+    if !s2.is_empty() { error += 1 }
+    s2.free()
+
+    // SSO boundary: 14 bytes
+    a3             := Array.empty[CChar]()
+    src14: CString := c"12345678901234"
+    i:     CSize   := 0
+    while i < 14, i += 1 { a3.push(src14.[i]) }
+    s3 := String.take_array(a3.&)
+    if s3.len() != 14 { error += 1 }
+    if !s3._is_small() { error += 1 }
+    if !s3.eq_cstr(c"12345678901234") { error += 1 }
+    cs3 := s3.cstr()
+    if c_strcmp(cs3, c"12345678901234") != 0 { error += 1 }
+    s3.free()
+
+    // Big case (>14 bytes): impl takes ownership of array's data buffer
+    a4             := Array.empty[CChar]()
+    src20: CString := c"ABCDEFGHIJKLMNOPQRST"
+    j:     CSize   := 0
+    while j < 20, j += 1 { a4.push(src20.[j]) }
+    s4 := String.take_array(a4.&)
+    if s4.len() != 20 { error += 1 }
+    if s4._is_small() { error += 1 }
+    if !s4.eq_cstr(c"ABCDEFGHIJKLMNOPQRST") { error += 1 }
+    cs4 := s4.cstr()
+    if c_strcmp(cs4, c"ABCDEFGHIJKLMNOPQRST") != 0 { error += 1 }
+    s4.free()
+
+    // Array[Byte] - exercises the generic parameter
+    b        := Array.empty[Byte]()
+    b1: Byte := 0x41
+    b2: Byte := 0x42
+    b3: Byte := 0x43
+    b.push(b1)
+    b.push(b2)
+    b.push(b3)
+    s5 := String.take_array(b.&)
+    if s5.len() != 3 { error += 1 }
+    if !s5.eq_cstr(c"ABC") { error += 1 }
+    cs5 := s5.cstr()
+    if c_strcmp(cs5, c"ABC") != 0 { error += 1 }
+    s5.free()
+
+    // Explicit allocator overload
+    a6 := Array.empty[CChar]()
+    a6.push('x')
+    a6.push('y')
+    a6.push('z')
+    s6 := String.take_array(Alloc.context.default, a6.&)
+    if s6.len() != 3 { error += 1 }
+    if !s6.eq_cstr(c"xyz") { error += 1 }
+    s6.free()
+
+    error
+}
+
 test_parse_number() {
     error := 0
 
@@ -1640,6 +1759,8 @@ main() {
     error += _check(c"strip_suffix", test_strip_suffix())
     error += _check(c"from_bool", test_from_bool())
     error += _check(c"from_array", test_from_array())
+    error += _check(c"take_cstr", test_take_cstr())
+    error += _check(c"take_array", test_take_array())
     error += _check(c"parse_number", test_parse_number())
     result: CInt := error
     result
