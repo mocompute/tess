@@ -93,8 +93,8 @@ Value: | JNull
                 if keys_cmp != 0 { return keys_cmp }
 
                 for key in my_keys {
-                    my:    Some := my_map.get(key) else { _tl_fatal_(c"unreachable") }
-                    their: Some := their_map.get(key) else { _tl_fatal_(c"unreachable") }
+                    my:    Some := my_map.get(key) else { unreachable }
+                    their: Some := their_map.get(key) else { unreachable }
                     val_cmp     := cmp(my.value, their.value)
                     if val_cmp != 0 { return val_cmp }
                 }
