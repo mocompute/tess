@@ -5,6 +5,46 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this project will adhere to
 [Semantic Versioning](https://semver.org/) beginning with the 0.2.0 release.
 
+## [v0.1.7] - 2026-04-25 to 2026-05-23 (6cd7fd5f..7aac5100)
+
+### Added
+
+- **`unreachable` keyword**: New language intrinsic that desugars to `_tl_fatal_(c"unreachable")` for marking
+  unreachable code paths (e.g. after `c_exit(1)` or in exhaustive `when` arms that the type system can't
+  prove dead). Added to `LANGUAGE_REFERENCE.md` and to the Emacs mode for syntax highlighting.
+- **`array_push_r` macro**: New `array_push_r(arr, rval)` helper in `array.h` for pushing rvalues
+  (string literals, function return values) without needing a named temporary. Uses `__typeof__` to capture
+  the element type.
+
+### Changed
+
+- **`Array.tl` synopsis uses a separate receiver block for explicit-allocator mutating methods**: `push`,
+  `reserve`, `free`, `insert`, `resize`, `shrink_to_fit`, and `append` are grouped under a single
+  `(self: Ptr[Array[T]], alloc: Ptr[Allocator]):` block instead of being declared individually. Cosmetic
+  cleanup; no API change.
+- **`String.tl` and `CommandLine.tl` synopses use receiver blocks**: Allocator-taking `String` constructors
+  and mutators (`cat`, `copy`, `replace`, `strip_prefix`, `to_upper`, etc.) and `CommandLine`/`Args`
+  builder/reader methods are likewise grouped.
+- **Internal `str_ilen`/`str_buf` combo replaced with `str_cstr` throughout compiler source**: All
+  `printf("%.*s", (int)str_ilen(s), str_buf(s))` patterns in `infer`, `transpile`, `cbind`, `type`,
+  `parser`, and `lockfile` are now `str_cstr(&s)`.
+- **Examples and tests modernized**: `wordcount.tl` example uses explicit allocator APIs and the renamed
+  `HashMap.get_ptr`; `ifc` and `float_comprehensive` tests gain additional coverage (including int-to-float
+  argument conversion); the integer literal initializer test now uses a static array initializer.
+- **Hard crashes on specialization errors converted to recoverable errors**: Three `fatal("runtime error")`
+  call sites in `infer_specialize.c` now check `self->errors.size` first and return a clean error code if
+  errors have already been recorded. Stopgap until full error reporting; lets the user see the actual
+  diagnostic instead of a crash.
+- **Nix flake updated to NixOS 25.11 with default LLVM 21**: Tooling-only; no compiler behavior change.
+- **README**: Mention that `curl` is required for `tess fetch`.
+
+### Fixed
+
+- **`_tl_fatal_` (and `unreachable`) silently dropped in non-tail position**: The transpiler previously
+  omitted side-effecting void-typed expressions that appeared as non-final statements in a body or `let-in`
+  chain. A `_tl_fatal_` in the middle of a block would not appear in the generated C. Such expressions are
+  now always emitted with a trailing semicolon regardless of position.
+
 ## [v0.1.6] - 2026-04-17 to 2026-04-25 (110b83cf..6cd7fd5f)
 
 ### Highlights
